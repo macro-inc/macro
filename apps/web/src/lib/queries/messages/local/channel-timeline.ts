@@ -114,7 +114,17 @@ type TimelineState = {
   newerCursor: string | null;
   loadingOlder: boolean;
   loadingNewer: boolean;
+  /**
+   * The cursor, per direction, of a page merged into the window that the
+   * device did not store: the next page that way reads it again, not past it.
+   */
+  unstored: Record<PageDirection, string | null>;
 };
+
+type PageDirection = 'older' | 'newer';
+
+/** How a page or its read again ended. */
+type PageOutcome = 'done' | 'failed' | 'unstored';
 
 /** A channel's timeline read from the device, as one window. */
 export interface LocalChannelTimeline {
@@ -278,11 +288,15 @@ export function createLocalChannelTimeline(
     newerCursor: null,
     loadingOlder: false,
     loadingNewer: false,
+    unstored: { older: null, newer: null },
   });
   // Every load bumps it; a result for an older load is dropped.
   let loadToken = 0;
-  // The device holds the whole window, so it can be read again.
+  // The device holds the window it loaded and every page stored since.
   let held = false;
+  // The device holds every page shown, so the window can be read again.
+  const holds = () =>
+    held && state.unstored.older === null && state.unstored.newer === null;
   let anchorId: string | undefined;
   let rereading: Promise<void> | undefined;
   let rereadAgain = false;
@@ -293,11 +307,7 @@ export function createLocalChannelTimeline(
   // Loads the window again when the connection returns after a failed load.
   let reconnect: ReconnectWatch | undefined;
   // Pages again in a direction whose page failed, when the connection returns.
-  const pageReconnects: Record<'older' | 'newer', ReconnectWatch | undefined> =
-    { older: undefined, newer: undefined };
-  // The cursor of a page merged into the window that the device did not
-  // store: the next page in that direction reads it again, not past it.
-  const unstoredPages: Record<'older' | 'newer', string | undefined> = {
+  const pageReconnects: Record<PageDirection, ReconnectWatch | undefined> = {
     older: undefined,
     newer: undefined,
   };
@@ -311,7 +321,7 @@ export function createLocalChannelTimeline(
   onCleanup(() => {
     // A live window the device holds is left for the next mount to show.
     if (
-      held &&
+      holds() &&
       anchorId === undefined &&
       state.phase === 'ready' &&
       state.newerCursor === null
@@ -368,8 +378,6 @@ export function createLocalChannelTimeline(
     held = false;
     anchorId = around;
     stopReconnects();
-    unstoredPages.older = undefined;
-    unstoredPages.newer = undefined;
     const watch = watchReconnect();
     reconnect = watch;
     if (reloads === 0)
@@ -381,11 +389,17 @@ export function createLocalChannelTimeline(
         newerCursor: null,
         loadingOlder: false,
         loadingNewer: false,
+        unstored: { older: null, newer: null },
       });
     // No page while the window is read again: its cursors are the old
     // window's, and a page from them could leave a gap beside the new one.
     // The page loading meanwhile was aborted above, its token now stale.
-    else setState({ loadingOlder: true, loadingNewer: true });
+    else
+      setState({
+        loadingOlder: true,
+        loadingNewer: true,
+        unstored: { older: null, newer: null },
+      });
     const epoch = deps.runtime.epoch();
     let loaded: LoadedChannelPage | 'unsupported';
     try {
@@ -455,7 +469,7 @@ export function createLocalChannelTimeline(
   };
 
   const reread = async () => {
-    if (!held || state.phase !== 'ready') return;
+    if (!holds() || state.phase !== 'ready') return;
     const token = loadToken;
     const merged = merges;
     const live = state.newerCursor === null;
@@ -543,40 +557,88 @@ export function createLocalChannelTimeline(
   /**
    * Reads a page of a held window again that the device did not take, as a
    * window load does: the new session can store what the old one could not,
-   * and a read after the delete can hold what it reads. Held again, the
-   * window follows the device and rereads what changed meanwhile;
-   * `unstored` when every read again was refused too.
+   * and a read after the delete can hold what it reads. `unstored` when every
+   * read again was refused too.
    */
   const fetchMoreAgain = async (
-    direction: 'older' | 'newer',
+    direction: PageDirection,
     cursor: string,
     token: number,
     signal: AbortSignal,
     first: 'session-changed' | 'yielded'
-  ): Promise<'held' | 'unstored' | 'ended'> => {
+  ): Promise<'held' | 'unheld' | 'unstored' | 'stale'> => {
     let settled: Awaited<ReturnType<typeof fetchMore>> = first;
     for (let reloads = 0; reloads < SESSION_CHANGE_RELOADS; reloads += 1) {
       if (settled === 'yielded' && !(await afterDeletes(signal)))
-        return 'ended';
-      if (token !== loadToken) return 'ended';
+        return 'stale';
+      if (token !== loadToken) return 'stale';
       settled = await fetchMore(direction, cursor, token, signal);
-      if (settled === 'held') {
-        held = true;
-        scheduleReread();
-        return 'held';
-      }
       if (settled !== 'yielded' && settled !== 'session-changed')
-        return 'ended';
+        return settled;
     }
     return 'unstored';
+  };
+
+  /** The window stops following the device until it is loaded again. */
+  const letGo = () => {
+    held = false;
+    setState('unstored', { older: null, newer: null });
+  };
+
+  /**
+   * Pages in at `cursor` in `direction`. A page merged into a held window that
+   * the device did not take keeps its cursor in `unstored`: the next page that
+   * way reads it again instead of paging past it, and the window follows the
+   * device only once it holds every page. A page refused again then is given
+   * up, so nothing that keeps asking for pages reads the same one forever.
+   */
+  const pageIn = async (
+    direction: PageDirection,
+    cursor: string,
+    again: boolean,
+    token: number,
+    signal: AbortSignal
+  ): Promise<PageOutcome | 'stale'> => {
+    let settled: Awaited<ReturnType<typeof fetchMoreAgain>>;
+    if (again) {
+      settled = await fetchMoreAgain(
+        direction,
+        cursor,
+        token,
+        signal,
+        'session-changed'
+      );
+    } else {
+      const first = await fetchMore(direction, cursor, token, signal);
+      if (first === 'stale') return 'stale';
+      if (first === 'held') return 'done';
+      if (first === 'unheld' || !held) {
+        letGo();
+        return 'done';
+      }
+      // Marked before the page is read again, so a scroll as the read ends,
+      // or a reread meanwhile, finds it.
+      setState('unstored', direction, cursor);
+      settled = await fetchMoreAgain(direction, cursor, token, signal, first);
+      if (settled === 'unstored') return 'unstored';
+    }
+    if (settled === 'stale') return 'stale';
+    if (settled !== 'held') {
+      letGo();
+      return 'done';
+    }
+    setState('unstored', direction, null);
+    // Held again once no page is missing: reread what changed meanwhile.
+    if (holds()) scheduleReread();
+    return 'done';
   };
 
   /**
    * Pages past the window's end in `direction`, or reads again the page there
    * that was merged in but that the device did not take.
    */
-  const loadMore = async (direction: 'older' | 'newer') => {
-    const unstored = unstoredPages[direction];
+  const loadMore = async (direction: PageDirection) => {
+    const unstored = state.unstored[direction];
     const cursor =
       unstored ??
       (direction === 'older' ? state.olderCursor : state.newerCursor);
@@ -588,54 +650,31 @@ export function createLocalChannelTimeline(
     pageReconnects[direction]?.stop();
     const watch = watchReconnect();
     pageReconnects[direction] = watch;
-    // The page past `cursor` is in the window, but not yet on the device.
-    let merged = unstored !== undefined;
-    let again: Awaited<ReturnType<typeof fetchMoreAgain>> | undefined;
-    let failed = false;
     setState(flag, true);
+    let outcome: PageOutcome | 'stale';
     try {
-      if (unstored !== undefined) {
-        again = await fetchMoreAgain(
-          direction,
-          cursor,
-          token,
-          signal,
-          'session-changed'
-        );
-      } else {
-        const settled = await fetchMore(direction, cursor, token, signal);
-        if (settled === 'stale' || settled === 'held') return;
-        const wasHeld = held;
-        held = false;
-        // Still loading until the page is read again: a scroll meanwhile
-        // would page past it from a window the device does not hold.
-        if (wasHeld && settled !== 'unheld') {
-          merged = true;
-          again = await fetchMoreAgain(
-            direction,
-            cursor,
-            token,
-            signal,
-            settled
-          );
-        }
-      }
+      outcome = await pageIn(
+        direction,
+        cursor,
+        unstored !== null,
+        token,
+        signal
+      );
     } catch (error) {
       // Aborted by a switch or unmount: nothing failed.
-      if (token !== loadToken) return;
-      Telemetry.error(error, { surface: 'channel-local-sync' });
-      failed = true;
-    } finally {
-      if (token === loadToken) setState(flag, false);
-      if (token !== loadToken || (!failed && again !== 'unstored'))
-        watch.stop();
+      outcome = token === loadToken ? 'failed' : 'stale';
+      if (outcome === 'failed')
+        Telemetry.error(error, { surface: 'channel-local-sync' });
     }
-    if (token !== loadToken) return;
-    // A page shown but not stored is read again from its own cursor, not
-    // from the one it moved the window's end to.
-    unstoredPages[direction] =
-      again === 'unstored' || (failed && merged) ? cursor : undefined;
-    if (!failed && again !== 'unstored') return;
+    if (outcome === 'stale' || token !== loadToken) {
+      watch.stop();
+      return;
+    }
+    setState(flag, false);
+    if (outcome === 'done') {
+      watch.stop();
+      return;
+    }
     // The window keeps what it shows. The next scroll asks again, and so does
     // the connection coming back: scrolled to the end there is no next
     // scroll.
@@ -681,7 +720,8 @@ export function createLocalChannelTimeline(
 
   return {
     entries,
-    hasOlder: () => state.olderCursor !== null,
+    // A last page the device did not store is still there to read again.
+    hasOlder: () => state.olderCursor !== null || state.unstored.older !== null,
     hasNewer: () => state.newerCursor !== null,
     isLoading: () => state.phase === 'loading',
     isLoadingOlder: () => state.loadingOlder,
@@ -701,7 +741,13 @@ export function createLocalChannelTimeline(
       if (anchorId !== undefined || state.newerCursor !== null) {
         await load(undefined);
       } else {
-        await currentLoad;
+        // A load that fails after the connection came back is replaced by
+        // its retry as it fails: wait for whichever load is current.
+        let awaited: Promise<void>;
+        do {
+          awaited = currentLoad;
+          await awaited;
+        } while (awaited !== currentLoad);
       }
       if (state.phase === 'failed') throw state.error;
     },

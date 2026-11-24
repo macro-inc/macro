@@ -25,7 +25,9 @@ TanStack path in `../` runs untouched.
   request that fails after the connection is already back loads again at
   once): nothing on screen retries them, nor a window read again after a
   session change. A page the device failed to store is read again from its
-  own cursor, by the next page in that direction or the connection's return.
+  own cursor, by the next page in that direction or the connection's return,
+  and given up if refused again: the window then follows the device only
+  once it is loaded again.
   Tabs share the device but hear only their own writes and the server's
   frames, so a write announces its channel to the other tabs once the queue
   stores it and once it settles (`channel-tab-writes.ts`, the

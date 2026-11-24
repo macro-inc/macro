@@ -8,7 +8,7 @@ import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/gene
 import { until } from '@solid-primitives/promise';
 import { onlineManager } from '@tanstack/solid-query';
 import { CombinedError } from '@urql/core';
-import { createEffect, createRoot, createSignal } from 'solid-js';
+import { createEffect, createRoot, createSignal, on } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   channelMessageKey,
@@ -1234,6 +1234,182 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
         rows[70]!.sortKey,
         rows[70]!.sortKey,
       ]);
+    } finally {
+      mounted.dispose();
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('reads a refused page again as paging restarts the moment it ends, and gives it up once refused again', async () => {
+    const rows = messages(120);
+    // Every page the server sends, the device refuses to store.
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockImplementation(async ({ before }) => {
+        const to = rows.findIndex((row) => row.sortKey === before);
+        return serverPage(
+          rows,
+          Math.max(0, to - 50),
+          to,
+          Promise.reject(new StaleCacheAuthorityError())
+        );
+      });
+    const mounted = mount({ rows, fetchPage });
+    const loads: Promise<void>[] = [];
+    let disposeEffect = () => {};
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      // A call panel seeking an older root pages whenever paging is idle.
+      createRoot((dispose) => {
+        disposeEffect = dispose;
+        createEffect(
+          on(
+            () =>
+              mounted.timeline.hasOlder() && !mounted.timeline.isLoadingOlder(),
+            (idle) => {
+              if (idle) loads.push(mounted.timeline.loadOlder());
+            }
+          )
+        );
+      });
+      await until(
+        () => !mounted.timeline.hasOlder() && !mounted.timeline.isLoadingOlder()
+      );
+      await Promise.all(loads);
+      expect(fetchPage.mock.calls.map(([input]) => input.before)).toEqual([
+        ...Array.from({ length: 5 }, () => rows[70]!.sortKey),
+        rows[20]!.sortKey,
+      ]);
+    } finally {
+      disposeEffect();
+      mounted.dispose();
+    }
+  });
+
+  it('reads a newer page the device refused again while an older one waits too', async () => {
+    const rows = messages(200);
+    const refused = (
+      entries: Row[],
+      older: string | null,
+      newer: string | null
+    ) => ({
+      page: {
+        __typename: 'GraphqlChannelTimelinePage',
+        entries: [...entries].reverse(),
+        olderCursor: older,
+        newerCursor: newer,
+        seq: '9',
+      } as never,
+      cached: Promise.reject(new StaleCacheAuthorityError()),
+    });
+    const at = (sortKey: string | undefined) =>
+      rows.findIndex((row) => row.sortKey === sortKey);
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockImplementation(async ({ before, after }) => {
+        if (before !== undefined) {
+          const to = at(before);
+          return refused(
+            rows.slice(to - 50, to),
+            rows[to - 50]!.sortKey,
+            before
+          );
+        }
+        const from = at(after) + 1;
+        return refused(
+          rows.slice(from, from + 50),
+          after!,
+          rows[from + 49]!.sortKey
+        );
+      });
+    const mounted = mount({ rows, fetchPage, around: rows[100]!.id });
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      // The window's newest message, where its newer pages start.
+      const newest = rows.find((row) => row.id === ids(mounted.timeline)[0]);
+      const newerCursor = newest!.sortKey;
+      await mounted.timeline.loadOlder();
+      await mounted.timeline.loadNewer();
+      await mounted.timeline.loadNewer();
+      const newer = fetchPage.mock.calls
+        .map(([input]) => input.after)
+        .filter((after) => after !== undefined);
+      expect(newer).toEqual(Array.from({ length: 5 }, () => newerCursor));
+    } finally {
+      mounted.dispose();
+    }
+  });
+
+  it('keeps a last older page the device refused there to read again', async () => {
+    const rows = messages(70);
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockImplementation(async () =>
+        serverPage(rows, 0, 20, Promise.reject(new StaleCacheAuthorityError()))
+      );
+    const mounted = mount({ rows, fetchPage });
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      await mounted.timeline.loadOlder();
+      expect(fetchPage).toHaveBeenCalledTimes(3);
+      expect(mounted.timeline.hasOlder()).toBe(true);
+
+      // The device stores it now, with the connection there all along.
+      fetchPage.mockImplementation(async () => serverPage(rows, 0, 20));
+      await mounted.timeline.loadOlder();
+      expect(fetchPage.mock.calls.map(([input]) => input.before)).toEqual(
+        Array.from({ length: 4 }, () => rows[20]!.sortKey)
+      );
+      expect(mounted.timeline.hasOlder()).toBe(false);
+    } finally {
+      mounted.dispose();
+    }
+  });
+
+  it('goes to the live end only once a window read again at once after its reload failed has loaded', async () => {
+    const rows = messages(2);
+    const cached = Promise.withResolvers<void>();
+    const reloading = Promise.withResolvers<void>();
+    const reload = Promise.withResolvers<ServerPage>();
+    const retrying = Promise.withResolvers<void>();
+    const retry = Promise.withResolvers<ServerPage>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(serverPage(rows, 0, 2, cached.promise))
+      .mockImplementationOnce(() => {
+        reloading.resolve();
+        return reload.promise;
+      })
+      .mockImplementationOnce(() => {
+        retrying.resolve();
+        return retry.promise;
+      });
+    const mounted = mount({ rows, held: false, fetchPage });
+    try {
+      await until(() => mounted.timeline.entries().length === 2);
+      // The session changed before the window was stored: it is read again.
+      cached.reject(new StaleCacheAuthorityError());
+      await reloading.promise;
+      onlineManager.setOnline(false);
+      let atLatest = false;
+      const latest = (async () => {
+        await mounted.timeline.toLatest();
+        atLatest = true;
+      })();
+      // Back before the read again fails: it is read again at once.
+      onlineManager.setOnline(true);
+      reload.reject(new TypeError('Failed to fetch'));
+      await retrying.promise;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(atLatest).toBe(false);
+
+      const grown = [...rows, graphqlMessage(3)];
+      retry.resolve(serverPage(grown, 0, 3));
+      await latest;
+      expect(mounted.timeline.entries()).toHaveLength(3);
     } finally {
       mounted.dispose();
       onlineManager.setOnline(true);
