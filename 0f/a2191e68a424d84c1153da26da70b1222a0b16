@@ -1,0 +1,27 @@
+apps/web/tests/native/README.md
+  s_6c7f2cf63ad69c::t_0aeaddb192c8b2 46-47
+apps/web/src/features/calendar-view/components/Header.tsx
+  s_6c7f2cf63ad69c::t_cb66448537c515 121-129,362,365-366
+docs/agent-guide/calendar.md
+  s_6c7f2cf63ad69c::t_0aeaddb192c8b2 455-458
+apps/web/tests/native/driver.ts
+  s_6c7f2cf63ad69c::t_2f9abef4b79011 193-198,202-204,214
+apps/web/tests/native/runner.ts
+  s_6c7f2cf63ad69c::t_0aeaddb192c8b2 371,384-397
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0fa2191e68a424d84c1153da26da70b1222a0b16",
+  "prompts": {},
+  "sessions": {
+    "s_6c7f2cf63ad69c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c4eead61-af1c-4553-a89d-d287bdb5f3ad",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
