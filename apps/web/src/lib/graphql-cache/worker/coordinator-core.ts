@@ -146,6 +146,8 @@ export type CoordinatorAction =
   | { kind: 'terminal-failure'; error: string; storageUntouched?: true };
 
 export type EngineReady = {
+  /** Its page may be shown again before it hands over. */
+  hiddenBriefly?: boolean;
   tabId: string;
   ownerEpoch: OwnerEpoch;
   ownerLockName: string;
@@ -528,7 +530,9 @@ export class CoordinatorCore {
     }
     // A hidden engine may have reset storage before it immediately drains.
     // Notify hosts of that outcome, but leave queued work for its successor.
-    const drain = this.drainHiddenOwner(state.ownerEpoch);
+    const drain = ready.hiddenBriefly
+      ? []
+      : this.drainHiddenOwner(state.ownerEpoch);
     if (drain.length > 0) return [...actions, ...drain];
     const held = this.queuedRequests.splice(0);
     for (const queued of inEngineArrivalOrder(held)) {
@@ -1006,10 +1010,14 @@ export class CoordinatorCore {
     return [{ kind: 'handoff-pending', ownerEpoch: state.ownerEpoch }];
   }
 
-  /** Whether a hidden page's engine serves the cache. */
+  /** Whether the engine that serves the cache, or is starting to, belongs to a
+   * hidden page. */
   get ownerHidden(): boolean {
     const state = this.stateValue;
-    return state.kind === 'active' && !this.visibleTabs.has(state.tabId);
+    return (
+      (state.kind === 'active' || state.kind === 'activating') &&
+      !this.visibleTabs.has(state.tabId)
+    );
   }
 
   drainHiddenOwner(ownerEpoch: OwnerEpoch): CoordinatorAction[] {

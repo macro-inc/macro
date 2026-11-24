@@ -130,6 +130,12 @@ type DrainWatch = {
   timer: ReturnType<typeof setTimeout> | undefined;
 };
 
+type OwnerHide = {
+  ownerEpoch: number;
+  since: number;
+  timer: ReturnType<typeof setTimeout> | undefined;
+};
+
 /** How long a write waits for an owner while some page is visible. */
 export const QUEUED_WRITE_TIMEOUT_MS = 30_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 2_000;
@@ -272,7 +278,7 @@ export class CoordinatorRouter {
   private heartbeatIntervalTimer: ReturnType<typeof setTimeout> | undefined;
   private heartbeatTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
   private drain: DrainWatch | undefined;
-  private hideTimer: ReturnType<typeof setTimeout> | undefined;
+  private ownerHide: OwnerHide | undefined;
   private queuedWriteTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly visibleTime = new VisibleTime(() => this.now());
   private nextHeartbeatId = 1;
@@ -781,6 +787,9 @@ export class CoordinatorRouter {
         const actions = core.engineReady({
           ...message,
           expectedOwnerLockName: databaseOwnerLockName(core.scope),
+          hiddenBriefly:
+            this.ownerHide?.ownerEpoch === message.ownerEpoch &&
+            this.hideGraceLeft(this.ownerHide) > 0,
         });
         const violated = actions.some(
           (action) => action.kind === 'protocol-violation'
@@ -1197,7 +1206,7 @@ export class CoordinatorRouter {
   private syncReadAvailability(): void {
     const core = this.coreValue;
     if (!core) return;
-    if (!core.ownerHidden) this.clearHideTimer();
+    this.watchOwnerHide(core);
     this.watchQueuedWrites(core);
     match(core.state)
       .with({ kind: 'parked' }, () =>
@@ -1218,7 +1227,7 @@ export class CoordinatorRouter {
           this.handoff.start(ownerEpoch, core.hasVisibleTab);
       })
       .with({ kind: 'active' }, ({ ownerEpoch }) => {
-        if (core.ownerHidden) this.drainOnceHiddenLongEnough(ownerEpoch);
+        this.drainOnceHiddenLongEnough(ownerEpoch);
         this.handoff.ready(ownerEpoch);
       })
       .with(
@@ -1847,18 +1856,32 @@ export class CoordinatorRouter {
     );
   }
 
-  private drainOnceHiddenLongEnough(ownerEpoch: number): void {
-    if (this.hideTimer !== undefined) return;
-    this.hideTimer = this.setTimeoutFn(() => {
-      this.hideTimer = undefined;
-      const core = this.coreValue;
-      if (core) this.applyActions(core.drainHiddenOwner(ownerEpoch));
-    }, this.hideGraceMs);
+  /** Notes since when the owner's page is hidden, from its startup on. */
+  private watchOwnerHide(core: CoordinatorCore): void {
+    const { ownerEpoch } = core.snapshot();
+    const hide = this.ownerHide;
+    if (core.ownerHidden && hide?.ownerEpoch === ownerEpoch) return;
+    if (hide?.timer !== undefined) this.clearTimeoutFn(hide.timer);
+    this.ownerHide = core.ownerHidden
+      ? { ownerEpoch, since: this.now(), timer: undefined }
+      : undefined;
   }
 
-  private clearHideTimer(): void {
-    if (this.hideTimer !== undefined) this.clearTimeoutFn(this.hideTimer);
-    this.hideTimer = undefined;
+  private hideGraceLeft(hide: OwnerHide): number {
+    return hide.since + this.hideGraceMs - this.now();
+  }
+
+  private drainOnceHiddenLongEnough(ownerEpoch: number): void {
+    const hide = this.ownerHide;
+    if (!hide || hide.timer !== undefined) return;
+    hide.timer = this.setTimeoutFn(
+      () => {
+        this.ownerHide = undefined;
+        const core = this.coreValue;
+        if (core) this.applyActions(core.drainHiddenOwner(ownerEpoch));
+      },
+      Math.max(0, this.hideGraceLeft(hide))
+    );
   }
 
   /**
@@ -1942,9 +1965,7 @@ export class CoordinatorRouter {
       ownerEvent: 'drain-timed-out',
       errorCode: 'timeout',
     });
-    this.applyActions(
-      core.drainExpired(tabId, ownerEpoch, 'engine drain timed out')
-    );
+    this.applyActions(core.drainExpired(tabId, ownerEpoch, reason));
   }
 
   /** Whether anyone holds the owner lock; a failed probe is no sign of a loss. */

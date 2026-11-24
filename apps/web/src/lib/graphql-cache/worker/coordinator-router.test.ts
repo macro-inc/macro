@@ -259,6 +259,7 @@ describe('CoordinatorRouter', () => {
         watchTabLock: () => () => undefined,
         telemetry: { record: (event) => observations.push(event), flush() {} },
         handoffReadTimeoutMs: 0,
+        hideGraceMs: 0,
       });
       const tabA = new FakePort();
       const tabB = new FakePort();
@@ -2330,6 +2331,73 @@ describe('CoordinatorRouter', () => {
     expect(router.snapshot()?.state.kind).toBe('draining');
   });
 
+  it.each([
+    { hiddenMs: 999, drains: false },
+    { hiddenMs: 1_000, drains: true },
+  ])(
+    'counts the second of an owner from when its page hid during its startup (hidden for $hiddenMs ms)',
+    async ({ hiddenMs, drains }) => {
+      vi.useFakeTimers();
+      const router = new CoordinatorRouter({
+        verifyTabLockHeld: async () => true,
+        verifyOwnerLockHeld: async () => true,
+        watchTabLock: () => () => {},
+      });
+      const tabA = new FakePort();
+      await register(router, tabA, 'tab-a');
+      await register(router, new FakePort(), 'tab-b');
+      const engine = new FakePort();
+      await attach(router, tabA, 'tab-a', 1, engine);
+      const show = (visible: boolean) =>
+        router.handleTabMessage(tabA as CoordinatorMessagePort, {
+          ...version,
+          kind: 'tab-visibility',
+          tabId: 'tab-a',
+          visible,
+        });
+      await show(false);
+      await vi.advanceTimersByTimeAsync(hiddenMs);
+      ready(engine, 'tab-a', 1, 'opened-existing');
+      expect(messagesOfKind(engine, 'drain-engine')).toHaveLength(
+        drains ? 1 : 0
+      );
+      if (drains) return;
+
+      await show(true);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(router.snapshot()?.state.kind).toBe('active');
+      await show(false);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(messagesOfKind(engine, 'drain-engine')).toHaveLength(1);
+    }
+  );
+
+  it('drains an owner that hid during its startup once the rest of its second is over', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      verifyOwnerLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, new FakePort(), 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'tab-visibility',
+      tabId: 'tab-a',
+      visible: false,
+    });
+    await vi.advanceTimersByTimeAsync(600);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    await vi.advanceTimersByTimeAsync(399);
+    expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(messagesOfKind(engine, 'drain-engine')).toHaveLength(1);
+  });
+
   it('forgets the second of an owner that ends while hidden', async () => {
     vi.useFakeTimers();
     const router = new CoordinatorRouter({
@@ -2518,7 +2586,7 @@ describe('CoordinatorRouter', () => {
       expect(messagesOfKind(tabB, 'become-owner')).toEqual([
         expect.objectContaining({
           ownerEpoch: 2,
-          databaseAction: 'wipe-before-open',
+          databaseAction: 'open-existing',
         }),
       ]);
     });
@@ -2636,7 +2704,7 @@ describe('CoordinatorRouter', () => {
       expect(messagesOfKind(tabB, 'become-owner')).toEqual([
         expect.objectContaining({
           ownerEpoch: 2,
-          databaseAction: 'open-existing',
+          databaseAction: 'wipe-before-open',
         }),
       ]);
     }
