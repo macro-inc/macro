@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM computer_screen_agent_notices\n                WHERE computer_id = $1 AND payload->>'name' = 'computer.screen.takeOver'\n                  AND (payload->>'startedAt')::timestamptz = $2\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0d4273fd36f95ba6ae0f5f8f90adb8fa429ba8432d5129ce6121db645a5e74a6"
+}

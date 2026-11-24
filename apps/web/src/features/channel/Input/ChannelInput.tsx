@@ -27,7 +27,6 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { isPlatform } from '@core/util/platform';
 import {
   chatRuleset,
   handleFileFolderDrop,
@@ -60,12 +59,17 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
-  DictationButton,
   DictationFeedback,
   DictationPanel,
 } from '../../dictation/components/dictation-controls';
+import {
+  VoiceMemoFeedback,
+  VoiceMemoPanel,
+} from '../../dictation/components/voice-memo-controls';
 import { createComposerDictation } from '../../dictation/composer-dictation';
+import { createComposerVoiceMemo } from '../../dictation/composer-voice-memo';
 import type { DictationController } from '../../dictation/core/types';
+import type { VoiceMemoController } from '../../dictation/core/voice-memo';
 import { useAgentMentionUserTransform } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { useMessageParticipants } from '../use-message-participants';
@@ -81,8 +85,10 @@ import {
   createConfiguredChannelMarkdownEditor,
 } from './configured-markdown-editor';
 import { createCollapsedInputState } from './create-collapsed-input-state';
+import { DefaultActions } from './DefaultActions';
 import { FormatButtons } from './FormatButtons';
 import { Input } from './Input';
+import { MicrophoneAction } from './MicrophoneAction';
 import type {
   EntityMentionInsertCoordinates,
   InputAttachmentTracker,
@@ -120,6 +126,12 @@ type ChannelInputFeatures = {
   richBlocks: boolean;
   attachments: boolean;
   dictation: boolean;
+  /**
+   * Recording a voice memo from the microphone, attached as a `static/audio`
+   * file. Needs `attachments` and Macro's own static uploads; off by default,
+   * on for channel messages and thread replies.
+   */
+  voiceMemos: boolean;
 };
 
 const ALL_FEATURES: ChannelInputFeatures = {
@@ -129,6 +141,7 @@ const ALL_FEATURES: ChannelInputFeatures = {
   richBlocks: true,
   attachments: true,
   dictation: true,
+  voiceMemos: false,
 };
 
 /** Slash actions behind each switchable feature. */
@@ -193,70 +206,6 @@ export type ChannelInputProps = InputCallbacks & {
   flat?: boolean;
 };
 
-function WebDefaultActions(props: {
-  input: InputData;
-  dictation: DictationController;
-  showDictation: boolean;
-  addMenu: JSX.Element;
-}) {
-  return (
-    <>
-      <Input.Layout.ActionsLeft>
-        {props.addMenu}
-        <Show when={isReplyInput(props.input)}>
-          <Input.CloseReplyAction />
-        </Show>
-      </Input.Layout.ActionsLeft>
-      <Input.Layout.ActionsRight>
-        <Show when={props.showDictation}>
-          <DictationButton dictation={props.dictation} />
-        </Show>
-        <Input.SendAction />
-      </Input.Layout.ActionsRight>
-    </>
-  );
-}
-
-// The iOS keyboard dictates on its own, so there is no microphone to place.
-function IosDefaultActions(props: { input: InputData; addMenu: JSX.Element }) {
-  return (
-    <>
-      <Input.Layout.ActionsLeft>
-        {props.addMenu}
-        <Show when={isReplyInput(props.input)}>
-          <Input.CloseReplyAction />
-        </Show>
-      </Input.Layout.ActionsLeft>
-      <Input.Layout.ActionsRight>
-        <Input.SendAction />
-      </Input.Layout.ActionsRight>
-    </>
-  );
-}
-
-function DefaultActions(props: {
-  input: InputData;
-  dictation: DictationController;
-  showDictation: boolean;
-  addMenu: JSX.Element;
-}) {
-  return (
-    <Show
-      when={isPlatform('ios')}
-      fallback={
-        <WebDefaultActions
-          input={props.input}
-          dictation={props.dictation}
-          showDictation={props.showDictation}
-          addMenu={props.addMenu}
-        />
-      }
-    >
-      <IosDefaultActions input={props.input} addMenu={props.addMenu} />
-    </Show>
-  );
-}
-
 export function ChannelInput(props: ChannelInputProps) {
   const features = (): ChannelInputFeatures => ({
     ...ALL_FEATURES,
@@ -308,7 +257,10 @@ export function ChannelInput(props: ChannelInputProps) {
   });
 
   const isCollapsed = () =>
-    !!props.collapsible && collapsedInput.isCollapsed() && !dictation.active();
+    !!props.collapsible &&
+    collapsedInput.isCollapsed() &&
+    !dictation.active() &&
+    !voiceMemo.active();
 
   let isEditorConnected = false;
   let acceptTyping = false;
@@ -424,7 +376,14 @@ export function ChannelInput(props: ChannelInputProps) {
     onMentionRemove: (mention) => {
       mentionsTracker.onMentionRemove(mention);
     },
-    onChange,
+    onChange: (markdown: string) => {
+      // A note about the last recording is stale once the draft moves on.
+      if (markdown !== (inputState.view().value ?? '')) {
+        composerDictation.clearMessage();
+        composerVoiceMemo.clearNotice();
+      }
+      onChange(markdown);
+    },
     onEnter: () => {
       if (isTouchDevice()) return false;
       typingTracker.stop();
@@ -454,13 +413,58 @@ export function ChannelInput(props: ChannelInputProps) {
     ...composerDictation,
     start: () => {
       collapsedInput.expand();
+      // One note under the composer at a time: the last attempt's.
+      composerVoiceMemo.clearNotice();
       return composerDictation.start();
     },
   };
+  // A recording attaches through the same tracker as picked files, so it
+  // shows, uploads, sends and restores with the rest of the draft.
+  const composerVoiceMemo = createComposerVoiceMemo({
+    attach: async (file) => {
+      const [staticFileId] = await uploadInputAttachments({
+        files: [file],
+        tracker: attachmentTracker,
+        kind: 'audio',
+        // The recording panel reports a failure and offers Retry.
+        quiet: true,
+        uploadFile: (memo) =>
+          uploadFile(memo, () => 'static', { hideProgressIndicator: true }),
+      });
+      return staticFileId;
+    },
+    // Pointer users keep typing; on touch, focus would raise the keyboard.
+    onFinish: () => {
+      if (!isTouchDevice()) focusEditor();
+    },
+  });
+  const voiceMemo: VoiceMemoController = {
+    ...composerVoiceMemo,
+    // A full draft could never take the recording.
+    disabled: () => composerVoiceMemo.disabled() || attachmentTracker.isFull(),
+    start: async () => {
+      if (attachmentTracker.isFull()) return;
+      collapsedInput.expand();
+      composerDictation.clearMessage();
+      await composerVoiceMemo.start();
+    },
+  };
+  const showVoiceMemo = () =>
+    features().attachments &&
+    features().voiceMemos &&
+    voiceMemo.phase() !== 'unavailable';
+  const recordingActive = () => dictation.active() || voiceMemo.active();
   const commands = {
     ...inputState.commands,
     // Keyboard, toolbar, and external handles all share this guard.
-    send: async () => (dictation.active() ? false : inputState.commands.send()),
+    send: async () => (recordingActive() ? false : inputState.commands.send()),
+    // A note about a memo (the limit) is stale once it leaves the draft.
+    removeAttachment: (
+      ...attachment: Parameters<typeof inputState.commands.removeAttachment>
+    ) => {
+      composerVoiceMemo.clearNotice();
+      return inputState.commands.removeAttachment(...attachment);
+    },
   };
   // The add menu's actions are the slash menu's, run from the + instead.
   const actionContext: ActionContext = {
@@ -683,7 +687,12 @@ export function ChannelInput(props: ChannelInputProps) {
     mode: () =>
       isReplyInput(inputState.view()) ||
       inputState.view().showFormatRibbon ||
-      inputState.view().attachments?.length
+      // A memo still uploading under its recording panel is not shown.
+      inputState
+        .view()
+        .attachments?.some(
+          (attachment) => !(attachment.kind === 'audio' && attachment.pending)
+        )
         ? 'expanded'
         : 'auto',
   });
@@ -802,6 +811,10 @@ export function ChannelInput(props: ChannelInputProps) {
         dictation.cancel();
         return true;
       }
+      if (voiceMemo.active()) {
+        voiceMemo.cancel();
+        return true;
+      }
       // Block upstream escape handlers when ESC should close inline menus.
       if (markdownEditor.controls.isInlineMenuOpen()) return true;
       if (!props.onEscape) return false;
@@ -823,8 +836,10 @@ export function ChannelInput(props: ChannelInputProps) {
         <Input.Layout
           ref={setLayout}
           oneLineInput={oneLineInput()}
-          inert={dictation.active()}
-          classList={{ invisible: dictation.active() }}
+          // The opaque panel covers the composer. Not `invisible`: the editor
+          // shell transitions all properties, visibility included, so it
+          // would stay unfocusable for a frame after the panel closes.
+          inert={recordingActive()}
         >
           <Show when={features().attachments}>
             <Input.DropOverlay />
@@ -884,6 +899,7 @@ export function ChannelInput(props: ChannelInputProps) {
             </Input.Layout.Editor>
             <Show when={features().attachments}>
               <Input.Attachments kind="media" />
+              <Input.Attachments kind="audio" />
               <Input.Attachments kind="document" />
             </Show>
           </Input.Layout.Body>
@@ -897,7 +913,9 @@ export function ChannelInput(props: ChannelInputProps) {
               <DefaultActions
                 input={inputState.view()}
                 dictation={dictation}
+                voiceMemo={voiceMemo}
                 showDictation={features().dictation}
+                showVoiceMemo={showVoiceMemo()}
                 // The collapsed pill carries the + while collapsed; one + at
                 // a time, so the menu never anchors to a hidden one.
                 addMenu={<Show when={!isCollapsed()}>{addMenu()}</Show>}
@@ -958,6 +976,17 @@ export function ChannelInput(props: ChannelInputProps) {
           disabled={!hasSendableInputContent(inputState.view())}
           getFocusTarget={() => lexicalEditor().getRootElement()}
           leadingAction={addMenu(true)}
+          // The microphone stays one tap away while the composer rests.
+          trailingAction={
+            <Show when={showVoiceMemo()}>
+              <MicrophoneAction
+                dictation={dictation}
+                memo={voiceMemo}
+                showDictation={features().dictation}
+                showMemo
+              />
+            </Show>
+          }
           onOpen={collapsedInput.expand}
           onSend={() => fireAndForget(commands.send(), 'channel-input')}
         />
@@ -969,7 +998,7 @@ export function ChannelInput(props: ChannelInputProps) {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
           if (isInternalRefocus) return;
-          if (dictation.active()) return;
+          if (recordingActive()) return;
           collapsedInput.collapse();
         }}
         // `ComposerSurface` stretches itself; a bare div would take its
@@ -984,9 +1013,17 @@ export function ChannelInput(props: ChannelInputProps) {
         <Show when={features().dictation}>
           <DictationPanel dictation={dictation} />
         </Show>
+        <VoiceMemoPanel memo={voiceMemo} />
       </Dynamic>
-      <Show when={features().dictation}>
-        <DictationFeedback dictation={dictation} />
+      <Show
+        when={voiceMemo.notice()}
+        fallback={
+          <Show when={features().dictation}>
+            <DictationFeedback dictation={dictation} />
+          </Show>
+        }
+      >
+        <VoiceMemoFeedback memo={voiceMemo} />
       </Show>
     </Input.Root>
   );

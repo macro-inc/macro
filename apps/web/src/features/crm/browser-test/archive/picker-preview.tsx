@@ -50,6 +50,8 @@ const quickAccessItems = itemNames.map((name, index) => {
         itemType === 'crm_contact'
           ? `person${index + 1}@example.com`
           : undefined,
+      // Name search reads a company's domains.
+      domains: itemType === 'crm_company' ? [] : undefined,
       updatedAt: new Date('2026-10-15'),
     },
   };

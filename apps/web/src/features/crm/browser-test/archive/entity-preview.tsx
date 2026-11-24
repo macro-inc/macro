@@ -25,6 +25,23 @@ export function ListEntity(props: {
   );
 }
 
+// The real icon and title reach soup and Markdown modules this harness
+// replaces. Like the chat and direct-message icons, this glyph fills its box
+// whatever class it is given, so a row must size the box around it.
+export function EntityRowIcon(props: { class?: string }) {
+  return (
+    <svg
+      class={`size-full ${props.class ?? ''}`}
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+    />
+  );
+}
+export function EntityRowTitle(props: { entity: { name: string } }) {
+  return <span class="truncate">{props.entity.name}</span>;
+}
+// No drag-and-drop context here, which makes the real helper a no-op too.
+export const createEntityDraggable = () => () => {};
 export {
   formatDateAndTime,
   formatRelativeTimestamp,
@@ -93,6 +110,9 @@ export const Entity = {
 
 export const isTaskEntity = (entity: { type: string }) =>
   entity.type === 'task';
+
+export const isCrmCompanyEntity = (entity: { type: string }) =>
+  entity.type === 'crm_company';
 
 Object.assign(window, {
   emailPickerFixture: {

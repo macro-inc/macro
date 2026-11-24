@@ -16,6 +16,7 @@ mod deferred;
 mod display_results;
 pub mod email_attachments;
 mod import_channels;
+mod import_hubspot;
 mod import_jobs;
 mod import_trackers;
 mod import_workspace;
@@ -58,12 +59,14 @@ use skills::inbound::toolset::skill_toolset;
 use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
 use teams::inbound::toolset::team_toolset;
+use time_tracking::inbound::toolset::time_tracking_toolset;
 
 pub use build_context::{
     build_cognition_tool_context, build_image_generator_from_env,
     build_tool_service_context_from_env, build_web_search_provider_from_env, service_feature_flags,
 };
 pub use deferred::{DeferredToolSet, deferred_tools};
+pub use import_hubspot::HubspotCrmWriter;
 pub use import_jobs::{IMPORT_JOBS_HANDOVER_TIMEOUT, ImportJobs};
 pub use mcp_app_catalog::ConnectorsAppCatalog;
 pub use search::search_toolset;
@@ -91,8 +94,8 @@ pub use tool_context::{
     ToolPropertiesService, ToolPropertiesToolContext, ToolReadAgentSessionContext,
     ToolServiceContext, ToolSkillService, ToolSkillToolContext, ToolSoupService,
     ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamCalendarService,
-    ToolTeamCalendarToolContext, ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
-    ToolViewOnlyDatabasesSqlToolContext, build_activity_read_service,
+    ToolTeamCalendarToolContext, ToolTeamService, ToolTeamToolContext, ToolTimeTrackingToolContext,
+    ToolUserEmailService, ToolViewOnlyDatabasesSqlToolContext, build_activity_read_service,
     build_booking_link_tool_context, build_booking_management_tool_context, build_bot_tool_context,
     build_calendar_tool_context, build_channel_media_upload_tool_context,
     build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
@@ -106,7 +109,7 @@ pub use tool_context::{
     build_properties_service, build_properties_service_with_broker, build_properties_tool_context,
     build_read_agent_session_context, build_routine_tool_context, build_skill_tool_context,
     build_task_properties_adapter, build_team_calendar_tool_context, build_team_repository,
-    build_team_tool_context,
+    build_team_tool_context, build_time_tracking_tool_context,
 };
 pub use tool_context::{ToolConnectorToolContext, build_connector_tool_context};
 #[cfg(any(test, feature = "test-support"))]
@@ -172,6 +175,7 @@ pub(crate) fn base_toolset() -> AiToolSet {
         .add_subtoolset::<ToolFavoritesToolContext>(favorites_toolset())
         .add_subtoolset::<ToolMessageToolContext>(message_toolset())
         .add_subtoolset::<ToolInitiativeToolContext>(initiative_toolset())
+        .add_subtoolset::<ToolTimeTrackingToolContext>(time_tracking_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
         .add_subtoolset::<ToolCallToolContext>(call_toolset())
         .add_tool::<ReadAgentSession, ToolReadAgentSessionContext>()

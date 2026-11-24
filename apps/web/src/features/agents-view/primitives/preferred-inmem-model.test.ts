@@ -22,6 +22,19 @@ describe('preferred in-memory model', () => {
     });
   });
 
+  it('restores a retired model choice as its replacement', () => {
+    window.localStorage.setItem(
+      'agents-view-inmem-model-v1:user-a',
+      'anthropic/claude-haiku-4-5'
+    );
+    createRoot((dispose) => {
+      expect(createPreferredInmemModel('user-a').model()).toBe(
+        'anthropic/claude-haiku-5-5'
+      );
+      dispose();
+    });
+  });
+
   it('ignores blank stored values', () => {
     window.localStorage.setItem('agents-view-inmem-model-v1:user-a', '  ');
     createRoot((dispose) => {

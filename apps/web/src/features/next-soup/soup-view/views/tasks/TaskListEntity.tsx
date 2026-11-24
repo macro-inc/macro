@@ -143,6 +143,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
         props.onClick?.(e);
       }}
       ref={mergeRefs(props.ref, draggable)}
+      data-press-surface
       class={cn(
         // Carries the --soup-row-* geometry (ListEntity.css) that the narrow
         // layout below reads for its leading edge.

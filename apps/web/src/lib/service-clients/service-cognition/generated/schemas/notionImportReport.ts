@@ -6,6 +6,7 @@
  */
 import type { NotionImporter } from './notionImporter';
 import type { NotionImportReportError } from './notionImportReportError';
+import type { NotionImportReportHubspot } from './notionImportReportHubspot';
 import type { NotionImportReportReviewId } from './notionImportReportReviewId';
 import type { NotionImportReportScanned } from './notionImportReportScanned';
 import type { NotionImportReportStatus } from './notionImportReportStatus';
@@ -65,6 +66,7 @@ planning is still `running`.
   hand: number;
   /** Objects that need handling by hand, with reasons. */
   handItems?: NotionReportItem[];
+  hubspot?: NotionImportReportHubspot;
   /**
    * Plan objects already imported.
    * @minimum 0

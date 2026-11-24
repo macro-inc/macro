@@ -8,6 +8,7 @@
  */
 
 import { defaultCollapsedPaths } from '@app/components/diff-view/model/collapse';
+import type { LineRange } from '@app/components/diff-view/model/lines';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type { Changeset } from '../core/changeset';
 import {
@@ -29,8 +30,13 @@ export type ReviewController = {
 
   /** The file the tree last selected; the stack scrolls to it. */
   active: Accessor<string | undefined>;
-  /** Select a file: it uncollapses and becomes the scroll target. */
-  activate: (path: string) => void;
+  /**
+   * Select a file: it uncollapses and becomes the scroll target. With `lines`
+   * (a code link's), those lines light up and scroll into view.
+   */
+  activate: (path: string, lines?: LineRange) => void;
+  /** The lines the last activation pointed at, until another one. */
+  pointed: Accessor<LineRange | undefined>;
 
   notes: Accessor<ReviewNote[]>;
   queued: Accessor<ReviewNote[]>;
@@ -127,6 +133,7 @@ export function createReviewState(options: {
     storage: options.storage,
   });
   const [active, setActive] = createSignal<string | undefined>();
+  const [pointed, setPointed] = createSignal<LineRange | undefined>();
   const [draft, setDraft] = createSignal<NoteDraft | undefined>();
 
   const changesetId = () => options.changeset()?.id;
@@ -164,14 +171,16 @@ export function createReviewState(options: {
     anyExpanded,
 
     active,
-    activate: (path) => {
+    activate: (path, lines) => {
       if (collapsed().has(path)) {
         writeCollapsed((paths) => paths.filter((item) => item !== path));
       }
+      setPointed(lines?.path === path ? lines : undefined);
       // Re-selecting the same file must still scroll, so clear first.
       setActive(undefined);
       setActive(path);
     },
+    pointed,
 
     notes,
     queued: () => queuedNotes(notes()),

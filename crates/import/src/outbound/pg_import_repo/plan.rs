@@ -130,8 +130,8 @@ impl NotionPlanRepo for PgImportRepo {
                 r#"
                 INSERT INTO import_entity
                     (user_id, source, kind, foreign_id, status, initiator, metadata, parent_id,
-                     review_id)
-                VALUES ($1, $2, $3, $4, 'staged', 'chat', $5, $6, $7)
+                     review_id, id)
+                VALUES ($1, $2, $3, $4, 'staged', 'chat', $5, $6, $7, $8)
                 ON CONFLICT (user_id, source, foreign_id) DO UPDATE
                 SET kind = EXCLUDED.kind, metadata = EXCLUDED.metadata || jsonb_strip_nulls(jsonb_build_object(
                         'personalFolderId', import_entity.metadata -> 'personalFolderId',
@@ -150,6 +150,8 @@ impl NotionPlanRepo for PgImportRepo {
                 row.metadata,
                 parent_id,
                 review_id,
+                // Transaction timestamps tie; new IDs retain the input order.
+                Uuid::now_v7(),
             )
             .fetch_optional(&mut *transaction)
             .await?;
@@ -344,6 +346,24 @@ impl NotionPlanRepo for PgImportRepo {
                       -- PG14 leading-key bound: 2,505 -> 11 buffers for two rows.
                       -- Proof log: https://github.com/macro-inc/macro/pull/11172#issuecomment-6967226786
                       AND source = ANY(ARRAY(SELECT 'jira'::text))
+                      AND foreign_id = ANY($2::text[])
+                      AND status IN ('importing', 'imported')
+                      AND user_id <> $1
+                      AND team_id IS NOT NULL
+                      AND team_id = (SELECT team_id FROM team_user WHERE user_id = $1)
+                "#,
+                user.as_ref(), foreign_ids,
+            ).fetch_all(&mut *transaction).await?,
+            ImportSource::Hubspot => sqlx::query_as!(
+                ImportEntityDbRow,
+                r#"
+                    SELECT id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,
+                           initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,
+                           updated_at
+                    FROM import_entity
+                    WHERE source = 'hubspot'
+                      -- Same leading-key bound as Jira, over the HubSpot team index.
+                      AND source = ANY(ARRAY(SELECT 'hubspot'::text))
                       AND foreign_id = ANY($2::text[])
                       AND status IN ('importing', 'imported')
                       AND user_id <> $1

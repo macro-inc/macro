@@ -324,6 +324,11 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		}
 	}
 	...GraphqlCrmContactFields
+	... on GraphqlSoupCrmContact {
+		properties {
+			...SoupPropertyFields
+		}
+	}
 	... on GraphqlSoupCrmCompany {
 		crmTeamId: teamId
 		crmCompanyName: name
@@ -442,6 +447,7 @@ fragment SoupPropertyValueFields on GraphqlPropertyValue {
 	}
 	... on GraphqlDatePropertyValue {
 		dateValue: value
+		dateHasTime: hasTime
 	}
 	... on GraphqlDateRangePropertyValue {
 		rangeStart: start

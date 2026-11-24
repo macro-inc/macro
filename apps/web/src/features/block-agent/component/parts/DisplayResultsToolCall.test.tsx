@@ -53,9 +53,9 @@ function common(
     id: 'display-results',
     label: 'DisplayResults',
     status,
-    muted: status === 'failed',
+    unsuccessful: status === 'failed',
     stopped: false,
-    trailing: status === 'failed' ? 'Failed' : undefined,
+    trailing: undefined,
   };
 }
 
@@ -102,7 +102,7 @@ describe('DisplayResultsToolCall', () => {
     { status: 'failed', error: null },
     { status: 'completed', error: 'private-error-details' },
     { status: 'running', error: 'private-error-details' },
-  ] as const)('shows only a failed summary for %j', ({ status, error }) => {
+  ] as const)('shows only a plain row for %j', ({ status, error }) => {
     const rendered = render(() => (
       <DisplayResultsToolCall
         view={VIEW}
@@ -111,10 +111,11 @@ describe('DisplayResultsToolCall', () => {
       />
     ));
 
-    expect(rendered.getByText('Failed')).toBeTruthy();
     const row = rendered.container.querySelector('[data-tool-row]');
+    expect(row?.textContent).not.toMatch(/failed/i);
     expect(row?.getAttribute('data-tool-status')).toBe('failed');
-    expect(row?.classList.contains('opacity-75')).toBe(true);
+    expect(row?.classList.contains('opacity-75')).toBe(false);
+    expect(row?.querySelector('.text-failure')).toBeNull();
     expect(rendered.queryByTestId('dashboard')).toBeNull();
     expect(rendered.queryByRole('button')).toBeNull();
     expect(rendered.container.textContent).not.toContain(

@@ -16,7 +16,7 @@ describe('CodeExecutionToolCall', () => {
           id: 'execute-code',
           label: 'ExecuteCode',
           status: 'running',
-          muted: false,
+          unsuccessful: false,
           stopped: false,
           trailing: undefined,
         }}
@@ -57,7 +57,7 @@ describe('CodeExecutionToolCall', () => {
           id: 'execute-code',
           label: 'ExecuteCode',
           status: 'failed',
-          muted: true,
+          unsuccessful: true,
           stopped: false,
           trailing: 'Failed',
         }}
@@ -94,7 +94,7 @@ describe('CodeExecutionToolCall', () => {
           id: 'execute-code',
           label: 'ExecuteCode',
           status: 'completed',
-          muted: false,
+          unsuccessful: false,
           stopped: false,
           trailing: undefined,
         }}

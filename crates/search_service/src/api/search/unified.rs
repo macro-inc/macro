@@ -70,6 +70,7 @@ pub async fn handler(
         hits: results,
         next_cursor,
         crm_access,
+        query_filters,
     } = perform_unified_search(&ctx, user, include_crm, query_params, req).await?;
 
     // Split the results by entity type
@@ -175,6 +176,7 @@ pub async fn handler(
     Ok(Json(UnifiedSearchResponse {
         results,
         next_cursor,
+        query_filters,
     }))
 }
 

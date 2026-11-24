@@ -41,6 +41,19 @@ describe('apiValuesToGraphqlPropertyValue', () => {
     ).toEqual({
       __typename: 'GraphqlDatePropertyValue',
       dateValue: '2026-07-10T00:00:00.000Z',
+      dateHasTime: false,
+    });
+
+    expect(
+      apiValuesToGraphqlPropertyValue({
+        valueType: 'DATE',
+        value: new Date('2026-07-10T14:30:00.000Z'),
+        hasTime: true,
+      })
+    ).toEqual({
+      __typename: 'GraphqlDatePropertyValue',
+      dateValue: '2026-07-10T14:30:00.000Z',
+      dateHasTime: true,
     });
 
     expect(

@@ -1,8 +1,13 @@
+import { useViewTabHotkeys } from '@app/components/view-shell';
+import {
+  splitRootScope,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { applyDatabaseOps } from '@queries/storage/databases';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import { ResultAsync } from 'neverthrow';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { TableNavigation } from '../../database/components/table-navigation';
 import {
   tableDeleteMessage,
@@ -23,8 +28,23 @@ export function TableTabs(props: {
   onSelect: (tableId: string) => void;
 }) {
   const formsOver = useFormsOverTables(() => props.databaseId);
+  const [tabs, setTabs] = createSignal<HTMLElement>();
+  const panel = useSplitPanel();
+  if (panel) {
+    useViewTabHotkeys({
+      scopeId: splitRootScope(panel),
+      enabled: panel.isPanelActive,
+      tabs,
+      ids: () => props.tables.map((table) => table.table.id),
+      activeId: () => props.activeTableId,
+      setActiveId: props.onSelect,
+      label: (id) =>
+        props.tables.find((table) => table.table.id === id)?.table.name ?? id,
+    });
+  }
   return (
     <TableNavigation
+      tabsRef={setTabs}
       deleteConsequence={(tableId) =>
         tableDeleteConsequence(formsOver(tableId))
       }

@@ -83,7 +83,10 @@ async fn gmail_folder_restore_refreshes_all_mail_before_provider_sync(
         let restored = service.email_repo.thread_by_id(thread).await?.unwrap();
         assert_eq!(restored.latest_non_spam_message_ts, Some(date));
         assert_eq!(restored.inbox_visible, in_inbox);
-        let found = service.email_repo.labels_by_message_ids(&[message]).await?;
+        let found = service
+            .email_repo
+            .labels_by_message_ids(&[message], Some(&owner))
+            .await?;
         let mut found: Vec<_> = found[&message]
             .iter()
             .map(|l| l.provider_label_id.as_str())
@@ -226,7 +229,10 @@ async fn gmail_report_spam_moves_the_thread_out_of_the_inbox(
             .unwrap()
             .inbox_visible
     );
-    let labels = service.email_repo.labels_by_message_ids(&[message]).await?;
+    let labels = service
+        .email_repo
+        .labels_by_message_ids(&[message], Some(&owner))
+        .await?;
     assert_eq!(
         labels[&message]
             .iter()

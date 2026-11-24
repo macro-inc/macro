@@ -328,8 +328,10 @@ export function ContextMenuTrigger(
   props: ComponentProps<typeof ContextMenu.Trigger>
 ) {
   const [local, others] = splitProps(props, ['children']);
+  // Touch opens the menu with a long press, so the trigger is a long-press
+  // element: a row inside it draws no WebKit tap highlight (index.css).
   return (
-    <ContextMenu.Trigger {...others}>
+    <ContextMenu.Trigger data-long-press {...others}>
       <div
         class="contents"
         onContextMenu={ignorePortaledEvents}

@@ -6,8 +6,12 @@ import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
 } from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
-import { ViewShell } from '@app/components/view-shell';
+import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
 import { AccountManagerRequestButton } from '@app/features/account-manager/account-manager-request-button';
+import {
+  DmScreenButton,
+  useDmScreenHarnessId,
+} from '@app/features/agent-screen/dm-screen-button';
 import {
   DmWorkPanel,
   DmWorkProvider,
@@ -35,7 +39,9 @@ import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
+  splitRootScope,
   useSplitDisplayName,
+  useSplitPanel,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
@@ -171,9 +177,23 @@ export function ChannelDetailTabs(props: {
         priority: 1,
       })
     : () => false;
+  const [tabsElement, setTabsElement] = createSignal<HTMLElement>();
+  const panel = useSplitPanel();
+  if (panel) {
+    useViewTabHotkeys<ChannelTabId>({
+      scopeId: splitRootScope(panel),
+      enabled: panel.isPanelActive,
+      tabs: tabsElement,
+      ids: () => tabs().map((tab) => tab.value),
+      activeId: activeTab,
+      setActiveId: setActiveTab,
+      label: (id) => tabs().find((tab) => tab.value === id)?.label ?? id,
+    });
+  }
 
   return (
     <Tabs
+      ref={setTabsElement}
       aria-label="Channel sections"
       size="sm"
       touch="inset"
@@ -186,18 +206,38 @@ export function ChannelDetailTabs(props: {
   );
 }
 
-export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
+export function ChannelDetailActions(
+  props: ChannelDetailHeaderProps & {
+    /** The top bar's: the agent's status chip yields before the title. */
+    collapser?: PriorityCollapser;
+  }
+) {
   const channel = useChannel(props.channelId);
   const channelName = useChannelName(props.channelId, props.fallbackName);
   const channelType = useChannelType(props.channelId);
+  const screenHarnessId = useDmScreenHarnessId(props.channelId);
   const call = useCall(() => props.channelId);
   const { activeTab } = useChannelTab();
+  // After the tabs and the agent's chip, the actions give up their labels,
+  // before the title (and the avatar) would be cut.
+  const labelsHidden = props.collapser
+    ? useRegisterPriorityCollapseItem(props.collapser, {
+        id: 'header-action-labels',
+        priority: 3,
+      })
+    : () => false;
 
   return (
-    <div class="header-actions ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
+    <div
+      class="header-actions group/header-labels ml-auto flex shrink-0 items-center gap-2 touch:gap-1"
+      data-labels-hidden={labelsHidden() ? '' : undefined}
+    >
       <Show when={channelType() === ChannelType.direct_message}>
         <DebugSuspense name="ChannelDetail.agent-status">
-          <TeamAgentDmStatusChip channelId={props.channelId} />
+          <TeamAgentDmStatusChip
+            channelId={props.channelId}
+            collapser={props.collapser}
+          />
         </DebugSuspense>
       </Show>
       <Show when={activeTab() !== 'call'}>
@@ -246,6 +286,13 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
         </DebugSuspense>
       </Show>
       <HeaderActionGroup label="Conversation actions">
+        <Show when={screenHarnessId()}>
+          {(harnessId) => (
+            <DebugSuspense name="ChannelDetail.screen-button">
+              <DmScreenButton grouped harnessId={harnessId()} />
+            </DebugSuspense>
+          )}
+        </Show>
         <Show
           when={ENABLE_CALLS && !channel()?.agentDm && !call.isInThisChannel()}
         >
@@ -310,6 +357,7 @@ function DesktopChannelDetailTopBar(
         <ChannelDetailActions
           channelId={props.channelId}
           fallbackName={props.fallbackName}
+          collapser={collapse.collapser}
         />
       </DebugSuspense>
     </ViewShell.TopBar>
@@ -318,6 +366,7 @@ function DesktopChannelDetailTopBar(
 
 function TouchChannelDetailTopBar(props: ChannelDetailHeaderProps) {
   const channel = useChannel(props.channelId);
+  const screenHarnessId = useDmScreenHarnessId(props.channelId);
   const channelName = useChannelName(props.channelId, props.fallbackName);
   const channelType = useChannelType(props.channelId);
   const call = useCall(() => props.channelId);
@@ -352,6 +401,15 @@ function TouchChannelDetailTopBar(props: ChannelDetailHeaderProps) {
         </DebugSuspense>
       </HeaderIsland>
       <div class="ml-auto flex shrink-0 items-center gap-2">
+        <DebugSuspense name="ChannelDetail.touch-screen">
+          <Show when={screenHarnessId()}>
+            {(harnessId) => (
+              <HeaderIsland class="px-1">
+                <DmScreenButton harnessId={harnessId()} />
+              </HeaderIsland>
+            )}
+          </Show>
+        </DebugSuspense>
         <Show
           when={ENABLE_CALLS && !channel()?.agentDm && !call.isInThisChannel()}
         >

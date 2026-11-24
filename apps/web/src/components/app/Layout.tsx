@@ -45,7 +45,10 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import { enableWhatsappLinked } from '@core/constant/featureFlags';
+import {
+  enableTimeTracking,
+  enableWhatsappLinked,
+} from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -74,13 +77,14 @@ import {
 } from 'solid-js';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
+import { FirstRunEmailSync } from './FirstRunEmailSync';
 import GlobalShortcuts from './GlobalHotkeys';
-import { InitialInteractiveOnboardingModal } from './InitialInteractiveOnboardingModal';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
 import { installGlassPress } from './mobile/glassPress';
 import { MobileDockRow } from './mobile/MobileDockRow';
+import { installRowPress } from './mobile/rowPress';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { SessionExpiredRedirect } from './SessionExpiredRedirect';
 import { useCloseTabShortcut } from './tab-layout/close-tab-shortcut';
@@ -168,6 +172,7 @@ export function RootFrame(props: ParentProps) {
 
   onMount(() => {
     onCleanup(installGlassPress());
+    onCleanup(installRowPress());
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');
@@ -220,8 +225,8 @@ export function PageContent(props: ParentProps) {
 }
 
 /**
- * Sends first-time desktop users into the onboarding flow at /onboarding, and
- * new agents on any platform to their setup page.
+ * Sends first-time web users (desktop and phone browsers) into the onboarding
+ * flow at /onboarding, and new agents on any platform to their setup page.
  * App chrome runs it, so it fires on any app destination (marketing SSO lands
  * on /app, not /login) and never on the onboarding pages themselves.
  */
@@ -240,7 +245,7 @@ function useNewOnboardingRedirect() {
       navigate('/agent-setup', { replace: true });
       return;
     }
-    if (isMobile() || isNativeMobilePlatform()) return;
+    if (isNativeMobilePlatform()) return;
     // Preserve the deep link the user arrived on (a shared doc, an invite)
     // as ?next, and a lifecycle-email ?step, so finish() and the flow can
     // resume. Base-relative so navigate() can resolve it against the router.
@@ -258,6 +263,10 @@ function useNewOnboardingRedirect() {
 const MobileCallIsland = lazyNamed(
   () => import('../../features/channel/Call/views/MobileCallIsland'),
   'MobileCallIsland'
+);
+const RunningTimerBanner = lazyNamed(
+  () => import('../../features/time-tracking/running-timer-indicator'),
+  'RunningTimerBanner'
 );
 
 export function AppChrome(props: ParentProps) {
@@ -377,6 +386,11 @@ export function AppChrome(props: ParentProps) {
         <Suspense>
           <MobileCallIsland />
         </Suspense>
+        <ShowFeatureFlag flag={enableTimeTracking}>
+          <Suspense>
+            <RunningTimerBanner />
+          </Suspense>
+        </ShowFeatureFlag>
         <Suspense>
           <UserCardDrawer />
         </Suspense>
@@ -398,7 +412,7 @@ export function AppChrome(props: ParentProps) {
           <MobileDockRow vertical={dockEdge() !== 'bottom'} />
         </FloatRegion>
       </Show>
-      <InitialInteractiveOnboardingModal />
+      <FirstRunEmailSync />
       <Suspense>
         <Show when={isAuthenticated()}>
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />

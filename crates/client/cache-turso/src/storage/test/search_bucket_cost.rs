@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn text_search_filters_in_sql_and_uses_the_covering_bucket_index() {
+fn text_search_scans_only_its_bucket_through_the_covering_index() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("search-bucket-cost").unwrap();
         storage
@@ -36,8 +36,7 @@ fn text_search_filters_in_sql_and_uses_the_covering_bucket_index() {
                 .await
                 .unwrap();
             let query = SearchQuery::new("ndl");
-            let (sql, parameters) =
-                search::statement(SearchProfile::QuickAccessV1, "document", &query);
+            let (sql, parameters) = search::statement(SearchProfile::QuickAccessV1, "document");
             let plan = driver::query(
                 &storage.connection(),
                 &format!("EXPLAIN QUERY PLAN {sql}"),
@@ -52,7 +51,8 @@ fn text_search_filters_in_sql_and_uses_the_covering_bucket_index() {
             );
             let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
             let rows = driver::query_prepared(&mut statement, parameters).unwrap();
-            assert_eq!(rows.len(), 1);
+            // The bucket's three documents; the token test runs as rows stream.
+            assert_eq!(rows.len(), 3);
             assert!(
                 statement.metrics().vm_steps < 500,
                 "{} VM steps with {unrelated_count} unrelated rows",

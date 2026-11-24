@@ -561,6 +561,17 @@ pub enum CrmError {
     /// The team already tracks a company for the requested domain.
     #[error("a crm company already exists for this domain")]
     CompanyAlreadyExistsForTeam,
+    /// Another company of the team already tracks the domain being added.
+    /// `None` when the caller cannot see it (an archived company, for a
+    /// member).
+    #[error("another crm company of the team already tracks this domain")]
+    CompanyDomainTaken(Option<CompanyDomainHolder>),
+    /// Removing a domain from a company whose email sync is off lets that
+    /// domain's mail back into the CRM, which only an admin or owner may do.
+    #[error(
+        "removing a domain from a company whose email sync is off requires admin/owner team role"
+    )]
+    CompanyDomainAdminRequired,
     /// The company already has a contact with the requested email.
     #[error("a crm contact with this email already exists for the company")]
     ContactAlreadyExistsForCompany,
@@ -577,6 +588,17 @@ pub enum CrmError {
     /// held needed records for too long. Nothing was written; retry later.
     #[error("crm records are busy; retry later")]
     Contended,
+}
+
+/// The team's other company that already tracks a domain.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompanyDomainHolder {
+    /// The company's id.
+    pub company_id: uuid::Uuid,
+    /// Its display name, if it has one.
+    pub name: Option<String>,
+    /// Whether the company is archived.
+    pub hidden: bool,
 }
 
 /// Contact fields plus the owning team/company and the viewer's history.

@@ -95,3 +95,7 @@ html[data-palette='cream'] .site-documentation-header { --doc-nav-background: #f
   :root { --documentation-nav-width: 200px; }
   .doc-nav-scroll { padding-inline: 16px 12px; }
 }
+
+@media (max-width: 767px) {
+  .doc-nav-group a.doc-nav-desktop-only { display: none; }
+}

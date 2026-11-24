@@ -1,7 +1,7 @@
-import type { InboxRowType } from '@app/features/notifications-inbox/core/inbox-row';
 import {
-  CHANNEL_ROW_TYPES,
+  type InboxUnreadCount,
   MAIL_ROW_TYPES,
+  unreadChatRows,
   unreadRows,
 } from '@app/features/notifications-inbox/core/inbox-unread';
 import { createInboxUnread } from '@app/features/notifications-inbox/queries/inbox-unread';
@@ -41,23 +41,25 @@ export type NavigationUnreadOptions = {
   homeIsNotifications?: boolean;
 };
 
-/**
- * The notifications inbox rows each section counts; `undefined` is every
- * kind.
- */
-const COUNTED_SECTIONS: Record<string, { rowTypes?: readonly InboxRowType[] }> =
-  {
-    home: {},
-    notifications: {},
-    'new-home': {},
-    channels: { rowTypes: CHANNEL_ROW_TYPES },
-    mail: { rowTypes: MAIL_ROW_TYPES },
-  };
+type CountRows = (
+  counts: readonly InboxUnreadCount[],
+  options: { passwords: boolean }
+) => number;
+
+/** The unread notifications inbox rows each section counts. */
+const COUNTED_SECTIONS: Record<string, CountRows> = {
+  home: unreadRows,
+  notifications: unreadRows,
+  channels: unreadChatRows,
+  mail: (counts, options) =>
+    unreadRows(counts, { ...options, rowTypes: MAIL_ROW_TYPES }),
+};
 
 /**
  * Unread rows of the notifications inbox by section, pushed by the server.
- * A dot and its number always agree, and both match what the Notifications
- * view lists as unread.
+ * A dot and its number always agree. They match what the Notifications view
+ * lists as unread, except Chat's: those match its own sidebar, which thread
+ * replies and reactions leave read.
  */
 function useCountedUnread(options: NavigationUnreadOptions): NavigationUnread {
   const userId = useUserId();
@@ -69,10 +71,9 @@ function useCountedUnread(options: NavigationUnreadOptions): NavigationUnread {
   });
 
   const rows = (id: string): number | undefined => {
-    const section = COUNTED_SECTIONS[id];
-    if (!section) return undefined;
-    return unreadRows(counts() ?? [], {
-      rowTypes: section.rowTypes,
+    const countRows = COUNTED_SECTIONS[id];
+    if (!countRows) return undefined;
+    return countRows(counts() ?? [], {
       passwords: !passwordsFlag().loading && passwordsFlag().enabled,
     });
   };

@@ -17,6 +17,10 @@ pub static MACRO_PASSWORDLESS_LOGIN_CODE_EXPIRY_SECONDS: u64 = 630;
 /// within the same auth flow, so this only needs to cover slow IdP round trips).
 pub static MACRO_JUST_SIGNED_UP_EXPIRY_SECONDS: u64 = 30 * 60;
 
+/// How long Meta click ids captured at SSO start wait for the create-user
+/// webhook. The IdP round trip is the same window as the signup marker.
+pub static MACRO_SIGNUP_META_EXPIRY_SECONDS: u64 = MACRO_JUST_SIGNED_UP_EXPIRY_SECONDS;
+
 /// Reads a mobile login session and deletes it in one step, returning the
 /// stored refresh token and its remaining lifetime in milliseconds.
 const TAKE_MOBILE_LOGIN_SESSION: &str = r"
@@ -208,6 +212,38 @@ impl MacroCache {
         let value = macro_redis::get::get_del_optional::<u8>(&self.inner, &key).await?;
         Ok(value.is_some())
     }
+
+    /// Stores Meta click ids for the browser that started SSO from `ip` with
+    /// `user_agent`. A different browser at the same address keeps its own slot.
+    pub async fn stash_signup_meta(
+        &self,
+        ip: &str,
+        user_agent: &str,
+        json: &str,
+    ) -> anyhow::Result<()> {
+        let key = signup_meta_key(ip, user_agent);
+        macro_redis::set::set_with_expiry(&self.inner, &key, json, MACRO_SIGNUP_META_EXPIRY_SECONDS)
+            .await
+    }
+
+    /// Takes the Meta click ids stashed for this address and user agent.
+    pub async fn take_signup_meta(
+        &self,
+        ip: &str,
+        user_agent: &str,
+    ) -> anyhow::Result<Option<String>> {
+        let key = signup_meta_key(ip, user_agent);
+        macro_redis::get::get_del_optional::<String>(&self.inner, &key).await
+    }
+}
+
+fn signup_meta_key(ip: &str, user_agent: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    user_agent.hash(&mut hasher);
+    format!("signup_meta:{ip}:{:x}", hasher.finish())
 }
 
 #[cfg(test)]

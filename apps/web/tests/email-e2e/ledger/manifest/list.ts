@@ -232,13 +232,13 @@ export const list = {
     {
       id: 'AL-006',
       surface: 'SL-17',
-      fn: ['F-029', 'F-030'],
-      action: 'switch tab by sidebar number',
+      fn: ['F-029'],
+      action: 'switch Inbox tab by number',
       trigger:
-        'hotkey 1..9 (Signal, then the sidebar tabs, then Library, visible ones only)',
+        'hotkey 1..3 by position among the Inbox tabs (Focus when shown, Signal, Noise), while the keyboard is on the list',
       source: [
         'src/components/view-shell/use-view-tab-hotkeys.ts',
-        'src/features/email-view/components/EmailSidebar.tsx',
+        'src/features/email-view/components/EmailHeader.tsx',
       ],
       viewports: ['desktop'],
     },
@@ -247,10 +247,11 @@ export const list = {
       surface: 'SL-18',
       fn: ['F-029'],
       action: 'cycle Inbox tabs',
-      trigger: 'hotkey Tab / Shift+Tab (not while the list grid has focus)',
+      trigger:
+        'hotkey Tab / Shift+Tab while the keyboard is on the list or nothing has focus, or right after a click on a sidebar folder or account or on Mail in the app rail (otherwise focus order on a control)',
       source: [
         'src/components/view-shell/use-view-tab-hotkeys.ts',
-        'src/features/email-view/components/EmailSidebar.tsx',
+        'src/features/email-view/components/EmailHeader.tsx',
       ],
     },
     {

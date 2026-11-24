@@ -1,3 +1,4 @@
+import { clearRowPress } from '@components/app/mobile/rowPress';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
@@ -163,7 +164,11 @@ export function touchHandler(
       longPressTriggered = true;
       setLongPressActivated(true);
       hapticImpact('medium');
-      options().onLongPress?.(e);
+      const onLongPress = options().onLongPress;
+      if (!onLongPress) return;
+      // The long press opens the row's menu, which ends the row's press.
+      clearRowPress(element);
+      onLongPress(e);
     }, options().delay ?? 500);
   }
 
@@ -211,12 +216,21 @@ export function touchHandler(
     clearState();
   }
 
+  // A long-press element that holds a pressed row draws no WebKit tap
+  // highlight (index.css): iOS keeps the long press's highlight and shows it
+  // over this element again on later taps elsewhere.
+  // A context menu trigger marks itself; leave its mark in place.
+  const marksLongPress =
+    Boolean(options().onLongPress) && !element.hasAttribute('data-long-press');
+  if (marksLongPress) element.setAttribute('data-long-press', '');
+
   element.addEventListener('touchstart', handleTouchStart, { passive: true });
   element.addEventListener('touchmove', handleTouchMove, { passive: true });
   element.addEventListener('touchend', handleTouchEnd);
   element.addEventListener('touchcancel', handleTouchCancel, { passive: true });
 
   onCleanup(() => {
+    if (marksLongPress) element.removeAttribute('data-long-press');
     clearState();
     cancelTouchClassExit();
     cancelTouchClassEnter();

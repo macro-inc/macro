@@ -268,7 +268,7 @@ pub(crate) fn field_value(field: &PipelineField, value: &PropertyValue) -> Optio
         PropertyValue::Bool(checked) => Some(FieldValue::Checkbox(*checked)),
         PropertyValue::Num(number) => Some(FieldValue::Number(*number)),
         PropertyValue::Str(text) => Some(FieldValue::Text(text.clone())),
-        PropertyValue::Date(date) => Some(FieldValue::Date(*date)),
+        PropertyValue::Date(date) => Some(FieldValue::Date(date.at())),
         PropertyValue::DateRange(range) => Some(FieldValue::DateRange(DateRange {
             start: range.start(),
             end: range.end(),

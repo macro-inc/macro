@@ -30,6 +30,7 @@ export function RecordTabs<S extends CrmRecordSection>(props: {
   value: S;
   onChange: (section: S) => void;
   compact?: boolean;
+  tabsRef?: (element: HTMLElement) => void;
 }) {
   const [open, setOpen] = createSignal(false);
   const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
@@ -41,6 +42,7 @@ export function RecordTabs<S extends CrmRecordSection>(props: {
       when={isTouchDevice()}
       fallback={
         <Tabs
+          ref={props.tabsRef}
           aria-label={t('tabs.recordSections')}
           size="sm"
           class="shrink-0"
