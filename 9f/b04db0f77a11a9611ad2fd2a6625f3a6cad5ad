@@ -1,0 +1,19 @@
+crates/macro_db_client/migrations/20261124154401_fusion_import.sql
+  s_8c8123a52748fa::t_c7af84b5335dc0 1-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9fb04db0f77a11a9611ad2fd2a6625f3a6cad5ad",
+  "prompts": {},
+  "sessions": {
+    "s_8c8123a52748fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e3ebe64b-e3f3-41de-91c9-1dffbc9d884d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
