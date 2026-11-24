@@ -714,7 +714,12 @@ export function Channel(props: ChannelProps) {
   // A latest request waits for both the query and the rendered list. Keeping
   // its identity prevents a late response from overriding newer navigation.
   let pendingLatest:
-    | { phase: 'loading' | 'waiting-for-layout'; behavior?: ScrollBehavior }
+    | {
+        phase: 'loading' | 'waiting-for-layout';
+        behavior?: ScrollBehavior;
+        /** The message to wait for: scrolling before its row would miss it. */
+        messageId?: string;
+      }
     | undefined;
   const cancelLatestNavigation = () => {
     pendingLatest = undefined;
@@ -731,7 +736,9 @@ export function Channel(props: ChannelProps) {
     // Retained data is usable after a pagination error. Wait only if the query
     // has no data yet or the message index still contains the old page.
     const latestEntry = timeline.latestEntry();
+    const { messageId } = pendingLatest;
     if (
+      (messageId === undefined || messageIndex.keys.includes(messageId)) &&
       latestEntry !== undefined &&
       messageIndex.entryKeys.at(-1) === timelineEntryKey(latestEntry) &&
       threadListNavigation()?.scrollToLatest(pendingLatest.behavior)
@@ -739,15 +746,27 @@ export function Channel(props: ChannelProps) {
       cancelLatestNavigation();
   };
 
-  const goToLatest: ChannelHandle['goToLatest'] = async (behavior) => {
-    const request: NonNullable<typeof pendingLatest> = {
-      phase: 'loading',
-      behavior,
-    };
+  // The list reports no scroll for a row added out of sight, so a send waits
+  // for its row here.
+  createEffect(
+    on(() => messageIndex.entryKeys.at(-1), finishLatestNavigation, {
+      defer: true,
+    })
+  );
+
+  const showLatest = async (
+    request: NonNullable<typeof pendingLatest>,
+    /** A page that has to load waits for this. */
+    ready?: Promise<unknown>
+  ) => {
     pendingLatest = request;
     try {
       const needsLatestPage =
         timeline.hasNewer() || !!targetMessageController.loadAroundMessageId();
+      if (needsLatestPage && ready) {
+        await ready;
+        if (pendingLatest !== request) return;
+      }
       targetMessageController.reset();
       if (needsLatestPage) await timeline.toLatest();
       if (pendingLatest !== request) return;
@@ -758,6 +777,17 @@ export function Channel(props: ChannelProps) {
       if (pendingLatest === request) cancelLatestNavigation();
     }
   };
+
+  const goToLatest: ChannelHandle['goToLatest'] = (behavior) =>
+    showLatest({ phase: 'loading', behavior });
+
+  // What the person sends comes into view, however far up they read. REST
+  // lists it once the server has it; the device lists a pending send itself.
+  const showSend = (messageId: string, delivery: Promise<unknown>) =>
+    showLatest(
+      { phase: 'loading', messageId },
+      timeline.mode() === 'rest' ? delivery : undefined
+    );
 
   const onThreadListScroll = (
     state: ThreadListScrollState,
@@ -832,7 +862,7 @@ export function Channel(props: ChannelProps) {
         span.setAttr('message.id', optimisticId);
         span.setAttr('channel.id', channelId);
         try {
-          await sendMessageMutation.mutateAsync({
+          const delivery = sendMessageMutation.mutateAsync({
             parentSpan: span,
             parent: { type: 'channel', id: channelId },
             senderId,
@@ -840,6 +870,8 @@ export function Channel(props: ChannelProps) {
             onOptimisticInsert: sendUi.afterPaint,
             ...payload,
           });
+          fireAndForget(showSend(optimisticId, delivery), 'channel-input');
+          await delivery;
           span.setAttr('composer.outcome', 'succeeded');
         } catch (error) {
           sendUi.finish('error');
