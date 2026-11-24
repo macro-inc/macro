@@ -64,7 +64,6 @@ import {
   HomeEntityDetailRouteView,
   MailRouteView,
   MeetingRouter,
-  NewHomeRouteView,
   NotFound,
   NotificationsCalendarRouteView,
   NotificationsRouteView,
@@ -84,6 +83,7 @@ import {
   BookingReceiptRoutePage,
   EmailCallback,
   EmailLinkCallback,
+  GithubConnectRoutePage,
   LoginPage,
   LoginPopupSuccess,
   OnboardingPage,
@@ -99,6 +99,7 @@ import {
   agentSetupDoneRoute,
   agentSetupRoute,
   agentSignupRoute,
+  agentsArchiveRoute,
   agentsRoute,
   agentsViewRoute,
   appRoute,
@@ -145,6 +146,7 @@ import {
   foldersRoute,
   formRespondRoute,
   forYouRoute,
+  githubConnectRoute,
   homeCalendarRoute,
   homeChannelRoute,
   homeDocumentRoute,
@@ -159,7 +161,6 @@ import {
   loginRoute,
   meetRoute,
   mobileEmailSignupRoute,
-  newHomeRoute,
   notFoundRoute,
   notificationsCalendarRoute,
   notificationsRoute,
@@ -280,6 +281,10 @@ export function appRouteElements(): JSX.Element {
           definition={loginPopupSuccessRoute}
           component={LoginPopupSuccess}
         />
+        <Route
+          definition={githubConnectRoute}
+          component={GithubConnectRoutePage}
+        />
         <Route definition={loginRoute} component={LoginPage} />
         <Route definition={welcomeRoute} component={WelcomePage} />
         <Route
@@ -344,6 +349,11 @@ export function appRouteElements(): JSX.Element {
           loading={AgentsViewSkeleton}
         />
         <Route
+          definition={agentsArchiveRoute}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
+        />
+        <Route
           definition={agentsRoute}
           component={AgentsRouteView}
           loading={AgentsViewSkeleton}
@@ -377,7 +387,6 @@ export function appRouteElements(): JSX.Element {
             component={HomeDetailRouteView}
           />
         </Route>
-        <Route definition={newHomeRoute} component={NewHomeRouteView} />
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={forYouRoute} component={ForYouRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />

@@ -145,6 +145,7 @@ async fn main() -> Result<(), rootcause::Report> {
             document_storage_url: "https://dev-gateway.macro.com/dss".parse()?,
             app_url: "https://dev.macro.com".parse()?,
             egress_url: "https://dev-gateway.macro.com/agent-harness-egress".parse()?,
+            telemetry_url: None,
         },
         traceparent: None,
         role: hosted_runtimes::domain::enrollment::ComputerRole::Person,

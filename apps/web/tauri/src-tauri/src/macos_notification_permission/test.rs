@@ -104,8 +104,16 @@ fn conversation_notifications_name_and_stack_their_conversation() {
     assert!(request.content().sound().is_some());
 
     let direct = notification_request(&notification_content("Ada", None, None, None, true), None);
-    assert!(direct.content().subtitle().is_empty());
-    assert!(direct.content().threadIdentifier().is_empty());
+    let content = direct.content();
+    // objc2 declares these getters non-null, but macOS returns nil for a
+    // property never set, which the generated getter turns into a panic.
+    // SAFETY: both are nullable NSString properties of UNNotificationContent
+    // that take no arguments.
+    let subtitle: Option<Retained<NSString>> = unsafe { objc2::msg_send![&*content, subtitle] };
+    let thread_id: Option<Retained<NSString>> =
+        unsafe { objc2::msg_send![&*content, threadIdentifier] };
+    assert!(subtitle.is_none_or(|subtitle| subtitle.is_empty()));
+    assert!(thread_id.is_none_or(|thread_id| thread_id.is_empty()));
 }
 
 #[test]

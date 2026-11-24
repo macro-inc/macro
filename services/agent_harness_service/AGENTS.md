@@ -16,6 +16,14 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   live in the library so the crate compiles once and caches; `src/main.rs` only
   starts it (allocator, `MacroEntrypoint`, `run()`). Never add a `mod` to
   `main.rs`.
+- Connections: `run()` calls `connectors::composition::compose` once, from
+  cognition's config (`cognition::config::Config::connectors_config`), and
+  hands its `Connectors` to every consumer: chat tool loading, code mode,
+  routines' required apps, the egress proxy and sandbox listing, imports,
+  Granola sync, onboarding, agent app pins and the connector tools.
+  `cognition/api.rs` mounts the `/connectors` routes and the public
+  callbacks (MCP OAuth, Connect consent, Pipedream webhook). Nothing here
+  reads the `macro-connect` flag or picks a source.
 - `src/api.rs`: the full agent-session HTTP API (durable metadata/log reads
   plus live in-memory transport operations), composed from each domain
   crate's own router (`agent_session`, `agent_changes`, `agent_egress`,
@@ -183,11 +191,21 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   (`tool_service.rs`) and can call only those; a native tool named directly
   is refused. ChatGPT gets the
   direct tools: its plugin directory refuses generic executors.
+  The server instructions follow the same mode on every handshake
+  (`initialize`, and the 2026-07-28 revision's `server/discover`, which
+  rmcp would otherwise answer from `get_info`'s direct-tools text). The
+  supported protocol revisions are capped at `NEWEST_PROTOCOL_VERSION`;
+  raising it requires teaching `every_handshake_describes_the_listed_tools`
+  the new revision's handshake.
   `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
   the session repo, Redis budgets and
   the gateway `ui_command` send.
   `src/code_mode/connected_apps.rs` serves a running execution's
-  `macro.connectedApps` through the in-process egress service; a scoped
+  `macro.connectedApps` through the in-process egress service, listing the
+  apps its agent was given from the connectors (`EgressProvisioner`), and
+  runs `discover`/`addServer` as the `DiscoverConnectors`/`ConnectMcpServer`
+  tools (a refusal answers 400, a missing or failing connectors service
+  5xx); a scoped
   session's code is refused it, and its turn calls no remote MCP tool
   directly either (`ScopedToolGate::refuse_remote_mcp`). The actor MCP
   transport is wrapped in `agent_egress::outbound::budgeted_mcp`, so each
@@ -208,8 +226,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
 - `src/cognition/`: existing chat, completions, and integrations; the library
   also exports their OpenAPI document.
   `src/cognition/service/integration_analytics.rs` sends PostHog
-  `integration_connected` / `integration_disconnected` for native MCP servers
-  and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.
+  `integration_connected` / `integration_disconnected` (`connection_type`
+  `app` or `mcp_server`) from the `/connectors` routes' and callbacks' hooks
+  wired in `src/cognition/server.rs`.
   `src/cognition/api/confirmed_actions.rs` runs a confirmed tool as the
   caller: `POST /cognition/email/send-confirmed` (`SendConfirmedEmail`, the
   SDK's `email.sendConfirmed` and `EmailMessage.forwardConfirmed`) and
@@ -284,7 +303,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
   email_service's internal recent-messages route, the person's connected
-  Pipedream apps, and whether CRM's company tools would let them add a
+  apps (`routine_sessions::RoutineConnectedApps`, which also checks a
+  routine's required apps, compared as `ConnectorId`s so an alias is its app), and whether CRM's company tools would let them add a
   company (a team, and CRM access in it). Generations (`crates/suggestion_generation`) run their
   suggestions and routines sessions hidden on the free tier's model, each kind
   gated on its flag (`enable-suggestions`, `enable-routine-suggestions`).
@@ -352,7 +372,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
 - Internal session tools require explicit `acting_as`, resolved by the shared gate, plus existing owner/edit authorization. SDK executions choose one account for the whole program; review decisions use the saved acting account. Keep their restricted prompt/stop route separate from human approval controls.
 - An import review's draft is `{source, excluded, shared, personal}` (`source` is `notion`, `linear`, or `jira`): the rows the owner left out and the rows whose sharing they flipped, passed to `start_workspace_write` as `NotionWriteChoices`.
 - One `ai_tools::ImportJobs` serves the whole process: session tools, public MCP, and `cognition::build` (the `/import/*` routes and the only stalled workspace-import sweeper, which adopts Notion, Linear and Jira runs) share it, and `run()` in `lib.rs` hands running imports over on shutdown (`ImportJobs::hand_over`).
-- The import service registers read-only Notion, Linear and Jira Pipedream readers wherever it is built (`cognition/server.rs` and `ai_tools::build_context`, which public MCP reuses). Authenticated `/import/workspaces/{source}` report and `/cancel` routes serve the shared review card; `/import/notion` remains for existing clients. Workspace tools stage reviewed plans; they never write upstream.
+- The import service registers read-only Notion, Linear and Jira readers over the connectors' API connections wherever it is built (`cognition/server.rs` and `ai_tools::build_context`, which public MCP reuses). Authenticated `/import/workspaces/{source}` report and `/cancel` routes serve the shared review card; `/import/notion` remains for existing clients. Workspace tools stage reviewed plans; they never write upstream.
 - The agent approves a presented review after its account holder says yes in chat by submitting it with `DecideReview`: `Actions::session` reports the turn's prompter from `agent_session.turn_prompter`, and `approvable` refuses an import whose plan is not `ready` for that review.
 - Presenting an import review ties its plan to the review and the session (`attach_workspace_review`); the import then produces `import.planned` and `review.settled` for that session itself, in the run's transaction (`crates/import`).
 - The owner connecting an app a session asked for produces an `app.connected` event (`agent_harness::domain::app_connections`).
@@ -452,6 +472,11 @@ replica. Serialize connect/disconnect effects by harness across replicas and che
 durable live connections before emitting a disconnect, so an old socket cannot
 mark its replacement offline. Keep this lock pool separate from repository pools
 to avoid exhausting the connections needed inside the guarded operation.
+Harness presence lease renewals use one more dedicated connection
+(`harness_bindings.rs`, each renewal bounded to 5 s), so a starved shared pool
+can't lapse the leases of live harnesses. A renewal cut off by that bound closes
+its connection instead of returning it: sqlx's unbounded return ping would let a
+silent socket hold the only slot.
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and
 cognition workers before draining sessions and pending publishes. Preview
@@ -487,6 +512,12 @@ listener failure shuts down the process so ECS can replace the task.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.
+- Each public tool call runs in a `public_mcp.call_tool` span (tool name, mode,
+  caller kind, outcome) carrying only opaque caller ids: `fusionauth_user_id`,
+  the OAuth `mcp.client.id` and registered `mcp.client.name`, or `agent_id`,
+  from `mcp_auth_proxy`'s `McpCallerIds`. Never put the Macro user id, an
+  email, on it. Span-reading tests share `test_spans::exported_spans()`, the
+  binary's one global subscriber.
 
 Local MCP uses both configured egress addresses in the in-process catalog;
 the public MCP transport permits its typed service hostname as well as its

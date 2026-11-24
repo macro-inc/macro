@@ -16,19 +16,12 @@ import {
   NewChatPage,
   type StartConversation,
 } from '../agents-view/views/NewChatPage';
+import { useHomeView } from './home-view-context';
 
 /** Home supplies its saved draft and detail pane to the same composer used by Agents. */
-export function HomeAgentComposer(props: {
-  autoFocus?: boolean;
-  /** Show the session the composer just started, beside the list. */
-  onStarted: (sessionId: string) => void;
-  /**
-   * Leave Enter to a list registered earlier in the split while it has a row
-   * to open, rather than taking the key from it.
-   */
-  shareEnter?: boolean;
-}) {
+export function HomeAgentComposer(props: { autoFocus?: boolean }) {
   const panel = useSplitPanelOrThrow();
+  const home = useHomeView();
   const roster = createAgentRosterSource();
   const settings = useSettingsState();
   const userId = useUserId();
@@ -43,7 +36,6 @@ export function HomeAgentComposer(props: {
     scopeId: panel.splitHotkeyScope,
     description: 'Focus Chat Input',
     hotkeyToken: TOKENS.block.focus,
-    registrationType: props.shareEnter ? 'add' : 'override',
     hide: true,
     keyDownHandler: () => {
       focus?.();
@@ -58,10 +50,10 @@ export function HomeAgentComposer(props: {
       userId: userId(),
       submitSurface: 'home',
     });
-    props.onStarted(id);
+    home.openStartedSession(id);
   };
   return (
-    <div class="agents-view-portal min-w-0 [&_.newchat]:p-0">
+    <div class="agents-view-portal agents-scope min-w-0 [&_.newchat]:p-0">
       <NewChatPage
         homeLayout
         roster={roster.roster()}

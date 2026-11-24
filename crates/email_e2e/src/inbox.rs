@@ -6,6 +6,7 @@ use std::time::Duration;
 use axum::body::Bytes;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use chrono::{DateTime, Utc};
 use reqwest::Method;
 use rootcause::prelude::*;
 use serde_json::{Value, json};
@@ -22,6 +23,9 @@ const UP_TO_DATE: &str = "UP_TO_DATE";
 const THREAD_PAGE: u8 = 100;
 /// The most previews one request reads.
 const PREVIEW_PAGE: u16 = 500;
+/// Where the providers keep what the mailbox's owner sent.
+const SENT_LABEL: &str = "SENT";
+const SENT_FOLDER: &str = "sentitems";
 
 /// What the send helpers read of an attempt.
 const SEND_ATTEMPT_FIELDS: &str = "attemptId status sendTime threadId message { \
@@ -81,9 +85,12 @@ pub struct Mail {
     pub in_reply_to: Option<String>,
     /// Attachments.
     pub attachments: Vec<MailAttachment>,
-    /// When it arrived: its `Date` header and the provider's received time.
-    /// The provider's clock when absent.
-    pub date: Option<chrono::DateTime<chrono::Utc>>,
+    /// When it was written: its `Date` and the provider's received time. The
+    /// provider's clock when absent.
+    pub date: Option<DateTime<Utc>>,
+    /// Whether the mailbox's owner sent it from another mail client, so it is
+    /// in Gmail's `SENT` label or Outlook's Sent Items instead of the inbox.
+    pub sent_from_mailbox: bool,
 }
 
 /// An attachment of a [`Mail`].
@@ -121,6 +128,18 @@ impl Mail {
     /// The same message as a reply to the message with this `Message-ID`.
     pub fn in_reply_to(mut self, message_id: &str) -> Self {
         self.in_reply_to = Some(message_id.to_owned());
+        self
+    }
+
+    /// The same message, written at `at`.
+    pub fn dated(mut self, at: DateTime<Utc>) -> Self {
+        self.date = Some(at);
+        self
+    }
+
+    /// The same message, sent by the mailbox's owner from another mail client.
+    pub fn sent_from_mailbox(mut self) -> Self {
+        self.sent_from_mailbox = true;
         self
     }
 }
@@ -733,6 +752,7 @@ impl Mail {
             message_id: self.message_id.clone(),
             in_reply_to: self.in_reply_to.clone(),
             date: self.date,
+            labels: self.sent_from_mailbox.then(|| vec![SENT_LABEL.to_owned()]),
             attachments: self
                 .attachments
                 .iter()
@@ -759,6 +779,7 @@ impl Mail {
             message_id: self.message_id.clone(),
             in_reply_to: self.in_reply_to.clone(),
             date: self.date,
+            folder: self.sent_from_mailbox.then(|| SENT_FOLDER.to_owned()),
             attachments: self
                 .attachments
                 .iter()

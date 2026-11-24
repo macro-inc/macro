@@ -24,6 +24,10 @@ cat >"$root/bin/bun" <<EOF
 #!$(command -v bash)
 [[ \$1 == -e ]] && exec "$real_bun" "\$@"
 echo "\$*" >>"$root/bun.ran"
+echo "\${MACRO_SETUP_TRACEPARENT-unset}" >"$root/bun.trace"
+echo "\${OTEL_EXPORTER_OTLP_ENDPOINT-unset}" >"$root/bun.otlp"
+echo "\${MACRO_LAUNCH_TIMINGS-unset}" >"$root/bun.launch"
+echo "\${OTEL_EXPORTER_OTLP_HEADERS-unset}" >"$root/bun.headers"
 EOF
 chmod +x "$root/bin/bun"
 export PATH=$root/bin:$PATH
@@ -62,6 +66,8 @@ script() { # script <name>: the assembled script, as `_agent.nix` builds it
     echo "runtime=$case/runtime"
     echo "helper=true"
     echo "helper_credentials=$case/agent.env"
+    echo "setup_traceparent=$case/inbox/setup-traceparent"
+    echo "setup_traceparent_used=$case/state/setup-traceparent"
     [[ $1 == start-agent ]] && cat "$files/agent-env-setting"
     cat "$files/$1"
   } >"$case/$1"
@@ -283,5 +289,39 @@ check 'B11 a clean stop of last-good code starts the count again' bash -c "[[ \$
 echo 2 >"$root/case/state/failures"
 stopped 75
 check 'B11 so does a restart of last-good code after a land' bash -c "[[ \$(cat '$root/case/state/failures') == 0 ]]"
+
+# --- B12: the setup trace reaches the runtime's first start only -----------
+trace=00-11111111111111111111111111111111-2222222222222222-01
+fresh
+mkdir -p "$root/case/inbox"
+echo -n "$trace" >"$root/case/inbox/setup-traceparent"
+start
+check 'B12 the first start runs under the setup trace macrod staged' bash -c "[[ \$(cat '$root/bun.trace') == '$trace' ]]"
+start
+check 'B12 a restart in the same boot does not join it again' bash -c "[[ \$(cat '$root/bun.trace') == unset ]]"
+echo -n 'not-a-trace' >"$root/case/inbox/setup-traceparent"
+start
+check 'B12 a malformed one is ignored' bash -c "[[ \$(cat '$root/bun.trace') == unset ]]"
+fresh
+start
+check 'B12 without one the runtime gets none' bash -c "[[ \$(cat '$root/bun.trace') == unset ]]"
+fresh
+echo 'OTEL_EXPORTER_OTLP_ENDPOINT="https://intake.test/i/otlp"' >>"$root/case/agent.env"
+start
+check 'B12 the runtime exports where agent.env says' bash -c "[[ \$(cat '$root/bun.otlp') == https://intake.test/i/otlp ]]"
+check 'B12 without a computer id it sends no header' bash -c "[[ \$(cat '$root/bun.headers') == unset ]]"
+echo 'MACRO_COMPUTER_ID=01900000-0000-7000-8000-000000000001' >>"$root/case/agent.env"
+start
+check 'B12 and names its computer to the intake' bash -c "[[ \$(cat '$root/bun.headers') == x-macro-computer-id=01900000-0000-7000-8000-000000000001 ]]"
+
+# --- B13: the runtime gets the times of start-agent's steps -------------------
+step='[0-9]{16}:[0-9]{16}'
+first="^started:[0-9]{16},settings:$step,clone:$step,configure:$step,rollback:$step,packages:$step,compatibility:$step,exec:[0-9]{16}\$"
+again="^started:[0-9]{16},settings:$step,configure:$step,rollback:$step,packages:$step,compatibility:$step,exec:[0-9]{16}\$"
+fresh
+start
+check 'B13 a first start times each step, the clone included' bash -c "[[ \$(cat '$root/bun.launch') =~ $first ]]"
+start
+check 'B13 a restart has no clone step' bash -c "[[ \$(cat '$root/bun.launch') =~ $again ]]"
 
 exit "$failed"

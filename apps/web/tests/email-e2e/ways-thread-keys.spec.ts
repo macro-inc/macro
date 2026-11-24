@@ -1,8 +1,8 @@
 // The open thread's keys and header controls that only change what is on
 // screen: Enter and f for a reply all and a forward, Back, Enter on a
-// collapsed message and on the hidden-messages chip, Shift+O, the header
-// caret of a message, and the older messages a long thread loads when its
-// list is scrolled to the top.
+// collapsed message and on the hidden-messages chip, Shift+O, Space and
+// Shift+Space paging the thread, the header caret of a message, and the
+// older messages a long thread loads when its list is scrolled to the top.
 
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
@@ -136,6 +136,32 @@ test.describe('the keys and header of an open thread', () => {
     await expect
       .poll(() => openMessages(cards))
       .toEqual([true, true, true, true, true]);
+  });
+
+  // When this fails, Space in an open thread does not page it down (the
+  // keyboard rests outside the list that scrolls, so the browser's own Space
+  // has nothing to scroll), or Shift+Space does not page it back up.
+  test('Space pages an open thread down and Shift+Space back up', async ({
+    page,
+    mailbox,
+  }) => {
+    const thread = await deliverThread(mailbox, 'Reading plan', longPoints(2));
+    await mailbox.open();
+    await openFromList(page, thread.id, 'Point number 2 of the plan.');
+    const list = messageCard(page, 'Point number 2 of the plan.').locator(
+      'xpath=ancestor::div[contains(@class, "overflow-y-scroll")][1]'
+    );
+    const top = () => list.evaluate((element) => element.scrollTop);
+    const start = await top();
+
+    await page.keyboard.press('Space');
+    did('AL-913');
+    await expect.poll(top).toBeGreaterThan(start + 200);
+    const paged = await top();
+
+    await page.keyboard.press('Shift+Space');
+    did('AL-913');
+    await expect.poll(top).toBeLessThan(paged - 200);
   });
 
   // When this fails, the caret beside a message's recipients does not show

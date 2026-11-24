@@ -361,6 +361,18 @@ subscription reconciliation still use them. Prices have no fallback. See [requir
   through team deletion; drop it before DSS RPC if data appeared.
 - Keep account deletion and membership compensation independent of vault items;
   team items retain their immutable creator after a person leaves.
+- Account deletion queues contacts `user_deleted` just before deleting each
+  profile (a retry no longer lists a deleted profile). The contacts worker
+  refuses it while the profile exists; after 5 receives it moves to
+  `contacts-dlq-<stack>` with no replay, which happens only when the profile
+  was never deleted, and a retried deletion queues it again. It, the teams `directory_changed`
+  sends and the channel interactions share one `ListWritesGate`
+  (`contacts-list-writes`, service context `contacts-list-writes`), so they are
+  no-ops until the flag is on; legacy contacts messages are not gated.
+- Account deletion passes each step the canonical lowercase profile id, but
+  some older `"User"` ids keep capitals. The profile delete matches the
+  account's profiles case-insensitively; team removal and DSS item deletion
+  still match the id exactly, so they skip rows stored under a capitalized id.
 
 - Compose `FlaggedCrmAccessRollout` from the shared flag provider for team CRM
   preference writes. `enable-crm-member-access-changes` is evaluated freshly for

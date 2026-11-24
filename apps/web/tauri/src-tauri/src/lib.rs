@@ -34,6 +34,8 @@ use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
 
 #[cfg(desktop)]
+mod crash_reports;
+#[cfg(desktop)]
 mod desktop;
 mod desktop_update;
 mod device;
@@ -416,8 +418,13 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             whatsapp_passkey::whatsapp_passkey_authenticate,
             desktop_update::get_native_update_status,
             desktop_update::restart_native_update,
+            desktop_update::take_native_update_reports,
             diagnostics::read_desktop_diagnostics,
             diagnostics::record_frontend_diagnostic,
+            #[cfg(desktop)]
+            crash_reports::take_native_crash_reports,
+            #[cfg(desktop)]
+            crash_reports::ack_native_crash_reports,
             open_external_url,
             #[cfg(target_os = "linux")]
             linux_notification::send_linux_notification,
@@ -441,6 +448,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             graphql_cache_plugin::commands::graphql_cache_current_storage_generation,
             graphql_cache_plugin::commands::graphql_cache_current_authority,
             graphql_cache_plugin::commands::graphql_cache_transition_authority,
+            graphql_cache_plugin::commands::graphql_cache_abandon,
             graphql_cache_plugin::commands::graphql_cache_read,
             graphql_cache_plugin::commands::graphql_cache_watch,
             graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
@@ -503,6 +511,8 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             desktop::pasteboard::stage_desktop_pasteboard_files,
         ])
         .setup(move |app| {
+            #[cfg(desktop)]
+            crash_reports::setup(app);
             #[cfg(desktop)]
             {
                 let windows = desktop::main_window::StartupWindows::new(

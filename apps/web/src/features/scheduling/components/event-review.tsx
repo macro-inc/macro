@@ -76,6 +76,8 @@ export function EventReview(props: {
   draft: EventType;
   link: string;
   schedule?: AvailabilitySchedule;
+  /** The connected account a personal link books on, when there is a choice. */
+  account?: string;
   members: SchedulingMember[];
   team: boolean;
   active: boolean;
@@ -177,6 +179,11 @@ export function EventReview(props: {
             <Show when={props.schedule}>
               <ReviewValue label="Time zone">
                 {props.schedule?.timeZone.replaceAll('_', ' ')}
+              </ReviewValue>
+            </Show>
+            <Show when={props.account}>
+              <ReviewValue label="Calendar account">
+                {props.account}
               </ReviewValue>
             </Show>
             <Show

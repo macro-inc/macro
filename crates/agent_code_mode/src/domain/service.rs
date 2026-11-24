@@ -284,6 +284,9 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "GetEntityProperties"
                 | "SetEntityProperty"
                 | "BulkSetEntityPropertyOptions"
+                // task.logTime() and task.timeEntries().
+                | "LogTime"
+                | "ReadTimeEntries"
                 // macro.properties.tags() and createTag(); PropertyOption edits.
                 | "ListTags"
                 | "CreateTag"
@@ -432,11 +435,14 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // DatabaseTable.saveQuery().
                 | "SaveDatabaseQuery"
                 // macro.crm: companyById(), createCompany(), createContact()
-                // and importCompaniesCsv().
+                // and importCompaniesCsv(); Company.addDomain() and
+                // removeDomain().
                 | "GetCompany"
                 | "CreateCompany"
                 | "CreateContact"
                 | "ImportCompaniesCsv"
+                | "AddCompanyDomain"
+                | "RemoveCompanyDomain"
                 // macro.crm.pipelines and CrmPipeline.
                 | "ListPipelines"
                 | "CreatePipeline"

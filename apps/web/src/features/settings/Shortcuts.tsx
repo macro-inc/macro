@@ -968,6 +968,42 @@ const shortcutSections: ShortcutSection[] = [
     ],
   },
   {
+    title: 'Tabs',
+    items: [
+      {
+        keys: ['tab'],
+        codes: ['Tab'],
+        description:
+          'Next tab at the top of the pane you are in. In a field, an editor or on a button, Tab moves focus as usual',
+      },
+      {
+        keys: ['shift+tab'],
+        codes: ['ShiftLeft', 'Tab'],
+        description: 'Previous tab at the top of the pane',
+      },
+      {
+        keys: ['1'],
+        codes: ['Digit1'],
+        description:
+          'Go to a tab at the top of the pane by its position, 1 to 9',
+      },
+      ...(IS_MAC
+        ? [
+            {
+              keys: ['ctrl+tab'],
+              codes: ['ControlLeft', 'Tab'],
+              description: 'Next window tab (Mac app)',
+            },
+            {
+              keys: ['cmd+1'],
+              codes: ['MetaLeft', 'Digit1'],
+              description: 'Go to a window tab by its position (Mac app)',
+            },
+          ]
+        : []),
+    ],
+  },
+  {
     title: 'Unified List',
     items: [
       {
@@ -1058,6 +1094,16 @@ const shortcutSections: ShortcutSection[] = [
         keys: ['shift+o'],
         codes: ['ShiftLeft', 'KeyO'],
         description: 'Expand all messages',
+      },
+      {
+        keys: ['space'],
+        codes: ['Space'],
+        description: 'Scroll down a page',
+      },
+      {
+        keys: ['shift+space'],
+        codes: ['ShiftLeft', 'Space'],
+        description: 'Scroll up a page',
       },
       {
         keys: [`${cmdOrCtrl}+arrowup`],

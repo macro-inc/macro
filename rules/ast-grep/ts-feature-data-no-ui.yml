@@ -11,6 +11,8 @@ note: |-
   with fake clients and controllers with fake capabilities; neither imports
   rendering code, including block-agent’s `ui/` and `component/` layers.
 files:
+  - apps/web/src/features/time-tracking/queries/**
+  - apps/web/src/features/time-tracking/primitives/**
   - apps/web/src/features/task-templates/queries/**
   - apps/web/src/features/task-templates/primitives/**
   - apps/web/src/features/entity-appearance/queries/**
@@ -19,6 +21,7 @@ files:
   - apps/web/src/features/passwords/primitives/**
   - apps/web/src/features/notifications-inbox/queries/**
   - apps/web/src/features/notifications-inbox/primitives/**
+  - apps/web/src/features/channel-notification-stacks/primitives/**
   - apps/web/src/features/command/queries/**
   - apps/web/src/features/document-composer/queries/**
   - apps/web/src/features/task-composer/queries/**

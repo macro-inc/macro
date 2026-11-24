@@ -9,6 +9,7 @@ use crate::domain::ports::{NotificationIngressQueue, NotificationQueue, Notifica
 use crate::domain::section_settings::{ChannelSectionMembershipReader, NoChannelSections};
 use crate::domain::service::NotificationIngressService;
 use std::time::Duration;
+use tracing::Instrument as _;
 
 /// Worker that processes notification requests from the ingress queue.
 ///
@@ -49,9 +50,17 @@ where
                 Ok(messages) => {
                     let count = messages.len();
                     for message in messages {
+                        let span = tracing::info_span!(
+                            "notification.ingress.process",
+                            notification_id = %message.body.notification_id(),
+                            event_type = message.body.event_type(),
+                        );
+                        crate::trace_context::link(&span, &message.body.trace_context);
                         match tokio::time::timeout(
                             Duration::from_secs(15),
-                            self.service.process_from_queue(message.body.request),
+                            self.service
+                                .process_from_queue(message.body.request)
+                                .instrument(span),
                         )
                         .await
                         {

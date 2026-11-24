@@ -4,6 +4,7 @@ mod calendar_join_request;
 mod channel_push;
 mod computer_setup;
 mod password_access_request;
+mod ping;
 pub use access_request::{
     ChannelAccessRequestedMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
     RequestedAccessLevel, RuntimeAccessRemovedMetadata, StoppedAgent,
@@ -30,9 +31,11 @@ use notification::domain::models::{
     },
 };
 pub use password_access_request::PasswordAccessRequestedMetadata;
+pub use ping::{PingAgent, PingMessage, PingMetadata};
 use rootcause::Report;
 use rootcause::report;
 use serde::{Deserialize, Serialize};
+use unicode_segmentation::UnicodeSegmentation;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -909,41 +912,57 @@ impl NotificationTitle for ChannelMessageSendMetadata {
 }
 
 const CHANNEL_REACTION_EXCERPT_MAX_CHARS: usize = 80;
+/// What 80 characters of at most four bytes each take, as the excerpt did
+/// when it was cut by `char`.
+const CHANNEL_REACTION_EXCERPT_MAX_BYTES: usize = CHANNEL_REACTION_EXCERPT_MAX_CHARS * 4;
 
+/// A reaction reads as Slack words its Activity item: who reacted, then
+/// "Reacted 👍 to: “message”", then the channel it happened in. The title is
+/// only the person, so an iOS communication notification names them and not
+/// a sentence.
 impl NotificationTitle for ChannelMessageReactionMetadata {
     fn format_title(
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender = sender_id
+        sender_id
             .map(|sender| sender.email_part().local_part().to_string())
-            .ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let message = parse_message_plain_text(&self.message_content)?
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
-        let excerpt: String = message
-            .chars()
-            .take(CHANNEL_REACTION_EXCERPT_MAX_CHARS)
-            .collect();
-        let suffix = if message.chars().count() > CHANNEL_REACTION_EXCERPT_MAX_CHARS {
-            "…"
-        } else {
-            ""
-        };
-        Ok(format!(
-            "{sender} reacted with {} to “{excerpt}{suffix}”",
-            self.emoji
-        ))
+            .ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))
     }
 
     fn format_body(
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
+        let message = parse_message_plain_text(&self.message_content)?
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        // Cut at whole characters, so a flag or a skin tone never splits, and
+        // within a byte budget, since one character can carry any number of
+        // combining marks and the push has a size limit.
+        let mut excerpt = String::new();
+        let mut cut = false;
+        for (index, grapheme) in message.graphemes(true).enumerate() {
+            if index == CHANNEL_REACTION_EXCERPT_MAX_CHARS
+                || excerpt.len() + grapheme.len() > CHANNEL_REACTION_EXCERPT_MAX_BYTES
+            {
+                cut = true;
+                break;
+            }
+            excerpt.push_str(grapheme);
+        }
+        let suffix = if cut { "…" } else { "" };
+        // A message with no text (only attachments) is "your message".
+        let reacted = if message.is_empty() {
+            format!("Reacted {} to your message", self.emoji)
+        } else {
+            format!("Reacted {} to: “{excerpt}{suffix}”", self.emoji)
+        };
+        // A direct message needs no place; the person already says where.
         Ok(match self.common.channel_type {
-            ChannelType::DirectMessage => "Direct message".to_string(),
-            _ => format!("#{}", self.common.channel_name),
+            ChannelType::DirectMessage => reacted,
+            _ => format!("{reacted}\n#{}", self.common.channel_name),
         })
     }
 }

@@ -3,8 +3,8 @@ import type { EmailReminderSummary } from '@service-storage/generated/schemas/em
 import { batch, createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { EmailViewState } from '../types';
 import { useEmailDetailListNavigation } from '../use-email-detail-list-navigation';
+import type { EmailDataSourceInput } from './use-email-query';
 import { useReminderEmailSource } from './use-reminder-email-source';
 
 const mocks = vi.hoisted(() => ({
@@ -50,13 +50,13 @@ afterEach(() => {
 function mount() {
   return createRoot((cleanup) => {
     dispose = cleanup;
-    const [state, setState] = createStore<EmailViewState>({
+    const [state, setState] = createStore<EmailDataSourceInput>({
       tab: 'reminders',
       search: 'persisted text',
+      searchScope: 'all',
       inboxIds: ['selected-inbox'],
       facets: {},
       focusSort: 'importance',
-      collapsedSidebarSectionIds: [],
     });
     const [collection, setCollection] = createStore({
       isPending: false,

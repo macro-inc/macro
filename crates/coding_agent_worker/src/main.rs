@@ -317,7 +317,7 @@ async fn main() -> ExitCode {
             workspace,
         }) => {
             // stdout is the event protocol: logs go to stderr, like herdr-acp.
-            let _telemetry = telemetry::install();
+            let _telemetry = telemetry::install(telemetry::Exporter::from_environment());
             return match service::run(service::ServiceOptions {
                 ignore_stdin_eof,
                 config,
@@ -343,7 +343,7 @@ async fn main() -> ExitCode {
             agent,
             root,
         }) => {
-            let _telemetry = telemetry::install();
+            // Telemetry starts once the enrollment is read: it names the intake.
             return match enroll::run_enroll(enroll::EnrollOptions {
                 from,
                 config,

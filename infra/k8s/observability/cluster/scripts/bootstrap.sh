@@ -42,7 +42,13 @@ echo "Bootstrapping Argo CD on $(k config view --minify -o jsonpath='{.clusters[
 # takes these objects over without conflicts.
 apply() { k apply --server-side --force-conflicts --field-manager=argocd-controller "$@"; }
 apply -f "$manifests/argocd/Namespace-argocd.yaml"
-apply -f "$manifests/argocd/"
+# Not the ExternalSecrets: their CRD comes with the external-secrets
+# application, and Argo CD's first sync of itself creates them.
+files=()
+for file in "$manifests"/argocd/*.yaml; do
+  case "$(basename "$file")" in ExternalSecret-*) ;; *) files+=(-f "$file") ;; esac
+done
+apply "${files[@]}"
 k wait --for=condition=Established --timeout=2m crd/applications.argoproj.io
 k -n argocd rollout status deployment/argocd-repo-server --timeout=5m
 k -n argocd rollout status statefulset/argocd-application-controller --timeout=5m

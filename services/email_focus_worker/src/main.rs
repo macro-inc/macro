@@ -3,13 +3,15 @@
 //!
 //! Reads `macro.email` for new and sent messages, asks Jev about each signal
 //! thread and key mail in an inbox in the Focus rollout (the
-//! `enable-email-focus` flag of its owner or of a user it is linked to) with
-//! the owner's stored memory as context, asks
-//! the agent harness for the day a thread that can be in Focus is due, stores
-//! both in `email_thread_focus`, and tells the inbox's readers through the
-//! connection gateway. Every minute it looks for inboxes that joined the
-//! rollout and fills them from the last window of mail; an hourly sweep catches
-//! what the event stream missed. Its rollout numbers (cost, failures, delays)
+//! `enable-email-focus` flag of its owner or of a user it is linked to, for
+//! someone who used Macro in the last week) with the owner's stored memory
+//! as context, asks the agent harness for the day a thread that can be in
+//! Focus is due, stores both in `email_thread_focus`, and tells the inbox's
+//! readers through the connection gateway. Every minute it looks for inboxes
+//! that joined the rollout and fills them from the last window of mail; an
+//! hourly sweep catches what the event stream missed. Backfills and sweeps
+//! keep to a TypeSafe token budget and slow down when TypeSafe pushes back;
+//! new mail never waits on it. Its rollout numbers (cost, failures, delays)
 //! go to CloudWatch as `Macro/EmailFocus` once a minute.
 
 mod config;
@@ -22,6 +24,7 @@ mod inbound {
     pub mod sweep;
 }
 mod outbound {
+    pub mod active_enrollment;
     pub mod cloudwatch_metrics;
     pub mod flag_enrollment;
     pub mod gateway_notifier;
@@ -29,10 +32,13 @@ mod outbound {
     pub mod jev_classifier;
     pub mod memory_profile;
     pub mod metered;
+    pub mod paced;
+    pub mod token_budget;
 }
 
 use std::{sync::Arc, time::Duration};
 
+use activity::outbound::pg_activity_repo::PgActivityRepo;
 use calendar_events::outbound::pg::PgCalendarRepository;
 use connection_gateway_client::ConnectionGatewayClient;
 use email::{domain::focus::FocusService, outbound::FocusPgRepository};
@@ -50,6 +56,7 @@ use crate::{
     inbound::{backfill::run_backfills, kafka_consumer::run_focus_consumer, sweep::run_sweeps},
     metrics::{FocusMetrics, Metric, run_publisher},
     outbound::{
+        active_enrollment::ActiveEnrollment,
         cloudwatch_metrics::CloudWatchMetrics,
         flag_enrollment::{EMAIL_FOCUS_FLAG, FlagEnrollment},
         gateway_notifier::{CoalescingNotifier, GatewayDelivery},
@@ -57,6 +64,8 @@ use crate::{
         jev_classifier::{self, JevFocusClassifier},
         memory_profile::MemoryProfiles,
         metered::{MeteredClassifier, MeteredRecorder, Prices, TimedStore},
+        paced::{PacedClassifier, SpendingRecorder},
+        token_budget::{Rates, TokenBudget},
     },
 };
 
@@ -121,6 +130,10 @@ async fn main() -> Result<(), Report> {
         config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     );
+    let activity = PgActivityRepo::new(db.clone());
+    // Shared by every Jev call, so backfills and sweeps keep inside
+    // TypeSafe's rate limits with live mail taking what it needs.
+    let budget = Arc::new(TokenBudget::new(Rates::default()));
     let service = Arc::new(FocusService::new(
         TimedStore::new(FocusPgRepository(db.clone()), metrics.clone()),
         MemoryProfiles::new(
@@ -128,14 +141,21 @@ async fn main() -> Result<(), Report> {
             PgCalendarRepository::new(db.clone()),
         ),
         MeteredClassifier::new(
-            JevFocusClassifier::new(JevClassifier::new(
-                provider,
-                Arc::new(MeteredRecorder::new(
-                    ai_usage::pg_recorder_with_enforcement(db.clone(), enforcement),
-                    metrics.clone(),
-                    Arc::clone(&prices),
+            PacedClassifier::new(
+                JevFocusClassifier::new(JevClassifier::new(
+                    provider,
+                    Arc::new(SpendingRecorder::new(
+                        Arc::new(MeteredRecorder::new(
+                            ai_usage::pg_recorder_with_enforcement(db.clone(), enforcement),
+                            metrics.clone(),
+                            Arc::clone(&prices),
+                        )),
+                        Arc::clone(&budget),
+                    )),
                 )),
-            )),
+                budget,
+                metrics.clone(),
+            ),
             metrics.clone(),
         ),
         CoalescingNotifier::new(
@@ -149,7 +169,12 @@ async fn main() -> Result<(), Report> {
             metrics.clone(),
             prices,
         )?,
-        FlagEnrollment::new(flags),
+        ActiveEnrollment::new(
+            FlagEnrollment::new(flags),
+            activity,
+            chrono::Duration::days(i64::from(config.focus_active_days.max(1))),
+            Duration::from_secs(config.focus_activity_cache_secs),
+        ),
     ));
     // The Focus list reads at most 90 days; a longer window would only make
     // every stale-thread page scan the whole thread table.

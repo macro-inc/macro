@@ -9,6 +9,8 @@ import type { CapabilityStatus } from './model';
 
 export function AiGrantActions(props: {
   status: CapabilityStatus;
+  /** Whether a connection is held, which a `not-connected` one may be. */
+  held?: boolean;
   onConnect: () => void;
   onReconnect: () => void;
   onEnable: () => void;
@@ -45,7 +47,7 @@ export function AiGrantActions(props: {
                 loading={props.connectBusy}
               />
             }
-            items={[]}
+            items={props.held ? [disconnectItem()] : []}
           />
         ))
         .with('action-required', () => (

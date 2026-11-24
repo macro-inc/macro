@@ -487,7 +487,7 @@ export type PropertyScope = 'user' | 'team' | 'system' | 'all';
  * here; task classification is resolved by the properties domain from the
  * document subtype.
  */
-export type PropertyTargetEntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DATABASE_ROW' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'THREAD' | 'USER';
+export type PropertyTargetEntityType = 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'CONTACT' | 'DATABASE_ROW' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'THREAD' | 'USER';
 
 /**
  * Canonical reference to an entity receiving properties.
@@ -531,10 +531,14 @@ export type PropertyValue = {
      */
     value: string;
 } | {
+    /**
+     * True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone.
+     */
+    has_time?: boolean;
     type: 'Date';
     /**
-     * Date/timestamp value
-     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
+     * Date value, with or without a time of day
+     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
      */
     value: string;
 } | {
@@ -600,6 +604,7 @@ export type SetPropertyValue = {
     type: 'boolean';
     value: boolean;
 } | {
+    has_time?: boolean;
     type: 'date';
     value: string;
 } | {

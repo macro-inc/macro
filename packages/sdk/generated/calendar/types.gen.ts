@@ -84,7 +84,8 @@ export type Booking = {
      */
     eventTypeId: string;
     /**
-     * Assigned hosts.
+     * Assigned hosts. Empty in responses to the booker, since a Macro user
+     * identity carries the host's sign-in address.
      */
     hosts: Array<string>;
     /**
@@ -129,6 +130,26 @@ export type Booking = {
      * Snapshot of the meeting title.
      */
     title: string;
+};
+
+/**
+ * A connected account whose primary calendar the host can write, so a
+ * personal link can book on it.
+ */
+export type BookingAccount = {
+    /**
+     * The account's address, which invitations for its bookings come from.
+     */
+    emailAddress: string;
+    /**
+     * Connected inbox identity, set as a link's `emailLinkId`.
+     */
+    emailLinkId: string;
+    /**
+     * Whether its calendar adds a video meeting to a booking that asks for
+     * one (`googleMeet`): Google Meet on Google, Microsoft Teams on Outlook.
+     */
+    videoMeetings: boolean;
 };
 
 /**
@@ -195,6 +216,13 @@ export type BookingEventType = {
      * Meeting duration.
      */
     durationMinutes: number;
+    /**
+     * Connected inbox whose primary calendar takes this link's bookings, so
+     * the event lands there and its invitation comes from that address.
+     * Absent books on the host's primary inbox. Personal links only: team
+     * links book on each host's primary inbox.
+     */
+    emailLinkId?: string | null;
     /**
      * Whether new bookings are accepted.
      */
@@ -346,6 +374,14 @@ export type BookingLinkEvent = {
      */
     durationMinutes: number;
     /**
+     * The connected account, an `emailLinkId` from the listing's `accounts`,
+     * whose primary calendar takes this link's bookings and sends their
+     * invitations from its address. Omit to book on the host's primary
+     * account. Personal links only; team links book on each host's primary
+     * account. `googleMeet` needs an account whose `videoMeetings` is true.
+     */
+    emailLinkId?: string | null;
+    /**
      * Whether new bookings are accepted.
      */
     enabled: boolean;
@@ -407,6 +443,11 @@ export type BookingLinkEvent = {
  * Authorized discovery results including reusable availability.
  */
 export type BookingLinkListing = {
+    /**
+     * Connected accounts a personal link can book on, as its `emailLinkId`;
+     * empty for a team.
+     */
+    accounts: Array<BookingAccount>;
     /**
      * Links whose title, slug or description matches the search, including paused links.
      */
@@ -968,6 +1009,39 @@ export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | '
 export type CalendarProvider = 'google' | 'outlook';
 
 /**
+ * Edits laid over the saved event in its replacement, as an event update
+ * would apply them; omitted fields keep the saved value.
+ */
+export type CalendarReplacementChanges = {
+    /**
+     * Replacement guest list.
+     */
+    attendees?: Array<CalendarAttendeeInputBody> | null;
+    /**
+     * Replacement description; an empty string clears it.
+     */
+    description?: string | null;
+    /**
+     * Replacement location; an empty string clears it.
+     */
+    location?: string | null;
+    /**
+     * Replacement recurrence properties; an empty list clears them. Applies
+     * only to a whole series, and drops its copied occurrences like a time
+     * change.
+     */
+    recurrenceLines?: Array<string> | null;
+    reminders?: null | EventReminders;
+    time?: null | EventTime;
+    /**
+     * Replacement title.
+     */
+    title?: string | null;
+    transparency?: null | EventTransparency;
+    visibility?: null | EventVisibility;
+};
+
+/**
  * Safe preview and recovery response; never exposes the opaque provider snapshot.
  */
 export type CalendarReplacementView = {
@@ -981,7 +1055,7 @@ export type CalendarReplacementView = {
     completedSteps: number;
     event?: null | CalendarEvent;
     /**
-     * Entire recurring series, including exceptions, is replaced.
+     * The replacement is a recurring series.
      */
     isSeries: boolean;
     /**
@@ -1423,6 +1497,7 @@ export type PrepareCalendarReplacementRequest = {
      * Exact calendar copy; defaults to canonical.
      */
     calendarId?: string | null;
+    changes?: null | CalendarReplacementChanges;
     /**
      * Original-start key; omitted to replace the entire series.
      */

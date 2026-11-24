@@ -9,9 +9,11 @@ export function ProjectSectionTabs(props: {
   compact: Accessor<boolean>;
   section: ProjectSection;
   onChange(section: ProjectSection): void;
+  ref?: (element: HTMLElement) => void;
 }) {
   return (
     <Tabs
+      ref={props.ref}
       aria-label={t('tabs.projectSections')}
       touch="inset"
       class="shrink-0"

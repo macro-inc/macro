@@ -73,10 +73,9 @@ tools/HTTP/GraphQL surfaces over them.
   using the same isolated database as the tests.
 - For member-access changes, also run `cargo test -p crm --all-features member_access`;
   the HTTP, search and tool revocation test requires the `search` feature.
-- After tool input or description changes, regenerate frontend tool types and
-  public MCP reference pages using the
-  [entity creation guide](../../docs/guides/add-entity.md#13-ai-and-mcp-tools);
-  CI checks both outputs.
+- After tool input or description changes, regenerate frontend tool types using
+  the [entity creation guide](../../docs/guides/add-entity.md#13-ai-and-mcp-tools);
+  CI checks the output.
 
 ## Gotchas
 
@@ -224,6 +223,21 @@ tools/HTTP/GraphQL surfaces over them.
   same-team duplicates without disclosing restricted matches. A new address
   must be free across the team; a link, switch or unlink re-checks every
   address the contact holds. Preserve ID, archive and sources.
+- Company domain setters (`domain/company_domains.rs`, `PUT`/`DELETE
+  /crm/companies/{id}/domains`, the `AddCompanyDomain` and
+  `RemoveCompanyDomain` tools) add or remove one of a company's
+  `crm_domains`, validated under the exclusive team privacy lock, the
+  domain's lock and the company row. Any member who can see the company may
+  edit; a domain another company of the team tracks is refused
+  (`CompanyDomainTaken`, naming it only to a caller who can see it). An
+  added domain is dated after every domain the company holds, so the
+  primary domain and the name never change; the primary that names a
+  company without a team name can't be removed. A company whose sync is off
+  keeps its domains out of sync, so adding one passes the mailbox-domain
+  guard and removing one is admin-only and schedules history. Edits mark
+  the company `manually_created`, record a company matching change, never
+  attach existing contacts, never delete contacts or mail, and write the
+  directory only through `ensure_domain_directory_entry`, as creation does.
 - A company-domain contact has a company and an address on one of that
   company's `crm_domains` (`CrmContact::company_domain_emails`; there is no
   stored marker). It cannot be unlinked or moved, and its last such address
