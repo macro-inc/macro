@@ -3823,11 +3823,10 @@ impl<S: Storage> Engine<S> {
         keys: &[EntityKey<'static>],
     ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
-        let keys = &*without_metadata(keys);
+        let (keys, channels) = self.deletable(keys).await?;
         let affected = self.deps.ops_for_keys(keys.iter());
-        let channels = self.channels_holding(keys).await?;
         self.storage
-            .delete_batch(keys)
+            .delete_batch(&keys)
             .await
             .map_err(EngineError::Storage)?;
         if keys
@@ -3836,7 +3835,7 @@ impl<S: Storage> Engine<S> {
         {
             self.contact_fence = Uuid::now_v7();
         }
-        for key in keys {
+        for key in &keys {
             self.hot.pop(key);
         }
         self.advance_revision()?;
@@ -3998,11 +3997,10 @@ impl<S: PredicateIndexStorage> Engine<S> {
         projections: Vec<ProjectionMutation>,
     ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
-        let keys = &*without_metadata(keys);
+        let (keys, channels) = self.deletable(keys).await?;
         let affected = self.deps.ops_for_keys(keys.iter());
-        let channels = self.channels_holding(keys).await?;
         self.storage
-            .delete_batch_with_projection_changes(keys, projections)
+            .delete_batch_with_projection_changes(&keys, projections)
             .await
             .map_err(EngineError::Storage)?;
         if keys
@@ -4011,7 +4009,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
         {
             self.contact_fence = Uuid::now_v7();
         }
-        for key in keys {
+        for key in &keys {
             self.hot.pop(key);
         }
         self.advance_revision()?;
