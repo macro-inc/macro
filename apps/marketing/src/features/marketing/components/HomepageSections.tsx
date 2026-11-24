@@ -109,7 +109,7 @@ const SECTIONS: readonly Section[] = [
     description:
       'Docs gives you collaborative plain markdown with full version history, real-time multiplayer cursors, and live editing alongside AI agents.',
     caption: [
-      'Mention Macro Tasks, Macro Mail, and Macro Calls inline with bidirectional links, and organize specs alongside Macro Spreadsheets in Macro Drive.',
+      'Type @ to mention Macro Tasks, Macro Mail, and Macro Calls inline with bidirectional links, and organize specs alongside Macro Spreadsheets in Macro Drive.',
     ],
     tutorial: 'docs',
     screen: docsScreen,
