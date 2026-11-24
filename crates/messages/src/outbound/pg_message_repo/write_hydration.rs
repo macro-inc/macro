@@ -87,6 +87,7 @@ impl PgMessageRepository {
             parent: MessageParent::parse(&row.parent_entity_type, &row.parent_entity_id)
                 .map_err(|error| MessageError::Repository(rootcause::Report::new(error).into()))?,
             thread_id: row.thread_id,
+            import_order: row.import_order,
             bot_profile: bot_profile.or_else(|| {
                 let id = bot_id::BotIdStr::parse_from_str(&row.sender_id)
                     .ok()?

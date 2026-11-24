@@ -71,6 +71,7 @@ fn posted(
         mentions: vec![],
         guest_name: None,
         imported_author: None,
+        import_order: None,
         content: content.into(),
         created_at: at(minute),
         updated_at: at(minute),

@@ -11,6 +11,7 @@ mod event_posts;
 mod guest_chat;
 mod initiative;
 mod sequences;
+mod thread_reads;
 
 #[derive(Clone)]
 struct Repo {
@@ -134,6 +135,40 @@ impl MessageRepository for Repo {
             .filter(|reply| reply.parent == *parent && reply.thread_id == Some(root))
             .cloned()
             .collect())
+    }
+    async fn root(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+    ) -> Result<Option<MessageListItem>, MessageError> {
+        Ok(self
+            .timeline(
+                parent,
+                MessageTimelineQuery {
+                    ids: vec![root_id],
+                    ..Default::default()
+                },
+            )
+            .await?
+            .items
+            .pop())
+    }
+    async fn thread_page(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+        _: MessageThreadQuery,
+    ) -> Result<MessageThreadPage, MessageError> {
+        Ok(MessageThreadPage {
+            root: self
+                .root(parent, root_id)
+                .await?
+                .ok_or(MessageError::NotFound)?,
+            replies: self.replies(parent, root_id).await?,
+            next_cursor: None,
+            previous_cursor: None,
+            call: None,
+        })
     }
     async fn parent_exists(&self, _: &MessageParent) -> Result<bool, MessageError> {
         Ok(true)
@@ -351,6 +386,7 @@ fn fixture() -> Repo {
             id,
             parent: MessageParent::parse("document", "doc").unwrap(),
             thread_id: None,
+            import_order: None,
             sender_id: ChannelSender::try_from(user.to_owned()).unwrap(),
             bot_profile: None,
             mentions: vec![],
@@ -400,6 +436,7 @@ fn reply_from(root: &Message, id: u128, sender: &str) -> Message {
     Message {
         id: Uuid::from_u128(id),
         thread_id: Some(root.id),
+        import_order: None,
         sender_id: ChannelSender::try_from(sender.to_owned()).unwrap(),
         guest_name: None,
         imported_author: None,
@@ -1525,6 +1562,21 @@ impl MessageRepository for StrictRepo {
     ) -> Result<Vec<Message>, MessageError> {
         self.inner.replies(parent, root).await
     }
+    async fn root(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+    ) -> Result<Option<MessageListItem>, MessageError> {
+        self.inner.root(parent, root_id).await
+    }
+    async fn thread_page(
+        &self,
+        parent: &MessageParent,
+        root_id: Uuid,
+        query: MessageThreadQuery,
+    ) -> Result<MessageThreadPage, MessageError> {
+        self.inner.thread_page(parent, root_id, query).await
+    }
     async fn parent_exists(&self, _: &MessageParent) -> Result<bool, MessageError> {
         Ok(self.parent_exists)
     }
@@ -2003,6 +2055,83 @@ async fn a_short_side_lends_its_room_to_the_other() {
     let (page, _) = around(&repo, facts, 7).await;
     assert_eq!(entry_ids(&page).len(), 4);
     assert!(page.next_cursor.is_none() && page.previous_cursor.is_none());
+}
+
+#[tokio::test]
+async fn a_mixed_page_offers_its_cursors_side_only_when_an_entry_lies_there() {
+    let mut repo = fixture();
+    repo.message.parent = MessageParent::Channel(Uuid::from_u128(20));
+    repo.state.anchor = None;
+    let fact = |id: u128, seconds| activity::domain::timeline::TimelineActivity {
+        id: Uuid::from_u128(100 + id),
+        actor_id: "macro|author@example.com".into(),
+        occurred_at: repo.message.created_at + chrono::Duration::seconds(seconds),
+        action: "picture_changed".into(),
+        payload: None,
+    };
+    let facts = vec![fact(0, -1), fact(1, 1)];
+    let service = MessageService::new(repo.clone(), Events::default())
+        .with_activity(TimelineFacts(facts.clone()));
+    let read = |cursor: MessageCursor, direction| {
+        service.timeline_entries(
+            channel_access()
+                .try_into_requirement::<MessageView>()
+                .unwrap(),
+            MessageTimelineQuery {
+                cursor: Some(cursor),
+                direction,
+                ..Default::default()
+            },
+        )
+    };
+    let at = |seconds| MessageCursor {
+        created_at: repo.message.created_at + chrono::Duration::seconds(seconds),
+        id: Uuid::from_u128(999),
+    };
+
+    // The entries the cursors were taken from are gone: nothing lies beyond.
+    let older = read(at(5), MessageDirection::Older).await.unwrap();
+    assert_eq!(entry_ids(&older).len(), 3);
+    assert!(older.previous_cursor.is_none());
+    let newer = read(at(-5), MessageDirection::Newer).await.unwrap();
+    assert_eq!(entry_ids(&newer).len(), 3);
+    assert!(newer.next_cursor.is_none());
+
+    // An activity on the cursor's side is offered, and so is a message from
+    // a page that holds activity alone.
+    let older = read(
+        MessageCursor {
+            created_at: facts[1].occurred_at,
+            id: facts[1].id,
+        },
+        MessageDirection::Older,
+    )
+    .await
+    .unwrap();
+    assert_eq!(entry_ids(&older), [repo.message.id, facts[0].id]);
+    assert_eq!(older.previous_cursor.unwrap().id, repo.message.id);
+    let newer = read(
+        MessageCursor {
+            created_at: repo.message.created_at,
+            id: Uuid::from_u128(0),
+        },
+        MessageDirection::Newer,
+    )
+    .await
+    .unwrap();
+    assert_eq!(entry_ids(&newer), [facts[1].id, repo.message.id]);
+    assert!(newer.next_cursor.is_some());
+    let only_activity = read(
+        MessageCursor {
+            created_at: repo.message.created_at,
+            id: Uuid::from_u128(0),
+        },
+        MessageDirection::Older,
+    )
+    .await
+    .unwrap();
+    assert_eq!(entry_ids(&only_activity), [facts[0].id]);
+    assert_eq!(only_activity.previous_cursor.unwrap().id, facts[0].id);
 }
 
 fn entry_ids(page: &MessageTimelinePage) -> Vec<Uuid> {

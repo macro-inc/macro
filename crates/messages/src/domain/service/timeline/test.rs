@@ -21,6 +21,7 @@ fn message(id: u128) -> MessageListItem {
             id,
             parent: MessageParent::Channel(Uuid::from_u128(100)),
             thread_id: None,
+            import_order: None,
             sender_id: ChannelSender::try_from("macro|author@example.com".to_owned()).unwrap(),
             bot_profile: None,
             mentions: vec![],

@@ -79,6 +79,7 @@ fn message(id: Uuid, thread_id: Option<Uuid>, sender: ChannelSender<'static>) ->
         id,
         parent: initiative(),
         thread_id,
+        import_order: None,
         sender_id: sender,
         guest_name: None,
         imported_author: None,
@@ -229,7 +230,11 @@ impl MessageReader for FakeMessages {
     ) -> Result<crate::domain::changes::ChannelChanges, crate::domain::ports::MessageError> {
         unimplemented!()
     }
-    async fn channel_seq(&self, _: uuid::Uuid) -> Result<i64, crate::domain::ports::MessageError> {
+    async fn channel_seq(
+        &self,
+        _: EntityAccessReceipt<crate::domain::service::MessageView>,
+        _: uuid::Uuid,
+    ) -> Result<i64, crate::domain::ports::MessageError> {
         unimplemented!()
     }
 
@@ -250,6 +255,29 @@ impl MessageReader for FakeMessages {
             .find(|thread| thread.root.id == root)
             .cloned()
             .ok_or(MessageError::NotFound)
+    }
+    async fn get_entry(
+        &self,
+        _: EntityAccessReceipt<crate::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<crate::domain::ports::MessageRead, crate::domain::ports::MessageError> {
+        unimplemented!("read path unused by these tools")
+    }
+    async fn get_root(
+        &self,
+        _: EntityAccessReceipt<crate::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<crate::domain::ports::MessageTimelineEntry, crate::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by these tools")
+    }
+    async fn thread_page(
+        &self,
+        _: EntityAccessReceipt<crate::domain::service::MessageView>,
+        _: Uuid,
+        _: crate::domain::ports::MessageThreadQuery,
+    ) -> Result<crate::domain::ports::MessageThreadPage, crate::domain::ports::MessageError> {
+        unimplemented!("read path unused by these tools")
     }
     async fn timeline(
         &self,

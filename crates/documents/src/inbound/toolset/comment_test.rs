@@ -67,6 +67,9 @@ impl MessageReader for FakeMessages {
     }
     async fn channel_seq(
         &self,
+        _: entity_access::domain::models::EntityAccessReceipt<
+            messages::domain::service::MessageView,
+        >,
         _: uuid::Uuid,
     ) -> Result<i64, messages::domain::ports::MessageError> {
         unimplemented!()
@@ -85,6 +88,30 @@ impl MessageReader for FakeMessages {
         _root: Uuid,
     ) -> Result<MessageThread, MessageError> {
         panic!("unexpected get_thread call")
+    }
+    async fn get_entry(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<messages::domain::ports::MessageRead, messages::domain::ports::MessageError> {
+        unimplemented!("read path unused by these tools")
+    }
+    async fn get_root(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<messages::domain::ports::MessageTimelineEntry, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by these tools")
+    }
+    async fn thread_page(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+        _: messages::domain::ports::MessageThreadQuery,
+    ) -> Result<messages::domain::ports::MessageThreadPage, messages::domain::ports::MessageError>
+    {
+        unimplemented!("read path unused by these tools")
     }
     async fn timeline(
         &self,
@@ -146,6 +173,7 @@ impl MessageCommands for FakeMessages {
             id: Uuid::from_u128(99),
             parent: MessageParent::parse("document", &access.entity().entity_id).unwrap(),
             thread_id: input.thread_id,
+            import_order: None,
             sender_id: ChannelSender::try_from(
                 bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
             )

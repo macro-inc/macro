@@ -121,6 +121,7 @@ fn message(content: &str) -> Message {
         sender_id: "macro|sender@example.com".to_owned().try_into().unwrap(),
         guest_name: None,
         imported_author: None,
+        import_order: None,
         bot_profile: None,
         mentions: Vec::new(),
         triggered_via: None,
