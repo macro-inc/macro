@@ -32,6 +32,7 @@ import {
   startDueOf,
 } from '@property/utils/start-due';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { isTemporaryGraphqlProperty } from '@queries/properties/graphql-optimistic';
 import { useTagsQuery } from '@queries/properties/tags';
 import { Key } from '@solid-primitives/keyed';
 import {
@@ -109,6 +110,8 @@ export function InlineTaskProperties() {
     if (pendingPins().size === 0 || !state.editor.md.editor) return;
     for (const property of properties()) {
       if (!pendingPins().has(property.propertyDefinitionId)) continue;
+      // A value saved straight after the add shows with a temporary id first.
+      if (isTemporaryGraphqlProperty(property.propertyId)) continue;
       pins.pin(property.propertyId, titleProperties());
       clearPendingPin(property.propertyDefinitionId);
     }

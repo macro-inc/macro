@@ -215,7 +215,7 @@ export async function verifyHomepage(
           .getByRole('link', { name: 'Learn about email', exact: true })
           .click();
         await expect(page).toHaveURL(`${origin}/email`);
-        await verifySignupNavigation(page, origin, viewport.width < 640);
+        await verifySignupNavigation(page, origin);
         if (errors.length)
           throw new Error(
             `Homepage demo failed (${label}): ${errors.join('; ')}`
@@ -237,8 +237,7 @@ export async function verifyHomepage(
 
 async function verifySignupNavigation(
   page: Page,
-  origin: string,
-  phone: boolean
+  origin: string
 ): Promise<void> {
   // App signup belongs to a separate application. A URL change alone
   // can pass while the website router renders an empty shell.
@@ -248,7 +247,7 @@ async function verifySignupNavigation(
       body: '<h1>Signup application</h1>',
     })
   );
-  const signupUrl = `${origin}${phone ? '/mobile-signup' : '/app/signup'}`;
+  const signupUrl = `${origin}/app/signup`;
   for (const selector of [
     '.homepage-hero-cta',
     '.site-header-actions .site-nav-start',
@@ -264,9 +263,8 @@ async function verifySignupNavigation(
     ]);
     expect(response.ok()).toBe(true);
     await expect(page).toHaveURL(signupUrl);
-    if (!phone)
-      await expect(
-        page.getByRole('heading', { name: 'Signup application' })
-      ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Signup application' })
+    ).toBeVisible();
   }
 }

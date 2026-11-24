@@ -29,7 +29,6 @@ export {
 } from './github-link';
 export { useInitGmailLink } from './gmail-link';
 export { authKeys } from './keys';
-export { useSendMobileWelcomeEmail } from './mobile-welcome-email';
 export {
   type CreateCheckoutSessionArgs,
   useCreateBillingPortalMutation,

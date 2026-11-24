@@ -2,6 +2,7 @@ import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
 import agentControls from './en/agent-controls';
 import agentNavigation from './en/agent-navigation';
+import agentScreen from './en/agent-screen';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
 import appearance from './en/appearance';
@@ -33,6 +34,7 @@ import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
 import passwords from './en/passwords';
 import routineDrafts from './en/routine-drafts';
+import routineFilters from './en/routine-filters';
 import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
 import routinesList from './en/routines-list';
@@ -62,6 +64,7 @@ export default {
   appearance,
   agentControls,
   agentNavigation,
+  agentScreen,
   accountManager,
   agentSetup,
   githubConnect,
@@ -94,6 +97,7 @@ export default {
   notificationsInbox,
   passwords,
   routineDrafts,
+  routineFilters,
   routineMenu,
   routineSuggestions,
   routinesList,

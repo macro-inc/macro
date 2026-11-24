@@ -642,28 +642,29 @@ pub async fn build_tool_service_context_from_env(
         ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
     let import_tool_context = if let Some(composed) = connectors {
         let connections = Arc::new(composed.connectors.clone());
+        let entity_creator = Arc::new(crate::ToolEntityCreator {
+            document_creator: document_tool_context.creator.clone(),
+            entity_access_service: entity_access_service.clone(),
+            channel_service: channel_tool_context.service.clone(),
+            task_properties: document_tool_context
+                .service
+                .task_properties_service
+                .clone(),
+            document_properties:
+                import::outbound::document_properties::DocumentPropertiesApplicator::new(
+                    properties_service.clone(),
+                ),
+            team_repository: crate::tool_context::build_team_repository(pool.clone()),
+            initiative_service: initiative_tool_context.service.clone(),
+            project_service: project_tool_context.service.clone(),
+            databases_service: databases_tool_context.service.clone(),
+            document_service: document_tool_context.service.clone(),
+        });
         let import_service = Arc::new(
             import::domain::service::ImportServiceImpl::new(
                 crate::tool_context::build_import_repo(pool.clone()),
                 Arc::clone(&connections),
-                Arc::new(crate::ToolEntityCreator {
-                    document_creator: document_tool_context.creator.clone(),
-                    entity_access_service: entity_access_service.clone(),
-                    channel_service: channel_tool_context.service.clone(),
-                    task_properties: document_tool_context
-                        .service
-                        .task_properties_service
-                        .clone(),
-                    document_properties:
-                        import::outbound::document_properties::DocumentPropertiesApplicator::new(
-                            properties_service.clone(),
-                        ),
-                    team_repository: crate::tool_context::build_team_repository(pool.clone()),
-                    initiative_service: initiative_tool_context.service.clone(),
-                    project_service: project_tool_context.service.clone(),
-                    databases_service: databases_tool_context.service.clone(),
-                    document_service: document_tool_context.service.clone(),
-                }),
+                entity_creator.clone(),
                 recorder.clone(),
             )
             .with_slack_source(Arc::new(
@@ -678,8 +679,18 @@ pub async fn build_tool_service_context_from_env(
                 )),
             )
             .with_notion_connections(Arc::new(
-                import_notion::outbound::connected::ConnectedNotion::new(connections),
+                import_notion::outbound::connected::ConnectedNotion::new(Arc::clone(&connections)),
             ))
+            .with_hubspot(
+                Arc::new(import_hubspot::outbound::client::HubspotApi::new(
+                    connections,
+                )),
+                Arc::new(crate::HubspotCrmWriter::new(
+                    &crm_tool_context,
+                    &pipeline_tool_context,
+                    entity_creator,
+                )),
+            )
             .with_admission(admission.clone())
             .with_notifier(import::outbound::gateway_notifier::gateway_import_notify(
                 side_effect_clients.connection_gateway.clone(),
