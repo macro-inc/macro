@@ -81,6 +81,7 @@ export default defineConfig(({ command }) => ({
           'parking.html',
           'graphql-soup-rollout.html',
           'cache-recovery.html',
+          'queue-salvage.html',
           'notification-projection.html',
           'mail-projection.html',
           'mail-reconciliation.html',
