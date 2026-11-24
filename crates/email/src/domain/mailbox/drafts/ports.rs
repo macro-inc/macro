@@ -1,5 +1,5 @@
 use super::{
-    super::{MailboxError, MailboxKey},
+    super::{MailboxError, MailboxKey, SyncClaim},
     models::*,
 };
 use email_api_client::domain::models::*;
@@ -11,7 +11,7 @@ pub trait DraftRepository: Send + Sync + 'static {
         &self,
         lease_id: Uuid,
         mode: DraftClaimMode,
-    ) -> impl Future<Output = Result<Option<DraftLease>, MailboxError>> + Send;
+    ) -> impl Future<Output = Result<SyncClaim<DraftLease>, MailboxError>> + Send;
     fn renew_draft(
         &self,
         lease: &DraftLease,

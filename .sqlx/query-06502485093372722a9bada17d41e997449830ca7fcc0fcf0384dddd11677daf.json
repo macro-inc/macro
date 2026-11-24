@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Reserve 16 slots for pre-migration NULL-provider work alongside 32 native\n-- slots, bounding routing writes while guaranteeing the legacy queue drains.\n-- Limit raw keys BEFORE SKIP LOCKED, so a held prefix cannot create an\n-- unbounded index walk. Every later LATERAL is one of these <=64 primary keys.\nWITH native AS MATERIALIZED (\n    SELECT id FROM email_mailbox_commands\n    WHERE provider = $1::text::email_user_provider_enum AND parked_at IS NULL\n        AND (CASE WHEN status IN ('pending','running') THEN GREATEST(available_at, COALESCE(lease_until, '-infinity'::timestamptz), COALESCE(blocked_until, '-infinity'::timestamptz)) ELSE 'infinity'::timestamptz END) < 'infinity'::timestamptz\n        AND (CASE WHEN status IN ('pending','running') THEN GREATEST(available_at, COALESCE(lease_until, '-infinity'::timestamptz), COALESCE(blocked_until, '-infinity'::timestamptz)) ELSE 'infinity'::timestamptz END) <= now()\n    ORDER BY (CASE WHEN status IN ('pending','running') THEN GREATEST(available_at, COALESCE(lease_until, '-infinity'::timestamptz), COALESCE(blocked_until, '-infinity'::timestamptz)) ELSE 'infinity'::timestamptz END), id LIMIT 32\n),\nlegacy AS MATERIALIZED (\n    SELECT id FROM email_mailbox_commands\n    WHERE provider IS NULL AND parked_at IS NULL\n        AND (CASE WHEN status IN ('pending','running') THEN GREATEST(available_at, COALESCE(lease_until, '-infinity'::timestamptz), COALESCE(blocked_until, '-infinity'::timestamptz)) ELSE 'infinity'::timestamptz END) < 'infinity'::timestamptz\n        AND (CASE WHEN status IN ('pending','running') THEN GREATEST(available_at, COALESCE(lease_until, '-infinity'::timestamptz), COALESCE(blocked_until, '-infinity'::timestamptz)) ELSE 'infinity'::timestamptz END) <= now()\n    ORDER BY (CASE WHEN status IN ('pending','running') THEN GREATEST(available_at, COALESCE(lease_until, '-infinity'::timestamptz), COALESCE(blocked_until, '-infinity'::timestamptz)) ELSE 'infinity'::timestamptz END), id LIMIT 16\n),\nkeys AS MATERIALIZED (SELECT id FROM native UNION ALL SELECT id FROM legacy),\nlocked AS MATERIALIZED (\n    SELECT d.* FROM keys k CROSS JOIN LATERAL (\n        SELECT d.id AS id,d.link_id,d.generation,d.provider,d.available_at,d.lease_until,d.parked_at,d.blocked_until,d.status,d.accepted_order,d.intent\n        FROM email_mailbox_commands d WHERE d.id=k.id\n        LIMIT 1 FOR UPDATE OF d SKIP LOCKED\n    ) d\n),\nenriched AS MATERIALIZED (\n    SELECT d.*, l.provider AS actual_provider,\n        (l.is_sync_active AND l.mailbox_unavailable_at IS NULL\n            AND l.sync_generation=d.generation) AS parent_ready\n    FROM locked d CROSS JOIN LATERAL (\n        SELECT provider,is_sync_active,mailbox_unavailable_at,sync_generation\n        FROM email_links WHERE id=d.link_id LIMIT 1\n    ) l\n),\nchanges AS MATERIALIZED (\n    SELECT d.*, CASE WHEN d.intent->>'kind' IS NULL OR d.intent->>'kind' NOT IN ('read','flagged','archived','trashed','junk','category')\n                THEN now()+interval '60 seconds'\n            ELSE NULL END AS new_blocked_until FROM enriched d\n),\nmaintained AS (\n    UPDATE email_mailbox_commands d\n    SET provider=c.actual_provider,\n        parked_at=CASE WHEN NOT c.parent_ready THEN clock_timestamp() ELSE NULL END,\n        blocked_until=c.new_blocked_until\n    FROM changes c WHERE d.id=c.id\n        AND (d.provider IS DISTINCT FROM c.actual_provider OR NOT c.parent_ready\n            OR d.blocked_until IS DISTINCT FROM c.new_blocked_until)\n    RETURNING d.id\n)\nSELECT COALESCE(array_agg(id ORDER BY GREATEST(available_at,COALESCE(lease_until,'-infinity'::timestamptz),COALESCE(new_blocked_until,'-infinity'::timestamptz)),id),ARRAY[]::uuid[]) AS \"ids!\",\n    (SELECT count(*) FROM maintained) AS \"maintained!\"\nFROM changes\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ids!",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 1,
+        "name": "maintained!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "06502485093372722a9bada17d41e997449830ca7fcc0fcf0384dddd11677daf"
+}

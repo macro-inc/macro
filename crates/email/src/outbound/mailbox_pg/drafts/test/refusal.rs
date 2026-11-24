@@ -29,6 +29,7 @@ async fn local_submit_contention_resets_admission_and_a_stale_worker_cannot_rese
         .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let mut checkpoint = checkpoint(&lease, DraftStage::Submitting);
     assert!(matches!(
@@ -74,6 +75,7 @@ async fn local_submit_contention_resets_admission_and_a_stale_worker_cannot_rese
         .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     checkpoint.advance(DraftStage::Submitting);
     checkpoint.submission_started = true;
@@ -172,6 +174,7 @@ async fn a_started_delivery_cannot_be_reset_as_unsubmitted(db: PgPool) {
         .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let mut checkpoint = checkpoint(&lease, DraftStage::Submitting);
     assert!(matches!(

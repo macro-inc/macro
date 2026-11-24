@@ -9,6 +9,7 @@ async fn claim(sync: &PgMailboxSync) -> DraftLease {
     )
     .await
     .unwrap()
+    .into_lease()
     .unwrap()
 }
 
@@ -82,6 +83,7 @@ async fn definite_pre_data_refusal_reports_failed_and_is_not_claimed_again(db: P
         sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
 }
@@ -162,6 +164,7 @@ async fn confirmed_delivery_reports_sent_and_is_not_claimed_again(db: PgPool) {
         sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
 }

@@ -127,6 +127,7 @@ impl From<PreviewReadError> for EmailErr {
 pub struct EmailPgRepo {
     pool: PgPool,
     rule_discovery: Option<Arc<RuleDiscoveryPort>>,
+    action_chunking: crate::domain::models::mailbox_action::MailboxActionChunking,
 }
 
 impl EmailPgRepo {
@@ -134,7 +135,17 @@ impl EmailPgRepo {
         EmailPgRepo {
             pool,
             rule_discovery: None,
+            action_chunking: Default::default(),
         }
+    }
+
+    /// Inject the default-off organization chunking switch from composition.
+    pub fn with_action_chunking(
+        mut self,
+        switch: crate::domain::models::mailbox_action::MailboxActionChunking,
+    ) -> Self {
+        self.action_chunking = switch;
+        self
     }
 
     /// Configure the owning CRM domain's discovery in composition. Selected
@@ -252,9 +263,16 @@ impl EmailRepo for EmailPgRepo {
         action: &crate::domain::models::mailbox_action::MailboxAction,
         targets: &[crate::domain::models::mailbox_action::MailboxActionTarget],
     ) -> Result<Uuid, EmailErr> {
-        mailbox_action::enqueue(&self.pool, link_id, actor, action, targets)
-            .await
-            .map_err(repo_error)
+        mailbox_action::enqueue(
+            &self.pool,
+            link_id,
+            actor,
+            action,
+            targets,
+            self.action_chunking.enabled(),
+        )
+        .await
+        .map_err(repo_error)
     }
     type Err = sqlx::Error;
 

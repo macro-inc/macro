@@ -371,6 +371,7 @@ async fn cleanup_retains_active_claims_and_recovery_checkpoints(db: PgPool) {
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_attachment_change(
         ACTOR,

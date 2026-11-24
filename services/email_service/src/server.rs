@@ -122,11 +122,12 @@ async fn run_server() -> anyhow::Result<()> {
         config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     );
+    let service_flags = crate::outlook_flags::posthog(&config)?;
     let contacts_ingress = std::sync::Arc::new(crate::composition::contacts_producer(
         aws_sdk_sqs::Client::new(&aws_config),
         macro_queues::ContactsQueue::new().to_string(),
         config.environment,
-        crate::outlook_flags::posthog(&config)?,
+        service_flags.clone(),
     ));
     let read_receipts = crate::composition::read_receipts(db.clone(), env)?;
     // The webhook reads the message a notification names once
@@ -136,7 +137,7 @@ async fn run_server() -> anyhow::Result<()> {
     let flag_cancellation = tokio_util::sync::CancellationToken::new();
     let flag_tracker = TaskTracker::new();
     flag_tracker.spawn(crate::outlook_flags::run(
-        crate::outlook_flags::posthog(&config)?,
+        service_flags.clone(),
         crate::outlook_flags::OutlookFlag {
             key: crate::outlook_flags::NOTIFIED_MESSAGE_READS_FLAG,
             name: "outlook notified message reads",
@@ -146,6 +147,23 @@ async fn run_server() -> anyhow::Result<()> {
             },
         },
         flag_cancellation.clone(),
+    ));
+    let mailbox_action_chunks =
+        email::domain::models::mailbox_action::MailboxActionChunking::default();
+    flag_tracker.spawn(feature_flags::polling::run(
+        service_flags,
+        feature_flags::polling::DefaultOffFlag {
+            key: email::domain::models::mailbox_action::MAILBOX_ACTION_CHUNKS_FLAG,
+            name: "mailbox action chunks",
+            context: feature_flags::ServiceContext::new(
+                email::domain::models::mailbox_action::MAILBOX_ACTION_FLAGS_CONTEXT,
+            ),
+            set: {
+                let switch = mailbox_action_chunks.clone();
+                move |enabled| switch.set(enabled)
+            },
+        },
+        flag_cancellation.clone().cancelled_owned(),
     ));
     let state = api_context(ApiDependencies {
         read_receipts,
@@ -164,6 +182,7 @@ async fn run_server() -> anyhow::Result<()> {
         macro_event_broker,
         event_broker_tracker: event_broker_tracker.clone(),
         notified_message_reads,
+        mailbox_action_chunks,
     })
     .await?;
     let api_result = api::setup_and_serve(state).await;

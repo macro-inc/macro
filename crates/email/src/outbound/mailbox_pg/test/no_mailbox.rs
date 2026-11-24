@@ -171,7 +171,13 @@ async fn claimable(repo: &PgMailboxSync) -> Vec<&'static str> {
     {
         kinds.push("settings");
     }
-    if repo.claim_command(lease()).await.unwrap().is_some() {
+    if repo
+        .claim_command(lease())
+        .await
+        .unwrap()
+        .into_lease()
+        .is_some()
+    {
         kinds.push("command");
     }
     kinds

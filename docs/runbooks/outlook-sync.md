@@ -130,12 +130,12 @@ folder's import round ends. Its enumerate spans read `@outlook.stream_kind:mail_
   (`round_started_at`); a round that began before that column existed is
   covered only from that page, until a resync or re-import restarts it.
 - Turn it off in PostHog: the workers read it every minute
-  (`outlook.feature_flag.refresh` spans with
+  (`feature_flag.refresh` spans with
   `@feature_flag.key:enable-outlook-import-live-pass`), stop claiming live
   passes and start new import rounds unordered. Open passes are deleted as
   their rounds end; nothing needs cleaning up. A worker that cannot read the
-  flag treats it as off and logs "could not read the outlook import live pass
-  flag".
+  flag treats it as off and emits a warning with the `feature_flag.key`
+  field identifying the failed evaluation.
 
 ## Reading notified messages
 
@@ -151,7 +151,7 @@ message read. Folder polls stay as the fallback for missed notifications.
   person property `environment = dev`; widen it to production after a dev
   round trip (send the Outlook test inbox mail, see it in the app within
   seconds). Turn it off in PostHog; the API reads it every minute
-  (`outlook.feature_flag.refresh` spans), and rows already queued are read as
+  (`feature_flag.refresh` spans), and rows already queued are read as
   usual.
 - Nothing is queued for a mailbox whose folders are still importing, or that
   already has 50 live messages due; its folder pages list the rest.

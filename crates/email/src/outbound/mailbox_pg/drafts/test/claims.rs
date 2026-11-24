@@ -1,6 +1,11 @@
 use super::*;
 use std::time::Duration;
 
+mod budget;
+
+// The other half of the 64-key window is reserved for legacy NULL routing.
+const NATIVE_DRAFT_WINDOW: usize = 32;
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_old_binary_draft_lease_is_not_claimed_again_after_its_commit(db: PgPool) {
     let (sync, _, input, _) = setup(&db, false).await;
@@ -16,6 +21,7 @@ async fn an_old_binary_draft_lease_is_not_claimed_again_after_its_commit(db: PgP
         sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
 }
@@ -101,6 +107,7 @@ async fn a_locked_head_does_not_hide_its_same_mailbox_successor(db: PgPool) {
     .await
     .unwrap()
     .unwrap()
+    .into_lease()
     .unwrap();
     assert_eq!(claim.message_id, second);
     editor.rollback().await.unwrap();
@@ -108,6 +115,7 @@ async fn a_locked_head_does_not_hide_its_same_mailbox_successor(db: PgPool) {
         .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(next.message_id, input.db_id);
 }
@@ -122,6 +130,7 @@ async fn a_definite_pre_data_failure_releases_the_same_link_for_its_next_draft(d
         .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(first.message_id, input.db_id);
     let mut progress = checkpoint(&first, DraftStage::Submitting);
@@ -165,6 +174,7 @@ async fn a_definite_pre_data_failure_releases_the_same_link_for_its_next_draft(d
         .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(next.message_id, second);
     assert_eq!(next.mailbox.link_id, first.mailbox.link_id);
@@ -174,7 +184,7 @@ async fn a_definite_pre_data_failure_releases_the_same_link_for_its_next_draft(d
 async fn a_contended_queue_yields_after_its_candidate_budget(db: PgPool) {
     let (sync, repo, input, link) = setup(&db, false).await;
     let mut locked = vec![input.db_id];
-    for _ in 1..MAX_DRAFT_CLAIM_CANDIDATES {
+    for _ in 1..NATIVE_DRAFT_WINDOW {
         locked.push(second_draft(&db, &repo, &input, link).await);
     }
     let successor = second_draft(&db, &repo, &input, link).await;
@@ -201,6 +211,7 @@ async fn a_contended_queue_yields_after_its_candidate_budget(db: PgPool) {
         sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
     editor.rollback().await.unwrap();
@@ -209,6 +220,7 @@ async fn a_contended_queue_yields_after_its_candidate_budget(db: PgPool) {
             .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
             .await
             .unwrap()
+            .into_lease()
             .unwrap();
         assert_eq!(claimed.message_id, expected);
     }

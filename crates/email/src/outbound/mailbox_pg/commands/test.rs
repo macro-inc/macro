@@ -5,6 +5,11 @@ use crate::outbound::mailbox_pg::test::{fixture, page, snapshot};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 
+mod action_groups;
+mod fifo;
+mod target_budget;
+mod target_facts;
+
 async fn setup(
     db: &PgPool,
 ) -> (
@@ -13,7 +18,19 @@ async fn setup(
     MessageLease,
     Uuid,
 ) {
-    let (sync, link) = fixture(db).await;
+    setup_for_provider(db, crate::domain::models::UserProvider::Outlook).await
+}
+
+async fn setup_for_provider(
+    db: &PgPool,
+    provider: crate::domain::models::UserProvider,
+) -> (
+    PgMailboxSync,
+    crate::outbound::EmailPgRepo,
+    MessageLease,
+    Uuid,
+) {
+    let (sync, link) = super::super::test::fixture_for_provider(db, provider).await;
     let stream = sync
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
@@ -77,7 +94,13 @@ async fn an_old_binary_command_lease_is_not_claimed_again_after_its_commit(db: P
     // The held-key probe tests establish exclusion. Once the old lease
     // commits, a new claimer must respect it rather than lease it again.
     old.commit().await.unwrap();
-    assert!(sync.claim_command(Uuid::now_v7()).await.unwrap().is_none());
+    assert!(
+        sync.claim_command(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -101,6 +124,7 @@ async fn newer_intent_survives_sync_and_ack_of_an_older_command(db: PgPool) {
         .claim_command(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(lease.id, first);
     let context = sync.command_context(&lease).await.unwrap();
@@ -162,6 +186,7 @@ async fn newer_intent_survives_sync_and_ack_of_an_older_command(db: PgPool) {
         sync.claim_command(macro_uuid::generate_uuid_v7())
             .await
             .unwrap()
+            .into_lease()
             .unwrap()
             .id,
         second
@@ -205,6 +230,7 @@ async fn acceptance_rechecks_access_and_expired_worker_cannot_confirm(db: PgPool
         .claim_command(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let target = sync.command_context(&old).await.unwrap().target.unwrap();
     sqlx::query!(
@@ -218,6 +244,7 @@ async fn acceptance_rechecks_access_and_expired_worker_cannot_confirm(db: PgPool
         .claim_command(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_ne!(old.lease_id, new.lease_id);
     assert!(matches!(
@@ -446,7 +473,12 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
             .iter()
             .any(|label| label.provider_label_id == "Projects")
     );
-    let first = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let first = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let target = sync.command_context(&first).await.unwrap().target.unwrap();
     let remove = MailboxAction::Category {
         name: "Projects".into(),
@@ -473,7 +505,12 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
                 .iter()
                 .any(|label| label.provider_label_id == "Projects"))
     );
-    let second = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let second = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let target = sync.command_context(&second).await.unwrap().target.unwrap();
     // Failure removes only its overlay, revealing the confirmed provider fact.
     sync.fail_target(&second, &target, false).await.unwrap();
@@ -523,7 +560,12 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
             .unwrap()
             .is_none()
     );
-    let last = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let last = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let target = sync.command_context(&last).await.unwrap().target.unwrap();
     sync.confirm_target(&last, &target, None).await.unwrap();
     sync.finish_command(&last, CommandCompletion::Succeeded)
@@ -535,7 +577,7 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
             .unwrap()
             .unwrap()
             .kind,
-        "delete_label"
+        crate::domain::mailbox::settings::SettingsWorkKind::DeleteLabel
     );
 }
 
@@ -577,9 +619,20 @@ async fn acceptance_order_wins_over_transaction_start_order(db: PgPool) {
     .execute(&db)
     .await
     .unwrap();
-    let lease = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let lease = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     assert_eq!(lease.id, first);
-    assert!(sync.claim_command(Uuid::now_v7()).await.unwrap().is_none());
+    assert!(
+        sync.claim_command(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none()
+    );
     let target = sync.command_context(&lease).await.unwrap().target.unwrap();
     sync.confirm_target(&lease, &target, None).await.unwrap();
     sync.finish_command(&lease, CommandCompletion::Succeeded)
@@ -589,6 +642,7 @@ async fn acceptance_order_wins_over_transaction_start_order(db: PgPool) {
         sync.claim_command(Uuid::now_v7())
             .await
             .unwrap()
+            .into_lease()
             .unwrap()
             .id,
         second
@@ -650,7 +704,13 @@ async fn unresumable_commands_are_not_reported_as_pending(db: PgPool) {
     .execute(&db)
     .await
     .unwrap();
-    assert!(sync.claim_command(Uuid::now_v7()).await.unwrap().is_none());
+    assert!(
+        sync.claim_command(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none()
+    );
     assert!(
         repo.thread_mailbox_operations(link, thread)
             .await
@@ -688,6 +748,7 @@ async fn a_claim_behind_a_stuck_claim_lock_fails_fast(db: PgPool) {
         sync.claim_command(macro_uuid::generate_uuid_v7())
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
 }

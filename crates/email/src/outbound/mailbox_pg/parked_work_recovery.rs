@@ -54,6 +54,8 @@ enum ParkedWork {
     Projection,
     Streams,
     Messages,
+    Drafts,
+    Commands,
 }
 
 impl ParkedWork {
@@ -62,6 +64,8 @@ impl ParkedWork {
             Self::Projection => "projection",
             Self::Streams => "streams",
             Self::Messages => "reconciliation",
+            Self::Drafts => "drafts",
+            Self::Commands => "commands",
         }
     }
 }
@@ -82,12 +86,18 @@ pub async fn unpark_link_page(
         ParkedWork::Projection,
         ParkedWork::Streams,
         ParkedWork::Messages,
+        ParkedWork::Drafts,
+        ParkedWork::Commands,
     ];
-    let quotas = [limit.div_ceil(3), (limit + 1) / 3, limit / 3];
-    let mut saturated = [false; 3];
+    let family_count = u32::try_from(families.len()).map_err(|_| {
+        sqlx::Error::Protocol("mailbox recovery family count exceeded its bound".into())
+    })?;
+    let extra = usize::try_from(limit % family_count)
+        .map_err(|_| sqlx::Error::Protocol("mailbox recovery quota exceeded its bound".into()))?;
+    let mut saturated = [false; 5];
     let mut remaining = limit;
     for (index, family) in families.iter().enumerate() {
-        let quota = quotas[index];
+        let quota = limit / family_count + u32::from(index < extra);
         if quota == 0 {
             // Small or halved pages must still try this family when another
             // family leaves room; otherwise the sweep can falsely see an end.
@@ -142,6 +152,8 @@ async fn unpark_work_page(
         ParkedWork::Projection => unpark_projection_page(connection, link, limit).await,
         ParkedWork::Streams => unpark_stream_page(connection, link, limit).await,
         ParkedWork::Messages => unpark_message_page(connection, link, limit).await,
+        ParkedWork::Drafts => unpark_draft_page(connection, link, limit).await,
+        ParkedWork::Commands => unpark_command_page(connection, link, limit).await,
     }?;
     let count = i64::try_from(rows)
         .map_err(|_| sqlx::Error::Protocol("mailbox recovery count exceeded its bound".into()))?;
@@ -249,6 +261,36 @@ pub async fn resume_link(pool: &PgPool, link: Uuid) {
     }
 }
 
+async fn unpark_draft_page(
+    connection: &mut sqlx::PgConnection,
+    link: Uuid,
+    limit: u32,
+) -> Result<u64, sqlx::Error> {
+    Ok(sqlx::query_file!(
+        "src/outbound/mailbox_pg/mutation_claims/unpark_drafts.sql",
+        link,
+        i64::from(limit)
+    )
+    .execute(connection)
+    .await?
+    .rows_affected())
+}
+
+async fn unpark_command_page(
+    connection: &mut sqlx::PgConnection,
+    link: Uuid,
+    limit: u32,
+) -> Result<u64, sqlx::Error> {
+    Ok(sqlx::query_file!(
+        "src/outbound/mailbox_pg/mutation_claims/unpark_commands.sql",
+        link,
+        i64::from(limit)
+    )
+    .execute(connection)
+    .await?
+    .rows_affected())
+}
+
 impl PgMailboxSync {
     async fn advance_parked_work_recovery(
         &self,
@@ -335,6 +377,14 @@ impl PgMailboxSync {
                         ORDER BY link_id LIMIT 1)
                     UNION ALL
                     (SELECT link_id FROM email_message_reconciliation
+                        WHERE parked_at IS NOT NULL AND link_id > $1
+                        ORDER BY link_id LIMIT 1)
+                    UNION ALL
+                    (SELECT link_id FROM email_mailbox_drafts
+                        WHERE parked_at IS NOT NULL AND link_id > $1
+                        ORDER BY link_id LIMIT 1)
+                    UNION ALL
+                    (SELECT link_id FROM email_mailbox_commands
                         WHERE parked_at IS NOT NULL AND link_id > $1
                         ORDER BY link_id LIMIT 1)
                 ) next_links ORDER BY link_id LIMIT 1

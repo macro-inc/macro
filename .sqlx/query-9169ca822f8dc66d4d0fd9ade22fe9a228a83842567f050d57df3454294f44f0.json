@@ -1,0 +1,123 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Inspect one locked draft. Reserve a bounded live-lease prefix, then use\n-- target primary-key point probes; command width never drives draft work.\nWITH keys AS MATERIALIZED (SELECT $4::uuid AS id),\ncandidate AS MATERIALIZED (\n    SELECT d.*, parent.grant_generation\n    FROM keys k CROSS JOIN LATERAL (\n        SELECT * FROM email_mailbox_drafts d WHERE d.message_id=k.id LIMIT 1\n    ) d CROSS JOIN LATERAL (\n        SELECT l.grant_generation FROM email_links l\n        WHERE l.id=d.link_id AND l.sync_generation=d.generation\n            AND l.is_sync_active AND l.mailbox_unavailable_at IS NULL\n            AND l.provider=$3::text::email_user_provider_enum\n            AND l.provider=d.provider LIMIT 1\n    ) parent LEFT JOIN LATERAL (\n        -- Keep time/state eligibility outside this key-only lookup; stale\n        -- due-time statistics must not select a global schedule range.\n        SELECT s.send_time,s.sent,s.processing FROM email_scheduled_messages s\n        WHERE s.link_id=d.link_id AND s.message_id=d.message_id\n        LIMIT 1\n    ) due ON true\n    WHERE d.state IN ('pending','running','synced')\n        AND ($2 OR d.checkpoint->>'stage' IN ('creating','submitting','confirming'))\n        AND (d.state IN ('pending','running') OR (\n            due.send_time<=now() AND NOT due.sent AND NOT due.processing))\n        AND d.parked_at IS NULL AND GREATEST(d.available_at,COALESCE(d.lease_until,'-infinity'::timestamptz),COALESCE(d.blocked_until,'-infinity'::timestamptz))<=now()\n        AND (d.lease_until IS NULL OR d.lease_until<now())\n),\nlive_leases AS MATERIALIZED (\n    SELECT c.id\n    FROM candidate d CROSS JOIN LATERAL (\n        SELECT id FROM email_mailbox_commands c\n        WHERE c.link_id=d.link_id AND c.generation=d.generation\n            AND c.status IN ('pending','running','confirming')\n            AND c.lease_id IS NOT NULL AND c.lease_until>now()\n        ORDER BY c.lease_until,c.id LIMIT ($5::bigint+1) OFFSET 0\n    ) c\n),\nsized AS MATERIALIZED (\n    SELECT d.*, (SELECT count(*) FROM live_leases) AS scope_leases FROM candidate d\n),\npermitted AS MATERIALIZED (\n    SELECT d.*, (scope_leases>$6::bigint) AS exclusion_overflow,\n        (scope_leases<=$5::bigint OR scope_leases>$6::bigint) AS evaluate\n    FROM sized d\n),\nchecked AS MATERIALIZED (\n    SELECT d.*, exclusion_overflow OR EXISTS (\n        SELECT 1 FROM (SELECT id FROM live_leases LIMIT $5::bigint) c\n        WHERE EXISTS (SELECT 1 FROM email_mailbox_command_targets t\n            WHERE t.command_id=c.id AND t.message_id=d.message_id)\n    ) AS dependency_blocked\n    FROM permitted d WHERE d.evaluate\n),\nblocked AS (\n    -- An over-cap scope cannot be proved safe in this budget. Defer locally,\n    -- letting orphaned leases expire; preserve actual retry and lease floors.\n    UPDATE email_mailbox_drafts d SET blocked_until=now()+interval '60 seconds'\n    FROM checked c WHERE d.message_id=c.message_id AND c.dependency_blocked\n    RETURNING d.message_id\n),\nclaimed AS (\n    UPDATE email_mailbox_drafts d\n    SET claimed_content=d.desired_content,state='running',lease_id=$1,\n        lease_until=now()+interval '3 minutes',updated_at=now()\n    FROM checked c WHERE d.message_id=c.message_id AND NOT c.dependency_blocked\n    RETURNING d.message_id\n)\nSELECT d.message_id AS \"message_id!\",d.link_id AS \"link_id!\",d.generation AS \"generation!\",\n    d.grant_generation AS \"grant_generation!\",d.revision AS \"revision!\",d.actor_id AS \"actor_id!\",\n    CASE WHEN EXISTS(SELECT 1 FROM claimed) THEN d.desired_content ELSE '{}'::jsonb END AS \"desired_content!\",\n    d.provider_id,d.base_version,\n    d.delete_requested AS \"delete_requested!\",\n    CASE WHEN EXISTS(SELECT 1 FROM claimed) THEN d.checkpoint ELSE NULL END AS checkpoint,\n    CASE WHEN d.evaluate THEN LEAST(d.scope_leases,$5::bigint) ELSE 0 END AS \"probe_count!\",\n    d.scope_leases AS \"scope_leases!\",d.exclusion_overflow AS \"exclusion_overflow!\",\n    NOT d.evaluate AS \"budget_exhausted!\",\n    EXISTS(SELECT 1 FROM claimed) AS \"leased!\",EXISTS(SELECT 1 FROM blocked) AS \"blocked!\"\nFROM permitted d\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "generation!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_generation!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "revision!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "actor_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "desired_content!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "base_version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "delete_requested!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "checkpoint",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "probe_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "scope_leases!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "exclusion_overflow!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "budget_exhausted!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 15,
+        "name": "leased!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 16,
+        "name": "blocked!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Text",
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      true,
+      true,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "9169ca822f8dc66d4d0fd9ade22fe9a228a83842567f050d57df3454294f44f0"
+}

@@ -171,11 +171,18 @@ async fn imap_mutation_claims_proceed_while_the_old_outlook_key_is_held(db: PgPo
         .fetch_one(&mut *old_binary).await.unwrap();
     // A wrong legacy-key acquisition fails at the real database lock_timeout;
     // no Tokio scheduling or wall-clock threshold decides this assertion.
-    assert!(imap.claim_command(Uuid::now_v7()).await.unwrap().is_none());
+    assert!(
+        imap.claim_command(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none()
+    );
     assert!(
         imap.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
     old_binary.rollback().await.unwrap();
@@ -361,6 +368,52 @@ async fn one_recovery_page_unparks_a_projection_head_beside_hot_reconciliation(d
         link,
         &messages
     ).execute(&db).await.unwrap();
+    let thread = Uuid::now_v7();
+    let draft = Uuid::now_v7();
+    let command = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_threads (id,link_id) VALUES ($1,$2)",
+        thread,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO email_messages (id,thread_id,link_id,is_draft) VALUES ($1,$2,$3,true)",
+        draft,
+        thread,
+        link,
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let draft_floor = sqlx::query!(
+        r#"
+        INSERT INTO email_mailbox_drafts
+            (message_id,link_id,generation,actor_id,desired_content,parked_at,available_at,lease_until)
+        VALUES ($1,$2,1,'macro|outlook-test@example.com','{}',now(),now()+interval '1 hour',now()+interval '2 hours')
+        RETURNING available_at,lease_until
+        "#,
+        draft,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    let command_floor = sqlx::query!(
+        r#"
+        INSERT INTO email_mailbox_commands
+            (id,link_id,generation,actor_id,intent,status,parked_at,available_at,lease_until)
+        VALUES ($1,$2,1,'macro|outlook-test@example.com','{"kind":"read","value":true}','pending',now(),now()+interval '1 hour',now()+interval '2 hours')
+        RETURNING available_at,lease_until
+        "#,
+        command,
+        link,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
     let mut tx = db.begin().await.unwrap();
     let changed = super::super::parked_work_recovery::unpark_link_page(&mut tx, link, 64)
         .await
@@ -385,6 +438,34 @@ async fn one_recovery_page_unparks_a_projection_head_beside_hot_reconciliation(d
     assert!(stream_ready);
     assert!(message_ready);
     assert!(projection_ready);
+    let draft_after = sqlx::query!(
+        r#"SELECT parked_at IS NULL AS "ready!",available_at,lease_until
+           FROM email_mailbox_drafts WHERE message_id=$1"#,
+        draft,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    let command_after = sqlx::query!(
+        r#"SELECT parked_at IS NULL AS "ready!",available_at,lease_until
+           FROM email_mailbox_commands WHERE id=$1"#,
+        command,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(draft_after.ready);
+    assert!(command_after.ready);
+    assert_eq!(
+        (draft_after.available_at, draft_after.lease_until),
+        (draft_floor.available_at, draft_floor.lease_until),
+        "recovery must preserve the draft retry and lease floors"
+    );
+    assert_eq!(
+        (command_after.available_at, command_after.lease_until),
+        (command_floor.available_at, command_floor.lease_until),
+        "recovery must preserve the command retry and lease floors"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

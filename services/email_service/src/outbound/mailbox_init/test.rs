@@ -333,7 +333,7 @@ async fn admission_pause_rejects_new_mailbox_but_preserves_reconnect(db: PgPool)
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn reconnect_resumes_organization_commands_under_the_new_grant(db: PgPool) {
     use email::domain::{
-        mailbox::commands::MailboxCommandRepository,
+        mailbox::{SyncClaim, commands::MailboxCommandRepository},
         models::mailbox_action::{MailboxAction, MailboxActionTarget, PendingMailboxState},
         ports::EmailRepo,
     };
@@ -395,7 +395,9 @@ async fn reconnect_resumes_organization_commands_under_the_new_grant(db: PgPool)
         .await
         .unwrap();
     let sync = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
-    let lease = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let SyncClaim::Acquired(lease) = sync.claim_command(Uuid::now_v7()).await.unwrap() else {
+        panic!("expected the queued command to be claimed");
+    };
     assert_eq!(lease.id, retrying);
     // An authorization failure releases the lease for a later retry.
     sync.release_command(&lease, 300).await.unwrap();
@@ -459,7 +461,9 @@ async fn reconnect_resumes_organization_commands_under_the_new_grant(db: PgPool)
     );
     let mut resumed = Vec::new();
     for _ in 0..2 {
-        let lease = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+        let SyncClaim::Acquired(lease) = sync.claim_command(Uuid::now_v7()).await.unwrap() else {
+            panic!("expected the resumed command to be claimed");
+        };
         resumed.push((lease.id, lease.mailbox.sync_generation));
     }
     resumed.sort();

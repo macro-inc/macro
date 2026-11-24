@@ -143,6 +143,14 @@ the gateway `/email` prefix.
   capabilities in `outbound/backfill_jobs/worker/` and its durable publication
   in `email::domain::backfill_jobs::outbox`.
 
+Organization-action writers use the shared default-off
+`enable-mailbox-action-chunks` service flag (`email-mailbox-actions` context).
+Composition owns the cancellable 60-second poll and injects one switch into the
+API and message-label repositories; enable only after all grouped-receipt
+readers are deployed. Agent-harness and ai_tools still write the legacy shape
+and block removal of the wide-command allowance under `mac-imap-smtp.116`.
+Missing or failed reads preserve the single-command writer.
+
 ## Checks
 
 - `cargo test -p email_service` (`SQLX_OFFLINE` unset; the `label_write_sim`
@@ -205,7 +213,7 @@ the gateway `/email` prefix.
   is due, so folder catalogs are checked again before more pages are read.
 - Outlook sync flags are PostHog flags for the service context
   `outlook-mailbox-sync`, each read about once a minute into a domain switch
-  by `outlook_flags::run` (one `outlook.feature_flag.refresh` span per read,
+  by `outlook_flags::run` (one `feature_flag.refresh` span per read,
   `feature_flag.key` names it). `pubsub_workers` reads
   `enable-outlook-import-live-pass` into the sync's `LiveImportPass`:
   newest-first imports and the live pass beside each folder's import round

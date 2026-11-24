@@ -1,7 +1,37 @@
 //! User intent and frozen targets, independent from provider label syntax.
 
 use serde::{Deserialize, Serialize};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use uuid::Uuid;
+
+/// Maximum frozen targets per command once action chunking is enabled.
+/// Legacy writers and queues may still contain wider commands.
+pub const MAX_MAILBOX_COMMAND_TARGETS: usize = 64;
+
+/// Backend rollout key; missing or unreadable evaluations keep chunking off.
+pub const MAILBOX_ACTION_CHUNKS_FLAG: &str = "enable-mailbox-action-chunks";
+/// Shared service identity used by flag-aware organization-action writers.
+pub const MAILBOX_ACTION_FLAGS_CONTEXT: &str = "email-mailbox-actions";
+
+/// A composition-owned rollout snapshot, read once before an action is queued.
+/// This changes persistence shape, never authorization.
+#[derive(Clone, Default)]
+pub struct MailboxActionChunking(Arc<AtomicBool>);
+
+impl MailboxActionChunking {
+    /// Whether new organization actions may use grouped, bounded commands.
+    pub fn enabled(&self) -> bool {
+        self.0.load(Ordering::Relaxed)
+    }
+
+    /// Apply a successful or fail-closed flag read and return the prior value.
+    pub fn set(&self, enabled: bool) -> bool {
+        self.0.swap(enabled, Ordering::Relaxed)
+    }
+}
 
 /// Desired organization state. Categories never stand in for folders or flags.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

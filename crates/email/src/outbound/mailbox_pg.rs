@@ -20,6 +20,7 @@ mod imap_notifications;
 mod ingest;
 mod leases;
 mod lifecycle;
+mod mutation_claims;
 pub mod parked_work_recovery;
 mod progress;
 mod projection;

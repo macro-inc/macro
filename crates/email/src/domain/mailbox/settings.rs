@@ -16,9 +16,18 @@ pub struct SettingsLease {
     pub lease_id: Uuid,
     pub mailbox: SettingsMailbox,
     pub revision: i64,
-    pub kind: String,
+    pub kind: SettingsWorkKind,
     pub resource: String,
     pub desired: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum SettingsWorkKind {
+    Catalog,
+    CreateLabel,
+    DeleteLabel,
+    SenderBlock,
 }
 pub struct SenderRuleIntent {
     pub id: Uuid,
@@ -329,15 +338,15 @@ impl<R: MailboxSettingsRepository, G: MailboxSettingsGateway> MailboxSettingsSer
         .inspect_err(|error| super::telemetry::log_unit_error(link_id, error))
     }
     async fn execute(&self, lease: &SettingsLease) -> Result<(), MailboxError> {
-        match lease.kind.as_str() {
-            "catalog" => {
+        match lease.kind {
+            SettingsWorkKind::Catalog => {
                 let labels = self.gateway.labels(lease.mailbox).await?;
                 self.repository.commit_labels(lease, &labels).await?;
                 self.repository
                     .finish_settings(lease, true, 300, None)
                     .await
             }
-            "create_label" => {
+            SettingsWorkKind::CreateLabel => {
                 // A lost creation response is recovered by the category's unique name.
                 let existing = self
                     .gateway
@@ -356,7 +365,7 @@ impl<R: MailboxSettingsRepository, G: MailboxSettingsGateway> MailboxSettingsSer
                 };
                 self.repository.commit_created_label(lease, label).await
             }
-            "delete_label" => {
+            SettingsWorkKind::DeleteLabel => {
                 if lease.mailbox.provider.uses_mailbox_framework() {
                     let messages = self
                         .gateway
@@ -386,16 +395,16 @@ impl<R: MailboxSettingsRepository, G: MailboxSettingsGateway> MailboxSettingsSer
                     .await?;
                 self.repository.finish_settings(lease, true, 0, None).await
             }
-            "sender_block" if lease.mailbox.provider == UserProvider::Gmail => {
+            SettingsWorkKind::SenderBlock if lease.mailbox.provider == UserProvider::Gmail => {
                 self.gateway
                     .gmail_set_block(lease.mailbox, &lease.resource, lease.desired)
                     .await?;
                 self.repository.finish_settings(lease, true, 0, None).await
             }
-            "sender_block" if lease.mailbox.provider == UserProvider::Imap => {
+            SettingsWorkKind::SenderBlock if lease.mailbox.provider == UserProvider::Imap => {
                 self.repository.finish_settings(lease, true, 0, None).await
             }
-            "sender_block" => {
+            SettingsWorkKind::SenderBlock => {
                 let rules = self.gateway.sender_rules(lease.mailbox).await?;
                 let owned: Vec<_> = rules
                     .into_iter()
@@ -427,7 +436,6 @@ impl<R: MailboxSettingsRepository, G: MailboxSettingsGateway> MailboxSettingsSer
                 }
                 self.repository.finish_settings(lease, true, 0, None).await
             }
-            _ => Err(MailboxError::Persistence),
         }
     }
 }

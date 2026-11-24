@@ -446,7 +446,8 @@ tools — hexagonal, heavily feature-gated.
   Message-label batches go through `domain/message_labels.rs`, with their atomic
   staging and unqueued-write undo behind `MessageLabelRepository`. A thread on
   an Outlook inbox, or a message batch whose first message resolves to one,
-  takes its label as one category mailbox command (`enqueue_mailbox_action`)
+  takes its label as one category action (`enqueue_mailbox_action`), using
+  bounded command chunks when the shared snapshot enables them,
   instead of a Gmail label write. The queued
   half lives in `domain/message_labels/gmail_ops.rs`: it owns turn ordering,
   partial acceptance/reversion, retry routing, and delivery dispositions through
@@ -761,13 +762,13 @@ tools — hexagonal, heavily feature-gated.
   either wake, needs the jittered one-to-two-hour backstop. Activation clears
   one FIFO page atomically,
   then bounded pages after commit. The separately fenced parked-work recovery
-  sweep shares one cursor across projection, streams and reconciliation every
-  five minutes, including old-binary activations. Find the next link using one
-  LIMIT 1 probe per family's parked partial index; dead-link cost is three
+  sweep shares one cursor across projection, streams, reconciliation, drafts
+  and commands every five minutes, including old-binary activations. Find the next link using one
+  LIMIT 1 probe per family's parked partial index; dead-link cost is five
   probes per cycle, independent of backlog size. A page clears at most 64 rows
-  total, sharing initial quota across all three families when at least three
+  total, sharing initial quota across all five families when at least five
   slots remain, then borrowing
-  unused room once (at most six UPDATEs). A family with zero initial quota
+  unused room once (at most ten UPDATEs). A family with zero initial quota
   still participates in borrowing so a one- or two-slot page cannot falsely
   report an empty link. Projection heads receive room even
   beside a hot reconciliation backlog; streams and reconciliation receive room
@@ -916,6 +917,78 @@ Mutation claims use `email.mailbox.mutation-claims:<provider>`. Outlook takes
 its legacy key first, then the provider key, until the rollback baseline is
 retired; remove that compatibility acquisition under `mac-imap-smtp.89`.
 IMAP never takes the Outlook legacy key.
+Draft claims reserve 32 native plus 32 NULL-provider keys; command claims reserve
+32 native plus 16 NULL-provider keys to bound routing writes. Limit keys before
+row locking; never enumerate links or let SKIP LOCKED walk an unbounded prefix.
+Keep each finite CASE due expression identical to its partial index. Acquire
+only by the locked primary keys, rechecking parent routing/generation, real retry
+and lease floors, schedule/mode and target exclusion. Maintain old NULL rows in
+that bounded lane; do not deploy an unbounded backfill or hide them from claims.
+Recheck a draft's schedule through a key-only limited LATERAL on both
+(link_id, message_id), applying due/sent/processing eligibility outside its
+LIMIT; never let eligibility select a global send-time range.
+Draft and command acquisition share one lazy ordered per-ID loop under a
+128-probe reservation budget and one 15-second evaluation deadline. Await commit
+outside that deadline so its timer cannot orphan a successfully committed
+lease; database and transport failures during commit can still be ambiguous. Draft
+exclusion lists only the candidate's live leases in its link/generation scope,
+then probes (command_id, message_id); never enumerate a leased command's target
+prefix or repeat checks for every locked draft at once. Reserve at most the
+remaining budget plus one lease-list sentinel. A scope that does not fit the
+remaining budget waits for a fresh turn. More than 128 live leases on a scope
+causes only a conservative 60-second local deferral; record overflow and the
+lease-count lower bound, preserving real retry/lease floors. Orphaned leases
+expire in three minutes, so this cannot permanently strand a draft.
+Drafts and sends stay independent across messages. Commands block only behind
+unfinished earlier accepted orders on an overlapping target, including delayed,
+leased and confirming predecessors. Keep Progress distinct from Idle in both
+worker ports. Clear only local blockers after fenced settlement commits, with an ordered
+SKIP LOCKED post-commit wake and <=60-second backstop; never report a committed finish failed
+just because its best-effort wake failed. Re-arm old-writer edits, schedules and
+cancels through the metadata hooks, and keep the shared parked sweep fair across
+all five work families. Keep each one-link draft/command unpark range inside its
+ordered, limited LATERAL probe, matching (link_id, generation, message_id/id), so
+the limit stops the index scan before a whole backlog is read or sorted. Retire
+NULL lanes/indexes under `mac-imap-smtp.114`.
+
+Command windows lock at most 48 ordered keys; draft windows lock at most 64.
+Both inspect one key at a time until the first lease or the 128-probe budget is
+spent (command targets or draft exclusion lease probes).
+Count only a 65-target prefix before dependency checks. Keep the locks and all
+per-key acquisitions in the same transaction under a 15-second evaluation
+deadline; await commit separately, and report DeadlineExceeded distinctly.
+Statement timeouts alone do not bound the sequential calls. Reject fresh-budget
+exhaustion instead of silently spinning Progress. Unknown command kinds get a
+finite 60-second local floor so a newer reader can reconsider them. A legacy wide head is an explicit probe-budget exception: it runs alone and
+is leased or deferred for 60 seconds, never split or reordered.
+
+New thread actions use at most 64 targets per command only when the backend
+`enable-mailbox-action-chunks` flag is on in the shared `email-mailbox-actions`
+context. Email-service API and message-label writers share one snapshot; DSS
+polls the same context. Agent-harness and ai_tools writers remain default-off
+legacy writers and block retirement of the wide allowance under .116.
+Default off preserves one legacy command. Group chunks atomically
+under the link lock with the first command ID as action ID; identity orders need
+not be consecutive. Receipts stay Pending while any chunk is unfinished, then
+Cancelled (including unknown), Failed, or Applied, matching the single-command
+reader. Reject an unrecognized terminal status rather than reporting success.
+Retained terminal chunks still count after reconnect. Enable writers
+only after every reader replica is upgraded, in the same rollout. Retire the
+flag, off writer and temporary wide-command allowance under `mac-imap-smtp.116`;
+retain NULL-action receipt decoding for terminal history.
+
+Command targets carry parent link/generation/order and unfinished facts for the
+partial predecessor index; every probe still checks the authoritative parent by
+primary key. Keep a wake's parent LATERAL key-only before LIMIT; check scope and
+status outside it so a generic plan cannot walk an active-link prefix instead.
+Derive them in the database on target insert and on parent
+terminal/generation transitions so old binaries remain correct. Nonterminal
+status changes must not rewrite targets. Fill only the pre-existing unfinished
+backlog atomically with those triggers installed; retained terminal history
+needs no facts. Keep the runtime free of a target repair lane, NULL-fact index
+or watermark fallback. Measure both the one-time migration and completion/rebind
+trigger writes, including 5,000 one-target commands, separately from claim cost.
+
 Nonempty windows open `email.mailbox.claim` with provider, work kind, window size,
 maintained row count and outcome; empty polling creates no claim span.
 
@@ -1013,3 +1086,6 @@ with a live lease; steady-state pending catch-up preserves its queue order.
 Resync exposes the future Inbox/catalog provider floor in its typed result;
 a longer Archive-only pause must not describe the Inbox as paused. Keep
 missing-mailbox probe backoff Local, separate from provider pacing.
+
+Decode settings-work kinds to SettingsWorkKind at the database boundary; keep
+execution and label-successor wake decisions exhaustive over that enum.

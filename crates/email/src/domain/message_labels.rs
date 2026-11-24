@@ -365,7 +365,7 @@ where
     }
 
     /// Outlook takes a category through a mailbox command, as a thread's
-    /// labels do, never through the Gmail label worker: one command for
+    /// labels do, never through the Gmail label worker: one action for
     /// exactly the requested messages the inbox still holds. The command's
     /// projection publishes the threads' changes, so none are published here.
     async fn queue_outlook_category(

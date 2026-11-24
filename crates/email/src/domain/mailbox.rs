@@ -166,6 +166,8 @@ pub enum DatabaseFailure {
     Connection,
     /// A returned value could not be decoded.
     Decode,
+    /// The bounded claim evaluation exceeded its application deadline.
+    DeadlineExceeded,
     /// Any other driver failure.
     Other,
 }
@@ -177,6 +179,7 @@ impl std::fmt::Display for DatabaseFailure {
             Self::PoolTimedOut => f.write_str("connection pool timed out"),
             Self::Connection => f.write_str("connection failed"),
             Self::Decode => f.write_str("decode failed"),
+            Self::DeadlineExceeded => f.write_str("claim evaluation deadline exceeded"),
             Self::Other => f.write_str("driver error"),
         }
     }

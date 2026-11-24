@@ -24,12 +24,20 @@ pub(super) async fn messages(
     "#,link_id,thread_id).fetch_all(pool).await
 }
 
+#[tracing::instrument(name = "email.mailbox.enqueue_action", skip_all, fields(
+    mailbox.link_id = %link_id,
+    mailbox.target_count = targets.len(),
+    mailbox.chunked = chunked,
+    mailbox.action_id = tracing::field::Empty,
+    mailbox.command_count = tracing::field::Empty,
+))]
 pub(super) async fn enqueue(
     pool: &PgPool,
     link_id: Uuid,
     actor: MacroUserIdStr<'_>,
     action: &MailboxAction,
     targets: &[MailboxActionTarget],
+    chunked: bool,
 ) -> Result<Uuid, sqlx::Error> {
     let mut tx = super::begin(pool).await?;
     // Serialize acceptance per mailbox and recheck the scoped delegation edge at
@@ -67,29 +75,52 @@ pub(super) async fn enqueue(
             return Err(sqlx::Error::RowNotFound);
         }
     }
-    let command_id = macro_uuid::generate_uuid_v7();
+    let action_id = macro_uuid::generate_uuid_v7();
+    tracing::Span::current().record("mailbox.action_id", action_id.to_string());
     let intent = serde_json::to_value(action).map_err(|e| sqlx::Error::Encode(Box::new(e)))?;
-    sqlx::query!(
-        r#"
-        INSERT INTO email_mailbox_commands (id,link_id,generation,actor_id,intent,status)
-        VALUES ($1,$2,$3,$4,$5,'pending')
-    "#,
-        command_id,
-        link_id,
-        binding.sync_generation,
-        actor.as_ref(),
-        intent
-    )
-    .execute(&mut *tx)
-    .await?;
-    let mut threads = std::collections::HashSet::new();
-    for target in targets {
-        let mut pending =
-            serde_json::to_value(&target.pending).map_err(|e| sqlx::Error::Encode(Box::new(e)))?;
-        if let MailboxAction::Category { name, present } = action {
-            pending[format!("tag:{name}")] = serde_json::json!(present);
+    let chunks: Vec<&[MailboxActionTarget]> = if chunked && !targets.is_empty() {
+        let mut seen = std::collections::HashSet::new();
+        if targets.iter().any(|target| !seen.insert(target.message_id)) {
+            return Err(sqlx::Error::Protocol(
+                "duplicate mailbox action target".into(),
+            ));
         }
-        let message = sqlx::query!(
+        targets.chunks(MAX_MAILBOX_COMMAND_TARGETS).collect()
+    } else {
+        vec![targets]
+    };
+    tracing::Span::current().record("mailbox.command_count", chunks.len());
+    let group = if chunked { Some(action_id) } else { None };
+    let mut threads = std::collections::HashSet::new();
+    // The existing link lock and transaction cover every chunk, pending-state
+    // overlay and projection. A later chunk error rolls the whole action back.
+    for (chunk_index, chunk) in chunks.into_iter().enumerate() {
+        let command_id = if chunk_index == 0 {
+            action_id
+        } else {
+            macro_uuid::generate_uuid_v7()
+        };
+        sqlx::query!(
+            r#"
+            INSERT INTO email_mailbox_commands (id,link_id,generation,actor_id,intent,status,action_id)
+            VALUES ($1,$2,$3,$4,$5,'pending',$6)
+            "#,
+            command_id,
+            link_id,
+            binding.sync_generation,
+            actor.as_ref(),
+            &intent,
+            group,
+        )
+        .execute(&mut *tx)
+        .await?;
+        for target in chunk {
+            let mut pending = serde_json::to_value(&target.pending)
+                .map_err(|e| sqlx::Error::Encode(Box::new(e)))?;
+            if let MailboxAction::Category { name, present } = action {
+                pending[format!("tag:{name}")] = serde_json::json!(present);
+            }
+            let message = sqlx::query!(
             r#"
             SELECT id,thread_id,provider_id FROM email_messages WHERE id = $1 AND link_id = $2
                 AND (provider_id IS NOT DISTINCT FROM $3 OR ($3 IS NULL AND is_draft))
@@ -104,32 +135,33 @@ pub(super) async fn enqueue(
         )
         .fetch_one(&mut *tx)
         .await?;
-        threads.insert(message.thread_id);
-        sqlx::query!(
-            r#"
+            threads.insert(message.thread_id);
+            sqlx::query!(
+                r#"
             INSERT INTO email_mailbox_command_targets (command_id,message_id,provider_id,pending)
             VALUES ($1,$2,$3,$4)
         "#,
-            command_id,
-            message.id,
-            message.provider_id,
-            pending
-        )
-        .execute(&mut *tx)
-        .await?;
-        sqlx::query!(r#"
+                command_id,
+                message.id,
+                message.provider_id,
+                pending
+            )
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query!(r#"
             INSERT INTO email_pending_mailbox_state (message_id,attribute,command_id,desired)
             SELECT $1,key,$2,value FROM jsonb_each($3)
             ON CONFLICT (message_id,attribute) DO UPDATE SET command_id = EXCLUDED.command_id,desired = EXCLUDED.desired
         "#,message.id,command_id,pending).execute(&mut *tx).await?;
-        sqlx::query!(r#"
+            sqlx::query!(r#"
             UPDATE email_messages SET is_read = COALESCE($2,is_read), is_starred = COALESCE($3,is_starred)
             WHERE id = $1
         "#,message.id,target.pending.is_read,target.pending.is_flagged).execute(&mut *tx).await?;
-        // This write belongs to the accepted trash command's transaction.
-        if target.pending.in_trash == Some(true) {
-            sqlx::query!("DELETE FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 AND NOT sent AND NOT processing",message.id,link_id)
+            // This write belongs to the accepted trash command's transaction.
+            if target.pending.in_trash == Some(true) {
+                sqlx::query!("DELETE FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 AND NOT sent AND NOT processing",message.id,link_id)
                 .execute(&mut *tx).await?;
+            }
         }
     }
     for thread_id in threads {
@@ -149,21 +181,27 @@ pub(super) async fn enqueue(
         .await?;
     }
     tx.commit().await?;
-    Ok(command_id)
+    Ok(action_id)
 }
 
+#[tracing::instrument(name = "email.mailbox.action_receipts", skip_all, fields(
+    mailbox.link_id = %link,
+    mailbox.thread_id = %thread,
+))]
 pub(super) async fn operations(
     pool: &PgPool,
     link: Uuid,
     thread: Uuid,
 ) -> Result<Vec<MailboxOperation>, sqlx::Error> {
-    // A reconnect rebinds unfinished commands into the new generation; commands
-    // left in an earlier generation can never run, so they report no outcome.
-    let rows=sqlx::query!(r#"SELECT DISTINCT ON(c.intent->>'kind',c.intent->'value'->>'name') c.id,c.intent,c.status,c.updated_at
-        FROM email_mailbox_commands c JOIN email_links l ON l.id=c.link_id AND l.sync_generation=c.generation
-        WHERE c.link_id=$1 AND EXISTS(SELECT 1 FROM email_mailbox_command_targets t
-            JOIN email_messages m ON m.id=t.message_id WHERE t.command_id=c.id AND m.thread_id=$2 AND m.link_id=$1)
-        ORDER BY c.intent->>'kind',c.intent->'value'->>'name',c.accepted_order DESC LIMIT 100"#,link,thread).fetch_all(pool).await?;
+    // Visibility follows the current generation; a visible group also retains
+    // terminal outcomes from its older chunks after reconnect.
+    let rows = sqlx::query_file!(
+        "src/outbound/email_pg_repo/mailbox_action/operations.sql",
+        link,
+        thread,
+    )
+    .fetch_all(pool)
+    .await?;
     rows.into_iter()
         .map(|row| {
             Ok(MailboxOperation {

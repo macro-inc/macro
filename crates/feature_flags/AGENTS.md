@@ -14,6 +14,8 @@ for authenticated Macro users or explicit global service contexts; one load retu
 - `src/outbound/posthog_local.rs`: evaluates named boolean flags in memory
   from polled definitions; fails closed on any condition it doesn't support.
 - `src/outbound/fake.rs`: the in-memory adapter for tests.
+- `src/polling.rs`: cancellable, 60-second default-off global switches; missing
+  adapters, missing flags and failed loads explicitly disable the switch.
 
 ## Scope
 
@@ -27,7 +29,8 @@ for authenticated Macro users or explicit global service contexts; one load retu
   every load sends), `sha1` (rollout bucketing).
 - Used by: `agent_harness_service` (agent modes, routine templates),
   `authentication_service` (`enable-outlook`, `enable-agent-teammates`),
-  `document_storage_service` (programmatic calls, search term matching),
+  `document_storage_service` (programmatic calls, search term matching, mailbox action chunks),
+  `email_service` (Outlook sync switches, mailbox action chunks),
   `hosted_runtimes` (`ComputerRollout`, `enable-macro-computers`; failures and
   missing flags disable new surfaces), `team_agents`, `agent_credentials` (agent
   accounts follow their creator's `enable-agent-teammates`), `email_focus_worker` (`enable-email-focus`, evaluated locally), and the `ai_tools`, `agent_harness`,

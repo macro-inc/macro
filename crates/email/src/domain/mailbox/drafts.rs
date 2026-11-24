@@ -9,6 +9,7 @@ pub mod ports;
 mod test;
 
 use super::MailboxError;
+use super::SyncClaim;
 use chrono::{Duration, Utc};
 use email_api_client::domain::models::*;
 use models::*;
@@ -64,13 +65,15 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
         error.kind = tracing::field::Empty,
     ), err)]
     pub async fn execute_once(&self) -> Result<bool, MailboxError> {
-        let Some(lease) = self
+        let lease = match self
             .repo
             .claim_draft(macro_uuid::generate_uuid_v7(), self.claim_mode)
             .await
             .map_err(|error| super::telemetry::claim_failed("drafts", error))?
-        else {
-            return Ok(false);
+        {
+            SyncClaim::Acquired(lease) => lease,
+            SyncClaim::Progress => return Ok(true),
+            SyncClaim::Idle => return Ok(false),
         };
         let link_id = lease.mailbox.link_id;
         let span = tracing::Span::current();

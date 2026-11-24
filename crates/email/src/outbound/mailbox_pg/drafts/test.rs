@@ -17,6 +17,7 @@ mod claims;
 mod delivery_status;
 mod lock_timeouts;
 mod refusal;
+mod rollout;
 mod sent_view;
 
 const ACTOR: &str = "macro|outlook-test@example.com";
@@ -32,6 +33,7 @@ async fn sent_sync_settles_uncertainty_and_fences_a_late_coordinator(db: PgPool)
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let mut cp = checkpoint(&lease, DraftStage::Confirming);
     sync.checkpoint_draft(&lease, &cp).await.unwrap();
@@ -80,6 +82,7 @@ async fn sending_in_outlook_is_not_attributed_to_the_last_macro_editor(db: PgPoo
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let cp = checkpoint(&lease, DraftStage::Ready);
     sync.settle_draft(&lease, &cp).await.unwrap();
@@ -116,6 +119,7 @@ async fn explicit_retry_and_read_only_recheck_have_different_delivery_effects(db
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let cp = checkpoint(&lease, DraftStage::Confirming);
     sync.checkpoint_draft(&lease, &cp).await.unwrap();
@@ -154,6 +158,7 @@ async fn explicit_retry_and_read_only_recheck_have_different_delivery_effects(db
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sync.fail_draft(&lease, DraftFailure::SendUnknown)
         .await
@@ -193,6 +198,7 @@ async fn conflict_resolution_rechecks_version_at_commit_and_requires_a_fresh_sen
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sync.fail_draft(&lease, DraftFailure::Conflict)
         .await
@@ -301,6 +307,7 @@ async fn a_new_save_keeps_the_acknowledged_version_before_sync_catches_up(db: Pg
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let cp = checkpoint(&lease, DraftStage::Ready);
     sync.settle_draft(&lease, &cp).await.unwrap();
@@ -333,6 +340,7 @@ async fn confirmed_sent_copy_uses_provider_content_and_retains_local_recovery_da
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let mut cp = checkpoint(&lease, DraftStage::Confirming);
     cp.draft.as_mut().unwrap().is_draft = false;
@@ -434,6 +442,7 @@ async fn sync_draft(sync: &PgMailboxSync, link: Uuid) {
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sync.settle_draft(&lease, &checkpoint(&lease, DraftStage::Ready))
         .await
@@ -558,6 +567,7 @@ async fn acknowledgement_of_an_older_revision_leaves_a_newer_save_pending(db: Pg
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let cp = checkpoint(&lease, DraftStage::Ready);
     sync.checkpoint_draft(&lease, &cp).await.unwrap();
@@ -595,6 +605,7 @@ async fn send_marker_and_schedule_claim_commit_together_and_survive_worker_recla
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let cp = checkpoint(&lease, DraftStage::Submitting);
     assert!(matches!(
@@ -617,6 +628,7 @@ async fn send_marker_and_schedule_claim_commit_together_and_survive_worker_recla
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(
         recovered.checkpoint.as_ref().unwrap().stage,
@@ -639,6 +651,7 @@ async fn cancellation_that_wins_before_submission_prevents_delivery(db: PgPool) 
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let cp = checkpoint(&lease, DraftStage::Submitting);
     sqlx::query!(
@@ -674,6 +687,7 @@ async fn deletion_retains_a_fenced_remote_cleanup_intent(db: PgPool) {
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sqlx::query!(
         "UPDATE email_links SET sync_generation = sync_generation + 1 WHERE id = $1",
@@ -710,8 +724,8 @@ async fn a_discard_while_the_worker_writes_a_save_runs_after_that_write(db: PgPo
     .unwrap();
     let claim = || sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All);
     let (lost, rejected) = (
-        claim().await.unwrap().unwrap(),
-        claim().await.unwrap().unwrap(),
+        claim().await.unwrap().into_lease().unwrap(),
+        claim().await.unwrap().into_lease().unwrap(),
     );
     for (lease, provider_id) in [(&lost, "a"), (&rejected, "b")] {
         assert!(
@@ -737,7 +751,7 @@ async fn a_discard_while_the_worker_writes_a_save_runs_after_that_write(db: PgPo
         .await
         .unwrap();
     for _ in 0..2 {
-        let discard = claim().await.unwrap().unwrap();
+        let discard = claim().await.unwrap().into_lease().unwrap();
         assert!(discard.delete_requested);
         assert!(discard.checkpoint.is_none());
     }
@@ -753,6 +767,7 @@ async fn sync_before_creation_response_binds_the_existing_macro_message(db: PgPo
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let mut cp = checkpoint(&lease, DraftStage::Creating);
     cp.draft = None;
@@ -801,12 +816,14 @@ async fn paused_writes_still_claim_uncertain_outcomes_without_claiming_new_draft
         sync.claim_draft(Uuid::now_v7(), DraftClaimMode::Reconciliation)
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
     let lease = sync
         .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sync.checkpoint_draft(&lease, &checkpoint(&lease, DraftStage::Confirming))
         .await
@@ -816,6 +833,7 @@ async fn paused_writes_still_claim_uncertain_outcomes_without_claiming_new_draft
         .claim_draft(Uuid::now_v7(), DraftClaimMode::Reconciliation)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(reconciling.message_id, lease.message_id);
     assert_eq!(
@@ -843,7 +861,12 @@ async fn draft_organization_waits_for_binding_and_rebases_queued_edits(db: PgPoo
         )
         .await
         .unwrap();
-    let command = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let command = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     assert_eq!(command.id, first);
     let target = sync
         .command_context(&command)
@@ -857,6 +880,7 @@ async fn draft_organization_waits_for_binding_and_rebases_queued_edits(db: PgPoo
         sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
     sync.defer_for_draft(&command).await.unwrap();
@@ -874,6 +898,7 @@ async fn draft_organization_waits_for_binding_and_rebases_queued_edits(db: PgPoo
         .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let cp = checkpoint(&draft, DraftStage::Ready);
     sync.settle_draft(&draft, &cp).await.unwrap();
@@ -894,7 +919,12 @@ async fn draft_organization_waits_for_binding_and_rebases_queued_edits(db: PgPoo
     .execute(&db)
     .await
     .unwrap();
-    let command = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let command = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     assert_eq!(command.id, first);
     let target = sync
         .command_context(&command)
@@ -934,6 +964,7 @@ async fn draft_organization_waits_for_binding_and_rebases_queued_edits(db: PgPoo
         sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
     let retained=sqlx::query!("SELECT base_version,desired_content->>'subject' AS subject FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
@@ -964,7 +995,12 @@ async fn draft_organization_waits_for_binding_and_rebases_queued_edits(db: PgPoo
         .await
         .unwrap()
     );
-    let command = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let command = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     assert_eq!(command.id, second);
     let target = sync
         .command_context(&command)
@@ -1007,7 +1043,12 @@ async fn queued_local_draft_command_cannot_resurrect_a_discarded_draft(db: PgPoo
     )
     .await
     .unwrap();
-    let command = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let command = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let stale = sync
         .command_context(&command)
         .await
@@ -1054,7 +1095,12 @@ async fn late_organization_confirmation_preserves_a_transferred_source_tombstone
     )
     .await
     .unwrap();
-    let command = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let command = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let stale = sync
         .command_context(&command)
         .await
@@ -1109,7 +1155,12 @@ async fn native_draft_first_edit_adopts_proven_organization_versions_before_proj
     )
     .await
     .unwrap();
-    let command = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    let command = sync
+        .claim_command(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let target = sync
         .command_context(&command)
         .await
@@ -1264,13 +1315,19 @@ async fn a_link_graph_serves_no_mailbox_for_holds_its_drafts(db: PgPool) {
     .execute(&db)
     .await
     .unwrap();
-    assert!(claim().await.unwrap().is_none());
+    assert!(matches!(claim().await.unwrap(), SyncClaim::Progress));
+    let mut recovered = db.begin().await.unwrap();
     sqlx::query!(
         "UPDATE email_links SET mailbox_unavailable_at = NULL WHERE id = $1",
         link
     )
-    .execute(&db)
+    .execute(&mut *recovered)
     .await
     .unwrap();
-    assert!(claim().await.unwrap().is_some());
+    // Catalog recovery and the shared recovery sweep use the same bounded wake.
+    super::super::parked_work_recovery::unpark_link_page(&mut recovered, link, 64)
+        .await
+        .unwrap();
+    recovered.commit().await.unwrap();
+    assert!(claim().await.unwrap().into_lease().is_some());
 }

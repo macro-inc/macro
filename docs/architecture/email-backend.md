@@ -87,10 +87,83 @@ until the rollback baseline is retired (`mac-imap-smtp.89`). Initially
 ineligible due rows also require a one-time bounded parking drain; hosted dev
 has zero in all five work classes. Production counts remain unmeasured.
 
+Draft and command claims use provider-scoped indexed windows, never one probe
+per link. Drafts inspect at most 32 native and 32 legacy NULL-provider keys;
+commands use 32 native and 16 legacy keys to bound routing writes. Both limit keys
+before skipping held rows. New writers derive routing from the parent; bounded claim
+maintenance labels old NULL rows without a rollout backfill. Acquisition compares
+the copied provider and generation with the current parent, so routing metadata
+cannot authorize a different gateway. Exact finite CASE indexes include the real
+due time, live lease and separate local blocker. Terminal and resting work stay
+outside the due range; normal and uncertainty-recovery modes retain distinct
+partial predicates for generic plans. A maintained window reports Progress; only
+an empty window lets the worker sleep.
+The per-draft schedule recheck first limits a lookup by (link_id, message_id),
+then applies due/sent/processing eligibility outside that lookup. Time predicates
+cannot select a global schedule range under misleading due-time statistics.
+
+Mutation dependency checks run lazily over ordered locked IDs with a shared
+budget of 128 reserved probes per claim; the first eligible row stops the walk.
+Commands charge their target count, drafts charge their candidate scope's live
+lease count; early EXISTS exits may execute fewer probes than reserved. One
+loop owns the transaction and its 15-second evaluation deadline. Commit is
+awaited separately so the evaluation timer cannot report a committed lease
+as an evaluation timeout; transport failures at commit can still be ambiguous. A 65-row count
+prefix identifies wide old-format commands, an explicit exception to the probe
+budget. They are evaluated alone and either leased or deferred for 60 seconds
+without rewriting orders or targets. Old
+writers and the default-off or failed flag path can still create these commands;
+this is a recurring cost until that enqueue path is retired, not a one-time
+deployment drain.
+
+Flagged new organization actions enqueue atomic chunks of at most 64 targets
+with one action ID (the first command ID). Disjoint chunks need no consecutive
+identity orders. The grouped receipt remains Pending until every chunk finishes,
+then Cancelled (including unknown) before Failed, otherwise Applied, preserving
+the single-command policy. An unrecognized terminal status fails decoding
+instead of reading as success. A terminal chunk from an older generation still
+contributes after reconnect. Email-service API and message-label writers share
+one snapshot of the default-off `enable-mailbox-action-chunks` flag; GraphQL
+polls the same `email-mailbox-actions` context. Agent-harness and ai_tools still
+write the legacy shape and block retiring the wide-command allowance under
+`mac-imap-smtp.116`. Authorization remains in the action service.
+
+Overlapping-target command predecessors are found through a partial target index
+on copied parent link, generation and accepted order where the parent is
+unfinished. The database derives those index facts on insert and maintains them
+on parent terminal/generation changes, including writes from rolling binaries;
+nonterminal status transitions do not rewrite targets. The same transaction that
+installs the triggers fills only the existing unfinished backlog. Terminal
+receipts remain retained without backfilling their historical targets. Claims
+and wakes recheck the authoritative parent by primary key. Draft exclusion starts
+from a candidate draft's live-lease range by link, generation and expiry, capped
+at the remaining budget plus one sentinel. Each inspected lease probes only the
+(command_id, message_id) target key, independent of command width. A scope that
+exceeds the remaining budget waits for the next claim's fresh budget. If even
+128 probes cannot prove exclusion safe, a 60-second local deferral waits for
+orphaned leases to expire; it never changes real retries or leases. The span
+records overflow and the lease-count lower bound. Unleased commands can wait for
+draft synchronization without blocking it. No runtime target repair or legacy-history scan is needed.
+
+Drafts, autosaves and sends have no mailbox-wide FIFO. Their existing schedule
+and per-draft lease rules remain; editing or rescheduling re-arms a resting
+synced draft. Commands retain accepted-order FIFO only where unfinished commands
+share a target in the same generation. Delayed, leased and confirming predecessors
+still block, while terminal predecessors and unrelated targets do not. Parent
+ineligibility parks work for the shared sweep. Local dependency deferrals expire
+within 60 seconds, plus the ordinary worker poll and available database/service
+capacity; they never replace a real retry or lease floor. Fenced completion wakes
+bounded target successors only after commit, in key order with SKIP LOCKED. A failed best-effort
+wake leaves the committed result successful and the local deadline as backstop.
+A command with more than 64 targets can leave later targets to that backstop.
+The temporary NULL lanes/indexes retire only after an authorized zero check and
+old-writer review (`mac-imap-smtp.114`).
+
 The parked-work recovery sweep visits parked links rather than their backlogs,
 using one next-link index probe per family and one shared cursor. Its 64-row
-page shares quota among projection, streams and reconciliation, then borrows
-unused room once; this guarantees room for each family with at most six updates.
+page shares quota among projection, streams, reconciliation, drafts and commands,
+then borrows unused room once; this guarantees room for each family with at most
+ten bounded updates.
 New activation and recovery paths clear bounded pages immediately; old-binary
 link changes converge through the five-minute sweep.
 

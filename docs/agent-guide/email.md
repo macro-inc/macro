@@ -2040,6 +2040,16 @@ IMAP size limits: an oversized monitored folder pauses the whole account snapsho
 
 Saved IMAP password recovery: verified per-account ciphertext corruption that qualifies under the fleet guard shows "Reconnect your inbox" and "Macro can't read this mailbox's saved password. Reconnect to continue." This is distinct from a rejected provider sign-in. In Mail settings, Change login details stays reachable even when reading the existing server settings fails. A verified reconnect repairs the same link and clears the warning; temporary credential-service outages, unproven key/context failures, and small replicas with fewer than twenty observed accounts continue retrying without this warning; Change login details remains available. Test with synthetic credentials only.
 
+Queue independence: a delayed autosave or send on one draft must not block a
+different draft in the same inbox. Read/star/archive and similar commands retain
+their accepted order only when they touch the same message; a delayed command
+still blocks its later overlapping command until it finishes. Verify independent
+drafts, edits/reschedules/cancels of a quiet synced draft, and terminal command
+release without treating a queued or uncertain send as delivered.
+For a long conversation, one organization action keeps one result and remains
+pending until its message updates finish. A successful tail must not hide an
+earlier failure, including after reconnect.
+
 IMAP send refusals identify sender, recipient or message refusal when the server
 provides that evidence. A recipient refusal names the address from the already
 loaded message; no accepted recipient receives the body after another RCPT is

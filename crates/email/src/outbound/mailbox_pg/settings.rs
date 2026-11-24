@@ -167,7 +167,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
     ) -> Result<(), MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
-        if lease.kind != "create_label"
+        if lease.kind != SettingsWorkKind::CreateLabel
             || label.link_id != lease.mailbox.key.link_id
             || label.provider_label_id != lease.resource
         {
@@ -177,7 +177,12 @@ impl MailboxSettingsRepository for PgMailboxSync {
         sqlx::query!("UPDATE email_mailbox_settings_work SET completed_revision=revision,lease_id=NULL,lease_until=NULL,failure=NULL WHERE id=$1",lease.id)
             .execute(&mut *tx).await.map_err(db_error)?;
         changed(&mut tx, lease.mailbox.key).await?;
-        tx.commit().await.map_err(db_error)
+        self.commit_mutation_and_wake(
+            tx,
+            lease.mailbox.key,
+            super::mutation_claims::MutationWake::Label(lease.resource.clone()),
+        )
+        .await
     }
     async fn delete_label(
         &self,
@@ -248,11 +253,15 @@ impl MailboxSettingsRepository for PgMailboxSync {
             .map(|r| {
                 Ok(MailboxSettingsOperation {
                     id: r.id,
-                    kind: match r.kind.as_str() {
-                        "create_label" => MailboxSettingsChange::CreateLabel,
-                        "delete_label" => MailboxSettingsChange::DeleteLabel,
-                        "sender_block" => MailboxSettingsChange::SenderBlock,
-                        _ => return Err(MailboxError::Persistence),
+                    kind: match r
+                        .kind
+                        .parse::<SettingsWorkKind>()
+                        .map_err(|_| MailboxError::Persistence)?
+                    {
+                        SettingsWorkKind::CreateLabel => MailboxSettingsChange::CreateLabel,
+                        SettingsWorkKind::DeleteLabel => MailboxSettingsChange::DeleteLabel,
+                        SettingsWorkKind::SenderBlock => MailboxSettingsChange::SenderBlock,
+                        SettingsWorkKind::Catalog => return Err(MailboxError::Persistence),
                     },
                     resource: r.resource_key,
                     enabled: r.desired,
@@ -355,7 +364,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
                 id: r.id,
                 lease_id,
                 revision: r.revision,
-                kind: r.kind,
+                kind: r.kind.parse().map_err(|_| MailboxError::Persistence)?,
                 resource: r.resource_key,
                 desired: r.desired,
                 mailbox: SettingsMailbox {
@@ -427,7 +436,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
     ) -> Result<(), MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
-        if complete && lease.kind == "delete_label" {
+        if complete && lease.kind == SettingsWorkKind::DeleteLabel {
             sqlx::query!("DELETE FROM email_message_labels m USING email_labels l WHERE m.label_id=l.id AND l.link_id=$1 AND l.provider_label_id=$2",lease.mailbox.key.link_id,lease.resource)
                 .execute(&mut *tx).await.map_err(db_error)?;
             sqlx::query!(
@@ -445,6 +454,15 @@ impl MailboxSettingsRepository for PgMailboxSync {
         if complete {
             changed(&mut tx, lease.mailbox.key).await?;
         }
-        tx.commit().await.map_err(db_error)
+        if complete && lease.kind == SettingsWorkKind::CreateLabel {
+            self.commit_mutation_and_wake(
+                tx,
+                lease.mailbox.key,
+                super::mutation_claims::MutationWake::Label(lease.resource.clone()),
+            )
+            .await
+        } else {
+            tx.commit().await.map_err(db_error)
+        }
     }
 }

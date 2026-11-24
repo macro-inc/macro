@@ -41,6 +41,11 @@ load of the same key for actor cohorts; configure the service context explicitly
 alongside those actors rather than using an owner identity for background work.
 `FakeFeatureFlags::set_service` configures service results independently of users.
 
+`polling::run` refreshes a composition-owned `DefaultOffFlag` every 60 seconds,
+starting with an immediate read. It disables the switch before the first load
+and on missing or failed evaluations; cancellation interrupts an in-flight read.
+The consuming service owns the key, stable context and synchronous setter.
+
 ## PostHog adapter
 
 Construct once at the service composition root and clone to share its HTTP pool:

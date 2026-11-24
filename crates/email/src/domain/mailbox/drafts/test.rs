@@ -17,6 +17,7 @@ struct State {
     authorized: bool,
     due: bool,
     stopped: bool,
+    claim_progress: bool,
     sent: bool,
     failure: Option<DraftFailure>,
     creates: usize,
@@ -102,6 +103,7 @@ fn harness(stage: Option<DraftStage>) -> Harness {
         authorized: true,
         due: true,
         stopped: false,
+        claim_progress: false,
         sent: false,
         failure: None,
         creates: 0,
@@ -122,13 +124,16 @@ impl DraftRepository for Harness {
         &self,
         id: Uuid,
         _mode: DraftClaimMode,
-    ) -> Result<Option<DraftLease>, MailboxError> {
+    ) -> Result<super::SyncClaim<DraftLease>, MailboxError> {
         let mut s = self.0.lock().unwrap();
+        if std::mem::take(&mut s.claim_progress) {
+            return Ok(super::SyncClaim::Progress);
+        }
         if s.stopped {
-            return Ok(None);
+            return Ok(super::SyncClaim::Idle);
         }
         s.lease.lease_id = id;
-        Ok(Some(s.lease.clone()))
+        Ok(super::SyncClaim::Acquired(s.lease.clone()))
     }
     async fn renew_draft(&self, _: &DraftLease) -> Result<(), MailboxError> {
         Ok(())
@@ -922,4 +927,16 @@ async fn repeated_local_contention_backs_off_and_progress_clears_the_count() {
             .local_contention_retries,
         0
     );
+}
+
+#[tokio::test]
+async fn maintained_draft_claim_is_progress_without_provider_work() {
+    let h = harness(None);
+    h.0.lock().unwrap().claim_progress = true;
+    assert!(service(&h).execute_once().await.unwrap());
+    let state = h.0.lock().unwrap();
+    assert_eq!(state.creates, 0);
+    assert_eq!(state.updates, 0);
+    assert_eq!(state.submitted_bodies, 0);
+    assert!(!state.stopped);
 }

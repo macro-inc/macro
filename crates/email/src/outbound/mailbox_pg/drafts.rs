@@ -1,9 +1,10 @@
+use super::mutation_claims::{
+    MUTATION_PROBE_BUDGET, MutationAcquirer, MutationStep, MutationWindow,
+};
 use super::*;
 use crate::domain::mailbox::drafts::{models::*, ports::DraftRepository};
 use email_api_client::domain::models::ProviderDraft;
 use sqlx::{Postgres, Transaction};
-
-const MAX_DRAFT_CLAIM_CANDIDATES: usize = 32;
 
 #[cfg(test)]
 mod test;
@@ -97,241 +98,62 @@ impl PgMailboxSync {
     }
 }
 
-impl DraftRepository for PgMailboxSync {
-    async fn claim_draft(
+struct DraftClaim {
+    lease_id: Uuid,
+    provider: crate::domain::models::UserProvider,
+    ordinary: bool,
+}
+
+impl MutationAcquirer for DraftClaim {
+    type Lease = DraftLease;
+    const WORK: &'static str = "drafts";
+
+    fn link_id(lease: &DraftLease) -> Uuid {
+        lease.mailbox.link_id
+    }
+
+    async fn window(
         &self,
-        lease_id: Uuid,
-        mode: DraftClaimMode,
-    ) -> Result<Option<DraftLease>, MailboxError> {
-        let mut tx = self.mutation_claim_transaction().await?;
-        // Inspect one ordered head per provider link without locking unrelated mailboxes.
-        // Normal and recovery branches expose their constant partial-index predicates even
-        // to generic plans. Actual acquisition below repeats every eligibility fence.
-        let mut skipped = Vec::<Uuid>::new();
-        let row = loop {
-            // Yield the shared mutation-claim lock under sustained editor contention.
-            // The next worker round retries after editors have had a chance to finish.
-            if skipped.len() == MAX_DRAFT_CLAIM_CANDIDATES {
-                break None;
-            }
-            let head=sqlx::query_scalar!(
-                r#"
-                SELECT
-                    head.message_id AS "message_id!"
-                FROM
-                    email_links l
-                    CROSS JOIN LATERAL (
-                        SELECT
-                            scoped.message_id,
-                            scoped.available_at
-                        FROM ((
-                                SELECT
-                                    d.message_id,
-                                    d.available_at
-                                FROM
-                                    email_mailbox_drafts d
-                                WHERE
-                                    $1
-                                    AND d.link_id = l.id
-                                    AND d.generation = l.sync_generation
-                                    AND d.state IN ('pending', 'running', 'synced')
-                                    AND NOT (d.message_id = ANY ($3))
-                                    AND (d.state IN ('pending', 'running')
-                                        OR (d.state = 'synced'
-                                            AND EXISTS (
-                                                SELECT
-                                                    1
-                                                FROM
-                                                    email_scheduled_messages schedule
-                                                WHERE
-                                                    schedule.message_id = d.message_id
-                                                    AND schedule.link_id = d.link_id
-                                                    AND NOT schedule.sent
-                                                    AND NOT schedule.processing
-                                                    AND schedule.send_time <= now())))
-                                    AND NOT EXISTS (
-                                        SELECT
-                                            1
-                                        FROM
-                                            email_mailbox_command_targets target
-                                            JOIN email_mailbox_commands command ON command.id = target.command_id
-                                        WHERE
-                                            target.message_id = d.message_id
-                                            AND command.lease_id IS NOT NULL
-                                            AND command.lease_until > now()
-                                            OFFSET 0)
-                                    AND d.available_at <= now()
-                                    AND (d.lease_until IS NULL
-                                        OR d.lease_until < now())
-                                ORDER BY
-                                    d.available_at,
-                                    d.message_id
-                                LIMIT 1)
-                        UNION ALL (
-                            SELECT
-                                d.message_id,
-                                d.available_at
-                            FROM
-                                email_mailbox_drafts d
-                            WHERE
-                                NOT $1
-                                AND d.checkpoint ->> 'stage' IN ('creating', 'submitting', 'confirming')
-                                AND d.link_id = l.id
-                                AND d.generation = l.sync_generation
-                                AND d.state IN ('pending', 'running', 'synced')
-                                AND NOT (d.message_id = ANY ($3))
-                                AND (d.state IN ('pending', 'running')
-                                    OR (d.state = 'synced'
-                                        AND EXISTS (
-                                            SELECT
-                                                1
-                                            FROM
-                                                email_scheduled_messages schedule
-                                            WHERE
-                                                schedule.message_id = d.message_id
-                                                AND schedule.link_id = d.link_id
-                                                AND NOT schedule.sent
-                                                AND NOT schedule.processing
-                                                AND schedule.send_time <= now())))
-                                AND NOT EXISTS (
-                                    SELECT
-                                        1
-                                    FROM
-                                        email_mailbox_command_targets target
-                                        JOIN email_mailbox_commands command ON command.id = target.command_id
-                                    WHERE
-                                        target.message_id = d.message_id
-                                        AND command.lease_id IS NOT NULL
-                                        AND command.lease_until > now()
-                                        OFFSET 0)
-                                AND d.available_at <= now()
-                                AND (d.lease_until IS NULL
-                                    OR d.lease_until < now())
-                            ORDER BY
-                                d.available_at,
-                                d.message_id
-                            LIMIT 1)) scoped
-                ORDER BY
-                    scoped.available_at,
-                    scoped.message_id
-                LIMIT 1) head
-                WHERE
-                    l.is_sync_active
-                    AND l.mailbox_unavailable_at IS NULL
-                    AND l.provider = $2::text::email_user_provider_enum
-                ORDER BY
-                    head.available_at,
-                    head.message_id
-                LIMIT 1
-                "#,
-                mode==DraftClaimMode::All,
-                self.provider.as_str(),
-                &skipped,
-            ).fetch_optional(&mut *tx).await.map_err(db_error)?;
-            let Some(head) = head else {
-                break None;
-            };
-            let leased = sqlx::query!(
-                r#"
-                WITH candidate AS (
-                    SELECT
-                        d.message_id
-                    FROM
-                        email_mailbox_drafts d
-                    WHERE
-                        d.message_id = $4
-                        AND d.state IN ('pending', 'running', 'synced')
-                        AND EXISTS (
-                            SELECT
-                                1
-                            FROM
-                                email_links l
-                            WHERE
-                                l.id = d.link_id
-                                AND l.is_sync_active
-                                AND l.mailbox_unavailable_at IS NULL
-                                AND l.provider = $3::text::email_user_provider_enum
-                                AND l.sync_generation = d.generation OFFSET 0)
-                        AND (d.state IN ('pending', 'running')
-                            OR (d.state = 'synced'
-                                AND EXISTS (
-                                    SELECT
-                                        1
-                                    FROM
-                                        email_scheduled_messages s
-                                    WHERE
-                                        s.message_id = d.message_id
-                                        AND s.link_id = d.link_id
-                                        AND NOT s.sent
-                                        AND NOT s.processing
-                                        AND s.send_time <= now())))
-                        AND ($2
-                            OR d.checkpoint ->> 'stage' IN ('creating', 'submitting', 'confirming'))
-                        AND NOT EXISTS (
-                            SELECT
-                                1
-                            FROM
-                                email_mailbox_command_targets target
-                                JOIN email_mailbox_commands command ON command.id = target.command_id
-                            WHERE
-                                target.message_id = d.message_id
-                                AND command.lease_id IS NOT NULL
-                                AND command.lease_until > now()
-                                OFFSET 0)
-                        AND d.available_at <= now()
-                        AND (d.lease_until IS NULL
-                            OR d.lease_until < now())
-                    ORDER BY
-                        d.available_at,
-                        d.message_id
-                    LIMIT 1
-                    FOR UPDATE
-                        OF d SKIP LOCKED
-                )
-                UPDATE
-                    email_mailbox_drafts d
-                SET
-                    claimed_content = d.desired_content,
-                    state = 'running',
-                    lease_id = $1,
-                    lease_until = now() + interval '3 minutes',
-                    updated_at = now()
-                FROM
-                    candidate c,
-                    email_links l
-                WHERE
-                    c.message_id = d.message_id
-                    AND l.id = d.link_id
-                RETURNING
-                    d.message_id,
-                    d.link_id,
-                    d.generation,
-                    l.grant_generation,
-                    d.revision,
-                    d.actor_id,
-                    d.desired_content,
-                    d.provider_id,
-                    d.base_version,
-                    d.delete_requested,
-                    d.checkpoint
-                "#,
-                lease_id,
-                mode==DraftClaimMode::All,
-                self.provider.as_str(),
-                head,
-            ).fetch_optional(&mut *tx).await.map_err(db_error)?;
-            if leased.is_some() {
-                break leased;
-            }
-            // An editor may lock or change a head between inspection and acquisition.
-            // Retrying its successor preserves SKIP LOCKED within the same mailbox too.
-            skipped.push(head);
-        };
-        tx.commit().await.map_err(db_error)?;
-        row.map(|row| {
-            Ok(DraftLease {
+        tx: &mut Transaction<'_, Postgres>,
+    ) -> Result<MutationWindow, MailboxError> {
+        let row = sqlx::query_file!(
+            "src/outbound/mailbox_pg/drafts/claim/window.sql",
+            self.provider.as_str(),
+            self.ordinary
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        Ok(MutationWindow {
+            ids: row.ids,
+            maintained: row.maintained,
+        })
+    }
+
+    async fn acquire(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        id: Uuid,
+        remaining: i64,
+        _first: bool,
+    ) -> Result<Option<MutationStep<DraftLease>>, MailboxError> {
+        let row = sqlx::query_file!(
+            "src/outbound/mailbox_pg/drafts/claim/acquire.sql",
+            self.lease_id,
+            self.ordinary,
+            self.provider.as_str(),
+            id,
+            remaining,
+            MUTATION_PROBE_BUDGET
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        let Some(row) = row else { return Ok(None) };
+        let lease = if row.leased {
+            Some(DraftLease {
                 message_id: row.message_id,
-                lease_id,
+                lease_id: self.lease_id,
                 mailbox: MailboxKey {
                     link_id: row.link_id,
                     sync_generation: row.generation,
@@ -358,8 +180,33 @@ impl DraftRepository for PgMailboxSync {
                     .transpose()
                     .map_err(|_| MailboxError::Persistence)?,
             })
+        } else {
+            None
+        };
+        Ok(Some(MutationStep {
+            probes: row.probe_count,
+            budget_exhausted: row.budget_exhausted,
+            blocked: row.blocked,
+            legacy_wide: false,
+            exclusion_overflow: row.exclusion_overflow,
+            exclusion_leases_at_least: row.scope_leases,
+            lease,
+        }))
+    }
+}
+
+impl DraftRepository for PgMailboxSync {
+    async fn claim_draft(
+        &self,
+        lease_id: Uuid,
+        mode: DraftClaimMode,
+    ) -> Result<SyncClaim<DraftLease>, MailboxError> {
+        self.claim_mutation(DraftClaim {
+            lease_id,
+            provider: self.provider,
+            ordinary: mode == DraftClaimMode::All,
         })
-        .transpose()
+        .await
     }
 
     async fn renew_draft(&self, lease: &DraftLease) -> Result<(), MailboxError> {
@@ -406,15 +253,21 @@ impl DraftRepository for PgMailboxSync {
         // A discard that arrived during this lease restarts from inspection,
         // which deletes whichever version Outlook holds; this step's
         // checkpoint can expect a version a lost response never confirmed.
+        let mut tx = self.begin().await.map_err(db_error)?;
         let changed = sqlx::query!(r#"
             UPDATE email_mailbox_drafts SET lease_id = NULL,lease_until = NULL,available_at = now() + make_interval(secs => $3::double precision),
                 checkpoint = CASE WHEN delete_requested AND NOT $4 AND checkpoint->>'stage' IS DISTINCT FROM 'creating' THEN NULL ELSE checkpoint END
             WHERE message_id = $1 AND lease_id = $2 AND lease_until > now() AND state = 'running'
-        "#,lease.message_id,lease.lease_id,f64::from(seconds),lease.delete_requested).execute(&self.db).await.map_err(db_error)?.rows_affected();
+        "#,lease.message_id,lease.lease_id,f64::from(seconds),lease.delete_requested).execute(&mut *tx).await.map_err(db_error)?.rows_affected();
         if changed != 1 {
             return Err(MailboxError::Stale);
         }
-        Ok(())
+        self.commit_mutation_and_wake(
+            tx,
+            lease.mailbox,
+            super::mutation_claims::MutationWake::Draft(lease.message_id),
+        )
+        .await
     }
 
     async fn fail_draft(
@@ -456,7 +309,12 @@ impl DraftRepository for PgMailboxSync {
             ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET revision = email_message_reconciliation.revision + 1,available_at = now(),is_import = false
         "#,lease.message_id).execute(&mut *tx).await.map_err(db_error)?;
         Self::draft_projection(&mut tx, lease).await?;
-        tx.commit().await.map_err(db_error)
+        self.commit_mutation_and_wake(
+            tx,
+            lease.mailbox,
+            super::mutation_claims::MutationWake::Draft(lease.message_id),
+        )
+        .await
     }
 
     async fn settle_draft(
@@ -482,7 +340,12 @@ impl DraftRepository for PgMailboxSync {
                 revision = email_message_reconciliation.revision + 1,available_at = now(),is_import = false
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation,draft.id.as_str()).execute(&mut *tx).await.map_err(db_error)?;
         Self::draft_projection(&mut tx, lease).await?;
-        tx.commit().await.map_err(db_error)
+        self.commit_mutation_and_wake(
+            tx,
+            lease.mailbox,
+            super::mutation_claims::MutationWake::Draft(lease.message_id),
+        )
+        .await
     }
 
     async fn start_delivery(
@@ -596,7 +459,12 @@ impl DraftRepository for PgMailboxSync {
                 revision = email_message_reconciliation.revision + 1,available_at = now(),is_import = false
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation,draft.id.as_str()).execute(&mut *tx).await.map_err(db_error)?;
         Self::draft_projection(&mut tx, lease).await?;
-        tx.commit().await.map_err(db_error)
+        self.commit_mutation_and_wake(
+            tx,
+            lease.mailbox,
+            super::mutation_claims::MutationWake::Draft(lease.message_id),
+        )
+        .await
     }
 
     async fn confirm_deleted(&self, lease: &DraftLease) -> Result<(), MailboxError> {
@@ -615,6 +483,11 @@ impl DraftRepository for PgMailboxSync {
         sqlx::query!("UPDATE email_messages SET mailbox_state = COALESCE(mailbox_state,'{}'::jsonb) || '{\"provider_missing\":true}'::jsonb WHERE id = $1",lease.message_id).execute(&mut *tx).await.map_err(db_error)?;
         sqlx::query!("UPDATE email_mailbox_drafts SET state = 'deleted',lease_id = NULL,lease_until = NULL,updated_at = now() WHERE message_id = $1",lease.message_id).execute(&mut *tx).await.map_err(db_error)?;
         Self::draft_projection(&mut tx, lease).await?;
-        tx.commit().await.map_err(db_error)
+        self.commit_mutation_and_wake(
+            tx,
+            lease.mailbox,
+            super::mutation_claims::MutationWake::Draft(lease.message_id),
+        )
+        .await
     }
 }

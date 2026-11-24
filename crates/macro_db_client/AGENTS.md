@@ -63,6 +63,14 @@ its due index identical to the effective-deadline claim expression. Migrations
 20261123181252–181254 add the lease fields and concurrently replace the index;
 preserve the original 20261119060030 checksum for databases that applied it.
 
+Mailbox mutation claims use forward migrations 20261123181255–181268. The
+command live-lease index narrows by link, generation and lease expiry before
+target lookup; it adds no child writes or copied lease state. Keep its live-lease
+predicate aligned with the draft exclusion query and retain the old indexes for
+rolling binaries. Migrations 181267–181268 add nullable command action IDs and
+a concurrent partial group lookup index. Legacy writers leave the action ID
+NULL; grouped receipt readers must precede the default-off chunking flag flip.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
@@ -298,3 +306,22 @@ undeployed migrations and the preserved local preview's scoped adaptation;
 never edit its migration ledger to hide incompatibility.
 
 Migration 20261123181251 builds the IMAP-only non-null provider-retry index concurrently for reconnect’s maximum-wait lookup. Inspect and drop an interrupted INVALID index before retrying; old binaries and the original query remain compatible.
+
+Migrations 20261123181255–181263 add nullable routing/local parking fields and
+concurrent finite-deadline indexes for draft and command claims. Legacy NULL
+routing has its own bounded lane: do not add a blocking rollout backfill. Preserve
+old indexes until rolling readers retire, and inspect/drop interrupted INVALID
+new builds before retrying. Re-arm metadata hooks must cover old writers and
+schedule edits/cancels without changing real retries or lease deadlines; routing
+is copied metadata, and acquisition must still check the current parent.
+
+Migrations 20261123181264–181265 add target index facts and the partial unfinished
+predecessor index. Parent-first locking protects installation and one atomic
+in-flight-only fill; the metadata migration bounds lock acquisition and each
+statement at five seconds. It keeps retained terminal history unchanged and
+aborts atomically on timeout. New/old target inserts and parent terminal or
+generation changes derive facts through DB triggers; nonterminal status changes
+must not rewrite children. Measure the expected live backlog before deployment;
+hosted-dev counts are only a proxy and do not establish production size. The
+predecessor index is a separate concurrent, no-transaction build with invalid
+index/rollback handling; no applied migration changes.

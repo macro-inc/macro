@@ -58,6 +58,8 @@ pub(crate) struct ApiDependencies {
     pub event_broker_tracker: TaskTracker,
     /// Set from `enable-outlook-notified-message-reads` by the server.
     pub notified_message_reads: email::domain::mailbox::watches::NotifiedMessageReads,
+    /// Default-off grouped-command rollout, shared with every API action writer.
+    pub mailbox_action_chunks: email::domain::models::mailbox_action::MailboxActionChunking,
 }
 
 /// Wires the services for the production listener.
@@ -79,6 +81,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         macro_event_broker,
         event_broker_tracker,
         notified_message_reads,
+        mailbox_action_chunks,
     } = deps;
     let gmail_api_repository = GmailApiClientRepository::new(gmail_client.clone());
 
@@ -107,9 +110,11 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
     );
     let email_service = EmailRouterState::new(
         EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()).with_rule_discovery(Arc::new(
-                crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
-            )),
+            EmailPgRepo::new(db.clone())
+                .with_rule_discovery(Arc::new(
+                    crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+                ))
+                .with_action_chunking(mailbox_action_chunks.clone()),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             (*sqs_client).clone(),
             crm_service,
@@ -348,7 +353,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         message_labels: Arc::new(email::domain::message_labels::MessageLabelService {
             repository: crate::outbound::message_labels::PgMessageLabels(
                 db.clone(),
-                EmailPgRepo::new(db.clone()),
+                EmailPgRepo::new(db.clone()).with_action_chunking(mailbox_action_chunks),
             ),
             enqueuer: sqs_client.as_ref().clone(),
             broker: macro_event_broker.clone(),

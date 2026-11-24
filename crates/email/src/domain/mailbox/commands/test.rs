@@ -90,6 +90,7 @@ struct Harness(Arc<Mutex<State>>);
 #[derive(Default)]
 struct State {
     claimed: bool,
+    claim_progress: bool,
     applies: u32,
     /// Write-version records that time out on a busy mailbox.
     locked_records: u32,
@@ -107,11 +108,17 @@ fn mailbox() -> MailboxKey {
 }
 
 impl MailboxCommandRepository for Harness {
-    async fn claim_command(&self, lease_id: Uuid) -> Result<Option<CommandLease>, MailboxError> {
-        if std::mem::replace(&mut self.0.lock().unwrap().claimed, true) {
-            return Ok(None);
+    async fn claim_command(
+        &self,
+        lease_id: Uuid,
+    ) -> Result<super::SyncClaim<CommandLease>, MailboxError> {
+        if std::mem::take(&mut self.0.lock().unwrap().claim_progress) {
+            return Ok(super::SyncClaim::Progress);
         }
-        Ok(Some(CommandLease {
+        if std::mem::replace(&mut self.0.lock().unwrap().claimed, true) {
+            return Ok(super::SyncClaim::Idle);
+        }
+        Ok(super::SyncClaim::Acquired(CommandLease {
             id: Uuid::now_v7(),
             lease_id,
             mailbox: mailbox(),
@@ -282,4 +289,20 @@ async fn a_write_version_that_stays_locked_gives_up_inside_the_lease() {
     assert_eq!(s.applies, 1);
     assert_eq!(s.recorded, None);
     assert_eq!(s.released, Some(30));
+}
+
+#[tokio::test]
+async fn maintained_command_claim_is_progress_without_provider_work() {
+    let h = Harness::default();
+    h.0.lock().unwrap().claim_progress = true;
+    assert!(
+        MailboxCommandService::new(h.clone(), h.clone())
+            .execute_once()
+            .await
+            .unwrap()
+    );
+    let state = h.0.lock().unwrap();
+    assert_eq!(state.applies, 0);
+    assert!(!state.claimed);
+    assert!(state.released.is_none());
 }
