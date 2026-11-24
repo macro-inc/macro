@@ -262,7 +262,10 @@ function install() {
 export function installCrmCacheHost(next: CacheHost | undefined) {
   install();
   host = next;
-  crmAccessAuthority.setHost(next?.disabled ? undefined : next?.authority);
+  crmAccessAuthority.setHost(
+    next?.disabled ? undefined : next?.authority,
+    next?.paused ? crmAccessAuthority.snapshot()?.generation : undefined
+  );
 }
 
 /** Local owner initialization only; permission verification starts after login. */

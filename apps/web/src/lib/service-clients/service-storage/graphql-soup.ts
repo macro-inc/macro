@@ -13,7 +13,7 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
-import { reloadForNewerBuild } from '@core/util/reloadForNewerBuild';
+import { reloadForSupersededCache } from '@core/util/reloadForNewerBuild';
 import { timeResponseBody } from '@core/util/responseBodyTiming';
 import { ThrownResultError } from '@core/util/result';
 import {
@@ -52,6 +52,7 @@ import {
 } from '@graphql-cache/lifecycle';
 import {
   isAdmittedEnqueueUncertainError,
+  isCacheOutageError,
   isCacheSupersededError,
   isOwnerLockUnavailableError,
 } from '@graphql-cache/protocol';
@@ -106,6 +107,7 @@ import {
   createCacheErrorThrottle,
 } from './cache-error-throttle';
 import {
+  CacheNotRestartedError,
   type CacheRecoveryStopReason,
   CacheRecoverySupersededError,
   canReopenCache,
@@ -355,7 +357,7 @@ async function sendDssGraphqlRequest(
   queueOwner?: CacheHost
 ): Promise<Response> {
   const retiredQueue =
-    queueOwner?.disabled ||
+    (queueOwner !== undefined && isCacheHostGone(queueOwner)) ||
     (cachedCacheHost !== undefined && cachedCacheHost !== queueOwner);
   // Even an in-flight cached client can fall back after queue initialization
   // fails. Check at transport time so it cannot overtake preserved mutations.
@@ -650,6 +652,7 @@ const cacheRecovery = createCacheRecovery(
   {
     onRelapse: recordCacheRecoveryRelapse,
     onStopped: recordCacheRecoveryStopped,
+    onOffPastLimit: recordCacheOffPastLimit,
   }
 );
 
@@ -690,17 +693,30 @@ function recordCacheRecoveryStopped(
   span.end();
 }
 
+/** Records that this page has run without its cache for a long time. */
+function recordCacheOffPastLimit(attempts: number, error: unknown): void {
+  const span = Telemetry.span('graphql.cache_off_past_limit');
+  span.setAttr('cache.recovery_attempts', attempts);
+  span.setAttr('cache.error_code', recoveryErrorCode(error));
+  setUnavailableReason(span, error);
+  span.end();
+}
+
+/** Disabled for good: retired, or without storage. */
+const isCacheHostGone = (host: CacheHost): boolean =>
+  host.disabled === true && !host.paused;
+
 /** Reopens the cache and proves its queue readable; throws when it cannot. */
 async function restartCache(span: Span): Promise<void> {
   const session = cacheSessionGeneration;
   // A host whose read was refused mid-handoff is still running; prove it
   // readable now instead of stacking another registration on it.
-  if (!cachedCacheHost || cachedCacheHost.disabled) {
+  if (!cachedCacheHost || isCacheHostGone(cachedCacheHost)) {
     cachedClient = undefined;
     getGraphqlSoupClient();
   }
   const host = cachedCacheHost;
-  if (!host || host.disabled) throw new Error('Local cache could not restart.');
+  if (!host || isCacheHostGone(host)) throw new CacheNotRestartedError();
   await host.currentRevision();
   span.event('engine_ready');
   // Opening the engine is insufficient: inspect the preserved queue before
@@ -790,7 +806,7 @@ let externalMutationVersion = 0;
 
 /** Fence stale GraphQL responses after a confirmed write through another transport. */
 export function acknowledgeGraphqlRestWrite(host: object): void {
-  if (host === cachedCacheHost && !cachedCacheHost.disabled)
+  if (host === cachedCacheHost && !isCacheHostGone(cachedCacheHost))
     externalMutationVersion += 1;
 }
 
@@ -913,7 +929,8 @@ export async function initializeGraphqlSoupCache(): Promise<void> {
     const error = result.error;
     span.setAttr('cache.fallback', true);
     span.error(error);
-    if (host && cachedCacheHost === host) {
+    // A paused host stays, and is initialized when it serves again.
+    if (host && cachedCacheHost === host && !isCacheOutageError(error)) {
       fallbackAfterInitializationFailure(error);
     }
     // Fallback detaches the failed owner; memory initialization cannot do I/O.
@@ -998,6 +1015,15 @@ export function getGraphqlSoupClient(): Client {
       suspendOnPagehide: !native,
     });
     const lifetime = new AbortController();
+    const startSubscriptions = async (target: CacheHost) => {
+      await initializeCrmCacheOwner();
+      if (
+        cachedClient &&
+        cachedCacheHost === target &&
+        !isCacheHostGone(target)
+      )
+        subscriptionsLifecycle.replace(cachedClient, target);
+    };
     const cleanup = () => {
       unregisterHost();
       // Unsubscribing emits urql teardown operations; keep the cache host
@@ -1010,28 +1036,46 @@ export function getGraphqlSoupClient(): Client {
       if (websocketClient)
         fireAndForget(websocketClient.dispose(), 'graphql-soup-client');
     };
+    /** The client, its socket and its queue stay: the host serves again. */
+    const onUnavailable = (error: Error) => {
+      if (!host || cachedCacheHost !== host) return;
+      installCrmCacheHost(host);
+      cacheInitializationFailed = true;
+      cacheRecovery.failed(error);
+      logCacheUnavailable(error, 'turso-wasm-opfs');
+      console.info(
+        `[graphql-cache] ${error.message}; using the network until it can be opened`
+      );
+      if (cachedClient) subscriptionsLifecycle.replace(cachedClient, host);
+      setCacheAvailability((version) => version + 1);
+    };
+    const onAvailable = () => {
+      const target = host;
+      if (!target || cachedCacheHost !== target) return;
+      installCrmCacheHost(target);
+      fireAndForget(
+        startSubscriptions(target).then(cacheRecovery.available),
+        'graphql-cache-recovery'
+      );
+    };
     const onInitializationError = (error: Error) => {
       if (!host || cachedCacheHost !== host) return;
-      // Another context holds the database: a tab on another deployed build,
-      // or a closing tab whose worker still has the files open. Retry later
-      // without stealing the lock or changing the cache scope.
-      if (isOwnerLockUnavailableError(error)) {
+      if (isCacheSupersededError(error)) {
         fallbackAfterInitializationFailure(error);
         logCacheUnavailable(error, native ? 'native' : 'turso-wasm-opfs');
         console.info(
-          isCacheSupersededError(error)
-            ? `[graphql-cache] ${error.message}; using the network until reload`
-            : `[graphql-cache] ${error.message}; using the network while waiting to retry`
+          `[graphql-cache] ${error.message}; using the network until reload`
         );
         return;
       }
+      const wasReady = cacheRecovery.state() === 'ready';
       reportCacheError(error, 'initialization');
       fallbackAfterInitializationFailure(error);
       if (error instanceof NativeCacheUpgradeRequiredError) {
         requireNativeUpdate(error.message);
-      } else if (!(error instanceof CoordinatorRestartedError)) {
-        // A restarting coordinator retries by itself, and can keep restarting
-        // on every new host: a toast per attempt would ask for nothing.
+      } else if (wasReady && !(error instanceof CoordinatorRestartedError)) {
+        // A failed cache retries by itself: a toast per attempt would ask for
+        // nothing, and a restarting coordinator mostly comes back at once.
         toast.failure('Local cache unavailable', {
           subtext:
             cacheRecovery.state() === 'unavailable'
@@ -1065,8 +1109,10 @@ export function getGraphqlSoupClient(): Client {
                 rolloutCohort: rollout.cohort,
                 // A newer deploy took the local cache over: move to it.
                 onSuperseded: reportInitialization
-                  ? () => reloadForNewerBuild()
+                  ? () => reloadForSupersededCache()
                   : undefined,
+                onUnavailable: reportInitialization ? onUnavailable : undefined,
+                onAvailable: reportInitialization ? onAvailable : undefined,
               })
         );
       host = createHost(true);
@@ -1156,13 +1202,7 @@ export function getGraphqlSoupClient(): Client {
       cachedCacheCleanup = cleanup;
       browserCacheClientActivated = !native;
       installCrmCacheHost(host);
-      fireAndForget(
-        initializeCrmCacheOwner().then(() => {
-          if (host && cachedCacheHost === host && !host.disabled)
-            subscriptionsLifecycle.replace(client, host);
-        }),
-        'graphql-cache-subscriptions'
-      );
+      fireAndForget(startSubscriptions(host), 'graphql-cache-subscriptions');
       return client;
     } catch (error) {
       reportCacheError(error, 'initialization');

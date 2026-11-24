@@ -336,12 +336,14 @@ export function createCrmAccessAuthority(options: Options) {
       return initialization;
     },
     refresh,
-    setHost(next: CacheAuthorityHost | undefined) {
+    /** Without a host, `generation` is the one a paused host still has, so that
+     * neither losing nor regaining it counts as a new session. */
+    setHost(next: CacheAuthorityHost | undefined, generation?: string) {
       if (next === shared) return;
       shared = next;
       if (earlyAccess) setState('pending');
       earlyAccess = undefined;
-      owner = next ?? memoryAuthority(account);
+      owner = next ?? memoryAuthority(account, generation);
       session = Symbol();
       pending = undefined;
       initialization = undefined;

@@ -159,6 +159,25 @@ it('keeps a proven denial when its owner is replaced by one that still records a
   expect(authority.state()).toBe('allowed');
 });
 
+it('keeps its generation while its host is paused, and when it serves again', async () => {
+  const owner = sharedOwner(`${team}:allowed`);
+  const { authority, retire } = client(owner);
+  await authority.refresh();
+  retire.mockClear();
+  const generation = authority.snapshot()?.generation;
+
+  authority.setHost(undefined, generation);
+  await authority.refresh();
+  expect(authority.state()).toBe('allowed');
+  expect(authority.snapshot()?.generation).toBe(generation);
+
+  authority.setHost(owner);
+  await authority.refresh();
+  expect(authority.state()).toBe('allowed');
+  expect(authority.snapshot()?.generation).toBe(generation);
+  expect(retire).not.toHaveBeenCalled();
+});
+
 it('follows a regrant committed by another window after proving the denial itself', async () => {
   const owner = sharedOwner(`${team}:allowed`);
   const first = client(owner);

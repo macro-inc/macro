@@ -1,15 +1,16 @@
 import {
   CacheHostDisposedError,
+  CacheHostFailedError,
   CacheRequestTimeoutError,
 } from '@graphql-cache/host/errors';
 import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
 import { CoordinatorRestartedError } from '@graphql-cache/host/worker-host';
-import { CacheBootstrapExhaustedError } from '@graphql-cache/worker/startup';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
+  CACHE_OFF_LIMIT_MS,
+  CacheNotRestartedError,
   CacheRecoverySupersededError,
   createCacheRecovery,
-  MAX_RECOVERY_RELAPSES,
   RECOVERY_HEALTHY_MS,
 } from './cache-recovery';
 
@@ -23,6 +24,8 @@ vi.mock('@core/util/fireAndForget', () => ({
   },
 }));
 
+const hostFailed = () => new CacheHostFailedError(new Error('Failed to fetch'));
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
@@ -33,11 +36,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('retries an untouched bootstrap on reconnect, single flight, until storage is readable', async () => {
+it('retries a failed host on reconnect, single flight, until storage is readable', async () => {
   const opened = Promise.withResolvers<void>();
   const rebuild = vi.fn(() => opened.promise);
   const recovery = createCacheRecovery(rebuild);
-  recovery.failed(new CacheBootstrapExhaustedError('Failed to fetch'));
+  recovery.failed(hostFailed());
   window.dispatchEvent(new Event('online'));
   const retry = recovery.retry();
   expect(recovery.state()).toBe('recovering');
@@ -50,12 +53,12 @@ it('retries an untouched bootstrap on reconnect, single flight, until storage is
   recovery.reset();
 });
 
-it('allows another foreground attempt after repeated bootstrap failures', async () => {
+it('allows another foreground attempt after repeated host failures', async () => {
   const rebuild = vi.fn(async (): Promise<void> => {
-    throw new CacheBootstrapExhaustedError('Failed to fetch');
+    throw hostFailed();
   });
   const recovery = createCacheRecovery(rebuild);
-  recovery.failed(new CacheBootstrapExhaustedError('Failed to fetch'));
+  recovery.failed(hostFailed());
   await vi.advanceTimersByTimeAsync(120_000);
   expect(rebuild.mock.calls.length).toBeGreaterThan(5);
   expect(recovery.state()).toBe('unavailable');
@@ -65,7 +68,7 @@ it('allows another foreground attempt after repeated bootstrap failures', async 
   recovery.reset();
 });
 
-it('does not reopen potentially damaged storage', async () => {
+it('does not reopen after a failure it does not know', async () => {
   const rebuild = vi.fn(async () => {});
   const recovery = createCacheRecovery(rebuild);
   const error = new Error('database recovery failed');
@@ -82,7 +85,7 @@ it('pauses offline and fences a completion from the previous session', async () 
   const opened = Promise.withResolvers<void>();
   const rebuild = vi.fn(() => opened.promise);
   const recovery = createCacheRecovery(rebuild);
-  const failure = new CacheBootstrapExhaustedError('Failed to fetch');
+  const failure = hostFailed();
   recovery.failed(failure);
   vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
   await vi.advanceTimersByTimeAsync(60_000);
@@ -123,22 +126,6 @@ it('retries after the coordinator kept restarting before its handshake', async (
   recovery.reset();
 });
 
-it('keeps an engine transport failure closed even when it looks like a lost owner', async () => {
-  const rebuild = vi.fn(async () => {});
-  const recovery = createCacheRecovery(rebuild);
-  const lost = Object.assign(
-    new Error('cache coordinator transport restarted'),
-    {
-      errorCode: 'owner-epoch-lost',
-    }
-  );
-  recovery.failed(lost);
-  await vi.advanceTimersByTimeAsync(60_000);
-  expect(rebuild).not.toHaveBeenCalled();
-  expect(recovery.state()).toBe('recovery-required');
-  recovery.reset();
-});
-
 it('retries after startup went unanswered', async () => {
   const rebuild = vi.fn(async () => {});
   const recovery = createCacheRecovery(rebuild);
@@ -161,15 +148,16 @@ it.each([
   ['its read timed out', new CacheRequestTimeoutError('current-revision')],
   ['its host was disposed', new CacheHostDisposedError()],
   ['the page replaced its host', new CacheRecoverySupersededError()],
+  ['it ended without a host', new CacheNotRestartedError()],
 ])('keeps retrying a restart cut short because %s', async (_why, error) => {
   const rebuild = vi.fn(async (): Promise<void> => {
     throw error;
   });
   const onStopped = vi.fn();
   const recovery = createCacheRecovery(rebuild, { onStopped });
-  recovery.failed(new CacheBootstrapExhaustedError('Failed to fetch'));
+  recovery.failed(hostFailed());
   await vi.advanceTimersByTimeAsync(30 * 60_000);
-  expect(rebuild.mock.calls.length).toBeGreaterThan(MAX_RECOVERY_RELAPSES * 2);
+  expect(rebuild.mock.calls.length).toBeGreaterThan(20);
   expect(recovery.state()).toBe('unavailable');
   expect(onStopped).not.toHaveBeenCalled();
   rebuild.mockResolvedValueOnce(undefined);
@@ -179,7 +167,7 @@ it.each([
 });
 
 it.each([
-  ['retries', new CacheBootstrapExhaustedError('Failed to fetch')],
+  ['retries', hostFailed()],
   ['stops', new Error('database recovery failed')],
 ])(
   '%s as the host that failed during a restart says, whatever the restart rejects with',
@@ -188,7 +176,7 @@ it.each([
     const rebuild = vi.fn(() => restart.promise);
     const onStopped = vi.fn();
     const recovery = createCacheRecovery(rebuild, { onStopped });
-    recovery.failed(new CacheBootstrapExhaustedError('Failed to fetch'));
+    recovery.failed(hostFailed());
     const first = expect(recovery.retry()).rejects.toThrow('consequence');
     recovery.failed(reported);
     // Its own retry finds the restart still running.
@@ -236,32 +224,88 @@ it('never retries after a newer build took the database over', async () => {
   recovery.reset();
 });
 
-it('stops after a cache keeps failing soon after each successful restart', async () => {
+it('keeps restarting a cache that fails soon after each successful restart, at a capped rate', async () => {
   const rebuild = vi.fn(async () => {});
   const onRelapse = vi.fn();
   const onStopped = vi.fn();
   const recovery = createCacheRecovery(rebuild, { onRelapse, onStopped });
-  const lockHeld = Object.assign(
-    new Error('cache database owner lock is held by another context'),
-    { errorCode: 'owner-lock-unavailable' }
-  );
-  recovery.failed(lockHeld);
-  for (let restart = 1; restart <= MAX_RECOVERY_RELAPSES; restart += 1) {
+  recovery.failed(hostFailed());
+  for (let restart = 1; restart <= 30; restart += 1) {
     await vi.advanceTimersByTimeAsync(40_000);
     expect(rebuild).toHaveBeenCalledTimes(restart);
     expect(recovery.state()).toBe('ready');
     // The restarted host fails again before it stayed up.
-    recovery.failed(lockHeld);
+    recovery.failed(hostFailed());
   }
-  expect(onRelapse).toHaveBeenCalledTimes(MAX_RECOVERY_RELAPSES);
-  expect(recovery.state()).toBe('recovery-required');
-  expect(onStopped).toHaveBeenCalledExactlyOnceWith(
-    'relapses-exhausted',
-    MAX_RECOVERY_RELAPSES,
-    lockHeld
+  expect(onRelapse).toHaveBeenCalledTimes(30);
+  expect(onStopped).not.toHaveBeenCalled();
+  // The backoff did not start over.
+  await vi.advanceTimersByTimeAsync(20_000);
+  expect(rebuild).toHaveBeenCalledTimes(30);
+  recovery.reset();
+});
+
+it('tells once when the cache stays off while the page is visible, and goes on', async () => {
+  const rebuild = vi.fn(async (): Promise<void> => {
+    throw hostFailed();
+  });
+  const onOffPastLimit = vi.fn();
+  const recovery = createCacheRecovery(rebuild, { onOffPastLimit });
+  recovery.failed(hostFailed());
+  await vi.advanceTimersByTimeAsync(CACHE_OFF_LIMIT_MS - 1);
+  expect(onOffPastLimit).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(10 * CACHE_OFF_LIMIT_MS);
+  expect(onOffPastLimit).toHaveBeenCalledExactlyOnceWith(
+    expect.any(Number),
+    hostFailed()
   );
-  await vi.advanceTimersByTimeAsync(10 * 60_000);
-  expect(rebuild).toHaveBeenCalledTimes(MAX_RECOVERY_RELAPSES);
+  const made = rebuild.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(rebuild.mock.calls.length).toBeGreaterThan(made);
+
+  rebuild.mockResolvedValueOnce(undefined);
+  await recovery.retry();
+  expect(recovery.state()).toBe('ready');
+  await vi.advanceTimersByTimeAsync(10 * CACHE_OFF_LIMIT_MS);
+  expect(onOffPastLimit).toHaveBeenCalledOnce();
+  recovery.reset();
+});
+
+it('proves a host that serves again at once, also offline and hidden', async () => {
+  const rebuild = vi.fn(async () => {});
+  const recovery = createCacheRecovery(rebuild);
+  vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  recovery.failed(
+    Object.assign(new Error('another context holds the database'), {
+      errorCode: 'owner-lock-unavailable',
+    })
+  );
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(rebuild).not.toHaveBeenCalled();
+
+  await recovery.available();
+
+  expect(rebuild).toHaveBeenCalledOnce();
+  expect(recovery.state()).toBe('ready');
+  await recovery.available();
+  expect(rebuild).toHaveBeenCalledOnce();
+  recovery.reset();
+});
+
+it('proves a host again that served again during an attempt which then failed', async () => {
+  const first = Promise.withResolvers<void>();
+  const rebuild = vi.fn(() => first.promise);
+  const recovery = createCacheRecovery(rebuild);
+  recovery.failed(hostFailed());
+  const retry = expect(recovery.retry()).rejects.toThrow('Failed to fetch');
+  const available = recovery.available();
+  rebuild.mockResolvedValueOnce(undefined);
+  first.reject(hostFailed());
+  await retry;
+  await available;
+  expect(rebuild).toHaveBeenCalledTimes(2);
+  expect(recovery.state()).toBe('ready');
   recovery.reset();
 });
 
@@ -269,8 +313,8 @@ it('counts failures afresh once a restarted cache stayed up', async () => {
   const rebuild = vi.fn(async () => {});
   const onRelapse = vi.fn();
   const recovery = createCacheRecovery(rebuild, { onRelapse });
-  const blocked = new CacheBootstrapExhaustedError('Failed to fetch');
-  for (let round = 0; round < MAX_RECOVERY_RELAPSES * 2; round += 1) {
+  const blocked = hostFailed();
+  for (let round = 0; round < 20; round += 1) {
     recovery.failed(blocked);
     await vi.advanceTimersByTimeAsync(2_000);
     expect(recovery.state()).toBe('ready');
@@ -294,7 +338,7 @@ it('keeps retrying a lock another context holds for a long time', async () => {
   const recovery = createCacheRecovery(rebuild, { onStopped });
   recovery.failed(lockHeld);
   await vi.advanceTimersByTimeAsync(30 * 60_000);
-  expect(rebuild.mock.calls.length).toBeGreaterThan(MAX_RECOVERY_RELAPSES * 2);
+  expect(rebuild.mock.calls.length).toBeGreaterThan(20);
   expect(recovery.state()).toBe('unavailable');
   expect(onStopped).not.toHaveBeenCalled();
   rebuild.mockResolvedValueOnce(undefined);
