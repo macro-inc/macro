@@ -145,6 +145,7 @@ async fn autodesk_is_connectable_and_listed_only_when_configured(pool: PgPool) {
 
     let (config, redis, auth_service) = setup();
     let without = compose(config, pool.clone(), redis, auth_service).unwrap();
+    assert!(!without.serves_native_api_app(&app));
     assert!(!without.connectors.connectable(&app).await.unwrap());
     assert!(
         without
@@ -159,6 +160,7 @@ async fn autodesk_is_connectable_and_listed_only_when_configured(pool: PgPool) {
     let (mut config, redis, auth_service) = setup();
     config.autodesk = Some(autodesk());
     let with = compose(config, pool, redis, auth_service).unwrap();
+    assert!(with.serves_native_api_app(&app));
     assert!(with.connectors.connectable(&app).await.unwrap());
     let page = with
         .catalog

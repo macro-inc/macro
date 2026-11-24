@@ -120,9 +120,15 @@ impl CadDocuments for FusionCadDocuments {
     }
 }
 
+/// Whether `composed` can connect the app the import reads through.
+fn serves_autodesk(composed: &connectors::composition::Composed) -> bool {
+    connectors::ConnectorId::parse(fusion_import::outbound::aps::AUTODESK_APP)
+        .is_ok_and(|app| composed.serves_native_api_app(&app))
+}
+
 /// Compose `ImportFromFusion`. It is unwired (every call fails with a clear
-/// error) on a host without connectors or when the download client can't be
-/// built. Who may use it follows each user's `enable-fusion-import` flag: on
+/// error) on a host whose connectors can't connect Autodesk, or when the
+/// download client can't be built. Who may use it follows each user's `enable-fusion-import` flag: on
 /// for everyone on a local stack and off on a host without a flag client.
 pub fn build_fusion_tool_context(
     pool: sqlx::PgPool,
@@ -131,7 +137,10 @@ pub fn build_fusion_tool_context(
     environment: macro_env::Environment,
     flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
 ) -> ToolFusionToolContext {
-    let Some(composed) = connectors else {
+    // Only a composition that signs in to Autodesk can hold the connection
+    // the import reads through; elsewhere (document storage's channel bot)
+    // the tool answers that it is not available here, never "not connected".
+    let Some(composed) = connectors.filter(|composed| serves_autodesk(composed)) else {
         return ToolFusionToolContext::unwired();
     };
     let downloads = match HttpSignedDownloads::new() {

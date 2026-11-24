@@ -121,6 +121,18 @@ pub struct Composed {
     pub catalog: ConnectorCatalog,
     /// Finishing sign-ins to servers by URL, for the OAuth callback route.
     pub sign_ins: ServerSignIns,
+    /// The REST apps Macro signs in to itself here (Autodesk, when this
+    /// process has its credentials).
+    native_api_apps: Vec<crate::domain::models::ConnectorId>,
+}
+
+impl Composed {
+    /// Whether this composition can connect `app` through Macro's own
+    /// sign-in. An app it can't serve is never connected here, so a
+    /// consumer of its API (the Fusion import) is not offered at all.
+    pub fn serves_native_api_app(&self, app: &crate::domain::models::ConnectorId) -> bool {
+        self.native_api_apps.contains(app)
+    }
 }
 
 /// The connection services over every source this process is configured
@@ -231,6 +243,11 @@ pub fn compose(
         }
         None => None,
     };
+    let native_api_apps = native_api
+        .iter()
+        .flat_map(|source| source.catalog_entries())
+        .map(|app| app.id)
+        .collect();
     if let Some(source) = &native_api {
         sources.push(Arc::new(source.clone()));
     }
@@ -273,6 +290,7 @@ pub fn compose(
         catalog: Catalog::new(directory, connectors.clone()),
         sign_ins,
         connectors,
+        native_api_apps,
     })
 }
 
