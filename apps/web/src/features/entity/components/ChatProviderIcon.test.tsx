@@ -30,7 +30,7 @@ describe('soup chat provider selection', () => {
       <ChatProviderIcon id="soup-updates" model={model()} />
     ));
     expect(container.querySelector('[data-entity-type="chat"]')).not.toBeNull();
-    setModel(Model.gpt56);
+    setModel(Model.gpt62Sol);
     expect(
       container.querySelector('[data-ai-provider="openai"]')
     ).not.toBeNull();
@@ -84,7 +84,7 @@ describe('soup chat provider selection', () => {
   it('keeps supported OpenAI and Anthropic chats distinct', async () => {
     const { container } = render(() => (
       <>
-        <ChatProviderIcon id="openai-chat" model={Model.gpt56} />
+        <ChatProviderIcon id="openai-chat" model={Model.gpt62Sol} />
         <ChatProviderIcon id="anthropic-chat" model={Model.opus55} />
       </>
     ));
@@ -101,7 +101,7 @@ describe('soup chat provider selection', () => {
       const id = `draft-with-${model}`;
       storeChatStateImmediate(id, { input: 'draft', model });
       const { container } = render(() => (
-        <ChatProviderIcon id={id} model={Model.gpt56} />
+        <ChatProviderIcon id={id} model={Model.gpt62Sol} />
       ));
       await vi.waitFor(() =>
         expect(
@@ -114,8 +114,8 @@ describe('soup chat provider selection', () => {
   it('reacts to per-chat selections without changing another row', () => {
     const { container } = render(() => (
       <>
-        <ChatProviderIcon id="selected-chat" model={Model.gpt56} />
-        <ChatProviderIcon id="other-chat" model={Model.gpt56} />
+        <ChatProviderIcon id="selected-chat" model={Model.gpt62Sol} />
+        <ChatProviderIcon id="other-chat" model={Model.gpt62Sol} />
       </>
     ));
     storeChatStateImmediate('selected-chat', { model: Model.sonnet55 });
@@ -124,7 +124,7 @@ describe('soup chat provider selection', () => {
         el.getAttribute('data-ai-provider')
       )
     ).toEqual(['anthropic', 'openai']);
-    storeChatStateImmediate('selected-chat', { model: Model.gpt56 });
+    storeChatStateImmediate('selected-chat', { model: Model.gpt62Sol });
     expect(
       container.querySelector('[data-ai-provider="anthropic"]')
     ).toBeNull();

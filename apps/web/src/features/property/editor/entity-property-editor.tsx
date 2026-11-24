@@ -39,6 +39,11 @@ import type {
   PropertyDefinitionDomain,
 } from '../types';
 import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
+import {
+  createUnhighlightedArrival,
+  type SavedValueState,
+  SavedValueStatus,
+} from './saved-value-status';
 
 type EntityPropertyRow =
   | { type: 'clear'; separatorBefore: boolean }
@@ -68,6 +73,7 @@ export function EntityPropertyEditor(props: {
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
   selectedEntityCount: number;
+  savedValueState: SavedValueState;
 }) {
   const propertiesContext = useMaybePropertiesContext();
   const definitionId = () => {
@@ -151,6 +157,11 @@ export function EntityPropertyEditor(props: {
     return 'value' in props.property;
   };
 
+  // Adding to references that haven't been read would save only the new one
+  // and drop the rest; a single reference is replaced either way.
+  const waitsForSavedValue = () =>
+    Boolean(props.property?.isMultiSelect) && props.savedValueState !== 'known';
+
   const localSelectedIds = createMemo(() =>
     localSelectedRefs().map((ref) => ref.entity_id)
   );
@@ -211,6 +222,7 @@ export function EntityPropertyEditor(props: {
 
   const rows = createMemo(() => {
     const nextRows: EntityPropertyRow[] = [];
+    if (waitsForSavedValue()) return nextRows;
 
     if (showClearAllAtTop()) {
       nextRows.push({ type: 'clear', separatorBefore: false });
@@ -294,6 +306,12 @@ export function EntityPropertyEditor(props: {
     selectedIndex: props.selectedIndex,
     setSelectedIndex: props.setSelectedIndex,
   });
+  createUnhighlightedArrival(
+    waitsForSavedValue,
+    () => rows().length > 0,
+    () => Boolean(searchQuery()) && rows()[0]?.type === 'entity',
+    props.setSelectedIndex
+  );
 
   props.setKeybindings({
     select: (event) => {
@@ -314,22 +332,34 @@ export function EntityPropertyEditor(props: {
       <Show
         when={rows().length > 0}
         fallback={
-          <CommandMenuEmptyState>
-            <Switch
-              fallback={
-                props.searchValue().trim()
-                  ? 'No matching entities found'
-                  : 'No entities available'
+          <Show
+            when={waitsForSavedValue()}
+            fallback={
+              <CommandMenuEmptyState>
+                <Switch
+                  fallback={
+                    props.searchValue().trim()
+                      ? 'No matching entities found'
+                      : 'No entities available'
+                  }
+                >
+                  <Match when={isAssignees() && team.isLoading()}>
+                    {t('viewMenus.loadingTeamMembers')}
+                  </Match>
+                  <Match when={isAssignees() && team.isError()}>
+                    {t('viewMenus.teamMembersUnavailable')}
+                  </Match>
+                </Switch>
+              </CommandMenuEmptyState>
+            }
+          >
+            <SavedValueStatus
+              state={props.savedValueState}
+              valuesLabel={
+                props.property?.displayName.toLowerCase() ?? 'values'
               }
-            >
-              <Match when={isAssignees() && team.isLoading()}>
-                {t('viewMenus.loadingTeamMembers')}
-              </Match>
-              <Match when={isAssignees() && team.isError()}>
-                {t('viewMenus.teamMembersUnavailable')}
-              </Match>
-            </Switch>
-          </CommandMenuEmptyState>
+            />
+          </Show>
         }
       >
         <Show when={isAssignees() && (team.isLoading() || team.isError())}>

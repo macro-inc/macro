@@ -23,7 +23,7 @@ use super::lifecycle::{self, LifecycleEvent};
 use super::model::{
     Accept, AttachDraft, Change, ChangeAction, EntityAction, FeedCounts, GenerationSession,
     GenerationTrigger, KindName, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion,
-    RoutineText, RunMode, SessionKind, Suggestion, SuggestionCaller, SuggestionContent,
+    RoutineText, RunMode, RunReport, SessionKind, Suggestion, SuggestionCaller, SuggestionContent,
     SuggestionError, SuggestionFeed, SuggestionKind, SuggestionState, SuggestionWriteOutcome,
     SuggestionsReview, Target, Waiting,
 };
@@ -531,6 +531,18 @@ fn moved_by(
 
 /// A problem when `content` changes the prompt or `sends` of `existing` while a
 /// run of it is going.
+/// Whether a suggestion of `kind` is done by the person acting on it (opening
+/// its item or the composer), which they may take back: not a background
+/// prompt, done by its run, a reply, done by the person's reply, or a
+/// routine suggestion, done by saving its routine.
+fn completed_by_acting(kind: &SuggestionKind) -> bool {
+    match kind {
+        SuggestionKind::Prompt { run_mode, .. } => *run_mode == RunMode::Composer,
+        SuggestionKind::Entity { action, .. } => *action != EntityAction::Reply,
+        SuggestionKind::Routine { .. } => false,
+    }
+}
+
 fn run_going(existing: &Suggestion, content: &SuggestionContent, problems: &mut Vec<String>) {
     let SuggestionKind::Prompt { prompt, sends, .. } = &existing.kind else {
         return;
@@ -857,6 +869,98 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(name = "suggestions.report_run", skip_all, fields(
+        agent.session.id = tracing::field::Empty,
+        suggestion.run.report_chars = report.report.chars().count(),
+        suggestion.problems = tracing::field::Empty,
+    ), err)]
+    async fn report_run(
+        &self,
+        principal: &CreationPrincipal,
+        correlation: Option<Uuid>,
+        report: RunReport,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
+        let user = principal
+            .owner()
+            .as_user()
+            .ok_or(SuggestionError::NotARun)?
+            .clone();
+        let session = match correlation {
+            Some(correlation) => self
+                .request_sessions
+                .session_of(correlation)
+                .await
+                .map_err(SuggestionError::Internal)?,
+            None => None,
+        };
+        let session = session.ok_or(SuggestionError::NotARun)?;
+        tracing::Span::current().record("agent.session.id", session.to_string());
+        self.require_flag(&user).await?;
+        let mut problems = Vec::new();
+        let Some(line) = check::text(
+            &report.report,
+            "`report`",
+            check::MAX_RUN_REPORT_CHARS,
+            &mut problems,
+        ) else {
+            tracing::Span::current().record("suggestion.problems", problems.len());
+            return Ok(SuggestionWriteOutcome::rejected(problems));
+        };
+        let stored = self
+            .repo
+            .report_run(&user, session, &line)
+            .await
+            .map_err(SuggestionError::internal)?;
+        if !stored {
+            return Err(SuggestionError::NotARun);
+        }
+        Ok(SuggestionWriteOutcome {
+            ok: true,
+            problems: Vec::new(),
+            suggestion: None,
+        })
+    }
+
+    #[tracing::instrument(name = "suggestions.stop_run", skip_all, fields(
+        suggestion.id = %id,
+        suggestions.caller = tracing::field::Empty,
+        suggestion.run.stopped = tracing::field::Empty,
+    ), err)]
+    async fn stop_run(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+        id: Uuid,
+    ) -> Result<(), SuggestionError> {
+        self.require_flag(user).await?;
+        self.admit(caller).await?;
+        let suggestion = self
+            .repo
+            .suggestion(user, id)
+            .await
+            .map_err(SuggestionError::internal)?
+            .filter(|suggestion| suggestion.state.is_open())
+            .ok_or(SuggestionError::NotFound)?;
+        let open = self
+            .repo
+            .cancel_run(user, id, Utc::now())
+            .await
+            .map_err(SuggestionError::internal)?;
+        if !open {
+            return Err(SuggestionError::NotFound);
+        }
+        let going = suggestion
+            .run
+            .as_ref()
+            .is_some_and(|run| !run.state.is_settled());
+        tracing::Span::current().record("suggestion.run.stopped", going);
+        if going {
+            self.stop_cancelled_run(&suggestion).await;
+            tracing::info!(event = "suggestions.run_stopped");
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(name = "suggestions.restore", skip_all, fields(
         suggestion.id = %id,
         suggestions.caller = tracing::field::Empty,
@@ -880,10 +984,15 @@ where
         if suggestion.kind.name() == KindName::Routine {
             return Err(SuggestionError::NotRestorable);
         }
+        // Only what the person completed themself is theirs to undo: a
+        // finished run made something, and an answered reply was answered.
+        if suggestion.state == SuggestionState::Done && !completed_by_acting(&suggestion.kind) {
+            return Err(SuggestionError::NotRestorable);
+        }
         let now = Utc::now();
         let restored = self
             .repo
-            .undismiss(user, id, now - RESTORE_WITHIN, now)
+            .undo(user, id, now - RESTORE_WITHIN, now)
             .await
             .map_err(SuggestionError::internal)?;
         if !restored {
@@ -1490,6 +1599,11 @@ fn run_prompt(prompt: &str, sends: Option<&str>) -> String {
     format!(
         "{prompt}\n\nThe user started this run from a suggestion card and isn't watching: never stop \
          to ask a question or wait for an approval; decide from what you can read, and say in \
-         your last message what you assumed. {approval}"
+         your last message what you assumed. {approval}\n\nJust before your last message, call \
+         `macro.suggestions.reportRun(line)` once with one plain line of at most \
+         {MAX_RUN_REPORT_CHARS} characters the card shows them: what you did, then what you sent, \
+         such as \"12 seats added · Nothing was sent\". Name items by what they are, never by an \
+         email address, phone number or street address.",
+        MAX_RUN_REPORT_CHARS = check::MAX_RUN_REPORT_CHARS,
     )
 }

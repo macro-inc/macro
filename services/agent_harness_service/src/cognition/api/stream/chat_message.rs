@@ -184,17 +184,20 @@ async fn send_chat_message_inner(
     // Determine chat_id - use provided or we'll create a new chat
     let requested_chat_id = request.chat_id.clone().unwrap_or_default();
 
-    // The frontend selects the model; enforce the user's entitlement here.
-    // Free users get Haiku; professional users get everything.
-    if !model_access.has_access(&request.model) {
+    // The frontend selects the model; a client that has not reloaded since a
+    // model retired still sends the old id, which runs on its replacement.
+    // Enforce the user's entitlement here: free users get the free model;
+    // professional users get everything.
+    let model = chat::domain::models::current_model(&request.model).to_owned();
+    if !model_access.has_access(&model) {
         return Err(ChatMessageError {
-            error: format!("No access to model {}", request.model),
+            error: format!("No access to model {model}"),
             stream_id: Some(stream_id.clone()),
             status: Some(StatusCode::FORBIDDEN),
             code: None,
         });
     }
-    if !request.speed.supported(&request.model) {
+    if !request.speed.supported(&model) {
         return Err(ChatMessageError {
             error: "Speed is not supported by the selected model".to_owned(),
             stream_id: Some(stream_id),
@@ -202,7 +205,6 @@ async fn send_chat_message_inner(
             code: None,
         });
     }
-    let model = request.model.clone();
 
     if tools_refused_to_current_session(&request.toolset) {
         return Err(ChatMessageError {

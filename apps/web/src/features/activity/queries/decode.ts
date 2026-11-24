@@ -92,6 +92,15 @@ function decodeAction(
       kind: 'responded' as const,
     }))
     .with(
+      { __typename: 'GraphqlActivityTimeLogged' },
+      ({ minutes, entryDate, source }) => ({
+        kind: 'time-logged' as const,
+        minutes,
+        entryDate,
+        source: source === 'TIMER' ? ('timer' as const) : ('manual' as const),
+      })
+    )
+    .with(
       { __typename: 'GraphqlActivityPropertyChanged' },
       ({ property, from, to }) => ({
         kind: 'property-changed' as const,

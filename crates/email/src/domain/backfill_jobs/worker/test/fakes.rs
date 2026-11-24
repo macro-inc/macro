@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::backfill_jobs::BackfillJobRepository;
 use crate::domain::mailbox::connection::ConnectionSourceError;
-use crate::domain::mailbox::inbox_sync::CrmContactRecipient;
+use crate::domain::mailbox::inbox_sync::{CrmContactRecipient, ThreadReindexQueue};
 use ::crm::domain::{
     email_policy_work::{EmailPolicyHistoryContact, EmailPolicyHistoryPage},
     email_privacy::EmailContributionMailbox,
@@ -442,6 +442,16 @@ impl BackfillGmail for Fake {
             self.call("provider").unwrap();
             std::mem::replace(&mut self.0.lock().unwrap().provider, Ok(None))
         })
+    }
+}
+impl ThreadReindexQueue for Fake {
+    type ReindexError = Error;
+    async fn enqueue_thread_reindex(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Vec<Uuid>,
+    ) -> Result<(), Error> {
+        self.call("reindex_queue")
     }
 }
 impl BackfillQueue for Fake {

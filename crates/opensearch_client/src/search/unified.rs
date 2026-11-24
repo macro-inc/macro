@@ -22,7 +22,10 @@ use crate::{
             DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
             DocumentSearchMode, DocumentTermMatching, PropertyFilterArg,
         },
-        emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
+        emails::{
+            EmailIndex, EmailLabelCondition, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig,
+            EmailTextCondition,
+        },
         model::{
             DefaultSearchResponse, Hit, MacroEm, SearchGotoCallRecord, SearchGotoChannel,
             SearchGotoContent, SearchGotoEmail, SearchHit, exclude_source_content,
@@ -124,6 +127,11 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             subject_only: args.email_search_args.subject_only,
             tag_option_ids: args.email_search_args.tag_option_ids,
             match_all_tags: args.email_search_args.match_all_tags,
+            text_conditions: args.email_search_args.text_conditions,
+            label_conditions: args.email_search_args.label_conditions,
+            exclude_thread_ids: args.email_search_args.exclude_thread_ids,
+            sent_after_millis: args.email_search_args.sent_after_millis,
+            sent_before_millis: args.email_search_args.sent_before_millis,
         }
     }
 }
@@ -270,6 +278,14 @@ pub struct UnifiedEmailSearchArgs {
     pub subject_only: bool,
     pub tag_option_ids: Vec<String>,
     pub match_all_tags: bool,
+    pub text_conditions: Vec<EmailTextCondition>,
+    pub label_conditions: Vec<EmailLabelCondition>,
+    /// Threads no hit may belong to.
+    pub exclude_thread_ids: Vec<String>,
+    /// Only messages sent at or after this time, in epoch milliseconds.
+    pub sent_after_millis: Option<i64>,
+    /// Only messages sent before this time, in epoch milliseconds.
+    pub sent_before_millis: Option<i64>,
 }
 
 #[derive(Debug, Default, Clone)]

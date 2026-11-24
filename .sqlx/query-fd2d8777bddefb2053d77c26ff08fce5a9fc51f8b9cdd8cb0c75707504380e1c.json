@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- One page of the viewer's outlook list: everyone known through one of their\n-- outlook inboxes, each once, in byte order after the cursor. $1 viewer, $2\n-- exclusive cursor (NULL on the first page), $3 page size + 1.\n-- One range read of the partial index contact_inbox_members_outlook_idx from\n-- the cursor; the list is a literal so that index applies. A contact known\n-- through two inboxes is read twice and returned once.\nSELECT DISTINCT contact_user_id AS \"contact!\"\nFROM contact_inbox_members\nWHERE list_key = 'outlook'\n  AND user_id = $1\n  AND contact_user_id > COALESCE($2::text, '')\nORDER BY contact_user_id\nLIMIT $3\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fd2d8777bddefb2053d77c26ff08fce5a9fc51f8b9cdd8cb0c75707504380e1c"
+}

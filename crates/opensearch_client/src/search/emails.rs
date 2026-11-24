@@ -9,8 +9,12 @@ use crate::{
 
 use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{
-    BoolQuery, BoolQueryBuilder, QueryType, SimpleQueryStringQuery, WildcardQuery,
+    BoolQuery, BoolQueryBuilder, QueryType, Script, ScriptQuery, WildcardQuery,
 };
+
+mod terms;
+
+use terms::{MAX_TERM_CLAUSES, clauses, terms_query};
 
 pub(crate) struct EmailSearchConfig;
 
@@ -68,69 +72,88 @@ const EMAIL_TEXT_FIELDS: &[&str] = &[
     "bcc_names",
 ];
 
-/// Builds the simple_query_string over the email-address fields.
-/// Single-word terms become `(term | term@*)` — an exact segment-token match
-/// on the `.parts` sub-fields OR an exact-local-part match on the raw
-/// address. The `term@*` pattern is redundant with `.parts` once the index
-/// carries the sub-fields but keeps the query compatible with an index that
-/// predates them. This deliberately does NOT use a trailing `*` on the bare
-/// term, so partial segments don't leak across addresses (e.g. `ali` won't
-/// match `alice@example.com` via this group).
-/// Terms containing `@`, `.`, or spaces (quoted phrases from
-/// `split_search_terms`) are wrapped in quotes to force phrase matching. On
-/// the `.parts` sub-fields the `email_parts` analyzer splits such terms into
-/// segment tokens, so the phrase requires an in-order adjacent run —
-/// `mail.foo.com`, `foo.com`, and full addresses all match `x@mail.foo.com`,
-/// but reordered or gapped segments don't. Without the quotes,
-/// `default_operator: "AND"` would match each segment independently anywhere
-/// in the field.
-/// The email pattern is lowercased because email addresses are case-insensitive.
-/// Terms are ANDed together with `+`.
-fn build_keyword_query_string(terms: &[String]) -> String {
-    terms
-        .iter()
-        .map(|term| {
-            if term.contains('@') || term.contains('.') || term.contains(' ') {
-                format!("\"{}\"", term)
-            } else {
-                format!("({} | {}@*)", term, term.to_lowercase())
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" + ")
+/// The part of a message an [`EmailTextCondition`] matches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EmailTextFields {
+    /// Every field a search term matches.
+    Any,
+    Subject,
+    /// The sender's name or address.
+    From,
+    /// The names and addresses of every recipient: To, Cc and Bcc.
+    To,
+    Cc,
+    Bcc,
 }
 
-/// Minimum prefix length before we emit a `term*` wildcard. Shorter prefixes
-/// expand to too many unique tokens in the index and risk blowing past
-/// `max_clause_count`. Under this threshold we fall back to exact token match.
-const MIN_PREFIX_LEN: usize = 3;
+impl EmailTextFields {
+    /// The address fields and the text fields, as [`terms_query`] matches them.
+    fn fields(self) -> (&'static [&'static str], &'static [&'static str]) {
+        match self {
+            Self::Any => (EMAIL_KEYWORD_FIELDS, EMAIL_TEXT_FIELDS),
+            Self::Subject => (&[], &["subject"]),
+            Self::From => (&["sender", "sender.parts"], &["sender_name"]),
+            Self::To => (
+                &[
+                    "recipients",
+                    "cc",
+                    "bcc",
+                    "recipients.parts",
+                    "cc.parts",
+                    "bcc.parts",
+                ],
+                &["recipient_names", "cc_names", "bcc_names"],
+            ),
+            Self::Cc => (&["cc", "cc.parts"], &["cc_names"]),
+            Self::Bcc => (&["bcc", "bcc.parts"], &["bcc_names"]),
+        }
+    }
+}
 
-/// Builds the simple_query_string over the text-analyzed fields.
-/// Single-word terms become `term*` so a prefix like `scri` matches the
-/// token `script` in subject/content/display-name fields. Terms shorter than
-/// `MIN_PREFIX_LEN` fall back to a grouped exact-token match to keep term
-/// expansion bounded. In `exact` match mode the prefix wildcard is dropped so
-/// every single-word term is an exact-token match. Multi-word terms (quoted
-/// phrases from `split_search_terms`) and `@`-containing terms are wrapped in
-/// quotes to
-/// force phrase matching — otherwise `default_operator: "AND"` would turn
-/// `(reply test)` into `reply AND test` and match each token independently
-/// anywhere in the field instead of as an adjacent phrase.
-fn build_text_query_string(terms: &[String], match_type: &str) -> String {
-    let exact = match_type == "exact";
-    terms
-        .iter()
-        .map(|term| {
-            if term.contains('@') || term.contains(' ') {
-                format!("\"{}\"", term)
-            } else if exact || term.chars().count() < MIN_PREFIX_LEN {
-                format!("({})", term)
-            } else {
-                format!("{}*", term)
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" + ")
+/// A word or phrase every hit must, or must not, match in one part of the
+/// message, by the same rules as a search term.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmailTextCondition {
+    pub fields: EmailTextFields,
+    pub text: String,
+    pub exclude: bool,
+}
+
+/// A tag or provider label every hit's thread must, or must not, carry: any
+/// of `labels` or of the tag options `tag_option_ids`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmailLabelCondition {
+    pub labels: Vec<String>,
+    pub tag_option_ids: Vec<String>,
+    pub exclude: bool,
+}
+
+/// A message's sent time, read as the unified sort reads it.
+const SENT_AT_MILLIS: &str = "doc['sent_at_millis'].value.toInstant().toEpochMilli()";
+
+/// Messages sent at or after `after_millis` and before `before_millis`; mail
+/// with no sent time never matches. A range query on a date field fails the
+/// whole request under the plain highlighter unified search uses (OpenSearch
+/// 3.5), indexed or not, so the bounds are a script over the doc values.
+fn sent_between_query<'a>(
+    after_millis: Option<i64>,
+    before_millis: Option<i64>,
+) -> Option<QueryType<'a>> {
+    if after_millis.is_none() && before_millis.is_none() {
+        return None;
+    }
+    let mut conditions = vec!["doc['sent_at_millis'].size() > 0".to_string()];
+    let mut params = serde_json::Map::new();
+    if let Some(after) = after_millis {
+        conditions.push(format!("{SENT_AT_MILLIS} >= params.after"));
+        params.insert("after".to_string(), after.into());
+    }
+    if let Some(before) = before_millis {
+        conditions.push(format!("{SENT_AT_MILLIS} < params.before"));
+        params.insert("before".to_string(), before.into());
+    }
+    let script = Script::new(conditions.join(" && ")).params(serde_json::Value::Object(params));
+    Some(ScriptQuery::new(script).into())
 }
 
 pub(crate) struct EmailQueryBuilder {
@@ -164,6 +187,16 @@ pub(crate) struct EmailQueryBuilder {
     tag_option_ids: Vec<String>,
     /// Whether the thread must carry every tag option id instead of any
     match_all_tags: bool,
+    /// Words or phrases matched against one part of each message
+    text_conditions: Vec<EmailTextCondition>,
+    /// Tags or labels each hit's thread must, or must not, carry
+    label_conditions: Vec<EmailLabelCondition>,
+    /// Threads no hit may belong to
+    exclude_thread_ids: Vec<String>,
+    /// Only messages sent at or after this time, in epoch milliseconds
+    sent_after_millis: Option<i64>,
+    /// Only messages sent before this time, in epoch milliseconds
+    sent_before_millis: Option<i64>,
 }
 
 impl EmailQueryBuilder {
@@ -183,6 +216,11 @@ impl EmailQueryBuilder {
             subject_only: false,
             tag_option_ids: Vec::new(),
             match_all_tags: false,
+            text_conditions: Vec::new(),
+            label_conditions: Vec::new(),
+            exclude_thread_ids: Vec::new(),
+            sent_after_millis: None,
+            sent_before_millis: None,
         }
     }
 
@@ -263,35 +301,125 @@ impl EmailQueryBuilder {
         self
     }
 
+    pub fn text_conditions(mut self, text_conditions: Vec<EmailTextCondition>) -> Self {
+        self.text_conditions = text_conditions;
+        self
+    }
+
+    pub fn label_conditions(mut self, label_conditions: Vec<EmailLabelCondition>) -> Self {
+        self.label_conditions = label_conditions;
+        self
+    }
+
+    pub fn exclude_thread_ids(mut self, exclude_thread_ids: Vec<String>) -> Self {
+        self.exclude_thread_ids = exclude_thread_ids;
+        self
+    }
+
+    pub fn sent_between(mut self, after_millis: Option<i64>, before_millis: Option<i64>) -> Self {
+        self.sent_after_millis = after_millis;
+        self.sent_before_millis = before_millis;
+        self
+    }
+
     pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        let mut content_bool_query = self.inner.build_content_bool_query()?;
+        // A search of typed conditions alone (`is:unread`, `from:ana`) has no
+        // terms, so it carries only the filters below.
+        let mut content_bool_query = if self.inner.terms.is_empty() {
+            self.inner.build_access_bool_query()?
+        } else {
+            self.inner.build_content_bool_query()?
+        };
+
+        // A name search matches its terms in the subject alone.
+        let term_fields = if self.subject_only {
+            EmailTextFields::Subject
+        } else {
+            EmailTextFields::Any
+        };
+        let terms = self.inner.terms.iter().map(|term| (term, term_fields));
+        let conditions = self
+            .text_conditions
+            .iter()
+            .map(|condition| (&condition.text, condition.fields));
+        let term_clauses: usize = terms
+            .chain(conditions)
+            .map(|(text, fields)| {
+                let (keyword_fields, text_fields) = fields.fields();
+                clauses(text, keyword_fields, text_fields)
+            })
+            .sum();
+        // Each address or label filter a request lists is a clause of its own.
+        let listed_filters = self.sender.len()
+            + self.cc.len()
+            + self.bcc.len()
+            + self.recipients.len()
+            + self.exclude_labels.len();
+        let compact = term_clauses + listed_filters > MAX_TERM_CLAUSES;
 
         // In subject_only mode (name search), replace with a match on TITLE_KEY (subject).
         // Otherwise replace with simple_query_string across all email fields.
-        if self.subject_only {
+        if self.subject_only && !self.inner.terms.is_empty() {
             let title_query = self.inner.build_title_term_query()?;
             let mut inner = BoolQueryBuilder::new();
             inner.minimum_should_match(1);
             inner.should(title_query);
             content_bool_query.set_must(inner.build().into());
-        } else {
-            let keyword_sqs = SimpleQueryStringQuery::new(
-                build_keyword_query_string(&self.inner.terms),
-                EMAIL_KEYWORD_FIELDS.iter().copied(),
-            )
-            .default_operator("AND");
+        } else if !self.inner.terms.is_empty() {
+            content_bool_query.set_must(terms_query(
+                &self.inner.terms,
+                &self.inner.match_type,
+                EMAIL_KEYWORD_FIELDS,
+                EMAIL_TEXT_FIELDS,
+                compact,
+            ));
+        }
 
-            let text_sqs = SimpleQueryStringQuery::new(
-                build_text_query_string(&self.inner.terms, &self.inner.match_type),
-                EMAIL_TEXT_FIELDS.iter().copied(),
-            )
-            .default_operator("AND");
+        // A condition that must match scores and highlights like a term; one
+        // that must not leaves its messages out.
+        for condition in &self.text_conditions {
+            let (keyword_fields, text_fields) = condition.fields.fields();
+            let query = terms_query(
+                std::slice::from_ref(&condition.text),
+                &self.inner.match_type,
+                keyword_fields,
+                text_fields,
+                compact,
+            );
+            if condition.exclude {
+                content_bool_query.must_not(query);
+            } else {
+                content_bool_query.must(query);
+            }
+        }
 
-            let mut combined = BoolQueryBuilder::new();
-            combined.minimum_should_match(1);
-            combined.should(keyword_sqs.into());
-            combined.should(text_sqs.into());
-            content_bool_query.set_must(combined.build().into());
+        for condition in &self.label_conditions {
+            let mut carries = BoolQueryBuilder::new();
+            carries.minimum_should_match(1);
+            if !condition.labels.is_empty() {
+                carries.should(QueryType::terms("labels", condition.labels.clone()));
+            }
+            if let Some(tags) = build_tag_filter(&condition.tag_option_ids, false) {
+                carries.should(tags);
+            }
+            if condition.exclude {
+                if !condition.labels.is_empty() || !condition.tag_option_ids.is_empty() {
+                    content_bool_query.must_not(QueryType::Bool(carries.build()));
+                }
+            } else {
+                content_bool_query.filter(QueryType::Bool(carries.build()));
+            }
+        }
+
+        if !self.exclude_thread_ids.is_empty() {
+            content_bool_query.must_not(QueryType::terms(
+                "entity_id",
+                self.exclude_thread_ids.clone(),
+            ));
+        }
+
+        if let Some(sent) = sent_between_query(self.sent_after_millis, self.sent_before_millis) {
+            content_bool_query.filter(sent);
         }
 
         // CUSTOM ATTRIBUTES SECTION
@@ -469,6 +597,11 @@ pub struct EmailSearchArgs {
     pub subject_only: bool,
     pub tag_option_ids: Vec<String>,
     pub match_all_tags: bool,
+    pub text_conditions: Vec<EmailTextCondition>,
+    pub label_conditions: Vec<EmailLabelCondition>,
+    pub exclude_thread_ids: Vec<String>,
+    pub sent_after_millis: Option<i64>,
+    pub sent_before_millis: Option<i64>,
 }
 
 impl From<EmailSearchArgs> for EmailQueryBuilder {
@@ -495,6 +628,10 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .subject_only(args.subject_only)
             .tag_option_ids(args.tag_option_ids)
             .match_all_tags(args.match_all_tags)
+            .text_conditions(args.text_conditions)
+            .label_conditions(args.label_conditions)
+            .exclude_thread_ids(args.exclude_thread_ids)
+            .sent_between(args.sent_after_millis, args.sent_before_millis)
     }
 }
 

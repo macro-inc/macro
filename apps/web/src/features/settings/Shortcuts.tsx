@@ -1096,6 +1096,16 @@ const shortcutSections: ShortcutSection[] = [
         description: 'Expand all messages',
       },
       {
+        keys: ['space'],
+        codes: ['Space'],
+        description: 'Scroll down a page',
+      },
+      {
+        keys: ['shift+space'],
+        codes: ['ShiftLeft', 'Space'],
+        description: 'Scroll up a page',
+      },
+      {
         keys: [`${cmdOrCtrl}+arrowup`],
         codes: [CmdOrCtrl, 'ArrowUp'],
         description: 'Jump to top of list',

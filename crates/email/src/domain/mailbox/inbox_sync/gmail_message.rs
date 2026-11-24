@@ -73,14 +73,20 @@ where
             .await);
         }
     };
-    super::catalog::sync_labels(&ctx.repository, link.id, &labels)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to reconcile labels"),
-            })
-        })?;
+    super::catalog::sync_labels(
+        &ctx.repository,
+        &ctx.queue,
+        link.id,
+        &link.macro_id,
+        &labels,
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to reconcile labels"),
+        })
+    })?;
 
     let change_batch = match ctx
         .gmail

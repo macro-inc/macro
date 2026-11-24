@@ -19,11 +19,7 @@ export function ExchangeToolCall(props: {
     <ToolCard
       title={props.common.label}
       status={props.common.status}
-      muted={props.common.muted || props.detail.error != null}
-      trailing={
-        props.common.trailing ??
-        (props.detail.error != null ? 'Failed' : undefined)
-      }
+      trailing={props.common.trailing}
     />
   );
 }

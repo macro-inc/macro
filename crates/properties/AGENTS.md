@@ -59,6 +59,15 @@ events to the `macro.properties` Kafka topic.
 
 ## Gotchas
 
+- CRM companies and contacts hold values the same way (`CrmCompany` ↔
+  `COMPANY`, `CrmContact` ↔ `CONTACT`): receipts come from `entity_access`'s
+  CRM rules (current membership, `crm_access`, hidden records for admins and
+  owners only) and skip the owner lookup. Stage, Owner and Revenue are
+  company-only (`is_property_applicable_to`); custom definitions are team-wide
+  and apply to both.
+  `inbound/axum_router/test/crm_contact_access.rs` exercises the HTTP routes
+  against real CRM access.
+
 - A user or team definition cannot take a built-in property's name.
   `create_property_definition` answers `PropertiesErr::ReservedName` (HTTP 409,
   the body names the property) from the `SystemPropertyKey` names, comparing

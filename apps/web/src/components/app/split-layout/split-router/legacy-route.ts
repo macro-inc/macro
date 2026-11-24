@@ -1,4 +1,10 @@
 import {
+  AGENTS_ARCHIVE_ROUTE_ID,
+  AGENTS_ARCHIVE_VIEW_ID,
+  agentsArchiveContent,
+  agentsArchiveLocation,
+} from '@app/features/agents-view/archive-navigation';
+import {
   agentsRouteFromSegments,
   agentsRouteSegments,
 } from '@app/features/agents-view/core/route';
@@ -128,6 +134,14 @@ function legacyLocation(type: string, id: string): SplitLocation | undefined {
   return { route: paneRoute({ id: 'legacy-content', params: { type, id } }) };
 }
 
+/** Retired views' own paths, and the view each now opens. */
+const RETIRED_VIEW_ROUTES = new Map([
+  // The Getting Started checklist.
+  ['getting-started', 'view-home'],
+  // New Home: its Notifications tab is the Notifications view again.
+  ['new-home', 'view-notifications'],
+]);
+
 export function handleLegacySplitPath(
   context: LegacySplitPathContext
 ): SplitLocation[] | undefined {
@@ -137,9 +151,10 @@ export function handleLegacySplitPath(
     return [{ route: paneRoute({ id: 'drive', params: {} }) }];
   }
 
-  // The retired Getting Started checklist's own path.
-  if (segments.length === 1 && segments[0] === 'getting-started') {
-    return [{ route: paneRoute({ id: 'view-home', params: {} }) }];
+  const retiredView =
+    segments.length === 1 ? RETIRED_VIEW_ROUTES.get(segments[0]!) : undefined;
+  if (retiredView) {
+    return [{ route: paneRoute({ id: retiredView, params: {} }) }];
   }
 
   if (segments.length === 1 && segments[0] === 'calendar') {
@@ -232,6 +247,12 @@ export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
+  if (
+    content.type === 'component' &&
+    (content.id === AGENTS_ARCHIVE_VIEW_ID ||
+      (content.id === 'agents' && content.params?.agentPage === 'archived'))
+  )
+    return agentsArchiveLocation();
   // Persisted panes can still contain the old block discriminator.
   if (['routine', 'automation'].includes(content.type))
     return routineLocation(content.id);
@@ -347,6 +368,14 @@ export function resolveContentLocation(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
+  // Old in-place Archived entries can carry the old Agents route metadata.
+  // Upgrade the route before that metadata can keep the archive at /agents.
+  if (
+    content.type === 'component' &&
+    content.id === 'agents' &&
+    content.params?.agentPage === 'archived'
+  )
+    return agentsArchiveLocation();
   let metadata: Record<string, unknown> | undefined;
   if (isRecord(content.entryMetadata)) metadata = content.entryMetadata;
 
@@ -410,6 +439,7 @@ export function splitContentFromLocation(
     return { type: 'component', id: NOT_FOUND_ROUTE_ID };
   }
 
+  if (root.id === AGENTS_ARCHIVE_ROUTE_ID) return agentsArchiveContent();
   if (root.id === ROUTINES_ROUTE_ID) return routineContent();
   if (root.id === ROUTINE_CREATE_ROUTE_ID) return routineContent('new');
   if (root.id === ROUTINE_DETAIL_ROUTE_ID) {

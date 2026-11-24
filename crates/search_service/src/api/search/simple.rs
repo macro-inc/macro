@@ -69,6 +69,9 @@ pub enum SearchError {
     /// Too many Drive folders in one email search
     #[error("email_filters.project_ids takes at most {0} folders")]
     TooManyEmailProjects(usize),
+
+    #[error("time_zone must be an IANA time zone name, such as America/New_York")]
+    InvalidTimeZone,
     /// The caller's other searches held every slot of its lane until the wait
     /// ran out
     #[error("too many of your searches are running at once; retry with fewer at once")]
@@ -109,6 +112,7 @@ impl IntoResponse for SearchError {
             | SearchError::InvalidChannelType(_)
             | SearchError::UnsupportedEmailFilter(_)
             | SearchError::TooManyEmailProjects(_)
+            | SearchError::InvalidTimeZone
             | SearchError::NoQueryOrTermsProvided
             | SearchError::NoChannelIds => StatusCode::BAD_REQUEST,
             SearchError::NameSearch(NameSearchError::IncompatibleCursor) => StatusCode::BAD_REQUEST,
