@@ -10,7 +10,7 @@ import {
   handleDemoClick,
 } from '../../utils/utilCta';
 import { LinkBookDemo } from '../buttons/LinkBookDemo';
-import { FormMobileSignup } from '../forms/FormMobileSignup';
+import { LinkGetStarted } from '../buttons/LinkGetStarted';
 import { SsgDesktop, SsgMobile } from '../utils/SsgGate';
 
 type SectionFinalCtaProps = {
@@ -18,7 +18,7 @@ type SectionFinalCtaProps = {
   googleButtonName: string;
   /** `button_name` on the desktop "Book demo" click (`demo_booking_open`). */
   demoButtonName: string;
-  /** `button_name` on the phone email-capture submit (`mobile_signup_submitted`). */
+  /** `button_name` on the phone "Get started" click (`app_redirect`). */
   mobileButtonName: string;
 };
 
@@ -62,7 +62,7 @@ const FINAL_CTA_STYLES = `
 /**
  * Closing CTA shared by the homepage, blog pages, and feature pages: the
  * "Start with your inbox" headline, the Google + Book demo pill bar on desktop
- * (inline email capture on phones), and the security badges. Callers own the
+ * (a full-width Get started button on phones), and the security badges. Callers own the
  * surrounding padding.
  */
 export function SectionFinalCta(props: SectionFinalCtaProps) {
@@ -106,8 +106,6 @@ export function SectionFinalCta(props: SectionFinalCtaProps) {
           </h2>
         </div>
         <SsgMobile>
-          {/* Same inline capture as the hero: on a phone the page's closing CTA
-            asks for an email rather than sending the visitor to the app. */}
           <div
             style={{
               'box-sizing': 'border-box',
@@ -117,7 +115,7 @@ export function SectionFinalCta(props: SectionFinalCtaProps) {
               width: '100%',
             }}
           >
-            <FormMobileSignup buttonName={props.mobileButtonName} />
+            <LinkGetStarted buttonName={props.mobileButtonName} />
             <LinkBookDemo buttonName={props.demoButtonName} />
           </div>
         </SsgMobile>

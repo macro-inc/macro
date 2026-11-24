@@ -245,7 +245,7 @@ browser verification. The Vite boundary plugin additionally rejects app and
 workspace modules in the resolved production build.
 
 Normal navigation and explicit public endpoints are allowed: links to `/app`,
-Google sign-in, and the unauthenticated mobile email handoff do not load app UI.
+and Google sign-in do not load app UI.
 Public integration selections are preview preferences, not OAuth connections.
 Local preview data must not be presented as server-backed account state.
 The preview proceeds from integration selection directly to workspace setup;
@@ -271,7 +271,7 @@ the authenticated `/app/*` routes. In standalone dev and preview servers,
 GET/HEAD navigation to `/app` or `/app/*` redirects to the same path and query
 on `VITE_APP_BASE_URL` (default `https://macro.com`), where signup and the real
 app run. Set it to the separate `apps/web` origin for local signup testing. This prevents Vite's
-website fallback from rendering an empty shell for app links. Keep `target="_self"` on the hero and header signup links so the website router cannot intercept the app handoff; phone clicks still open `/mobile-signup`. Verify a real document navigation, not only a changed URL. Production routing
+website fallback from rendering an empty shell for app links. Keep `target="_self"` on the hero and header signup links so the website router cannot intercept the app handoff; phones open `/app/signup` too. The retired `/mobile-signup` and `/mobile-signup-sent` paths only forward to `/app/signup` with their query. Verify a real document navigation, not only a changed URL. Production routing
 is unchanged; run `apps/web` separately when testing local signup changes.
 
 `/download` is headed “Download Macro Alpha” and says “Available for macOS and

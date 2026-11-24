@@ -7,7 +7,6 @@ import { HomepageTrustBadges } from '../marketing/components/HomepageTrustBadges
 import { HomepageTour } from '../marketing/components/homepage/HomepageTour';
 import { SiteHeader } from '../marketing/components/SiteHeader';
 import { wallpapers } from '../marketing/components/TutorialWallpaper';
-import { routePhoneToMobileSignup } from '../marketing/core/navigation';
 import '../marketing/components/homepage/macro-homepage.css';
 import '../marketing/components/page-aura.css';
 
@@ -71,7 +70,6 @@ export function Homepage(props: { embedded?: boolean } = {}) {
                 class="site-nav-start homepage-hero-cta"
                 target="_self"
                 href="/app/signup"
-                onClick={routePhoneToMobileSignup}
               >
                 Get Macro
               </a>
