@@ -21,8 +21,14 @@ program timing out and one operation failing. The page answers the harness's
 code-execution requests from the replay. `?speed=` divides every delay, and
 `?summary=1` also publishes the session summarizer's line for each stretch.
 `activity.browser.e2e.ts` checks that the run shows one live line and never
-opens on its own, never says a step failed, then settles to **Used 74 tools**
-with its failed rows marked only in `data-tool-status`.
+opens on its own, never says a step failed, then settles to **Used 73 tools**
+(the timed-out program named no step, so it adds none) with its failed rows
+marked only in `data-tool-status`.
+
+`empty-program.html` renders settled replies with a program that failed before
+naming a step: alone in its run, beside a program's steps, and in a channel
+reply. `empty-program.browser.e2e.ts` checks that it shows no row, opens no
+group and adds nothing to a group's count.
 
 `channel-reply.html` renders a channel agent reply's sealed run with a failed
 and an interrupted step; `channel-reply.browser.e2e.ts` checks that its summary
