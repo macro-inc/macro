@@ -80,6 +80,10 @@ pub enum MailboxError {
     /// every worker that claims it) and its lease expired.
     #[error("the message's last {0} claims ended without an outcome")]
     ClaimsUnfinished(i32),
+    /// The draft was edited outside Macro, or may have been, so neither copy
+    /// overwrites the other.
+    #[error("the draft changed outside Macro")]
+    DraftChanged(drafts::models::DraftChange),
 }
 
 /// Which projection effect deferred the work (`outlook.effect`).

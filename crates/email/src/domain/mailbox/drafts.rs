@@ -14,10 +14,14 @@ use email_api_client::domain::models::*;
 use models::*;
 use ports::*;
 use sha2::{Digest, Sha256};
+use tracing::Instrument;
 
 const UNCERTAIN_WAIT: Duration = Duration::minutes(10);
 const UPLOAD_RANGE_BYTES: usize = 10 * 320 * 1024;
 const SMALL_ATTACHMENT_BYTES: u64 = 3_000_000;
+/// How often one run writes a draft whose version moves between its read and
+/// its write before the change counts as a conflict.
+const UPDATE_ATTEMPTS: u32 = 3;
 
 pub struct MailboxDraftService<R, G, M> {
     repo: R,
@@ -56,41 +60,50 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             return Ok(false);
         };
         let link_id = lease.mailbox.link_id;
+        let span = super::telemetry::draft_span(&lease);
         async {
             let result =
                 super::maintain_lease(self.execute(&lease), || self.repo.renew_draft(&lease)).await;
-            match result {
-                Ok(()) => Ok(true),
-                Err(MailboxError::Provider(EmailApiError::Conflict)) => {
-                    self.repo.fail_draft(&lease, DraftFailure::Conflict).await?;
-                    Ok(true)
-                }
-                Err(MailboxError::Provider(EmailApiError::Forbidden)) => {
-                    self.repo.fail_draft(&lease, DraftFailure::Denied).await?;
-                    Ok(true)
-                }
-                Err(MailboxError::Provider(EmailApiError::Permanent { .. })) => {
-                    self.repo.fail_draft(&lease, DraftFailure::Invalid).await?;
-                    Ok(true)
-                }
-                Err(error) => {
-                    if !matches!(error, MailboxError::Stale) {
-                        self.repo
-                            .release_draft(
-                                &lease,
-                                match &error {
-                                    MailboxError::Provider(e) => super::retry::retry_seconds(e),
-                                    _ => 30,
-                                },
-                            )
-                            .await?;
-                    }
-                    Err(error)
-                }
+            let Err(error) = result else {
+                return Ok(true);
+            };
+            if let Some(failure) = failure(&error) {
+                self.fail(&lease, failure, Some(&error)).await?;
+                return Ok(true);
             }
+            if !matches!(error, MailboxError::Stale) {
+                self.repo
+                    .release_draft(
+                        &lease,
+                        match &error {
+                            MailboxError::Provider(e) => super::retry::retry_seconds(e),
+                            _ => 30,
+                        },
+                    )
+                    .await?;
+            }
+            Err(error)
         }
+        .instrument(span.clone())
         .await
-        .inspect_err(|error| super::telemetry::log_unit_error(link_id, error))
+        .inspect(|_| super::telemetry::record_done(&span, "done"))
+        .inspect_err(|error| {
+            super::telemetry::record_draft_deferred(&span, error);
+            span.in_scope(|| super::telemetry::log_unit_error(link_id, error));
+        })
+    }
+
+    /// Records why the draft stopped, and logs it with the send attempts that
+    /// wait on it.
+    async fn fail(
+        &self,
+        lease: &DraftLease,
+        failure: DraftFailure,
+        error: Option<&MailboxError>,
+    ) -> Result<(), MailboxError> {
+        let attempts = self.repo.fail_draft(lease, failure).await?;
+        super::telemetry::draft_failed(lease, failure, error, &attempts);
+        Ok(())
     }
 
     async fn execute(&self, lease: &DraftLease) -> Result<(), MailboxError> {
@@ -110,7 +123,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             actor
         };
         if !self.repo.draft_authorized(lease, actor).await? {
-            return self.repo.fail_draft(lease, DraftFailure::Denied).await;
+            return self.fail(lease, DraftFailure::Denied, None).await;
         }
         let mut checkpoint = match &lease.checkpoint {
             Some(checkpoint) => checkpoint.clone(),
@@ -180,12 +193,19 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                 checkpoint.advance(DraftStage::Confirming);
                 return Ok(());
             }
-            if draft.version.is_none()
-                || (!lease.delete_requested
-                    && lease.provider_id.is_some()
-                    && draft.version != lease.base_version)
-            {
+            if draft.version.is_none() {
                 return Err(EmailApiError::Conflict.into());
+            }
+            if !lease.delete_requested
+                && lease.provider_id.is_some()
+                && let Some(change) = DraftChange::between(
+                    lease.base_version.as_deref(),
+                    lease.base_fingerprint.as_deref(),
+                    None,
+                    &draft,
+                )
+            {
+                return Err(MailboxError::DraftChanged(change));
             }
             checkpoint.draft = Some(draft);
             if lease.delete_requested {
@@ -249,8 +269,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             return Ok(());
         }
         if Utc::now() - checkpoint.stage_started_at >= UNCERTAIN_WAIT {
-            self.repo
-                .fail_draft(lease, DraftFailure::CreationUnknown)
+            self.fail(lease, DraftFailure::CreationUnknown, None)
                 .await?;
             // The caller must not checkpoint/release a terminal result.
             return Err(MailboxError::Stale);
@@ -264,46 +283,51 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
         lease: &DraftLease,
         checkpoint: &mut DraftCheckpoint,
     ) -> Result<(), MailboxError> {
-        let prior = checkpoint.draft.as_ref().ok_or(MailboxError::Persistence)?;
-        let observed = self
-            .provider
-            .get_draft(lease.mailbox, &prior.id)
-            .await?
-            .ok_or(EmailApiError::Conflict)?;
-        if !observed.is_draft {
+        let mut attempt = 1;
+        loop {
+            let prior = checkpoint.draft.as_ref().ok_or(MailboxError::Persistence)?;
+            let observed = self
+                .provider
+                .get_draft(lease.mailbox, &prior.id)
+                .await?
+                .ok_or(EmailApiError::Conflict)?;
+            if !observed.is_draft {
+                checkpoint.draft = Some(observed);
+                checkpoint.advance(DraftStage::Confirming);
+                return Ok(());
+            }
+            let version = observed.version.clone().ok_or(EmailApiError::Conflict)?;
+            refuse_edit(prior, &observed)?;
+            if lease.delete_requested {
+                checkpoint.draft = Some(observed);
+                checkpoint.advance(DraftStage::Deleting);
+                return Ok(());
+            }
+            let id = observed.id.clone();
             checkpoint.draft = Some(observed);
-            checkpoint.advance(DraftStage::Confirming);
-            return Ok(());
+            checkpoint.advance(DraftStage::Updating);
+            self.repo.checkpoint_draft(lease, checkpoint).await?;
+            let written = self
+                .provider
+                .update_draft(
+                    lease.mailbox,
+                    &id,
+                    &draft_request(lease, checkpoint),
+                    &version,
+                )
+                .await;
+            match written {
+                Ok(draft) => {
+                    checkpoint.draft = Some(draft);
+                    checkpoint.advance(DraftStage::Attachments);
+                    return Ok(());
+                }
+                // A refused version means nothing was written. The next read
+                // tells a moved version from an edit.
+                Err(EmailApiError::Conflict) if attempt < UPDATE_ATTEMPTS => attempt += 1,
+                Err(error) => return Err(error.into()),
+            }
         }
-        if observed.version.is_none() || observed.version != prior.version {
-            return Err(EmailApiError::Conflict.into());
-        }
-        if lease.delete_requested {
-            checkpoint.draft = Some(observed);
-            checkpoint.advance(DraftStage::Deleting);
-            return Ok(());
-        }
-        let version = observed
-            .version
-            .as_deref()
-            .ok_or(EmailApiError::Conflict)?
-            .to_owned();
-        let id = observed.id.clone();
-        checkpoint.draft = Some(observed);
-        checkpoint.advance(DraftStage::Updating);
-        self.repo.checkpoint_draft(lease, checkpoint).await?;
-        let draft = self
-            .provider
-            .update_draft(
-                lease.mailbox,
-                &id,
-                &draft_request(lease, checkpoint),
-                &version,
-            )
-            .await?;
-        checkpoint.draft = Some(draft);
-        checkpoint.advance(DraftStage::Attachments);
-        Ok(())
     }
 
     async fn attach(
@@ -323,10 +347,14 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             checkpoint.advance(DraftStage::Confirming);
             return Ok(());
         }
-        if draft.content_fingerprint.is_none()
-            || observed.content_fingerprint != draft.content_fingerprint
-        {
-            return Err(EmailApiError::Conflict.into());
+        // Attachment writes move the version, so only the content counts here.
+        if let Some(change) = DraftChange::between(
+            None,
+            draft.content_fingerprint.as_deref(),
+            Some(&draft.field_digests),
+            &observed,
+        ) {
+            return Err(MailboxError::DraftChanged(change));
         }
         if lease.delete_requested {
             checkpoint.draft = Some(observed);
@@ -378,25 +406,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             return Ok(());
         };
         let attachments = self.provider.attachments(lease.mailbox, &id).await?;
-        let matches: Vec<_> = attachments
-            .iter()
-            .filter(|a| {
-                a.content_id
-                    .as_deref()
-                    .map(|value| value.trim_matches(['<', '>']))
-                    == Some(file.content_id.trim_matches(['<', '>']))
-            })
-            .collect();
-        if matches.len() > 1 {
-            return Err(EmailApiError::Conflict.into());
-        }
-        if matches.len() == 1 {
-            let found = matches[0];
-            // Graph's size also counts the attachment's other properties, so it
-            // exceeds the byte length; only a smaller file means it changed.
-            if found.size < file.size || found.name != file.name || found.inline != file.inline {
-                return Err(EmailApiError::Conflict.into());
-            }
+        if attached(&attachments, file)? {
             checkpoint.completed_files += 1;
             checkpoint.transfer = None;
             return Ok(());
@@ -416,8 +426,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
         if file.size < SMALL_ATTACHMENT_BYTES {
             if let Some(transfer) = &checkpoint.transfer {
                 if Utc::now() - transfer.started_at >= UNCERTAIN_WAIT {
-                    self.repo
-                        .fail_draft(lease, DraftFailure::AttachmentUnknown)
+                    self.fail(lease, DraftFailure::AttachmentUnknown, None)
                         .await?;
                     return Err(MailboxError::Stale);
                 }
@@ -473,8 +482,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                 // Final PUT may have succeeded. Give the attachment read time to
                 // converge; never restart and create a second attachment blindly.
                 if Utc::now() - transfer.started_at >= UNCERTAIN_WAIT {
-                    self.repo
-                        .fail_draft(lease, DraftFailure::AttachmentUnknown)
+                    self.fail(lease, DraftFailure::AttachmentUnknown, None)
                         .await?;
                     return Err(MailboxError::Stale);
                 }
@@ -524,8 +532,23 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             checkpoint.draft = Some(observed);
             return self.repo.confirm_sent(lease, checkpoint).await;
         }
-        if observed.version != prior.version || observed.version.is_none() {
+        if observed.version.is_none() {
             return Err(EmailApiError::Conflict.into());
+        }
+        refuse_edit(prior, &observed)?;
+        if observed.version != prior.version {
+            // The fingerprint does not cover attachments, so a moved version
+            // has to show that every file the person approved is still there.
+            let attachments = self
+                .provider
+                .attachments(lease.mailbox, &observed.id)
+                .await?;
+            for file in &checkpoint.prepared.files {
+                if !attached(&attachments, file)? {
+                    return Err(EmailApiError::Conflict.into());
+                }
+            }
+            checkpoint.draft = Some(observed);
         }
         checkpoint.advance(DraftStage::Submitting);
         checkpoint.submission_started = true;
@@ -535,7 +558,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                 checkpoint.advance(DraftStage::Ready);
                 self.repo.settle_draft(lease, checkpoint).await
             }
-            DeliveryStart::Denied => self.repo.fail_draft(lease, DraftFailure::Denied).await,
+            DeliveryStart::Denied => self.fail(lease, DraftFailure::Denied, None).await,
             DeliveryStart::Started => {
                 let id = &checkpoint
                     .draft
@@ -552,10 +575,9 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                         // Definitive rejections are surfaced for a deliberate retry.
                         // A crash after recording Submitting always resumes reads.
                         if definitively_rejected(&error) {
-                            self.repo
-                                .fail_draft(lease, DraftFailure::SendRejected)
-                                .await?;
-                            return Ok(());
+                            return self
+                                .fail(lease, DraftFailure::SendRejected, Some(&error.into()))
+                                .await;
                         }
                         Err(error.into())
                     }
@@ -578,7 +600,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             return self.repo.confirm_sent(lease, checkpoint).await;
         }
         if Utc::now() - checkpoint.stage_started_at >= UNCERTAIN_WAIT {
-            return self.repo.fail_draft(lease, DraftFailure::SendUnknown).await;
+            return self.fail(lease, DraftFailure::SendUnknown, None).await;
         }
         self.repo.release_draft(lease, 10).await
     }
@@ -598,9 +620,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             checkpoint.draft = Some(draft);
             return self.repo.confirm_sent(lease, checkpoint).await;
         }
-        if draft.version != prior.version {
-            return Err(EmailApiError::Conflict.into());
-        }
+        refuse_edit(prior, &draft)?;
         self.provider
             .delete_draft(
                 lease.mailbox,
@@ -618,6 +638,59 @@ fn draft_request(lease: &DraftLease, checkpoint: &DraftCheckpoint) -> DraftReque
         correlation: lease.message_id,
         revision: checkpoint.revision as u64,
         content: checkpoint.prepared.request.clone(),
+    }
+}
+
+/// Refuses to write over, send or delete a draft edited since `prior`.
+fn refuse_edit(prior: &ProviderDraft, observed: &ProviderDraft) -> Result<(), MailboxError> {
+    let change = DraftChange::between(
+        prior.version.as_deref(),
+        prior.content_fingerprint.as_deref(),
+        Some(&prior.field_digests),
+        observed,
+    );
+    match change {
+        Some(change) => Err(MailboxError::DraftChanged(change)),
+        None => Ok(()),
+    }
+}
+
+/// Whether the draft holds `file` as uploaded; another file under its
+/// Content-ID is a conflict.
+fn attached(attachments: &[DraftAttachment], file: &DraftFile) -> Result<bool, EmailApiError> {
+    let content_id = file.content_id.trim_matches(['<', '>']);
+    let matches: Vec<_> = attachments
+        .iter()
+        .filter(|attachment| {
+            attachment
+                .content_id
+                .as_deref()
+                .map(|value| value.trim_matches(['<', '>']))
+                == Some(content_id)
+        })
+        .collect();
+    let found = match matches.as_slice() {
+        [] => return Ok(false),
+        [found] => found,
+        _ => return Err(EmailApiError::Conflict),
+    };
+    // Graph's size also counts the attachment's other properties, so it
+    // exceeds the byte length; only a smaller file means it changed.
+    if found.size < file.size || found.name != file.name || found.inline != file.inline {
+        return Err(EmailApiError::Conflict);
+    }
+    Ok(true)
+}
+
+/// The outcome an error settles the draft with; `None` runs it again.
+fn failure(error: &MailboxError) -> Option<DraftFailure> {
+    match error {
+        MailboxError::DraftChanged(_) | MailboxError::Provider(EmailApiError::Conflict) => {
+            Some(DraftFailure::Conflict)
+        }
+        MailboxError::Provider(EmailApiError::Forbidden) => Some(DraftFailure::Denied),
+        MailboxError::Provider(EmailApiError::Permanent { .. }) => Some(DraftFailure::Invalid),
+        _ => None,
     }
 }
 

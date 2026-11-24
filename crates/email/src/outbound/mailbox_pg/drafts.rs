@@ -118,7 +118,7 @@ impl DraftRepository for PgMailboxSync {
             UPDATE email_mailbox_drafts d SET claimed_content = d.desired_content,state = 'running', lease_id = $1,lease_until = now() + interval '3 minutes',updated_at = now()
             FROM candidate c,email_links l WHERE c.message_id = d.message_id AND l.id = d.link_id
             RETURNING d.message_id,d.link_id,d.generation,l.grant_generation,d.revision,d.actor_id,d.desired_content,
-                d.provider_id,d.base_version,d.delete_requested,d.checkpoint
+                d.provider_id,d.base_version,d.base_fingerprint,d.delete_requested,d.checkpoint
         "#,lease_id,mode==DraftClaimMode::All).fetch_optional(&mut *tx).await.map_err(db_error)?;
         tx.commit().await.map_err(db_error)?;
         row.map(|row| {
@@ -144,6 +144,7 @@ impl DraftRepository for PgMailboxSync {
                     .map_err(|_| MailboxError::Persistence)?,
                 provider_id: row.provider_id.map(ProviderId::new).transpose()?,
                 base_version: row.base_version,
+                base_fingerprint: row.base_fingerprint,
                 delete_requested: row.delete_requested,
                 checkpoint: row
                     .checkpoint
@@ -214,7 +215,7 @@ impl DraftRepository for PgMailboxSync {
         &self,
         lease: &DraftLease,
         failure: DraftFailure,
-    ) -> Result<(), MailboxError> {
+    ) -> Result<Vec<Uuid>, MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_draft(&mut tx, lease).await?;
         // A discard that arrived during this lease runs next instead, as it
@@ -249,7 +250,9 @@ impl DraftRepository for PgMailboxSync {
             ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET revision = email_message_reconciliation.revision + 1,available_at = now(),is_import = false
         "#,lease.message_id).execute(&mut *tx).await.map_err(db_error)?;
         Self::draft_projection(&mut tx, lease).await?;
-        tx.commit().await.map_err(db_error)
+        let attempts = sqlx::query_scalar!("SELECT attempt_id FROM email_send_attempts WHERE message_id = $1 AND link_id = $2 AND NOT cancelled AND NOT sent ORDER BY attempt_id",lease.message_id,lease.mailbox.link_id).fetch_all(&mut *tx).await.map_err(db_error)?;
+        tx.commit().await.map_err(db_error)?;
+        Ok(attempts)
     }
 
     async fn settle_draft(
@@ -263,12 +266,12 @@ impl DraftRepository for PgMailboxSync {
         Self::bind_draft(&mut tx, lease, draft).await?;
         let value = serde_json::to_value(checkpoint).map_err(|_| MailboxError::Persistence)?;
         sqlx::query!(r#"
-            UPDATE email_mailbox_drafts SET synced_revision = $2,base_version = $3,
+            UPDATE email_mailbox_drafts SET synced_revision = $2,base_version = $3,base_fingerprint = $5,
                 state = CASE WHEN revision = $2 AND NOT delete_requested THEN 'synced' ELSE 'pending' END,
                 checkpoint = CASE WHEN revision = $2 THEN $4::jsonb ELSE NULL END,
                 error_code = NULL,lease_id = NULL,lease_until = NULL,available_at = now(),updated_at = now()
             WHERE message_id = $1
-        "#,lease.message_id,checkpoint.revision,draft.version,value).execute(&mut *tx).await.map_err(db_error)?;
+        "#,lease.message_id,checkpoint.revision,draft.version,value,draft.content_fingerprint).execute(&mut *tx).await.map_err(db_error)?;
         sqlx::query!(r#"
             INSERT INTO email_message_reconciliation (link_id,generation,provider_id,revision,is_import)
             VALUES ($1,$2,$3,1,false) ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET

@@ -249,6 +249,20 @@ token that works again clears the flag.
 - Levers: fix the shared credential or roll back. Mailboxes already marked
   need their users to reconnect.
 
+## Drafts that stop
+
+A draft step that gives up logs `email_send.draft_failed` (WARN) with `link_id`,
+`message_id`, the waiting `attempt_ids`, `code`, `stage`, and for a conflict
+`change` (`content`, or `unknown` with nothing recorded to compare) and
+`changed_fields`, the names of the fields someone edited. A send admitted onto a
+draft that already stopped logs `email_send.admitted_stopped`. Every step is an
+`outlook.draft.step` span (`@draft.stage`, `@draft.error_code`) whose children
+are its Graph requests.
+
+A moved version alone never stops a draft. If `change` is `content` for most of
+one mailbox's drafts, `changed_fields` says which part a tool in that tenant
+rewrites.
+
 ## No mailbox
 
 Graph answers 404 to an account's Inbox, and to every other mailbox call,

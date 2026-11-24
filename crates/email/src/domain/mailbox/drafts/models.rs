@@ -4,7 +4,9 @@ use chrono::{DateTime, Utc};
 use email_api_client::domain::models::{
     AttachmentUploadSession, ProviderDraft, ProviderId, SendRequest,
 };
+use models_email::service::message::Message;
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 
 /// A frozen attachment source, always resolved through authorized server records.
@@ -90,8 +92,82 @@ pub struct DraftLease {
     pub attachments: crate::domain::models::draft_attachment_manifest::DraftAttachmentManifest,
     pub provider_id: Option<ProviderId>,
     pub base_version: Option<String>,
+    /// Content the provider held at the last sync, by fingerprint. Survives the
+    /// checkpoint, which a new local revision clears.
+    pub base_fingerprint: Option<String>,
     pub delete_requested: bool,
     pub checkpoint: Option<DraftCheckpoint>,
+}
+
+/// Whether `remote`, a read of the draft, still holds what Macro last synced
+/// to it. The provider rewrites whitespace as it stores a body, so whitespace
+/// does not count.
+pub fn holds_synced(synced: &ResolvedDraftInput, remote: &Message) -> bool {
+    fn compact(body: Option<&str>) -> String {
+        body.unwrap_or_default().split_whitespace().collect()
+    }
+    fn addresses<'a>(emails: impl Iterator<Item = &'a String>) -> BTreeSet<String> {
+        emails.map(|email| email.to_lowercase()).collect()
+    }
+    let same_body = match &synced.body_html {
+        Some(html) => compact(Some(html)) == compact(remote.body_html_sanitized.as_deref()),
+        None => compact(synced.body_text.as_deref()) == compact(remote.body_text.as_deref()),
+    };
+    let same_recipients = [
+        (&synced.to, &remote.to),
+        (&synced.cc, &remote.cc),
+        (&synced.bcc, &remote.bcc),
+    ]
+    .into_iter()
+    .all(|(synced, remote)| {
+        addresses(synced.iter().map(|contact| &contact.email))
+            == addresses(remote.iter().map(|contact| &contact.email))
+    });
+
+    same_body
+        && same_recipients
+        && synced.subject.trim() == remote.subject.as_deref().unwrap_or_default().trim()
+}
+
+/// How a draft differs from the one Macro last read or wrote. Names only, so it
+/// can be logged.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DraftChange {
+    /// The content changed, in these fields when both sides' digests are known.
+    Content(Vec<String>),
+    /// Nothing is recorded to compare the content with.
+    Unknown,
+}
+
+impl DraftChange {
+    /// What `observed` changed since `prior`, or `None` when nobody edited it. A
+    /// mailbox stamps drafts on its own (an add-in, a label policy) and Macro's
+    /// own organization writes move them: both change only the version. An edit
+    /// also changes the content, which the fingerprint covers. Attachments are
+    /// not in it.
+    pub fn between(
+        prior_version: Option<&str>,
+        prior_fingerprint: Option<&str>,
+        prior_digests: Option<&BTreeMap<String, String>>,
+        observed: &ProviderDraft,
+    ) -> Option<Self> {
+        if prior_version.is_some() && observed.version.as_deref() == prior_version {
+            return None;
+        }
+        let Some(fingerprint) = prior_fingerprint else {
+            return Some(Self::Unknown);
+        };
+        if observed.content_fingerprint.as_deref() == Some(fingerprint) {
+            return None;
+        }
+        let names = prior_digests.into_iter().flatten();
+        Some(Self::Content(
+            names
+                .filter(|(name, digest)| observed.field_digests.get(*name) != Some(digest))
+                .map(|(name, _)| name.clone())
+                .collect(),
+        ))
+    }
 }
 
 /// Persisted user-visible outcome. Unknown is never an automatic retry instruction.

@@ -32,12 +32,14 @@ pub trait DraftRepository: Send + Sync + 'static {
         lease: &DraftLease,
         seconds: u32,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    /// Records the failure and returns the send attempts waiting on this draft.
     fn fail_draft(
         &self,
         lease: &DraftLease,
         failure: DraftFailure,
-    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
-    /// Records the synced revision without acknowledging a newer concurrent save.
+    ) -> impl Future<Output = Result<Vec<Uuid>, MailboxError>> + Send;
+    /// Records the synced revision, and the content it left at the provider,
+    /// without acknowledging a newer concurrent save.
     fn settle_draft(
         &self,
         lease: &DraftLease,

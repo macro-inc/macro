@@ -359,7 +359,24 @@ impl EmailPgRepo {
             prepared_content,
             prepared.snapshot.message.db_id, prepared.source_inbox.map(|source| source.link_id),
         ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
+        let stopped = sqlx::query!(
+            "SELECT state, error_code FROM email_mailbox_drafts WHERE message_id = $1 AND link_id = $2 AND state IN ('conflict','unknown')",
+            ids.message_db_id, link,
+        ).fetch_optional(&mut *tx).await.map_err(anyhow::Error::from)?;
         tx.commit().await.map_err(anyhow::Error::from)?;
+        if let Some(stopped) = stopped {
+            // The draft stopped before this send, so no worker takes the send
+            // up and logs its failure.
+            tracing::warn!(
+                event = "email_send.admitted_stopped",
+                link_id = %link,
+                message_id = %ids.message_db_id,
+                attempt_id = %attempt.0,
+                state = stopped.state,
+                code = stopped.error_code,
+                "send admitted onto a draft that had already stopped"
+            );
+        }
         Ok(SendAttempt {
             transitioned: true,
             message: None,

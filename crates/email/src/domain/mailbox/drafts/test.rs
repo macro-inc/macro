@@ -19,10 +19,17 @@ struct State {
     stopped: bool,
     sent: bool,
     failure: Option<DraftFailure>,
+    /// Send attempts waiting on the draft.
+    attempts: Vec<Uuid>,
     creates: usize,
     updates: usize,
+    deletes: usize,
     submissions: usize,
     additions: usize,
+    /// Updates refused because the version moved after it was read.
+    refusals: usize,
+    /// The content an edit leaves as it makes an update be refused.
+    refused_by_edit: Option<String>,
     /// Checkpoints after a provider update that time out on a busy mailbox.
     locked_checkpoints: u32,
 }
@@ -57,6 +64,7 @@ fn harness(stage: Option<DraftStage>) -> Harness {
         is_draft: true,
         app_revision: Some(1),
         content_fingerprint: Some("unchanged-body".into()),
+        field_digests: [("body".to_owned(), "unchanged-body".to_owned())].into(),
     };
     let checkpoint = stage.map(|stage| DraftCheckpoint {
         revision: 1,
@@ -85,6 +93,7 @@ fn harness(stage: Option<DraftStage>) -> Harness {
             attachments: Default::default(),
             provider_id: stage.map(|_| remote.id.clone()),
             base_version: Some("v1".into()),
+            base_fingerprint: Some("unchanged-body".into()),
             delete_requested: false,
             checkpoint,
         },
@@ -96,10 +105,14 @@ fn harness(stage: Option<DraftStage>) -> Harness {
         stopped: false,
         sent: false,
         failure: None,
+        attempts: Vec::new(),
         creates: 0,
         updates: 0,
+        deletes: 0,
         submissions: 0,
         additions: 0,
+        refusals: 0,
+        refused_by_edit: None,
         locked_checkpoints: 0,
     })))
 }
@@ -141,11 +154,11 @@ impl DraftRepository for Harness {
     async fn release_draft(&self, _: &DraftLease, _: u32) -> Result<(), MailboxError> {
         Ok(())
     }
-    async fn fail_draft(&self, _: &DraftLease, f: DraftFailure) -> Result<(), MailboxError> {
+    async fn fail_draft(&self, _: &DraftLease, f: DraftFailure) -> Result<Vec<Uuid>, MailboxError> {
         let mut s = self.0.lock().unwrap();
         s.failure = Some(f);
         s.stopped = true;
-        Ok(())
+        Ok(s.attempts.clone())
     }
     async fn settle_draft(&self, _: &DraftLease, c: &DraftCheckpoint) -> Result<(), MailboxError> {
         let mut s = self.0.lock().unwrap();
@@ -225,6 +238,7 @@ impl DraftGateway for Harness {
             is_draft: true,
             app_revision: Some(request.revision),
             content_fingerprint: Some("unchanged-body".into()),
+            field_digests: Default::default(),
         });
         Err(EmailApiError::Transient {
             message: "response lost".into(),
@@ -235,19 +249,34 @@ impl DraftGateway for Harness {
         _: MailboxKey,
         _: &ProviderId,
         _: &DraftRequest,
-        _: &str,
+        version: &str,
     ) -> Result<ProviderDraft, EmailApiError> {
         let mut s = self.0.lock().unwrap();
         s.updates += 1;
+        if s.refusals > 0 {
+            s.refusals -= 1;
+            let version = format!("moved-{}", s.updates);
+            let edit = s.refused_by_edit.clone();
+            let remote = s.remote.as_mut().unwrap();
+            remote.version = Some(version);
+            if let Some(content) = edit {
+                remote.content_fingerprint = Some(content);
+            }
+            return Err(EmailApiError::Conflict);
+        }
+        assert_eq!(s.remote.as_ref().unwrap().version.as_deref(), Some(version));
         Ok(s.remote.clone().unwrap())
     }
     async fn delete_draft(
         &self,
         _: MailboxKey,
         _: &ProviderId,
-        _: &str,
+        version: &str,
     ) -> Result<(), EmailApiError> {
-        self.0.lock().unwrap().remote = None;
+        let mut s = self.0.lock().unwrap();
+        assert_eq!(s.remote.as_ref().unwrap().version.as_deref(), Some(version));
+        s.deletes += 1;
+        s.remote = None;
         Ok(())
     }
     async fn attachments(
@@ -328,6 +357,45 @@ impl DraftGateway for Harness {
     }
 }
 
+/// Another client saves the draft with different content.
+fn edit(h: &Harness, version: &str) {
+    let mut state = h.0.lock().unwrap();
+    let remote = state.remote.as_mut().unwrap();
+    remote.version = Some(version.into());
+    remote.content_fingerprint = Some(version.into());
+    remote.field_digests = [("body".to_owned(), version.to_owned())].into();
+}
+
+/// The mailbox stamps the draft: its version moves, its content does not.
+fn stamp(h: &Harness, version: &str) {
+    let mut state = h.0.lock().unwrap();
+    state.remote.as_mut().unwrap().version = Some(version.into());
+}
+
+fn file() -> DraftFile {
+    DraftFile {
+        source: AttachmentSource::Uploaded {
+            key: "immutable-key".into(),
+        },
+        name: "notes.txt".into(),
+        content_type: "text/plain".into(),
+        content_id: "stable-cid".into(),
+        inline: false,
+        size: 3,
+        sha256: format!("{:x}", Sha256::digest(b"abc")),
+    }
+}
+
+fn uploaded(name: &str) -> DraftAttachment {
+    DraftAttachment {
+        id: ProviderId::new("uploaded-earlier").unwrap(),
+        name: name.into(),
+        size: 3 + 212,
+        content_id: Some("stable-cid".into()),
+        inline: false,
+    }
+}
+
 fn service(h: &Harness) -> MailboxDraftService<Harness, Harness, Harness> {
     MailboxDraftService::new(h.clone(), h.clone(), h.clone())
 }
@@ -397,7 +465,7 @@ async fn crash_after_submission_marker_never_replays_the_send() {
 #[tokio::test]
 async fn remote_edit_conflicts_without_overwriting_the_local_revision() {
     let h = harness(Some(DraftStage::Inspect));
-    h.0.lock().unwrap().remote.as_mut().unwrap().version = Some("remote-edit".into());
+    edit(&h, "remote-edit");
     service(&h).execute_once().await.unwrap();
     let s = h.0.lock().unwrap();
     assert!(matches!(s.failure, Some(DraftFailure::Conflict)));
@@ -538,8 +606,7 @@ async fn an_external_content_edit_during_upload_cannot_become_a_new_send_baselin
 #[tokio::test]
 async fn revision_marker_does_not_prove_external_clients_left_content_untouched() {
     let h = harness(Some(DraftStage::Updating));
-    h.0.lock().unwrap().remote.as_mut().unwrap().version =
-        Some("remote-edit-after-our-patch".into());
+    edit(&h, "remote-edit-after-our-patch");
     service(&h).execute_once().await.unwrap();
     let state = h.0.lock().unwrap();
     assert!(matches!(state.failure, Some(DraftFailure::Conflict)));
@@ -607,4 +674,201 @@ async fn a_checkpoint_that_stays_locked_gives_up_inside_the_lease() {
         s.lease.checkpoint.as_ref().unwrap().stage,
         DraftStage::Updating
     );
+}
+
+#[tokio::test]
+async fn a_draft_the_mailbox_stamped_before_its_update_still_syncs_and_sends() {
+    let h = harness(Some(DraftStage::Inspect));
+    stamp(&h, "stamped");
+    let service = service(&h);
+    for _ in 0..3 {
+        service.execute_once().await.unwrap();
+    }
+    let s = h.0.lock().unwrap();
+    assert!(s.failure.is_none(), "{:?}", s.failure);
+    assert_eq!(s.updates, 1);
+    assert_eq!(s.submissions, 1);
+}
+
+#[tokio::test]
+async fn a_draft_the_mailbox_stamped_before_its_send_still_sends() {
+    let h = harness(Some(DraftStage::Ready));
+    stamp(&h, "stamped");
+    service(&h).execute_once().await.unwrap();
+    let s = h.0.lock().unwrap();
+    assert!(s.failure.is_none(), "{:?}", s.failure);
+    assert_eq!(s.submissions, 1);
+}
+
+#[tokio::test]
+async fn a_moved_version_with_no_recorded_content_conflicts() {
+    let h = harness(Some(DraftStage::Inspect));
+    h.0.lock().unwrap().lease.base_fingerprint = None;
+    stamp(&h, "stamped");
+    service(&h).execute_once().await.unwrap();
+    let s = h.0.lock().unwrap();
+    assert!(matches!(s.failure, Some(DraftFailure::Conflict)));
+    assert_eq!(s.updates, 0);
+}
+
+#[tokio::test]
+async fn an_edit_before_the_send_is_never_sent() {
+    let h = harness(Some(DraftStage::Ready));
+    edit(&h, "remote-edit");
+    service(&h).execute_once().await.unwrap();
+    let s = h.0.lock().unwrap();
+    assert!(matches!(s.failure, Some(DraftFailure::Conflict)));
+    assert_eq!(s.submissions, 0);
+}
+
+#[tokio::test]
+async fn an_update_refused_by_a_stamp_is_written_at_the_new_version() {
+    let h = harness(Some(DraftStage::Inspect));
+    h.0.lock().unwrap().refusals = 2;
+    service(&h).execute_once().await.unwrap();
+    let s = h.0.lock().unwrap();
+    assert!(s.failure.is_none(), "{:?}", s.failure);
+    assert_eq!(s.updates, 3);
+    assert_eq!(
+        s.lease.checkpoint.as_ref().unwrap().stage,
+        DraftStage::Attachments
+    );
+}
+
+#[tokio::test]
+async fn an_update_refused_every_time_conflicts_after_three_writes() {
+    let h = harness(Some(DraftStage::Inspect));
+    h.0.lock().unwrap().refusals = usize::MAX;
+    service(&h).execute_once().await.unwrap();
+    let s = h.0.lock().unwrap();
+    assert!(matches!(s.failure, Some(DraftFailure::Conflict)));
+    assert_eq!(s.updates, 3);
+}
+
+#[tokio::test]
+async fn an_update_refused_by_an_edit_is_not_written_again() {
+    let h = harness(Some(DraftStage::Inspect));
+    {
+        let mut s = h.0.lock().unwrap();
+        s.refusals = 1;
+        s.refused_by_edit = Some("edited-between-read-and-write".into());
+    }
+    service(&h).execute_once().await.unwrap();
+    let s = h.0.lock().unwrap();
+    assert!(matches!(s.failure, Some(DraftFailure::Conflict)));
+    assert_eq!(s.updates, 1);
+}
+
+#[tokio::test]
+async fn a_stamped_draft_sends_only_with_the_files_the_person_approved() {
+    for (attachments, sends) in [
+        (vec![uploaded("notes.txt")], 1),
+        (vec![], 0),
+        (vec![uploaded("replaced.txt")], 0),
+    ] {
+        let h = harness(Some(DraftStage::Ready));
+        stamp(&h, "stamped");
+        {
+            let mut s = h.0.lock().unwrap();
+            let checkpoint = s.lease.checkpoint.as_mut().unwrap();
+            checkpoint.prepared.files.push(file());
+            s.attachments = attachments;
+        }
+        service(&h).execute_once().await.unwrap();
+        let s = h.0.lock().unwrap();
+        assert_eq!(s.submissions, sends);
+        assert_eq!(s.failure.is_some(), sends == 0);
+    }
+}
+
+#[tokio::test]
+async fn a_discard_deletes_a_stamped_draft_and_keeps_an_edited_one() {
+    let h = harness(Some(DraftStage::Deleting));
+    h.0.lock().unwrap().lease.delete_requested = true;
+    stamp(&h, "stamped");
+    service(&h).execute_once().await.unwrap();
+    assert_eq!(h.0.lock().unwrap().deletes, 1);
+
+    let h = harness(Some(DraftStage::Deleting));
+    h.0.lock().unwrap().lease.delete_requested = true;
+    edit(&h, "remote-edit");
+    service(&h).execute_once().await.unwrap();
+    let s = h.0.lock().unwrap();
+    assert_eq!(s.deletes, 0);
+    assert!(matches!(s.failure, Some(DraftFailure::Conflict)));
+}
+
+#[test]
+fn a_change_names_the_fields_that_differ_and_nothing_else() {
+    let mut observed = ProviderDraft {
+        id: ProviderId::new("draft").unwrap(),
+        conversation_id: ProviderId::new("conversation").unwrap(),
+        version: Some("v2".into()),
+        is_draft: true,
+        app_revision: None,
+        content_fingerprint: Some("edited".into()),
+        field_digests: [
+            ("subject".to_owned(), "same".to_owned()),
+            ("body".to_owned(), "edited".to_owned()),
+        ]
+        .into(),
+    };
+    let prior = [
+        ("subject".to_owned(), "same".to_owned()),
+        ("body".to_owned(), "original".to_owned()),
+    ]
+    .into();
+    let between = |fingerprint, observed: &ProviderDraft| {
+        DraftChange::between(Some("v1"), fingerprint, Some(&prior), observed)
+    };
+    assert_eq!(
+        between(Some("original"), &observed),
+        Some(DraftChange::Content(vec!["body".into()]))
+    );
+    assert_eq!(between(None, &observed), Some(DraftChange::Unknown));
+    assert_eq!(between(Some("edited"), &observed), None);
+    observed.version = Some("v1".into());
+    assert_eq!(between(None, &observed), None);
+}
+
+#[tokio::test]
+async fn a_failed_draft_is_logged_with_its_mailbox_message_and_attempts() {
+    let telemetry = crate::telemetry_capture::Telemetry::default();
+    let _guard = telemetry.install();
+    let attempt = Uuid::now_v7();
+    let fail = || async {
+        let h = harness(Some(DraftStage::Ready));
+        h.0.lock().unwrap().attempts = vec![attempt];
+        edit(&h, "remote-edit");
+        service(&h).execute_once().await.unwrap();
+        let lease = h.0.lock().unwrap().lease.clone();
+        lease
+    };
+    // The other tests here reach the same callsites as this one installs its
+    // subscriber, and can cache them as disabled. Once this thread has reached
+    // them too, recomputing covers every one.
+    fail().await;
+    tracing::callsite::rebuild_interest_cache();
+    let lease = fail().await;
+
+    let link_id = lease.mailbox.link_id.to_string();
+    let events = telemetry.events("outlook draft failed");
+    let event = events.iter().find(|(_, event)| event["link_id"] == link_id);
+    let Some((level, event)) = event else {
+        panic!("expected the failure to be logged, got {events:?}");
+    };
+    assert_eq!(*level, tracing::Level::WARN);
+    assert_eq!(event["message_id"], lease.message_id.to_string());
+    assert_eq!(event["attempt_ids"], attempt.to_string());
+    assert_eq!(event["code"], "draft_conflict");
+    assert_eq!(event["stage"], "ready");
+    assert_eq!(event["change"], "content");
+    assert_eq!(event["changed_fields"], "body");
+    let spans = telemetry.spans("outlook.draft.step");
+    let span = spans.iter().find(|span| span["mailbox.link_id"] == link_id);
+    let Some(span) = span else {
+        panic!("expected the step's span, got {spans:?}");
+    };
+    assert_eq!(span["email.message_id"], lease.message_id.to_string());
+    assert_eq!(span["draft.error_code"], "draft_conflict");
 }
