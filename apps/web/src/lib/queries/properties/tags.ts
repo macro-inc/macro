@@ -74,6 +74,7 @@ export function useTagsQuery(): CatalogListResult<TagSetResponse> {
             ]
           : []
       ),
+    sets: () => query.data ?? [],
     refresh: () => query.refetch({ requestPolicy: 'network-only' }),
   });
   return catalogListResult(query, stamp, EMPTY_TAG_SETS);

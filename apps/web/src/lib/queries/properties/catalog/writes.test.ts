@@ -74,6 +74,7 @@ import { CatalogMutationError, isCatalogErrorCode } from './errors';
 import { registerCatalogReader } from './readers';
 import {
   addPropertyOption,
+  cachedTagSet,
   createPropertyDefinition,
   deletePropertyDefinition,
   deletePropertyOption,
@@ -596,6 +597,7 @@ describe('option order', () => {
         kind: 'tags',
         key: () => 5,
         definitions: () => [{ scope: 'USER', definitionId: 'def-1' }],
+        sets: () => [],
         refresh: refresh('tags'),
       });
       return dispose;
@@ -838,6 +840,85 @@ describe('a write the cache never hands to an engine', () => {
       expect(early).toBe(false);
       expect(outcome).toBeInstanceOf(CatalogMutationError);
       expect(soup.mutation).toHaveBeenCalledTimes(1);
+    }
+  });
+});
+
+describe('provisioning while the cache cannot answer', () => {
+  const provisioned = {
+    scope: 'USER',
+    definition: {
+      __typename: 'GraphqlPropertyDefinition',
+      id: 'def-mine',
+      owner: { scope: 'USER', principalId: 'user-1' },
+      displayName: 'Tags',
+      dataType: 'SELECT_STRING',
+      isMultiSelect: true,
+      specificEntityType: null,
+      isSystem: false,
+      isMetadata: false,
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+    },
+    options: [],
+  };
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('reads the cache back once its reload is written, or after 10 s', async () => {
+    vi.useFakeTimers();
+    queueingHost();
+    soup.result = { data: { ensureTagSet: provisioned } };
+    soup.reload = {
+      data: { user: { tagSets: [provisioned] } },
+      extensions: {
+        __macroNormalizedCache: {
+          source: 'live-network',
+          // The reload's write never reports back.
+          persistence: new Promise<undefined>(() => {}),
+        },
+      },
+    };
+    soup.cachedReads = [
+      { kind: 'miss' },
+      { kind: 'hit', data: { user: { tagSets: [provisioned] } } },
+    ];
+    let done = false;
+    const ensured = (async () => {
+      const value = await ensureTagSet('user');
+      done = true;
+      return value;
+    })();
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(ensured).resolves.toMatchObject({ scope: 'user' });
+  });
+
+  it('takes the set a tag list shows when the cache answers nothing', async () => {
+    queueingHost();
+    const shown = {
+      scope: 'team',
+      definition: { id: 'def-team' },
+      options: [],
+    } as unknown as Awaited<ReturnType<typeof ensureTagSet>>;
+    const dispose = createRoot((dispose) => {
+      registerCatalogReader({
+        kind: 'tags',
+        key: () => 7,
+        definitions: () => [{ scope: 'TEAM', definitionId: 'def-team' }],
+        sets: () => [shown],
+        refresh: async () => {},
+      });
+      return dispose;
+    });
+    try {
+      expect(await cachedTagSet('team')).toBe(shown);
+      expect(await cachedTagSet('user')).toBeUndefined();
+    } finally {
+      dispose();
     }
   });
 });

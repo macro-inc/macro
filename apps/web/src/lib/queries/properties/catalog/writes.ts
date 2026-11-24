@@ -226,6 +226,27 @@ async function settle<TData, TVariables extends AnyVariables>(
   }
 }
 
+/**
+ * How long provisioning waits for its reload to be written to the cache
+ * before reading it back: the cache ends a read it cannot answer at 10 s.
+ */
+const PERSISTENCE_WAIT_MS = 10_000;
+
+/** Waits for a promise, or for `ms`, whichever comes first. */
+async function within(promise: Promise<unknown> | undefined, ms: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      promise,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function noData(operation: string): never {
   throw new CatalogMutationError(`${operation} returned no data`);
 }
@@ -687,7 +708,8 @@ export async function ensureTagSet(
         // is not the cache refusing the set: the readers on screen shared the
         // reload, so its own answer decides then.
         const metadata = normalizedCacheResultMetadata(reloaded);
-        if (metadata?.source === 'live-network') await metadata.persistence;
+        if (metadata?.source === 'live-network')
+          await within(metadata.persistence, PERSISTENCE_WAIT_MS);
         const after = await readListed();
         const ready = after.isOk()
           ? after.value
@@ -797,7 +819,8 @@ export function refreshTagSets(): void {
 /**
  * The viewer's provisioned set for a scope as the cache holds it, without a
  * request. Provisioning is idempotent, so a cached definition stays valid and
- * a tag can be created at once, offline included.
+ * a tag can be created at once, offline included. A cache that cannot answer
+ * answers nothing; a tag list on screen still shows the set it last read.
  */
 export async function cachedTagSet(
   scope: TagScope
@@ -810,5 +833,8 @@ export async function cachedTagSet(
     (candidate) => candidate.scope === toGraphqlTagScope(scope)
   );
   const mapped = set && toTagSet(set);
-  return mapped?.definition ? mapped : undefined;
+  if (mapped?.definition) return mapped;
+  return catalogReaders()
+    .flatMap((reader) => (reader.kind === 'tags' ? reader.sets() : []))
+    .find((shown) => shown.scope === scope && shown.definition);
 }
