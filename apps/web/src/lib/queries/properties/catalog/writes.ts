@@ -17,7 +17,13 @@
  *   name collisions); the lists that hold them reload after it answers.
  * - A write the server answers waits while the app is offline and goes once
  *   it is back online, as TanStack paused a write started offline; a write
- *   the cache queues shows at once and the queue sends it.
+ *   the cache queues shows at once and the queue sends it. Each write takes
+ *   the client and cache the page has when it is sent.
+ * - While the cache holds older writes it cannot send (paused through an
+ *   outage, or resuming but not yet handed out), a write is refused and can
+ *   be retried, as drafts are: sending it past the cache would reorder it.
+ * - A write the cache may have queued although its reply was lost is waited
+ *   for under the id it was queued with, not taken as failed.
  */
 
 import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
@@ -36,6 +42,7 @@ import {
   selectRecords,
   update,
 } from '@graphql-cache/index';
+import { isAdmittedEnqueueUncertainError } from '@graphql-cache/protocol';
 import { Telemetry } from '@macro-inc/observability';
 import type { AddPropertyOptionRequest } from '@service-properties/generated/schemas/addPropertyOptionRequest';
 import type { CreatePropertyDefinitionRequest } from '@service-properties/generated/schemas/createPropertyDefinitionRequest';
@@ -63,10 +70,13 @@ import {
 import {
   getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
+  graphqlDraftQueueBlocked,
+  graphqlSoupSessionActive,
 } from '@service-storage/graphql-soup';
 import { onlineManager } from '@tanstack/solid-query';
 import {
   type AnyVariables,
+  type Client,
   getOperationName,
   type OperationContext,
   type OperationResult,
@@ -145,6 +155,11 @@ type SettleOptions = {
   onCommit?: () => void;
   /** The login session the write's flow began in; the session now when omitted. */
   session?: number;
+  /**
+   * The id the cache queues the write under, for one it predicts: a write
+   * whose enqueue lost its reply is found by it.
+   */
+  uuid?: string;
 };
 
 const accountChanged = (when: string) =>
@@ -152,6 +167,20 @@ const accountChanged = (when: string) =>
     `Another login took over ${when}`,
     'ACCOUNT_CHANGED'
   );
+
+const signedOut = (when: string) =>
+  new CatalogMutationError(`The session ended ${when}`, 'SIGNED_OUT');
+
+/** A write refused while the cache holds older writes it cannot send yet. */
+const writesPaused = () =>
+  new CatalogMutationError(
+    'Saving is paused while earlier changes wait to sync. Try again in a moment.',
+    'WRITES_PAUSED'
+  );
+
+/** Whether a write's outcome is no longer this page's to report. */
+const belongsElsewhere = (session: number) =>
+  queryAccountSession() !== session || !graphqlSoupSessionActive();
 
 /** What a write's wait depends on: its login, and the cache holding it. */
 type WaitScope = {
@@ -172,9 +201,10 @@ const isHostGone = (host: CacheHost): boolean =>
 
 /**
  * Why a write's wait ended before its work did, if it did: another login took
- * over, or the cache holding the write stopped (signed out, retired, failed or
- * replaced), which will never report it. A cache that is paused, or hidden
- * while it resumes, has not stopped.
+ * over, the session ended (a sign-out, which then wipes the cache), or the
+ * cache holding the write stopped (retired, failed or replaced), which will
+ * never report it. A cache that is paused, or hidden while it resumes, has
+ * not stopped.
  */
 function waitEnded({
   session,
@@ -182,6 +212,7 @@ function waitEnded({
   when,
 }: WaitScope): CatalogMutationError | undefined {
   if (queryAccountSession() !== session) return accountChanged(when);
+  if (!graphqlSoupSessionActive()) return signedOut(when);
   // Read for its changes: each retirement, pause and resume is announced there.
   getGraphqlSoupCacheHost();
   if (host && isHostGone(host))
@@ -194,18 +225,21 @@ function waitEnded({
 
 /**
  * Waits for `work`, or rejects once the wait ended (`waitEnded`), aborting
- * `work`'s signal. An outcome that arrives as the login changes belongs to
- * the old login; one the cache reported before it stopped still stands.
+ * `work`'s signal. An outcome that arrives as the login changes or the
+ * session ends belongs to the old login; one the cache reported before it
+ * stopped still stands.
  */
 async function whileWaitHolds<T>(
   scope: WaitScope,
   work: (signal: AbortSignal) => Promise<T>
 ): Promise<T> {
   const ended = () => waitEnded(scope);
-  const loginEnded = () =>
-    queryAccountSession() === scope.session
-      ? undefined
-      : accountChanged(scope.when);
+  const loginEnded = () => {
+    if (queryAccountSession() !== scope.session)
+      return accountChanged(scope.when);
+    if (!graphqlSoupSessionActive()) return signedOut(scope.when);
+    return undefined;
+  };
   const abort = new AbortController();
   let stop = () => {};
   const stopped = new Promise<never>((_, reject) => {
@@ -230,26 +264,84 @@ async function whileWaitHolds<T>(
   }
 }
 
+/**
+ * Waits for a write the cache may have queued although its enqueue lost its
+ * reply. Its settlement decides; a queue that answers without it, before any
+ * settlement of it, never took it.
+ */
+async function commitOfUncertain(
+  settlements: Settlements,
+  host: CacheHost | undefined,
+  uuid: string
+): Promise<void> {
+  const settled = settlements.waitForMutation(uuid);
+  const queued = (async () => {
+    try {
+      const queue = await host?.inspectMutations?.();
+      return queue?.some((mutation) => mutation.uuid === uuid);
+    } catch (error: unknown) {
+      // Unknown: its settlement still decides.
+      console.error('Inspecting the property write queue failed', error);
+      return undefined;
+    }
+  })();
+  const reported = (async () => {
+    await settled;
+    return 'settled' as const;
+  })();
+  const first = await Promise.race([reported, queued]);
+  if (first === false && !settlements.reported(uuid)) {
+    throw new CatalogMutationError(
+      'The change was not saved. Try again.',
+      'NOT_SAVED'
+    );
+  }
+  return settled;
+}
+
+/**
+ * How to wait for the commit of a write the cache took, if it took it: a
+ * queued one by its transaction, one whose enqueue lost its reply by its id.
+ */
+function commitOf(
+  settlements: Settlements,
+  host: CacheHost | undefined,
+  result: OperationResult,
+  uuid: string | undefined
+): (() => Promise<void>) | undefined {
+  const disposition = optimisticMutationDispositionOf(result);
+  if (disposition?.kind === 'queued')
+    return () => settlements.waitForCommit(disposition.transactionId);
+  if (
+    uuid !== undefined &&
+    isAdmittedEnqueueUncertainError(result.error?.networkError)
+  )
+    return () => commitOfUncertain(settlements, host, uuid);
+  return undefined;
+}
+
 /** Waits for a queued write's commit in the background. */
 async function observeCommit(
   settlements: Settlements,
-  transactionId: string,
+  committed: () => Promise<void>,
   scope: WaitScope,
   options: SettleOptions
 ): Promise<void> {
   let failure: Error | undefined;
   try {
-    await whileWaitHolds(scope, () => settlements.waitForCommit(transactionId));
+    await whileWaitHolds(scope, committed);
   } catch (error: unknown) {
     failure = error instanceof Error ? error : new Error(String(error));
   } finally {
     settlements.dispose();
   }
-  // The old login's write is not this page's to report. Checked here, right
-  // before the callbacks, since a login can change after the wait ends.
+  // The old login's write is not this page's to report, nor a write a
+  // sign-out wiped. Checked here, right before the callbacks, since a login
+  // can change after the wait ends.
   if (
-    queryAccountSession() !== scope.session ||
-    isCatalogErrorCode(failure, 'ACCOUNT_CHANGED')
+    belongsElsewhere(scope.session) ||
+    isCatalogErrorCode(failure, 'ACCOUNT_CHANGED') ||
+    isCatalogErrorCode(failure, 'SIGNED_OUT')
   )
     return;
   if (!failure) {
@@ -271,7 +363,9 @@ type Settled<TData> =
  * A write that goes straight to the server (`serverAnswered`) waits until the
  * app is online before it is sent, in the trace it was started in, and is
  * dropped if another login took over the page meanwhile, or since the
- * `session` its flow began in.
+ * `session` its flow began in, or the session ended. `send` reads the
+ * client and cache when it runs. A write is refused while the cache holds
+ * older writes it cannot send yet.
  */
 async function settle<TData, TVariables extends AnyVariables>(
   send: (
@@ -297,6 +391,10 @@ async function settle<TData, TVariables extends AnyVariables>(
       'Another login took over before the write was sent',
       'ACCOUNT_CHANGED'
     );
+  if (!graphqlSoupSessionActive()) throw signedOut('before the write was sent');
+  // A cache paused through an outage, or resuming but not handed out yet,
+  // still holds older writes; this one would overtake them.
+  if (graphqlDraftQueueBlocked()) throw writesPaused();
   const host = getGraphqlSoupCacheHost();
   const settlements = observePropertyMutationSettlements(host);
   const saving: WaitScope = {
@@ -307,12 +405,10 @@ async function settle<TData, TVariables extends AnyVariables>(
   let observing = false;
   try {
     const result = await trace.run(() => send(context));
-    const disposition = optimisticMutationDispositionOf(result);
-    if (disposition?.kind === 'queued') {
+    const committed = commitOf(settlements, host, result, options.uuid);
+    if (committed) {
       if (options.waitForCommit) {
-        await whileWaitHolds(saving, () =>
-          settlements.waitForCommit(disposition.transactionId)
-        );
+        await whileWaitHolds(saving, committed);
         // A login can change after the wait ends.
         if (queryAccountSession() !== session)
           throw accountChanged(saving.when);
@@ -321,12 +417,13 @@ async function settle<TData, TVariables extends AnyVariables>(
       }
       observing = true;
       fireAndForget(
-        observeCommit(settlements, disposition.transactionId, saving, options),
+        observeCommit(settlements, committed, saving, options),
         'property-catalog'
       );
       return { kind: 'queued' };
     }
     if (result.error) throw errorOf(result);
+    const disposition = optimisticMutationDispositionOf(result);
     if (disposition?.kind === 'permanently-failed') {
       throw new CatalogMutationError(disposition.error.message);
     }
@@ -393,10 +490,11 @@ const reorder = { waiting: new Set<string>(), running: false };
  * Puts a definition's options back in the server's order (see the header).
  * One reload runs at a time and covers every definition whose write committed
  * meanwhile, so replaying a queue of writes reloads each list once or twice,
- * not once per write.
+ * not once per write. A cache that is paused, or hidden while it resumes,
+ * still commits the writes it queued; those reload too.
  */
 function reorderOptionsOf(propertyDefinitionId: string) {
-  if (!usingCache()) return;
+  if (!usingCache() && !graphqlDraftQueueBlocked()) return;
   reorder.waiting.add(propertyDefinitionId);
   if (!reorder.running) fireAndForget(reorderWaiting(), 'property-catalog');
 }
@@ -435,6 +533,7 @@ export async function updatePropertyOption(
   await Telemetry.span('property_catalog.update_option', async (span) => {
     span.setAttr('property.definition_id', propertyDefinitionId);
     span.setAttr('property.option_id', optionId);
+    const uuid = uuidv7();
     const outcome = await settle(
       (context) =>
         getGraphqlSoupClient()
@@ -451,13 +550,14 @@ export async function updatePropertyOption(
                   : {}),
               },
             },
-            context
+            { optimisticMutation: { uuid }, ...context }
           )
           .toPromise(),
       {
         waitForCommit: false,
         serverAnswered: !usingCache(),
         onLateFailure,
+        uuid,
         ...(body.value != null || body.display_order != null
           ? { onCommit: () => reorderOptionsOf(propertyDefinitionId) }
           : {}),
@@ -475,16 +575,22 @@ export async function deletePropertyOption(
   await Telemetry.span('property_catalog.delete_option', async (span) => {
     span.setAttr('property.definition_id', propertyDefinitionId);
     span.setAttr('property.option_id', optionId);
+    const uuid = uuidv7();
     const outcome = await settle(
       (context) =>
         getGraphqlSoupClient()
           .mutation(
             DeletePropertyOptionDocument,
             { propertyDefinitionId, optionId },
-            context
+            { optimisticMutation: { uuid }, ...context }
           )
           .toPromise(),
-      { waitForCommit: false, serverAnswered: !usingCache(), onLateFailure }
+      {
+        waitForCommit: false,
+        serverAnswered: !usingCache(),
+        onLateFailure,
+        uuid,
+      }
     );
     span.setAttr('property.outcome', outcome.kind);
   });
@@ -496,16 +602,22 @@ export async function deletePropertyDefinition(
 ): Promise<void> {
   await Telemetry.span('property_catalog.delete_definition', async (span) => {
     span.setAttr('property.definition_id', propertyDefinitionId);
+    const uuid = uuidv7();
     const outcome = await settle(
       (context) =>
         getGraphqlSoupClient()
           .mutation(
             DeletePropertyDefinitionDocument,
             { propertyDefinitionId },
-            context
+            { optimisticMutation: { uuid }, ...context }
           )
           .toPromise(),
-      { waitForCommit: false, serverAnswered: !usingCache(), onLateFailure }
+      {
+        waitForCommit: false,
+        serverAnswered: !usingCache(),
+        onLateFailure,
+        uuid,
+      }
     );
     // An editor mounted for the deleted definition asks the server again,
     // which refuses it, rather than showing the options the cache holds.
@@ -626,8 +738,6 @@ export async function addPropertyOption(
     const id = uuidv7();
     span.setAttr('property.option_id', id);
     const input = { ...toAddOptionInput(propertyDefinitionId, request), id };
-    const client = getGraphqlSoupClient();
-    const host = getGraphqlSoupCacheHost();
     const now = new Date().toISOString();
     const option = {
       __typename: 'GraphqlPropertyOption' as const,
@@ -644,7 +754,7 @@ export async function addPropertyOption(
     // The links are read from the cache, so they carry the cache generation
     // they were read under.
     const parent = Telemetry.captureContext();
-    const enqueue = async (cacheHost: CacheHost) => {
+    const enqueue = async (client: Client, cacheHost: CacheHost) => {
       const authorizationEpoch = crmSnapshotAuthorization().epoch;
       const updates = await optionListLinks(
         cacheHost,
@@ -670,16 +780,22 @@ export async function addPropertyOption(
       AddPropertyOptionMutation,
       { input: typeof input }
     >(
-      async (context) =>
-        host
-          ? enqueue(host)
+      // The cache may have stopped or come back while the add waited to go
+      // online: it goes through the client and cache the page has now.
+      async (context) => {
+        const client = getGraphqlSoupClient();
+        const host = getGraphqlSoupCacheHost();
+        return host
+          ? enqueue(client, host)
           : client
               .mutation(AddPropertyOptionDocument, { input }, context)
-              .toPromise(),
+              .toPromise();
+      },
       {
         waitForCommit: true,
-        serverAnswered: !host,
+        serverAnswered: !usingCache(),
         onCommit: () => reorderOptionsOf(propertyDefinitionId),
+        uuid: id,
       }
     );
     span.setAttr(
@@ -754,10 +870,9 @@ export async function ensureTagSet(
   return Telemetry.span('property_catalog.ensure_tag_set', async (span) => {
     span.setAttr('property.scope', scope);
     const session = started.session ?? queryAccountSession();
-    const client = getGraphqlSoupClient();
     const outcome = await settle(
       (context) =>
-        client
+        getGraphqlSoupClient()
           .mutation(
             EnsureTagSetDocument,
             { scope: toGraphqlTagScope(scope) },
@@ -771,6 +886,9 @@ export async function ensureTagSet(
     const mapped = set && toTagSet(set);
     if (!mapped?.definition) noData('ensureTagSet');
     span.setAttr('property.definition_id', mapped.definition.id);
+    // Read after the write: the cache may have come back or stopped while it
+    // waited to go online, and the reload fills the cache the page has now.
+    const client = getGraphqlSoupClient();
     const host = getGraphqlSoupCacheHost();
     if (host) {
       // Provisioning fills a set the cached list holds as empty. A set that is

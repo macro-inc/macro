@@ -1,5 +1,8 @@
 import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
-import type { MutationSettlement } from '@graphql-cache/protocol';
+import {
+  ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
+  type MutationSettlement,
+} from '@graphql-cache/protocol';
 import { onlineManager } from '@tanstack/solid-query';
 import { CombinedError, type OperationResult } from '@urql/core';
 import { createRoot } from 'solid-js';
@@ -21,8 +24,22 @@ const soup = vi.hoisted(() => ({
         disabled?: boolean;
         /** Paused through an outage: not handed out, but serving again later. */
         paused?: boolean;
+        /** The writes the cache's queue holds. */
+        inspectMutations?: () => Promise<{ uuid: string }[]>;
       }
     | undefined,
+  /** Whether the cache holds older writes it cannot send now. */
+  blocked: false,
+  /** Whether the session runs: false once sign-out clears the login cookie. */
+  signedIn: true,
+  /** Tells reactive readers of the session that it ended. */
+  sessionChanged: () => {},
+  /** Read by reactive readers of the session. */
+  trackSession: () => {},
+  /** Which client the soup hands out now. */
+  clientName: 'client',
+  /** Each request a client was asked for, as `<kind>:<client>`. */
+  clients: [] as string[],
   /** Whether the cache holds the definition's options on its record. */
   definitionCached: true as boolean | 'unreadable',
   settle: (_settlement: MutationSettlement) => {},
@@ -46,24 +63,41 @@ const soup = vi.hoisted(() => ({
 }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlSoupClient: () => ({
-    mutation: soup.mutation,
-    query: (
-      _document: unknown,
-      _variables: unknown,
-      context?: { requestPolicy?: string }
-    ) => ({
-      toPromise: async () => {
-        if (context?.requestPolicy === 'network-only')
-          return soup.reload ?? { data: undefined };
-        if (context?.requestPolicy !== 'cache-only') return { data: undefined };
-        return soup.cacheOnly ?? { data: undefined };
+  getGraphqlSoupClient: () => {
+    const name = soup.clientName;
+    return {
+      name,
+      mutation: (...args: unknown[]) => {
+        soup.clients.push(`mutation:${name}`);
+        return soup.mutation(...args);
       },
-    }),
-  }),
+      query: (
+        _document: unknown,
+        _variables: unknown,
+        context?: { requestPolicy?: string }
+      ) => ({
+        toPromise: async () => {
+          soup.clients.push(`${context?.requestPolicy}:${name}`);
+          if (context?.requestPolicy === 'network-only')
+            return soup.reload ?? { data: undefined };
+          if (context?.requestPolicy !== 'cache-only')
+            return { data: undefined };
+          return soup.cacheOnly ?? { data: undefined };
+        },
+      }),
+    };
+  },
   getGraphqlSoupCacheHost: () => {
     soup.tracked();
     return soup.host;
+  },
+  graphqlDraftQueueBlocked: () => {
+    soup.tracked();
+    return soup.blocked;
+  },
+  graphqlSoupSessionActive: () => {
+    soup.trackSession();
+    return soup.signedIn;
   },
 }));
 
@@ -87,10 +121,15 @@ vi.mock('../../auth/account-scope', async () => {
   const { createSignal } = await import('solid-js');
   const [changes, setChanges] = createSignal(0);
   const [cacheChanges, setCacheChanges] = createSignal(0);
+  const [sessionChanges, setSessionChanges] = createSignal(0);
   soup.loginChanged = () => setChanges((count) => count + 1);
   soup.cacheChanged = () => setCacheChanges((count) => count + 1);
+  soup.sessionChanged = () => setSessionChanges((count) => count + 1);
   soup.tracked = () => {
     cacheChanges();
+  };
+  soup.trackSession = () => {
+    sessionChanges();
   };
   return {
     queryAccountSession: () => {
@@ -109,6 +148,8 @@ import {
   deletePropertyDefinition,
   deletePropertyOption,
   ensureTagSet,
+  mergeTag,
+  promoteTag,
   updatePropertyOption,
 } from './writes';
 
@@ -131,6 +172,10 @@ beforeEach(() => {
   soup.definitionCached = true;
   soup.duringRead = undefined;
   soup.epoch = 'gen-1';
+  soup.blocked = false;
+  soup.signedIn = true;
+  soup.clientName = 'client';
+  soup.clients = [];
 });
 
 /** A cache host whose queue holds every write until the test settles it. */
@@ -703,6 +748,35 @@ describe('option order', () => {
     }
   });
 
+  it.each([
+    ['paused', (host: typeof soup.host) => pause(host)],
+    [
+      'resuming, hidden',
+      (host: typeof soup.host) => {
+        if (host) Object.assign(host, { disabled: false, paused: false });
+        soup.host = undefined;
+        soup.cacheChanged();
+      },
+    ],
+  ])(
+    'reloads them for a rename that commits while the cache is %s',
+    async (_, state) => {
+      const readers = mountedReaders();
+      try {
+        const settle = queueingHost();
+        soup.result = { queued: 'tx-rename' } as Partial<OperationResult>;
+        await updatePropertyOption('def-1', 'opt-1', { value: 'B' }, () => {});
+        state(soup.host);
+        soup.blocked = true;
+        settle({ transactionId: 'tx-rename', status: 'committed' });
+        await readers.reloaded(HOLDING_DEF_1.length);
+        expect([...readers.refreshed].sort()).toEqual(HOLDING_DEF_1);
+      } finally {
+        readers.dispose();
+      }
+    }
+  );
+
   it('reloads once more for every write that commits during a reload', async () => {
     const readers = mountedReaders();
     try {
@@ -1141,6 +1215,304 @@ describe('a waiting write when the login or the cache goes', () => {
       expect(isCatalogErrorCode(await created, 'ACCOUNT_CHANGED')).toBe(true);
       expect(soup.mutation).not.toHaveBeenCalled();
       // It left no listener waiting for the reconnect.
+      expect(unsubscribed).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+      onlineManager.setOnline(true);
+    }
+  });
+});
+
+describe('a write sent after it waited to go online', () => {
+  it('provisions through the client the page has then, and reloads through it', async () => {
+    onlineManager.setOnline(false);
+    try {
+      soup.clientName = 'network';
+      const ensured = ensureTagSet('user');
+      await Promise.resolve();
+      // The cache recovered meanwhile.
+      queueingHost();
+      soup.clientName = 'cached';
+      const provisioned = {
+        scope: 'USER',
+        definition: {
+          __typename: 'GraphqlPropertyDefinition',
+          id: 'def-mine',
+          owner: { scope: 'USER', principalId: 'user-1' },
+          displayName: 'Tags',
+          dataType: 'SELECT_STRING',
+          isMultiSelect: true,
+          specificEntityType: null,
+          isSystem: false,
+          isMetadata: false,
+          createdAt: new Date(0).toISOString(),
+          updatedAt: new Date(0).toISOString(),
+        },
+        options: [],
+      };
+      soup.result = { data: { ensureTagSet: provisioned } };
+      soup.reload = { data: { user: { tagSets: [provisioned] } } };
+      soup.cachedReads = [
+        { kind: 'hit', data: { user: { tagSets: [] } } },
+        { kind: 'hit', data: { user: { tagSets: [provisioned] } } },
+      ];
+      onlineManager.setOnline(true);
+      await expect(ensured).resolves.toMatchObject({ scope: 'user' });
+      expect(soup.clients).toEqual(['mutation:cached', 'network-only:cached']);
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('queues an add once the cache is back, rather than sending it past the cache', async () => {
+    onlineManager.setOnline(false);
+    try {
+      soup.clientName = 'network';
+      const added = addPropertyOption('def-1', TAG);
+      await Promise.resolve();
+      const settle = queueingHost();
+      soup.clientName = 'cached';
+      onlineManager.setOnline(true);
+      await settle.enqueued();
+      const [client] = soup.optimistic.mock.calls[0] ?? [];
+      expect(client.name).toBe('cached');
+      expect(soup.mutation).not.toHaveBeenCalled();
+      settle({ transactionId: 'tx-1', status: 'committed' });
+      await expect(added).resolves.toMatchObject({
+        property_definition_id: 'def-1',
+      });
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+});
+
+describe('a write whose enqueue lost its reply', () => {
+  /** The cache may hold the write: the engine took it, then its reply was lost. */
+  const uncertain = (): Partial<OperationResult> => ({
+    error: new CombinedError({
+      networkError: Object.assign(
+        new Error(
+          'worker lost: admitted optimistic enqueue outcome is uncertain'
+        ),
+        { errorCode: ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE }
+      ),
+    }),
+  });
+
+  /** The queue holds the writes enqueued under these ids. */
+  function queueHolds(uuids: () => string[]) {
+    const host = soup.host;
+    if (!host) throw new Error('no host');
+    host.inspectMutations = async () => uuids().map((uuid) => ({ uuid }));
+  }
+
+  function optionsReader() {
+    const refresh = vi.fn(async () => {});
+    const dispose = createRoot((dispose) => {
+      registerCatalogReader({
+        kind: 'options',
+        key: () => 99,
+        propertyDefinitionId: () => 'def-1',
+        refresh,
+      });
+      return dispose;
+    });
+    return { refresh, dispose };
+  }
+
+  it('waits for an add the cache holds under its id, and reloads once it commits', async () => {
+    const reader = optionsReader();
+    try {
+      const settle = queueingHost();
+      soup.optimistic.mockImplementation(() => ({
+        toPromise: async () => uncertain(),
+      }));
+      const sent = () =>
+        soup.optimistic.mock.calls.map(([, , , , options]) => options.uuid);
+      queueHolds(sent);
+      let ended = false;
+      const added = (async () => {
+        const outcome = await outcomeOf(addPropertyOption('def-1', TAG));
+        ended = true;
+        return outcome;
+      })();
+      await vi.waitFor(() => expect(sent()).toHaveLength(1));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(ended).toBe(false);
+      settle({
+        transactionId: 'tx-7',
+        status: 'committed',
+        mutationUuid: sent()[0],
+      });
+      expect(await added).toMatchObject({ id: sent()[0] });
+      await vi.waitFor(() => expect(reader.refresh).toHaveBeenCalled());
+    } finally {
+      reader.dispose();
+    }
+  });
+
+  it('fails an add the queue turns out not to hold, as not saved', async () => {
+    queueingHost();
+    soup.optimistic.mockImplementation(() => ({
+      toPromise: async () => uncertain(),
+    }));
+    queueHolds(() => []);
+    const added = await outcomeOf(addPropertyOption('def-1', TAG));
+    expect(isCatalogErrorCode(added, 'NOT_SAVED')).toBe(true);
+  });
+
+  it('runs a predicted write on when its commit arrives, reporting no failure', async () => {
+    const reader = optionsReader();
+    try {
+      const settle = queueingHost();
+      soup.result = uncertain();
+      const sent = () =>
+        soup.mutation.mock.calls.map(
+          ([, , context]) => context?.optimisticMutation?.uuid
+        );
+      queueHolds(sent);
+      const late = vi.fn();
+      await updatePropertyOption('def-1', 'opt-1', { value: 'B' }, late);
+      const [uuid] = sent();
+      expect(validateUuid(uuid)).toBe(true);
+      settle({
+        transactionId: 'tx-8',
+        status: 'committed',
+        mutationUuid: uuid,
+      });
+      await settle.drained();
+      expect(late).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(reader.refresh).toHaveBeenCalled());
+    } finally {
+      reader.dispose();
+    }
+  });
+
+  it('reports a predicted write the queue turns out not to hold as failed', async () => {
+    const settle = queueingHost();
+    soup.result = uncertain();
+    queueHolds(() => []);
+    const late = vi.fn();
+    await deletePropertyOption('def-1', 'opt-1', late);
+    await settle.drained();
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(isCatalogErrorCode(late.mock.calls[0]?.[0], 'NOT_SAVED')).toBe(true);
+  });
+});
+
+describe('a write while the cache holds older writes it cannot send', () => {
+  const WRITES: Record<string, () => Promise<unknown>> = {
+    'an option update': () =>
+      updatePropertyOption('def-1', 'opt-1', { value: 'B' }, () => {}),
+    'an option delete': () => deletePropertyOption('def-1', 'opt-1', () => {}),
+    'a definition delete': () => deletePropertyDefinition('def-1', () => {}),
+    'an option add': () => addPropertyOption('def-1', TAG),
+    'a definition create': () =>
+      createPropertyDefinition({
+        display_name: 'Phase',
+        scope: 'user',
+        data_type: { type: 'boolean' },
+      }),
+    'a tag set provisioning': () => ensureTagSet('user'),
+    'a tag promotion': () => promoteTag('opt-1'),
+    'a tag merge': () => mergeTag('opt-1', 'opt-2'),
+  };
+
+  it.each([
+    [
+      'paused through an outage',
+      () => {
+        queueingHost();
+        pause(soup.host);
+      },
+    ],
+    [
+      'resuming, hidden until its queue is readable',
+      () => {
+        queueingHost();
+        // The same host serves again, but the soup does not hand it out yet.
+        soup.host = undefined;
+      },
+    ],
+  ])(
+    'refuses every write, retryably, while the cache is %s',
+    async (_, state) => {
+      for (const [name, write] of Object.entries(WRITES)) {
+        soup.mutation.mockClear();
+        soup.optimistic.mockClear();
+        state();
+        soup.blocked = true;
+        const refused = await outcomeOf(write());
+        expect(isCatalogErrorCode(refused, 'WRITES_PAUSED'), name).toBe(true);
+        expect(soup.mutation, name).not.toHaveBeenCalled();
+        expect(soup.optimistic, name).not.toHaveBeenCalled();
+      }
+    }
+  );
+
+  it('sends writes to the server while the cache is off', async () => {
+    soup.result = { data: {} };
+    await updatePropertyOption('def-1', 'opt-1', { color: '#0f0' }, () => {});
+    await deletePropertyOption('def-1', 'opt-1', () => {});
+    await deletePropertyDefinition('def-1', () => {});
+    expect(soup.clients).toEqual([
+      'mutation:client',
+      'mutation:client',
+      'mutation:client',
+    ]);
+  });
+});
+
+describe('signing out', () => {
+  it('reports no late failure when sign-out wipes the cache holding a write', async () => {
+    const settle = queueingHost();
+    soup.mutation.mockImplementation(() => ({
+      toPromise: async () => ({ queued: 'tx-1' }),
+    }));
+    const late = vi.fn();
+    await updatePropertyOption('def-1', 'opt-1', { value: 'Renamed' }, late);
+    // Sign-out clears the login cookie, then wipes and retires the cache,
+    // and only then ends the session.
+    soup.signedIn = false;
+    retire(soup.host);
+    await settle.drained();
+    soup.sessionChanged();
+    expect(late).not.toHaveBeenCalled();
+  });
+
+  it('stops waiting to go online when the session ends', async () => {
+    const subscribe = onlineManager.subscribe.bind(onlineManager);
+    const unsubscribed = vi.fn();
+    const spy = vi
+      .spyOn(onlineManager, 'subscribe')
+      .mockImplementation((listener) => {
+        const unsubscribe = subscribe(listener);
+        return () => {
+          unsubscribed();
+          unsubscribe();
+        };
+      });
+    onlineManager.setOnline(false);
+    try {
+      const created = outcomeOf(
+        createPropertyDefinition({
+          display_name: 'Phase',
+          data_type: { type: 'boolean' },
+          scope: 'user',
+        })
+      );
+      await Promise.resolve();
+      soup.signedIn = false;
+      soup.sessionChanged();
+      const outcome = await Promise.race([
+        created,
+        new Promise((resolve) =>
+          setTimeout(() => resolve('still waiting'), 200)
+        ),
+      ]);
+      expect(isCatalogErrorCode(outcome, 'SIGNED_OUT')).toBe(true);
+      expect(soup.mutation).not.toHaveBeenCalled();
       expect(unsubscribed).toHaveBeenCalledTimes(1);
     } finally {
       spy.mockRestore();
