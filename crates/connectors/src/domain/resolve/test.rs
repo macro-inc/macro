@@ -83,8 +83,15 @@ fn connect() -> ConnectSupport {
 /// where the source can, an API. Its name says which source it came from.
 fn held(source: SourceKind, key: ConnectorKey) -> SourceConnection {
     let api: Option<Arc<dyn ApiConnection>> = match source {
-        SourceKind::Pipedream | SourceKind::Connect => Some(Arc::new(Undialed)),
+        SourceKind::Pipedream | SourceKind::Connect | SourceKind::NativeApi => {
+            Some(Arc::new(Undialed))
+        }
         SourceKind::Native | SourceKind::GithubLink => None,
+    };
+    // The native API source serves REST only.
+    let mcp: Option<Arc<dyn McpConnection>> = match source {
+        SourceKind::NativeApi => None,
+        _ => Some(Arc::new(Undialed)),
     };
     SourceConnection {
         source,
@@ -93,7 +100,7 @@ fn held(source: SourceKind, key: ConnectorKey) -> SourceConnection {
         key,
         enabled: true,
         grant: GrantState::Working,
-        mcp: Some(Arc::new(Undialed)),
+        mcp,
         api,
     }
 }
@@ -204,6 +211,130 @@ fn github_macro_connect_on_connect_does_not_serve_it_counts_the_link() {
         handle_name(&resolution, &app_key("github")).as_deref(),
         Some("GithubLink")
     );
+}
+
+// The table: an app reached by REST with Macro's own OAuth client.
+
+/// The name of the connection whose API handle is offered for `app`.
+fn api_name(resolution: &Resolution, app_slug: &str) -> Option<String> {
+    let counted = resolution.mcp.resolved().iter().find(|resolved| {
+        resolved.key == app_key(app_slug) && resolved.status == Status::Connected
+    })?;
+    resolution
+        .api
+        .iter()
+        .any(|handle| handle.app() == &app(app_slug))
+        .then(|| counted.name.clone())
+}
+
+#[test]
+fn native_api_app_macro_connect_off_counts_the_native_api_source() {
+    let resolution = run(
+        MacroConnectEnabledFlag::Off,
+        vec![
+            held(SourceKind::Pipedream, app_key("autodesk")),
+            held(SourceKind::NativeApi, app_key("autodesk")),
+        ],
+    );
+
+    assert_eq!(
+        api_name(&resolution, "autodesk").as_deref(),
+        Some("NativeApi")
+    );
+    assert_eq!(resolution.mcp.resolved().len(), 1);
+}
+
+#[test]
+fn native_api_app_macro_connect_on_connect_does_not_serve_it_counts_the_native_api_source() {
+    let resolution = run(
+        MacroConnectEnabledFlag::On,
+        vec![
+            held(SourceKind::Pipedream, app_key("autodesk")),
+            held(SourceKind::NativeApi, app_key("autodesk")),
+        ],
+    );
+
+    assert_eq!(
+        api_name(&resolution, "autodesk").as_deref(),
+        Some("NativeApi")
+    );
+}
+
+#[test]
+fn native_api_app_macro_connect_on_connect_serves_it_counts_connect() {
+    let connect = ConnectSupport::new([(app("autodesk"), Surfaces::new(true, true))]);
+    let resolution = resolve(
+        &user(),
+        MacroConnectEnabledFlag::On,
+        &overlays(),
+        &connect,
+        vec![
+            held(SourceKind::NativeApi, app_key("autodesk")),
+            held(SourceKind::Connect, app_key("autodesk")),
+        ],
+    );
+
+    assert_eq!(
+        api_name(&resolution, "autodesk").as_deref(),
+        Some("Connect")
+    );
+}
+
+#[test]
+fn native_api_app_is_api_only_and_offers_no_mcp_handle() {
+    let resolution = run(
+        MacroConnectEnabledFlag::Off,
+        vec![held(SourceKind::NativeApi, app_key("autodesk"))],
+    );
+
+    assert_eq!(
+        resolution.mcp.status(&app_key("autodesk")),
+        Status::Connected
+    );
+    assert_eq!(resolution.mcp.handles().count(), 0);
+    assert_eq!(resolution.api.len(), 1);
+    let surfaces = resolution.mcp.resolved()[0].surfaces;
+    assert!(surfaces.api());
+    assert!(!surfaces.mcp());
+}
+
+#[test]
+fn native_api_source_counts_only_for_its_own_apps() {
+    let resolution = run(
+        MacroConnectEnabledFlag::Off,
+        vec![held(SourceKind::NativeApi, app_key("asana"))],
+    );
+
+    assert!(resolution.mcp.resolved().is_empty());
+    assert!(resolution.api.is_empty());
+}
+
+#[test]
+fn native_api_app_needing_reauth_offers_no_api() {
+    let resolution = run(
+        MacroConnectEnabledFlag::Off,
+        vec![unauthorized(held(SourceKind::NativeApi, app_key("autodesk")))],
+    );
+
+    assert_eq!(
+        resolution.mcp.status(&app_key("autodesk")),
+        Status::NeedsReauth
+    );
+    assert!(resolution.api.is_empty());
+}
+
+#[test]
+fn native_api_app_turned_off_offers_no_api() {
+    let resolution = run(
+        MacroConnectEnabledFlag::Off,
+        vec![disabled(held(SourceKind::NativeApi, app_key("autodesk")))],
+    );
+
+    assert_eq!(
+        resolution.mcp.status(&app_key("autodesk")),
+        Status::Disabled
+    );
+    assert!(resolution.api.is_empty());
 }
 
 // The table: an overlaid app.

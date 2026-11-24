@@ -4,6 +4,7 @@
 //! | App | Flag off | Flag on, Connect serves it | Flag on, Connect does not |
 //! |---|---|---|---|
 //! | GitHub | the account link | Connect | the account link |
+//! | A native API app (Autodesk) | native API | Connect | native API |
 //! | An overlaid app | native | Connect | native |
 //! | Any other catalog app | Pipedream | Connect | Pipedream |
 //! | A server added by URL | its own row | its own row | its own row |
@@ -12,9 +13,10 @@
 //! is not connected (2), an app gets at most one answer (3), `slack_v2` is
 //! `slack` (4), a native row is an app only at that app's overlay URL (5),
 //! API access comes from the counted connection when its source provides an
-//! API for the app (6), and a failed flag read is off (9).
+//! API for the app (6), and a failed flag read is off (9). A native API
+//! connection provides no MCP: it is usable through its API alone.
 
-use crate::domain::catalog::{ConnectSupport, Overlays};
+use crate::domain::catalog::{self, ConnectSupport, Overlays};
 use crate::domain::models::{
     ApiHandle, ConnectorId, ConnectorKey, McpConnections, McpHandle, Resolved, Status, Surfaces,
 };
@@ -171,6 +173,8 @@ pub(crate) fn counted_source(
 
     if *app == ConnectorId::github() {
         SourceKind::GithubLink
+    } else if catalog::is_native_api(app) {
+        SourceKind::NativeApi
     } else if overlays.is_overlaid(app) {
         SourceKind::Native
     } else {
@@ -204,12 +208,12 @@ fn rank(status: Status) -> u8 {
     }
 }
 
-/// Whether `source` provides an API for `app` (rule 6): Pipedream for every
-/// app, Connect where its catalog lists API access, native servers and the
-/// GitHub link never.
+/// Whether `source` provides an API for `app` (rule 6): Pipedream and the
+/// native API source for every app they count for, Connect where its catalog
+/// lists API access, native servers and the GitHub link never.
 fn source_provides_api(source: SourceKind, app: &ConnectorId, connect: &ConnectSupport) -> bool {
     match source {
-        SourceKind::Pipedream => true,
+        SourceKind::Pipedream | SourceKind::NativeApi => true,
         SourceKind::Connect => connect.surfaces(app).is_some_and(|surfaces| surfaces.api()),
         SourceKind::Native | SourceKind::GithubLink => false,
     }

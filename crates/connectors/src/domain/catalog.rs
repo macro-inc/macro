@@ -1,6 +1,6 @@
 //! App identity: the slug aliases (rule 4), the overlay lookup that decides
-//! when a native server is an app (rule 5), and which apps Macro Connect
-//! serves.
+//! when a native server is an app (rule 5), the apps Macro reaches by REST
+//! with its own OAuth client, and which apps Macro Connect serves.
 
 use crate::domain::models::{ConnectorId, ServerUrl, Surfaces};
 use std::collections::{BTreeSet, HashMap};
@@ -10,6 +10,19 @@ mod test;
 
 /// GitHub's slug, the app the Macro account link connects.
 pub(crate) const GITHUB_SLUG: &str = "github";
+
+/// Autodesk (Autodesk Platform Services), reached by REST with Macro's own
+/// OAuth client: Pipedream's Connect does not serve it.
+pub(crate) const AUTODESK_SLUG: &str = "autodesk";
+
+/// Apps Macro reaches by REST with its own OAuth client (the native API
+/// source), whatever Pipedream's directory lists under the same slug.
+const NATIVE_API_APPS: &[&str] = &[AUTODESK_SLUG];
+
+/// Whether `app` is reached through the native API source.
+pub(crate) fn is_native_api(app: &ConnectorId) -> bool {
+    NATIVE_API_APPS.contains(&app.as_str())
+}
 
 /// Pipedream slugs that name the same app as another slug, with the slug
 /// they fold to.

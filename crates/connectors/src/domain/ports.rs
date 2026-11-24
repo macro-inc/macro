@@ -26,6 +26,9 @@ pub(crate) enum SourceKind {
     Pipedream,
     /// Macro Connect (`pipedream_mcp_connections`, provider `connect`).
     Connect,
+    /// REST apps Macro signs in to with its own OAuth client
+    /// (`api_app_connections`): API access only, no MCP.
+    NativeApi,
 }
 
 /// One connection a source holds for a user, with what it provides.

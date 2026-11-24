@@ -132,7 +132,9 @@ impl FakeSource {
             name: row.name.clone(),
             enabled: row.enabled,
             grant: row.grant,
-            mcp: Some(Arc::new(FakeMcp {
+            // The native API source serves REST only.
+            mcp: (row.source != SourceKind::NativeApi).then(|| -> Arc<dyn McpConnection> {
+                Arc::new(FakeMcp {
                 name: row.name.clone(),
                 tools: row.tools.clone(),
                 scope: match (&row.source, &row.key) {
@@ -141,7 +143,8 @@ impl FakeSource {
                     }
                     _ => None,
                 },
-            })),
+                })
+            }),
             api,
         }
     }
