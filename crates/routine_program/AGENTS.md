@@ -79,6 +79,14 @@ no I/O.
 
 ## Gotchas
 
+- `STEP_CONTEXT` types an event's channel message (`RoutineMessage`), the JSON
+  `scheduled_action`'s `event_content.rs` (`message_json`) builds: a field
+  added there is added to the type, or code can't read it. A change must keep
+  checking what the guide taught before it, or saved code is rewritten:
+  `message` is required although only message events carry it, and
+  `thread_id` (the thread's root, set on top-level posts too) stays,
+  deprecated, for code that reads it; `is_reply` and `root_id` replace it.
+  The harness's real-Deno tests check both.
 - There are no branches: code decides inside itself (`macro.ai.decide`) and
   can branch on anything it has read.
 - `sdk` is bookkeeping the scheduler writes after type-checking; never trust a
