@@ -81,6 +81,7 @@ function CanvasSurfaceWithContextMenu() {
         state={state}
         clipboard={props.clipboard}
         imageActions={view.imageActions()}
+        onCopyItemLink={view.copyItemLink()}
         onClose={view.focus}
       />
     </ContextMenu>

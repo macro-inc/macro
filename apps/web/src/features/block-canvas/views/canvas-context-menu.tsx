@@ -13,6 +13,7 @@ import ArrowUp from '@icon/system/regular/arrow-up.svg';
 import Clipboard from '@icon/system/regular/clipboard.svg';
 import Copy from '@icon/system/regular/copy.svg';
 import DownloadSimple from '@icon/system/regular/download-simple.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import Scissors from '@icon/system/regular/scissors.svg';
 import SelectionAll from '@icon/system/regular/selection-all.svg';
 import SelectionPlus from '@icon/system/regular/selection-plus.svg';
@@ -33,6 +34,8 @@ export function CanvasContextMenu(props: {
     onCopy: () => void;
     onSave: () => void;
   };
+  /** Present with exactly one item selected. */
+  onCopyItemLink?: () => void;
   onClose: () => void;
 }) {
   const selected = () => props.state.selection().length > 0;
@@ -86,6 +89,12 @@ export function CanvasContextMenu(props: {
           shortcut="cmd+d"
           disabled={!selected()}
           onClick={props.state.duplicate}
+        />
+        <MenuItem
+          text="Copy link to element"
+          icon={LinkIcon}
+          disabled={!props.onCopyItemLink}
+          onClick={() => props.onCopyItemLink?.()}
         />
         <MenuSeparator />
         <Show when={props.imageActions}>

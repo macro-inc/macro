@@ -242,6 +242,8 @@ export function MobileCanvasActionsSheet(props: {
   onPaste: () => void;
   onPasteInPlace: () => void;
   onDuplicate: () => void;
+  /** Present with exactly one item selected. */
+  onCopyItemLink?: () => void;
   onSelectAll: () => void;
   onGroup: () => void;
   onUngroup: () => void;
@@ -285,6 +287,12 @@ export function MobileCanvasActionsSheet(props: {
           label="Duplicate"
           disabled={!props.hasSelection}
           onClick={run(props.onDuplicate)}
+        />
+        <SheetRow
+          icon={Link}
+          label="Copy link to element"
+          disabled={!props.onCopyItemLink}
+          onClick={run(() => props.onCopyItemLink?.())}
         />
         <SheetRow
           icon={SelectionAll}

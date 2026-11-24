@@ -15,10 +15,11 @@ import {
 } from '@macro-inc/graphics';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
-import { onCleanup, Show } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { createCanvasClipboard } from '../clipboard';
 import type { CanvasAssetSource } from '../core/assets';
+import type { CanvasFocusRequest } from '../core/view';
 import { createAssetState } from '../primitives/create-asset-state';
 import {
   type CanvasState,
@@ -35,11 +36,16 @@ declare global {
       state: CanvasState;
       /** Names of the files handed to the upload source, in order. */
       uploads: string[];
+      /** Items whose link was copied, in order. */
+      copiedLinks: string[];
+      /** Follow a link to an item, as a mention opening this canvas does. */
+      focus: (itemId: string) => void;
     };
   }
 }
 
 const uploads: string[] = [];
+const copiedLinks: string[] = [];
 
 // Nothing is stored here: an upload is only recorded, so a test can see which
 // files the Attach menu handed over.
@@ -55,6 +61,8 @@ const NO_ASSETS: CanvasAssetSource = {
 // opened signed out is.
 const HAS_APP_CHROME =
   new URLSearchParams(location.search).get('chrome') !== 'none';
+// `?item=<id>` opens the canvas as a link to that item does.
+const LINKED_ITEM = new URLSearchParams(location.search).get('item');
 
 /**
  * The editable canvas as a phone or tablet shows it: the real touch view and
@@ -103,12 +111,22 @@ function Fixture() {
     { canvasId: 'touch-fixture', center }
   );
   const [attachScope, scopeId] = useHotkeyDOMScope('canvas-next');
-  window.canvasTouchFixture = { editor, state, uploads };
+  const [focus, setFocus] = createSignal<CanvasFocusRequest | undefined>(
+    LINKED_ITEM ? { itemId: LINKED_ITEM } : undefined
+  );
+  window.canvasTouchFixture = {
+    editor,
+    state,
+    uploads,
+    copiedLinks,
+    focus: (itemId) => setFocus({ itemId }),
+  };
 
   return (
     <div class="relative h-dvh w-full overflow-hidden bg-panel">
       <MobileCanvasView
         fitOnLoad={false}
+        focus={focus}
         state={state}
         scopeId={scopeId}
         embedView={() => null}
@@ -119,6 +137,7 @@ function Fixture() {
           viewport = element;
         }}
         onOpenDocument={() => {}}
+        onCopyItemLink={(itemId) => copiedLinks.push(itemId)}
         attachScope={attachScope}
       />
       <Show when={HAS_APP_CHROME}>

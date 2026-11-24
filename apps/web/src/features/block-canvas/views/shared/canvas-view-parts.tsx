@@ -20,6 +20,7 @@ import {
   TextView,
 } from '@macro-inc/graphics/solid';
 import {
+  type Accessor,
   type Component,
   createContext,
   createSignal,
@@ -35,6 +36,7 @@ import { EraserTrail } from '../../components/eraser-trail';
 import { MediaUploadPreviews } from '../../components/media-upload-previews';
 import type { CanvasAsset } from '../../core/assets';
 import type { CanvasInsertMode } from '../../core/insert';
+import type { CanvasFocusRequest } from '../../core/view';
 import { registerCanvasZoomHotkeys } from '../../hotkeys';
 import { createCanvasAssetDrop } from '../../primitives/asset-drop';
 import type { CanvasAssetState } from '../../primitives/create-asset-state';
@@ -61,6 +63,9 @@ export type CanvasViewProps = {
   state: CanvasState;
   presence?: GraphicsPresence;
   fitOnLoad?: boolean;
+  focus?: Accessor<CanvasFocusRequest | undefined>;
+  /** Copy a link that opens this canvas on the one selected item. */
+  onCopyItemLink: (itemId: string) => void;
   scopeId: string;
   embedView: Component<CanvasEmbedViewProps>;
   clipboard: CanvasClipboard;
@@ -184,6 +189,7 @@ function createCanvasView(props: CanvasViewProps) {
     focus,
     fit,
     fitSelection,
+    frameOnLoad: framing.frameOnLoad,
     frameWithin: framing.frameWithin,
     keepInFrame: framing.keepInFrame,
     zoom,
@@ -206,6 +212,11 @@ function createCanvasView(props: CanvasViewProps) {
               ),
           }
         : undefined,
+    /** Copy a link to the one selected item, or undefined without one. */
+    copyItemLink: () => {
+      const item = selectedItem();
+      return item ? () => props.onCopyItemLink(item.id) : undefined;
+    },
     insert,
     presenting,
     setPresenting,
@@ -319,13 +330,11 @@ function Root(props: ParentProps<CanvasViewProps>) {
     onCleanup(props.clipboard.attach(root));
     onCleanup(attachTextInput(root, state));
 
-    const initialFit = new ResizeObserver(([entry]) => {
-      if (!entry?.contentRect.width || !entry.contentRect.height) return;
-      if (props.fitOnLoad !== false) view.fit();
-      initialFit.disconnect();
-    });
-    initialFit.observe(host);
-    onCleanup(() => initialFit.disconnect());
+    view.frameOnLoad(
+      host,
+      () => props.fitOnLoad,
+      () => props.focus?.()
+    );
     view.focus();
   });
 

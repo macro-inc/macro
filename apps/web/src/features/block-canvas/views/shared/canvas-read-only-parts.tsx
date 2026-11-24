@@ -14,6 +14,7 @@ import {
   TextView,
 } from '@macro-inc/graphics/solid';
 import {
+  type Accessor,
   createContext,
   createSignal,
   onCleanup,
@@ -22,6 +23,7 @@ import {
   Show,
   useContext,
 } from 'solid-js';
+import type { CanvasFocusRequest } from '../../core/view';
 import { ArtifactPresentation } from '../artifact-presentation';
 import { CanvasArtifactView } from '../artifact-view';
 import { CanvasMediaView } from '../embedded-items';
@@ -32,6 +34,7 @@ export type CanvasReadOnlyViewProps = {
   editor: GraphicsEditor;
   presence?: GraphicsPresence;
   fitOnLoad?: boolean;
+  focus?: Accessor<CanvasFocusRequest | undefined>;
 };
 
 export type CanvasReadOnlyTool = 'select' | 'pan';
@@ -82,6 +85,7 @@ function createCanvasReadOnlyView(props: CanvasReadOnlyViewProps) {
     },
     fit: framing.fit,
     fitSelection: framing.fitSelection,
+    frameOnLoad: framing.frameOnLoad,
     frameWithin: framing.frameWithin,
     activeArtifact,
     setActiveArtifact,
@@ -112,13 +116,11 @@ function Root(props: ParentProps<CanvasReadOnlyViewProps>) {
     if (!host) return;
     if (props.presence)
       onCleanup(attachPresencePointer(host, props.editor, props.presence));
-    const observer = new ResizeObserver(([entry]) => {
-      if (!entry?.contentRect.width || !entry.contentRect.height) return;
-      if (props.fitOnLoad !== false) view.fit();
-      observer.disconnect();
-    });
-    observer.observe(host);
-    onCleanup(() => observer.disconnect());
+    view.frameOnLoad(
+      host,
+      () => props.fitOnLoad,
+      () => props.focus?.()
+    );
   });
   return (
     <CanvasReadOnlyPartsContext.Provider value={view}>

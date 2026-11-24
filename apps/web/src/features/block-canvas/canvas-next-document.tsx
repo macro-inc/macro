@@ -18,10 +18,12 @@ import {
 import { CanvasNextEditor } from './canvas-next';
 import type { CanvasDocumentProps } from './component/CanvasDocument';
 import { Loading } from './component/Loading';
+import { URL_PARAMS } from './constants';
 import { CanvasAncestry } from './context/canvas-ancestry';
 import { readSharedCanvas } from './core/collaboration';
 import type { CanvasFile } from './core/document-format';
 import { createNumericParser } from './core/parse';
+import type { CanvasFocusRequest } from './core/view';
 import { createSharedReferenceTracking } from './primitives/create-shared-reference-tracking';
 import {
   fetchCanvasViewLocation,
@@ -40,6 +42,14 @@ const parseLocation = createNumericParser<{
   y: ['y', 'canvas_y'],
   scale: ['s', 'scale', 'canvas_scale'],
 });
+
+function parseFocus(
+  params: Record<string, unknown>
+): CanvasFocusRequest | undefined {
+  const value = params[URL_PARAMS.item];
+  const itemId = Array.isArray(value) ? value[0] : value;
+  return typeof itemId === 'string' && itemId ? { itemId } : undefined;
+}
 
 export default function CanvasNextDocument(
   props: CanvasDocumentProps & { initial: CanvasFile }
@@ -101,8 +111,14 @@ function CanvasDocumentSession(
   const [savedLocation] = createResource(async () =>
     props.isNested || props.view ? null : fetchCanvasViewLocation(documentId)
   );
+  const [focus, setFocus] = createSignal(
+    parseFocus(props.locationParams ?? {})
+  );
+  // A link to an item frames that item, not the view saved from last time.
   const location = () =>
-    props.view ?? parseLocation(props.locationParams ?? {}) ?? savedLocation();
+    props.view ??
+    parseLocation(props.locationParams ?? {}) ??
+    (focus() ? undefined : savedLocation());
   const applyLocation = (
     view: { x?: number; y?: number; scale?: number } | null | undefined
   ) => {
@@ -153,6 +169,7 @@ function CanvasDocumentSession(
             canEdit={!!doc && canEdit()}
             isEmbedded={props.isNested}
             fitOnLoad={!location()}
+            focus={focus}
             onReady={(current, finishText) => {
               setEditor(current);
               if (doc)
@@ -179,8 +196,11 @@ function CanvasDocumentSession(
                     ? readSharedCanvas(doc, documentId)
                     : { ...initial, document: current.document };
                 },
-                goToLocationFromParams: (params) =>
-                  applyLocation(parseLocation(params)),
+                goToLocationFromParams: (params) => {
+                  const request = parseFocus(params);
+                  if (request) setFocus(request);
+                  else applyLocation(parseLocation(params));
+                },
               });
               let viewTimer: ReturnType<typeof setTimeout> | undefined;
               let notifiedCamera = current.getCamera();

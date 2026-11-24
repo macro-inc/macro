@@ -84,6 +84,17 @@ Pasting a supported routed Macro app link onto the canvas creates a document
 reference card. Routed links retain compatible block targets, but not workspace
 paths or pane-local search state; unsupported links remain text.
 
+## Linking to an element
+
+Select exactly one item and choose **Copy link to element** from the context
+menu, or from **More** on touch. The link is the canvas URL with
+`canvas_item=<item id>`. Pasted into a document, channel, or other composer it
+becomes a mention of the canvas; opening that mention, or the link itself,
+opens the canvas with the item selected and zoomed to fit, also for viewers
+and when the canvas is already open. A link to a deleted item opens the canvas
+as usual with nothing selected. Read-only canvases follow links but do not
+offer the action.
+
 ## Copying and saving images
 
 Select exactly one image to show **Copy image** and **Save image** in both the

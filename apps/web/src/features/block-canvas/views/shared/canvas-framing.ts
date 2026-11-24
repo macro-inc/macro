@@ -1,5 +1,6 @@
 import type { Camera, FitViewport, GraphicsEditor } from '@macro-inc/graphics';
-import { onCleanup } from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup, untrack } from 'solid-js';
+import type { CanvasFocusRequest } from '../../core/view';
 
 /** Screen pixels kept between what is being typed and the frame's edges. */
 const KEEP_SHOWN_MARGIN = 16;
@@ -153,12 +154,53 @@ export function createCanvasFraming(
       ? { camera: editor.getCamera(), again: fitSelection }
       : undefined;
   };
+  /**
+   * Select the item a link names and frame it. A link to an item the scene
+   * no longer has leaves the view and the selection alone.
+   */
+  const focusItem = (itemId: string) => {
+    if (!editor.document.items[itemId]) return false;
+    editor.select(itemId);
+    fitSelection();
+    return true;
+  };
 
   return {
     viewport,
     centre,
     fit,
     fitSelection,
+    /**
+     * Frame the view once `element`, its host, first has a size: on the item
+     * `focus` names, or else the whole scene unless `fitOnLoad` is false.
+     * Later focus requests frame their item as they arrive.
+     */
+    frameOnLoad(
+      element: HTMLElement,
+      fitOnLoad: () => boolean | undefined,
+      focus: Accessor<CanvasFocusRequest | undefined>
+    ) {
+      let sized = false;
+      const observer = new ResizeObserver(([entry]) => {
+        if (!entry?.contentRect.width || !entry.contentRect.height) return;
+        observer.disconnect();
+        sized = true;
+        const request = untrack(focus);
+        if (request && focusItem(request.itemId)) return;
+        if (fitOnLoad() !== false) fit();
+      });
+      observer.observe(element);
+      onCleanup(() => observer.disconnect());
+      createEffect(
+        on(
+          focus,
+          (request) => {
+            if (sized && request) focusItem(request.itemId);
+          },
+          { defer: true }
+        )
+      );
+    },
     /**
      * A press anywhere on `element`, the view's host, means the person has
      * taken over from the last fit. Heard at the window: a tool may stop the
