@@ -153,28 +153,6 @@ describe('websocket channel unread cache writes', () => {
     }
   );
 
-  it('links an invite, which the inbox lists on the channel top level', async () => {
-    const host = setup([]);
-    expect(
-      await cacheNewChannelUnread(
-        host,
-        {
-          ...notification,
-          eventType: 'channel_invite',
-          metadata: {
-            __typename: 'GraphqlChannelInviteMetadata',
-            channelInviteInvitedBy: 'sender',
-            channelInviteChannelName: 'Channel',
-            channelInviteMessageContent: null,
-            channelInviteSenderProfilePictureUrl: null,
-          },
-        },
-        () => true
-      )
-    ).toBe(true);
-    expect(host.writeQuery).toHaveBeenCalledTimes(2);
-  });
-
   it('preserves other badge identities without replaying their notification states, and stays bounded', async () => {
     const host = setup(['other', 'oldest']);
     await cacheNewChannelUnread(host, notification, () => true);
@@ -203,6 +181,7 @@ describe('websocket channel unread cache writes', () => {
     { eventType: 'call_started' },
     { eventType: 'channel_message_reply' },
     { eventType: 'channel_message_reaction' },
+    { eventType: 'channel_invite' },
     { entityType: 'DOCUMENT' as const },
   ])('does not admit non-message or read evidence: %j', async (patch) => {
     const host = setup();

@@ -13,6 +13,7 @@ type Wording = (whose: string) => string;
  * `null` for the tools that use nobody's access and so are never held.
  */
 const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
+  AddCompanyDomain: (whose) => `add a domain to a company in ${whose} CRM`,
   AddSharedCalendarEvent: (whose) => `add a shared event to ${whose} calendar`,
   AddToPipeline: (whose) => `add deals to ${whose} pipelines`,
   BashCodeExecution: (whose) => `run code with ${whose} access`,
@@ -118,6 +119,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   ListTags: (whose) => `list tags in ${whose} workspace`,
   ListTeamMembers: (whose) => `look up ${whose} teammates`,
   LoadTools: null,
+  LogTime: (whose) => `log time on ${whose} tasks`,
   ManageBotChannelAccess: (whose) =>
     `change which channels ${whose} bots can use`,
   ManageChannelParticipants: (whose) => `change who is in ${whose} channels`,
@@ -140,6 +142,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   CreateAgentSession: (whose) => `start an agent session with ${whose} access`,
   ManageAgentSession: (whose) => `manage ${whose} agent sessions`,
   ReadAgentSessionSharing: (whose) => `read ${whose} session sharing`,
+  ReadTimeEntries: (whose) => `read time logged on ${whose} tasks`,
   UpdateAgentSessionSharing: (whose) => `change ${whose} session sharing`,
   ReadAgentSession: (whose) => `read ${whose} agent sessions`,
   ReadChat: (whose) => `read ${whose} chats`,
@@ -163,6 +166,8 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   ReadSpreadsheet: (whose) => `read ${whose} spreadsheets`,
   ReadThread: (whose) => `read ${whose} email`,
   ReadWordDocument: (whose) => `read ${whose} documents`,
+  RemoveCompanyDomain: (whose) =>
+    `remove a domain from a company in ${whose} CRM`,
   RemoveFromPipeline: (whose) => `remove deals from ${whose} pipelines`,
   RenameChannel: (whose) => `rename ${whose} channels`,
   RenameDocument: (whose) => `rename ${whose} documents`,

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM computer_screen_tickets WHERE expires_at < now() - interval '1 hour'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "34af0c41fd0e5cf0cfe4a2a5fb3a0294343734cc278ca7bf174b7d846e43ecf2"
+}

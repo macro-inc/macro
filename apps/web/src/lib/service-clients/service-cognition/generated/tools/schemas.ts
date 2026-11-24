@@ -3,6 +3,17 @@
  */
 import { z } from 'zod/v3';
 
+export const AddCompanyDomain = z.object({
+  companyId: z.string().uuid(),
+  domain: z.string(),
+});
+
+export const CompanyDomainsResponse = z.object({
+  companyId: z.string().uuid(),
+  name: z.union([z.string(), z.null()]).optional(),
+  domains: z.array(z.string()),
+});
+
 export const AddSharedCalendarEvent = z.object({
   eventId: z.string().uuid(),
   calendarId: z.union([z.string().uuid(), z.null()]).optional(),
@@ -196,6 +207,7 @@ export const BulkSetEntityPropertyOptions = z.object({
         'call',
         'user',
         'company',
+        'contact',
         'chat',
       ]),
       entity_id: z.string(),
@@ -1529,6 +1541,7 @@ export const SearchToolResponse = z.object({
                 snippet: z.union([z.string(), z.null()]).optional(),
                 is_read: z.boolean(),
                 inbox_visible: z.boolean(),
+                has_received_mail: z.boolean().optional(),
                 is_draft: z.boolean(),
                 is_important: z.boolean(),
                 id: z.string().uuid(),
@@ -2042,6 +2055,7 @@ export const CreateBookingLink = z
             location: z.string(),
             macroCall: z.boolean().optional(),
             googleMeet: z.boolean(),
+            emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
             enabled: z.boolean(),
             mode: z.any().superRefine((x, ctx) => {
               const schemas = [
@@ -2128,6 +2142,7 @@ export const BookingLinkResult = z.object({
           location: z.string(),
           macroCall: z.boolean().optional(),
           googleMeet: z.boolean(),
+          emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
           enabled: z.boolean(),
           mode: z.any().superRefine((x, ctx) => {
             const schemas = [
@@ -6074,6 +6089,7 @@ export const EditBookingLink = z
             location: z.string(),
             macroCall: z.boolean().optional(),
             googleMeet: z.boolean(),
+            emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
             enabled: z.boolean(),
             mode: z.any().superRefine((x, ctx) => {
               const schemas = [
@@ -11036,6 +11052,7 @@ export const GetEntityProperties = z.object({
     'call',
     'user',
     'company',
+    'contact',
     'chat',
   ]),
 });
@@ -12332,6 +12349,15 @@ export const ListBookingLinksResult = z.object({
       ),
     })
   ),
+  accounts: z.array(
+    z
+      .object({
+        emailLinkId: z.string().uuid(),
+        emailAddress: z.string(),
+        videoMeetings: z.boolean(),
+      })
+      .strict()
+  ),
   links: z.array(
     z.object({
       profileId: z.string().uuid(),
@@ -12348,6 +12374,7 @@ export const ListBookingLinksResult = z.object({
               location: z.string(),
               macroCall: z.boolean().optional(),
               googleMeet: z.boolean(),
+              emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
               enabled: z.boolean(),
               mode: z.any().superRefine((x, ctx) => {
                 const schemas = [
@@ -14014,6 +14041,43 @@ export const LoadToolsResponse = z.object({
   not_found: z.array(z.string()),
 });
 
+export const LogTime = z.object({
+  task_id: z.string(),
+  minutes: z.number().int().gte(1).lte(1440),
+  date: z.string().date(),
+  note: z.union([z.string(), z.null()]).optional(),
+});
+
+export const LogTimeResponse = z.object({
+  entry: z.object({
+    id: z.string().uuid(),
+    userId: z.string(),
+    date: z.string().date(),
+    minutes: z.number().int().gte(0).lte(65535),
+    note: z.union([z.string(), z.null()]).optional(),
+    source: z.any().superRefine((x, ctx) => {
+      const schemas = [z.literal('manual'), z.literal('timer')];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    }),
+  }),
+  totalMinutes: z.number().int().gte(0),
+  summary: z.string(),
+});
+
 export const ManageAgentSession = z
   .object({
     sessionId: z.string().uuid(),
@@ -14896,6 +14960,7 @@ export const BookingSettingsResult = z.object({
         location: z.string(),
         macroCall: z.boolean().optional(),
         googleMeet: z.boolean(),
+        emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
         enabled: z.boolean(),
         scheduleId: z.string().uuid(),
         mode: z.any().superRefine((x, ctx) => {
@@ -18761,10 +18826,50 @@ export const ReadSpreadsheet = z.object({
   includeStyles: z.union([z.boolean(), z.null()]).optional(),
 });
 
+export const ReadTimeEntries = z.object({ task_id: z.string() });
+
+export const ReadTimeEntriesResponse = z.object({
+  totalMinutes: z.number().int().gte(0),
+  entries: z.array(
+    z.object({
+      id: z.string().uuid(),
+      userId: z.string(),
+      date: z.string().date(),
+      minutes: z.number().int().gte(0).lte(65535),
+      note: z.union([z.string(), z.null()]).optional(),
+      source: z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('manual'), z.literal('timer')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+    })
+  ),
+  truncated: z.boolean(),
+  summary: z.string(),
+});
+
 export const ReadWordDocument = z.object({
   documentId: z.string(),
   start: z.union([z.number().int().gte(0), z.null()]).optional(),
   count: z.union([z.number().int().gte(0), z.null()]).optional(),
+});
+
+export const RemoveCompanyDomain = z.object({
+  companyId: z.string().uuid(),
+  domain: z.string(),
 });
 
 export const RemoveFromPipeline = z.object({
@@ -19635,6 +19740,7 @@ export const SetEntityProperty = z.object({
     'call',
     'user',
     'company',
+    'contact',
     'chat',
   ]),
   property_definition_id: z.string().uuid(),
@@ -20169,6 +20275,7 @@ export const UpdateBookingSettings = z
           location: z.string(),
           macroCall: z.boolean().optional(),
           googleMeet: z.boolean(),
+          emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
           enabled: z.boolean(),
           scheduleId: z.string().uuid(),
           mode: z.any().superRefine((x, ctx) => {

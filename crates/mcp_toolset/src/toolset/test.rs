@@ -287,3 +287,120 @@ async fn only_servers_we_run_are_sent_the_callers_trace_context() {
     );
     assert_eq!(*theirs.traceparents.lock().unwrap(), vec![None]);
 }
+
+/// `quote` refuses its call with an error that quotes what it was given, as
+/// a server's refusal of arguments can.
+#[derive(Clone, Default)]
+struct QuotingServer;
+
+impl ServerHandler for QuotingServer {
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+    }
+
+    async fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: McpRequestContext<RoleServer>,
+    ) -> Result<ListToolsResult, ErrorData> {
+        Ok(ListToolsResult::with_all_items(vec![Tool::new(
+            "quote",
+            "Refuses its input, quoting it.",
+            Arc::new(serde_json::Map::new()),
+        )]))
+    }
+
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        _context: McpRequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, ErrorData> {
+        Err(ErrorData::invalid_params(
+            format!("not a number: {:?}", request.arguments),
+            None,
+        ))
+    }
+}
+
+/// Every event's target and fields, as text.
+#[derive(Clone, Default)]
+struct Events(Arc<std::sync::Mutex<Vec<String>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Events {
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        struct Text<'a>(&'a mut String);
+        impl tracing::field::Visit for Text<'_> {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                use std::fmt::Write as _;
+                let _ = write!(self.0, "{}={value:?} ", field.name());
+            }
+        }
+        let mut text = format!("{} ", event.metadata().target());
+        event.record(&mut Text(&mut text));
+        self.0.lock().expect("events lock").push(text);
+    }
+}
+
+/// A server's error can quote the call, and the client logs it at ERROR, so
+/// inside `withhold_content` the event says only that the call failed.
+#[tokio::test]
+async fn a_withheld_calls_server_error_is_logged_without_its_text() {
+    use tracing_subscriber::layer::SubscriberExt as _;
+    let events = Events::default();
+    let _guard =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(events.clone()));
+    let (server_side, client_side) = tokio::io::duplex(8192);
+    tokio::spawn(async move {
+        let running = QuotingServer.serve(server_side).await.unwrap();
+        let _ = running.waiting().await;
+    });
+    let client = crate::client_info().serve(client_side).await.unwrap();
+    let tools = RemoteMcpToolSet::from_connected(
+        vec![ConnectedServer {
+            name: "Macro".into(),
+            client,
+        }],
+        None,
+    )
+    .await;
+    let arguments = serde_json::json!({ "count": "the private supplier list" });
+    let call = || {
+        ToolSet::<()>::dispatch_tool_call(
+            &tools,
+            (),
+            RequestContext::new(
+                macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
+                    .unwrap(),
+            ),
+            "mcp__Macro__quote",
+            &arguments,
+        )
+    };
+    // Register the callsites, then recompute their interest on this thread:
+    // another test's thread can cache them as never wanted.
+    let _ = call().await;
+    let _ = genai_telemetry::withhold_content(call()).await;
+    tracing::callsite::rebuild_interest_cache();
+    // The client's own events; the server here runs in the same process.
+    let take = || -> Vec<String> {
+        std::mem::take(&mut *events.0.lock().expect("events lock"))
+            .into_iter()
+            .filter(|event| event.starts_with("mcp_toolset"))
+            .collect()
+    };
+    take();
+
+    let _ = call().await;
+    let shown = take();
+    let _ = genai_telemetry::withhold_content(call()).await;
+    let withheld = take();
+    assert!(
+        shown.iter().any(|event| event.contains("private supplier")),
+        "{shown:#?}"
+    );
+    assert_eq!(withheld.len(), shown.len(), "still logged: {withheld:#?}");
+    assert!(
+        withheld.iter().all(|event| !event.contains("private")),
+        "{withheld:#?}"
+    );
+}

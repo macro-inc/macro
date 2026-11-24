@@ -39,6 +39,23 @@ export const passthrough: Trace = (_name, run) =>
   run({ set: () => undefined, traceparent: () => undefined });
 const server = capabilityServer;
 
+/**
+ * Marks this query's model requests as the agent's main loop (Claude Code
+ * sends `ANTHROPIC_CUSTOM_HEADERS` with each), so the harness gives it, and
+ * no side query, the notices of a person taking over its screen.
+ */
+export const mainLoop = (
+  env: Readonly<Record<string, string>>
+): Record<string, string> => {
+  const header = 'x-macro-agent-loop: main';
+  const given = env.ANTHROPIC_CUSTOM_HEADERS;
+  return {
+    ...env,
+    ANTHROPIC_CUSTOM_HEADERS:
+      given === undefined || given === '' ? header : `${given}\n${header}`,
+  };
+};
+
 /** The SDK's `query`, as much of it as a wake uses. */
 export type Query = (params: {
   readonly prompt: string;
@@ -137,9 +154,11 @@ export const agentClaude = ({
     });
 
     const { budgetUsd, timeoutMs, cwd, directories } = profile(event);
-    const env = Object.fromEntries(
-      Object.entries(await environment()).flatMap(([name, value]) =>
-        value === undefined ? [] : [[name, value]]
+    const env = mainLoop(
+      Object.fromEntries(
+        Object.entries(await environment()).flatMap(([name, value]) =>
+          value === undefined ? [] : [[name, value]]
+        )
       )
     );
     const abort = new AbortController();

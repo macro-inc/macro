@@ -225,10 +225,14 @@ use time_tracking::domain::models::{
     LoggedTime, RunningTimer, StartedTimer, StoppedTimer, TaskTimeTotal, TimeEntry,
     TimeEntryCursor, TimeEntryPage, TimeEntrySource, TimerState,
 };
+use time_tracking::domain::report::{
+    TimeExport, TimeGroup, TimeGroupKey, TimeGrouping, TimeSummary, TimeTotal,
+};
 use time_tracking::inbound::axum_router::{
     DiscardTimerRequest, LogTimeRequest, StartTimerRequest, StopTimerRequest, TimeTrackingApiError,
     TimeTrackingErrorCode, UpdateTimeEntryRequest,
 };
+use time_tracking::inbound::report_router::TimeScopeName;
 use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
 use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
 use utoipa::OpenApi;
@@ -581,6 +585,8 @@ use email_policy::EmailPolicySchemas;
         time_tracking::inbound::axum_router::start_timer_handler,
         time_tracking::inbound::axum_router::stop_timer_handler,
         time_tracking::inbound::axum_router::discard_timer_handler,
+        time_tracking::inbound::report_router::time_summary_handler,
+        time_tracking::inbound::report_router::export_time_handler,
 
         // user api keys
         account_manager::inbound::axum_router::request_account_manager_handler,
@@ -762,6 +768,8 @@ use email_policy::EmailPolicySchemas;
         crm::inbound::axum_router::email_privacy::update_handler,
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_company_name::handler,
+        crm::inbound::axum_router::company_domains::add_handler,
+        crm::inbound::axum_router::company_domains::remove_handler,
         crm::inbound::axum_router::set_contact_hidden::handler,
         crm::inbound::axum_router::set_contact_name::handler,
         crm::inbound::axum_router::set_contact_email::handler,
@@ -976,6 +984,13 @@ use email_policy::EmailPolicySchemas;
             DiscardTimerRequest,
             TimeTrackingApiError,
             TimeTrackingErrorCode,
+            TimeScopeName,
+            TimeGrouping,
+            TimeGroupKey,
+            TimeTotal,
+            TimeGroup,
+            TimeSummary,
+            TimeExport,
             // databases
             Database,
             DatabaseTable,
@@ -1354,6 +1369,8 @@ use email_policy::EmailPolicySchemas;
             crm::inbound::axum_router::set_email_sync::SetEmailSyncRequest,
             crm::inbound::axum_router::set_company_hidden::SetCompanyHiddenRequest,
             crm::inbound::axum_router::set_company_name::SetCompanyNameRequest,
+            crm::inbound::axum_router::company_domains::CompanyDomainRequest,
+            crm::inbound::axum_router::company_domains::CompanyDomainTakenResponse,
             crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
             crm::inbound::axum_router::set_contact_name::SetContactNameRequest,
             crm::inbound::axum_router::set_contact_email::SetContactEmailRequest,

@@ -106,6 +106,9 @@ pub use initiatives::{
     ToolInitiativeService, ToolInitiativeToolContext, build_initiative_tool_context,
 };
 
+mod time_entries;
+pub use time_entries::{ToolTimeTrackingToolContext, build_time_tracking_tool_context};
+
 use activity_metadata::ToolActivityMetadataResolver;
 pub use ai_toolset::RequestContext;
 
@@ -557,10 +560,11 @@ pub fn build_calendar_tool_context(
     .with_shared_event_copies(shared_event_copies)
 }
 
-/// Settings-only scheduling service; no provider/calendar writes are exposed here.
+/// Settings-only scheduling service; no provider/calendar writes are exposed
+/// here, only the connected accounts a personal link can book on.
 pub type ToolBookingLinkService = calendar_scheduling::domain::service::Service<
     calendar_scheduling::outbound::postgres::PostgresRepository,
-    (),
+    calendar_scheduling::outbound::macro_services::MacroBookingAccounts<ToolCalendarReadService>,
     calendar_scheduling::outbound::macro_services::MacroDirectory<ToolTeamService>,
 >;
 /// Booking-link tool dependencies.
@@ -574,7 +578,11 @@ pub fn build_booking_link_tool_context(
     calendar_scheduling::inbound::toolset::BookingLinkToolContext {
         service: Arc::new(calendar_scheduling::domain::service::Service::new(
             calendar_scheduling::outbound::postgres::PostgresRepository::new(pool.clone()),
-            (),
+            calendar_scheduling::outbound::macro_services::MacroBookingAccounts(Arc::new(
+                calendar_events::domain::service::CalendarService::new(
+                    calendar_events::outbound::pg::PgCalendarRepository::new(pool.clone()),
+                ),
+            )),
             calendar_scheduling::outbound::macro_services::MacroDirectory(TeamRepositoryImpl::new(
                 pool,
             )),
@@ -2284,6 +2292,8 @@ pub struct ToolServiceContext {
     pub message_tool_context: ToolMessageToolContext,
     /// Native task project lifecycle, properties, sharing and history.
     pub initiative_tool_context: ToolInitiativeToolContext,
+    /// Time logged on tasks.
+    pub time_tracking_tool_context: ToolTimeTrackingToolContext,
     pub team_tool_context: ToolTeamToolContext,
     pub crm_tool_context: ToolCrmToolContext,
     /// CRM pipelines: deals by record, fields by name.

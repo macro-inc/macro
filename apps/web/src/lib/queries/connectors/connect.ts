@@ -1,3 +1,4 @@
+import { SERVER_HOSTS } from '@core/constant/servers';
 import {
   openPipedreamConnectUI,
   type PipedreamConnectEvent,
@@ -42,6 +43,8 @@ const COMPLETE_POLL_MS = 2000;
 const COMPLETE_TIMEOUT_MS = 10 * 60 * 1000;
 /** How long a dialog that reported success may take to show the connection. */
 const CONFIRM_ATTEMPTS = 5;
+/** Polls left once the tab has closed, if the one that would see it failed. */
+const CLOSED_RETRIES = 3;
 
 function currentUserId() {
   return queryClient.getQueryData<UserInfoData>(authKeys.userInfo.queryKey)?.id;
@@ -135,7 +138,9 @@ async function followStep(
 
 /**
  * Ask the server to record the connection until it exists, the consent tab
- * is closed, the session expires, or another user signs in.
+ * is closed, the session expires, or another user signs in. Setup can take
+ * minutes and hundreds of polls, so a failed poll doesn't end it; only the
+ * last answer counts.
  */
 async function pollCompletion(
   key: string,
@@ -143,17 +148,39 @@ async function pollCompletion(
   userId: string | undefined
 ): Promise<ConnectOutcome> {
   const deadline = Date.now() + COMPLETE_TIMEOUT_MS;
+  let closedRetries = CLOSED_RETRIES;
+  let failure: ConstructorParameters<typeof ThrownResultError>[0] | undefined;
   while (Date.now() < deadline && currentUserId() === userId) {
     const closed = tab?.closed ?? false;
-    const connector = await completeOnce(key);
-    if (connector) {
+    const result = await cognitionApiServiceClient.completeConnectorConnect({
+      key,
+    });
+    if (result.isOk()) {
       if (currentUserId() !== userId) return 'closed';
-      return await recordConnected(connector);
+      finishTab(tab, 'connected');
+      return await recordConnected(result.value);
     }
-    if (closed) return 'closed';
+    failure = result.error.some((error) => error.code === 'NOT_FOUND')
+      ? undefined
+      : result.error;
+    if (closed && (!failure || closedRetries-- <= 0)) break;
     await sleep(COMPLETE_POLL_MS);
   }
+  finishTab(tab, 'error');
+  if (failure && currentUserId() === userId)
+    throw new ThrownResultError(failure);
   return 'closed';
+}
+
+/**
+ * Take the consent tab off the vendor's page. `close()` does nothing once a
+ * tab with a severed opener has navigated, so send it to the page that closes
+ * itself or tells the user to.
+ */
+function finishTab(tab: Window | null, status: 'connected' | 'error') {
+  if (tab && !tab.closed) {
+    tab.location.href = `${SERVER_HOSTS['cognition-service']}/pipedream/mcp/connect/callback?status=${status}`;
+  }
 }
 
 /** The recorded connector, or none while the server has nothing to record. */

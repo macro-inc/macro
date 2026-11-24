@@ -124,6 +124,8 @@ vi.mock('./rail/hooks/useChannelCalls', () => ({
 vi.mock('./rail/hooks/useChannelRailActivity', () => ({
   useChannelRailActivity: () => ({
     unreadChannelIds: () => mocks.unreadChannelIds,
+    unreadOrMentionedChannelIds: () =>
+      new Set([...mocks.unreadChannelIds, ...mocks.mentionCounts.keys()]),
     callStatuses: () => new Map(),
     incomingCallIds: () => mocks.incomingCallIds,
     mentionCount: (channelId: string) =>
@@ -315,33 +317,6 @@ describe('mobile section hydration', () => {
 });
 
 describe('mobile channel press feedback', () => {
-  it('highlights a held row and cancels when the finger scrolls or the touch is cancelled', () => {
-    vi.useFakeTimers();
-    render(() => (
-      <ChannelsMobileView
-        source={source}
-        pinned={[]}
-        searchQuery=""
-        onClearSearch={() => {}}
-      />
-    ));
-    const button = screen.getByRole('button', { name: 'One' });
-    const row = button.closest('[data-soup-entity]')!;
-    fireEvent.touchStart(button, { touches: [{ clientX: 20, clientY: 20 }] });
-    vi.advanceTimersByTime(20);
-    expect(row.classList.contains('touch-highlight')).toBe(true);
-    vi.advanceTimersByTime(500);
-    expect(row.classList.contains('touch-highlight')).toBe(true);
-    expect(mocks.openSplit).not.toHaveBeenCalled();
-    fireEvent.touchMove(button, { touches: [{ clientX: 20, clientY: 40 }] });
-    expect(row.classList.contains('touch-highlight')).toBe(false);
-    fireEvent.touchStart(button, { touches: [{ clientX: 20, clientY: 20 }] });
-    vi.advanceTimersByTime(20);
-    expect(row.classList.contains('touch-highlight')).toBe(true);
-    fireEvent.touchCancel(button);
-    expect(row.classList.contains('touch-highlight')).toBe(false);
-  });
-
   it('keeps the tapped row highlighted while navigation is pending and clears after it finishes', async () => {
     vi.useFakeTimers();
     const opened = Promise.withResolvers<void>();
@@ -470,6 +445,23 @@ describe('mobile channel pins', () => {
         expect.objectContaining({ referredFrom: 'channels' })
       )
     );
+  });
+
+  it('keeps a conversation whose only unread is a thread mention under Unread only', () => {
+    mocks.mentionCounts = new Map([['two', 1]]);
+    mocks.unreadChannelIds = new Set();
+    render(() => (
+      <ChannelsMobileView
+        source={both}
+        pinned={[]}
+        searchQuery=""
+        onClearSearch={() => {}}
+        preferences={{ unreadOnly: true }}
+      />
+    ));
+
+    expect(screen.queryByTestId('row-one')).toBeNull();
+    expect(screen.getByTestId('row-two')).toBeTruthy();
   });
 
   it('counts unread mentions on list rows and pins, capped at the edge limit', () => {

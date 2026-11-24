@@ -159,7 +159,7 @@ mod test {
         let free = access(&[]);
         assert_eq!(free.best_model(), FREE_MODEL);
         assert!(free.has_access(FREE_MODEL));
-        assert!(!free.has_access("anthropic/claude-haiku-4-5"));
+        assert!(!free.has_access("anthropic/claude-haiku-5-5"));
         assert!(!free.has_access("anthropic/claude-opus-5-5"));
         assert!(!free.has_access("anthropic/claude-sonnet-5-5"));
     }
@@ -171,7 +171,7 @@ mod test {
         assert!(pro.has_access("anthropic/claude-sonnet-5-5"));
         assert!(pro.has_access("anthropic/claude-opus-5-5"));
         assert!(pro.has_access(FREE_MODEL));
-        assert!(pro.has_access("openai/gpt-5.5"));
+        assert!(pro.has_access("openai/gpt-6.2-sol"));
     }
 
     // Permission strings unrelated to the professional flag don't grant access.

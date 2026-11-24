@@ -4,9 +4,6 @@ use axum::{
 };
 use chrono::TimeDelta;
 use http_body_util::BodyExt;
-use macro_authorization::{InternalIdentityClaims, MacroAuthorizationError, ValidatedCredential};
-use model_user::UserContext;
-use rootcause::Report;
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
@@ -14,45 +11,13 @@ use super::*;
 use crate::{
     domain::service::TimeTrackingServiceImpl,
     test_support::{
-        AUTHOR, EDITOR, FakeAccess, FakeRepo, FixedRollout, OUTSIDER, RecordingPublisher, TASK,
-        TestClock, VIEWER, noon,
+        AUTHOR, BearerIsUser, EDITOR, FakeAccess, FakeRepo, FixedRollout, OUTSIDER,
+        RecordingPublisher, RecordingUpdates, TASK, TestClock, VIEWER, noon,
     },
 };
 
-/// A bearer token is the user id it stands for.
-#[derive(Clone)]
-struct BearerIsUser;
-
-impl MacroAuthorizationService for BearerIsUser {
-    async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
-        if !jwt.starts_with("macro|") {
-            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
-        }
-        Ok(UserContext {
-            user_id: jwt.to_string(),
-            fusion_user_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb".to_string(),
-            permissions: None,
-            organization_id: None,
-        })
-    }
-
-    async fn authorize_identity(
-        &self,
-        jwt: &str,
-    ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
-        self.authorize(jwt).await.map(ValidatedCredential::session)
-    }
-
-    async fn authorize_internal(
-        &self,
-        _provided_key: &str,
-        _claims: InternalIdentityClaims,
-    ) -> Result<Option<UserContext>, Report<MacroAuthorizationError>> {
-        Err(Report::new(MacroAuthorizationError::InvalidCredentials))
-    }
-}
-
-type Service = TimeTrackingServiceImpl<FakeRepo, FakeAccess, RecordingPublisher, TestClock>;
+type Service =
+    TimeTrackingServiceImpl<FakeRepo, FakeAccess, RecordingPublisher, RecordingUpdates, TestClock>;
 
 struct App {
     router: Router,
@@ -67,6 +32,7 @@ fn app() -> App {
         access.clone(),
         Arc::new(FixedRollout(true)),
         RecordingPublisher::default(),
+        RecordingUpdates::default(),
     )
     .with_clock(clock.clone());
     let router = time_tracking_router(TimeTrackingRouterState::new(

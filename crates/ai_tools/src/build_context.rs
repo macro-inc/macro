@@ -384,6 +384,7 @@ pub async fn build_tool_service_context_from_env(
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         pool.clone(),
     )));
+    let session_update_tracker = event_task_tracker.clone();
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
@@ -564,6 +565,16 @@ pub async fn build_tool_service_context_from_env(
         search_client.clone(),
         soup_service.clone(),
         &document_tool_context,
+    );
+
+    let time_tracking_tool_context = crate::tool_context::build_time_tracking_tool_context(
+        pool.clone(),
+        entity_access_service.clone(),
+        side_effect_clients.macro_event_broker.clone(),
+        side_effect_clients.connection_gateway.as_ref().clone(),
+        session_update_tracker,
+        side_effect_clients.environment,
+        side_effect_clients.feature_flags.clone(),
     );
 
     let initiative_tool_context = crate::tool_context::build_initiative_tool_context(
@@ -765,6 +776,7 @@ pub async fn build_tool_service_context_from_env(
             entity_access_service.clone(),
         ),
         initiative_tool_context,
+        time_tracking_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context,
         pipeline_tool_context,

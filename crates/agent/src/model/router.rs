@@ -824,7 +824,10 @@ where
     let records_per_call = financial_context
         .as_ref()
         .is_some_and(MeteringContext::records_per_call);
-    let driver = tokio::spawn(
+    // Content withheld from this run's spans stays withheld in its driver.
+    let withheld = genai_telemetry::content_withheld();
+    let driver = tokio::spawn(genai_telemetry::withhold_content_if(
+        withheld,
         MeteringContext::carry(financial_context, async move {
             let mut liveness = StreamLiveness::new(agent_span.clone(), telemetry.clone());
 
@@ -909,7 +912,7 @@ where
         // `execute_tool` spans from inside this task, and they belong under
         // the run, not at the root of a trace of their own.
         .instrument(driver_span),
-    );
+    ));
 
     // Abort the driver when the consumer drops the returned stream (e.g. on
     // cancellation), which drops `rig_stream` and cancels any in-flight tool —

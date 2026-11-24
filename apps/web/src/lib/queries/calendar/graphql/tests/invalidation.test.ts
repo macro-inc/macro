@@ -4,6 +4,7 @@ import {
   invalidateCalendarOccurrences,
   syncCalendarOccurrences,
 } from '../../occurrences';
+import { CALENDAR_CACHE_READ_DEADLINE_MS } from '../readiness';
 import {
   type CalendarSyncController,
   setActiveCalendarSyncController,
@@ -25,6 +26,7 @@ describe('invalidateCalendarOccurrences', () => {
   afterEach(() => {
     setActiveCalendarSyncController(undefined);
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   it('applies the delta before cache-backed viewports reread', async () => {
@@ -37,6 +39,7 @@ describe('invalidateCalendarOccurrences', () => {
     });
     setActiveCalendarSyncController({
       answering: () => true,
+      noticeChange: vi.fn(),
       runDelta,
     } as unknown as CalendarSyncController);
 
@@ -52,6 +55,7 @@ describe('invalidateCalendarOccurrences', () => {
     const runDelta = vi.fn(() => new Promise<void>(() => {}));
     setActiveCalendarSyncController({
       answering: () => false,
+      noticeChange: vi.fn(),
       runDelta,
     } as unknown as CalendarSyncController);
 
@@ -61,10 +65,31 @@ describe('invalidateCalendarOccurrences', () => {
     expect(invalidateQueriesMock).toHaveBeenCalledTimes(1);
   });
 
+  it('notices the change and refetches once the read deadline passes while the delta runs', async () => {
+    vi.useFakeTimers();
+    const noticeChange = vi.fn();
+    const runDelta = vi.fn(() => new Promise<void>(() => {}));
+    setActiveCalendarSyncController({
+      answering: () => true,
+      noticeChange,
+      runDelta,
+    } as unknown as CalendarSyncController);
+
+    const invalidated = invalidateCalendarOccurrences();
+    expect(noticeChange).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(CALENDAR_CACHE_READ_DEADLINE_MS - 1);
+    expect(invalidateQueriesMock).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    await invalidated;
+    expect(invalidateQueriesMock).toHaveBeenCalledTimes(1);
+  });
+
   it('still refetches when the delta fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     setActiveCalendarSyncController({
       answering: () => true,
+      noticeChange: vi.fn(),
       runDelta: vi.fn().mockRejectedValue(new Error('offline')),
     } as unknown as CalendarSyncController);
 
@@ -91,6 +116,7 @@ describe('invalidateCalendarOccurrences', () => {
     });
     setActiveCalendarSyncController({
       answering: () => false,
+      noticeChange: vi.fn(),
       runDelta,
     } as unknown as CalendarSyncController);
 

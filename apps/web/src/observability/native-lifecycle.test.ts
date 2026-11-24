@@ -149,6 +149,7 @@ describe('native WebView startup diagnostics', () => {
         readError: 'NotFound',
         bundleDirsFound: 1,
         bundleDirsRemoved: 0,
+        savedBundleCheckMs: 3,
       },
     });
     expect(telemetry.track).toHaveBeenCalledWith(
@@ -160,6 +161,7 @@ describe('native WebView startup diagnostics', () => {
         native_bundle_startup_read_error: 'NotFound',
         native_bundle_startup_dirs_found: 1,
         native_bundle_startup_dirs_removed: 0,
+        native_bundle_startup_check_ms: 3,
       })
     );
     const expected = expect.objectContaining({
