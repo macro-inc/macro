@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use super::*;
+use crate::domain::models::ItemReport;
 
 fn args(value: serde_json::Value) -> ImportFromFusion {
     serde_json::from_value(value).unwrap()
@@ -121,4 +122,23 @@ fn sync_takes_no_items_for_all_or_up_to_fifty() {
             .request()
             .is_err()
     );
+}
+
+#[test]
+fn an_item_that_was_not_synced_is_work_left_not_done() {
+    let item = ItemId::parse(ITEM).unwrap();
+    let report = SyncReport::of(vec![ItemReport::untouched(item, ItemStatus::Busy)]);
+
+    let message = report_message(&report);
+
+    assert!(!message.contains("Every version found is recorded"));
+    assert!(message.contains("1 items were busy, rate limited or failed"));
+}
+
+#[test]
+fn a_finished_sync_says_so() {
+    let item = ItemId::parse(ITEM).unwrap();
+    let report = SyncReport::of(vec![ItemReport::untouched(item, ItemStatus::Synced)]);
+
+    assert!(report_message(&report).contains("Every version found is recorded"));
 }

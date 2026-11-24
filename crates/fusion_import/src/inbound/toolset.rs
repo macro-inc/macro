@@ -14,8 +14,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::models::{
-    ApsFolderId, ApsProjectId, BrowseAt, BrowseEntry, HubId, InvalidApsId, ItemId, SyncReport,
-    SyncScope,
+    ApsFolderId, ApsProjectId, BrowseAt, BrowseEntry, HubId, InvalidApsId, ItemId, ItemStatus,
+    SyncReport, SyncScope,
 };
 use crate::domain::service::{
     FUSION_IMPORT_OFF, FusionImport, FusionImportError, MAX_IMPORT_ITEMS, MAX_SYNC_ITEMS,
@@ -271,10 +271,23 @@ fn call_error(error: FusionImportError) -> ToolCallError {
     }
 }
 
-/// What the model should know and do after an import or sync.
+/// What the model should know and do after an import or sync. Items that
+/// were busy, rate limited or failed are work left too, though their
+/// `remaining` is 0: nothing about their versions was read.
 pub(crate) fn report_message(report: &SyncReport) -> String {
     let imported: u32 = report.items.iter().map(|item| item.imported_now).sum();
+    let unsettled = report
+        .items
+        .iter()
+        .filter(|item| {
+            matches!(
+                item.status,
+                ItemStatus::Busy | ItemStatus::RateLimited | ItemStatus::Failed
+            )
+        })
+        .count();
     let mut message = format!("Imported {imported} versions.");
+
     if let Some(cursor) = &report.next_cursor {
         message.push_str(&format!(
             " More to do: call `sync` again with `cursor` \"{}\" and no `itemIds`.",
@@ -285,16 +298,35 @@ pub(crate) fn report_message(report: &SyncReport) -> String {
             " {} versions remain and {} items were not reached; call `sync` again with the same `itemIds` to continue.",
             report.remaining, report.not_reached
         ));
-    } else {
+    }
+
+    if unsettled > 0 {
+        message.push_str(&format!(
+            " {unsettled} items were busy, rate limited or failed and were not synced; call `sync` with their `itemIds` again in a minute."
+        ));
+    }
+
+    let done = report.next_cursor.is_none()
+        && report.remaining == 0
+        && report.not_reached == 0
+        && unsettled == 0;
+    if done {
         message.push_str(" Every version found is recorded.");
     }
-    let unidentified: usize = report.items.iter().map(|item| item.unidentified.len()).sum();
+
+    let unidentified: usize = report
+        .items
+        .iter()
+        .map(|item| item.unidentified.len())
+        .sum();
     if unidentified > 0 {
         message.push_str(&format!(
             " {unidentified} versions have a file type Autodesk did not name; they are not recorded, and a later sync tries them again."
         ));
     }
-    message.push_str(" Items with status `busy`, `rate_limited` or `failed` can be synced again later; `document_gone` means the user deleted the document, and `import` makes a new one.");
+    message.push_str(
+        " `document_gone` means the user deleted the document, and `import` makes a new one.",
+    );
     message
 }
 
