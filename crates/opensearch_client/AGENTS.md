@@ -67,9 +67,9 @@ projects.
   known bug is `#[ignore = "known bug: ..."]`; the fix removes the ignore.
   `tests/content_search/email_operators.rs` runs the same way and checks the
   conditions typed Mail search operators become (`EmailTextCondition`,
-  `EmailLabelCondition`, excluded threads, sent bounds), hyphenated and
-  punctuated words in email text and searches at the term cap inside the
-  unified request; it needs the emails index empty too.
+  `EmailLabelCondition`, excluded threads, sent bounds), an address beside a
+  word, hyphenated and punctuated words in email text and searches at the term
+  cap inside the unified request; it needs the emails index empty too.
 
 ## Gotchas
 
@@ -165,6 +165,13 @@ projects.
   outside content, words under three characters keep the capped
   `match_phrase_prefix`; OpenSearch has no phrase prefix that keeps every
   match.
+- An address or a domain in an email search, which is any term with an `@` or
+  a dotted name (`example.com`, `node.js`), matches apart from the words beside
+  it, and the words match together, all in the address fields or all in the
+  text fields (`emails::terms::term_groups`). Never match each word apart: one
+  that is in many addresses, such as the name of the searcher's own domain,
+  would match nearly every message, and one the analyzer drops (`½`) would
+  match none. Regexp input that uses syntax stays one group.
 - Email text terms go into one `simple_query_string`
   (`emails::terms::build_text_query_string`), where a `term*` prefix is not
   analyzed: `follow-up*` looks for one token `follow-up`, which the index

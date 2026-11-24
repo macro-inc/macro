@@ -412,6 +412,129 @@ async fn a_term_matches_by_its_words_whatever_punctuation_it_carries() -> anyhow
     search_seeded(punctuated_messages(), punctuated_cases()).await
 }
 
+/// Mail that holds an address in its address fields and words in its text.
+fn address_and_text_messages() -> Vec<Message> {
+    let message = |n, subject, content, sender, recipient| Message {
+        thread: thread(n),
+        owner: VIEWER,
+        subject,
+        content,
+        sender,
+        recipients: vec![recipient],
+        cc: Vec::new(),
+        bcc: Vec::new(),
+        labels: vec!["INBOX"],
+        sent_at_millis: Some(MARCH_2025),
+        tagged: false,
+    };
+    vec![
+        message(51, "Quarterly numbers", "two figures", ANA, BO),
+        message(52, "Quarterly plan", "one figure", BO, CY),
+        message(53, "Hiring plan", "attached", ANA, BO),
+        message(54, "Quarterly numbers", "one figure", CY, DI),
+        message(55, "A follow-up", "half a cup", BO, DI),
+    ]
+}
+
+/// An address matches apart from the words, which match together.
+fn address_and_text_cases() -> Vec<Case> {
+    let words = || {
+        [
+            case("an address", &["ana@probe.example"], &[51, 53]),
+            case("a word", &["numbers"], &[51, 54]),
+            case(
+                "an address and a word",
+                &["ana@probe.example", "numbers"],
+                &[51],
+            ),
+            case(
+                "a word and an address",
+                &["numbers", "ana@probe.example"],
+                &[51],
+            ),
+            case(
+                "an address and a phrase",
+                &["ana@probe.example", "quarterly numbers"],
+                &[51],
+            ),
+            case(
+                "an address and a hyphenated word it does not hold",
+                &["ana@probe.example", "follow-up"],
+                &[],
+            ),
+            case("a domain and a word", &["probe.example", "hiring"], &[53]),
+            case(
+                "a sender and a recipient and a word",
+                &["ana@probe.example", "bo@probe.example", "plan"],
+                &[53],
+            ),
+            case(
+                "a name in an address and a word",
+                &["bo", "plan"],
+                &[52, 53],
+            ),
+            case(
+                "a word and one the analyzer drops",
+                &["plan", "½"],
+                &[52, 53],
+            ),
+            case(
+                "words around one the analyzer drops",
+                &["quarterly", "½", "plan"],
+                &[52],
+            ),
+            case(
+                "an address and a word the analyzer drops",
+                &["ana@probe.example", "½"],
+                &[51, 53],
+            ),
+            case(
+                "an address, a word and one the analyzer drops",
+                &["ana@probe.example", "½", "numbers"],
+                &[51],
+            ),
+            case(
+                "an address, a hyphenated word and one the analyzer drops",
+                &["bo@probe.example", "½", "follow-up"],
+                &[55],
+            ),
+            case(
+                "a domain typed with a comma and a word",
+                &["probe.example,", "hiring"],
+                &[53],
+            ),
+            case("a handle and a word", &["@ana", "hiring"], &[53]),
+            case(
+                "a word of every address and a word of the text",
+                &["probe", "plan"],
+                &[],
+            ),
+            case("two words in the text", &["quarterly", "plan"], &[52]),
+            case(
+                "a word and an address no mail holds",
+                &["plan", "zed@probe.example"],
+                &[],
+            ),
+        ]
+    };
+    let mut cases = Vec::new();
+    for match_type in ["partial", "exact"] {
+        cases.extend(words().map(|case| Case { match_type, ..case }));
+    }
+    let mut left_out = case("a word and an address, left out", &["plan"], &[52]);
+    left_out.args.text_conditions = vec![text(EmailTextFields::Any, "ana@probe.example", true)];
+    cases.push(left_out);
+    let mut from = case("a word and from:", &["numbers"], &[51]);
+    from.args.text_conditions = vec![text(EmailTextFields::From, "ana@probe.example", false)];
+    cases.push(from);
+    cases
+}
+
+#[tokio::test]
+async fn an_address_beside_a_word_finds_the_mail_that_holds_both() -> anyhow::Result<()> {
+    search_seeded(address_and_text_messages(), address_and_text_cases()).await
+}
+
 /// A message whose subject, body and every name field hold `text`.
 fn message_holding(n: u128, text: &'static str) -> Message {
     Message {
@@ -540,7 +663,7 @@ static HOLDS_EVERY_TERM: LazyLock<String> = LazyLock::new(|| {
 const TERM_COUNTS: [usize; 4] = [14, 30, 45, TERM_CAP];
 
 /// Every shape at each of [`TERM_COUNTS`], with every filter a search can
-/// carry beside the terms, and as that many left-out words.
+/// carry beside the terms, beside an address, and as that many left-out words.
 fn cap_cases() -> Vec<Case> {
     let mut cases = Vec::new();
     for (shape, terms) in TERMS_AT_THE_CAP.iter() {
@@ -573,6 +696,21 @@ fn cap_cases() -> Vec<Case> {
                 cases.push(Case {
                     match_type,
                     ..found
+                });
+
+                // An emoji is left out beside an address.
+                let holds_the_rest: &[u128] = match *shape {
+                    "forty emoji" => &[31, 32, 33],
+                    _ => &[31],
+                };
+                let beside_an_address = [&[BO.1], &terms[1..]].concat();
+                cases.push(Case {
+                    match_type,
+                    ..case(
+                        &format!("an address and {name}"),
+                        &beside_an_address,
+                        holds_the_rest,
+                    )
                 });
 
                 let left_out: &[u128] = if holds_word_1 { &[33] } else { &[32, 33] };
