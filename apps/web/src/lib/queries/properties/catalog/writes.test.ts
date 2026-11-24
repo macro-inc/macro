@@ -30,9 +30,11 @@ const soup = vi.hoisted(() => ({
   reload: undefined as Partial<OperationResult> | undefined,
   /** The client's answer to a cache-only read; nothing when unset. */
   cacheOnly: undefined as Partial<OperationResult> | undefined,
-  /** Tells reactive readers that the login session or the cache host changed. */
+  /** Tells reactive readers of the login session that it changed. */
   loginChanged: () => {},
-  /** Read by reactive readers of the login session and the cache host. */
+  /** Tells reactive readers of the cache host that it changed. */
+  cacheChanged: () => {},
+  /** Read by reactive readers of the cache host. */
   tracked: () => {},
   /** The cache store's answers to reads of the tag sets, in order; then a miss. */
   cachedReads: [] as unknown[],
@@ -84,9 +86,11 @@ vi.mock('@app/lib/urql-solid/authorization', async (importOriginal) => ({
 vi.mock('../../auth/account-scope', async () => {
   const { createSignal } = await import('solid-js');
   const [changes, setChanges] = createSignal(0);
+  const [cacheChanges, setCacheChanges] = createSignal(0);
   soup.loginChanged = () => setChanges((count) => count + 1);
+  soup.cacheChanged = () => setCacheChanges((count) => count + 1);
   soup.tracked = () => {
-    changes();
+    cacheChanges();
   };
   return {
     queryAccountSession: () => {
@@ -181,14 +185,14 @@ function queueingHost() {
 function pause(host: typeof soup.host) {
   if (host) Object.assign(host, { disabled: true, paused: true });
   soup.host = undefined;
-  soup.loginChanged();
+  soup.cacheChanged();
 }
 
 /** The cache is retired (logout, a failure, or a replacement): it goes quiet. */
 function retire(host: typeof soup.host) {
   if (host) Object.assign(host, { disabled: true, paused: false });
   soup.host = undefined;
-  soup.loginChanged();
+  soup.cacheChanged();
 }
 
 /** The value a write resolves with, or the error it rejects with. */
@@ -1043,11 +1047,11 @@ describe('a waiting write when the login or the cache goes', () => {
     // The same host serves again, hidden until it proves its queue readable,
     // then reports the write.
     if (held) Object.assign(held, { disabled: false, paused: false });
-    soup.loginChanged();
+    soup.cacheChanged();
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(ended).toBe(false);
     soup.host = held;
-    soup.loginChanged();
+    soup.cacheChanged();
     settle({ transactionId: 'tx-1', status: 'committed' });
     expect(await added).toMatchObject({ property_definition_id: 'def-1' });
   });
@@ -1083,7 +1087,7 @@ describe('a waiting write when the login or the cache goes', () => {
       toPromise: async () => {
         // Resumed, but not handed out until it proves its queue readable.
         soup.host = undefined;
-        soup.loginChanged();
+        soup.cacheChanged();
         return { queued: 'tx-1' };
       },
     }));
@@ -1091,7 +1095,7 @@ describe('a waiting write when the login or the cache goes', () => {
     await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 20));
     soup.host = held;
-    soup.loginChanged();
+    soup.cacheChanged();
     settle({ transactionId: 'tx-1', status: 'committed' });
     expect(await added).toMatchObject({ property_definition_id: 'def-1' });
   });
