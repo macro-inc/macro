@@ -7,7 +7,7 @@ import type {
   StopTimerMutation,
 } from '@service-storage/graphql/generated/graphql';
 import type { Client } from '@urql/core';
-import { err } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import {
   type Accessor,
   createEffect,
@@ -21,6 +21,7 @@ import { refreshOnTimeTrackingChanges } from '../queries/time-tracking-changes';
 import {
   createRunningTimerQuery,
   discardTimer,
+  type RunningTimer,
   startTimer,
   stopTimer,
 } from '../queries/timer';
@@ -108,11 +109,42 @@ export function createRunningTimer(dependencies: RunningTimerDependencies) {
     }
   );
 
+  /**
+   * A write that got no answer may still have landed, and its push may be
+   * lost with it: read what the server holds, and count the write done when
+   * the server holds what it asked for. Done this way it has no reply to
+   * show (`data` is undefined). The write itself is never resent, since a
+   * second start would stop and save the first.
+   */
+  async function settle<T>(
+    result: TimeWriteResult<T>,
+    landed: (timer: RunningTimer | undefined) => boolean
+  ): Promise<TimeWriteResult<T>> {
+    if (result.isOk() || result.error.kind !== 'failed') return result;
+    const reread = await query.refetch();
+    if (reread.error || !landed(query.timer())) return result;
+    return ok({ kind: 'committed', data: undefined });
+  }
+
   const ops: TimerOps = {
-    start: (args) => startTimer(args, { client: dependencies.client() }),
-    stop: (args) => stopTimer(args, { client: dependencies.client() }),
-    discard: (timerId) =>
-      discardTimer({ timerId }, { client: dependencies.client() }),
+    start: async (args) =>
+      settle(
+        await startTimer(args, { client: dependencies.client() }),
+        (timer) =>
+          timer?.taskId === args.taskId &&
+          (!args.startedAt ||
+            Date.parse(timer.startedAt) === Date.parse(args.startedAt))
+      ),
+    stop: async (args) =>
+      settle(
+        await stopTimer(args, { client: dependencies.client() }),
+        (timer) => timer?.id !== args.timerId
+      ),
+    discard: async (timerId) =>
+      settle(
+        await discardTimer({ timerId }, { client: dependencies.client() }),
+        (timer) => timer?.id !== timerId
+      ),
   };
 
   // One timer change at a time: a second one while another is in flight is
@@ -125,14 +157,7 @@ export function createRunningTimer(dependencies: RunningTimerDependencies) {
     if (busy()) return err(BUSY);
     setBusy(true);
     try {
-      const result = await run(ops);
-      // A write that got no answer may still have landed, and its push may be
-      // lost with it: read what the server holds before the next press, never
-      // resend the write, since a second start would stop and save the first.
-      if (result.isErr() && result.error.kind === 'failed') {
-        await query.refetch();
-      }
-      return result;
+      return await run(ops);
     } finally {
       setBusy(false);
     }

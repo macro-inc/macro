@@ -237,10 +237,11 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
         fail(stopped.error);
         return;
       }
-      const entry =
-        stopped.value.kind === 'committed' ? stopped.value.data?.entry : null;
-      if (entry) showLogged(entry, name);
-      else toast.alert(t('timeTracking.timerDiscarded'));
+      const reply =
+        stopped.value.kind === 'committed' ? stopped.value.data : undefined;
+      // No reply means the stop landed but its answer was lost: say nothing.
+      if (reply?.entry) showLogged(reply.entry, name);
+      else if (reply) toast.alert(t('timeTracking.timerDiscarded'));
     } finally {
       interaction.end();
     }
