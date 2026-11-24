@@ -37,7 +37,7 @@ use soup_filter_cache_adapter::{
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use turso_opfs::{OpenResult, OpfsError, OpfsErrorKind, OpfsOwner};
+use turso_opfs::{OpenResult, OpfsError, OpfsErrorKind, OpfsOwner, Sidecar};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
@@ -557,6 +557,7 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
 struct CacheState {
     selections: RecordSelectionCache,
     engine: Option<BrowserEngine>,
+    sidecar: Sidecar,
     mail_generation: String,
     scope: String,
     hot_capacity: Option<u32>,
@@ -602,7 +603,12 @@ impl CacheState {
         };
         let result = self.engine_mut()?.current_identity().await;
         let bound = self.engine_result(result)?;
-        Ok(bound.as_deref().is_none_or(|bound| bound == observed))
+        let reuse = bound.as_deref().is_none_or(|bound| bound == observed);
+        if !reuse {
+            // The reset takes the queue of the account before this one.
+            salvage::forget(&self.sidecar).await?;
+        }
+        Ok(reuse)
     }
 
     /// Storage may have changed in a way this connection's WAL position
@@ -1061,6 +1067,7 @@ async fn open_owner(owner: OpfsOwner) -> Result<OpenResult, JsValue> {
 
 struct OpenedStorage {
     storage: TursoStorage,
+    sidecar: Sidecar,
     outcome: CacheOpenOutcome,
     queue: QueueReport,
 }
@@ -1076,6 +1083,7 @@ async fn open_storage(
     match crossing.finish(&sidecar, &mut storage).await {
         Ok(queue) => Ok(OpenedStorage {
             storage,
+            sidecar,
             outcome,
             queue,
         }),
@@ -1217,6 +1225,7 @@ async fn open_cache_inner(
     let schema = runtime_schema()?;
     let OpenedStorage {
         storage,
+        sidecar,
         outcome,
         queue,
     } = acquire_storage(&scope, recovery_wipe, storage_grant.as_ref(), if_available).await?;
@@ -1225,6 +1234,7 @@ async fn open_cache_inner(
             state: Rc::new(Mutex::new(CacheState {
                 selections: RecordSelectionCache::default(),
                 engine: Some(build_engine(storage, hot_capacity, schema)),
+                sidecar,
                 mail_generation: soup_filter_cache_adapter::mail::new_generation(),
                 scope,
                 hot_capacity,
@@ -1452,7 +1462,7 @@ pub async fn destroy_cache(scope: String) -> Result<(), JsValue> {
         .recovery_wipe()
         .await
         .map_err(err_js)?;
-    salvage::forget(&owner).await?;
+    salvage::forget(&owner.sidecar()).await?;
     owner.release().await.map_err(err_js)
 }
 
@@ -1787,7 +1797,7 @@ async fn discard_storage(storage: BrowserStorage) -> Result<OpfsOwner, JsValue> 
         TursoStorageCloseOutcome::ResetRequired(closed) => closed.reset().await,
     }
     .map_err(err_js)?;
-    salvage::forget(&owner).await?;
+    salvage::forget(&owner.sidecar()).await?;
     Ok(owner)
 }
 
@@ -3006,15 +3016,18 @@ impl CacheEngine {
         })
     }
 
-    /// Drops all cached state, including the durable mutation queue.
+    /// Drops all cached state, including the durable mutation queue and any
+    /// copy of it kept beside the database. Rejects when that copy stays.
     pub fn clear(&self) -> js_sys::Promise {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.forget_prepared_projections();
             let result = state.engine_mut()?.clear().await;
+            let forgotten = salvage::forget(&state.sidecar).await;
             let revision = state.engine_result(result)?;
             to_js(&JsRevisionResult {
+            forgotten?;
                 revision: revision.to_string(),
             })
         })
@@ -3047,14 +3060,15 @@ impl CacheEngine {
                     return Err(error);
                 }
             };
-            let storage = match open_storage(&scope, owner, Crossing::default()).await {
-                Ok(opened) => opened.storage,
+            let opened = match open_storage(&scope, owner, Crossing::default()).await {
+                Ok(opened) => opened,
                 Err(error) => {
                     state.reset_required = true;
                     return Err(error);
                 }
             };
-            state.engine = Some(build_engine(storage, hot_capacity, schema));
+            state.sidecar = opened.sidecar;
+            state.engine = Some(build_engine(opened.storage, hot_capacity, schema));
             state.mail_generation = soup_filter_cache_adapter::mail::new_generation();
             state.reset_required = false;
             Ok(JsValue::UNDEFINED)

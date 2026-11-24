@@ -204,7 +204,7 @@ async fn read_before_wipe(
     let pending = file.into_queue();
     let found = read_queue(&connected, scope, pending.clone(), now_ms());
     read.report = report_of(&found);
-    if found.pending_held {
+    if found.forget_pending {
         let attempts = attempt.repeat(reads);
         read.end = attempts.len() as u64;
         // What the database holds and may have settled must not come back.
@@ -286,18 +286,17 @@ impl Crossing {
         let file = SalvageFile::decode(&bytes);
         let (end, imports) = (file.end(), file.imports());
         let Some(queue) = self.unwritten.or(file.into_queue()) else {
-            let _ = sidecar.remove().await;
+            remove(sidecar).await?;
             return Ok(report);
         };
         if imports >= MAX_ATTEMPTS {
             report.outcome = QueueOutcome::Abandoned;
             report.dropped += queue.len();
-            let _ = sidecar.remove().await;
+            remove(sidecar).await?;
             return Ok(report);
         }
-        let _ = sidecar
-            .write_tail(end, &SalvageFile::import_attempt())
-            .await;
+        let attempt = SalvageFile::import_attempt();
+        unless_busy(sidecar.write_tail(end, &attempt).await)?;
         let imported = storage
             .import_queue(&queue, now_ms())
             .map_err(storage_error)?;
@@ -310,16 +309,31 @@ impl Crossing {
             (_, 0, 1..) => QueueOutcome::Abandoned,
             (_, 0, 0) => report.outcome,
         };
-        // The database names the queue it holds, so a copy left here is inert.
-        let _ = sidecar.remove().await;
+        // The database names the queue it holds, so a copy that stays for any
+        // other reason is inert while the database can be read.
+        remove(sidecar).await?;
         Ok(report)
     }
 }
 
-/// Forgets a queue on its way, with the database it was on its way to.
-pub(super) async fn forget(owner: &OpfsOwner) -> Result<(), JsValue> {
-    owner
-        .sidecar()
+/// Rejects when another context keeps the side file open, which passes: the
+/// next attempt goes on from here. Whatever else is wrong with the side file
+/// never stops the cache.
+fn unless_busy(result: Result<(), OpfsError>) -> Result<(), JsValue> {
+    match result {
+        Err(error) if error.kind() == OpfsErrorKind::Busy => Err(storage_err_js(&error)),
+        _ => Ok(()),
+    }
+}
+
+async fn remove(sidecar: &Sidecar) -> Result<(), JsValue> {
+    unless_busy(sidecar.remove().await)
+}
+
+/// Forgets a queue on its way, with the database it was on its way to. One
+/// that stays could reach the next account, so a failure is the caller's.
+pub(super) async fn forget(sidecar: &Sidecar) -> Result<(), JsValue> {
+    sidecar
         .remove()
         .await
         .map_err(|error| storage_err_js(&error))

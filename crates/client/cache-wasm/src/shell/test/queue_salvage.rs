@@ -28,6 +28,23 @@ async fn write_side_file(scope: &str, bytes: &[u8]) {
     owner.release().await.expect("release");
 }
 
+/// Writes a side file whose lock an engine holds.
+async fn leave_side_file(scope: &str, bytes: &[u8]) {
+    let hex = bytes.iter().map(|byte| format!("{byte:02x}"));
+    run_js(
+        "return (async () => {
+          const [file, hex] = name.split('|');
+          const root = await navigator.storage.getDirectory();
+          const entry = await root.getFileHandle(file, { create: true });
+          const handle = await entry.createSyncAccessHandle();
+          handle.write(Uint8Array.from(hex.match(/../g), (byte) => parseInt(byte, 16)));
+          handle.close();
+        })()",
+        &format!("{}|{}", side_file(scope), hex.collect::<String>()),
+    )
+    .await;
+}
+
 /// A closed database of one account that queues one mutation.
 async fn closed_with_queue(scope: &str) {
     let engine = fresh_engine(scope).await;
@@ -264,6 +281,61 @@ async fn a_queue_lost_behind_an_older_copy_is_never_called_kept() {
         assert_kept(&engine, SCOPE).await;
         close_and_destroy(&engine, SCOPE).await;
     }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_copy_never_outlives_the_account_it_was_queued_under() {
+    const SCOPE: &str = "cache-wasm-salvage-account";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let copy = read_side_file(SCOPE).await;
+
+    // Signing out clears the database and keeps its name.
+    let (engine, _, _) = open(SCOPE, false).await;
+    leave_side_file(SCOPE, &copy).await;
+    resolved(engine.clear()).await;
+    assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+    resolved(engine.close()).await;
+
+    // Another account's first response resets it.
+    closed_with_queue(SCOPE).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    leave_side_file(SCOPE, &copy).await;
+    resolved(engine.write_query(
+        write_context(None),
+        PROPERTY_QUERY.into(),
+        Some("Soup".into()),
+        js(variables()),
+        js(property_base()),
+        Some("user-2".into()),
+    ))
+    .await;
+    assert_eq!(depth(&engine).await, "0");
+    assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_clear_that_leaves_the_copy_behind_fails() {
+    const SCOPE: &str = "cache-wasm-salvage-clear-fails";
+    closed_with_queue(SCOPE).await;
+    let (engine, _, _) = open(SCOPE, false).await;
+    run_js(
+        "return (async () => {
+          const root = await navigator.storage.getDirectory();
+          const entry = await root.getFileHandle(name, { create: true });
+          self.heldSideFile = await entry.createSyncAccessHandle();
+        })()",
+        &side_file(SCOPE),
+    )
+    .await;
+    let cleared = wasm_bindgen_futures::JsFuture::from(engine.clear()).await;
+    assert!(cleared.is_err());
+    assert_eq!(depth(&engine).await, "0");
+    run_js("self.heldSideFile.close(); return Promise.resolve();", "").await;
+    resolved(engine.clear()).await;
+    assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+    close_and_destroy(&engine, SCOPE).await;
 }
 
 #[wasm_bindgen_test(async)]

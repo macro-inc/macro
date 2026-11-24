@@ -3,7 +3,7 @@ use super::*;
 use crate::storage::test::queued;
 use crate::{PhysicalResetReason, TursoMemoryDatabase};
 use cache_core::engine::authority::AUTHORITY_META_KEY;
-use cache_core::queue::{MutationClaimRequest, MutationClaimToken, MutationId};
+use cache_core::queue::{MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation};
 use cache_core::store::Storage;
 use cache_core::value::{CacheValue, Record};
 use pollster::block_on;
@@ -111,10 +111,17 @@ fn projection(key: &str, variant: u8) -> PendingOptimisticProjection {
     }
 }
 
+/// A write of a database that has no account yet.
+fn unowned(label: &str) -> NewQueuedMutation {
+    let mut queued = queued(label);
+    queued.mutation.request.identity = None;
+    queued
+}
+
 async fn enqueue(storage: &mut TursoStorage, label: &str) -> MutationId {
     storage
         .enqueue_mutation_with_shadow(
-            queued(label),
+            unowned(label),
             vec![projection(&format!("Thing:{label}"), 1)],
         )
         .await
@@ -167,7 +174,7 @@ async fn run(storage: &mut TursoStorage, actions: Vec<Action>) {
             Action::Enqueue(key, variant) => {
                 storage
                     .enqueue_mutation_with_shadow(
-                        queued("Edit"),
+                        unowned("Edit"),
                         vec![projection(&format!("Thing:{key}"), variant)],
                     )
                     .await
@@ -360,6 +367,37 @@ fn a_queue_never_enters_another_accounts_database() {
 }
 
 #[test]
+fn a_copy_of_another_accounts_queue_goes_with_the_database() {
+    block_on(async {
+        let mut older = fresh();
+        enqueue(&mut older, "Older").await;
+        older
+            .put_batch(vec![metadata(IDENTITY_META_KEY, "account")])
+            .await
+            .unwrap();
+        let older = carried(&older);
+        for queues in [false, true] {
+            let mut storage = fresh();
+            storage
+                .put_batch(vec![metadata(IDENTITY_META_KEY, "another")])
+                .await
+                .unwrap();
+            if queues {
+                enqueue(&mut storage, "Own").await;
+            }
+            let read = storage.salvage_queue(SCOPE, Some(older.clone()), 0);
+            assert!(read.forget_pending);
+            assert_eq!(read.dropped, 1);
+            let names = read.queue.map(|queue| queue.len());
+            assert_eq!(names, queues.then_some(1));
+        }
+        // One that has no account yet takes it.
+        let read = fresh().salvage_queue(SCOPE, Some(older.clone()), 0);
+        assert_eq!((read.queue, read.forget_pending), (Some(older), false));
+    });
+}
+
+#[test]
 fn an_unreadable_write_leaves_the_others() {
     block_on(async {
         let mut storage = fresh();
@@ -488,7 +526,7 @@ fn a_database_without_a_generation_is_known_by_the_writes_it_queues() {
         assert_eq!(queue.source, None);
         // The wipe never came: the next one finds the copy and the original.
         let again = storage.salvage_queue(SCOPE, Some(queue.clone()), 0);
-        assert!(again.pending_held && again.complete);
+        assert!(again.forget_pending && again.complete);
         assert_eq!(again.dropped, 0);
         let mut next = fresh();
         let imported = next.import_queue(&again.queue.unwrap(), 0).unwrap();

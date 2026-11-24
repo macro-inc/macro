@@ -87,14 +87,18 @@ fn read(connection: &Db, scope: &str, pending: Option<SalvagedQueue>, now_ms: i6
             .marked();
         }
     };
-    let pending_held = pending.as_ref().is_some_and(|pending| held.holds(pending));
-    let pending = pending.filter(|_| !pending_held);
+    let holds = pending.as_ref().is_some_and(|pending| held.holds(pending));
+    let pending = pending.filter(|_| !holds);
+    let foreign = pending.as_ref().filter(|pending| !held.admits(pending));
+    let foreign = foreign.map_or(0, SalvagedQueue::len);
+    let forget_pending = holds || foreign > 0;
+    let pending = pending.filter(|_| foreign == 0);
     let mut read = QueueRead {
         queue: None,
-        dropped: held.dropped,
+        dropped: held.dropped + foreign,
         complete: held.complete,
         abandoned: held.queue.rounds > MAX_ROUNDS && !held.queue.is_empty(),
-        pending_held,
+        forget_pending,
     };
     let queue = if read.abandoned {
         read.dropped += held.queue.len();
@@ -134,6 +138,7 @@ enum Held {
 struct HeldQueue {
     queue: SalvagedQueue,
     imported: Option<Uuid>,
+    account: Option<Vec<u8>>,
     dropped: u64,
     complete: bool,
 }
@@ -147,6 +152,11 @@ impl HeldQueue {
             || self.queue.shares_a_write_with(pending)
     }
 }
+
+    /// Whether `pending` may follow this database under one account.
+    fn admits(&self, pending: &SalvagedQueue) -> bool {
+        self.account.is_none() || self.account.as_deref() == pending.account()
+    }
 
 fn read_database(connection: &Db, scope: &str, now_ms: i64) -> Result<Held, TursoStorageError> {
     let tables = driver::query(
@@ -174,6 +184,7 @@ fn read_database(connection: &Db, scope: &str, now_ms: i64) -> Result<Held, Turs
             records: Vec::new(),
         },
         imported: marker.map(|marker| marker.id),
+        account: metadata_record(connection, IDENTITY_META_KEY)?,
         dropped: 0,
         complete: true,
     };
@@ -193,8 +204,12 @@ fn read_database(connection: &Db, scope: &str, now_ms: i64) -> Result<Held, Turs
     if held.queue.is_empty() {
         return Ok(Held::Queue(held));
     }
-    for key in [IDENTITY_META_KEY, AUTHORITY_META_KEY] {
-        if let Some(value) = metadata_record(connection, key)? {
+    let authority = metadata_record(connection, AUTHORITY_META_KEY)?;
+    for (key, value) in [
+        (IDENTITY_META_KEY, held.account.clone()),
+        (AUTHORITY_META_KEY, authority),
+    ] {
+        if let Some(value) = value {
             held.queue
                 .records
                 .push((RecordKey::from_entity(&EntityKey(key.into()))?, value));

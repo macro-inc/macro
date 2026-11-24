@@ -99,9 +99,9 @@ pub struct QueueRead {
     pub complete: bool,
     /// Whether the queue was given up because wipes kept following its import.
     pub abandoned: bool,
-    /// Whether the database already held the pending queue, so that the copy
-    /// of it must go before the database does.
-    pub pending_held: bool,
+    /// Whether the copy of the pending queue must go before the database does:
+    /// the database held that queue already, or is another account's.
+    pub forget_pending: bool,
 }
 
 /// What importing a queue did.
