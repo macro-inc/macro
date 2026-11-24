@@ -1,5 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { queryClient } from '@queries/client';
 import { useQueryClient } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
@@ -10,7 +12,8 @@ import type {
 import { EmailThreadMention } from '../../email-thread-mention';
 import { createEmailPolicySource } from '../../queries/email-policy';
 import { createEmailPrivacySource } from '../../queries/email-privacy';
-import { policyClient } from './policy-adapter';
+import { crmKeys } from '../../queries/keys';
+import { connectPolicyMailbox, policyClient } from './policy-adapter';
 
 // Rich mentions import the same optional capabilities as other app references.
 export * from '@app/lib/analytics/posthog.tsx';
@@ -46,6 +49,25 @@ const [state, setState] = createSignal<EmailPrivacy>({
   canRemoveTeamDomains: params.has('admin'),
 });
 export const [lastChange, setLastChange] = createSignal('');
+export const [mailboxConnections, setMailboxConnections] = createSignal(0);
+/**
+ * Stands in for the app's add-inbox flow: it counts the request and leaves the
+ * fixture's mailbox connected, as a completed OAuth return would. It never
+ * touches consent, so sharing stays off.
+ */
+function connectMailbox() {
+  setMailboxConnections((count) => count + 1);
+  setState((s) => ({
+    ...s,
+    mailboxEmail: 'member@example.com',
+    mailboxLinkId: mailboxId,
+  }));
+  connectPolicyMailbox();
+  fireAndForget(
+    queryClient.invalidateQueries({ queryKey: crmKeys._def }),
+    'crm'
+  );
+}
 export const [statusUnavailable, setStatusUnavailable] = createSignal(
   params.has('status-unavailable')
 );
@@ -99,6 +121,7 @@ export const useCrmContext = () => ({
   accessState: () => (crmAccess() ? 'allowed' : 'denied'),
   retryAccess: async () => {},
   EmailThreadMention,
+  connectMailbox,
   createEmailPrivacy: () =>
     createEmailPrivacySource(
       {
