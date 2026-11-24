@@ -12,7 +12,7 @@
 // it records whether each side carries notifiedAt and whether that is the
 // viewer's latest notification time for it. Phase "quiet" runs DBG_ROUNDS
 // (default 6) rounds alone; phase "storm" runs as many while DBG_RATE (default
-// 15) notifications a second go to the viewer about its other entities.
+// 15) notifications a second go to the viewer about any of its entities.
 // Prints a tally per phase and side. Runs in the browser's network namespace.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -42,7 +42,7 @@ const viewerKey = process.env.DBG_VIEWER ?? 'n101';
 const user = seeded.users.get(viewerKey)!;
 const mine = seeded.world.entities.filter((e) => e.viewer === viewerKey);
 const docs = mine.filter((e) => e.itemType === 'document');
-const others = mine.filter((e) => e.itemType !== 'document');
+const others = mine;
 const track = Number(process.env.DBG_TRACK ?? 4);
 const rounds = Number(process.env.DBG_ROUNDS ?? 6);
 const rate = Number(process.env.DBG_RATE ?? 15);
