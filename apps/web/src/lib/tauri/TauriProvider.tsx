@@ -175,7 +175,13 @@ function TauriProvider(props: { children: JSX.Element }) {
       // native Ready/Resumed handlers cover cases where this window is missed.
       // Leaving the app does not mean nothing is running: switching to Gmail
       // for a sign-in code hides the page while its auth sheet is still open.
-      if (document.hidden && !hasAutomaticReloadHolds()) {
+      // A desktop restart may be downloading the bundle for the next launch;
+      // a reload now would drop the restart.
+      if (
+        document.hidden &&
+        !hasAutomaticReloadHolds() &&
+        !nativeUpdates.preparing()
+      ) {
         performBundleUpdate();
       }
     };
