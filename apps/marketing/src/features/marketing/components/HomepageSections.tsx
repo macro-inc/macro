@@ -172,7 +172,7 @@ const SECTIONS: readonly Section[] = [
   },
   {
     id: 'coding',
-    title: 'From bug report to merged pull request.',
+    title: 'From bug report to merged PR.',
     description:
       'Review diffs, read review comments, and merge pull requests right inside Macro so engineering work stays beside the thread that started it.',
     caption: [
