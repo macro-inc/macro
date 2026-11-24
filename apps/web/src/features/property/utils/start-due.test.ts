@@ -299,6 +299,56 @@ describe('dates with times', () => {
     });
   });
 
+  it('move the due date to a start time picked past it when there is no length to keep', () => {
+    expect(
+      pickTime(
+        { start: null, due: at(26, 2), timed: true },
+        'start',
+        at(26, 0),
+        13 * 60
+      )
+    ).toEqual({
+      dates: { start: at(26, 13), due: at(26, 13), timed: true },
+      changed: ['start', 'due'],
+    });
+    expect(
+      pickTime(
+        { start: at(26, 16), due: at(26, 14), timed: true },
+        'start',
+        at(26, 0),
+        15 * 60
+      )
+    ).toEqual({
+      dates: { start: at(26, 15), due: at(26, 15), timed: true },
+      changed: ['start', 'due'],
+    });
+  });
+
+  it('leave the due date for a start time before it when there is no length to keep', () => {
+    expect(
+      pickTime(
+        { start: null, due: at(26, 16), timed: true },
+        'start',
+        at(26, 0),
+        13 * 60
+      )
+    ).toEqual({
+      dates: { start: at(26, 13), due: at(26, 16), timed: true },
+      changed: ['start'],
+    });
+    expect(
+      pickTime(
+        { start: at(26, 16), due: at(26, 14), timed: true },
+        'start',
+        at(26, 0),
+        9 * 60
+      )
+    ).toEqual({
+      dates: { start: at(26, 9), due: at(26, 14), timed: true },
+      changed: ['start'],
+    });
+  });
+
   it('keep each end its time when a day is picked', () => {
     expect(
       pickTimedDay(
@@ -340,6 +390,15 @@ describe('formatStartDueCompact', () => {
     expect(
       formatStartDueCompact({ start: null, due: at(26, 9), timed: true }, NOW)
     ).toBe('Nov 26, 9am');
+  });
+
+  it('writes one time when the start and due date are the same moment', () => {
+    expect(
+      formatStartDueCompact(
+        { start: at(26, 13), due: at(26, 13), timed: true },
+        NOW
+      )
+    ).toBe('Nov 26, 1pm');
   });
 
   it('reads an end saved as a whole day without a time', () => {

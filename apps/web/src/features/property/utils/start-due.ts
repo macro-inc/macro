@@ -154,6 +154,7 @@ export function formatStartDueCompact(
   if (!due) return `${at('start', start)} →`;
   if (wholeDay === 'start') return at('due', due);
   if (wholeDay === 'due') return `${at('start', start)} → ${day(due)}`;
+  if (start.getTime() === due.getTime()) return at('due', due);
   return `${day(start)}, ${formatCompactCalendarTimeRange(start, due, clock)}`;
 }
 
@@ -213,8 +214,10 @@ export function withoutTimes(dates: StartDue): StartDue {
 /**
  * The dates after a clock time is picked for `field`, as minutes past the
  * midnight of `day`. A new start time moves the due date with it, keeping
- * the length, as a calendar event's end follows its start. A due time before
- * the start moves the start back to it.
+ * the length, as a calendar event's end follows its start. With no length to
+ * keep (no start yet, or a start after the due date), a start time past the
+ * due date moves the due date to it. A due time before the start moves the
+ * start back to it.
  */
 export function pickTime(
   dates: StartDue,
@@ -224,16 +227,24 @@ export function pickTime(
 ): { dates: StartDue; changed: DateField[] } {
   const at = atClock(day, minutes);
   if (field === 'start') {
-    if (!dates.due || !dates.start) {
-      return { dates: { ...dates, start: at }, changed: ['start'] };
+    const { start, due } = dates;
+    if (start && due && due >= start) {
+      return {
+        dates: {
+          ...dates,
+          start: at,
+          due: addMinutes(at, differenceInMinutes(due, start)),
+        },
+        changed: ['start', 'due'],
+      };
     }
-    const length = differenceInMinutes(dates.due, dates.start);
-    if (length < 0)
-      return { dates: { ...dates, start: at }, changed: ['start'] };
-    return {
-      dates: { ...dates, start: at, due: addMinutes(at, length) },
-      changed: ['start', 'due'],
-    };
+    if (due && at > due) {
+      return {
+        dates: { ...dates, start: at, due: at },
+        changed: ['start', 'due'],
+      };
+    }
+    return { dates: { ...dates, start: at }, changed: ['start'] };
   }
   if (dates.start && at < dates.start) {
     return {
