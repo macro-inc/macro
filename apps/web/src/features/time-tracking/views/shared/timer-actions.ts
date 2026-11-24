@@ -155,10 +155,17 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
       if (restarted.isErr()) return err(restarted.error);
       const removed = await writes.remove(stopped);
       if (removed.isOk()) return removed;
+      // A restart whose reply was lost has no reply to name it; the timer the
+      // re-read found is it when it runs on that task from that start.
+      const reread = runningTimer.timer();
       const restartedId =
-        restarted.value.kind === 'committed'
-          ? restarted.value.data?.timeTracking.runningTimer?.id
-          : undefined;
+        restarted.value.kind !== 'committed'
+          ? undefined
+          : (restarted.value.data?.timeTracking.runningTimer?.id ??
+            (reread?.taskId === stopped.taskId &&
+            Date.parse(reread.startedAt) === Date.parse(startedAt)
+              ? reread.id
+              : undefined));
       if (restartedId) await timerOps.discard(restartedId);
       return removed;
     });
