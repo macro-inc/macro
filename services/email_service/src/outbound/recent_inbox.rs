@@ -7,7 +7,8 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use email::domain::mailbox::{MailboxError, MailboxKey};
 use email::domain::recent_inbox::{
-    RecentInboxMailbox, RecentInboxMailboxes, RecentInboxReader, RecentMailFolder, RecentRead,
+    RecentInboxMailbox, RecentInboxMailboxes, RecentInboxReadError, RecentInboxReader,
+    RecentMailFolder, RecentRead,
 };
 use email_api_client::GmailApiClientRepository;
 use email_api_client::domain::{
@@ -94,13 +95,13 @@ where
         &self,
         mailbox: &RecentInboxMailbox,
         read: RecentRead,
-    ) -> Result<Vec<RecentInboxMessage>, EmailApiError> {
+    ) -> Result<Vec<RecentInboxMessage>, RecentInboxReadError> {
         let messages = match mailbox.provider {
             UserProvider::Gmail => {
                 gmail_recent_messages(&self.gmail, &self.gmail_window, mailbox.key.link_id, read)
                     .await?
             }
-            UserProvider::Imap => self.imap.recent(mailbox.key, limit).await?,
+            UserProvider::Imap => imap_recent_messages(&self.imap, mailbox.key, read).await?,
             UserProvider::Outlook => self
                 .outlook
                 .recent_inbox_messages(
@@ -130,6 +131,24 @@ where
             .map(|message| summarize(&mailbox.email_address, message, dated_by_sending))
             .collect())
     }
+}
+
+async fn imap_recent_messages(
+    gateway: &super::email_api::imap::ImapMailboxGateway,
+    mailbox: MailboxKey,
+    read: RecentRead,
+) -> Result<Vec<Message>, RecentInboxReadError> {
+    let limit = imap_recent_limit(read)?;
+    Ok(gateway.recent(mailbox, limit).await?)
+}
+
+/// The current engine RPC reads newest inbox messages only, bounded at 100.
+/// Reject unsupported context before RPC rather than silently narrowing it.
+fn imap_recent_limit(read: RecentRead) -> Result<u16, RecentInboxReadError> {
+    if read.folder != RecentMailFolder::Inbox || read.since.is_some() || read.limit > 100 {
+        return Err(RecentInboxReadError::Unsupported);
+    }
+    Ok(read.limit)
 }
 
 /// Lists the newest message ids, dated since `read.since` when it is given,

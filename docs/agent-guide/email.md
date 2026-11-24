@@ -2114,3 +2114,5 @@ A local queued-send timer must never say
 Delivery unconfirmed before a provider outcome. Reconnect uses the Reconnect
 action; server fields stack at full dialog width and port choices name SSL/TLS
 or STARTTLS in both the selected value and menu.
+
+Routine suggestions currently use newest inbox context for IMAP. Month and Sent context are omitted until IMAP folder/date-window support lands; internal recent-mail responses identify unsupported mailboxes, and the harness records typed partial-context counts.

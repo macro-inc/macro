@@ -45,12 +45,12 @@ impl RecentInboxReader for Reader {
         &self,
         mailbox: &RecentInboxMailbox,
         read: RecentRead,
-    ) -> Result<Vec<RecentInboxMessage>, EmailApiError> {
+    ) -> Result<Vec<RecentInboxMessage>, RecentInboxReadError> {
         self.reads.lock().unwrap().push(read);
         self.messages
             .get(&mailbox.key.link_id)
             .cloned()
-            .ok_or(EmailApiError::AuthRequired)
+            .ok_or(EmailApiError::AuthRequired.into())
     }
 }
 
@@ -89,6 +89,7 @@ async fn merges_inboxes_newest_first_and_skips_one_that_fails() {
     let gmail = mailbox("owner@example.com", UserProvider::Gmail);
     let outlook = mailbox("work@example.com", UserProvider::Outlook);
     let revoked = mailbox("old@example.com", UserProvider::Gmail);
+    let revoked_id = revoked.key.link_id;
     let reader = Reader {
         messages: HashMap::from([
             (
@@ -118,6 +119,7 @@ async fn merges_inboxes_newest_first_and_skips_one_that_fails() {
 
     assert_eq!(
         messages
+            .messages
             .iter()
             .map(|message| (message.inbox.as_str(), message.subject.as_deref()))
             .collect::<Vec<_>>(),
@@ -125,6 +127,13 @@ async fn merges_inboxes_newest_first_and_skips_one_that_fails() {
             ("owner@example.com", Some("Gmail newest")),
             ("work@example.com", Some("Outlook middle")),
         ]
+    );
+    assert_eq!(
+        messages.unreadable_mailboxes,
+        vec![UnreadableMailbox {
+            link_id: revoked_id,
+            reason: UnreadableMailboxReason::ProviderError
+        }]
     );
     assert_eq!(service.reader.limits(), vec![2, 2, 2]);
     assert!(
@@ -180,9 +189,9 @@ async fn long_subjects_and_snippets_are_cut_at_a_character_boundary() {
         .await
         .unwrap();
 
-    assert_eq!(messages[0].subject, Some("é".repeat(200)));
-    assert_eq!(messages[0].snippet, Some("ü".repeat(300)));
-    assert_eq!(messages[1].subject.as_deref(), Some("Lunch?"));
+    assert_eq!(messages.messages[0].subject, Some("é".repeat(200)));
+    assert_eq!(messages.messages[0].snippet, Some("ü".repeat(300)));
+    assert_eq!(messages.messages[1].subject.as_deref(), Some("Lunch?"));
 }
 
 #[tokio::test]
@@ -194,7 +203,7 @@ async fn a_user_without_inboxes_reads_nothing() {
         .await
         .unwrap();
 
-    assert!(messages.is_empty());
+    assert!(messages.messages.is_empty());
 }
 
 #[tokio::test]
@@ -230,15 +239,18 @@ async fn a_longer_snippet_comes_from_the_body_only_when_asked_for() {
         .read(&actor(), 10, DEFAULT_SNIPPET_CHARS)
         .await
         .unwrap();
-    assert_eq!(messages[0].snippet.as_deref(), Some("Your order shipped"));
-    assert_eq!(messages[0].labels, ["INBOX"]);
-    assert_eq!(messages[0].body, None);
+    assert_eq!(
+        messages.messages[0].snippet.as_deref(),
+        Some("Your order shipped")
+    );
+    assert_eq!(messages.messages[0].labels, ["INBOX"]);
+    assert_eq!(messages.messages[0].body, None);
 
     let messages = service.read(&actor(), 10, 2_000).await.unwrap();
-    let snippet = messages[0].snippet.as_deref().unwrap();
+    let snippet = messages.messages[0].snippet.as_deref().unwrap();
     assert!(snippet.starts_with("Your order shipped. Details"));
     assert_eq!(snippet.chars().count(), usize::from(MAX_SNIPPET_CHARS));
-    assert_eq!(messages[0].body, None);
+    assert_eq!(messages.messages[0].body, None);
 }
 
 fn at(time: &str) -> DateTime<Utc> {
@@ -309,7 +321,7 @@ async fn a_sent_window_merges_mailboxes_and_keeps_text_for_only_the_newest() {
 
     // Room for every message: only those of the window are kept.
     assert_eq!(
-        subjects(read(10).await.unwrap()),
+        subjects(read(10).await.unwrap().messages),
         vec![
             text("Today"),
             text("Yesterday"),
@@ -318,7 +330,7 @@ async fn a_sent_window_merges_mailboxes_and_keeps_text_for_only_the_newest() {
     );
     // The newest across both inboxes.
     assert_eq!(
-        subjects(read(2).await.unwrap()),
+        subjects(read(2).await.unwrap().messages),
         vec![text("Today"), text("Yesterday")]
     );
     let read = |limit| RecentRead {
@@ -347,7 +359,7 @@ async fn a_sent_window_merges_mailboxes_and_keeps_text_for_only_the_newest() {
         )
         .await
         .unwrap();
-    assert_eq!(subjects(one), vec![text("Today")]);
+    assert_eq!(subjects(one.messages), vec![text("Today")]);
 }
 
 #[tokio::test]
@@ -391,4 +403,139 @@ async fn a_window_read_reaches_back_a_month_and_five_hundred_messages_at_most() 
             },
         ]
     );
+}
+
+#[tokio::test]
+async fn unsupported_imap_window_is_reported_without_losing_healthy_mail() {
+    struct PartialReader;
+    impl RecentInboxReader for PartialReader {
+        async fn recent(
+            &self,
+            mailbox: &RecentInboxMailbox,
+            read: RecentRead,
+        ) -> Result<Vec<RecentInboxMessage>, RecentInboxReadError> {
+            match mailbox.provider {
+                UserProvider::Imap if read.since.is_some() => {
+                    Err(RecentInboxReadError::Unsupported)
+                }
+                _ => Ok(vec![message(
+                    "owner@example.com",
+                    "Healthy",
+                    "2026-11-20T10:00:00Z",
+                )]),
+            }
+        }
+    }
+    let imap = mailbox("imap@example.com", UserProvider::Imap);
+    let link_id = imap.key.link_id;
+    let gmail = mailbox("owner@example.com", UserProvider::Gmail);
+    let service = RecentInboxService::new(Mailboxes(Ok(vec![imap, gmail])), PartialReader);
+    for folder in [RecentMailFolder::Inbox, RecentMailFolder::Sent] {
+        let response = service
+            .read_window(
+                &actor(),
+                WindowRead {
+                    folder,
+                    days: 30,
+                    limit: 100,
+                    texts: 100,
+                    snippet_chars: 300,
+                },
+                at("2026-11-21T00:00:00Z"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.messages.len(), 1);
+        assert_eq!(response.messages[0].subject.as_deref(), Some("Healthy"));
+        assert_eq!(
+            response.unreadable_mailboxes,
+            vec![UnreadableMailbox {
+                link_id,
+                reason: UnreadableMailboxReason::Unsupported
+            }]
+        );
+    }
+}
+
+#[tokio::test]
+async fn unsupported_context_is_not_a_provider_error_span() {
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use tracing::instrument::WithSubscriber as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+    struct Failures;
+    impl RecentInboxReader for Failures {
+        async fn recent(
+            &self,
+            mailbox: &RecentInboxMailbox,
+            _: RecentRead,
+        ) -> Result<Vec<RecentInboxMessage>, RecentInboxReadError> {
+            match mailbox.provider {
+                UserProvider::Imap => Err(RecentInboxReadError::Unsupported),
+                _ => Err(EmailApiError::AuthRequired.into()),
+            }
+        }
+    }
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let subscriber = tracing_subscriber::registry()
+        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
+    let service = RecentInboxService::new(
+        Mailboxes(Ok(vec![
+            mailbox("imap@example.com", UserProvider::Imap),
+            mailbox("outlook@example.com", UserProvider::Outlook),
+        ])),
+        Failures,
+    );
+    let response = service
+        .read(&actor(), 10, 300)
+        .with_subscriber(subscriber)
+        .await
+        .unwrap();
+    assert_eq!(response.unreadable_mailboxes.len(), 2);
+    provider.force_flush().unwrap();
+    let spans = exporter.get_finished_spans().unwrap();
+    let unsupported = spans
+        .iter()
+        .find(|span| {
+            span.attributes.iter().any(|a| {
+                a.key.as_str() == "provider"
+                    && a.value == opentelemetry::Value::String("Imap".into())
+            })
+        })
+        .unwrap();
+    assert!(!matches!(
+        unsupported.status,
+        opentelemetry::trace::Status::Error { .. }
+    ));
+    assert!(unsupported.events.is_empty());
+    let failed = spans
+        .iter()
+        .find(|span| {
+            span.attributes.iter().any(|a| {
+                a.key.as_str() == "unreadable_reason"
+                    && a.value == opentelemetry::Value::String("ProviderError".into())
+            })
+        })
+        .unwrap();
+    assert!(matches!(
+        failed.status,
+        opentelemetry::trace::Status::Error { .. }
+    ));
+    assert_eq!(failed.events.len(), 1);
+    let aggregate = spans
+        .iter()
+        .find(|span| span.name == "email.recent_inbox")
+        .unwrap();
+    for key in ["failed_inbox_count", "unsupported_inbox_count"] {
+        assert!(
+            aggregate
+                .attributes
+                .iter()
+                .any(|attribute| attribute.key.as_str() == key
+                    && attribute.value == opentelemetry::Value::I64(1))
+        );
+    }
 }

@@ -88,8 +88,14 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
 export function EmailEmptyState(props: {
   onConnect: ReturnType<typeof useAddInboxFlow>;
 }) {
-  const { state, parsedSearch, setInboxIds, setTab, filtersChanged, clearFilters } =
-    useEmailView();
+  const {
+    state,
+    parsedSearch,
+    setInboxIds,
+    setTab,
+    filtersChanged,
+    clearFilters,
+  } = useEmailView();
   const emailActive = useEmailLinksStatus();
   const links = useEmailLinksQuery();
   const syncing = () =>

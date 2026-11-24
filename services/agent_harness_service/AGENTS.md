@@ -546,3 +546,5 @@ attachment answers typed 503 before any command. macrod ingress keeps its
 existing authorization.
 Authentication checks the owning hosted host heartbeat per request, so its
 attachment observation can briefly differ from this service's operator presence.
+
+Routine-suggestion recent-mail adapters preserve best-effort messages and record typed unreadable-mailbox reason counts on `routine_suggestions.mail_context` and provider-error warnings (expected Unsupported never warns). IMAP folder/date windows remain unsupported (`mac-imap-smtp.118`); IMAP-only suggestions currently use newest inbox mail, not full month/sent context.

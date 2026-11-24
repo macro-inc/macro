@@ -517,3 +517,5 @@ into its new catalog stream. Resync returns that deadline to Mail settings;
 credential changes do not bypass provider pacing.
 
 IMAP reconnect preserves the maximum provider wait across all its stream kinds. The IMAP-only non-null retry index supports that lookup without changing its SQL predicates.
+
+Recent-mail IMAP reads support newest Inbox mail up to 100 only. Reject Sent/date-window/oversized reads before RPC as typed Unsupported, expose them in `unreadable_mailboxes`, and retain healthy provider results. Engine folder/window support is tracked in `mac-imap-smtp.118`.

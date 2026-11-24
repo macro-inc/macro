@@ -122,5 +122,8 @@ pub(crate) async fn handler(
         }
     };
 
-    Ok(Json(RecentInboxMessagesResponse { messages }))
+    Ok(Json(RecentInboxMessagesResponse {
+        messages: messages.messages,
+        unreadable_mailboxes: messages.unreadable_mailboxes,
+    }))
 }

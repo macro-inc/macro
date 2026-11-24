@@ -263,3 +263,56 @@ fn an_outlook_sent_window_dates_mail_by_when_it_was_sent() {
     assert_eq!(window_date(arrived, None, true), arrived);
     assert_eq!(window_date(None, sent, false), sent);
 }
+
+#[tokio::test]
+async fn unsupported_imap_context_never_calls_the_provider() {
+    let server = MockServer::start().await;
+    let db = sqlx::PgPool::connect_lazy("postgres://unused@127.0.0.1:1/unused").unwrap();
+    db.close().await;
+    let gateway = super::super::email_api::imap::ImapMailboxGateway {
+        client: imap_service_client::ImapServiceClient::new(
+            server.uri(),
+            "internal-test-key".into(),
+        )
+        .unwrap(),
+        health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
+            .with_provider(email::domain::models::UserProvider::Imap),
+    };
+    let mailbox = MailboxKey {
+        link_id: Uuid::now_v7(),
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    for read in [
+        RecentRead {
+            folder: RecentMailFolder::Sent,
+            limit: 10,
+            since: None,
+        },
+        RecentRead {
+            folder: RecentMailFolder::Inbox,
+            limit: 10,
+            since: Some("2026-11-01T00:00:00Z".parse().unwrap()),
+        },
+        RecentRead {
+            folder: RecentMailFolder::Inbox,
+            limit: 101,
+            since: None,
+        },
+    ] {
+        assert!(matches!(
+            imap_recent_messages(&gateway, mailbox, read).await,
+            Err(RecentInboxReadError::Unsupported)
+        ));
+    }
+    assert!(server.received_requests().await.unwrap().is_empty());
+    assert_eq!(
+        imap_recent_limit(RecentRead {
+            folder: RecentMailFolder::Inbox,
+            limit: 100,
+            since: None
+        })
+        .unwrap(),
+        100
+    );
+}

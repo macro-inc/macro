@@ -37,6 +37,7 @@ vi.mock('../email-view-context', () => ({
       tab: 'important',
       search: '',
     },
+    parsedSearch: () => ({ query: '' }),
     filtersChanged: () => false,
   }),
 }));

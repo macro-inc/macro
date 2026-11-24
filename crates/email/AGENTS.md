@@ -1104,3 +1104,5 @@ missing-mailbox probe backoff Local, separate from provider pacing.
 
 Decode settings-work kinds to SettingsWorkKind at the database boundary; keep
 execution and label-successor wake decisions exhaustive over that enum.
+
+Recent-mail aggregation returns healthy messages plus typed mailbox omissions (`Unsupported` or `ProviderError`); mailbox-read failures never erase another mailbox’s messages. Unsupported capability is a reason field, not an error span or warning; provider failures retain ERROR and WARN.

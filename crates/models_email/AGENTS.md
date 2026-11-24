@@ -68,3 +68,5 @@ The browser's seeded recipient-refusal projection fixture is serialized by
 `cargo test -p models_email --test submission_refusal_fixture regenerate_browser_refusal_fixture -- --ignored`,
 then the active consistency test. The seeded browser case does not exercise SMTP;
 the transport tests and lab recording cover the real rejection path.
+
+Recent-mail responses retain healthy messages and a typed `unreadable_mailboxes` list; older responses default that list to empty. Do not infer complete context from an empty messages list.
