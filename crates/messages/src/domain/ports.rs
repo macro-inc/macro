@@ -478,6 +478,17 @@ impl MessageEvent {
     }
 }
 
+/// A message as a repeatable write answers with it.
+#[derive(Debug, Clone)]
+pub struct WrittenMessage {
+    /// The written message, or the stored one when nothing was left to write.
+    pub message: Message,
+    /// A position in the channel's changes that `message` includes everything
+    /// up to: the one the write committed, or the channel's own from before
+    /// the stored message was read. Absent for parents without a change log.
+    pub seq: Option<i64>,
+}
+
 /// Persisted reaction state and whether this operation changed membership.
 pub struct ReactionResult {
     /// Committed channel position, absent for unchanged reactions or other parents.

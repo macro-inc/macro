@@ -296,10 +296,10 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         }
         let parent = parent_from_receipt(&access)?;
         if !matches!(parent, MessageParent::Call(_)) {
-            return self.post_validated(access, input).await;
+            return Ok(self.post_validated(access, input).await?.message);
         }
         let Some(client_message_id) = input.id else {
-            return self.post_validated(access, input).await;
+            return Ok(self.post_validated(access, input).await?.message);
         };
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
@@ -318,8 +318,23 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 .get_by_client_message_id(&parent, &actor, client_message_id)
                 .await?
                 .ok_or(MessageError::Conflict),
-            result => result,
+            result => result.map(|written| written.message),
         }
+    }
+
+    /// The stored message a repeated write answers with. The channel's
+    /// position is read first, so the message includes everything up to it.
+    async fn stored(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<Option<WrittenMessage>, MessageError> {
+        let seq = match parent {
+            MessageParent::Channel(channel_id) => Some(self.repo.channel_seq(*channel_id).await?),
+            _ => None,
+        };
+        let message = self.repo.get(parent, id).await?;
+        Ok(message.map(|message| WrittenMessage { message, seq }))
     }
 
     /// Post a client message once, for callers that retry until they hear an
@@ -337,7 +352,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         &self,
         access: EntityAccessReceipt<MessageWrite>,
         input: PostMessage,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<WrittenMessage, MessageError> {
         let Some(id) = input.id else {
             return Err(MessageError::Invalid("message id required"));
         };
@@ -349,25 +364,31 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let thread_id = input.thread_id;
         if let Some(message) = self.repo.get(&parent, id).await? {
             span.record("replayed", true);
-            return validate_event_message(message, &parent, &actor, thread_id);
+            validate_event_message(message, &parent, &actor, thread_id)?;
+            return self
+                .stored(&parent, id)
+                .await?
+                .ok_or(MessageError::Conflict);
         }
         // A write queued on a device can first arrive long after its id was
         // minted; a call's first message keeps `post`'s own id handling.
         let posted = if matches!(parent, MessageParent::Call(_)) {
-            self.post(access, input).await
+            self.post(access, input)
+                .await
+                .map(|message| WrittenMessage { message, seq: None })
         } else {
             validate_replayed_client_id(id, chrono::Utc::now())?;
             self.post_validated(access, input).await
         };
         match posted {
             Err(MessageError::Conflict) => {
-                let message = self
-                    .repo
-                    .get(&parent, id)
+                let written = self
+                    .stored(&parent, id)
                     .await?
                     .ok_or(MessageError::Conflict)?;
                 span.record("replayed", true);
-                validate_event_message(message, &parent, &actor, thread_id)
+                validate_event_message(written.message.clone(), &parent, &actor, thread_id)?;
+                Ok(written)
             }
             result => {
                 span.record("replayed", false);
@@ -385,20 +406,23 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         access: EntityAccessReceipt<MessageWrite>,
         id: Uuid,
         nonce: Option<String>,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<WrittenMessage, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         let moderator = can_moderate(access.entity_permission());
-        match self.delete(access, id, nonce).await {
-            Err(MessageError::NotFound) => match self.repo.get(&parent, id).await? {
-                Some(message) if message.parent == parent && message.deleted_at.is_some() => {
+        match self.delete_message(access, id, nonce).await {
+            Err(MessageError::NotFound) => match self.stored(&parent, id).await? {
+                Some(written)
+                    if written.message.parent == parent && written.message.deleted_at.is_some() =>
+                {
+                    let message = &written.message;
                     let channel_bot = matches!(parent, MessageParent::Channel(_))
                         && message.sender_id.as_bot().is_some();
                     if message.sender_id != actor && !moderator && !channel_bot {
                         return Err(MessageError::Forbidden);
                     }
                     tracing::Span::current().record("replayed", true);
-                    Ok(message)
+                    Ok(written)
                 }
                 _ => Err(MessageError::NotFound),
             },
@@ -434,7 +458,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                     .ok_or(MessageError::Conflict)?;
                 validate_event_message(message, &parent, &actor, thread_id)
             }
-            result => result,
+            result => result.map(|written| written.message),
         }
     }
 
@@ -442,7 +466,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         &self,
         access: EntityAccessReceipt<MessageWrite>,
         mut input: PostMessage,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<WrittenMessage, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
@@ -533,7 +557,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             },
         })
         .await;
-        Ok(message)
+        Ok(WrittenMessage { message, seq })
     }
 
     /// Create a channel call's thread root once, however often it is asked for.
@@ -611,7 +635,10 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         id: Uuid,
         patch: MessagePatch,
     ) -> Result<Message, MessageError> {
-        self.apply_patch(access, id, patch, Replay::Rewrite).await
+        match self.apply_patch(access, id, patch, Replay::Rewrite).await? {
+            Applied::Written(written) => Ok(written.message),
+            Applied::Unchanged(message) => Ok(message),
+        }
     }
 
     /// Edit a message for callers that retry until they hear an answer: an
@@ -623,8 +650,18 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         access: EntityAccessReceipt<MessageWrite>,
         id: Uuid,
         patch: MessagePatch,
-    ) -> Result<Message, MessageError> {
-        self.apply_patch(access, id, patch, Replay::Unchanged).await
+    ) -> Result<WrittenMessage, MessageError> {
+        let parent = parent_from_receipt(&access)?;
+        match self
+            .apply_patch(access, id, patch, Replay::Unchanged)
+            .await?
+        {
+            Applied::Written(written) => Ok(written),
+            Applied::Unchanged(_) => self
+                .stored(&parent, id)
+                .await?
+                .ok_or(MessageError::NotFound),
+        }
     }
 
     async fn apply_patch(
@@ -633,7 +670,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         id: Uuid,
         patch: MessagePatch,
         replay: Replay,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<Applied, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
@@ -729,7 +766,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             && input.mentions == current.mentions
             && input.attachments.is_none()
         {
-            return Ok(current);
+            return Ok(Applied::Unchanged(current));
         }
         // A replayed edit whose first attempt committed finds nothing to change.
         if replay == Replay::Unchanged {
@@ -741,7 +778,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                     .is_none_or(|attachments| same_attachments(attachments, &current.attachments));
             tracing::Span::current().record("replayed", unchanged);
             if unchanged {
-                return Ok(current);
+                return Ok(Applied::Unchanged(current));
             }
         }
         let notification_policy = input.notification_policy;
@@ -761,7 +798,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             },
         })
         .await;
-        Ok(message)
+        Ok(Applied::Written(WrittenMessage { message, seq }))
     }
 
     /// Delete one message. On a discussion, deleting the root deletes the discussion.
@@ -772,6 +809,15 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         id: Uuid,
         nonce: Option<String>,
     ) -> Result<Message, MessageError> {
+        Ok(self.delete_message(access, id, nonce).await?.message)
+    }
+
+    async fn delete_message(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        nonce: Option<String>,
+    ) -> Result<WrittenMessage, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
@@ -784,11 +830,12 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if parent.is_discussion() && current.thread_id.is_none() {
             self.delete_discussion(&access, &parent, &actor, id, nonce)
                 .await?;
-            return self
+            let message = self
                 .repo
                 .get(&parent, id)
                 .await?
-                .ok_or(MessageError::NotFound);
+                .ok_or(MessageError::NotFound)?;
+            return Ok(WrittenMessage { message, seq: None });
         }
         let channel_bot =
             matches!(parent, MessageParent::Channel(_)) && current.sender_id.as_bot().is_some();
@@ -806,7 +853,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             },
         )
         .await;
-        Ok(message)
+        Ok(WrittenMessage { message, seq })
     }
 
     /// Add or remove a reaction owned by the authenticated caller.
@@ -819,6 +866,44 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         add: bool,
         nonce: Option<String>,
     ) -> Result<Message, MessageError> {
+        match self.apply_reaction(access, id, emoji, add, nonce).await? {
+            Applied::Written(written) => Ok(written.message),
+            Applied::Unchanged(message) => Ok(message),
+        }
+    }
+
+    /// Set or clear a reaction for callers that retry until they hear an
+    /// answer. Like [`Self::react`], a repeat changes and publishes nothing;
+    /// this also answers with the position the message is known at.
+    #[tracing::instrument(err, skip(self, access, emoji, nonce), fields(replayed = tracing::field::Empty))]
+    pub async fn react_once(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        emoji: String,
+        add: bool,
+        nonce: Option<String>,
+    ) -> Result<WrittenMessage, MessageError> {
+        let parent = parent_from_receipt(&access)?;
+        let applied = self.apply_reaction(access, id, emoji, add, nonce).await?;
+        tracing::Span::current().record("replayed", matches!(applied, Applied::Unchanged(_)));
+        match applied {
+            Applied::Written(written) => Ok(written),
+            Applied::Unchanged(_) => self
+                .stored(&parent, id)
+                .await?
+                .ok_or(MessageError::NotFound),
+        }
+    }
+
+    async fn apply_reaction(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        emoji: String,
+        add: bool,
+        nonce: Option<String>,
+    ) -> Result<Applied, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
@@ -838,7 +923,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         // Idempotent retries still return the current message to the caller,
         // but must not publish another change or notify the author again.
         if !changed {
-            return Ok(message);
+            return Ok(Applied::Unchanged(message));
         }
         self.publish_message(
             actor,
@@ -852,7 +937,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             },
         )
         .await;
-        Ok(message)
+        Ok(Applied::Written(WrittenMessage { message, seq }))
     }
 
     /// Update a discussion; detaching document text requires edit access.
@@ -1441,6 +1526,14 @@ enum Replay {
     Rewrite,
     /// An edit the message already shows is answered without a write.
     Unchanged,
+}
+
+/// What an edit or reaction did.
+enum Applied {
+    /// The message as the write left it.
+    Written(WrittenMessage),
+    /// Nothing to write: the message already shows it.
+    Unchanged(Message),
 }
 
 /// Whether an edit mentions what the message already does. Stored mentions are

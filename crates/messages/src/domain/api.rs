@@ -92,8 +92,9 @@ pub trait MessageCommands: Send + Sync + 'static {
         &self,
         access: EntityAccessReceipt<MessageWrite>,
         input: PostMessage,
-    ) -> Result<Message, MessageError> {
-        self.post(access, input).await
+    ) -> Result<WrittenMessage, MessageError> {
+        let message = self.post(access, input).await?;
+        Ok(WrittenMessage { message, seq: None })
     }
     /// Delete for callers that retry: a repeat on a tombstoned message returns
     /// the tombstone. Defaults to a plain delete.
@@ -102,8 +103,9 @@ pub trait MessageCommands: Send + Sync + 'static {
         access: EntityAccessReceipt<MessageWrite>,
         id: Uuid,
         nonce: Option<String>,
-    ) -> Result<Message, MessageError> {
-        self.delete(access, id, nonce).await
+    ) -> Result<WrittenMessage, MessageError> {
+        let message = self.delete(access, id, nonce).await?;
+        Ok(WrittenMessage { message, seq: None })
     }
     /// Edit for callers that retry: an edit the message already shows returns
     /// it without another write or event. Defaults to a plain patch.
@@ -112,8 +114,22 @@ pub trait MessageCommands: Send + Sync + 'static {
         access: EntityAccessReceipt<MessageWrite>,
         id: Uuid,
         patch: MessagePatch,
-    ) -> Result<Message, MessageError> {
-        self.patch(access, id, patch).await
+    ) -> Result<WrittenMessage, MessageError> {
+        let message = self.patch(access, id, patch).await?;
+        Ok(WrittenMessage { message, seq: None })
+    }
+    /// Set or clear a reaction for callers that retry, with the position the
+    /// answer is known at. Defaults to a plain reaction.
+    async fn react_once(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        emoji: String,
+        add: bool,
+        nonce: Option<String>,
+    ) -> Result<WrittenMessage, MessageError> {
+        let message = self.react(access, id, emoji, add, nonce).await?;
+        Ok(WrittenMessage { message, seq: None })
     }
     /// Idempotently post a trusted server event, using its UUIDv7 as the message
     /// id without a client clock-skew limit. Replays return the original message,
@@ -297,7 +313,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
         &self,
         access: EntityAccessReceipt<MessageWrite>,
         input: PostMessage,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<WrittenMessage, MessageError> {
         MessageService::post_once(self, access, input).await
     }
     async fn delete_once(
@@ -305,7 +321,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
         access: EntityAccessReceipt<MessageWrite>,
         id: Uuid,
         nonce: Option<String>,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<WrittenMessage, MessageError> {
         MessageService::delete_once(self, access, id, nonce).await
     }
     async fn patch_once(
@@ -313,8 +329,18 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
         access: EntityAccessReceipt<MessageWrite>,
         id: Uuid,
         patch: MessagePatch,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<WrittenMessage, MessageError> {
         MessageService::patch_once(self, access, id, patch).await
+    }
+    async fn react_once(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        emoji: String,
+        add: bool,
+        nonce: Option<String>,
+    ) -> Result<WrittenMessage, MessageError> {
+        MessageService::react_once(self, access, id, emoji, add, nonce).await
     }
     async fn post_from_event(
         &self,

@@ -4073,6 +4073,12 @@ type GraphqlChannelMessageWrite {
 	read back after the write committed.
 	"""
 	root: GraphqlChannelMessage
+	"""
+	Channel position both include every change up to, encoded as in
+	`channelChanges`: the one this write committed, or, when there was
+	nothing left to write, the channel's position before the read.
+	"""
+	seq: String!
 }
 
 """

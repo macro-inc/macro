@@ -432,3 +432,72 @@ async fn a_replayed_edit_with_a_repeated_mention_writes_nothing(pool: PgPool) {
         "the replay changed the message or the channel"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn each_write_answers_with_the_position_it_committed_and_a_replay_with_the_channels(
+    pool: PgPool,
+) {
+    let reads = fixture(pool.clone()).await;
+    let harness = harness();
+    let context = writable(&harness, &reads);
+    let [root, reply, other] = [(); 3].map(|()| Uuid::now_v7());
+    let send = |id: Uuid, thread: &str| {
+        format!(
+            "sendChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{id}\", content: \"Hi\"{thread} }}) {{ seq }}"
+        )
+    };
+    let in_thread = format!(", threadId: \"{root}\"");
+    let writes = [
+        ("sendChannelMessage", send(root, "")),
+        ("sendChannelMessage", send(reply, &in_thread)),
+        (
+            "editChannelMessage",
+            format!(
+                "editChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{reply}\", content: \"Edited\" }}) {{ seq }}"
+            ),
+        ),
+        (
+            "reactToChannelMessage",
+            format!(
+                "reactToChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{reply}\", emoji: \"👍\", add: true }}) {{ seq }}"
+            ),
+        ),
+        (
+            "deleteChannelMessage",
+            format!(
+                "deleteChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{reply}\" }}) {{ seq }}"
+            ),
+        ),
+    ];
+    let answer = async |(name, field): &(&'static str, String)| {
+        let response = mutate(&harness, &context, Some(PERSON), field).await;
+        payload(response, name)["seq"]
+            .as_str()
+            .expect("a decimal sequence")
+            .parse::<i64>()
+            .expect("a decimal sequence")
+    };
+
+    let mut previous = None;
+    for write in &writes {
+        let written = answer(write).await;
+        assert_eq!(written, channel_seq(&pool).await, "{}", write.0);
+        assert!(previous < Some(written), "{}", write.0);
+        // Its replay writes nothing and answers with where the channel is.
+        assert_eq!(answer(write).await, written, "{} replayed", write.0);
+        assert_eq!(channel_seq(&pool).await, written);
+        previous = Some(written);
+    }
+
+    // Another message moves the channel on; a late replay follows it.
+    let moved = answer(&("sendChannelMessage", send(other, ""))).await;
+    assert!(previous < Some(moved));
+    for (index, write) in writes.iter().enumerate() {
+        // The reply is deleted by now, so its edit and reaction are refused.
+        if matches!(index, 2 | 3) {
+            continue;
+        }
+        assert_eq!(answer(write).await, moved, "{} replayed late", write.0);
+    }
+    assert_eq!(channel_seq(&pool).await, moved);
+}

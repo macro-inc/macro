@@ -21,12 +21,17 @@ they need.
 - `src/domain/api.rs`: `MessageServiceApi`, the boundary HTTP/agents/channel
   adapters call through; `thread_page` adds bounded reply windows while
   `get_thread` preserves the complete REST thread read.
-  `post_once`, `patch_once` and `delete_once` are for callers that replay a
-  write (the GraphQL channel mutations): a repeated client id returns the
-  stored message, an edit the message already shows returns it unwritten, and
-  a repeated delete returns the tombstone to a caller that could have deleted
-  it. A first `post_once` accepts an id minted up to 30 days ago, and
+  `post_once`, `patch_once`, `delete_once` and `react_once` are for callers that
+  replay a write (the GraphQL channel mutations): a repeated client id returns
+  the stored message, an edit the message already shows returns it unwritten,
+  and a repeated delete returns the tombstone to a caller that could have
+  deleted it. A first `post_once` accepts an id minted up to 30 days ago, and
   `AttachmentChange::DeltaOnce` skips an added entity the message already holds.
+  Compare a replay with the message as it is stored: attachment types through
+  `stored_attachment_type`, mentions without their order. Each answers a
+  `WrittenMessage`, whose `seq` is the one the write committed or, for a replay,
+  the channel counter read before the message; never the counter read after a
+  write, which may be past it.
 - `src/inbound/axum_router.rs`: the HTTP surface (feature `inbound`).
 - `src/inbound/toolset.rs`: the AI tools for any entity's Discussion
   (`ReadDiscussion`, `Comment`, `EditComment`, `DeleteComment`,

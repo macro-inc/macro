@@ -33,6 +33,8 @@ struct Repo {
     client_message_id: Option<Uuid>,
     call_thread: Option<CallThreadFacts>,
     call_statuses: HashMap<Uuid, CallEntryStatus>,
+    /// Reads of the channel counter and of single messages, in order.
+    reads: Arc<Mutex<Vec<&'static str>>>,
 }
 
 impl Repo {
@@ -52,6 +54,7 @@ impl Repo {
 
 impl MessageRepository for Repo {
     async fn channel_seq(&self, _: Uuid) -> Result<i64, MessageError> {
+        self.reads.lock().unwrap().push("seq");
         Ok(self.change_log.seq)
     }
 
@@ -175,6 +178,7 @@ impl MessageRepository for Repo {
         Ok(true)
     }
     async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
+        self.reads.lock().unwrap().push("message");
         if self.concurrent_create && self.creates.lock().unwrap().is_empty() {
             return Ok(None);
         }
@@ -429,6 +433,7 @@ fn fixture() -> Repo {
         client_message_id: None,
         call_thread: None,
         call_statuses: HashMap::new(),
+        reads: Arc::default(),
     }
 }
 
