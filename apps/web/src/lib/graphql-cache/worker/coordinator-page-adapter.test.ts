@@ -1327,7 +1327,9 @@ describe('CacheCoordinatorPageAdapter', () => {
     expect(coordinatorPort.closed).toBe(true);
     expect(
       coordinatorPort.events.filter((event) =>
-        departure.some((kind) => event === `post:${kind}`)
+        ['engine-lost', 'navigation-departure', 'disconnect-tab'].includes(
+          event.replace('post:', '')
+        )
       )
     ).toEqual(departure.map((kind) => `post:${kind}`));
     expect(onTerminalError).not.toHaveBeenCalled();

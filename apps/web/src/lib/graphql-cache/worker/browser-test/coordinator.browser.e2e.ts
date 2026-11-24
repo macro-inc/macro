@@ -256,7 +256,7 @@ test('a suspended owner resumes without replacement or cache loss', async ({
   ).toEqual(before);
 });
 
-test('an owner page that dies mid-write leaves every accepted write queued', async ({
+test('an owner page that dies while writes arrive leaves every accepted write queued', async ({
   context,
   page,
 }, testInfo) => {

@@ -256,7 +256,11 @@ uses a fenced navigation-departure message: the page terminates its dedicated
 worker, but the next owner opens the existing OPFS database. A page that leaves
 without saying so (a killed tab, a departure message that arrives after its
 liveness lock is released) or disposes its cache stops its worker the same way
-and is treated the same; a wipe already due stays due. Only an engine failure
+and is treated the same; a wipe already due stays due. The coordinator reads what the
+engine of a page that left had sent for one more heartbeat interval: its port is
+not ordered with the page's. Opening a database doesn't look for damage, so a
+`storage-reset-required` that arrives this late still makes the next open wipe, and
+replaces a successor that opened the database meanwhile. Only an engine failure
 reported by a page or seen by the coordinator **after the database open grant**
 selects `wipe-before-open`. A missed heartbeat alone is not owner loss: background tabs and their dedicated workers may be suspended while the
 SharedWorker still runs. The coordinator probes the physical owner Web Lock
@@ -265,7 +269,8 @@ heartbeat without changing epochs or touching storage. A released lock confirms
 silent worker termination and triggers the usual fenced recovery, unless the
 page's liveness lock is released too, which means the page left; the coordinator
 looks for it after a heartbeat interval, and also before an opening deadline ends
-an owner. Read deadlines
+an owner, and looks three times when looking fails. An answer, a hidden page or a
+departure that arrives meanwhile changes nothing: the engine is gone. Read deadlines
 still bound callers waiting on an unresponsive engine outside a visibility handoff.
 
 Protocol v10 reports tab visibility and epoch-fenced read states: `ready`,
@@ -436,7 +441,8 @@ A handshake nobody answers in its startup phase's time is treated like a lost
 connection: the same host connects again, within the same budget, and then ends
 with `request-timeout` and the database kept. `graphql_cache.owner` records each
 as `ownerEvent: startup-unanswered`. An authority read a ready owner leaves
-unanswered is asked again.
+unanswered is asked again, twice, and then ends with `request-timeout`, so the page
+can start over on a new host.
 
 Protocol v6 separates startup into asset loading, taking the database owner
 lock, and database opening. The engine loads/compiles WASM without touching OPFS
