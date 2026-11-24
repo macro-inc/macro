@@ -11,6 +11,7 @@ import type { CacheGenerationChange } from '@graphql-cache/host/types';
 import type { CacheHost } from '@graphql-cache/index';
 import {
   isAdmittedEnqueueUncertainError,
+  LOCAL_COMMIT_FAILED,
   type MutationSettlement,
 } from '@graphql-cache/protocol';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
@@ -58,6 +59,11 @@ const SEND_OPERATION = 'channel.write.send';
 const RETRY_EXHAUSTED = 'MUTATION_RETRY_EXHAUSTED';
 /** Codes of a write whose queue can no longer say what became of it. */
 const QUEUE_LOST = ['CACHE_RESET', 'CACHE_RETIRED'];
+/**
+ * How long a write the retired host had acknowledged waits for its answer: one
+ * sent straight out may still get it, but nothing promises it.
+ */
+const RETIRED_ANSWER_BUDGET_MS = 10_000;
 /**
  * The server's code for a write it could not finish, which it may have
  * committed before it could not read the answer back.
@@ -261,6 +267,11 @@ export interface ChannelWritesDeps {
    * is not in use again until its queue has been read.
    */
   serving?: () => boolean;
+  /**
+   * The sign-in the page is under: it changes when a sign-in replaces the
+   * session on the same host, which must not send what the old one asked for.
+   */
+  signIn?: () => number;
 }
 
 /** A reply this page sent, under its thread root. */
@@ -949,7 +960,12 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       Write<unknown, AnyVariables>,
       'operation' | 'channelId' | 'messageId'
     >,
-    reason: 'missed' | 'retry_exhausted' | 'enqueue_uncertain' | 'answer_lost',
+    reason:
+      | 'missed'
+      | 'retry_exhausted'
+      | 'commit_failed'
+      | 'enqueue_uncertain'
+      | 'answer_lost',
     read: (trace: TraceContext) => Promise<T>
   ): Promise<T> {
     return Telemetry.span('channel.write.recover', async (span) => {
@@ -967,10 +983,11 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
 
   /**
    * A send the queue gave up on after retrying it may still have reached the
-   * server, or reach it later: a restored draft would go out again under a
-   * new id. The device's copy (a frame may have stored the server's row),
-   * else the server's, is the send's answer; without either the send is
-   * unknown, so the composer sends it again under its own id.
+   * server, or reach it later, and one whose answer the device could not store
+   * did: a restored draft would go out again under a new id. The device's copy
+   * (a frame may have stored the server's row), else the server's, is the
+   * send's answer; without either the send is unknown, so the composer sends
+   * it again under its own id.
    */
   async function deliveredAfterAll(
     write: Pick<
@@ -981,7 +998,11 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     trace: TraceContext
   ): Promise<Message | undefined> {
     if (write.operation !== SEND_OPERATION) return undefined;
-    if (!thrownResultErrorHasCode(error, RETRY_EXHAUSTED)) return undefined;
+    if (
+      !thrownResultErrorHasCode(error, RETRY_EXHAUSTED) &&
+      !thrownResultErrorHasCode(error, LOCAL_COMMIT_FAILED)
+    )
+      return undefined;
     // The queue rolled its optimistic record back before it settled: a copy
     // here is the server's.
     const stored = await readMessage(write.messageId);
@@ -991,10 +1012,19 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     throw unknownDelivery();
   }
 
-  /** The transaction the queue holds a write under; undefined when it does not. */
+  /**
+   * The transaction the queue holds a write under; undefined when it does
+   * not. A retired host may never answer, so the question ends with it.
+   */
   async function queuedAs(uuid: string): Promise<string | undefined> {
-    if (!deps.host.inspectMutations) throw new Error('queue cannot be listed');
-    const queue = await deps.host.inspectMutations();
+    const listed = deps.host.inspectMutations?.();
+    if (!listed) throw new Error('queue cannot be listed');
+    const queue = await Effect.runPromise(
+      Effect.raceFirst(
+        Effect.promise(() => listed),
+        Deferred.await(retired)
+      )
+    );
     return queue.find((entry) => entry.uuid === uuid)?.transactionId;
   }
 
@@ -1070,19 +1100,59 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   }
 
   /**
-   * Hands a write to the queue, in its turn, and answers what came of that.
-   * One that finds the database away waits for it and is handed over again.
+   * Hands a write to the queue, and answers what came of that. One whose host
+   * retires meanwhile may already be in the queue or on the server, and
+   * nothing else says so: a send is then unknown, and another write failed.
+   */
+  function handedOver<TData, TVariables extends AnyVariables>(
+    write: Write<TData, TVariables>,
+    root: ChannelMessageFieldsFragment | undefined,
+    onEnqueued: () => void
+  ): Promise<OperationResult<TData, TVariables>> {
+    let acknowledged = false;
+    // Started here, in the caller's trace.
+    const answer = write.run(
+      deps.client(),
+      {
+        uuid: write.uuid,
+        onEnqueued: () => {
+          acknowledged = true;
+          onEnqueued();
+        },
+        holdWhilePaused: true,
+      },
+      root
+    );
+    const unanswered = Effect.gen(function* () {
+      yield* Effect.exit(Deferred.await(retired));
+      if (acknowledged) yield* Effect.sleep(RETIRED_ANSWER_BUDGET_MS);
+      return yield* Effect.fail(
+        write.operation === SEND_OPERATION ? unknownDelivery() : cacheRetired()
+      );
+    });
+    return Effect.runPromise(
+      Effect.raceFirst(
+        Effect.promise(() => answer),
+        unanswered
+      )
+    );
+  }
+
+  /**
+   * Hands a write over in its turn, and again when it found the database away
+   * and waited for it. A write that outlasted its host or its sign-in is not
+   * handed over: `client` then answers for another.
    */
   async function handOver<TData, TVariables extends AnyVariables>(
     write: Write<TData, TVariables>,
     trace: TraceContext,
+    signIn: number | undefined,
     onEnqueued: () => void
   ): Promise<OperationResult<TData, TVariables>> {
     for (;;) {
       await trace.run(() => untilServed(write));
       const root = await trace.run(() => write.root?.());
-      // A read can outlast the host: `client` then answers its replacement's.
-      if (isRetired) throw cacheRetired();
+      if (isRetired || deps.signIn?.() !== signIn) throw cacheRetired();
       if (away()) continue;
       // The span covers the hand-off and a direct answer; a queued write can
       // wait for hours, which is not this operation's duration.
@@ -1090,11 +1160,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         Telemetry.span(write.operation, async (span) => {
           span.setAttr('channel.id', write.channelId);
           span.setAttr('message.id', write.messageId);
-          const answer = await write.run(
-            deps.client(),
-            { uuid: write.uuid, onEnqueued, holdWhilePaused: true },
-            root
-          );
+          const answer = await handedOver(write, root, onEnqueued);
           span.setAttr(
             'write.disposition',
             held(answer)
@@ -1113,6 +1179,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   ): Promise<Message> {
     // Taken before any await: recovery after a long wait joins the write's trace.
     const trace = Telemetry.captureContext();
+    const signIn = deps.signIn?.();
     const turn = takeTurn(write.channelId);
     const settlements = watchSettlements(deps.host, retired, write.uuid);
     addPending(write.channelId, {
@@ -1132,7 +1199,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     };
     try {
       await turn.come();
-      const result = await handOver(write, trace, onEnqueued);
+      const result = await handOver(write, trace, signIn, onEnqueued);
       turn.pass();
       const settled = async (transactionId: string): Promise<Message> => {
         let outcome: 'committed' | 'missed';
@@ -1147,12 +1214,20 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
             QUEUE_LOST.some((code) => thrownResultErrorHasCode(error, code))
           )
             throw unknownDelivery();
+          const uncommitted = thrownResultErrorHasCode(
+            error,
+            LOCAL_COMMIT_FAILED
+          );
           const delivered = await trace.run(() =>
-            recovered(write, 'retry_exhausted', (recovery) =>
-              deliveredAfterAll(write, error, recovery)
+            recovered(
+              write,
+              uncommitted ? 'commit_failed' : 'retry_exhausted',
+              (recovery) => deliveredAfterAll(write, error, recovery)
             )
           );
           if (delivered) return delivered;
+          // On the server: the next frame or catch-up brings it.
+          if (uncommitted) return stored(write);
           throw error;
         }
         if (outcome === 'missed')

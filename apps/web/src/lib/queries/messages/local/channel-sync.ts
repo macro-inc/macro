@@ -1,11 +1,13 @@
 import type { CacheHost } from '@graphql-cache/index';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { queryAccountSession } from '@queries/auth/account-session';
 import { ChannelChangesDocument } from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlSoupClient,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
+import { untrack } from 'solid-js';
 import { channelCacheHost } from './channel-flag';
 import { queryChannelNetwork } from './channel-network';
 import { type ChannelTouches, createChannelTouches } from './channel-pages';
@@ -40,7 +42,10 @@ async function fetchChannelChanges(
 
 /**
  * The sync runtime of a cache host, made on first use. A storage reset or a
- * replaced engine makes it forget what it knew of each channel.
+ * replaced engine makes it forget what it knew of each channel. With storage
+ * kept, the channels on screen catch up: frames and reads can have failed
+ * while the engine was away, and no reconnect need follow. While the host is
+ * paused its `resumed` does that.
  */
 export function channelSyncRuntime(host: CacheHost): ChannelSyncRuntime {
   const existing = runtimes.get(host);
@@ -50,7 +55,10 @@ export function channelSyncRuntime(host: CacheHost): ChannelSyncRuntime {
     fetchChanges: fetchChannelChanges,
     generation: () => cacheSessionGeneration.capture(),
   });
-  host.onCacheGenerationChanged(() => runtime.forgetAll());
+  host.onCacheGenerationChanged(({ storage }) => {
+    runtime.forgetAll();
+    if (storage === 'preserved' && !host.paused) runtime.resumed();
+  });
   runtimes.set(host, runtime);
   return runtime;
 }
@@ -99,6 +107,7 @@ export function channelWrites(host: CacheHost): ChannelWrites {
     runtime: channelSyncRuntime(host),
     client: getGraphqlSoupClient,
     serving: graphqlCacheEnabled,
+    signIn: () => untrack(queryAccountSession),
   });
   writes.set(host, created);
   return created;

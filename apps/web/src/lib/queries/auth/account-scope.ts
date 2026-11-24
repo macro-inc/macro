@@ -6,11 +6,11 @@ import {
   type MutationFunctionContext,
   partialMatchKey,
 } from '@tanstack/solid-query';
-import { createSignal } from 'solid-js';
 import { channelKeys } from '../channel/keys';
 import { forgetOwnChannelWrites } from '../channel/own-writes';
 import { queryClient } from '../client';
 import { emailKeys } from '../email/keys';
+import { accountSession, setAccountSession } from './account-session';
 import { authKeys } from './keys';
 
 const ACCOUNT_SOURCE_PREFIXES = [
@@ -24,7 +24,6 @@ const ACCOUNT_SOURCE_PREFIXES = [
 
 /** Captured before async work; a new login fences even a return to the same account. */
 export type QueryAccount = { userId: string; session: number };
-const [session, setSession] = createSignal({ epoch: 0, pending: false });
 let stopWaitingForIdentity: (() => void) | undefined;
 
 export class QueryAccountChangedError extends Error {
@@ -36,21 +35,17 @@ export class QueryAccountChangedError extends Error {
 export function captureQueryAccount(
   userId: string | undefined
 ): QueryAccount | undefined {
-  const current = session();
+  const current = accountSession();
   return userId && !current.pending
     ? { userId, session: current.epoch }
     : undefined;
 }
 
 export function queryAccountSessionPending(): boolean {
-  return session().pending;
+  return accountSession().pending;
 }
 
-/** The login session, for work that has no user id to capture: a new login
- * changes it, even to the same account, and a failed identity read doesn't. */
-export function queryAccountSession(): number {
-  return session().epoch;
-}
+export { queryAccountSession } from './account-session';
 
 export function currentQueryAccount(): QueryAccount | undefined {
   if (
@@ -111,8 +106,8 @@ export function mutationQueryAccount(
 export async function resetQueryAccountSession(): Promise<void> {
   stopWaitingForIdentity?.();
   resetMacroApiToken();
-  const epoch = session().epoch + 1;
-  setSession({ epoch, pending: true });
+  const epoch = accountSession().epoch + 1;
+  setAccountSession({ epoch, pending: true });
   forgetOwnChannelWrites(queryClient);
   const cache = queryClient.getQueryCache();
   for (const query of cache.findAll({
@@ -129,18 +124,18 @@ export async function resetQueryAccountSession(): Promise<void> {
   // Drain the canceled request's continuations before observing fresh success.
   // A promise already resolved just before login may still be publishing data.
   if (identity) await identity.cancel({ revert: true });
-  if (session().epoch !== epoch) return;
+  if (accountSession().epoch !== epoch) return;
   stopWaitingForIdentity = cache.subscribe((event) => {
     if (
       event.type !== 'updated' ||
       event.action.type !== 'success' ||
       event.action.manual ||
       event.query.queryHash !== hashKey(authKeys.userInfo.queryKey) ||
-      session().epoch !== epoch
+      accountSession().epoch !== epoch
     )
       return;
     stopWaitingForIdentity?.();
     stopWaitingForIdentity = undefined;
-    setSession({ epoch, pending: false });
+    setAccountSession({ epoch, pending: false });
   });
 }

@@ -148,7 +148,8 @@ export function writeHost(records: ChannelMessageFieldsFragment[] = []) {
 export function setup(
   answer: (variables: unknown) => Answer | Promise<Answer>,
   records: ChannelMessageFieldsFragment[] = [],
-  server: ChannelMessageFieldsFragment[] = []
+  server: ChannelMessageFieldsFragment[] = [],
+  signIn?: () => number
 ) {
   const device = writeHost(records);
   const { client, calls } = fakeClient(
@@ -166,6 +167,7 @@ export function setup(
     client: () => client,
     now: () => NOW,
     serving: () => device.availability.serving,
+    signIn,
     async fetchMessage(_channelId, messageId) {
       fetched.push(messageId);
       return server.find((message) => message.id === messageId) ?? null;
