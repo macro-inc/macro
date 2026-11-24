@@ -100,6 +100,30 @@ fn reads_clamp_viewports_to_the_sync_horizon() {
 }
 
 #[test]
+fn reads_keep_timed_occurrences_when_no_all_day_date_is_materialized() {
+    let now = Utc.with_ymd_and_hms(2026, 7, 24, 12, 0, 0).unwrap();
+    let materialized = OccurrenceRange::historical_sync(now);
+    // From six hours before the horizon to a day after it: the horizon's last
+    // date is end-exclusive, so no all-day date is materialized.
+    let at_the_horizon = OccurrenceRange {
+        starts_at: materialized.ends_at - chrono::Duration::hours(6),
+        ends_at: materialized.ends_at + chrono::Duration::days(1),
+        start_date: materialized.end_date,
+        end_date: materialized.end_date + chrono::Duration::days(1),
+    };
+
+    assert_eq!(
+        at_the_horizon.clamped_to_materialized(now),
+        Some(OccurrenceRange {
+            starts_at: at_the_horizon.starts_at,
+            ends_at: materialized.ends_at,
+            start_date: materialized.end_date,
+            end_date: materialized.end_date,
+        })
+    );
+}
+
+#[test]
 fn sync_plan_extends_only_the_uncovered_tail() {
     let now = Utc.with_ymd_and_hms(2026, 7, 25, 12, 0, 0).unwrap();
     let materialized = OccurrenceRange::historical_sync(now);
