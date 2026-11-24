@@ -11,8 +11,9 @@ import {
   type MockInstance,
   vi,
 } from 'vitest';
-import { runCacheSync, runStreamedSync } from '../backfill';
+import { runCacheSync } from '../backfill';
 import { nextSecondPassPages, SECOND_PASS_STREAM } from './host';
+import { runStreamedSync } from './stream';
 
 const runSyncPass = vi.hoisted(() => vi.fn());
 vi.mock('./run', () => ({ runSyncPass }));

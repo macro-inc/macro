@@ -13,7 +13,8 @@ lanes change with a server deploy, without an app release.
   `services/document_storage_service/src/api/graphql_soup/stream.rs`.
 - Cache: `crates/client/cache-core/src/sync.rs` and the hosts that drive it.
 - App: the passes, retries and pacing in
-  `apps/web/src/lib/queries/soup/backfill.ts` and `apps/web/src/lib/queries/soup/sync/`.
+  `apps/web/src/lib/queries/soup/sync/` (`stream.ts` runs them), started from
+  `apps/web/src/lib/queries/soup/backfill.ts`.
 
 ## HTTP stream
 
@@ -319,7 +320,7 @@ them, beside the sync.
 ## App
 
 `useSoupBackfills` (`apps/web/src/lib/queries/soup/backfill.ts`) runs the
-streamed sync in the leader tab when the remote flag
+streamed sync (`sync/stream.ts`) in the leader tab when the remote flag
 `enable-streamed-cache-sync` is on and the cache host can stream
 (`isSyncHost`). Otherwise, when a host answers `unsupported` (a native build
 older than the sync commands answers `Command … not found`), and when the
