@@ -45,8 +45,12 @@ pub(in crate::api::search) struct EmailQuery {
     pub filters: EmailFilters,
     /// The shared threads an operator asked for, when one did.
     pub shared: Option<SharedEmailFilter>,
-    /// How many terms were operators, a minus before a word included.
+    /// How many terms were named operators, and once applied, words left out.
     pub operators: usize,
+    /// Words and phrases a minus leaves out (`-lunch`). Nothing about them
+    /// says email, so they apply only to a search that is about email
+    /// anyway ([`EmailQuery::leave_out_words`]).
+    pub excluded_words: Vec<String>,
     /// Whether a relative date (`newer_than:`, `older_than:`) was read
     /// against [`QueryClock::now`].
     pub reads_now: bool,
@@ -366,8 +370,9 @@ impl Conditions {
 }
 
 /// Reads the email operators out of `terms`. A minus before a plain word or
-/// phrase leaves out the messages that contain it; a minus alone stays a
-/// term, which [`super::terms::drop_wordless_terms`] has already removed.
+/// phrase goes to [`EmailQuery::excluded_words`]. A minus alone stays a term,
+/// which [`super::terms::drop_wordless_terms`] has already removed, and so
+/// does a term that starts with two (`--force`).
 pub(in crate::api::search) fn read_email_operators(
     terms: Vec<String>,
     clock: QueryClock,
@@ -375,7 +380,9 @@ pub(in crate::api::search) fn read_email_operators(
     let mut conditions = Conditions::default();
     for term in terms {
         let (exclude, body) = match term.strip_prefix('-') {
-            Some(body) if body.chars().any(char::is_alphanumeric) => (true, body),
+            Some(body) if !body.starts_with('-') && body.chars().any(char::is_alphanumeric) => {
+                (true, body)
+            }
             _ => (false, term.as_str()),
         };
 
@@ -387,14 +394,27 @@ pub(in crate::api::search) fn read_email_operators(
         }
 
         if exclude {
-            conditions.text(EmailTextPart::Any, body.to_string(), true);
-            conditions.query.operators += 1;
+            conditions.query.excluded_words.push(body.to_string());
         } else {
             conditions.query.terms.push(term);
         }
     }
     conditions.apply_view();
     conditions.query
+}
+
+impl EmailQuery {
+    /// Leaves out the mail containing each word or phrase a minus named.
+    fn leave_out_words(&mut self) {
+        for text in self.excluded_words.drain(..) {
+            self.filters.text_matches.push(EmailTextMatch {
+                part: EmailTextPart::Any,
+                text,
+                exclude: true,
+            });
+            self.operators += 1;
+        }
+    }
 }
 
 /// Whether `a` and `b` can both hold, and the one value that meets both.
@@ -462,11 +482,15 @@ pub(in crate::api::search) fn reported_filters(query: &EmailQuery) -> EmailFilte
 
 /// Reads the email operators out of a search's `terms` when the search
 /// reaches email and its match type reads plain words. A search that types
-/// any becomes an email search, since no other kind of item can meet them,
-/// as a tag filter drops the kinds that carry no tags. Returns the terms left
-/// and the operators read, or the terms unchanged and `None`.
+/// a named operator becomes an email search, since no other kind of item can
+/// meet it, as a tag filter drops the kinds that carry no tags. A minus
+/// before a plain word says nothing about email, so it leaves mail out only
+/// beside a named operator or in a search of email alone (`include_crm` asks
+/// for CRM companies too); otherwise the word stays a term. Returns the terms
+/// left and the operators read, or the terms unchanged and `None`.
 pub(in crate::api::search) fn apply_email_operators(
     filters: &mut SearchEntityFilters,
+    include_crm: bool,
     terms: Vec<String>,
     match_type: MatchType,
     clock: QueryClock,
@@ -475,10 +499,20 @@ pub(in crate::api::search) fn apply_email_operators(
     if !filters.should_include_emails || !reads_words {
         return (terms, None);
     }
-    let query = read_email_operators(terms, clock);
-    if query.operators == 0 {
-        return (query.terms, None);
+    let email_only = !include_crm
+        && !filters.should_include_agent_sessions
+        && !filters.should_include_documents
+        && !filters.should_include_chats
+        && !filters.should_include_channels
+        && !filters.should_include_projects
+        && !filters.should_include_call_records
+        && !filters.should_include_calendar_events;
+    let mut query = read_email_operators(terms.clone(), clock);
+    let leaves_out_words = email_only && !query.excluded_words.is_empty();
+    if query.operators == 0 && !leaves_out_words {
+        return (terms, None);
     }
+    query.leave_out_words();
 
     filters.should_include_agent_sessions = false;
     filters.should_include_documents = false;

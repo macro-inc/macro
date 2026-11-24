@@ -94,8 +94,10 @@ pub struct UnifiedSearchRequest {
     /// `favorites`) or a tag or label name, `label:`, `is:unread`, `is:read`,
     /// `is:starred`, `is:shared`, `has:attachment`, `after:`/`before:` a day
     /// (`2017/06/01`), `newer_than:`/`older_than:` a span (`3d`, `2w`, `1m`,
-    /// `1y`), and a minus before an operator, word or quoted phrase to leave
-    /// matching mail out. A query that types any searches email only.
+    /// `1y`), and a minus before an operator to leave matching mail out. A
+    /// query that types an operator searches email only. A minus before a
+    /// word or quoted phrase leaves out mail containing it beside an operator
+    /// or in a search of email alone; elsewhere it is part of the word.
     pub query: String,
 
     /// How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field.

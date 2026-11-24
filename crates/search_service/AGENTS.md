@@ -174,12 +174,15 @@ per-entity-type search plus a unified search across them — mounted into
   `label:` (a tag or inbox label of that name), `is:unread|read|starred|shared`,
   `has:attachment`, `after:`/`before:` (a day, from its midnight in the
   request's `time_zone`) and `newer_than:`/`older_than:` (`3d`, `2w`, `1m`,
-  `1y` back on that zone's calendar), each with a minus to leave matches out;
-  a minus before a word or phrase leaves out mail containing it. Each becomes
-  an `EmailFilters` field ANDed with the request's own, applied before
-  paging; an unknown name or invalid value stays a word. A search that types
-  any operator becomes an email search (no other kind can meet them); one
-  that leaves email out, or uses `regexp`/`query` matching, reads none. Opposite
+  `1y` back on that zone's calendar), each with a minus to leave matches out.
+  Each becomes an `EmailFilters` field ANDed with the request's own, applied
+  before paging; an unknown name or invalid value stays a word. A search that
+  types a named operator becomes an email search (no other kind can meet
+  them); one that leaves email out, or uses `regexp`/`query` matching, reads
+  none. A minus before a plain word or phrase says nothing about email, so it
+  leaves out mail containing it only beside a named operator or in a search
+  of email alone; otherwise, and always for a term starting `--`, it stays a
+  word and the search keeps every kind. Opposite
   operators search nothing. A cursor keeps the first page's moment
   (`query_time_millis`) so relative dates bound the same instants on every
   page, and the response's `query_filters` reports what the operators became.

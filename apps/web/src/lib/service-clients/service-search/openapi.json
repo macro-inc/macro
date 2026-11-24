@@ -4933,7 +4933,7 @@
           },
           "query": {
             "type": "string",
-            "description": "The search query string. Must not be empty; one character is enough.\nWhen the search reaches email it also reads Gmail's operators:\n`subject:`, `from:`, `to:`, `cc:`, `bcc:`, `in:` a Mail view (`inbox`,\n`signal`, `noise`, `archived`, `sent`, `drafts`, `calendar`, `shared`,\n`favorites`) or a tag or label name, `label:`, `is:unread`, `is:read`,\n`is:starred`, `is:shared`, `has:attachment`, `after:`/`before:` a day\n(`2017/06/01`), `newer_than:`/`older_than:` a span (`3d`, `2w`, `1m`,\n`1y`), and a minus before an operator, word or quoted phrase to leave\nmatching mail out. A query that types any searches email only."
+            "description": "The search query string. Must not be empty; one character is enough.\nWhen the search reaches email it also reads Gmail's operators:\n`subject:`, `from:`, `to:`, `cc:`, `bcc:`, `in:` a Mail view (`inbox`,\n`signal`, `noise`, `archived`, `sent`, `drafts`, `calendar`, `shared`,\n`favorites`) or a tag or label name, `label:`, `is:unread`, `is:read`,\n`is:starred`, `is:shared`, `has:attachment`, `after:`/`before:` a day\n(`2017/06/01`), `newer_than:`/`older_than:` a span (`3d`, `2w`, `1m`,\n`1y`), and a minus before an operator to leave matching mail out. A\nquery that types an operator searches email only. A minus before a\nword or quoted phrase leaves out mail containing it beside an operator\nor in a search of email alone; elsewhere it is part of the word."
           },
           "search_on": {
             "$ref": "#/components/schemas/SearchOn",

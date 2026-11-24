@@ -596,8 +596,13 @@ async fn search_unified_sources(
 
     let calendar_event_scope = req.calendar_event_scope;
     let mut search_filters = SearchEntityFilters::from(req.filters);
-    let (search_terms, email_query) =
-        apply_email_operators(&mut search_filters, search_terms, match_type, clock);
+    let (search_terms, email_query) = apply_email_operators(
+        &mut search_filters,
+        include_crm,
+        search_terms,
+        match_type,
+        clock,
+    );
     record_term_counts(
         &tracing::Span::current(),
         search_terms.len(),

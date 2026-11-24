@@ -72,17 +72,15 @@ fn people_operators_name_their_part_of_the_message() {
 
 #[test]
 fn a_minus_leaves_out_an_operator_a_word_or_a_phrase() {
-    let query = read(r#"-from:ana -lunch -"team lunch" - e-mail"#);
+    let query = read(r#"-from:ana -lunch -"team lunch" - e-mail --force"#);
 
-    assert_eq!(query.terms, ["-", "e-mail"]);
+    assert_eq!(query.terms, ["-", "e-mail", "--force"]);
     assert_eq!(
         query.filters.text_matches,
-        [
-            text(EmailTextPart::From, "ana", true),
-            text(EmailTextPart::Any, "lunch", true),
-            text(EmailTextPart::Any, "team lunch", true),
-        ]
+        [text(EmailTextPart::From, "ana", true)]
     );
+    assert_eq!(query.excluded_words, ["lunch", "team lunch"]);
+    assert_eq!(query.operators, 1);
 }
 
 #[test]
@@ -185,10 +183,8 @@ fn leaving_out_a_view_stacks_with_the_view_named() {
 fn leaving_out_signal_or_noise_is_a_word_left_out() {
     let query = read("-in:signal");
 
-    assert_eq!(
-        query.filters.text_matches,
-        [text(EmailTextPart::Any, "in:signal", true)]
-    );
+    assert_eq!(query.excluded_words, ["in:signal"]);
+    assert_eq!(query.operators, 0);
     assert_eq!(query.filters.importance, None);
     assert_eq!(query.filters.done, None);
 }
@@ -363,6 +359,7 @@ fn an_operator_makes_the_search_an_email_search() {
 
     let (left, query) = apply_email_operators(
         &mut filters,
+        false,
         terms("budget subject:lunch"),
         MatchType::Partial,
         clock(Tz::UTC),
@@ -390,6 +387,7 @@ fn a_search_without_operators_keeps_every_kind() {
 
     let (left, query) = apply_email_operators(
         &mut filters,
+        false,
         terms("budget"),
         MatchType::Partial,
         clock(Tz::UTC),
@@ -413,6 +411,7 @@ fn a_search_that_leaves_out_email_reads_operators_as_words() {
 
     let (left, query) = apply_email_operators(
         &mut filters,
+        false,
         terms("subject:lunch"),
         MatchType::Partial,
         clock(Tz::UTC),
@@ -429,6 +428,7 @@ fn raw_query_syntax_is_left_alone() {
 
     let (left, query) = apply_email_operators(
         &mut filters,
+        false,
         terms("subject:lunch"),
         MatchType::Regexp,
         clock(Tz::UTC),
@@ -444,6 +444,7 @@ fn contradicting_operators_search_nothing() {
 
     apply_email_operators(
         &mut filters,
+        false,
         terms("is:read is:unread"),
         MatchType::Partial,
         clock(Tz::UTC),
@@ -451,4 +452,120 @@ fn contradicting_operators_search_nothing() {
 
     assert!(!filters.should_include_emails);
     assert!(!filters.should_include_documents);
+}
+
+fn email_only() -> SearchEntityFilters {
+    let nil = || vec![uuid::Uuid::nil().to_string()];
+    SearchEntityFilters::from(item_filters::EntityFilters {
+        document_filters: item_filters::DocumentFilters {
+            document_ids: nil(),
+            ..Default::default()
+        },
+        chat_filters: item_filters::ChatFilters {
+            chat_ids: nil(),
+            ..Default::default()
+        },
+        channel_filters: item_filters::ChannelFilters {
+            channel_ids: nil(),
+            ..Default::default()
+        },
+        project_filters: item_filters::ProjectFilters {
+            project_ids: nil(),
+            ..Default::default()
+        },
+        call_filters: item_filters::CallFilters {
+            channel_ids: nil(),
+            ..Default::default()
+        },
+        calendar_event_filters: item_filters::CalendarEventFilters {
+            calendar_event_ids: nil(),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+}
+
+#[test]
+fn a_minus_word_alone_keeps_every_kind() {
+    for query in ["budget -40", "budget -v", "budget --force", "budget -lunch"] {
+        let mut filters = every_kind();
+
+        let (left, read) = apply_email_operators(
+            &mut filters,
+            false,
+            terms(query),
+            MatchType::Partial,
+            clock(Tz::UTC),
+        );
+
+        assert_eq!(left, terms(query), "{query}");
+        assert_eq!(read, None, "{query}");
+        assert!(filters.should_include_documents, "{query}");
+        assert!(filters.should_include_channels, "{query}");
+        assert!(filters.email_filters.text_matches.is_empty(), "{query}");
+    }
+}
+
+#[test]
+fn a_minus_word_beside_a_named_operator_leaves_mail_out() {
+    let mut filters = every_kind();
+
+    let (left, read) = apply_email_operators(
+        &mut filters,
+        false,
+        terms("budget -lunch subject:plan"),
+        MatchType::Partial,
+        clock(Tz::UTC),
+    );
+
+    assert_eq!(left, ["budget"]);
+    assert_eq!(read.map(|query| query.operators), Some(2));
+    assert!(!filters.should_include_documents);
+    assert_eq!(
+        filters.email_filters.text_matches,
+        [
+            text(EmailTextPart::Subject, "plan", false),
+            text(EmailTextPart::Any, "lunch", true),
+        ]
+    );
+}
+
+#[test]
+fn an_email_search_leaves_out_a_minus_word() {
+    let mut filters = email_only();
+
+    let (left, read) = apply_email_operators(
+        &mut filters,
+        false,
+        terms("budget -40 -lunch --force"),
+        MatchType::Partial,
+        clock(Tz::UTC),
+    );
+
+    assert_eq!(left, ["budget", "--force"]);
+    assert_eq!(read.map(|query| query.operators), Some(2));
+    assert!(filters.should_include_emails);
+    assert_eq!(
+        filters.email_filters.text_matches,
+        [
+            text(EmailTextPart::Any, "40", true),
+            text(EmailTextPart::Any, "lunch", true),
+        ]
+    );
+}
+
+#[test]
+fn a_search_with_crm_companies_is_not_an_email_search() {
+    let mut filters = email_only();
+
+    let (left, read) = apply_email_operators(
+        &mut filters,
+        true,
+        terms("budget -lunch"),
+        MatchType::Partial,
+        clock(Tz::UTC),
+    );
+
+    assert_eq!(left, ["budget", "-lunch"]);
+    assert_eq!(read, None);
 }
