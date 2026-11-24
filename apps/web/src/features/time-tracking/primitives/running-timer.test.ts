@@ -148,15 +148,24 @@ it('shows the timer the server holds after a start whose reply is lost', async (
   query.startTimer.mockResolvedValue(
     err({ kind: 'failed', error: new Error('network') })
   );
-  query.refetch.mockImplementation(async () => {
-    setTimer(TIMER);
-  });
+  let reread: () => void = () => undefined;
+  query.refetch.mockReturnValue(
+    new Promise<void>((resolve) => {
+      reread = () => {
+        setTimer(TIMER);
+        resolve();
+      };
+    })
+  );
   const state = mountTimer();
   const pressed = state.start({ taskId: 'task-1' });
+  await vi.waitFor(() => expect(query.refetch).toHaveBeenCalledOnce());
   const again = await state.start({ taskId: 'task-1' });
+  expect(again.isErr() && again.error).toMatchObject({ code: 'BUSY' });
+  reread();
   await pressed;
   expect(state.timer()).toEqual(TIMER);
-  expect(again.isErr() && again.error).toMatchObject({ code: 'BUSY' });
+  expect(state.busy()).toBe(false);
   expect(query.startTimer).toHaveBeenCalledOnce();
 });
 
