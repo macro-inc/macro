@@ -31,6 +31,26 @@ function refusalText(reason: AddRefusal): string {
     .exhaustive();
 }
 
+/** Stands in for the name while a label is split around it. */
+const NAME_MARK = '\u{E000}';
+
+/** A submit label, with the agent's name, if it has one, apart. */
+type LabelParts = { before: string; name?: string; after?: string };
+
+function SubmitLabel(props: { parts: LabelParts }) {
+  return (
+    <span class="flex min-w-0 items-baseline">
+      <span class="shrink-0 whitespace-pre">{props.parts.before}</span>
+      <Show when={props.parts.name}>
+        {(name) => <span class="min-w-0 truncate">{name()}</span>}
+      </Show>
+      <Show when={props.parts.after}>
+        {(after) => <span class="shrink-0 whitespace-pre">{after()}</span>}
+      </Show>
+    </span>
+  );
+}
+
 /**
  * Add an agent teammate: a name, shown as its initial, and the computer it
  * runs on, priced the way Buy a computer prices it. The dialog stays open
@@ -51,10 +71,16 @@ export function InviteAgentForm(props: {
   onRetryStart: (agent: TeamAgent) => void;
   /** The name or size changed after a refusal. */
   onEdit: () => void;
-  onBilling: () => void;
+  /** Update card after a decline, with what was typed so it can come back. */
+  onBilling: (draft: { name: string; size: ComputerSize | undefined }) => void;
+  /** Where the form starts, e.g. the draft put aside to update the card. */
+  initialName?: string;
+  initialSize?: ComputerSize;
 }) {
-  const [name, setName] = createSignal('');
-  const [chosenSize, setChosenSize] = createSignal<ComputerSize>();
+  const [name, setName] = createSignal(props.initialName ?? '');
+  const [chosenSize, setChosenSize] = createSignal<ComputerSize | undefined>(
+    props.initialSize
+  );
   // Add was pressed with no name: the field says it needs one.
   const [asked, setAsked] = createSignal(false);
   // Add was pressed with every size sold out.
@@ -104,23 +130,29 @@ export function InviteAgentForm(props: {
     return formatQuote(chosen.quote);
   };
 
-  const addLabel = () => {
+  // Add's label split around the agent's name, so a long name can shorten
+  // while the price stays whole, in whatever order the translation puts them.
+  const addLabel = (): LabelParts => {
     const agentName = trimmedName() || t('teamAgents.agent');
     const amount = price();
-    return amount
-      ? t('teamAgents.addPriced', { name: agentName, price: amount })
-      : t('teamAgents.add', { name: agentName });
+    const text = amount
+      ? t('teamAgents.addPriced', { name: NAME_MARK, price: amount })
+      : t('teamAgents.add', { name: NAME_MARK });
+    const [before = '', after = ''] = text.split(NAME_MARK);
+    return { before, name: agentName, after };
   };
 
-  const submitLabel = () =>
+  const submitLabel = (): LabelParts =>
     match(props.state.kind)
       .with('declined', 'refunded', () => {
         const amount = price();
-        return amount
-          ? t('teamAgents.tryAgainPriced', { price: amount })
-          : t('teamAgents.tryAgain');
+        return {
+          before: amount
+            ? t('teamAgents.tryAgainPriced', { price: amount })
+            : t('teamAgents.tryAgain'),
+        };
       })
-      .with('not_started', () => t('teamAgents.retryStart'))
+      .with('not_started', () => ({ before: t('teamAgents.retryStart') }))
       .otherwise(() => addLabel());
 
   const submit = () => {
@@ -235,12 +267,17 @@ export function InviteAgentForm(props: {
         )}
       </Show>
       {/* What Add charges for, before anything is bought. */}
-      <p class="text-xs text-ink-muted">{t('teamAgents.computerHint')}</p>
-      <p class="text-xs text-ink-muted">
-        {offer()?.quote.amount === 0
-          ? t('settingsBilling.noCharge')
-          : t('settingsBilling.proration')}
-      </p>
+      <Show when={offer()}>
+        {(chosen) => (
+          <p class="text-xs text-ink-muted">
+            {chosen().quote.amount === 0
+              ? t('teamAgents.chargeIncluded')
+              : t('teamAgents.chargeAdded', {
+                  price: formatQuote(chosen().quote),
+                })}
+          </p>
+        )}
+      </Show>
     </div>
   );
 
@@ -259,7 +296,9 @@ export function InviteAgentForm(props: {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => props.onBilling()}
+                onClick={() =>
+                  props.onBilling({ name: name(), size: offer()?.size })
+                }
               >
                 {t('teamAgents.updateCard')}
               </Button>
@@ -328,10 +367,8 @@ export function InviteAgentForm(props: {
         >
           <Show
             when={adding()}
-            // A long name ends the label in an ellipsis instead of widening
-            // the button past the sheet; the label's word order is the
-            // translation's, so the whole label truncates.
-            fallback={<span class="min-w-0 truncate">{submitLabel()}</span>}
+            // A long name ends in an ellipsis; the price beside it stays.
+            fallback={<SubmitLabel parts={submitLabel()} />}
           >
             <SpinnerIcon class="size-4 animate-spin" />
             {t('teamAgents.adding', { name: trimmedName() })}

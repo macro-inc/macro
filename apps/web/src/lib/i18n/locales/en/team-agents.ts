@@ -26,7 +26,10 @@ export default {
   voiceSaveFailed:
     "Couldn't save the voice. Your choice is still selected; try again.",
   giveItAComputer: 'Give it a computer',
-  computerHint: 'Its own computer, always on. Its seat is included.',
+  chargeAdded:
+    "Its own computer, always on. {{price}} is added to your team subscription, prorated for the rest of this billing period. The agent's seat costs nothing extra.",
+  chargeIncluded:
+    "Its own computer, always on. Nothing is added to your team subscription, and the agent's seat costs nothing extra.",
   sizesFailed: "Couldn't load computer sizes.",
   tryAgain: 'Try again',
   nameRequired: 'Give your agent a name to continue.',

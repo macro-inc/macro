@@ -261,18 +261,19 @@ avatar is the name's first character, upper-cased (`agentInitial`: one
 grapheme, after any invisible marks or punctuation, so "Ada Lovelace" is
 **A** and an emoji or CJK character stays whole; **?** while the name is
 empty), redrawn as it is typed. The agent's Members row draws the same letter;
-people keep their two initials. Agents have no picture editor. Under the sizes,
-two lines say what Add charges for: "Its own computer, always on. Its seat is
-included." and "Added to your team subscription, prorated for the rest of
-this billing period." (or "No charge is added to your team subscription." for
-an included size). Voice and role come later, and the agent asks what to take
+people keep their two initials. Agents have no picture editor. Under the sizes, one line says
+what Add charges for: "Its own computer, always on. $X/month is added to your
+team subscription, prorated for the rest of this billing period. The agent's
+seat costs nothing extra." (for an included size, "Nothing is added to your
+team subscription…"). Voice and role come later, and the agent asks what to take
 on once it is online.
 
 Sizes come from the same catalog and prices as Buy a computer
 (sold-out sizes are disabled and marked **Sold out**; Add with every size sold
 out says so under the sizes and sends nothing). The agent's seat is
 included, so the button reads **Add <name> · $X/month** (or **Add Agent ·
-$X/month** before a name). Add is always enabled: with no name it marks the name field invalid, says
+$X/month** before a name). A long name shortens with an ellipsis inside the Add label; the price stays whole.
+Add is always enabled: with no name it marks the name field invalid, says
 "Give your agent a name to continue.", and moves the caret there; a name too
 long is marked the same way; either sends nothing. Adding calls
 `POST /team_agents` with `jobDescription` and `personality` empty, then waits
@@ -282,7 +283,9 @@ closes into the agent's DM, where it has said hi; no toast. Past five seconds
 it closes into the DM anyway, where the banner says it is still being set up
 and its Members row shows the setup step. Every failure stays in the dialog
 with the name and size kept: a declined card (402 `payment_declined`;
-nothing was bought) with **Update card** (Settings → Billing) and **Try again ·
+nothing was bought) with **Update card** (Settings → Billing; the name and size are kept in
+the tab's sessionStorage, so the next Invite an agent for that team starts
+from them until the agent is added or Cancel is pressed) and **Try again ·
 $X/month**, which sends a new purchase key; no room for the size (409
 `no_room`, checked before any charge), which marks the size sold out and picks
 the next one on sale; a computer that didn't start, whose **Retry** is the

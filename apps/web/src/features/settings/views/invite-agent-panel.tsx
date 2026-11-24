@@ -6,6 +6,7 @@ import {
 } from '../../notifications/computer-setup-toast';
 import { InviteAgentForm } from '../components/invite-agent-form';
 import { useAddTeamAgent } from '../primitives/add-team-agent';
+import { createAgentInviteDraft } from '../primitives/agent-invite-draft';
 
 /**
  * The Agent side of Invite to Team, wired to the computer catalog. Add waits
@@ -20,9 +21,12 @@ export function InviteAgentPanel(props: {
   onInvited: () => void;
 }) {
   const offers = useComputerOffersQuery(() => true);
+  // What was typed before Update card took the admin to Billing.
+  const draft = createAgentInviteDraft(props.teamId);
   const add = useAddTeamAgent({
     teamId: () => props.teamId,
     onAdded: ({ agent }) => {
+      draft.forget();
       props.onInvited();
       fireAndForget(openAgentDirectMessage(agent.userId), 'team-agent.add');
     },
@@ -35,7 +39,12 @@ export function InviteAgentPanel(props: {
       onRetryOffers={() => fireAndForget(offers.refetch(), 'team-agent.offers')}
       state={add.state()}
       purchaseKey={add.purchaseKey()}
-      onCancel={props.onCancel}
+      initialName={draft.initial?.name}
+      initialSize={draft.initial?.size}
+      onCancel={() => {
+        draft.forget();
+        props.onCancel();
+      }}
       onSubmit={(request, size) =>
         fireAndForget(add.add(request, size), 'team-agent.add')
       }
@@ -43,7 +52,8 @@ export function InviteAgentPanel(props: {
         fireAndForget(add.retry(agent), 'team-agent.add')
       }
       onEdit={add.edit}
-      onBilling={() => {
+      onBilling={({ name, size }) => {
+        draft.save(name, size);
         props.onCancel();
         openBilling();
       }}

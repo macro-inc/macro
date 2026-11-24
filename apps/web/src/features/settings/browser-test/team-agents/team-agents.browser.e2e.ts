@@ -720,6 +720,73 @@ test('a declined card keeps the dialog, nothing behind, and Try again buys anew'
   expect(again?.purchaseKey).not.toBe(declined?.purchaseKey);
 });
 
+test('Update card after a decline opens Billing, and the next invite keeps the name and size', async ({
+  page,
+}) => {
+  await scriptAuthService(page, 0, {
+    failedCreates: 1,
+    refusal: 'payment_declined',
+  });
+  await page.goto('/');
+  let dialog = await openInviteAgent(page);
+  await fillAda(page);
+  await dialog.getByText('Large', { exact: true }).click();
+  await dialog.getByRole('button', { name: /^Add Ada/ }).click();
+  await dialog.getByRole('button', { name: 'Update card' }).click();
+  await expect(dialog).toBeHidden();
+  expect(
+    await page.evaluate(() => JSON.stringify(window.teamAgentsFixture.opened))
+  ).toContain('billing');
+
+  // Back from Billing, the invite starts where it was left.
+  dialog = await openInviteAgent(page);
+  await expect(dialog.getByRole('textbox', { name: 'Name it' })).toHaveValue(
+    'Ada'
+  );
+  await expect(dialog.getByRole('radio', { name: 'Large' })).toBeChecked();
+  await expect(
+    dialog.getByRole('button', { name: 'Add Ada · $80.00/month' })
+  ).toBeVisible();
+
+  // Cancel forgets it.
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  dialog = await openInviteAgent(page);
+  await expect(dialog.getByRole('textbox', { name: 'Name it' })).toHaveValue(
+    ''
+  );
+});
+
+test('a long name shortens on Add while the price stays whole', async ({
+  page,
+}) => {
+  await scriptAuthService(page, 2);
+  await page.goto('/');
+  const dialog = await openInviteAgent(page);
+  const longName = 'Ada Augusta King, Countess of Lovelace and Analyst';
+  await dialog.getByRole('textbox', { name: 'Name it' }).fill(longName);
+  const add = dialog.getByRole('button', { name: /^Add Ada/ });
+  await expect(add).toHaveAccessibleName(`Add ${longName} · $40.00/month`);
+  const price = add.getByText('· $40.00/month');
+  await expect(price).toBeVisible();
+  const addBox = await add.boundingBox();
+  const priceBox = await price.boundingBox();
+  if (!addBox || !priceBox) throw new Error('Add or its price has no box');
+  // The price sits inside the button, uncut, and the button inside the dialog.
+  expect(priceBox.x).toBeGreaterThanOrEqual(addBox.x);
+  expect(priceBox.x + priceBox.width).toBeLessThanOrEqual(
+    addBox.x + addBox.width + 0.5
+  );
+  const dialogBox = await dialog.boundingBox();
+  if (!dialogBox) throw new Error('The dialog has no box');
+  expect(addBox.x + addBox.width).toBeLessThanOrEqual(
+    dialogBox.x + dialogBox.width + 0.5
+  );
+  expect(
+    await price.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
+  ).toBe(true);
+});
+
 test('a size with no room is marked and another size can be added', async ({
   page,
 }, testInfo) => {
