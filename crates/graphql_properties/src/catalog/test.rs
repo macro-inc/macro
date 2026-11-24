@@ -500,6 +500,41 @@ async fn refusals_carry_their_rest_status_class() {
 }
 
 #[tokio::test]
+async fn a_conflict_says_what_it_collided_with() {
+    for (err, reason) in [
+        (PropertiesErr::ReservedName("Tags"), "RESERVED_NAME"),
+        (PropertiesErr::DuplicateDefinitionName, "NAME_TAKEN"),
+        (PropertiesErr::DuplicateOptionValue, "OPTION_VALUE_TAKEN"),
+    ] {
+        let schema = Schema::build(
+            Query,
+            PropertyCatalogMutationRoot::<FakeWriter, NoOpEntityPropertyReader>::new(),
+            EmptySubscription,
+        )
+        .data(FakeWriter::refusing(err))
+        .finish();
+        let response = schema
+            .execute(format!(
+                r#"mutation {{ updatePropertyOption(input: {{ propertyDefinitionId: "{DEFINITION}", optionId: "{OPTION}", value: "Won" }}) {{ id }} }}"#
+            ))
+            .await;
+        let extensions = response.errors[0].extensions.as_ref().expect("extensions");
+        assert_eq!(
+            extensions
+                .get("code")
+                .map(|code| code.clone().into_json().unwrap()),
+            Some(json!("CONFLICT"))
+        );
+        assert_eq!(
+            extensions
+                .get("reason")
+                .map(|reason| reason.clone().into_json().unwrap()),
+            Some(json!(reason))
+        );
+    }
+}
+
+#[tokio::test]
 async fn an_infrastructure_failure_hides_its_cause() {
     let (_, errors) = run(
         FakeWriter::refusing(PropertiesErr::Repo(

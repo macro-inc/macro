@@ -281,6 +281,14 @@ where
 /// Map a domain refusal to a GraphQL error whose `extensions.code` names its
 /// REST status class, so a client can tell a rejected write from a fault.
 fn catalog_error(err: PropertiesErr) -> async_graphql::Error {
+    // What a conflict collided with, for a client to explain it.
+    let reason = match &err {
+        PropertiesErr::ReservedName(_) => Some("RESERVED_NAME"),
+        PropertiesErr::DuplicateDefinitionName => Some("NAME_TAKEN"),
+        PropertiesErr::DuplicateOptionValue => Some("OPTION_VALUE_TAKEN"),
+        PropertiesErr::ConflictingTeamLabel(_) => Some("TEAM_LABEL_TAKEN"),
+        _ => None,
+    };
     let code = match &err {
         PropertiesErr::Validation(_) => "BAD_REQUEST",
         PropertiesErr::NotFound
@@ -302,8 +310,12 @@ fn catalog_error(err: PropertiesErr) -> async_graphql::Error {
                 .extend_with(|_, extensions| extensions.set("code", "INTERNAL"));
         }
     };
-    async_graphql::Error::new(err.to_string())
-        .extend_with(|_, extensions| extensions.set("code", code))
+    async_graphql::Error::new(err.to_string()).extend_with(|_, extensions| {
+        extensions.set("code", code);
+        if let Some(reason) = reason {
+            extensions.set("reason", reason);
+        }
+    })
 }
 
 /// A delete whose target is gone has the outcome it asked for. Not found also
