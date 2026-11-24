@@ -47,6 +47,7 @@ pub mod harnessd;
 mod in_use;
 pub(crate) mod moves;
 mod presence;
+pub mod screen;
 pub mod sign_in_ahead;
 pub(crate) mod wake;
 
@@ -95,6 +96,122 @@ pub type Operator = ComputerOperator<
     SystemClock,
     team_agents::outbound::setup_notices::IngressSetupNotices<SetupNotifications, PgTeamAgentsRepo>,
 >;
+
+/// How long a screen waits for its hibernated computer to wake before it
+/// tries anyway: Xvnc is up well before macrod dials.
+const SCREEN_WAKE_TIMEOUT: Duration = Duration::from_secs(30);
+
+impl screen::tunnel::ScreenWaker for Operator {
+    fn wake(
+        &self,
+        harness: HarnessId,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<screen::tunnel::Woken, screen::tunnel::TunnelError>>
+                + Send
+                + '_,
+        >,
+    > {
+        use hosted_runtimes::domain::operator::DispatchWake;
+        use screen::tunnel::{TunnelError, Woken};
+        Box::pin(async move {
+            match self.wake_for_dispatch(harness, SCREEN_WAKE_TIMEOUT).await {
+                Ok(DispatchWake::NotAComputer) => Err(TunnelError::ComputerOff),
+                Ok(DispatchWake::Awake | DispatchWake::Connected) => Ok(Woken::Up),
+                Ok(DispatchWake::Waiting) => Ok(Woken::StillWaking),
+                Err(error) => Err(TunnelError::Unreachable(error.to_string())),
+            }
+        })
+    }
+
+    fn power(
+        &self,
+        computer: ComputerId,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<screen::tunnel::ComputerPower, screen::tunnel::TunnelError>>
+                + Send
+                + '_,
+        >,
+    > {
+        use screen::tunnel::ComputerPower;
+        // Asked when a screen stopped short, and before a hand-back's thaw.
+        Box::pin(async move {
+            Ok(
+                if screen::tunnel::ScreenWaker::awake(self)
+                    .await?
+                    .contains(&computer)
+                {
+                    ComputerPower::Running
+                } else {
+                    ComputerPower::NotRunning
+                },
+            )
+        })
+    }
+
+    fn awake(
+        &self,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        std::collections::HashSet<ComputerId>,
+                        screen::tunnel::TunnelError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        use screen::tunnel::TunnelError;
+        // The fleet's whole list: once per reaping round, not per computer.
+        Box::pin(async move {
+            Ok(self
+                .awake_computers()
+                .await
+                .map_err(|error| TunnelError::Unreachable(error.to_string()))?
+                .into_iter()
+                .map(|(_, computer)| computer)
+                .collect())
+        })
+    }
+}
+
+impl screen::tunnel::GuestExec for Operator {
+    fn exec<'a>(
+        &'a self,
+        computer: ComputerId,
+        argv: &'a [&'a str],
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<screen::tunnel::GuestProgram, screen::tunnel::TunnelError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        use hosted_runtimes::domain::ports::{Fleet as _, FleetError as _};
+        use screen::tunnel::{GuestProgram, TunnelError};
+        Box::pin(async move {
+            let fleet = self
+                .fleet_of(computer)
+                .await
+                .map_err(|error| TunnelError::Unreachable(error.to_string()))?;
+            let process = fleet.exec(computer, argv).await.map_err(|error| {
+                if error.is_missing() {
+                    TunnelError::ComputerOff
+                } else {
+                    TunnelError::Unreachable(error.to_string())
+                }
+            })?;
+            let exit = process.exit;
+            Ok(GuestProgram {
+                stdin: process.stdin,
+                stdout: process.stdout,
+                exit: Box::pin(async move { exit.await.map_err(|error| error.to_string()) }),
+            })
+        })
+    }
+}
 
 /// Build the operator from explicit config, or `None` when this deployment
 /// has no attached computer fleet (`COMPUTERS_FLEET` is absent).

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE computer_screen_drives\n            SET thaw_settled_at = now(), thaw_settled = $2, thaw_tried_at = now()\n            WHERE id = $1 AND thaw_settled_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "daefe474321de88abfc4372b792a93dccf095f5e37e117c002e43acc401a46d0"
+}

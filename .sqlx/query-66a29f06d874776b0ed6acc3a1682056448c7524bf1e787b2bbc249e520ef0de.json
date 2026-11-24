@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM computer_screen_agent_notices WHERE created_at < now() - interval '1 day'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "66a29f06d874776b0ed6acc3a1682056448c7524bf1e787b2bbc249e520ef0de"
+}
