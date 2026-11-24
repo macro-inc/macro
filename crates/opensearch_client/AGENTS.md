@@ -67,8 +67,9 @@ projects.
   known bug is `#[ignore = "known bug: ..."]`; the fix removes the ignore.
   `tests/content_search/email_operators.rs` runs the same way and checks the
   conditions typed Mail search operators become (`EmailTextCondition`,
-  `EmailLabelCondition`, excluded threads, sent bounds) inside the unified
-  request; it needs the emails index empty too.
+  `EmailLabelCondition`, excluded threads, sent bounds) and hyphenated words
+  in email text inside the unified request; it needs the emails index empty
+  too.
 
 ## Gotchas
 
@@ -164,6 +165,12 @@ projects.
   outside content, words under three characters keep the capped
   `match_phrase_prefix`; OpenSearch has no phrase prefix that keeps every
   match.
+- Email text terms go into one `simple_query_string`
+  (`emails::build_text_query_string`), where a `term*` prefix is not
+  analyzed: `follow-up*` looks for one token `follow-up`, which the index
+  never holds. A partial term the tokenizer splits into several words is
+  matched with `create_query` instead (`emails::text_terms_query`), so it
+  follows the rules above.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:

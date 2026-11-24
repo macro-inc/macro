@@ -1,6 +1,6 @@
-//! The conditions typed Mail search operators become, against a real
-//! OpenSearch: each runs inside the unified request, with its sort and
-//! highlighter, and keeps exactly the messages it names.
+//! Email search words, and the conditions typed Mail search operators
+//! become, against a real OpenSearch: each runs inside the unified request,
+//! with its sort and highlighter, and keeps exactly the messages it names.
 
 use std::collections::BTreeSet;
 
@@ -268,9 +268,75 @@ fn cases() -> Vec<Case> {
 
 #[tokio::test]
 async fn typed_email_conditions_keep_exactly_the_messages_they_name() -> anyhow::Result<()> {
+    search_seeded(messages(), cases()).await
+}
+
+const MARY_JANE: (&str, &str) = ("Mary-Jane Watts", "mj@probe.example");
+
+/// Mail holding words the analyzer splits at a hyphen, and mail holding the
+/// same words apart.
+fn hyphenated_messages() -> Vec<Message> {
+    let message = |n, subject, content, sender| Message {
+        thread: thread(n),
+        owner: VIEWER,
+        subject,
+        content,
+        sender,
+        recipients: vec![ANA],
+        cc: Vec::new(),
+        bcc: Vec::new(),
+        labels: vec!["INBOX"],
+        sent_at_millis: Some(MARCH_2025),
+        tagged: false,
+    };
+    vec![
+        message(11, "Follow-up on the re-org", "see the e-mail below", BO),
+        message(12, "follow the plan", "up next: mail", CY),
+        message(13, "Quarterly numbers", "attached", MARY_JANE),
+    ]
+}
+
+fn hyphenated_cases() -> Vec<Case> {
+    let mut cases = vec![
+        case("follow-up", &["follow-up"], &[11]),
+        case(
+            "follow-u, the last word still being typed",
+            &["follow-u"],
+            &[11],
+        ),
+        case("re-org", &["re-org"], &[11]),
+        case("e-mail in the body", &["e-mail"], &[11]),
+        case("Mary-Jane, a sender name", &["Mary-Jane"], &[13]),
+        case("follow-up beside a word", &["follow-up", "re-org"], &[11]),
+        case("follow, one word", &["follow"], &[11, 12]),
+    ];
+    let mut with = |mut case: Case, set: &dyn Fn(&mut UnifiedEmailSearchArgs)| {
+        set(&mut case.args);
+        cases.push(case);
+    };
+    with(case("subject:follow-up", &[], &[11]), &|args| {
+        args.text_conditions = vec![text(EmailTextFields::Subject, "follow-up", false)];
+    });
+    with(case("from:mary-jane", &[], &[13]), &|args| {
+        args.text_conditions = vec![text(EmailTextFields::From, "mary-jane", false)];
+    });
+    with(case("follow -follow-up", &["follow"], &[12]), &|args| {
+        args.text_conditions = vec![text(EmailTextFields::Any, "follow-up", true)];
+    });
+    cases
+}
+
+#[tokio::test]
+async fn a_hyphenated_word_finds_the_mail_that_holds_it() -> anyhow::Result<()> {
+    search_seeded(hyphenated_messages(), hyphenated_cases()).await
+}
+
+/// Seeds `messages` into an `emails` index holding nothing else, runs each
+/// case, removes what it seeded, and fails on any case that kept other
+/// messages than it names.
+async fn search_seeded(messages: Vec<Message>, cases: Vec<Case>) -> anyhow::Result<()> {
     let _one_at_a_time = SEARCH_INDICES.lock().await;
     let (client, raw, url) = test_clients()?;
-    let messages = messages();
     let seeded: Vec<String> = messages.iter().map(|m| m.thread.to_string()).collect();
 
     let others = count_documents(
@@ -283,7 +349,7 @@ async fn typed_email_conditions_keep_exactly_the_messages_they_name() -> anyhow:
         bail!("`{EMAILS}` at {url} holds {others} documents this test did not write");
     }
 
-    let result = seed_and_search(&client, &raw, &messages).await;
+    let result = seed_and_search(&client, &raw, &messages, cases).await;
     let removed = remove(&raw, &seeded).await;
     let failures = match (result, removed) {
         (Err(error), Err(cleanup)) => {
@@ -302,6 +368,7 @@ async fn seed_and_search(
     client: &OpensearchClient,
     raw: &OpenSearch,
     messages: &[Message],
+    cases: Vec<Case>,
 ) -> anyhow::Result<Vec<String>> {
     for message in messages {
         client.upsert_email_message(&upsert_args(message)?).await?;
@@ -309,7 +376,7 @@ async fn seed_and_search(
     refresh(raw, EMAILS).await?;
 
     let mut failures = Vec::new();
-    for case in cases() {
+    for case in cases {
         let args = UnifiedSearchArgs {
             user_id: VIEWER.to_string(),
             page_size: 50,

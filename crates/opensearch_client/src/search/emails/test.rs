@@ -837,3 +837,85 @@ fn a_label_condition_matches_a_label_or_a_tag() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+fn phrase_prefix(field: &str, term: &str) -> serde_json::Value {
+    json!({"match_phrase_prefix": {field: {"query": term, "max_expansions": 256}}})
+}
+
+#[test]
+fn a_hyphenated_word_matches_its_words_together_in_one_field() {
+    let terms = vec!["menu".to_string(), "follow-up".to_string()];
+
+    let json = terms_query(&terms, "partial", &[], &["subject", "content"]).to_json();
+
+    assert_eq!(
+        json,
+        json!({
+            "bool": {
+                "should": [{
+                    "bool": {
+                        "must": [
+                            {
+                                "simple_query_string": {
+                                    "query": "menu*",
+                                    "fields": ["subject", "content"],
+                                    "default_operator": "AND"
+                                }
+                            },
+                            {
+                                "bool": {
+                                    "should": [
+                                        phrase_prefix("subject", "follow-up"),
+                                        phrase_prefix("content", "follow-up")
+                                    ],
+                                    "minimum_should_match": 1
+                                }
+                            }
+                        ]
+                    }
+                }],
+                "minimum_should_match": 1
+            }
+        })
+    );
+}
+
+#[test]
+fn a_hyphenated_word_alone_needs_no_query_string() {
+    let terms = vec!["re-org".to_string()];
+
+    let json = terms_query(&terms, "partial", &[], &["subject"]).to_json();
+
+    assert_eq!(
+        json["bool"]["should"][0],
+        json!({
+            "bool": {
+                "must": [{
+                    "bool": {
+                        "should": [phrase_prefix("subject", "re-org")],
+                        "minimum_should_match": 1
+                    }
+                }]
+            }
+        })
+    );
+}
+
+#[test]
+fn an_exact_short_or_quoted_hyphenated_term_stays_in_the_query_string() {
+    for (terms, match_type, query) in [
+        (vec!["follow-up"], "exact", "(follow-up)"),
+        (vec!["東京"], "partial", "(東京)"),
+        (vec!["the follow-up"], "partial", "\"the follow-up\""),
+        (vec!["node.js"], "partial", "node.js*"),
+    ] {
+        let terms: Vec<String> = terms.into_iter().map(str::to_string).collect();
+
+        let json = terms_query(&terms, match_type, &[], &["subject"]).to_json();
+
+        assert_eq!(
+            json["bool"]["should"][0]["simple_query_string"]["query"], query,
+            "{terms:?} in {match_type} match"
+        );
+    }
+}
