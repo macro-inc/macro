@@ -364,3 +364,59 @@ async fn completion_continues_after_a_recipient_failure() {
     );
     assert!(attempts.iter().all(|(_, id)| *id == notification_id));
 }
+
+#[tokio::test]
+async fn an_answered_mention_keeps_its_id_and_files_under_the_thread_root() {
+    let channel_id = Uuid::from_u128(1);
+    let message_id = Uuid::from_u128(2);
+    let thread_id = Uuid::from_u128(3);
+    let notification_id = Uuid::from_u128(4);
+    let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    let answer = |thread_id: Option<Uuid>| ChannelNotificationEffect::AnsweredMention {
+        mention: ChannelMentionNotification {
+            channel_id,
+            message_content: "Here is the answer".to_string(),
+            message_id,
+            has_attachments: false,
+            thread_id,
+            metadata: ChannelMetadata {
+                channel_type: ChannelType::Public,
+                channel_name: "general".to_string(),
+                named: true,
+            },
+            sender_profile_picture_url: None,
+            sender: crate::domain::side_effects::NotificationSender::Bot {
+                name: "Agent".to_string(),
+            },
+        },
+        recipient_id: asker.clone(),
+        notification_id,
+    };
+    let ingress = Arc::new(CapturingIngress::default());
+    let sender = NotificationChannelSender::new(ingress.clone());
+
+    // A redelivered resolution, then the same answer at top level.
+    sender.send(answer(Some(thread_id))).await.unwrap();
+    sender.send(answer(Some(thread_id))).await.unwrap();
+    sender.send(answer(None)).await.unwrap();
+
+    let sent = ingress.sent.lock().unwrap();
+    assert_eq!(sent.len(), 3);
+    let channel_message = serde_json::to_value(model_entity::EntityType::ChannelMessage).unwrap();
+    for (request, thread_root) in sent.iter().zip([thread_id, thread_id, message_id]) {
+        assert_eq!(request["uuid_to_write"], json!(notification_id));
+        assert_eq!(request["req"]["notification"]["tag"], "channel_mention");
+        assert_eq!(
+            request["req"]["notification_entity"]["entity_id"],
+            channel_id.to_string()
+        );
+        assert_eq!(
+            request["req"]["secondary_notification_entity"],
+            json!({ "entity_type": channel_message, "entity_id": thread_root.to_string() })
+        );
+        assert!(request["req"]["sender_id"].is_null());
+        assert_eq!(request["req"]["recipient_ids"], json!([asker]));
+        assert!(!request["build_apns"].is_null());
+        assert_eq!(request["send_conn_gateway"], true);
+    }
+}

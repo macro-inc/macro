@@ -312,6 +312,34 @@ where
                     .await
                     .map_err(|e| anyhow::anyhow!("{e:?}"))?;
             }
+            ChannelNotificationEffect::AnsweredMention {
+                mention,
+                recipient_id,
+                notification_id,
+            } => {
+                // Filed like a mention of the person, under the same thread
+                // row, so it reads and clears like one.
+                let channel_id = mention.channel_id;
+                let secondary_notification_entity = secondary_channel_thread_entity(Some(
+                    mention.thread_id.unwrap_or(mention.message_id),
+                ));
+                self.ingress
+                    .send_notification(
+                        SendNotificationRequestBuilder {
+                            notification_entity: model_entity::EntityType::Channel
+                                .with_entity_string(channel_id.to_string()),
+                            secondary_notification_entity,
+                            notification: to_channel_mention_metadata(mention),
+                            sender_id: None,
+                            recipient_ids: HashSet::from([recipient_id]),
+                        }
+                        .into_request_with_id(notification_id)
+                        .with_apns()
+                        .with_conn_gateway(),
+                    )
+                    .await
+                    .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            }
             ChannelNotificationEffect::DocumentMention {
                 mention,
                 document,

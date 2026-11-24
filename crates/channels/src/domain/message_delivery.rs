@@ -388,13 +388,18 @@ where
                 message,
                 mentions,
                 notification_policy,
-            } => Some((message, mentions, *notification_policy)),
+            } => Some((message, mentions, *notification_policy, false)),
             MessageChange::Edited {
                 message,
                 mentions,
                 notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
                 ..
-            } => Some((message, mentions, PostMessageNotificationPolicy::Default)),
+            } => Some((
+                message,
+                mentions,
+                PostMessageNotificationPolicy::Default,
+                true,
+            )),
             MessageChange::ReactionChanged {
                 message,
                 emoji,
@@ -443,7 +448,7 @@ where
             | MessageChange::CallRootPosted { .. }
             | MessageChange::ThreadUpdated { .. } => None,
         };
-        if let Some((message, mentions, notification_policy)) = posted {
+        if let Some((message, mentions, notification_policy, finalized_reply)) = posted {
             let metadata = self.channel_metadata(channel_id, &actor).await?;
             self.events.dispatch(ChannelEvent::MessagePosted {
                 channel_id,
@@ -453,6 +458,7 @@ where
                 mentions: mentions.clone(),
                 has_attachments: !message.attachments.is_empty(),
                 notification_policy,
+                finalized_reply,
             });
         }
         if let Err(error) = self.realtime.send(&event, live_users).await {

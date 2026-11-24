@@ -111,6 +111,9 @@ struct MockRepository {
     withdrawn_notifications: HashSet<Uuid>,
     muted_users: HashSet<MacroUserIdStr<'static>>,
     unsubscribed_users: HashSet<MacroUserIdStr<'static>>,
+    /// Unsubscribed except from direct mentions, like a channel's legacy
+    /// mentions-only row.
+    mentions_only_users: HashSet<MacroUserIdStr<'static>>,
     type_disabled_users: HashSet<MacroUserIdStr<'static>>,
     channel_settings: HashMap<MacroUserIdStr<'static>, ChannelNotificationSettings>,
     section_settings:
@@ -138,6 +141,7 @@ impl MockRepository {
             withdrawn_notifications: HashSet::new(),
             muted_users: HashSet::new(),
             unsubscribed_users: HashSet::new(),
+            mentions_only_users: HashSet::new(),
             type_disabled_users: HashSet::new(),
             channel_settings: HashMap::new(),
             section_settings: HashMap::new(),
@@ -204,6 +208,11 @@ impl MockRepository {
 
     fn with_unsubscribed_user(mut self, user_id: MacroUserIdStr<'static>) -> Self {
         self.unsubscribed_users.insert(user_id);
+        self
+    }
+
+    fn with_mentions_only_user(mut self, user_id: MacroUserIdStr<'static>) -> Self {
+        self.mentions_only_users.insert(user_id);
         self
     }
 
@@ -297,10 +306,14 @@ impl NotificationRepository for MockRepository {
     async fn get_unsubscribed_users<'a>(
         &self,
         _item_id: &str,
-        _is_direct_mention: bool,
+        is_direct_mention: bool,
         _user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
-        Ok(self.unsubscribed_users.clone())
+        let mut unsubscribed = self.unsubscribed_users.clone();
+        if !is_direct_mention {
+            unsubscribed.extend(self.mentions_only_users.iter().cloned());
+        }
+        Ok(unsubscribed)
     }
 
     async fn get_channel_notification_settings<'a>(

@@ -263,6 +263,7 @@ async fn a_post_emits_the_channel_notification_event_and_the_common_payload() {
             message,
             has_attachments,
             participants,
+            finalized_reply,
             ..
         },
     ] = events.as_slice()
@@ -273,6 +274,7 @@ async fn a_post_emits_the_channel_notification_event_and_the_common_payload() {
     assert_eq!(message.id, Uuid::from_u128(1));
     assert_eq!(message.channel_id, CHANNEL);
     assert!(has_attachments);
+    assert!(!finalized_reply);
     assert_eq!(participants.len(), 2);
     assert_eq!(
         *log.live.lock().unwrap(),
@@ -314,6 +316,7 @@ async fn an_edit_that_notifies_as_a_post_emits_the_posted_event() {
     let [
         ChannelEvent::MessagePosted {
             notification_policy,
+            finalized_reply,
             ..
         },
     ] = events.as_slice()
@@ -321,6 +324,7 @@ async fn an_edit_that_notifies_as_a_post_emits_the_posted_event() {
         panic!("expected one posted event, got {events:?}");
     };
     assert_eq!(*notification_policy, PostMessageNotificationPolicy::Default);
+    assert!(finalized_reply);
     assert_eq!(log.live.lock().unwrap()[0].0, "edited");
 }
 

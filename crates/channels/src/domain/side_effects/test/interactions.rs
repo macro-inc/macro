@@ -71,6 +71,7 @@ fn posted(
         mentions: Vec::new(),
         has_attachments: false,
         notification_policy: PostMessageNotificationPolicy::Default,
+        finalized_reply: false,
     }
 }
 
