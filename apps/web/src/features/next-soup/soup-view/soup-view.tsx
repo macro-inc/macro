@@ -54,6 +54,7 @@ import {
   SoupEntityContextMenu,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -124,6 +125,7 @@ import type { CacheSnapshot } from 'virtua/unstable_core';
 import { makeMarkNotDoneAction } from '../actions/make-mark-not-done-action';
 import { SOUP_TOUR } from '../tour';
 import { SearchAskAiButton } from './search-ask-ai-button';
+import { SearchMoreChats } from './search-more-chats';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { SoupGroupContinuation } from './soup-group-continuation';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
@@ -626,6 +628,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     rows,
     searchText,
     featuredIds,
+    moreChatCount,
+    showMoreChats,
     isSearchServiceLoading,
     isLocalSearchSettling,
     activeTab,
@@ -1300,7 +1304,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                             <>
                               <Show when={i() === 0 && featuredCount() > 0}>
                                 <SoupSectionHeader>
-                                  <span class="truncate">Featured Results</span>
+                                  <span class="truncate">
+                                    {currentView() === 'search'
+                                      ? t('searchResults.bestMatches')
+                                      : t('searchResults.featuredResults')}
+                                  </span>
                                 </SoupSectionHeader>
                               </Show>
                               <Show
@@ -1309,7 +1317,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                 }
                               >
                                 <SoupSectionHeader>
-                                  <span class="truncate">More Results</span>
+                                  <span class="truncate">
+                                    {t('searchResults.moreResults')}
+                                  </span>
                                 </SoupSectionHeader>
                               </Show>
 
@@ -1442,6 +1452,17 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                   </SoupEntityContextMenu>
                                 </Match>
                               </Switch>
+                              <Show
+                                when={
+                                  i() === featuredCount() - 1 &&
+                                  moreChatCount() > 0
+                                }
+                              >
+                                <SearchMoreChats
+                                  count={moreChatCount()}
+                                  onShow={showMoreChats}
+                                />
+                              </Show>
                               <Show
                                 when={
                                   i() === rows().length - 1 &&

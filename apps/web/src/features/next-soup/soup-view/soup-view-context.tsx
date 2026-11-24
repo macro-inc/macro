@@ -33,6 +33,7 @@ import { createSearchState } from '@app/features/next-soup/soup-view/create-sear
 import {
   featuredDocumentIds,
   featureSearchResults,
+  rankBestMatches,
   withFeaturedDocumentData,
 } from '@app/features/next-soup/soup-view/featured-search-results';
 import {
@@ -182,6 +183,9 @@ export interface SoupViewContextValues {
   searchPaused: Accessor<boolean>;
   setSearchPaused: Setter<boolean>;
   featuredIds: Accessor<string[]>;
+  /** Search's other matching chats, waiting behind one row under its best matches. */
+  moreChatCount: Accessor<number>;
+  showMoreChats: () => void;
   items: Accessor<SoupEntity[]>;
   rows: Accessor<SoupRow[]>;
   isSearchServiceLoading: Accessor<boolean>;
@@ -1154,11 +1158,31 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     return soup.positions.apply(transformed);
   };
 
-  const featuredSearch = createLazyMemo(() =>
-    ENABLE_FEATURED_SEARCH_RESULTS && search.isSearching()
-      ? featureSearchResults(baseEntities(), search.featuredIds())
+  // Search leads with its best few name matches and folds the other chats
+  // behind one row; other views feature every name match.
+  const bestMatches = createMemo(() =>
+    activeListView() === 'search' && search.isSearching()
+      ? rankBestMatches(search.localFuzzyResults(), search.searchText())
       : undefined
   );
+  const [chatsShownFor, setChatsShownFor] = createSignal<string>();
+  const chatsShown = () => chatsShownFor() === search.searchText();
+  const moreChatCount = () =>
+    chatsShown() ? 0 : (bestMatches()?.moreChats.length ?? 0);
+  const showMoreChats = () => setChatsShownFor(search.searchText());
+
+  const featuredSearch = createLazyMemo(() => {
+    if (!ENABLE_FEATURED_SEARCH_RESULTS || !search.isSearching()) return;
+    const best = bestMatches();
+    if (!best)
+      return featureSearchResults(baseEntities(), search.featuredIds());
+    if (chatsShown())
+      return featureSearchResults(baseEntities(), [
+        ...best.best,
+        ...best.moreChats,
+      ]);
+    return featureSearchResults(baseEntities(), best.best, best.moreChats);
+  });
   const entities = () => featuredSearch()?.entities ?? baseEntities();
   const featuredIds = createMemo(
     () => featuredSearch()?.featuredIds ?? [],
@@ -1604,6 +1628,8 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     searchPaused: sourceSearchPaused,
     setSearchPaused,
     featuredIds,
+    moreChatCount,
+    showMoreChats,
     isSearchServiceLoading: search.isSearchServiceLoading,
     isLocalSearchSettling: search.isLocalSearchSettling,
     queryFilters,
