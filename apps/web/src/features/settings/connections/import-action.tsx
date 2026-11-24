@@ -1,4 +1,5 @@
-import { importSourceFor } from '@app/features/connector-import/core/catalog';
+import type { ImportSourceMatch } from '@app/features/connector-import/core/catalog';
+import { createImportSources } from '@app/features/connector-import/primitives/provider-flags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { Telemetry } from '@macro-inc/observability';
@@ -19,7 +20,9 @@ const ConnectorImportDialogHost = lazyNamed(
  * the app's tools.
  */
 export function ImportAction(props: { appSlug: string; name: string }) {
-  const source = () => importSourceFor(props.appSlug);
+  // A provider behind a flag that is off, or still loading, offers no Import.
+  const importSource = createImportSources();
+  const source = () => importSource(props.appSlug);
   const [open, setOpen] = createSignal(false);
   // The dialog's code loads on first open.
   const [opened, setOpened] = createSignal(false);
@@ -65,9 +68,14 @@ export function ImportAction(props: { appSlug: string; name: string }) {
   );
 }
 
-/** One line on what connecting an app does in Macro, not what the app is. */
-export function connectorDescription(appSlug: string, name: string): string {
-  const found = importSourceFor(appSlug);
+/**
+ * One line on what connecting an app does in Macro, not what the app is.
+ * `found` is the app's import source as `createImportSources` answers it.
+ */
+export function connectorDescription(
+  found: ImportSourceMatch | undefined,
+  name: string
+): string {
   if (!found) {
     return `Agents can use ${name} when you ask them to. Nothing is copied into Macro.`;
   }

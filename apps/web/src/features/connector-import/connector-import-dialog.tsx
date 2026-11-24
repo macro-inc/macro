@@ -7,7 +7,9 @@ import {
 import { createMemo, type JSX } from 'solid-js';
 import { ConnectorImportProvider } from './context/connector-import-context';
 import type { ConnectorImportContext } from './context/contracts';
+import { withProviders } from './core/catalog';
 import type { ImportCategoryConfig } from './core/providers';
+import { createProviderFlags } from './primitives/provider-flags';
 import {
   ConnectorImportDialog,
   type ImportAlternative,
@@ -55,10 +57,13 @@ export function ConnectorImportDialogHost(props: {
   opener?: HTMLElement;
   alternatives?: readonly ImportAlternative[];
 }): JSX.Element {
+  // Providers behind a flag that is off, or still loading, are left out.
+  const shown = createProviderFlags();
+  const config = createMemo(() => withProviders(props.config, shown));
   return (
     <ConnectorImportProvider context={PRODUCTION_CONTEXT}>
       <ConnectorImportDialog
-        config={props.config}
+        config={config()}
         open={props.open}
         onOpenChange={props.onOpenChange}
         opener={props.opener}
