@@ -1,0 +1,61 @@
+crates/documents/src/domain/service/file_version.rs
+  s_daac47ed1cb766::t_5dfb0181413adf 70,85,107
+  s_daac47ed1cb766::t_cb0d4794e5662f 53-55
+  s_daac47ed1cb766::t_8cd5bb72d2ca3d 1-6,11-37,40-41,50-52,57-69,71-84,86-106,108-118
+  s_daac47ed1cb766::t_f416885ccb95bf 7-10,38-39,42-49,56
+crates/documents/src/outbound/pg_document_repo.rs
+  s_daac47ed1cb766::t_cb0d4794e5662f 30-32
+  s_daac47ed1cb766::t_5dfb0181413adf 1439,1444
+  s_daac47ed1cb766::t_987aa9841ab6ff 11,1427-1438,1440-1443,1445
+crates/documents/src/domain/ports/create.rs
+  s_daac47ed1cb766::t_6aaef752d618c9 9,33-43,84-101,147-160
+crates/documents/src/domain/create/upload/test.rs
+  s_daac47ed1cb766::t_cafdb55c834538 147-158
+crates/documents/src/domain/service/tests.rs
+  s_daac47ed1cb766::t_da16e99c81bb4e 19-20
+crates/documents/src/domain/create/file_version.rs
+  s_daac47ed1cb766::t_c68ed51004d8b1 1-84
+crates/documents/src/outbound/pg_document_repo/file_version.rs
+  s_daac47ed1cb766::t_d4945d4382c1c5 57-59,62-70
+  s_daac47ed1cb766::t_5dfb0181413adf 95
+  s_daac47ed1cb766::t_13e28b4fcc2a86 1-56,60-61,71-94,96-109
+crates/documents/src/domain/create/test.rs
+  s_daac47ed1cb766::t_cfb0fd20e78550 133-144
+crates/documents/src/domain/ports.rs
+  s_daac47ed1cb766::t_5dfb0181413adf 368
+  s_daac47ed1cb766::t_56cdc610997e1c 43,355-367,369-371
+  s_daac47ed1cb766::t_b1d41f50290cb5 372
+crates/documents/src/domain/service/tests/file_version.rs
+  s_daac47ed1cb766::t_cb0d4794e5662f 9-10,31-34,36-38
+  s_daac47ed1cb766::t_f57a5b7503e2f5 1-8,11-30,35,39-60,67-91,98-181,187-355
+  s_daac47ed1cb766::t_5dfb0181413adf 61-66,92-97,182-186
+crates/documents/src/domain/service.rs
+  s_daac47ed1cb766::t_c95c45a46734a6 4-5,1092-1106
+crates/documents/src/domain/models.rs
+  s_daac47ed1cb766::t_56cdc610997e1c 27-35
+crates/documents/src/domain/create.rs
+  s_daac47ed1cb766::t_c68ed51004d8b1 11,36-37,506-513
+  s_daac47ed1cb766::t_808cfc590f02e6 514-515
+crates/documents/src/inbound/axum_router/tests.rs
+  s_daac47ed1cb766::t_cfb0fd20e78550 656-667
+crates/documents/src/inbound/toolset/edit_document/test.rs
+  s_daac47ed1cb766::t_cfb0fd20e78550 412-423
+crates/documents/AGENTS.md
+  s_daac47ed1cb766::t_e6217e15264434 139-146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "23b7660195487b93ba7f5c7a97b2ef90c89c2034",
+  "prompts": {},
+  "sessions": {
+    "s_daac47ed1cb766": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5cc4efcb-4b26-48d2-bf9c-aaee3d38345e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
