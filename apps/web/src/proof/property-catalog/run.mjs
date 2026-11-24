@@ -1804,13 +1804,12 @@ async function compareStep(pair, level, op) {
   const [liveAo, liveAn, liveBo, liveBn] = await Promise.all(sides(pair).map(async (s) => prep(s, await ev(s, 'snapshot'))));
   // the frozen readers go back to live before the fresh mounts read
   if (CONFIG.mutant === 'skip-live-update') await Promise.all(news.map((s) => ev(s, 'mutant.release')));
-  const fresh = await Promise.all(
-    sides(pair).map(async (s) => {
-      const since = Date.now();
-      const f = await ev(s, 'fresh', keysFor(pair, s, keys), CONFIG.settleMs);
-      return { snap: prep(s, f.snap), timing: withWaitedOn(s, f.timing, since), asOf: clockNow() };
-    })
-  );
+  const coldMount = async (s) => {
+    const since = Date.now();
+    const f = await ev(s, 'fresh', keysFor(pair, s, keys), CONFIG.settleMs);
+    return { snap: prep(s, f.snap), timing: withWaitedOn(s, f.timing, since), asOf: clockNow() };
+  };
+  const fresh = await Promise.all(sides(pair).map(coldMount));
   R.counts.freshMounts += 4;
   for (const f of fresh) {
     R.settle.fresh.samples++;
@@ -1818,9 +1817,33 @@ async function compareStep(pair, level, op) {
     if (f.timing.timedOut) R.settle.fresh.timeouts++;
   }
   fresh.forEach((f, i) => noteHarnessTime(R.settle.fresh, f.timing, SIDE_NAMES[i], 'fresh mount settled'));
-  fresh.forEach((f, i) => {
-    if (f.timing.timedOut) record('settle', `${SIDE_NAMES[i]} fresh mount did not settle within ${CONFIG.settleMs}ms`, 'state', null, harnessFigures(f.timing), { waitedOn: f.timing.waitedOn });
-  });
+  // A cold mount is the harness's reference read of what the server holds
+  // after the step, not a bound the app must meet. One that overran the bound
+  // (the server answering slowly) is mounted again, both sides of its account
+  // together so the pair reads one state, and the retry, when it settles,
+  // stands in for the pair. The first attempt stays in settleTimeouts, as
+  // class `fresh-retry`; a retry that also overruns is `state`, as before.
+  for (const at of [0, 2]) {
+    if (!fresh[at].timing.timedOut && !fresh[at + 1].timing.timedOut) continue;
+    const first = [fresh[at], fresh[at + 1]];
+    const again = await Promise.all([sides(pair)[at], sides(pair)[at + 1]].map(coldMount));
+    R.counts.freshMounts += 2;
+    R.settle.fresh.retried = (R.settle.fresh.retried ?? 0) + 1;
+    const settled = again.every((f) => !f.timing.timedOut);
+    if (settled) R.settle.fresh.retrySettled = (R.settle.fresh.retrySettled ?? 0) + 1;
+    first.forEach((f, j) => {
+      if (!f.timing.timedOut) return;
+      record('settle', `${SIDE_NAMES[at + j]} fresh mount did not settle within ${CONFIG.settleMs}ms${settled ? ', and its retry did' : ''}`, settled ? 'fresh-retry' : 'state', null, harnessFigures(f.timing), { waitedOn: f.timing.waitedOn, retryMs: again.map((g) => g.timing.ms) });
+    });
+    if (!settled) {
+      again.forEach((f, j) => {
+        if (f.timing.timedOut) record('settle', `${SIDE_NAMES[at + j]} fresh mount retry did not settle within ${CONFIG.settleMs}ms`, 'state', null, harnessFigures(f.timing), { waitedOn: f.timing.waitedOn });
+      });
+      continue;
+    }
+    fresh[at] = again[0];
+    fresh[at + 1] = again[1];
+  }
   const freshOut = fresh.map((f) => f.timing.timedOut);
   const [frAo, frAn, frBo, frBn] = fresh.map((f) => f.snap);
   const c = here();

@@ -393,6 +393,19 @@ The counts measure work attempted, not successes, and are not interchangeable:
   that drew it failed (`current transaction is aborted`) for ten minutes, until
   the pool dropped it. Restart the storage service before a run that follows a
   stopped one.
+- `fresh-retry`: a cold mount that overran `SETTLE_MS` is mounted again, both
+  sides of its account together so the pair reads one server state, and the
+  retry stands in for the pair when both sides of it settle. A cold mount is
+  the harness's reference read of what the server holds after the step, not a
+  bound the app must meet, and without one the step's live comparisons lose
+  every staleness excuse (`old-stale`, the other-account rule). The first
+  attempt is kept in `settleTimeouts` as class `fresh-retry`, with the retry's
+  durations (`retryMs`); `settle.fresh.retried` and `settle.fresh.retrySettled`
+  count them. A retry that overruns too is `state`, as any timeout was before.
+  In the quiet seed-1 run at harness `9defcb1dcf7`, with the machine's load
+  average near 80 on 96 cores from other work, two head cold mounts overran
+  (9.1 s and 13.5 s, their catalog reads taking 2.6–3.0 s each), and the five
+  live comparisons at those two steps were left unexcused.
 - A settle timeout (level `settle`) records what that side was still waiting
   on, as `waitedOn` in `settleTimeouts` (every one, uncapped up to 1,000),
   `diffs` and `examples`: its busy queries and readers (`busy`, taken in the
