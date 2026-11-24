@@ -41,6 +41,8 @@ const ACCESS_TOKEN_COOKIE: &str = "macro-access-token";
 const API_KEY_USER_ID: &str = "macro|api-key@example.com";
 const VALID_USER_API_KEY: &str = "mak_valid";
 const MANAGER_API_KEY: &str = "mak_manager";
+const AGENT_API_KEY: &str = "mak_agent";
+const AGENT_USER_ID: &str = "macro|proof-1a2b3c@agents.macro.invalid";
 /// A Macro API token that signs an agent session's scope.
 const SCOPED_JWT: &str = "scoped";
 
@@ -128,6 +130,10 @@ impl MacroAuthorizationService for FakeAuthorizationService {
                         .expect("valid Macro user id")
                         .into_owned(),
                 }),
+            }),
+            AGENT_API_KEY => Ok(AuthorizedUserApiKey {
+                user_context: user_context(AGENT_USER_ID, Some(42)),
+                account_manager: None,
             }),
             "mak_unavailable" => Err(Report::new(MacroAuthorizationError::Unavailable)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
@@ -2303,47 +2309,11 @@ fn exported_attributes(
         .collect()
 }
 
-#[tokio::test]
-async fn the_request_span_records_the_verified_credential_and_an_opaque_principal() {
-    use opentelemetry::trace::TracerProvider as _;
-    use tracing::Instrument as _;
-    use tracing_subscriber::layer::SubscriberExt as _;
-
-    for (key, kind) in [
-        (VALID_USER_API_KEY, "user_api_key"),
-        (MANAGER_API_KEY, "account_manager"),
-    ] {
-        let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
-        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-            .with_simple_exporter(exporter.clone())
-            .build();
-        let subscriber = tracing_subscriber::registry()
-            .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
-        let _guard = tracing::subscriber::set_default(subscriber);
-        let (router, _) = test_router();
-
-        let (status, _) = send(&router, empty_body(user_api_key_request("/user", key)))
-            .instrument(tracing::info_span!("http.request"))
-            .await;
-        assert_eq!(status, StatusCode::OK);
-        provider.force_flush().expect("flush");
-
-        let attributes = exported_attributes(&exporter, "http.request");
-        assert_eq!(attributes[CREDENTIAL_ATTRIBUTE], kind, "{key}");
-        assert_eq!(
-            attributes[PRINCIPAL_ATTRIBUTE],
-            agent_credentials::telemetry_id(API_KEY_USER_ID),
-            "the same opaque id an agent's other telemetry uses"
-        );
-        assert!(
-            attributes.values().all(|value| !value.contains('@')),
-            "no attribute carries the account's email: {attributes:?}"
-        );
-    }
-}
-
-#[tokio::test]
-async fn a_refused_credential_records_no_principal() {
+/// Runs `request` through the test router inside an `http.request` span and
+/// returns that span's exported attributes.
+async fn request_span_attributes(
+    request: Request<Body>,
+) -> (StatusCode, std::collections::BTreeMap<String, String>) {
     use opentelemetry::trace::TracerProvider as _;
     use tracing::Instrument as _;
     use tracing_subscriber::layer::SubscriberExt as _;
@@ -2356,17 +2326,70 @@ async fn a_refused_credential_records_no_principal() {
         .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
     let _guard = tracing::subscriber::set_default(subscriber);
     let (router, _) = test_router();
-
-    let (status, _) = send(
-        &router,
-        empty_body(user_api_key_request("/user", "mak_invalid")),
-    )
-    .instrument(tracing::info_span!("http.request"))
-    .await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let (status, _) = send(&router, request)
+        .instrument(tracing::info_span!("http.request"))
+        .await;
     provider.force_flush().expect("flush");
+    (status, exported_attributes(&exporter, "http.request"))
+}
 
-    let attributes = exported_attributes(&exporter, "http.request");
+#[tokio::test]
+async fn the_request_span_records_the_verified_credential_and_the_opaque_fusion_id() {
+    for (key, kind) in [
+        (VALID_USER_API_KEY, "user_api_key"),
+        (MANAGER_API_KEY, "account_manager"),
+    ] {
+        let (status, attributes) =
+            request_span_attributes(empty_body(user_api_key_request("/user", key))).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(attributes[CREDENTIAL_ATTRIBUTE], kind, "{key}");
+        assert_eq!(attributes[PRINCIPAL_ATTRIBUTE], "fusion-user-id");
+        assert!(
+            !attributes.contains_key(AGENT_ATTRIBUTE),
+            "a person's account gets no agent id: {attributes:?}"
+        );
+        assert!(
+            attributes.values().all(|value| !value.contains('@')
+                && *value != agent_credentials::telemetry_id(API_KEY_USER_ID)),
+            "nothing derived from the account's email: {attributes:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn an_agent_teammates_request_also_records_its_agent_id() {
+    let (status, attributes) =
+        request_span_attributes(empty_body(user_api_key_request("/user", AGENT_API_KEY))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(attributes[CREDENTIAL_ATTRIBUTE], "user_api_key");
+    assert_eq!(
+        attributes[AGENT_ATTRIBUTE],
+        agent_credentials::telemetry_id(AGENT_USER_ID)[..16],
+        "the agent runtime's macro.agent.id"
+    );
+}
+
+#[tokio::test]
+async fn bot_credentials_record_the_bot_and_any_verified_acting_user() {
+    let (status, bare) = request_span_attributes(empty_body(bot_request("/bot", "bot-bare"))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(bare[CREDENTIAL_ATTRIBUTE], "bot");
+    assert_eq!(bare[BOT_ATTRIBUTE], BOT_ID.to_string());
+    assert!(!bare.contains_key(PRINCIPAL_ATTRIBUTE));
+
+    let (status, acting) =
+        request_span_attributes(empty_body(bot_request("/bot", "bot-acting"))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(acting[CREDENTIAL_ATTRIBUTE], "bot");
+    assert_eq!(acting[BOT_ATTRIBUTE], BOT_ID.to_string());
+    assert_eq!(acting[PRINCIPAL_ATTRIBUTE], "fusion-user-id");
+}
+
+#[tokio::test]
+async fn a_refused_credential_records_no_principal() {
+    let (status, attributes) =
+        request_span_attributes(empty_body(user_api_key_request("/user", "mak_invalid"))).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert!(!attributes.contains_key(CREDENTIAL_ATTRIBUTE));
     assert!(!attributes.contains_key(PRINCIPAL_ATTRIBUTE));
 }

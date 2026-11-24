@@ -45,6 +45,7 @@ where
         .await
         .map_err(bot_authorization_rejection)?;
 
+    super::record_verified_bot(&bot);
     Ok(Some(bot))
 }
 

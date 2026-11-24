@@ -11,11 +11,13 @@ axum = [
   "dep:model-error-response",
   "dep:serde",
   "dep:serde_json",
+  "dep:sha2",
+  "dep:tracing-opentelemetry",
 ]
 default = ["axum", "outbound"]
 local_auth = ["dep:macro_env_var"]
 outbound = ["dep:macro_auth"]
-postgres = ["dep:sqlx"]
+postgres = ["dep:sqlx", "dep:sha2"]
 
 [dependencies]
 axum = { workspace = true, optional = true }
@@ -32,11 +34,11 @@ model_user = { path = "../model_user" }
 rootcause = { workspace = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
-sha2 = { workspace = true }
+sha2 = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-tracing-opentelemetry = { workspace = true }
+tracing-opentelemetry = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

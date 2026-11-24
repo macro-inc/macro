@@ -99,12 +99,17 @@ the account, or changes its managers.
 - Locally (`local_auth`), a configured user stands in for an ambient cookie
   or none; an explicit user token is always the one used.
 - A valid principal not admitted by the chosen policy is a 403, not a 401.
-- Every user credential the Axum layer verifies (`authenticated_user`) sets
-  `auth.credential` (the `CredentialOrigin` kind) and `auth.principal_id`
-  (SHA-256 of the user id, as `agent_credentials::telemetry_id`) on the
-  current span, the request's. That is the service's own finding; a
-  caller's `traceparent` only says which trace the caller claims. Never
-  record the user id itself: an agent's carries an email.
+- Every credential the Axum layer verifies records on the current span (the
+  request's): `auth.credential` (the `CredentialOrigin` kind), and
+  `auth.principal_id`, the account's FusionAuth id (an opaque UUID; unset
+  when the credential carries none). An agent teammate's account (address
+  at `agents.macro.invalid`, `team_agents::AGENT_EMAIL_DOMAIN`) also gets
+  `macro.agent.id`, the first 16 digits of `agent_credentials::telemetry_id`,
+  the same as the agent runtime's. Bots add `auth.bot_id` (and the acting
+  user, if any), harnesses `auth.harness_id` and their acting user. That is
+  the service's own finding; a caller's `traceparent` only says which trace
+  the caller claims. Never record the user id, or a hash of a person's: it
+  is an email, and a guessable one.
 - A route whose response carries a new credential's secret refuses
   `is_program_run`, because a program's results reach the model: the
   bot-token, channel-scoped bot and user API key routes do. The header alone
