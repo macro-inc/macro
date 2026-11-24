@@ -104,6 +104,7 @@ impl World {
             kind,
             store: self.store.clone(),
             supported,
+            org_setups: HashMap::new(),
             overlays: Self::overlays(),
         }
     }

@@ -3609,9 +3609,50 @@
             "type": "string",
             "description": "The display name."
           },
+          "orgSetup": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CatalogOrgSetup",
+                "description": "Setup an admin of the user's organization must do at the vendor\nbefore the user connects it; absent when there is none."
+              }
+            ]
+          },
           "slug": {
             "type": "string",
             "description": "Its canonical slug."
+          }
+        }
+      },
+      "CatalogOrgSetup": {
+        "type": "object",
+        "description": "Setup an admin of the user's organization must do at the vendor.",
+        "required": ["summary", "steps", "settingsUrl", "required"],
+        "properties": {
+          "allowlistUrl": {
+            "type": ["string", "null"],
+            "description": "The URL the admin adds, when a step adds one."
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Connecting fails until this is done. Otherwise it works with less\naccess."
+          },
+          "settingsUrl": {
+            "type": "string",
+            "description": "Where the admin does it."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The steps, in order."
+          },
+          "summary": {
+            "type": "string",
+            "description": "One sentence on what the admin does and what happens without it."
           }
         }
       },

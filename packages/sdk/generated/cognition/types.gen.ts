@@ -227,10 +227,38 @@ export type CatalogApp = {
      * The display name.
      */
     name: string;
+    orgSetup?: null | CatalogOrgSetup;
     /**
      * Its canonical slug.
      */
     slug: string;
+};
+
+/**
+ * Setup an admin of the user's organization must do at the vendor.
+ */
+export type CatalogOrgSetup = {
+    /**
+     * The URL the admin adds, when a step adds one.
+     */
+    allowlistUrl?: string | null;
+    /**
+     * Connecting fails until this is done. Otherwise it works with less
+     * access.
+     */
+    required: boolean;
+    /**
+     * Where the admin does it.
+     */
+    settingsUrl: string;
+    /**
+     * The steps, in order.
+     */
+    steps: Array<string>;
+    /**
+     * One sentence on what the admin does and what happens without it.
+     */
+    summary: string;
 };
 
 /**

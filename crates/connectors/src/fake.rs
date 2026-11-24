@@ -8,6 +8,7 @@
 //! rename, remove) land in the same store and show in the next answer.
 
 use crate::domain::catalog::Overlays;
+use crate::domain::discovery::OrgSetup;
 use crate::domain::models::{ApiResponse, ConnectorId, ConnectorKey, ServerUrl, Surfaces};
 use crate::domain::ports::{
     GrantState, MacroConnectEnabledFlagReader, OverlayCatalog, Source, SourceKind,
@@ -111,6 +112,7 @@ pub struct FakeConnectors {
     store: SharedStore,
     pipedream_apps: HashSet<ConnectorId>,
     connect_apps: HashMap<ConnectorId, Surfaces>,
+    connect_org_setups: HashMap<ConnectorId, OrgSetup>,
     overlays: Vec<(ConnectorId, ServerUrl)>,
     flags: HashMap<MacroUserIdStr<'static>, Result<bool, String>>,
     held: Vec<(MacroUserIdStr<'static>, FakeConnection)>,
@@ -133,6 +135,16 @@ impl FakeConnectors {
     pub fn with_connect_app(mut self, slug: &str, api: bool) -> Self {
         self.connect_apps
             .insert(app(slug), Surfaces::new(true, api));
+        self
+    }
+
+    /// Macro Connect serves `slug` and lists `setup` as the admin setup it
+    /// needs.
+    #[cfg(test)]
+    pub(crate) fn with_connect_org_setup(mut self, slug: &str, setup: OrgSetup) -> Self {
+        self.connect_apps
+            .insert(app(slug), Surfaces::new(true, false));
+        self.connect_org_setups.insert(app(slug), setup);
         self
     }
 
@@ -199,6 +211,11 @@ impl FakeConnectors {
             kind,
             store: self.store.clone(),
             supported,
+            org_setups: if kind == SourceKind::Connect {
+                self.connect_org_setups.clone()
+            } else {
+                HashMap::new()
+            },
             overlays: overlays.clone(),
         };
         let pipedream_supported = pipedream_apps

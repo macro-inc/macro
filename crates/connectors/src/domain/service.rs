@@ -4,6 +4,7 @@
 //! hand.
 
 use crate::domain::catalog::{ConnectSupport, Overlays};
+use crate::domain::discovery::{OrgSetup, OrgSetups};
 use crate::domain::models::{
     AddedBy, ApiHandle, ApiRequest, ApiResponse, ConnectStep, Connector, ConnectorId, ConnectorKey,
     ConnectorsError, McpConnections, McpHandle, Permitted, Result, ServerUrl, Status, Surfaces,
@@ -536,6 +537,37 @@ fn refusal_error(report: rootcause::Report) -> ConnectorsError {
         SourceRefusal::Unsupported(ConnectorKey::App(app)) => ConnectorsError::UnknownApp(app),
         SourceRefusal::NonPublic(url) => ConnectorsError::NonPublicServer(url),
         SourceRefusal::EmptyName => ConnectorsError::EmptyName,
+    }
+}
+
+#[async_trait::async_trait]
+impl OrgSetups for Connectors {
+    #[tracing::instrument(name = "connectors.org_setups", skip_all, fields(apps = apps.len(), org_setups = tracing::field::Empty))]
+    async fn org_setups(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        apps: &[ConnectorId],
+    ) -> HashMap<ConnectorId, OrgSetup> {
+        let Some(connect) = self.source(SourceKind::Connect) else {
+            return HashMap::new();
+        };
+        let macro_connect_enabled =
+            MacroConnectEnabledFlag::from_read(self.inner.macro_connect_enabled.read(user).await);
+        // Only Connect lists admin setup. With the rollout on, Connect counts
+        // for every app it serves (`resolve::counted_source`), so its answer
+        // is the counted source's; off, it counts for none.
+        if macro_connect_enabled != MacroConnectEnabledFlag::On {
+            return HashMap::new();
+        }
+
+        let setups = connect
+            .org_setups(apps)
+            .await
+            .inspect_err(|error| tracing::warn!(error = ?error, "could not read Connect's admin setup; listing the catalog without it"))
+            .unwrap_or_default();
+        tracing::Span::current().record("org_setups", setups.len());
+
+        setups
     }
 }
 

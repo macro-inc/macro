@@ -7,12 +7,14 @@
 //! the service walks every source in one list (`Arc<dyn Source>`).
 
 use crate::domain::catalog::Overlays;
+use crate::domain::discovery::OrgSetup;
 use crate::domain::models::{
     AddedBy, ApiRequest, ApiResponse, ConnectStep, ConnectorId, ConnectorKey, ServerUrl, Surfaces,
     Upstream,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_toolset::McpServer;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Which source holds a connection. Only the resolver reads it.
@@ -121,6 +123,16 @@ pub(crate) trait Source: Send + Sync {
 
     /// Whether this source serves an app, and with which surfaces.
     async fn supports(&self, app: &ConnectorId) -> Result<Option<Surfaces>, rootcause::Report>;
+
+    /// The setup an admin of the user's organization must do at the vendor
+    /// before each of `apps` connects through this source; an app with none
+    /// is left out.
+    async fn org_setups(
+        &self,
+        _apps: &[ConnectorId],
+    ) -> Result<HashMap<ConnectorId, OrgSetup>, rootcause::Report> {
+        Ok(HashMap::new())
+    }
 
     /// Every user with an enabled connection to `app` here: the candidates a
     /// background sync resolves one by one.

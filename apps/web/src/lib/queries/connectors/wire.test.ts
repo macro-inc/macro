@@ -49,6 +49,7 @@ const CATALOG_PAGE = {
       description: null,
       iconUrl: null,
       categories: [],
+      orgSetup: null,
     },
   ],
   nextCursor: null,

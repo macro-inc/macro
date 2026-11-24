@@ -15,7 +15,7 @@
 //! Clients use the key as given and never build one, except
 //! `app/{slug}` from a catalog entry's slug.
 
-use crate::domain::discovery::CatalogApp;
+use crate::domain::discovery::{CatalogApp, OrgSetup};
 use crate::domain::models::{
     ConnectStep, Connector, ConnectorId, ConnectorKey, InvalidConnectorId, InvalidServerUrl,
     ServerUrl, Status,
@@ -334,6 +334,39 @@ pub struct CatalogAppResponse {
     pub icon_url: Option<String>,
     /// The directory's categories for it.
     pub categories: Vec<String>,
+    /// Setup an admin of the user's organization must do at the vendor
+    /// before the user connects it; absent when there is none.
+    pub org_setup: Option<OrgSetupResponse>,
+}
+
+/// Setup an admin of the user's organization must do at the vendor.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+#[schema(as = CatalogOrgSetup)]
+pub struct OrgSetupResponse {
+    /// One sentence on what the admin does and what happens without it.
+    pub summary: String,
+    /// The steps, in order.
+    pub steps: Vec<String>,
+    /// Where the admin does it.
+    pub settings_url: String,
+    /// Connecting fails until this is done. Otherwise it works with less
+    /// access.
+    pub required: bool,
+    /// The URL the admin adds, when a step adds one.
+    pub allowlist_url: Option<String>,
+}
+
+impl From<OrgSetup> for OrgSetupResponse {
+    fn from(setup: OrgSetup) -> Self {
+        Self {
+            summary: setup.summary,
+            steps: setup.steps,
+            settings_url: setup.settings_url,
+            required: setup.required,
+            allowlist_url: setup.allowlist_url,
+        }
+    }
 }
 
 impl From<CatalogApp> for CatalogAppResponse {
@@ -345,6 +378,7 @@ impl From<CatalogApp> for CatalogAppResponse {
             description: app.description,
             icon_url: app.icon_url,
             categories: app.categories,
+            org_setup: app.org_setup.map(OrgSetupResponse::from),
         }
     }
 }

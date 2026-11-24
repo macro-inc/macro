@@ -10,6 +10,7 @@ export {
 export {
   appConnectorKey,
   type CatalogApp,
+  type CatalogOrgSetup,
   type Connector,
   type ConnectorStatus,
   GITHUB_CONNECTOR_KEY,

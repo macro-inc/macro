@@ -6,6 +6,7 @@
  */
 import type { CatalogAppDescription } from './catalogAppDescription';
 import type { CatalogAppIconUrl } from './catalogAppIconUrl';
+import type { CatalogAppOrgSetup } from './catalogAppOrgSetup';
 
 /**
  * One connectable app.
@@ -21,6 +22,7 @@ export interface CatalogApp {
   key: string;
   /** The display name. */
   name: string;
+  orgSetup?: CatalogAppOrgSetup;
   /** Its canonical slug. */
   slug: string;
 }

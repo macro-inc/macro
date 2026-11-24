@@ -149,6 +149,8 @@ export function IntegrationListRow(props: {
   badge?: JSX.Element;
   kind: IntegrationKind;
   description: string;
+  /** Shown under the description, e.g. setup the user's admin must do. */
+  note?: JSX.Element;
   categories: string[];
   status: IntegrationStatus;
   statusLabel?: string;
@@ -218,6 +220,7 @@ export function IntegrationListRow(props: {
           >
             {props.description}
           </span>
+          {props.note}
         </div>
       </div>
       <div role="cell" class="hidden min-w-0 @[640px]/integrations:block">

@@ -26,6 +26,7 @@ fn catalog_app(slug: &str) -> CatalogApp {
         description: None,
         icon_url: None,
         categories: Vec::new(),
+        org_setup: None,
     }
 }
 

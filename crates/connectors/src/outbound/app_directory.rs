@@ -78,6 +78,8 @@ fn catalog_app(entry: CatalogEntry) -> Option<CatalogApp> {
         description: entry.description,
         icon_url: entry.icon_url,
         categories: entry.categories,
+        // The catalog adds the setup from the source that connects the app.
+        org_setup: None,
     })
 }
 

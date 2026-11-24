@@ -14,6 +14,7 @@ import { connectorKeys } from './keys';
 
 export type {
   CatalogApp,
+  CatalogOrgSetup,
   Connector,
   ConnectorStatus,
 } from '@service-cognition/generated/schemas';

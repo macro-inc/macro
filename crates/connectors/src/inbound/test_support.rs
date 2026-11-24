@@ -70,6 +70,7 @@ fn entry(slug: &str, name: &str) -> CatalogApp {
         description: Some(format!("{name} from the directory")),
         icon_url: None,
         categories: vec!["Productivity".to_owned()],
+        org_setup: None,
     }
 }
 

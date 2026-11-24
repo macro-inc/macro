@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::discovery::OrgSetup;
 use crate::domain::models::{ConnectorId, ServerUrl};
 use crate::fake::{FakeConnection, FakeConnectors};
 use crate::inbound::ConnectorChange;
@@ -500,6 +501,49 @@ async fn the_catalog_lists_apps_by_key() {
             "description": "Linear from the directory",
             "iconUrl": null,
             "categories": ["Productivity"],
+            "orgSetup": null,
         })
     );
+}
+
+/// The admin setup comes from the source that would connect the app: a
+/// user on Connect sees Connect's, anyone else nothing.
+#[tokio::test]
+async fn the_catalog_shows_the_admin_setup_of_the_source_that_counts() {
+    let flagged = user("flagged");
+    let fake = FakeConnectors::new()
+        .with_connect_org_setup(
+            "linear",
+            OrgSetup {
+                summary: "An admin allows it once.".to_owned(),
+                steps: vec!["Open settings.".to_owned(), "Add the URL.".to_owned()],
+                settings_url: "https://vendor.example/settings".to_owned(),
+                required: true,
+                allowlist_url: Some("https://connect.example/callback".to_owned()),
+            },
+        )
+        .with_macro_connect_enabled(&flagged);
+    let harness = harness(&fake);
+
+    let (status, page) = harness
+        .send("GET", "/connectors/catalog", "flagged", None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        page["apps"][0]["orgSetup"],
+        json!({
+            "summary": "An admin allows it once.",
+            "steps": ["Open settings.", "Add the URL."],
+            "settingsUrl": "https://vendor.example/settings",
+            "required": true,
+            "allowlistUrl": "https://connect.example/callback",
+        })
+    );
+    assert_eq!(page["apps"][1]["orgSetup"], Value::Null);
+
+    let (status, page) = harness
+        .send("GET", "/connectors/catalog", "owner", None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(page["apps"][0]["orgSetup"], Value::Null);
 }

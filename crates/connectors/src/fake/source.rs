@@ -2,6 +2,7 @@
 //! its own kind from, as the real sources share their stores.
 
 use crate::domain::catalog::Overlays;
+use crate::domain::discovery::OrgSetup;
 use crate::domain::models::{
     AddedBy, ApiRequest, ApiResponse, ConnectStep, ConnectorId, ConnectorKey, ServerUrl, Surfaces,
     Upstream,
@@ -110,6 +111,8 @@ pub(crate) struct FakeSource {
     pub(crate) store: SharedStore,
     /// The apps it serves and how.
     pub(crate) supported: HashMap<ConnectorId, Surfaces>,
+    /// The admin setup each app it serves needs, where one does.
+    pub(crate) org_setups: HashMap<ConnectorId, OrgSetup>,
     /// The overlay table, which decides what a native row is to.
     pub(crate) overlays: Overlays,
 }
@@ -202,6 +205,16 @@ impl Source for FakeSource {
 
     async fn supports(&self, app: &ConnectorId) -> Result<Option<Surfaces>, rootcause::Report> {
         Ok(self.supported.get(app).copied())
+    }
+
+    async fn org_setups(
+        &self,
+        apps: &[ConnectorId],
+    ) -> Result<HashMap<ConnectorId, OrgSetup>, rootcause::Report> {
+        Ok(apps
+            .iter()
+            .filter_map(|app| Some((app.clone(), self.org_setups.get(app)?.clone())))
+            .collect())
     }
 
     async fn holders(

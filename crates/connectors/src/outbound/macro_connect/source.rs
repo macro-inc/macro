@@ -1,6 +1,7 @@
 //! Macro Connect as a [`Source`].
 
 use crate::domain::catalog;
+use crate::domain::discovery::OrgSetup;
 use crate::domain::models::{
     ApiRequest, ApiResponse, ConnectStep, ConnectorId, ConnectorKey, Surfaces, Upstream,
 };
@@ -17,6 +18,7 @@ use mcp_toolset::McpServer;
 use rootcause::Report;
 use std::collections::HashMap;
 use std::sync::Arc;
+use url::Url;
 
 #[cfg(test)]
 mod test;
@@ -48,6 +50,25 @@ fn serves(entry: &wire::CatalogEntry, app: &ConnectorId) -> bool {
 fn surfaces(entry: &wire::CatalogEntry) -> Surfaces {
     let lists = |method: &str| entry.access.iter().any(|access| access == method);
     Surfaces::new(lists(ACCESS_MCP), lists(ACCESS_API))
+}
+
+/// Connect's admin setup for an app, as the catalog shows it; `None` when
+/// the page it points the admin to is not an `https` URL, which the web app
+/// would otherwise render as a link.
+fn org_setup(setup: wire::OrgSetup) -> Option<OrgSetup> {
+    let https = Url::parse(&setup.settings_url).is_ok_and(|url| url.scheme() == "https");
+    if !https {
+        tracing::warn!("skipping Connect admin setup whose settings page is not https");
+        return None;
+    }
+
+    Some(OrgSetup {
+        summary: setup.summary,
+        steps: setup.steps,
+        settings_url: setup.settings_url,
+        required: setup.required,
+        allowlist_url: setup.allowlist_url,
+    })
 }
 
 /// The catalog app a key names, or the refusal for a server added by URL.
@@ -184,6 +205,23 @@ impl Source for ConnectSource {
     #[tracing::instrument(skip(self), fields(app = %app), err)]
     async fn supports(&self, app: &ConnectorId) -> Result<Option<Surfaces>, Report> {
         Ok(self.entry(app).await?.as_ref().map(surfaces))
+    }
+
+    /// From Connect's catalog, cached: one read for every app.
+    async fn org_setups(
+        &self,
+        apps: &[ConnectorId],
+    ) -> Result<HashMap<ConnectorId, OrgSetup>, Report> {
+        let catalog = self.vendor.catalog().await?;
+
+        Ok(apps
+            .iter()
+            .filter_map(|app| {
+                let entry = catalog.iter().find(|entry| serves(entry, app))?;
+                let setup = org_setup(entry.org_setup.clone()?)?;
+                Some((app.clone(), setup))
+            })
+            .collect())
     }
 
     #[tracing::instrument(skip(self), fields(app = %app), err)]

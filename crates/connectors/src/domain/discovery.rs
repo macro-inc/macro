@@ -8,6 +8,7 @@
 use crate::domain::models::{ConnectorId, ConnectorKey, Result, Status};
 use crate::domain::service::McpConnectionsService;
 use macro_user_id::user_id::MacroUserIdStr;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -33,6 +34,26 @@ pub struct CatalogApp {
     pub icon_url: Option<String>,
     /// The directory's categories for it.
     pub categories: Vec<String>,
+    /// Setup an admin of the user's organization must do at the vendor
+    /// before the user connects it, from the source the user would connect
+    /// it through; `None` when there is none.
+    pub org_setup: Option<OrgSetup>,
+}
+
+/// Setup an admin of the user's organization must do at the vendor.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OrgSetup {
+    /// One sentence on what the admin does and what happens without it.
+    pub summary: String,
+    /// The steps, in order.
+    pub steps: Vec<String>,
+    /// Where the admin does it.
+    pub settings_url: String,
+    /// Connecting fails until this is done. Otherwise it works with less
+    /// access.
+    pub required: bool,
+    /// The URL the admin adds, when a step adds one.
+    pub allowlist_url: Option<String>,
 }
 
 /// One page of the catalog, most popular first.
@@ -98,6 +119,22 @@ pub(crate) trait AppDirectory: Send + Sync {
     ) -> Result<Vec<AppTool>, rootcause::Report>;
 }
 
+/// The admin setup each app needs for a user, from the source that would
+/// connect it for them.
+///
+/// Object-safe (`#[async_trait]`) so [`Catalog`] keeps it behind an `Arc`.
+#[async_trait::async_trait]
+pub(crate) trait OrgSetups: Send + Sync {
+    /// The setup each of `apps` needs before `user` connects it; an app
+    /// with none is left out. A source that cannot answer is left out too:
+    /// the catalog still lists the app.
+    async fn org_setups(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        apps: &[ConnectorId],
+    ) -> HashMap<ConnectorId, OrgSetup>;
+}
+
 /// Browsing the catalog of connectable apps.
 pub trait ConnectorCatalogService: Send + Sync + 'static {
     /// A page of apps matching `search` by name, or of every app. `limit`
@@ -123,6 +160,7 @@ pub trait ConnectorCatalogService: Send + Sync + 'static {
 pub struct Catalog<C> {
     directory: Arc<dyn AppDirectory>,
     connections: C,
+    org_setups: Arc<dyn OrgSetups>,
 }
 
 impl<C: Clone> Clone for Catalog<C> {
@@ -130,16 +168,31 @@ impl<C: Clone> Clone for Catalog<C> {
         Self {
             directory: self.directory.clone(),
             connections: self.connections.clone(),
+            org_setups: self.org_setups.clone(),
         }
     }
 }
 
 impl<C> Catalog<C> {
-    /// The catalog over `directory`, asking `connections` for statuses.
-    pub(crate) fn new(directory: Arc<dyn AppDirectory>, connections: C) -> Self {
+    /// The catalog over `directory`, asking `connections` for statuses and
+    /// for the admin setup each app needs.
+    pub(crate) fn new(directory: Arc<dyn AppDirectory>, connections: C) -> Self
+    where
+        C: OrgSetups + Clone + 'static,
+    {
         Self {
             directory,
+            org_setups: Arc::new(connections.clone()),
             connections,
+        }
+    }
+
+    /// `apps` with the admin setup each needs for `user`.
+    async fn with_org_setups(&self, user: &MacroUserIdStr<'static>, apps: &mut [CatalogApp]) {
+        let ids: Vec<ConnectorId> = apps.iter().map(|app| app.id.clone()).collect();
+        let mut setups = self.org_setups.org_setups(user, &ids).await;
+        for app in apps {
+            app.org_setup = setups.remove(&app.id);
         }
     }
 }
@@ -155,8 +208,9 @@ impl<C: McpConnectionsService> ConnectorCatalogService for Catalog<C> {
     ) -> Result<CatalogPage> {
         let search = search.map(str::trim).filter(|search| !search.is_empty());
         let limit = limit.unwrap_or(DEFAULT_PAGE_SIZE).clamp(1, MAX_PAGE_SIZE);
-        let page = self.directory.search(user, search, cursor, limit).await?;
+        let mut page = self.directory.search(user, search, cursor, limit).await?;
         tracing::Span::current().record("apps", page.apps.len());
+        self.with_org_setups(user, &mut page.apps).await;
 
         Ok(page)
     }
@@ -170,10 +224,13 @@ impl<C: McpConnectionsService> ConnectorCatalogService for Catalog<C> {
         let Some(entry) = self.directory.retrieve(user, app).await? else {
             return Ok(None);
         };
-        let (connections, tools) = futures::join!(
+        let mut entry = [entry];
+        let (connections, tools, ()) = futures::join!(
             self.connections.connections(user),
             self.directory.tools(user, app),
+            self.with_org_setups(user, &mut entry),
         );
+        let [entry] = entry;
         let status = connections?.status(&ConnectorKey::App(entry.id.clone()));
         let mut tools = tools?;
         let tools_truncated = tools.len() > MAX_TOOLS;

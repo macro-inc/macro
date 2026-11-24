@@ -10,6 +10,7 @@ import { type Accessor, createSignal, For, Show } from 'solid-js';
 import { ConnectAction } from '../integration-ui';
 import { connectorDescription, ImportAction } from './import-action';
 import { IntegrationListRow } from './integrations-list';
+import { OrgSetupNote } from './org-setup-note';
 
 /** The directory's categories for an app, at most two. */
 function catalogCategories(entry: CatalogApp): string[] {
@@ -106,6 +107,11 @@ function CatalogRow(props: { entry: CatalogApp }) {
       name={name()}
       kind="mcp"
       description={connectorDescription(props.entry.slug, name())}
+      note={
+        <Show when={props.entry.orgSetup}>
+          {(setup) => <OrgSetupNote setup={setup()} />}
+        </Show>
+      }
       categories={catalogCategories(props.entry)}
       status="available"
     >

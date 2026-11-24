@@ -22,7 +22,7 @@ use connectors::inbound::axum_router::{self as connectors_api};
 use connectors::inbound::callbacks::{self as connectors_callbacks};
 use connectors::inbound::dto::{
     AddServerRequest, CatalogAppResponse, CatalogPageResponse, ConnectStepResponse, ConnectorKind,
-    ConnectorResponse, ConnectorStatus, ConnectorTarget, UpdateConnectorRequest,
+    ConnectorResponse, ConnectorStatus, ConnectorTarget, OrgSetupResponse, UpdateConnectorRequest,
 };
 use image_generation::inbound::axum_router::{self as image_generation_api};
 use import::inbound::axum_router::{self as import_api, RunImportRequest};
@@ -298,6 +298,7 @@ use utoipa::OpenApi;
                 UpdateConnectorRequest,
                 CatalogPageResponse,
                 CatalogAppResponse,
+                OrgSetupResponse,
                 model_error_response::ErrorResponse,
             ),
         ),

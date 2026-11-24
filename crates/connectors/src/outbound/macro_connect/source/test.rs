@@ -29,6 +29,7 @@ fn entry(id: &str, pipedream_app_slugs: &[&str], access: &[&str]) -> wire::Catal
             .iter()
             .map(|slug| (*slug).to_owned())
             .collect(),
+        org_setup: None,
     }
 }
 
@@ -246,6 +247,55 @@ async fn supports_reads_the_catalog(pool: PgPool) {
         Some(Surfaces::new(true, false))
     );
     assert_eq!(connect.supports(&app("linear")).await.unwrap(), None);
+}
+
+/// An app's admin setup is the one its catalog entry lists, under the slugs
+/// Macro addresses it by; one whose settings page is not `https` is left out.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn org_setups_read_the_catalog(pool: PgPool) {
+    let setup = |settings_url: &str| wire::OrgSetup {
+        summary: "An admin allows it once.".to_owned(),
+        steps: vec!["Open settings.".to_owned()],
+        settings_url: settings_url.to_owned(),
+        required: true,
+        allowlist_url: Some("https://connect.example/callback".to_owned()),
+    };
+    let mut vendor = FakeConnect::new(Vec::new());
+    vendor.catalog = Arc::new(
+        vendor
+            .catalog
+            .iter()
+            .cloned()
+            .map(|mut entry| {
+                entry.org_setup = match entry.id.as_str() {
+                    "slack" => Some(setup("https://slack.example/admin")),
+                    "acme" => Some(setup("javascript:alert(1)")),
+                    _ => None,
+                };
+                entry
+            })
+            .collect(),
+    );
+    let connect = source(pool, Arc::new(vendor), Arc::default());
+
+    let setups = connect
+        .org_setups(&[app("slack_v2"), app("granola"), app("acme"), app("linear")])
+        .await
+        .unwrap();
+
+    assert_eq!(
+        setups,
+        HashMap::from([(
+            app("slack_v2"),
+            OrgSetup {
+                summary: "An admin allows it once.".to_owned(),
+                steps: vec!["Open settings.".to_owned()],
+                settings_url: "https://slack.example/admin".to_owned(),
+                required: true,
+                allowlist_url: Some("https://connect.example/callback".to_owned()),
+            }
+        )])
+    );
 }
 
 /// Completing records Connect's active connection, takes the row Pipedream
