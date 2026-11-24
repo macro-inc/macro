@@ -373,7 +373,9 @@ encrypts the secret before calling it.
   digest of that key, so subscribing again refreshes the row in place: a new
   expiry and secret, the same filter. Rows expire (`expires_at`; default 1 h,
   1 min to 24 h) and are deleted outright on unsubscribe. Expired rows stop
-  matching at once and are deleted by `McpSubscriptionSweeper`, which
+  matching at once (a delivery still queued when the same key subscribes
+  again, before the sweep deletes the row, is sent) and are deleted
+  by `McpSubscriptionSweeper`, which
   `document_storage_service` runs every minute (batches of 500, the limit
   written into the SQL so a generic plan stops at it, at most 20 per round,
   `FOR UPDATE SKIP LOCKED` so replicas share it). A user holds at most 50 live
