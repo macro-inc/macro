@@ -193,7 +193,8 @@ pub(crate) async fn run(
         if let Err(end) = send(sink, &cancel, method, params).await {
             return (end, stats);
         }
-        // Counted once sent: a send cancelled while pending delivered nothing.
+        // Counted once the transport confirms the send; one cancelled while
+        // pending is not counted, though rmcp may still write it.
         if method == EVENT_NOTIFICATION {
             stats.delivered += 1;
         }
