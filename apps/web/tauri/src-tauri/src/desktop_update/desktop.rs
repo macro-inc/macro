@@ -372,13 +372,14 @@ async fn check<R: Runtime>(
         .await
         .map_err(CheckError::Check)?
     else {
-        report(app, coordinator, timing, Outcome::UpToDate);
+        // A ready update installs as before the feed was checked again.
         if ready.is_some() {
             return Ok(true);
         }
         // A saved download is for a version this app already runs, or one
         // the feed withdrew.
         remove_saved(store);
+        report(app, coordinator, timing, Outcome::UpToDate);
         publish(app, coordinator, Status::Idle);
         return Ok(true);
     };
@@ -407,7 +408,12 @@ async fn check<R: Runtime>(
         return Ok(true);
     }
     let version = update.version.clone();
-    if ready.as_deref() == Some(version.as_str()) {
+    // Only a newer release replaces a ready update, so a feed rolled back to
+    // an older one never trades it for that.
+    if ready
+        .as_deref()
+        .is_some_and(|ready| !is_newer(&version, ready))
+    {
         return Ok(true);
     }
     report(
@@ -442,17 +448,6 @@ async fn check<R: Runtime>(
             download_ms: duration_ms(download_started.elapsed()),
             error,
         })?;
-    report(
-        app,
-        coordinator,
-        timing,
-        Outcome::Downloaded {
-            target_version: version.clone(),
-            download_ms: duration_ms(download_started.elapsed()),
-            download_bytes: downloaded.bytes,
-            resumed_bytes: downloaded.resumed_bytes,
-        },
-    );
     {
         let mut state = coordinator
             .state
@@ -480,10 +475,33 @@ async fn check<R: Runtime>(
             },
         );
     }
+    report(
+        app,
+        coordinator,
+        timing,
+        Outcome::Downloaded {
+            target_version: version.clone(),
+            download_ms: duration_ms(download_started.elapsed()),
+            download_bytes: downloaded.bytes,
+            resumed_bytes: downloaded.resumed_bytes,
+        },
+    );
     app.emit(EVENT, Status::Ready { version })
         .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update ready"))
         .ok();
     Ok(true)
+}
+
+/// Whether `offered` is a later version than `ready`. A version that doesn't
+/// parse never replaces a ready update.
+fn is_newer(offered: &str, ready: &str) -> bool {
+    match (
+        semver::Version::parse(offered),
+        semver::Version::parse(ready),
+    ) {
+        (Ok(offered), Ok(ready)) => offered > ready,
+        _ => false,
+    }
 }
 
 fn remove_saved(store: &Store) {

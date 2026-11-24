@@ -343,6 +343,27 @@ async fn a_failed_newer_download_keeps_the_ready_update() {
 }
 
 #[tokio::test]
+async fn a_feed_rolled_back_below_the_ready_update_keeps_it() {
+    let directory = tempfile::tempdir().unwrap();
+    let coordinator = Coordinator::new(true, "1.0.0".into());
+    check_again(&coordinator, directory.path(), "99.0.0", Serve::Signed).await;
+
+    for offered in ["98.0.0", "0.0.0"] {
+        let run = check_again(&coordinator, directory.path(), offered, Serve::Signed).await;
+        assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
+        assert_eq!(
+            run.status,
+            Status::Ready {
+                version: "99.0.0".into()
+            }
+        );
+        assert!(run.outcomes.is_empty());
+        assert!(run.artifact_requests.is_empty());
+        assert!(run.store.read_verified(&run.signature).is_ok());
+    }
+}
+
+#[tokio::test]
 async fn a_ready_update_offered_again_stays_ready() {
     let directory = tempfile::tempdir().unwrap();
     let coordinator = Coordinator::new(true, "1.0.0".into());
