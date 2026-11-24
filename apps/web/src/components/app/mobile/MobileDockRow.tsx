@@ -6,7 +6,6 @@ import { t } from '@app/lib/i18n';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { triggerFocusInput } from '@core/directive/focusInput';
-import { hapticImpact } from '@core/mobile/haptics';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { UnreadCount } from '@entity/components/UnreadCount';
 import { UnreadIndicator } from '@entity/components/UnreadIndicator';
@@ -238,7 +237,6 @@ function MobileNavigationDockRow(props: { vertical?: boolean }) {
         to,
         dockViews().map((view) => view.id)
       );
-      hapticImpact('light');
     } finally {
       span.end();
     }

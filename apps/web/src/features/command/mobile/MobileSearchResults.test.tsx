@@ -91,7 +91,6 @@ vi.mock('@components/app/mobile/use-mobile-nav', () => ({
   useForegroundMobileView: () => () => 'search',
   useMobileNavNavigate: () => vi.fn(),
 }));
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => mocks.accountId,
   useIsAuthenticated: () => mocks.authenticated,

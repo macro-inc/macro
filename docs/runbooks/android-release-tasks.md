@@ -49,7 +49,7 @@ Make everyday composing and file workflows behave correctly on Android across me
 Scope:
 - Implement native IME/window-inset events; prevent double keyboard-height subtraction; update safe areas on rotation, window resizing, and navigation-mode changes.
 - Validate focus, caret visibility, selection, clipboard menus, toolbar/sheet positioning, and iOS-specific cursor-scroll behavior currently applied to all native mobile platforms.
-- Integrate system/predictive Back with keyboard, overlays, nested navigation, and unsent drafts; register Android haptics and handle unsupported cases.
+- Integrate system/predictive Back with keyboard, overlays, nested navigation, and unsent drafts.
 - Implement inbound SEND/SEND_MULTIPLE sharing for text, URLs, images, and files, with safe `content://` staging, multiple attachments, cleanup, cold starts, and authentication detours.
 - Verify existing WebView file-input fallbacks before adding Photo Picker/Storage Access Framework adapters. Complete clipboard-image handling, authenticated/Blob downloads, save/export/open, and outgoing sharing where needed.
 - Test Gboard/Samsung Keyboard, composition/non-Latin input, emoji/dictation, large files/cloud providers, TalkBack, large text, and supported tablet/foldable layouts. Remove TV advertising unless intentionally supported.

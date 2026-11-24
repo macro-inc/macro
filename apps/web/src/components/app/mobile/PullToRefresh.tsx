@@ -1,5 +1,4 @@
 import { toast } from '@core/component/Toast/Toast';
-import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -189,9 +188,7 @@ export function PullToRefresh(props: {
       (1 - OVERDRAG_RESISTANCE) *
         OVERDRAG_FADE *
         (1 - Math.exp(-over / OVERDRAG_FADE));
-    const wasArmed = pull() >= PULL_THRESHOLD;
     setPull(damped);
-    if (damped >= PULL_THRESHOLD !== wasArmed) hapticImpact('light');
   };
 
   const onTouchEnd = () => {

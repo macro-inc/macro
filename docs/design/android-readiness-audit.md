@@ -100,11 +100,11 @@ There is also a concrete configuration mismatch to resolve: [lib.rs](../../apps/
 
 **Done when:** attachments and exports work across chat, email, documents, and AI, including files originating from Downloads and cloud providers.
 
-### 10. Integrate system Back, haptics, and Android UI behavior — P1, small/medium
+### 10. Integrate system Back and Android UI behavior — P1, small/medium
 
-**Confirmed:** the pinned Tauri Android activity has default WebView-history Back behavior. No app listener for its `back-button` API was found; application drawers, overlays, and split navigation need an explicit behavior review. [Haptic calls](../../apps/web/src/lib/core/mobile/haptics.ts) run for Tauri, but [native plugin registration](../../apps/web/tauri/src-tauri/src/lib.rs) places haptics inside the iOS-only block.
+**Confirmed:** the pinned Tauri Android activity has default WebView-history Back behavior. No app listener for its `back-button` API was found; application drawers, overlays, and split navigation need an explicit behavior review.
 
-**Do:** define/test Back priority (IME, overlay/sheet, nested screen, top-level exit), gesture/predictive Back, and unsent-draft preservation; use the existing Tauri mechanism where sufficient. Register haptics on Android and handle unsupported/error cases. Verify notification prompts/settings wording, TalkBack, large text, contrast, touch targets, rotation, tablets/foldables, split-screen, and external keyboards. Decide supported form factors explicitly; the scaffold also advertises a TV launcher category that should be removed unless intentionally supported.
+**Do:** define/test Back priority (IME, overlay/sheet, nested screen, top-level exit), gesture/predictive Back, and unsent-draft preservation; use the existing Tauri mechanism where sufficient. Verify notification prompts/settings wording, TalkBack, large text, contrast, touch targets, rotation, tablets/foldables, split-screen, and external keyboards. Decide supported form factors explicitly; the scaffold also advertises a TV launcher category that should be removed unless intentionally supported.
 
 **Done when:** normal Android navigation never unexpectedly exits a compose flow or strands an overlay, and supported layouts remain usable at changed window/font sizes.
 

@@ -56,7 +56,6 @@ vi.mock('@app/features/crm/creation-adapter', () => ({
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: true }),
 }));
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@components/app/mobile/use-mobile-nav', () => ({
   useForegroundMobileView: () => () =>
     mocks.viewAccessor ? mocks.viewAccessor() : mocks.view,

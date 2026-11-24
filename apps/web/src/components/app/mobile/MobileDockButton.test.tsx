@@ -1,4 +1,3 @@
-import { hapticImpact } from '@core/mobile/haptics';
 import {
   cleanup,
   fireEvent,
@@ -11,7 +10,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MobileDockButton } from './MobileDockButton';
 import { MobileDrawer } from './MobileDrawer';
 
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@ui', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
   Layer: (props: ParentProps) => props.children,
@@ -66,13 +64,11 @@ describe('mobile dock activation', () => {
     (pointerType) => {
       const { activate, button, press } = setup();
       expect(press(pointerType).defaultPrevented).toBe(false);
-      expect(hapticImpact).not.toHaveBeenCalled();
       expect(activate).not.toHaveBeenCalled();
       fireEvent.pointerUp(button);
       expect(activate).not.toHaveBeenCalled();
       fireEvent.click(button, { detail: 1 });
       expect(activate).toHaveBeenCalledTimes(1);
-      expect(hapticImpact).not.toHaveBeenCalled();
       press(pointerType);
       expect(activate).toHaveBeenCalledTimes(1);
     }

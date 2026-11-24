@@ -1,5 +1,4 @@
 import { SWIPE_EDGE_THRESHOLD } from '@components/app/split-layout/mobile/createMobileSplitMotion';
-import { hapticImpact } from '@core/mobile/haptics';
 import { cn } from '@ui';
 import {
   type Accessor,
@@ -461,7 +460,6 @@ export function SwipableRowProvider(
 
       if (thesholdCrossed) {
         if (phase !== 'threshold') {
-          hapticImpact('light');
           setState(touchState.id, {
             direction: dx > 0 ? 'right' : 'left',
             phase: 'threshold',
@@ -469,9 +467,6 @@ export function SwipableRowProvider(
         }
       } else {
         if (phase !== 'dragging') {
-          if (phase === 'threshold') {
-            hapticImpact('light');
-          }
           setState(touchState.id, {
             direction: dx > 0 ? 'right' : 'left',
             phase: 'dragging',

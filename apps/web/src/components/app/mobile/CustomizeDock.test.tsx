@@ -1,4 +1,3 @@
-import { hapticImpact } from '@core/mobile/haptics';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -7,7 +6,6 @@ import { MobileDrawer } from './MobileDrawer';
 import type { MobileDockView } from './mobile-dock-views';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@core/mobile/virtualKeyboard', () => ({
   virtualKeyboardVisible: () => false,
 }));
@@ -95,7 +93,6 @@ it('drags immediately across the menu/dock boundary without a hold', () => {
   fireEvent.touchEnd(handle, { touches: [], changedTouches: [touch(128)] });
   expect(onMove).toHaveBeenCalledExactlyOnceWith(2, 0);
   expect(views()[0].id).toBe('tasks');
-  expect(hapticImpact).toHaveBeenCalledExactlyOnceWith('light');
   expect(screen.getByRole('status').textContent).toContain('in dock');
 });
 
@@ -136,7 +133,6 @@ it('cleans up a pending handle touch when the drawer unmounts', () => {
   cleanup();
   vi.advanceTimersByTime(500);
   expect(onMove).not.toHaveBeenCalled();
-  expect(hapticImpact).not.toHaveBeenCalled();
 });
 
 it.each(['touchcancel', 'escape', 'blur', 'multitouch'])(
@@ -152,18 +148,16 @@ it.each(['touchcancel', 'escape', 'blur', 'multitouch'])(
         touches: [touch(248), { ...touch(150), identifier: 2 }],
       });
     vi.advanceTimersByTime(350);
-    expect(hapticImpact).not.toHaveBeenCalled();
     expect(fireEvent.touchMove(handle, { touches: [touch(128)] })).toBe(true);
     fireEvent.touchEnd(handle, { touches: [], changedTouches: [touch(128)] });
     expect(onMove).not.toHaveBeenCalled();
   }
 );
 
-it('keeps tap and small finger movements from reordering or firing haptics', () => {
+it('keeps tap and small finger movements from reordering', () => {
   const { handle, onMove } = mount();
   fireEvent.touchStart(handle, { touches: [touch(248)] });
   fireEvent.touchMove(handle, { touches: [touch(250)] });
   fireEvent.touchEnd(handle, { touches: [], changedTouches: [touch(250)] });
   expect(onMove).not.toHaveBeenCalled();
-  expect(hapticImpact).not.toHaveBeenCalled();
 });

@@ -3,8 +3,6 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SwipableRow, SwipableRowProvider } from './SwipableRow';
 
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: () => {} }));
-
 beforeEach(() => {
   vi.useFakeTimers();
   // jsdom has no layout; give rows a phone's width so a short drag does not

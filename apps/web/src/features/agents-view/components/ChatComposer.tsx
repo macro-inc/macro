@@ -21,7 +21,6 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { toast } from '@core/component/Toast/Toast';
-import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -259,7 +258,6 @@ export function ChatComposer(props: {
     const attached = attachments();
     props.onDraftChange('');
     editor.controls.clear();
-    hapticImpact('light');
     props.onSend(prompt, attached);
   };
 

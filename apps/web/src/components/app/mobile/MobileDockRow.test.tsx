@@ -39,7 +39,6 @@ vi.mock('@core/constant/SettingsState', () => ({
 vi.mock('@core/directive/focusInput', () => ({
   triggerFocusInput: (target: () => HTMLElement | null) => target()?.focus(),
 }));
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@core/mobile/virtualKeyboard', () => ({
   virtualKeyboardVisible: () => false,
 }));

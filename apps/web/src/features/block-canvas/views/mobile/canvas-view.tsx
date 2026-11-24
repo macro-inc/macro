@@ -1,5 +1,4 @@
 import { makePersistedState } from '@app/lib/persistence';
-import { hapticImpact } from '@core/mobile/haptics';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { selectAllCommand } from '@macro-inc/graphics';
@@ -209,7 +208,6 @@ function MobileCanvasLayout() {
   const longPress = () => {
     if (state.tool() !== 'select' && state.tool() !== 'pan') return;
     return (point: { x: number; y: number }) => {
-      hapticImpact('medium');
       view.selectAt(point.x, point.y, LONG_PRESS_REACH);
       setPressedInside(itemInsideSelectedGroup(point));
       setActions('long-press');

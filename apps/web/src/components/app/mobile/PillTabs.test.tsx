@@ -1,4 +1,3 @@
-import { hapticImpact } from '@core/mobile/haptics';
 import {
   cleanup,
   fireEvent,
@@ -11,7 +10,6 @@ import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PillTabs } from './PillTabs';
 
-vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 vi.mock('@core/mobile/virtualKeyboard', () => ({
   virtualKeyboardVisible: () => false,
@@ -105,7 +103,6 @@ describe('pill overflow drawer', () => {
       fireEvent.click(within(drawer).getByRole('button', { name }));
       expect(onChange).toHaveBeenCalledExactlyOnceWith(selectedValue);
       expect(value()).toBe(selectedValue);
-      expect(hapticImpact).not.toHaveBeenCalled();
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
       expect(screen.getByRole('button', { name, pressed: true })).toBeTruthy();
       fireEvent.click(trigger, { detail: 0 });
@@ -175,7 +172,6 @@ describe.each([true, false])(
       fireEvent.touchEnd(button, { touches: [] });
       expect(onContextMenu).not.toHaveBeenCalled();
       expect(onChange).not.toHaveBeenCalled();
-      expect(hapticImpact).not.toHaveBeenCalled();
     });
 
     it('opens context actions without changing the selected tab', () => {

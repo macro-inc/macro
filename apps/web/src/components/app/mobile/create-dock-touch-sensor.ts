@@ -1,4 +1,3 @@
-import { hapticImpact } from '@core/mobile/haptics';
 import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import { onCleanup, onMount } from 'solid-js';
 
@@ -43,7 +42,6 @@ export function createDockTouchSensor(onCancel: () => void) {
       if (state.active.sensor) return cancel();
       actions.sensorStart(id, { x: gesture.x, y: gesture.y });
       actions.dragStart(gesture.draggableId);
-      hapticImpact('light');
     }
     actions.sensorMove({ x: touch.clientX, y: touch.clientY });
   };
