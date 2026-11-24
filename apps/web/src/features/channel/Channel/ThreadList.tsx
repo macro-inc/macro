@@ -937,6 +937,8 @@ export function ThreadList(props: ThreadListProps) {
       <CustomScrollbar
         scrollContainer={scrollEl}
         watchContent
+        // The bar runs between the floating header and the composer.
+        insets={insets()}
         onScrollIntent={(delta) => {
           scrollCompensation?.finish();
           scrollIntent.markUserIntent(delta > 0 ? 'down' : 'up');
