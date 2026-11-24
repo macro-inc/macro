@@ -1434,7 +1434,9 @@ describe('CoordinatorRouter', () => {
       tabId: 'tab-a',
       visible: false,
     });
-    expect(router.snapshot()?.state.kind).toBe('draining');
+    await vi.waitFor(() =>
+      expect(router.snapshot()?.state.kind).toBe('draining')
+    );
     expect(messagesOfKind(engine, 'drain-engine')).toHaveLength(1);
 
     ask(2_000);
@@ -2285,6 +2287,89 @@ describe('CoordinatorRouter', () => {
     }
   );
 
+  it('drains a hidden owner only once it stayed hidden for a second', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      verifyOwnerLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    const show = (visible: boolean) =>
+      router.handleTabMessage(tabA as CoordinatorMessagePort, {
+        ...version,
+        kind: 'tab-visibility',
+        tabId: 'tab-a',
+        visible,
+      });
+
+    for (let looks = 0; looks < 3; looks += 1) {
+      await show(false);
+      await vi.advanceTimersByTimeAsync(999);
+      await show(true);
+      await vi.advanceTimersByTimeAsync(400);
+    }
+    expect(router.snapshot()?.state.kind).toBe('active');
+    expect(messagesOfKind(tabB, 'cache-read-availability')).toEqual([]);
+
+    await show(false);
+    await vi.advanceTimersByTimeAsync(500);
+    // Neither a repeated report nor another page starts the second over.
+    await show(false);
+    await register(router, new FakePort(), 'tab-c');
+    await vi.advanceTimersByTimeAsync(499);
+    expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(messagesOfKind(engine, 'drain-engine')).toHaveLength(1);
+    expect(router.snapshot()?.state.kind).toBe('draining');
+  });
+
+  it('forgets the second of an owner that ends while hidden', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      verifyOwnerLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    const visibility = (port: FakePort, tabId: string, visible: boolean) =>
+      router.handleTabMessage(port as CoordinatorMessagePort, {
+        ...version,
+        kind: 'tab-visibility',
+        tabId,
+        visible,
+      });
+    await visibility(tabA, 'tab-a', false);
+    await vi.advanceTimersByTimeAsync(900);
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'navigation-departure',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'pagehide',
+    });
+    const nextEngine = new FakePort();
+    await attach(router, tabB, 'tab-b', 2, nextEngine);
+    ready(nextEngine, 'tab-b', 2, 'opened-existing');
+    await visibility(tabB, 'tab-b', false);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(messagesOfKind(nextEngine, 'drain-engine')).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(messagesOfKind(nextEngine, 'drain-engine')).toHaveLength(1);
+  });
+
   describe('when a drain does not end', () => {
     async function drainOwner(
       options: {
@@ -2297,6 +2382,7 @@ describe('CoordinatorRouter', () => {
       const router = new CoordinatorRouter({
         heartbeatIntervalMs: 5,
         heartbeatTimeoutMs: 7,
+        hideGraceMs: 1,
         verifyTabLockHeld: async () => true,
         verifyOwnerLockHeld: options.lockHeld ?? (async () => true),
         watchTabLock: () => () => {},
@@ -2317,6 +2403,7 @@ describe('CoordinatorRouter', () => {
         });
       await options.wait?.();
       await show('tab-a', tabA, false);
+      await vi.advanceTimersByTimeAsync(1);
       expect(router.snapshot()?.state.kind).toBe('draining');
       return { router, tabA, tabB, engine, show };
     }
@@ -2755,6 +2842,7 @@ describe('CoordinatorRouter', () => {
 
   it('drops a page that navigates away before it knows its epoch ended', async () => {
     const router = new CoordinatorRouter({
+      hideGraceMs: 0,
       verifyTabLockHeld: async () => true,
       watchTabLock: () => () => {},
     });
@@ -2771,6 +2859,9 @@ describe('CoordinatorRouter', () => {
         visible,
       });
     await visibility(false);
+    await vi.waitFor(() =>
+      expect(router.snapshot()?.state.kind).toBe('draining')
+    );
     engine.receive({
       ...version,
       kind: 'engine-drained',

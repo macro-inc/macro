@@ -80,6 +80,7 @@ export interface CoordinatorRouterOptions {
   activationTimeoutMs?: number;
   heartbeatIntervalMs?: number;
   heartbeatTimeoutMs?: number;
+  hideGraceMs?: number;
   handoffReadTimeoutMs?: number;
   verifyTabLockHeld?: (lockName: string) => Promise<boolean>;
   verifyOwnerLockHeld?: (lockName: string) => Promise<boolean>;
@@ -130,6 +131,9 @@ const DEFAULT_HEARTBEAT_INTERVAL_MS = 2_000;
 /** How often to look for a silent owner's page when looking fails. */
 const MAX_PAGE_PROBES = 3;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
+/** How long an owner whose page is hidden keeps serving. Looking at another tab
+ * for less is no reason to move the engine. */
+const DEFAULT_HIDE_GRACE_MS = 1_000;
 /** How often a drain's engine is looked for, a heartbeat timeout apart, before
  * the drain is cut short. */
 const MAX_DRAIN_CHECKS = 3;
@@ -251,6 +255,7 @@ export class CoordinatorRouter {
   private heartbeatIntervalTimer: ReturnType<typeof setTimeout> | undefined;
   private heartbeatTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
   private drain: DrainWatch | undefined;
+  private hideTimer: ReturnType<typeof setTimeout> | undefined;
   private nextHeartbeatId = 1;
   private pendingHeartbeat:
     | { ownerEpoch: number; heartbeatId: number }
@@ -269,6 +274,7 @@ export class CoordinatorRouter {
   private readonly activationTimeoutMs: number;
   private readonly heartbeatIntervalMs: number;
   private readonly heartbeatTimeoutMs: number;
+  private readonly hideGraceMs: number;
   private readonly verifyTabLockHeld: (lockName: string) => Promise<boolean>;
   private readonly verifyOwnerLockHeld: (lockName: string) => Promise<boolean>;
   private readonly queryHeldLockNames: () => Promise<string[]>;
@@ -316,6 +322,7 @@ export class CoordinatorRouter {
       options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
     this.heartbeatTimeoutMs =
       options.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT_MS;
+    this.hideGraceMs = options.hideGraceMs ?? DEFAULT_HIDE_GRACE_MS;
     this.verifyTabLockHeld =
       options.verifyTabLockHeld ?? verifyExclusiveLockHeld;
     this.verifyOwnerLockHeld =
@@ -1148,6 +1155,7 @@ export class CoordinatorRouter {
   private syncReadAvailability(): void {
     const core = this.coreValue;
     if (!core) return;
+    if (!core.ownerHidden) this.clearHideTimer();
     match(core.state)
       .with({ kind: 'parked' }, () =>
         this.handoff.park(core.snapshot().ownerEpoch)
@@ -1166,9 +1174,10 @@ export class CoordinatorRouter {
         if (this.handoff.transitioning)
           this.handoff.start(ownerEpoch, core.hasVisibleTab);
       })
-      .with({ kind: 'active' }, ({ ownerEpoch }) =>
-        this.handoff.ready(ownerEpoch)
-      )
+      .with({ kind: 'active' }, ({ ownerEpoch }) => {
+        if (core.ownerHidden) this.drainOnceHiddenLongEnough(ownerEpoch);
+        this.handoff.ready(ownerEpoch);
+      })
       .with(
         { kind: 'waiting-for-tab' },
         { kind: 'resetting-after-loss' },
@@ -1769,6 +1778,20 @@ export class CoordinatorRouter {
     // died, or a drain asked of it.
     this.clearHeartbeatTimers();
     this.endUnlockedOwner(route);
+  }
+
+  private drainOnceHiddenLongEnough(ownerEpoch: number): void {
+    if (this.hideTimer !== undefined) return;
+    this.hideTimer = this.setTimeoutFn(() => {
+      this.hideTimer = undefined;
+      const core = this.coreValue;
+      if (core) this.applyActions(core.drainHiddenOwner(ownerEpoch));
+    }, this.hideGraceMs);
+  }
+
+  private clearHideTimer(): void {
+    if (this.hideTimer !== undefined) this.clearTimeoutFn(this.hideTimer);
+    this.hideTimer = undefined;
   }
 
   /**

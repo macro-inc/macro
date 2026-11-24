@@ -47,6 +47,7 @@ it('closes on last-visible exit, keeps clients, and routes an old settlement bef
   ready(core, 'a', 1);
   core.registerTab('b', false);
   core.setTabVisibility('a', false);
+  core.drainHiddenOwner(1);
   expect(core.state.kind).toBe('draining');
   expect(core.engineDrained('a', 1)).toEqual([
     { kind: 'close-engine-route', tabId: 'a', ownerEpoch: 1 },
@@ -110,6 +111,7 @@ it('retains an accepted settlement after its caller leaves, without retaining ab
   ready(core, 'a', 1);
   core.registerTab('b', false);
   core.setTabVisibility('a', false);
+  core.drainHiddenOwner(1);
   core.engineDrained('a', 1);
   core.request('a', {
     id: 7,
@@ -175,6 +177,7 @@ it('retains a real abrupt-loss reset requirement through all-hidden recovery', (
   core.registerTab('a');
   ready(core, 'a', 1);
   core.setTabVisibility('a', false);
+  core.drainHiddenOwner(1);
   core.ownerLost('a', 1, 'runtime failure');
   expect(core.resumeAfterLoss()).toEqual([]);
   expect(core.state).toEqual({

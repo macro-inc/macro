@@ -485,8 +485,8 @@ export class CoordinatorCore {
     }
     // A hidden engine may have reset storage before it immediately drains.
     // Notify hosts of that outcome, but leave queued work for its successor.
-    const handoff = this.handoffIfNeeded();
-    if (handoff.length > 0) return [...actions, ...handoff];
+    const drain = this.drainHiddenOwner(state.ownerEpoch);
+    if (drain.length > 0) return [...actions, ...drain];
     const held = this.queuedRequests.splice(0);
     for (const queued of inEngineArrivalOrder(held)) {
       if (
@@ -954,17 +954,29 @@ export class CoordinatorCore {
     ];
   }
 
+  /** A starting owner that is hidden finishes its startup, then drains. A
+   * serving one is drained by `drainHiddenOwner` once it stayed hidden. */
   private handoffIfNeeded(): CoordinatorAction[] {
     const state = this.stateValue;
+    if (state.kind !== 'activating' || this.visibleTabs.has(state.tabId))
+      return [];
+    return [{ kind: 'handoff-pending', ownerEpoch: state.ownerEpoch }];
+  }
+
+  /** Whether a hidden page's engine serves the cache. */
+  get ownerHidden(): boolean {
+    const state = this.stateValue;
+    return state.kind === 'active' && !this.visibleTabs.has(state.tabId);
+  }
+
+  drainHiddenOwner(ownerEpoch: OwnerEpoch): CoordinatorAction[] {
+    const state = this.stateValue;
     if (
-      (state.kind !== 'active' && state.kind !== 'activating') ||
+      state.kind !== 'active' ||
+      state.ownerEpoch !== ownerEpoch ||
       this.visibleTabs.has(state.tabId)
     )
       return [];
-    // Start draining on the last visible page's exit, not after a hidden
-    // worker has had time to suspend. Startup still finishes before draining.
-    if (state.kind === 'activating')
-      return [{ kind: 'handoff-pending', ownerEpoch: state.ownerEpoch }];
     this.stateValue = { ...state, kind: 'draining' };
     return [
       {

@@ -324,9 +324,11 @@ describe('CoordinatorCore', () => {
     draining.registerTab('tab-a');
     draining.registerTab('tab-b');
     ready(draining, 'tab-a', 1, 'opened-existing');
-    expect(
-      action(draining.setTabVisibility('tab-a', false), 'drain-owner')
-    ).toMatchObject({ tabId: 'tab-a', handoff: true });
+    draining.setTabVisibility('tab-a', false);
+    expect(action(draining.drainHiddenOwner(1), 'drain-owner')).toMatchObject({
+      tabId: 'tab-a',
+      handoff: true,
+    });
     expect(draining.supersede()).toEqual([]);
     expect(draining.handingOver).toBe(true);
     const drained = draining.engineDrained('tab-a', 1);
@@ -497,6 +499,7 @@ describe('CoordinatorCore', () => {
     core.registerTab('tab-a');
     ready(core, 'tab-a', 1, 'opened-existing');
     core.setTabVisibility('tab-a', false);
+    core.drainHiddenOwner(1);
     core.engineDrained('tab-a', 1);
     core.setTabVisibility('tab-a', true);
     const { state } = core;

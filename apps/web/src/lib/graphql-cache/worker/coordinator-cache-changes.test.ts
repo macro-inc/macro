@@ -33,6 +33,7 @@ function resume(requests: CacheRequest[]) {
   core.registerTab('a');
   ready(core, 'a', 1);
   core.setTabVisibility('a', false);
+  core.drainHiddenOwner(1);
   core.engineDrained('a', 1);
   expect(core.state.kind).toBe('parked');
   for (const request of requests)
