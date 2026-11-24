@@ -150,6 +150,12 @@ type EmailListController = ListController<
   EmailListActivationMetadata
 >;
 
+/** The search field on screen: the desktop header's, or touch's search page. */
+export type EmailSearchField = {
+  open: Accessor<boolean>;
+  close: () => void;
+};
+
 export type EmailViewContext = {
   state: Store<EmailViewState>;
   setState: SetStoreFunction<EmailViewState>;
@@ -157,7 +163,7 @@ export type EmailViewContext = {
    * Opens a tab. During a search it narrows the search to that tab's view
    * (`in:<view>`) and keeps the words; a tab with no view in the search index
    * (Scheduled, Reminders, Spam, Trash), or a search with no words typed yet,
-   * ends the search.
+   * ends the search and closes its field.
    */
   setTab: (tab: EmailTab) => void;
   /** Opens the Inbox view last open (Focus, Signal or Noise), or `in:inbox`. */
@@ -169,7 +175,11 @@ export type EmailViewContext = {
    */
   shownTab: Accessor<EmailShownView>;
   /** The search field holds a query, whatever it says. */
+  searchHasText: Accessor<boolean>;
+  /** A search is open: its field is open, or holds a query. */
   searchOpen: Accessor<boolean>;
+  /** Tells the view whether its search is open, for as long as the field is mounted. */
+  registerSearchField: (field: EmailSearchField) => void;
   /** Focus, Signal and Noise show as tabs: in the Inbox, never in a search. */
   showsInboxTabs: Accessor<boolean>;
   setInboxIds: (ids: string[] | undefined) => void;
@@ -301,6 +311,13 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     })
   );
   const state = persistedState;
+  const [searchField, setSearchField] = createSignal<EmailSearchField>();
+  const registerSearchField = (field: EmailSearchField) => {
+    setSearchField(field);
+    onCleanup(() =>
+      setSearchField((current) => (current === field ? undefined : current))
+    );
+  };
 
   // Saved views: the URL names the open view; its definition fills the All tab.
   const savedViewsEnabled = () => Boolean(props.savedViewSource);
@@ -340,7 +357,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       })
     );
   /** Returns to the tab and inboxes from before the view, or to `tab`. */
-  const clearSavedViewState = (tab?: EmailTab) =>
+  const clearSavedViewState = (tab?: EmailTab) => {
     setState(
       produce((draft) => {
         const before = draft.beforeSavedView;
@@ -354,6 +371,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         draft.beforeSavedView = undefined;
       })
     );
+    searchField()?.close();
+  };
   if (savedViewSource && savedViewsList)
     savedViewCreation = createSavedViewCreation({
       kind: 'email',
@@ -398,7 +417,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         const accountChanged =
           previousViewer !== undefined && viewer !== previousViewer;
         if (id && !accountChanged) {
-          if (id !== previousId)
+          if (id !== previousId) {
             setState(
               produce((draft) => {
                 rememberBeforeSavedView(draft);
@@ -406,6 +425,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
                 draft.search = '';
               })
             );
+            searchField()?.close();
+          }
           return;
         }
         if (state.beforeSavedView) clearSavedViewState();
@@ -459,8 +480,10 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       scope: conditions && resolveEmailSavedViewScope(conditions, new Date()),
     };
   });
-  const searchOpen = () =>
+  const searchHasText = () =>
     canSearchEmailTab(state.tab) && state.search.trim() !== '';
+  // An open field is a search before anything is typed in it.
+  const searchOpen = () => searchHasText() || Boolean(searchField()?.open());
   const typedSearch = createMemo(() => parseEmailSearch(state.search));
   // A search covers all mail from any tab; only an `in:` filter narrows it.
   // Text with no words (an operator still being typed, or a view alone) runs
@@ -476,7 +499,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const shownTab = (): EmailShownView => {
     const { query, scope } = parsedSearch();
     // With no search to stay on, the list is still the open tab's.
-    if (!searchOpen() || query === '') return state.tab;
+    if (!searchHasText() || query === '') return state.tab;
 
     if (!scope) return 'search';
     return emailSearchScopeTab(scope) ?? 'inbox';
@@ -730,8 +753,9 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   // During a search, a tab narrows it rather than leaving it: the navigation
   // reads as the view searched, and the words stay.
   const selectTab = (tab: EmailTab, scope = emailSearchScopeForTab(tab)) => {
-    if (savedViewActive() || !searchOpen()) {
+    if (savedViewActive() || !searchHasText()) {
       setTabNow(tab);
+      searchField()?.close();
       return;
     }
 
@@ -741,6 +765,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       // With no words typed there is nothing to narrow, so the tab just opens.
       if (!scope || query === '') {
         setState('search', '');
+        searchField()?.close();
         return;
       }
 
@@ -767,6 +792,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
           draft.search = '';
         })
       );
+      searchField()?.close();
       fireAndForget(navigateToList(id), 'email-view');
     });
   };
@@ -928,7 +954,9 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         )
       ),
     shownTab,
+    searchHasText,
     searchOpen,
+    registerSearchField,
     showsInboxTabs,
     setInboxIds,
     setAliasFilter,
