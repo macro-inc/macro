@@ -92,8 +92,11 @@ function itemDestination(source: CrmBranchParams, item: CrmItemParams) {
   };
 }
 
+/** The split showing the Customers route, which an opened item navigates. */
+type CrmRoutePane = { captureEntryState(): void; activate(): void };
+
 /** The Customers location held by the pane's route. */
-export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
+export function createCrmRoute(pane?: CrmRoutePane): CrmRoute {
   const [search] = createSearchParams(crmSearch);
   const [recordSearch] = createSearchParams(crmRecordSearch);
   const params = useParams<CrmBranchParams>();
@@ -222,7 +225,11 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
           }
         : {}),
     };
-    captureEntryState?.();
+    pane?.captureEntryState();
+    // Activate before navigating: when another split already shows the item,
+    // the router brings that split up, and activating afterwards (the focus
+    // the click moved here) would take it back.
+    pane?.activate();
     const trail = records();
     const destination = itemDestination(params, itemParams);
     fireAndForget(
