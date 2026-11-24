@@ -70,25 +70,30 @@ describe('live trial checkout', () => {
     expect(screen.getByText('10× usage')).toBeTruthy();
     expect(screen.queryByText(/17.50/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Continue with Max' }));
+    expect(checkout).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue to checkout' })
+    );
     expect(checkout).toHaveBeenCalledWith('max', 'standard', 'year');
   });
 
-  it('prices Business and Max annually first and buys at the interval shown', () => {
+  it('prices Business annually with monthly noted and lets the user pick monthly before checkout', () => {
     const { checkout } = setupComparison();
     const business = () =>
       screen.getByRole('columnheader', { name: /^Business/ }).textContent;
     expect(business()).toContain('$80');
     expect(business()).toContain('billed annually');
+    expect(business()).toContain('$90 monthly');
     expect(
       screen.getByRole('columnheader', { name: /^Pro/ }).textContent
     ).toContain('$40');
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Billed monthly' }));
-
-    expect(business()).toContain('$90');
-    expect(business()).not.toContain('billed annually');
     fireEvent.click(
       screen.getByRole('button', { name: 'Continue with Business' })
+    );
+    fireEvent.click(screen.getByRole('radio', { name: /Billed monthly/ }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue to checkout' })
     );
     expect(checkout).toHaveBeenCalledWith('business', 'standard', 'month');
   });

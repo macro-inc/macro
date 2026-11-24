@@ -22,13 +22,12 @@ import {
 import { setPageSeo } from "../utils/utilSeo";
 import "./RoutePricing.css";
 
-type Billing = "annual" | "monthly";
-
 type Plan = {
 	key: "free" | "pro" | "business" | "max";
 	name: string;
-	/** Per seat per month: the same at both billings, or annual and monthly. */
-	price: string | Record<Billing, string>;
+	/** Per seat per month, showing the annual rate for plans sold annually. */
+	price: string;
+	terms: string;
 	note: string;
 	service: "Self-serve" | "White-glove" | null;
 	cta: string;
@@ -41,6 +40,7 @@ const plans: readonly Plan[] = [
 		key: "free",
 		name: "Free",
 		price: "$0",
+		terms: "per seat / month",
 		note: "Start here.",
 		service: null,
 		cta: "Start for free",
@@ -54,6 +54,7 @@ const plans: readonly Plan[] = [
 		key: "pro",
 		name: "Pro",
 		price: "$40",
+		terms: "per seat / month, billed monthly",
 		note: "30 days free",
 		service: "Self-serve",
 		cta: "Try Pro",
@@ -67,7 +68,8 @@ const plans: readonly Plan[] = [
 	{
 		key: "business",
 		name: "Business",
-		price: { annual: "$80", monthly: "$90" },
+		price: "$80",
+		terms: "per seat / month, billed annually · $90 monthly",
 		note: "3× Pro usage",
 		service: "White-glove",
 		cta: "Get Business",
@@ -81,7 +83,8 @@ const plans: readonly Plan[] = [
 	{
 		key: "max",
 		name: "Max",
-		price: { annual: "$200", monthly: "$220" },
+		price: "$200",
+		terms: "per seat / month, billed annually · $220 monthly",
 		note: "10× Pro usage",
 		service: "White-glove",
 		cta: "Get Max",
@@ -93,21 +96,6 @@ const plans: readonly Plan[] = [
 		],
 	},
 ];
-
-function planPrice(plan: Plan, billing: Billing) {
-	return typeof plan.price === "string" ? plan.price : plan.price[billing];
-}
-
-function priceTerms(plan: Plan, billing: Billing) {
-	if (typeof plan.price === "string") {
-		return plan.key === "free"
-			? "per seat / month"
-			: "per seat / month, billed monthly";
-	}
-	return billing === "annual"
-		? "per seat / month, billed annually"
-		: "per seat / month, billed monthly";
-}
 
 type CellValue = boolean | string;
 
@@ -586,13 +574,7 @@ function CustomerStory() {
 	);
 }
 
-const BILLINGS: ReadonlyArray<{ key: Billing; label: string }> = [
-	{ key: "annual", label: "Billed annually" },
-	{ key: "monthly", label: "Billed monthly" },
-];
-
 export function RoutePricing() {
-	const [billing, setBilling] = createSignal<Billing>("annual");
 	setPageSeo({
 		title: "Pricing — Macro",
 		description:
@@ -608,20 +590,6 @@ export function RoutePricing() {
 					description="Start free. Pro is self-serve; Business and Max add more AI, security reviews, and white-glove onboarding for larger teams."
 				/>
 				<section class="pricing-plan-list" aria-label="Choose a plan">
-					<div class="pricing-billing" role="group" aria-label="Billing">
-						<For each={BILLINGS}>
-							{(option) => (
-								<button
-									type="button"
-									aria-pressed={billing() === option.key}
-									onClick={() => setBilling(option.key)}
-								>
-									{option.label}
-								</button>
-							)}
-						</For>
-						<span>Save about 10% on Business and Max with annual billing.</span>
-					</div>
 					<For each={plans}>
 						{(plan) => (
 							<article
@@ -639,8 +607,8 @@ export function RoutePricing() {
 									</Show>
 								</div>
 								<div class="pricing-plan-price">
-									<strong>{planPrice(plan, billing())}</strong>
-									<span>{priceTerms(plan, billing())}</span>
+									<strong>{plan.price}</strong>
+									<span>{plan.terms}</span>
 								</div>
 								<ul>
 									<For each={plan.features}>

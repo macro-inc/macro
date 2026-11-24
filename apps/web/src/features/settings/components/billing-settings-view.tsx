@@ -1,4 +1,6 @@
+import { BillingCycleDialog } from '@app/features/paywall/components/billing-cycle-dialog';
 import {
+  defaultInterval,
   type PaidPlanTier,
   PLAN_BY_TIER,
   type PlanTier,
@@ -8,7 +10,7 @@ import { plural } from '@core/util/string';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
-import { Button, Layer, Tabs } from '@ui';
+import { Button, Layer } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import {
   type BillingState,
@@ -35,9 +37,16 @@ export function BillingSettingsView(props: {
   /** The subscription breakdown, or the computers list when billing is unavailable. */
   computers?: JSX.Element;
 }) {
-  // Business and Max are offered annually first; once paid, the
-  // subscription's own interval prices every card.
-  const [interval, setChosenInterval] = createSignal<BillingInterval>('year');
+  // Free-tier checkouts for plans with annual and monthly options confirm
+  // the billing cycle in a compact dialog before launching Stripe Checkout.
+  const [cyclePlan, setCyclePlan] = createSignal<PaidPlanTier | null>(null);
+  const handleSelectPlan = (plan: PaidPlanTier, interval: BillingInterval) => {
+    if (!props.state.hasPaid && PLAN_BY_TIER[plan].annualPrice !== undefined) {
+      setCyclePlan(plan);
+      return;
+    }
+    props.onSelectPlan(plan, interval);
+  };
   // A paid plan change keeps the subscription's interval, so until it is
   // known no card is priced or offered.
   const offeredPlans = () =>
@@ -271,18 +280,6 @@ export function BillingSettingsView(props: {
               </Button>
             </div>
           </Show>
-          <Show when={!props.state.hasPaid}>
-            <Tabs<BillingInterval>
-              aria-label="Billing interval"
-              class="self-start"
-              value={interval()}
-              onChange={setChosenInterval}
-              options={[
-                { value: 'year', label: 'Billed annually' },
-                { value: 'month', label: 'Billed monthly' },
-              ]}
-            />
-          </Show>
           <div
             class="grid grid-cols-1 gap-6"
             classList={{
@@ -294,15 +291,29 @@ export function BillingSettingsView(props: {
               {(plan) => (
                 <BillingPlanCard
                   plan={plan}
-                  interval={cardInterval(plan, props.state, interval())}
+                  interval={cardInterval(
+                    plan,
+                    props.state,
+                    defaultInterval(plan)
+                  )}
                   state={props.state}
-                  onSelectPlan={props.onSelectPlan}
+                  onSelectPlan={handleSelectPlan}
                 />
               )}
             </For>
           </div>
         </section>
       </Show>
+      <BillingCycleDialog
+        plan={cyclePlan()}
+        perSeat={!!props.state.teamRole}
+        pending={props.state.pending}
+        onClose={() => setCyclePlan(null)}
+        onConfirm={(plan, chosen) => {
+          setCyclePlan(null);
+          props.onSelectPlan(plan, chosen);
+        }}
+      />
     </SettingsPage>
   );
 }

@@ -33,14 +33,23 @@ export const PlanFeatures = (props: {
 const PlanPrice = (props: {
   tier: PaidPlanTier;
   interval: BillingInterval;
+  hasPaid: boolean;
   perSeat: boolean;
   aiUsageEnabled: boolean;
 }) => {
+  const showMonthlyNote = () =>
+    !props.hasPaid &&
+    props.interval === 'year' &&
+    PLAN_BY_TIER[props.tier].annualPrice !== undefined;
   return (
     <p class="text-ink-extra-muted text-xs">
       ${planPriceAt(props.tier, props.interval)}{' '}
       {props.perSeat ? 'per seat / month' : '/ month'}
       {props.interval === 'year' ? ', billed annually' : ''}
+      <Show when={showMonthlyNote()}>
+        {' '}
+        (${PLAN_BY_TIER[props.tier].price} monthly)
+      </Show>
       <Show when={props.aiUsageEnabled && props.tier !== 'premium'}>
         {' '}
         · {PLAN_USAGE_LABELS[props.tier]}
@@ -103,6 +112,7 @@ export function BillingPlanCard(props: {
             <PlanPrice
               tier={props.plan}
               interval={props.interval}
+              hasPaid={props.state.hasPaid}
               perSeat={!!props.state.teamRole}
               aiUsageEnabled={props.state.aiUsageEnabled}
             />

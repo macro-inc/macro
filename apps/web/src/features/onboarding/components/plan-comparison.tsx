@@ -1,3 +1,4 @@
+import { BillingCycleDialog } from '@app/features/paywall/components/billing-cycle-dialog';
 import {
   formatPlanPrice,
   type PaidPlanTier,
@@ -8,7 +9,6 @@ import type {
   AiPlanCatalogEntry,
 } from '@service-auth/ai-billing-types';
 import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
-import { Tabs } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { Loadable } from '../context/onboarding-context';
 import { PLAN_COMPARISON } from '../core/plan-comparison';
@@ -27,10 +27,13 @@ export function PlanComparison(props: {
     const state = props.catalog;
     return state.t === 'ready' ? state.value.plans : [];
   };
-  // Business and Max are offered annually first; Pro is monthly only.
-  const [interval, setChosenInterval] = createSignal<BillingInterval>('year');
+  const [cyclePlan, setCyclePlan] = createSignal<PaidPlanTier | null>(null);
+  const selectedEntry = () => {
+    const plan = cyclePlan();
+    return plan ? entries().find((item) => item.tier === plan) : undefined;
+  };
   const annual = (entry: AiPlanCatalogEntry | undefined) =>
-    interval() === 'year' ? entry?.annual_price_per_month_cents : undefined;
+    entry?.annual_price_per_month_cents ?? undefined;
   const price = (entry: AiPlanCatalogEntry | undefined) =>
     annual(entry) ?? entry?.monthly_price_cents;
   return (
@@ -49,16 +52,6 @@ export function PlanComparison(props: {
         features. Business and Max add more AI, SSO, a signed DPA, and
         white-glove onboarding for larger teams.
       </p>
-      <Tabs<BillingInterval>
-        aria-label="Billing interval"
-        class="mt-6"
-        value={interval()}
-        onChange={setChosenInterval}
-        options={[
-          { value: 'year', label: 'Billed annually' },
-          { value: 'month', label: 'Billed monthly' },
-        ]}
-      />
       <Show when={props.catalog.t === 'error'}>
         <p role="alert" class="mt-5">
           We couldn't load plan prices. You can continue with Free or{' '}
@@ -108,6 +101,16 @@ export function PlanComparison(props: {
                           </span>
                           <Show when={typeof annual(entry()) === 'number'}>
                             <span class="block">billed annually</span>
+                            <Show
+                              when={
+                                typeof entry()?.monthly_price_cents === 'number'
+                              }
+                            >
+                              <span class="block text-ink-extra-muted">
+                                {formatPlanPrice(entry()?.monthly_price_cents)}{' '}
+                                monthly
+                              </span>
+                            </Show>
                           </Show>
                         </>
                       )}
@@ -161,7 +164,14 @@ export function PlanComparison(props: {
                     onClick={() => {
                       if (plan.tier === 'free') return props.onContinueFree();
                       if (plan.tier === 'premium') return props.onBackToPro();
-                      props.onStartPlan(plan.tier, interval());
+                      const entry = entries().find(
+                        (item) => item.tier === plan.tier
+                      );
+                      if (typeof annual(entry) === 'number') {
+                        setCyclePlan(plan.tier);
+                        return;
+                      }
+                      props.onStartPlan(plan.tier, 'month');
                     }}
                     class="flex min-h-10 w-full items-center justify-center rounded-full border border-edge px-2 py-2 text-center text-[11px] font-medium leading-4 text-ink-muted hover:border-ink-muted hover:text-ink disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink sm:px-3"
                   >
@@ -175,6 +185,20 @@ export function PlanComparison(props: {
           </tr>
         </tfoot>
       </table>
+      <BillingCycleDialog
+        plan={cyclePlan()}
+        perSeat
+        pending={props.disabled}
+        monthlyPriceCents={selectedEntry()?.monthly_price_cents}
+        annualPricePerMonthCents={
+          selectedEntry()?.annual_price_per_month_cents ?? undefined
+        }
+        onClose={() => setCyclePlan(null)}
+        onConfirm={(plan, chosen) => {
+          setCyclePlan(null);
+          props.onStartPlan(plan, chosen);
+        }}
+      />
     </section>
   );
 }

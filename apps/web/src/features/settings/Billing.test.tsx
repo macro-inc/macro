@@ -103,7 +103,11 @@ it.each(['loading', 'error'])(
       expect(mocks.eligibility.refetch).toHaveBeenCalled();
     }
     fireEvent.click(screen.getByRole('button', { name: 'Get Max' }));
-    // Business and Max are offered annually first.
+    // Business and Max confirm their billing cycle in the modal (annual default).
+    expect(mocks.checkout).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue to checkout' })
+    );
     expect(mocks.checkout).toHaveBeenCalledWith({
       plan: 'max',
       interval: 'year',
@@ -112,10 +116,13 @@ it.each(['loading', 'error'])(
   }
 );
 
-it('buys Business monthly once Billed monthly is chosen', () => {
+it('buys Business monthly once Billed monthly is chosen in the billing-cycle dialog', () => {
   render(() => <Billing />);
-  fireEvent.click(screen.getByRole('radio', { name: 'Billed monthly' }));
   fireEvent.click(screen.getByRole('button', { name: 'Get Business' }));
+  fireEvent.click(screen.getByRole('radio', { name: /Billed monthly/ }));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Continue to checkout' })
+  );
   expect(mocks.checkout).toHaveBeenCalledWith({
     plan: 'business',
     interval: 'month',
