@@ -2000,7 +2000,9 @@ unbroken titles, and keyboard opening.
 Inline property fields stay `readOnly`, never `disabled`, while they save: a
 browser moves focus off a disabled field, so a failed save would strand it. Enter
 and Escape return focus to the value through `Property.Root`; tabbing or clicking
-away leaves focus where the user put it. The backend-free regression is
+away leaves focus where the user put it. A Link value's remove × takes its own
+space after the title, which truncates before it; desktop shows it on hover or
+focus, touch always. The backend-free regression for both is
 `bunx playwright test --config src/features/property/editors/inline/browser-test/playwright.config.ts`.
 
 ### Assignee people scope
