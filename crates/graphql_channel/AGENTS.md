@@ -29,7 +29,10 @@ separately from Soup's thread-root projection.
 
 ## Gotchas
 
-- Read the channel sequence before loading a page so replay cannot skip a racing write.
+- Read the channel sequence before loading a page or a single message, so replay cannot
+  skip a racing write; `MessageReader::channel_seq` takes the view receipt of that channel.
+- `channelMessage` answers `{ seq, message }` from one `MessageReader::get_entry` call;
+  a missing message is a null `message` beside its `seq`.
 - Map change pages from `MessageReader::channel_changes`; preserve its reset,
   watermark, coalescing, removed identities, and changed-reply roots.
 - Reply keys include `import_order NULLS LAST`; timestamps alone do not describe their order.

@@ -4021,6 +4021,20 @@ type GraphqlChannelMessageReactionMetadata {
 }
 
 """
+One message read with the channel sequence it is at least as new as.
+"""
+type GraphqlChannelMessageRead {
+	"""
+	Channel change sequence read before the message.
+	"""
+	seq: String!
+	"""
+	The message; absent when it does not exist or cannot be shown.
+	"""
+	message: GraphqlChannelMessage
+}
+
+"""
 Metadata for a newly sent channel message.
 """
 type GraphqlChannelMessageSendMetadata {
@@ -11914,7 +11928,8 @@ type GraphqlUser {
 		input: ChannelThreadInput!
 	): GraphqlChannelThreadPage!
 	"""
-	One message under channel view access; missing messages return null.
+	One message under channel view access, with the channel sequence read
+	before it; a missing message answers the sequence alone.
 	"""
 	channelMessage(
 		"""
@@ -11925,7 +11940,7 @@ type GraphqlUser {
 		Message identity to read.
 		"""
 		messageId: ID!
-	): GraphqlChannelMessage
+	): GraphqlChannelMessageRead!
 	"""
 	Current changed messages and activity after the client's sequence.
 	"""

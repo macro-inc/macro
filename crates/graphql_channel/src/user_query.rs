@@ -1,7 +1,7 @@
 //! Authenticated user's channel reads, flattened into the composed schema.
 use async_graphql::{Context, ID, Object};
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::ports::MessageTimelineEntry;
+use messages::domain::ports::{MessageRead, MessageTimelineEntry};
 use tracing::Instrument;
 
 use crate::{ChannelGraphqlContext, inputs::*, message_error, objects::*};
@@ -42,7 +42,7 @@ impl GraphqlChannelQuery {
             .instrument(tracing::info_span!("channel.timeline.authorize"))
             .await?;
         let seq = reads
-            .channel_seq(channel_id)
+            .channel_seq(access.clone(), channel_id)
             .instrument(tracing::info_span!("channel.timeline.sequence"))
             .await?;
         let page = reads
@@ -84,7 +84,7 @@ impl GraphqlChannelQuery {
         tracing::Span::current().record("page_size", i64::from(query.limit.unwrap_or(50)));
         let reads = ctx.data::<ChannelGraphqlContext>()?;
         let access = reads.authorize(self.user_id.clone(), channel_id).await?;
-        let seq = reads.channel_seq(channel_id).await?;
+        let seq = reads.channel_seq(access.clone(), channel_id).await?;
         let page = reads
             .messages
             .thread_page(access, root_id, query)
@@ -104,49 +104,45 @@ impl GraphqlChannelQuery {
         })
     }
 
-    /// One message under channel view access; missing messages return null.
+    /// One message under channel view access, with the channel sequence read
+    /// before it; a missing message answers the sequence alone.
     #[tracing::instrument(
         name = "channel.message",
         skip_all,
         err(Debug),
-        fields(channel_id = tracing::field::Empty, message_id = tracing::field::Empty)
+        fields(channel_id = tracing::field::Empty, message_id = tracing::field::Empty, found = tracing::field::Empty)
     )]
     async fn channel_message(
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "Channel containing the message.")] channel_id: ID,
         #[graphql(desc = "Message identity to read.")] message_id: ID,
-    ) -> async_graphql::Result<Option<GraphqlChannelMessage>> {
+    ) -> async_graphql::Result<GraphqlChannelMessageRead> {
         let channel_id = crate::parse_read_id(channel_id, "channelId")?;
         let message_id = crate::parse_read_id(message_id, "messageId")?;
         tracing::Span::current().record("channel_id", tracing::field::display(channel_id));
         tracing::Span::current().record("message_id", tracing::field::display(message_id));
         let reads = ctx.data::<ChannelGraphqlContext>()?;
         let access = reads.authorize(self.user_id.clone(), channel_id).await?;
-        let message = match reads.messages.get(access.clone(), message_id).await {
-            Ok(message) => message,
-            Err(messages::domain::ports::MessageError::NotFound) => return Ok(None),
-            Err(error) => return Err(message_error(error)),
-        };
-        if message.thread_id.is_some() {
-            return Ok(Some(GraphqlChannelMessage::from_message(
-                message, channel_id,
-            )));
-        }
-        let entry = match reads.messages.get_root(access, message_id).await {
-            Ok(entry) => entry,
-            Err(messages::domain::ports::MessageError::NotFound) => return Ok(None),
-            Err(error) => return Err(message_error(error)),
-        };
-        match entry {
-            MessageTimelineEntry::Message { message } => Ok(Some(
-                GraphqlChannelMessage::from_item(*message, channel_id, None),
-            )),
-            MessageTimelineEntry::Call { message, status } => Ok(Some(
+        let seq = reads.channel_seq(access.clone(), channel_id).await?;
+        let message = match reads.messages.get_entry(access, message_id).await {
+            Ok(MessageRead::Reply(message)) => {
+                Some(GraphqlChannelMessage::from_message(message, channel_id))
+            }
+            Ok(MessageRead::Root(MessageTimelineEntry::Message { message })) => {
+                Some(GraphqlChannelMessage::from_item(*message, channel_id, None))
+            }
+            Ok(MessageRead::Root(MessageTimelineEntry::Call { message, status })) => Some(
                 GraphqlChannelMessage::from_item(*message, channel_id, Some(status)),
-            )),
-            MessageTimelineEntry::Activity { .. } => Err(crate::bad_input("expected a message")),
-        }
+            ),
+            Ok(MessageRead::Root(MessageTimelineEntry::Activity { .. })) => {
+                return Err(crate::bad_input("expected a message"));
+            }
+            Err(messages::domain::ports::MessageError::NotFound) => None,
+            Err(error) => return Err(message_error(error)),
+        };
+        tracing::Span::current().record("found", message.is_some());
+        Ok(GraphqlChannelMessageRead { seq, message })
     }
 
     /// Current changed messages and activity after the client's sequence.

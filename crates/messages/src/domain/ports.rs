@@ -156,6 +156,15 @@ pub struct MessageThreadPage {
     pub call: Option<CallEntryStatus>,
 }
 
+/// One message as a single-message read answers it.
+#[derive(Debug, Clone)]
+pub enum MessageRead {
+    /// A reply, which carries no thread of its own.
+    Reply(Message),
+    /// A root with its thread state, preview and call status.
+    Root(MessageTimelineEntry),
+}
+
 /// One chronological entry in a parent's timeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

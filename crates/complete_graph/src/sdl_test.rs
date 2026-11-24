@@ -1164,7 +1164,7 @@ fn channel_reads_hang_off_the_authenticated_user() {
         ),
         (
             "channelMessage",
-            "GraphqlChannelMessage",
+            "GraphqlChannelMessageRead!",
             &[("channelId", "ID!"), ("messageId", "ID!")][..],
         ),
     ] {

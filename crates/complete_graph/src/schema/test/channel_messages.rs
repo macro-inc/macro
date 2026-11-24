@@ -789,7 +789,7 @@ async fn channel_single_message_matches_rest_and_respects_channel_access(pool: P
             &harness,
             &context,
             &format!(
-                "channelMessage(channelId: \"{CHANNEL_ID}\", messageId: \"{id}\") {{ {} }}",
+                "channelMessage(channelId: \"{CHANNEL_ID}\", messageId: \"{id}\") {{ seq message {{ {} }} }}",
                 message_selection(),
             ),
         )
@@ -824,7 +824,7 @@ async fn channel_single_message_matches_rest_and_respects_channel_access(pool: P
             None
         };
         assert_eq!(
-            data["channelMessage"],
+            data["channelMessage"]["message"],
             expected_message(
                 &rest,
                 thread
@@ -840,10 +840,13 @@ async fn channel_single_message_matches_rest_and_respects_channel_access(pool: P
         let data = execute(
             &harness,
             &context,
-            &format!("channelMessage(channelId: \"{CHANNEL_ID}\", messageId: \"{id}\") {{ id }}",),
+            &format!("channelMessage(channelId: \"{CHANNEL_ID}\", messageId: \"{id}\") {{ seq message {{ id }} }}",),
         )
         .await;
-        assert!(data["channelMessage"].is_null());
+        assert!(
+            data["channelMessage"]["message"].is_null()
+                && data["channelMessage"]["seq"].is_string()
+        );
     }
     harness
         .state
@@ -856,13 +859,13 @@ async fn channel_single_message_matches_rest_and_respects_channel_access(pool: P
         &harness,
         &context,
         &format!(
-            "channelMessage(channelId: \"{OTHER_CHANNEL_ID}\", messageId: \"{}\") {{ id }}",
+            "channelMessage(channelId: \"{OTHER_CHANNEL_ID}\", messageId: \"{}\") {{ message {{ id }} }}",
             message_id(2),
         ),
     )
     .await;
     assert!(
-        isolated["channelMessage"].is_null(),
+        isolated["channelMessage"]["message"].is_null(),
         "a grant on another channel cannot reveal the message"
     );
     harness
@@ -874,7 +877,7 @@ async fn channel_single_message_matches_rest_and_respects_channel_access(pool: P
         .remove(&OTHER_CHANNEL_ID);
     for field in [
         format!(
-            "channelMessage(channelId: \"{OTHER_CHANNEL_ID}\", messageId: \"{}\") {{ id }}",
+            "channelMessage(channelId: \"{OTHER_CHANNEL_ID}\", messageId: \"{}\") {{ message {{ id }} }}",
             message_id(2)
         ),
         format!("channelTimeline(input: {{ channelId: \"{OTHER_CHANNEL_ID}\" }}) {{ seq }}"),

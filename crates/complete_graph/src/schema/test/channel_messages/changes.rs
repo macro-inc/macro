@@ -16,10 +16,10 @@ async fn channel_page_watermarks_are_read_before_page_queries(pool: PgPool) {
     let mut sequence = mockall::Sequence::new();
     let mut mock = MockMessageReader::new();
     mock.expect_channel_seq()
-        .withf(|id| *id == CHANNEL_ID)
+        .withf(|_, id| *id == CHANNEL_ID)
         .times(1)
         .in_sequence(&mut sequence)
-        .returning(|_| Ok(41));
+        .returning(|_, _| Ok(41));
     mock.expect_timeline_entries()
         .times(1)
         .in_sequence(&mut sequence)
@@ -31,10 +31,10 @@ async fn channel_page_watermarks_are_read_before_page_queries(pool: PgPool) {
             })
         });
     mock.expect_channel_seq()
-        .withf(|id| *id == CHANNEL_ID)
+        .withf(|_, id| *id == CHANNEL_ID)
         .times(1)
         .in_sequence(&mut sequence)
-        .returning(|_| Ok(41));
+        .returning(|_, _| Ok(41));
     mock.expect_thread_page()
         .times(1)
         .in_sequence(&mut sequence)
@@ -65,6 +65,72 @@ async fn channel_page_watermarks_are_read_before_page_queries(pool: PgPool) {
     )
     .await;
     assert_eq!(thread["channelThread"]["seq"], "41");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_single_message_is_one_read_after_its_watermark(pool: PgPool) {
+    let reads = fixture(pool).await;
+    let harness = harness();
+    let root = reads
+        .get_entry(access(), message_id(2))
+        .await
+        .expect("real root for mapping");
+    let mut sequence = mockall::Sequence::new();
+    // The mock refuses every read not listed: no second read of the root.
+    let mut mock = MockMessageReader::new();
+    mock.expect_channel_seq()
+        .withf(|_, id| *id == CHANNEL_ID)
+        .times(1)
+        .in_sequence(&mut sequence)
+        .returning(|_, _| Ok(41));
+    mock.expect_get_entry()
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(move |_, _| Ok(root));
+    mock.expect_channel_seq()
+        .times(1)
+        .in_sequence(&mut sequence)
+        .returning(|_, _| Ok(42));
+    mock.expect_get_entry()
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(|_, _| Err(messages::domain::ports::MessageError::NotFound));
+    harness
+        .state
+        .entity_access
+        .viewable_channels
+        .lock()
+        .expect("channel access lock")
+        .insert(CHANNEL_ID);
+    let context =
+        ChannelGraphqlContext::new(Arc::new(mock), Arc::clone(&harness.state.entity_access));
+    let found = execute(
+        &harness,
+        &context,
+        &format!(
+            "channelMessage(channelId: \"{CHANNEL_ID}\", messageId: \"{}\") {{ seq message {{ id thread {{ replyCount }} }} }}",
+            message_id(2),
+        ),
+    )
+    .await;
+    assert_eq!(found["channelMessage"]["seq"], "41");
+    assert_eq!(
+        found["channelMessage"]["message"]["id"],
+        message_id(2).to_string()
+    );
+    let missing = execute(
+        &harness,
+        &context,
+        &format!(
+            "channelMessage(channelId: \"{CHANNEL_ID}\", messageId: \"{}\") {{ seq message {{ id }} }}",
+            message_id(9999),
+        ),
+    )
+    .await;
+    assert_eq!(
+        missing["channelMessage"],
+        json!({ "seq": "42", "message": null })
+    );
 }
 
 fn expected_changes(page: &ChannelChanges) -> Value {
