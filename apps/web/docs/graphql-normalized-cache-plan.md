@@ -79,7 +79,10 @@ entire cache in browser memory. With 10s of thousands of cached objects
     write-session token: logout closes admission and drains admitted durable
     write/delete operations before clearing registered hosts. Independent local
     auth cleanup and server sign-out begin without waiting for this drain; reload
-    and replacement admission still wait for all cleanup. Tracked contact writes
+    and replacement admission still wait for all cleanup. A browser cache not wiped
+    within ten seconds counts as a failed wipe: the scope rotates, so nothing opens
+    it again, and the wipe goes on while the page lives. A native cache gets no such
+    limit, as its running engine refuses a new scope. Tracked contact writes
     retain their exact physical host even if auth propagation retires the public
     wrapper, whose callbacks and subsequent operations are silenced immediately.
     Successful login
@@ -273,11 +276,18 @@ still bound callers waiting on an unresponsive engine outside a visibility hando
 
 Protocol v10 reports tab visibility and epoch-fenced read states: `ready`,
 `waiting`, and `blocked`. A visible owner stays put even if another visible window
-gets focus. When its page hides, stop routing new work into that engine and ask it
-to drain immediately, without waiting for another visible consumer. An engine
+gets focus, and one that hides for less than a second keeps serving. After that,
+stop routing new work into that engine and ask it to drain, without waiting for
+another visible consumer. An engine
 already loading/opening first finishes startup before draining. The runtime waits
 for admitted work and closes OPFS before acknowledging. Only then may another
 eligible visible page acquire the owner lock and open the existing database.
+A drain is looked at every five seconds in which some page is visible, or a newer
+build waits for it. An engine whose lock is free is ended as a silently dead one
+is. One still draining at the third look, 15 s in, is ended as if its page had
+left (`ownerEvent: drain-timed-out`), so the next owner opens the existing
+database. A frozen one keeps its lock until it thaws or its page goes, and the
+next owner then runs into the lock's own time limit.
 Clients and their subscribers stay connected; an explicit page disposal can join
 the same drain and retire that page normally. A host disposed before it is ready
 leaves like a navigating page instead: it keeps the database and the cache scope,
@@ -340,7 +350,7 @@ to its event loop before starting (and again after each request), repeating
 while requests keep arriving (up to a bound), and then picks by priority. A
 typed search with nothing else queued starts at once. A visible consumer starts a one-second read budget
 covering drain/startup/resume; changes of candidate do not extend it. If everyone
-hides again, cancel that budget. On expiry, `blocked` allows ordinary query network
+hides again, cancel that budget: the next visible consumer starts a fresh one. On expiry, `blocked` allows ordinary query network
 fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.
 Only read callers are canceled, not admitted engine work or writes. A typed
 search already sent is the exception: it has no network fallback, so it stays
@@ -352,6 +362,15 @@ blocked is refused like any read, and Quick Access replays it. `search` takes an
 host stops waiting, though the coordinator may still run its copy. Readiness
 restores deadlines and refreshes dependency registrations with preserved-storage
 semantics, including when startup finishes on its original owner.
+
+The second covers an owner change. A read that waits for an owner for any other
+reason (the first startup, a recovery) ends after ten seconds in which its page
+is visible, with `CacheRequestTimeoutError`; reads sent once an owner is ready get
+their ten seconds for its answer, as before. A cache-only reader has nothing to
+turn to, so it tells the two apart (`isOwnerHandoffBlockedError` or the timeout)
+and asks again when `onOwnerReady` reports that the owner answers: after a start,
+after a replaced engine's handshake, and after an owner change that was called
+off. `onCacheGenerationChanged` reports replaced engines only.
 
 A replacement also invalidates document-read cursors and in-flight snapshots.
 The exchange retries a still-current read once against the new generation instead
@@ -393,8 +412,11 @@ contexts/coordinator still needs the existing uncertain-outcome and server-side
 idempotency protections. Parking never reports an unpersisted enqueue as durable.
 
 The read budget never kills an owner, steals a lock, wipes storage, or replays a
-write. If a drain itself stalls, writes wait until it can finish or existing
-failure/navigation recovery applies. Owner telemetry adds `park-started`, `parked`,
+write. A write still queued in the coordinator after 30 s in which some page is
+visible is refused with `write-not-admitted`: no engine ever got it. The exchange
+returns that as the mutation's error, whatever else changed meanwhile, and never
+sends it to the API, where it would overtake writes made since. Settlements,
+removals and the queue's own bookkeeping keep waiting. Owner telemetry adds `park-started`, `parked`,
 `unpark-started`, and `unpark-completed` alongside the `visibility-handoff-*` events.
 The backend-free `parking.browser.e2e.ts` exercises physical release, retained
 clients/storage, a query admitted while parked completing across replacement
@@ -434,6 +456,13 @@ registration whose every attempt met a restarted coordinator all reject with
 and scope and which page recovery retries like an untouched bootstrap, without
 the "Local cache unavailable" toast. The `graphql_cache.owner` event records
 `ownerEvent: coordinator-restarted`.
+
+A coordinator can also end without a word: Chromium ends it with the process of
+the page that started it. No port closes. The coordinator holds a Web Lock of its
+own for its life and names it in `registered` (`coordinatorLockName`); each page
+waits for that lock, shared, and takes being given it for a restart, as above. A
+coordinator that cannot take its lock works without one, and its end goes
+unnoticed until the page reloads.
 
 A handshake nobody answers in its startup phase's time is treated like a lost
 connection: the same host connects again, within the same budget, and then ends

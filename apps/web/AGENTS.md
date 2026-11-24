@@ -1134,6 +1134,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   engine and re-register in place, preserving durable storage and never replaying
   uncertain enqueues. Space failed coordinator registrations with bounded,
   cancelable waits; a missing startup frame is not proof of untouched storage.
+  A coordinator that ends without a word is noticed through the Web Lock it
+  holds and handled the same way.
   See `docs/graphql-normalized-cache-plan.md`.
 - Reject already-routed optimistic enqueues with missing replies as uncertain on
   every owner departure; never forward them through network fallback, because
@@ -1168,8 +1170,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   `wasm_download` has no `bytes` and `wasm_compile` includes the body; a
   streamed compile that fails other than on an invalid binary is reported as a
   failed download and retried once from bytes.
-- Drain browser cache engines when their last visible consumer hides, then park
-  without retiring clients; queue background work until a visible owner reopens
+- Drain browser cache engines once their last visible consumer has been hidden
+  for a second, then park without retiring clients; end a drain that takes 15 s
+  while a page is visible like a departed owner, keeping its files; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
   Publish recovery reset outcomes before parking while retaining the read pause.
   A typed search held across an engine restart reaches the new engine first, and
@@ -1179,7 +1182,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   (while still replaying it if the engine arrives), and a list aborts the
   search it has superseded.
   Bound foreground resume reads to one second without killing an owner, stealing
-  its lock, replaying writes, or treating intentional parking as a failure.
+  its lock, replaying writes, or treating intentional parking as a failure. Reads
+  waiting for an owner otherwise end after ten seconds; a cache-only reader asks
+  again on `onOwnerReady`. A write still queued after 30 s is refused with
+  `write-not-admitted`: return it as the mutation's error, never send it.
 - Snapshot cache generation subscribers before dispatch and skip removed listeners;
   reactive observers may resubscribe during notification and must not extend it.
 - Coalesce broad browser cache-change hints across the coordinator's in-flight
