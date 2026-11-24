@@ -531,3 +531,17 @@ describe('serverPageCoverage', () => {
     ).toBeUndefined();
   });
 });
+
+describe('createChannelTouches', () => {
+  it('keeps a new session’s mark when a late read of the old one is refused', () => {
+    const touches = createChannelTouches();
+    expect(touches.due(CHANNEL_ID, 1_000, 'new')).toBe(1_000);
+    touches.settled(CHANNEL_ID, 1_000, 'new', true);
+    // A read sent before the session changed reaches the touches late; the
+    // device refuses its mark.
+    expect(touches.due(CHANNEL_ID, 1_001, 'old')).toBe(1_001);
+    touches.settled(CHANNEL_ID, 1_001, 'old', false);
+
+    expect(touches.due(CHANNEL_ID, 1_002, 'new')).toBeUndefined();
+  });
+});
