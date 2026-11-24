@@ -22,7 +22,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   routines' required apps, the egress proxy and sandbox listing, imports,
   Granola sync, onboarding, agent app pins and the connector tools.
   `cognition/api.rs` mounts the `/connectors` routes and the public
-  callbacks (MCP OAuth, Connect consent, Pipedream webhook). Nothing here
+  callbacks (MCP OAuth, REST app OAuth for Autodesk, Connect consent,
+  Pipedream webhook). `run()` adds Autodesk's config
+  (`ai_tools::connectors_config::autodesk_config`, optional). Nothing here
   reads the `macro-connect` flag or picks a source.
 - `src/api.rs`: the full agent-session HTTP API (durable metadata/log reads
   plus live in-memory transport operations), composed from each domain
