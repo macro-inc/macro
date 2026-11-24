@@ -268,6 +268,23 @@ title and navigation goes through the hamburger overlay. Location, search,
 filters, expanded folders, list focus, and scroll position are restored when
 returning from an opened file.
 
+## Fusion imports
+
+Behind `enable-fusion-import` (loading counts as off), the Drive card's
+**Import files** dialog lists **Autodesk Fusion** ("CAD designs and their
+versions"), and Settings → Integrations' Autodesk row offers **Import**
+beside Connect. With the flag off the row, the card's logo and the Settings
+Import are all absent, and the Autodesk row reads like any connector.
+**Connect Autodesk Fusion** connects the Pipedream `autodesk` app. **Import**
+opens an agent chat beside Drive with "Import my Fusion designs into Macro.":
+the agent uses `ImportFromFusion` to `browse` hubs, projects and folders, asks
+which designs to bring, `import`s them, and calls `sync` again while
+`remaining` is above 0. Each Fusion item becomes one Drive file document, and
+each of its versions one version of that document, oldest first; a later
+`sync` adds only new versions. The tool renders as a default tool row and
+never writes to Autodesk. `src/features/connector-import/browser-test/`
+covers the row with the flag on and off, on desktop and phone.
+
 ## Zooming opened images
 
 On a touch device, open an image file (an SVG, PNG, or JPEG) in Drive or as its

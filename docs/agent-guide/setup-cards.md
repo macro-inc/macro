@@ -11,7 +11,8 @@ tasks**, or **Import customers**. Customers shows it only to team members.
 [Dismissing cards](#dismissing-cards).
 
 The button opens a dialog listing that category's apps (Files: Notion, Google
-Drive, Dropbox, OneDrive, Box, Confluence; Tasks: Linear, Jira, Asana, GitHub,
+Drive, Dropbox, OneDrive, Box, Confluence, and Autodesk Fusion behind
+`enable-fusion-import`, see [Fusion imports](files.md#fusion-imports); Tasks: Linear, Jira, Asana, GitHub,
 Trello, monday.com; Customers: HubSpot, Salesforce, Close, Airtable). A
 disconnected row offers **Connect** (`Connect <App>`). Connecting follows the
 server's answer: a consent page in a new tab (the row flips to connected when
@@ -25,7 +26,9 @@ the server says its connection can be imported from (`importAvailable`),
   (`ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`) with “Import my
   <Provider> workspace into Macro.” They read only, ask who should see the import
   when needed, and present a review before creating anything. Other connectors
-  list candidates and ask which ones to create. No importer writes to its source.
+  list candidates and ask which ones to create. Autodesk Fusion opens
+  `ImportFromFusion` with “Import my Fusion designs into Macro.”, which browses
+  and imports the designs the user picks. No importer writes to its source.
 - The shared review identifies its source, shows task/project totals for issue
   trackers, and lets the owner exclude objects and change sharing. On phones,
   **Open full review** uses the existing full-height sheet. Approve on the card,

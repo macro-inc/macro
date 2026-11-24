@@ -525,6 +525,16 @@ export const enableTimeTracking = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Autodesk Fusion in the files import dialog and Settings → Integrations'
+ * Import. The backend refuses `ImportFromFusion` under the same key.
+ */
+export const enableFusionImport = defineFlag({
+  key: 'enable-fusion-import',
+  env: 'ENABLE_FUSION_IMPORT',
+  default: onInDev,
+});
+
 /** Task-composer template selection, authoring, and saved-draft recovery. */
 export const enableTaskTemplates = defineFlag({
   key: 'enable-task-templates',
