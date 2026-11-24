@@ -136,6 +136,14 @@ tools/HTTP/GraphQL surfaces over them.
   edit hooks invalidate preview metadata; no mailbox index is added for counts.
   No worker initializes consent or activates selected contribution.
 
+- A company merged away keeps answering to its old id through
+  `crm_company_aliases`: the `/crm/companies/{company_id}` routes, the company and
+  pipeline tools, a contact's company, record associations and `/crm/previews`.
+  The company extractor and `company_receipt` mint the receipt for the company
+  the id names now, so act on the receipt's id, never on the path or argument.
+  Previews stay keyed by the requested id and name the other in `mergedInto`.
+  Soup and search filters match company ids as given.
+
 - Company lists with at most 500 explicit IDs and policy target reads probe the
   primary key behind `OFFSET 0` before applying team/visibility filters. Keeping a team
   predicate inside the probe lets stale plans scan the team per ID. For target
