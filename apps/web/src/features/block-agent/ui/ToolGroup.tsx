@@ -2,7 +2,8 @@
  * A run of tool calls and thoughts as one row that opens to them. While the
  * turn is in the run, the row is its live line: the working dots and the
  * step the agent is on, or the session's own status line over them. Once
- * the run is over it settles to "Used N tools", with any failures counted.
+ * the run is over it settles to "Used N tools"; a failure is the agent's to
+ * explain, so the row never counts them.
  * It opens only when the reader asks, and then lists every call in full.
  *
  * Shaped like `Thought` rather than `ToolCard`: a bare caret row, no surface,
@@ -17,8 +18,6 @@ import { DisclosureCaret } from './DisclosureCaret';
 export interface ToolGroupProps {
   /** The steps the run shows when open. */
   count: number;
-  /** How many of them failed; the settled row says so. */
-  failed?: number;
   /**
    * The turn is in this run: the row is its live line over these steps. A
    * turn has at most one live run.
@@ -44,7 +43,6 @@ export function ToolGroup(props: ToolGroupProps) {
     props.onOpenChange?.(open);
   };
   const contentId = createUniqueId();
-  const failed = () => props.failed ?? 0;
 
   return (
     <div class="min-w-0 text-sm leading-6 text-ink-extra-muted">
@@ -58,16 +56,8 @@ export function ToolGroup(props: ToolGroupProps) {
         <Show
           when={props.live}
           fallback={
-            <span class="flex min-w-0">
-              <span class="min-w-0 truncate">
-                {`Used ${props.count} ${props.count === 1 ? 'tool' : 'tools'}`}
-              </span>
-              {/* Never cut off: a narrow row shortens the count first. */}
-              <Show when={failed() > 0}>
-                <span class="shrink-0 whitespace-pre text-failure">
-                  {` · ${failed()} failed`}
-                </span>
-              </Show>
+            <span class="min-w-0 truncate">
+              {`Used ${props.count} ${props.count === 1 ? 'tool' : 'tools'}`}
             </span>
           }
         >

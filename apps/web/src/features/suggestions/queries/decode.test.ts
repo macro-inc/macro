@@ -37,7 +37,11 @@ it('reads a running background suggestion with the server’s status and what it
     runMode: 'background',
     prompt: 'Summarize this week and post it.',
     sends: 'Posts the weekly status summary in #ops',
-    run: { sessionId: 'session-1', startedAt: '2026-11-09T08:00:00Z' },
+    run: {
+      sessionId: 'session-1',
+      startedAt: '2026-11-09T08:00:00Z',
+      stopping: false,
+    },
     title: 'Post the weekly status summary',
     summary: 'This week has none.',
     importance: 80,
@@ -121,4 +125,30 @@ it('reads a feed asked for with a limit, which has no done list', () => {
   expect(
     toFeed({ suggestions: [open], counts: COUNTS }).suggestions
   ).toHaveLength(1);
+});
+
+it('keeps the line a run reported, and that a run asked to stop is stopping', () => {
+  const run = WIRE.run;
+  if (!run) throw new Error('the fixture has a run');
+
+  expect(
+    toSuggestion({
+      ...WIRE,
+      run: {
+        ...run,
+        state: 'cancelling',
+        report: '3 quotes compared · Nothing was sent',
+      },
+    })
+  ).toMatchObject({
+    run: {
+      stopping: true,
+      report: '3 quotes compared · Nothing was sent',
+    },
+  });
+  expect(
+    toSuggestion({ ...WIRE, run: { ...run, report: null } })
+  ).toMatchObject({
+    run: { stopping: false },
+  });
 });

@@ -78,7 +78,7 @@ pub enum GenerationEvent {
     /// No session finished or changed anything.
     NoneFinished,
     /// Its process is stopping and cut its sessions short before any
-    /// finished.
+    /// finished, or cut short one whose work only a next attempt can finish.
     ProcessStopped,
     /// Its heartbeat stopped for longer than the sweep allows.
     HeartbeatLost,
@@ -150,16 +150,21 @@ pub struct SessionResult {
     pub finished: bool,
     /// Whether it changed anything, by its kind's measure.
     pub changed: bool,
+    /// Whether its process stopping cut it short where what it did is not
+    /// enough to keep: the generation then runs again instead of ending
+    /// partial.
+    pub cut_short: bool,
 }
 
 /// The event that ends a generation whose sessions came out as `sessions`,
-/// with its process `stopping` or not.
+/// with its process `stopping` or not. A stopping process cancels it, to run
+/// again, when no session finished or one was cut short.
 pub fn conclude(sessions: &[SessionResult], stopping: bool) -> GenerationEvent {
     let finished = sessions.iter().filter(|session| session.finished).count();
     let changed = sessions.iter().any(|session| session.changed);
     if !sessions.is_empty() && finished == sessions.len() {
         GenerationEvent::AllFinished
-    } else if stopping && finished == 0 {
+    } else if stopping && (finished == 0 || sessions.iter().any(|session| session.cut_short)) {
         GenerationEvent::ProcessStopped
     } else if finished > 0 || changed {
         GenerationEvent::SomeFinished

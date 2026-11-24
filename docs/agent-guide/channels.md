@@ -186,8 +186,9 @@ An external email can be selected as a channel participant. For an unregistered 
 **New direct message** opens a draft message whose To
 field takes either people or one existing conversation. People open their DM
 or group chat, creating it on the first message. While the field is empty it
-also suggests the channels and group chats you belong to (the same set as
-Share To; reach a one-to-one DM by picking the person). A picked channel is the
+also suggests every channel and group chat in your channel list, whatever its
+size (the same set as Share To and the iOS share sheet; reach a one-to-one DM
+by picking the person). A picked channel is the
 only recipient: the field takes no typing and suggests nothing until its chip
 is removed (its X, or Backspace), and once anyone is picked channels are no
 longer suggested. Send posts into the channel and opens it at the message, as
@@ -278,10 +279,11 @@ at the same time take turns every two seconds. In a DM it is the typing row.
 A channel mention's reply in its thread is one message, so the line sits in
 it, and reads `Thinking` whenever the turn is running with no open run, before
 the first step or while the agent writes after one.
-Once a run closes, it folds to a `Used N tools` summary (with
-`· N failed` when a step failed), with a caret after it on hover, that opens
-to compact rows like the session's tool rows: the label, and **Failed** or
-**Interrupted** when a step did not finish.
+Once a run closes, it folds to a `Used N tools` summary, with a caret after it
+on hover, that opens to compact rows like the session's tool rows: the label
+only. A failed or interrupted step looks like any other, and a program that
+failed or stopped without naming a step is left out of the line and the
+summary; the agent explains a failure in its reply.
 Documents, sessions, pull requests, and contacts an agent's reply mentions are
 set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
@@ -442,8 +444,8 @@ the tool's own name, without a server or workspace label, never by the harness's
 (`mcp`). Clicking the row expands the exchange: a `Request` section with the
 tool's own arguments and a `Response` section with what it returned, both as
 syntax-lit, pretty-printed JSON (prose results show as text), each with a copy
-button that copies the whole section; a call that failed is faded, shows the
-error as its subtitle, and adds an `Error` section. Rows for a call still running
+button that copies the whole section; a call that failed shows its plain row,
+with no failure label or fade. Rows for a call still running
 show whatever has arrived so far.
 
 ## Inline image actions
@@ -466,9 +468,11 @@ and use the lightbox toolbar instead. Videos have their own toolbar; see
 
 When an agent reads a channel through Macro MCP, `ReadChannelMessages`,
 `ReadChannelThread`, and `ReadChannelMessageContext` include download URLs for
-image and video attachments, including attachments in replies and previews.
+image, video and voice memo attachments, including attachments in replies and
+previews.
 Up to eight distinct images per response are also returned as inline images.
-Videos are linked for inspection with a video-capable tool. If an image cannot
+Videos and voice memos are linked for inspection with a video- or
+audio-capable tool. If an image cannot
 be loaded or exceeds the inline limit, its URL remains available. To check this,
 ask the agent to inspect an image on a channel message and a video on a reply;
 verify that its tool response includes the matching attachment URLs.
@@ -508,16 +512,45 @@ in the DM (`<m-account-manager-request>{"id":"<grant>"}</...>`).
 
 ## Message composer
 
-Channel messages and thread replies have a microphone next to Send on pointer
-devices. It uses the same OpenAI Whisper dictation and scrolling volume
-timeline as AI chat. **Use dictation** appends text to the draft without
-sending; **Cancel dictation** or Escape preserves the existing draft. Sending
-is blocked during dictation, including keyboard and external send actions.
+Channel messages and thread replies have a microphone next to Send, in the
+expanded composer and in the resting one-line pill. On pointer devices it
+(`Dictate or record`) opens a menu: **Dictate** or **Voice memo**. Dictate uses
+the same OpenAI Whisper dictation and scrolling volume timeline as AI chat.
 Confirming uploads the in-memory audio to Whisper, which is available on all
-plans without consuming chat credits. Browsers without microphone recording
-show a disabled button. Touch devices have no microphone in either the
-collapsed or the expanded composer — their keyboards already dictate — so Send
-is the only control on that edge.
+plans without consuming chat credits. Touch devices and the iOS app skip the
+menu (their keyboards already dictate): the microphone (`Record a voice memo`)
+records a memo at once. Browsers that cannot record show the dictation-only
+button, disabled.
+
+Both recordings cover the composer with the same row: **Cancel dictation** /
+**Discard voice memo** where + was, a mode mark (Aa for dictation, a red dot
+for a memo), the level timeline, an `m:ss` timer, and the primary action where
+Send was (**Use dictation** / **Stop and attach**, a spinner while it
+transcribes or uploads). The row itself takes focus, so Enter or Space runs the
+primary action and Escape cancels, also while it is busy. **Use dictation**
+appends text to the draft without sending; Cancel preserves the draft. A failed
+transcription is stated in the panel and the primary action becomes **Try
+transcribing again** with the same recording.
+
+A voice memo records in the browser (AAC in MP4 where the browser can, else
+WebM/Opus). **Stop and attach** uploads it as a `static/audio` attachment,
+shown in the draft as a voice memo chip (play, seek, time, remove); the typed
+draft is never touched. **Discard voice memo** throws the recording away
+without uploading; once it is uploading, Discard is disabled and the memo lands
+in the draft. A failed upload is stated in the panel (no toast) and keeps the
+recording for **Try attaching again**. Recordings stop and attach themselves at
+five minutes. A draft already holding the maximum number of attachments
+disables the memo microphone. A blocked or missing microphone, an empty
+recording or the limit is noted on one line under the composer, which clears
+after a few seconds, when the draft changes, or when the next recording starts.
+Sending is blocked while dictating or recording, including keyboard and
+external send actions. Recipients play the memo with the same chip in the
+message. The recording lives only in the tab until it is uploaded (dictation:
+until it is transcribed): a reload or crash before then loses it. Only channel
+messages and channel thread replies offer voice memos; comments, calls, email
+discussions, message edits and WhatsApp chats keep dictation only. To check:
+record a memo, type before and after it, send, and play it as the other
+participant; repeat at 390px with touch emulation.
 
 Composer and conversation body text use `text-base` (15px at the default root
 size) on desktop and mobile. The shared scale uses 14px for `text-sm` and 12px
@@ -601,7 +634,11 @@ Escape also cancels an edit. The iOS app uses its native media picker. Check inl
 on desktop and touch: attach a file and save, then edit again and discard changes
 without changing the original message or attachments.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
-Check this arrangement at both phone and tablet widths.
+Check this arrangement at both phone and tablet widths. Its To field is the
+New direct message field (see [Create a channel](#create-a-channel)): people,
+or one channel or group chat, which fills the field until its chip is removed.
+Send posts into that channel and closes the sheet without leaving the current
+view. Phones and tablets behave the same.
 
 With a wrapping draft present, repeatedly narrow and widen the desktop split
 and window, then scroll the message history. The composer should settle into
@@ -1356,9 +1393,11 @@ There is no separate Browse channels row. Closing search restores the sectioned
 list. Collapsed sections retain unread rows by default; **Display → Unread when
 collapsed** turns those rows off without changing expanded membership. Off-page
 unread rows supplement only collapsed groups with that setting enabled; expanded
-groups keep the source's page order. An unseen invite (being added to a channel)
-makes the channel unread, as it is in Notifications and the Chat badge, until
-Chat opens the channel and marks the invite seen.
+groups keep the source's page order. A collapsed section and **Unread only**
+also keep a channel whose only unread is a mention in a thread: its row shows the
+mention count and no unread dot, and the mention lights the Chat badge. Being
+added to a channel does not make it unread; opening the channel in Chat marks
+its invite seen, which tidies Notifications.
 
 Drag a section heading or its name to reorder sections. There is no drag-handle
 icon. Keyboard focus reveals an icon-free **Reorder** control over the heading
@@ -1695,7 +1734,16 @@ and full notification edge load before the split opens with the same top-level
 read policy. Selecting another channel while that request is pending must cancel
 the pending open; failed lookups must not open a split or mark anything seen.
 
-The app-shell Chat badge uses `ChannelUnreadPresence`: only
+With unified notifications on, the app-shell Chat badge lights for an unseen
+top-level message or a mention, thread mentions included: what can make a channel
+unread in the sidebar or show a mention count on its row. A thread reply, a
+reaction, a ping or an invite leaves it dark (see
+[Notifications](notifications.md)). To check, have another account reply in a
+thread you are part of: the badge stays dark and Notifications lists the reply as
+unread. Then have them mention you in that thread: the badge lights and the
+channel's row shows **1**, under **Unread only** too.
+
+With unified notifications off, the badge uses `ChannelUnreadPresence`: only
 channel IDs and at most one unread top-level message/mention ID/state per channel, with a
 500-channel candidate bound and no history, message previews, or metadata. It
 excludes replies, thread mentions, and reactions, matching the channel-row badges.

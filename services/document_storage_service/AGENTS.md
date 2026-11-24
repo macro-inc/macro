@@ -137,7 +137,10 @@ threads, pins, recents, notifications, folders, activity.
 - `/time` mounts `crates/time_tracking` (entries and the running timer). Its
   writes need `enable-time-tracking` for the caller from the shared PostHog
   client, failing closed; a local stack uses `LocalTimeTracking` instead, so
-  time tracking is on there without a PostHog flag, as Passwords is.
+  time tracking is on there without a PostHog flag, as Passwords is. Its
+  report router (`/time/summary`, `/time/export`) is merged in with its own
+  state; summaries read the primary and exports the replica, and
+  `graphql_time_report_context` serves `timeSummary` from the same service.
 - Provision required `POSTHOG_API_KEY` before startup; the flag client
   evaluates `enable-programmatic-calls` per caller for the explicit call start,
   join, and leave routes; failures disable those routes.
@@ -199,7 +202,7 @@ threads, pins, recents, notifications, folders, activity.
 
 - The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.
 - Compose activity ingestion with `service/activity/persistence.rs`'s `PgChannelActivityRepo` so timeline facts and their channel changes commit together; `timeline_activity` forwards the returned receipt's sequence on each activity.
-- Admit channel-timeline activity batches through the shared message-write gate before opening a transaction; acquire unique channel permits in sorted order and retain all through commit.
+- Admit channel-timeline activity batches through the shared message-write gate before opening a transaction; acquire unique channel permits in sorted order and retain all through commit. A refused admission is retried with backoff (permits released while waiting), because an error from this repository ends the activity consumer's run.
 
 ## Passwords vault
 

@@ -141,3 +141,14 @@ async fn each_scheduler_round_is_its_own_finished_root_span(db: PgPool) {
     );
     assert_eq!(drains[0].parent_span_id, pruning.span_context.span_id());
 }
+
+#[test]
+fn a_channel_prune_backlog_continues_on_the_next_round() {
+    let now = tokio::time::Instant::now();
+
+    assert_eq!(next_channel_prune(now, true), now);
+    assert_eq!(
+        next_channel_prune(now, false),
+        now + CHANGE_LOG_RETENTION_INTERVAL
+    );
+}

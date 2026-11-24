@@ -8985,6 +8985,196 @@
         }
       }
     },
+    "/crm/companies/{company_id}/domains": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::company_domains"],
+        "summary": "Add a domain the organization uses to a company, so mail and new contacts\nfrom it are filed under this company instead of a company of its own. Any\nteam member who can see the company may add one. The company's name and\nprimary domain stay. Refused for a personal or generic email provider\n(400) and for a domain another company of the team tracks (409, naming it\nwhen the caller can see it). Returns the company without its contacts.\nIdempotent.",
+        "operationId": "add_crm_company_domain",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The company to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyDomainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmCompanyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyDomainTakenResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::company_domains"],
+        "summary": "Remove a domain from a company. Contacts, their addresses and mail stay;\nlater mail from the domain is filed as it was before the domain was\nadded. The domain the company is named after stays until the company is\nrenamed (400). Removing a domain from a company whose email sync is off\nrequires an admin or owner (403). Returns the company without its\ncontacts. Idempotent.",
+        "operationId": "remove_crm_company_domain",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The company to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyDomainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmCompanyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies/{company_id}/email-sync": {
       "put": {
         "tags": ["crm::inbound::axum_router::set_email_sync"],
@@ -30438,6 +30628,264 @@
         }
       }
     },
+    "/time/export": {
+      "get": {
+        "tags": ["time_tracking"],
+        "summary": "A scope's entries over a period as CSV text, oldest day first: one row\nper entry with its day, person (as an email), task, minutes, hours, note\nand source. Capped at 10,000 entries and 16 MiB; `complete` is false when\nentries were left out. May miss writes from the last few seconds.",
+        "operationId": "export_time",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Whose time to read.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TimeScopeName"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "description": "The project, with `scope=project` only.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "The first day, `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "The last day, `YYYY-MM-DD`, at most 365 days after `from`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeExport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time/summary": {
+      "get": {
+        "tags": ["time_tracking"],
+        "summary": "A scope's time over a period: the total, totals by the first grouping,\neach split by the second, and the second grouping's totals. Only tasks\nthe caller can see count, out of the Trash; a scope past 5,000 tasks is\nread to the first 5,000 and answers `complete: false`.",
+        "operationId": "get_time_summary",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Whose time to read.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TimeScopeName"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "description": "The project, with `scope=project` only.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "The first day, `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "The last day, `YYYY-MM-DD`, at most 365 days after `from`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "description": "What the totals are grouped by.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TimeGrouping"
+            }
+          },
+          {
+            "name": "thenBy",
+            "in": "query",
+            "description": "What each group is split by; another grouping than `groupBy`.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TimeGrouping"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/time/tasks/{task_id}/entries": {
       "get": {
         "tags": ["time_tracking"],
@@ -39224,6 +39672,37 @@
           }
         }
       },
+      "CompanyDomainRequest": {
+        "type": "object",
+        "description": "One of a company's domains. It travels in the body, as a contact's\naddresses do.",
+        "required": ["domain"],
+        "properties": {
+          "domain": {
+            "type": "string",
+            "description": "A bare domain such as \"example.com\": no scheme, path or email. An\nidentical retry is accepted."
+          }
+        }
+      },
+      "CompanyDomainTakenResponse": {
+        "type": "object",
+        "description": "The 409 answer when another company of the team already tracks the domain.",
+        "required": ["message"],
+        "properties": {
+          "companyId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The company that tracks the domain. Absent when the caller cannot see\nit: an archived company, for a team member."
+          },
+          "companyName": {
+            "type": ["string", "null"],
+            "description": "That company's display name, when the caller can see it."
+          },
+          "message": {
+            "type": "string",
+            "description": "What happened, naming the other company when the caller can see it."
+          }
+        }
+      },
       "CompanyImportResponse": {
         "type": "object",
         "description": "What a companies import did.",
@@ -46515,6 +46994,21 @@
             },
             "description": "Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default."
           },
+          "exclude_views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailSearchView"
+            },
+            "description": "Leave out the threads in these mailbox views. Search only."
+          },
+          "favorite": {
+            "type": ["boolean", "null"],
+            "description": "True for the caller's favorite threads only, false to leave them out.\nSearch only."
+          },
+          "has_attachment": {
+            "type": ["boolean", "null"],
+            "description": "True for threads with an attachment on any message, false for threads\nwith none. Search only."
+          },
           "importance": {
             "type": ["boolean", "null"],
             "description": "Filter by email importance. None to not filter. True to show only important emails\n(drafts, personal, sent, or uncategorized). False to show only unimportant emails\n(those categorized as promotions, social, updates, or forums)."
@@ -46529,6 +47023,13 @@
           "is_read": {
             "type": ["boolean", "null"],
             "description": "Filter by the email thread's read flag, independently of notification state."
+          },
+          "label_names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailLabelMatch"
+            },
+            "description": "Tags or labels each thread must carry, or must not, by name, as typing\n`label:` or `in:<name>` into the search does. A name matches the\ncaller's tags with that label and the labels with that name in the\ncaller's inboxes, ignoring case; a name that is neither matches\nnothing. Search only."
           },
           "link_ids": {
             "type": "array",
@@ -46562,9 +47063,26 @@
             },
             "description": "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
           },
+          "sent_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Only messages sent at or after this instant. Mail with no sent time\nnever matches. Search only."
+          },
+          "sent_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Only messages sent before this instant. Mail with no sent time never\nmatches. Search only."
+          },
           "shared": {
             "$ref": "#/components/schemas/SharedEmailFilter",
             "description": "Controls whether shared email threads are included in results.\nDefaults to \"exclude\" (only the user's own threads)."
+          },
+          "text_matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailTextMatch"
+            },
+            "description": "Words or phrases each message must contain, or must not, in one part\nof it, as typing `subject:`, `from:`, `to:`, `cc:`, `bcc:` or a minus\ninto the search does. Search only."
           },
           "view": {
             "oneOf": [
@@ -46791,6 +47309,21 @@
           }
         ],
         "description": "One positive whole-thread selector; denials always take precedence."
+      },
+      "EmailLabelMatch": {
+        "type": "object",
+        "description": "A tag or provider label that an email thread must, or must not, carry,\nnamed by its label.",
+        "required": ["name"],
+        "properties": {
+          "exclude": {
+            "type": "boolean",
+            "description": "Leave out the threads that carry it instead."
+          },
+          "name": {
+            "type": "string",
+            "description": "The label of one of the caller's tags, or the name of a label in one\nof the caller's inboxes, ignoring case."
+          }
+        }
       },
       "EmailPolicyActorKind": {
         "type": "string",
@@ -47500,7 +48033,31 @@
       "EmailSearchView": {
         "type": "string",
         "description": "A mailbox view the Email list scopes a search to, as its tabs do.",
-        "enum": ["sent", "drafts"]
+        "enum": ["sent", "drafts", "calendar"]
+      },
+      "EmailTextMatch": {
+        "type": "object",
+        "description": "A word or phrase that must, or must not, appear in one part of a message.",
+        "required": ["part", "text"],
+        "properties": {
+          "exclude": {
+            "type": "boolean",
+            "description": "Leave out the messages that match instead."
+          },
+          "part": {
+            "$ref": "#/components/schemas/EmailTextPart",
+            "description": "The part of the message matched."
+          },
+          "text": {
+            "type": "string",
+            "description": "One word, matched as a search word is (a prefix unless the search is\nexact), or several words, matched as an adjacent phrase."
+          }
+        }
+      },
+      "EmailTextPart": {
+        "type": "string",
+        "description": "The part of an email message a search condition matches.",
+        "enum": ["any", "subject", "from", "to", "cc", "bcc"]
       },
       "EmptyResponse": {
         "type": "object",
@@ -69028,6 +69585,196 @@
         "type": "string",
         "description": "How a time entry was made.",
         "enum": ["manual", "timer"]
+      },
+      "TimeExport": {
+        "type": "object",
+        "description": "A scope's entries over a period as CSV text.",
+        "required": ["csv", "rows", "complete"],
+        "properties": {
+          "complete": {
+            "type": "boolean",
+            "description": "False when entries were left out: past 10,000 entries or 16 MiB, or\npast the first 5,000 tasks of the scope."
+          },
+          "csv": {
+            "type": "string",
+            "description": "The CSV: one row per entry, oldest day first."
+          },
+          "rows": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Entries written.",
+            "minimum": 0
+          }
+        }
+      },
+      "TimeGroup": {
+        "type": "object",
+        "description": "The total of one group, and its split by the second grouping.",
+        "required": ["key", "minutes", "taskCount", "rows"],
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/TimeGroupKey",
+            "description": "What the group is for."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes logged in the group.",
+            "minimum": 0
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeTotal"
+            },
+            "description": "The group's totals by the second grouping, in report order; empty\nwithout one."
+          },
+          "taskCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tasks with time in the group.",
+            "minimum": 0
+          }
+        }
+      },
+      "TimeGroupKey": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "One person's time.",
+            "required": ["userId", "by"],
+            "properties": {
+              "by": {
+                "type": "string",
+                "enum": ["person"]
+              },
+              "userId": {
+                "type": "string",
+                "description": "The person."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The time on one task.",
+            "required": ["taskId", "by"],
+            "properties": {
+              "by": {
+                "type": "string",
+                "enum": ["task"]
+              },
+              "taskId": {
+                "type": "string",
+                "description": "The task document."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The time logged for one day.",
+            "required": ["date", "by"],
+            "properties": {
+              "by": {
+                "type": "string",
+                "enum": ["day"]
+              },
+              "date": {
+                "type": "string",
+                "format": "date",
+                "description": "The loggers' calendar day."
+              }
+            }
+          }
+        ],
+        "description": "What one total is for."
+      },
+      "TimeGrouping": {
+        "type": "string",
+        "description": "What a report's totals are grouped by.",
+        "enum": ["person", "task", "day"]
+      },
+      "TimeScopeName": {
+        "type": "string",
+        "description": "Whose time a report reads.",
+        "enum": ["project", "mine", "team"]
+      },
+      "TimeSummary": {
+        "type": "object",
+        "description": "The time a scope logged over a period.",
+        "required": [
+          "from",
+          "to",
+          "totalMinutes",
+          "taskCount",
+          "complete",
+          "groups",
+          "thenTotals"
+        ],
+        "properties": {
+          "complete": {
+            "type": "boolean",
+            "description": "False when the scope held more than 5,000 tasks and only the first\n5,000 were read."
+          },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "description": "The first day of the period."
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeGroup"
+            },
+            "description": "Totals by the first grouping, in report order: days in calendar order,\npeople and tasks with the most time first. For the caller's own and\ntheir team's time grouped by person, every current member has a group,\nwith or without time."
+          },
+          "scopeTaskCount": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "For a project, its tasks the caller can see that are out of the\nTrash, with time or not; absent for other scopes.",
+            "minimum": 0
+          },
+          "taskCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tasks with time in the period.",
+            "minimum": 0
+          },
+          "thenTotals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeTotal"
+            },
+            "description": "Totals by the second grouping across all groups, in report order;\nempty without one."
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "description": "The last day of the period."
+          },
+          "totalMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes logged in the period.",
+            "minimum": 0
+          }
+        }
+      },
+      "TimeTotal": {
+        "type": "object",
+        "description": "A total of minutes.",
+        "required": ["key", "minutes"],
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/TimeGroupKey",
+            "description": "What the total is for."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes logged.",
+            "minimum": 0
+          }
+        }
       },
       "TimeTrackingApiError": {
         "type": "object",

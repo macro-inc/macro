@@ -262,23 +262,33 @@ impl InboxScope {
 
 /// Unread rows past which the groups of one entity type stop being counted.
 /// A count this high is shown as "99+", so the rest would be read for
-/// nothing.
+/// nothing. Channels are counted for Chat too, so they stop once this many
+/// of their rows are also unread there.
 pub const UNREAD_ROWS_COUNTED: usize = 100;
+
+/// One unread row, as counted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnreadRow {
+    /// The row's kind.
+    pub row_type: InboxRowType,
+    /// Whether Chat shows what makes the row unread.
+    pub in_chat: bool,
+}
 
 /// The unread rows of a viewer's inbox, by group, kept so that a change to
 /// some groups recounts those groups alone.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UnreadRows {
-    /// The kind of each unread row of every group that has one.
-    pub(crate) groups: HashMap<FeedKey, Vec<InboxRowType>>,
+    /// The unread rows of every group that has one.
+    pub(crate) groups: HashMap<FeedKey, Vec<UnreadRow>>,
     /// Entity types with more groups that may hold unread rows than were
-    /// read, because the ones read already hold [`UNREAD_ROWS_COUNTED`].
+    /// read, because the ones read already hold enough.
     pub(crate) more: HashSet<EntityType>,
 }
 
 impl UnreadRows {
-    /// The unread rows of `groups`, each given the kinds of its unread rows.
-    pub fn of(groups: HashMap<FeedKey, Vec<InboxRowType>>) -> Self {
+    /// The unread rows of `groups`.
+    pub fn of(groups: HashMap<FeedKey, Vec<UnreadRow>>) -> Self {
         Self {
             groups,
             more: HashSet::new(),
@@ -289,20 +299,39 @@ impl UnreadRows {
     /// whose groups were not all read counts the ones that were, which is
     /// at least [`UNREAD_ROWS_COUNTED`] across that entity type's kinds.
     pub fn counts(&self) -> HashMap<InboxRowType, u32> {
+        self.count_where(|_| true)
+    }
+
+    /// How many of [`Self::counts`] Chat shows as unread.
+    pub fn chat_counts(&self) -> HashMap<InboxRowType, u32> {
+        self.count_where(|row| row.in_chat)
+    }
+
+    fn count_where(&self, counted: impl Fn(&UnreadRow) -> bool) -> HashMap<InboxRowType, u32> {
         let mut counts = HashMap::new();
-        for row_type in self.groups.values().flatten() {
-            *counts.entry(*row_type).or_default() += 1;
+        for row in self.groups.values().flatten().filter(|row| counted(row)) {
+            *counts.entry(row.row_type).or_default() += 1;
         }
         counts
     }
 
-    /// Unread rows in the groups filed under entities of `entity_type`.
-    pub(crate) fn rows_under(&self, entity_type: EntityType) -> usize {
-        self.groups
-            .iter()
-            .filter(|(group, _)| group.entity().entity_type == entity_type)
-            .map(|(_, rows)| rows.len())
-            .sum()
+    /// Whether the groups filed under entities of `entity_type` already hold
+    /// enough unread rows that reading more would change no label.
+    pub(crate) fn holds_enough(&self, entity_type: EntityType) -> bool {
+        let rows = || {
+            self.groups
+                .iter()
+                .filter(|(group, _)| group.entity().entity_type == entity_type)
+                .flat_map(|(_, rows)| rows)
+        };
+        if rows().count() < UNREAD_ROWS_COUNTED {
+            return false;
+        }
+
+        // Replies alone can fill the first count, and Chat shows none of
+        // them: stopping there would hide the messages it does show.
+        entity_type != EntityType::Channel
+            || rows().filter(|row| row.in_chat).count() >= UNREAD_ROWS_COUNTED
     }
 }
 

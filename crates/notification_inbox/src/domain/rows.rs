@@ -709,6 +709,34 @@ fn actions(slot: &Slot, shown: &[FeedNotification]) -> Vec<InboxRowAction> {
     }
 }
 
+/// Whether Chat shows what makes `row` unread: an unseen top-level message,
+/// or a mention of the viewer wherever it is. Replies, reactions and pings
+/// are unread in the inbox alone.
+///
+/// These are the notifications Chat's own lists read a channel's unread
+/// state and mention count from: the `topLevelMessagesOnly` notification
+/// filter (`notification::outbound::entity_notifications`) and the channel's
+/// unseen `channel_mention` notifications. Change the two together.
+pub fn unread_in_chat(row: &InboxRow, viewer: &MacroUserIdStr<'static>) -> bool {
+    if row.id.group.entity().entity_type != EntityType::Channel {
+        return false;
+    }
+    row.notifications.iter().any(|notification| {
+        counts_as_unseen(notification)
+            && matches!(
+                channel_view(notification, viewer).kind,
+                ChannelKind::Message {
+                    role: MessageRole::Mention,
+                    ..
+                } | ChannelKind::Message {
+                    role: MessageRole::Message | MessageRole::DocumentMention,
+                    thread_id: None,
+                    ..
+                }
+            )
+    })
+}
+
 /// The rows of the group filed under `group`, newest first.
 ///
 /// `notifications` are the viewer's pending notifications filed under the

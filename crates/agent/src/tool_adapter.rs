@@ -157,9 +157,9 @@ impl ToolsetToolAdapter {
                             let telemetry = req_ctx
                                 .genai_telemetry
                                 .then(|| ToolCallSpan::begin(&tool_name, &args));
-                            let span = telemetry.as_ref().map_or_else(tracing::Span::none, |t| {
-                                t.span().clone()
-                            });
+                            let span = telemetry
+                                .as_ref()
+                                .map_or_else(tracing::Span::none, |t| t.span().clone());
                             let result: Result<ToolResult<serde_json::Value>, ToolSetError> =
                                 async {
                                     let callable = (deserializer)(&args)
@@ -175,7 +175,7 @@ impl ToolsetToolAdapter {
                             match result {
                                 Ok(Ok(value)) => crate::tool_media::model_output(value),
                                 Ok(Err(e)) => {
-                                    tracing::error!(error = ?e.internal_error, "toolset tool error");
+                                    log_tool_error("toolset tool error", &e.internal_error);
                                     Err(ToolExecutionError::other(e.description))
                                 }
                                 Err(ToolSetError::Deserialization(e)) => Err(invalid_args(e)),
@@ -285,7 +285,7 @@ impl DynToolSetAdapter {
                     match toolset.try_tool_call(ctx, req_ctx, &tool_name, &args).await {
                         Ok(Ok(value)) => crate::tool_media::model_output(value),
                         Ok(Err(e)) => {
-                            tracing::error!(error = ?e.internal_error, "tool error");
+                            log_tool_error("tool error", &e.internal_error);
                             Err(ToolExecutionError::other(e.description))
                         }
                         Err(e) => Err(ToolExecutionError::other(e.to_string())),
@@ -296,7 +296,25 @@ impl DynToolSetAdapter {
     }
 }
 
+/// A failed tool's error, at ERROR. Its text can quote the call (an MCP
+/// tool's error is its result), and the event lands on the turn's span too,
+/// so inside `genai_telemetry::withhold_content` it says only that the tool
+/// failed.
+fn log_tool_error(message: &'static str, error: &anyhow::Error) {
+    if genai_telemetry::content_withheld() {
+        tracing::error!(
+            error = "the tool failed; its text is withheld with the call's content",
+            "{message}"
+        );
+    } else {
+        tracing::error!(error = ?error, "{message}");
+    }
+}
+
 /// Deserialization failures are invalid model-supplied arguments.
 fn invalid_args(e: serde_json::Error) -> ToolExecutionError {
     ToolExecutionError::invalid_args(e.to_string())
 }
+
+#[cfg(test)]
+mod test;

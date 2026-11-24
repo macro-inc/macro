@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ml.message_id AS \"message_id!\", m.thread_id AS \"thread_id!\"\n        FROM email_labels l\n        CROSS JOIN LATERAL (\n            SELECT ml.message_id\n            FROM email_message_labels ml\n            WHERE ml.label_id = l.id AND ml.message_id > $3\n            ORDER BY ml.message_id\n            LIMIT $4\n        ) ml\n        CROSS JOIN LATERAL (\n            SELECT em.thread_id FROM email_messages em WHERE em.id = ml.message_id OFFSET 0\n        ) m\n        WHERE l.link_id = $1 AND l.provider_label_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "50039de73d0bb0a942e1cce4bd6e071254a997943d5e4b1e0b56ea33d266ae84"
+}

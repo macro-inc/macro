@@ -392,8 +392,9 @@ const firstReads = new WeakMap<object, Promise<unknown>>();
 export type CalendarRangeRead =
   | { kind: 'range'; data: CalendarOccurrencesData }
   /**
-   * The cache may be older than what REST already showed. `older` is what it
-   * holds for a covered week, for when REST cannot answer either.
+   * The cache may be older than what REST already showed or than a change it
+   * was told of. `older` is what it holds for a covered week, for when REST
+   * cannot answer either.
    */
   | { kind: 'behind'; older?: CalendarOccurrencesData }
   | { kind: 'unsupported' }
@@ -430,11 +431,34 @@ async function askCalendarRange(
   return withinCacheHeadStart(answer, headStartMs);
 }
 
+/** Brings a cache that may be behind forward, unless a pending write shaped the week. */
+async function catchUpBeforeAnswering(
+  result: Extract<CalendarRangeCacheResult, { kind: 'range' }>,
+  options: {
+    sync?: Pick<CalendarSyncController, 'catchUp'>;
+    span?: TraceSpan;
+  }
+): Promise<CalendarCatchUp> {
+  if (!options.sync) return 'current';
+  if (result.optimistic) {
+    options.span?.setAttr('calendar.read.pending_write', true);
+    return 'current';
+  }
+  // Stays on a read whose deadline passes while the delta runs.
+  options.span?.setAttr('calendar.read.catch_up', 'waiting');
+  const catchUp = await options.sync.catchUp();
+  options.span?.setAttr('calendar.read.catch_up', catchUp);
+  return catchUp;
+}
+
 /**
  * Answers a viewport from the cache, fetching only spans never fetched and,
  * once per key, viewports whose cached occurrences cannot be read. When the
- * cache may be older than a REST answer already on screen, `sync` brings it
- * forward first; a cache it cannot bring forward answers `behind`.
+ * cache may be older than a REST answer already on screen or a change it was
+ * told of, `sync` brings it forward first; a cache it cannot bring forward
+ * answers `behind`. A week a pending write shaped answers from the cache
+ * without catching up: REST cannot show the write, and its settle refreshes
+ * the week.
  */
 export async function readCalendarRange(
   host: Pick<
@@ -462,13 +486,9 @@ export async function readCalendarRange(
   if (first === 'not-ready') return { kind: 'not-ready' };
   let result = first;
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
-  let catchUp: CalendarCatchUp = 'current';
-  if (behind && options.sync) {
-    // Stays on a read whose deadline passes while the delta runs.
-    options.span?.setAttr('calendar.read.catch_up', 'waiting');
-    catchUp = await options.sync.catchUp();
-    options.span?.setAttr('calendar.read.catch_up', catchUp);
-  }
+  const catchUp = behind
+    ? await catchUpBeforeAnswering(result, options)
+    : 'current';
   if (options.signal?.aborted) throw options.signal.reason;
   const current = await match(catchUp)
     // The cache moved on since the first read whenever it was behind then.

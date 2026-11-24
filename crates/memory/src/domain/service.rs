@@ -121,11 +121,15 @@ impl<R: ComposedMemoryRepo> MemoryService for MemoryServiceImpl<R> {
 pub const MAX_REFRESH_ATTEMPTS: u8 = 3;
 /// Bounds one user's model work, inside the 25-minute claim lease.
 const REFRESH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1200);
-/// Bounds giving up a day, which runs after a full refresh in the same lease.
-const GIVE_UP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(240);
+/// Bounds passing a day, which can run after a full refresh in the same lease.
+const PASS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(240);
 /// A day is generated only this long after it ends, so activity still on its way
 /// into the activity log is counted before the day is judged inactive.
 const ACTIVITY_SETTLE: Duration = Duration::hours(1);
+/// A user who has not used Macro themselves for this long is away: each day that
+/// comes due commits without a report, even when their agents worked that day.
+/// Skipped days are not caught up when they come back.
+pub const AWAY_AFTER: Duration = Duration::days(14);
 
 /// Wait before the next claim of a day after a failed attempt: 1, 2, 4, 8, then
 /// 16 hours, so transient provider errors clear without rerunning every lease.
@@ -141,6 +145,9 @@ enum ClaimOutcome {
     Committed,
     /// Attempts ran out; the reviewed pieces committed and the day was passed.
     GaveUp,
+    /// The user is away; the day was passed with no new model work, keeping
+    /// only pieces an earlier attempt already passed review.
+    Away,
     /// The attempt failed; the day is claimed again after `retry_delay`.
     Retry,
 }
@@ -285,7 +292,8 @@ impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
 
     /// Process a bounded batch. A failed day is claimed again after a growing
     /// delay and given up after `MAX_REFRESH_ATTEMPTS` claims; other users
-    /// continue. Cancellation never marks an unfinished day complete.
+    /// continue. A day of a user who is away ([`AWAY_AFTER`]) is passed
+    /// without a report. Cancellation never marks an unfinished day complete.
     /// `paused` is asked before every claim, so a kill switch stops the batch
     /// after the user in progress.
     #[tracing::instrument(skip_all, err)]
@@ -313,7 +321,7 @@ impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
                 let outcome = self.attempt(&claim).await;
                 tracing::Span::current().record("outcome", outcome.as_ref());
                 match outcome {
-                    ClaimOutcome::Committed | ClaimOutcome::GaveUp => {
+                    ClaimOutcome::Committed | ClaimOutcome::GaveUp | ClaimOutcome::Away => {
                         self.repo.release_refresh(&claim).await
                     }
                     ClaimOutcome::Retry => {
@@ -330,6 +338,9 @@ impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
     }
 
     async fn attempt(&self, claim: &RefreshClaim) -> ClaimOutcome {
+        if !self.around(&claim.user).await {
+            return self.pass(claim, ClaimOutcome::Away).await;
+        }
         if claim.attempt <= MAX_REFRESH_ATTEMPTS {
             match tokio::time::timeout(
                 REFRESH_TIMEOUT,
@@ -345,19 +356,38 @@ impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
                 return ClaimOutcome::Retry;
             }
         }
+        self.pass(claim, ClaimOutcome::GaveUp).await
+    }
+
+    /// Whether the user used Macro within [`AWAY_AFTER`]. A failed read counts
+    /// as around, so generation runs as it did before the check; the day's own
+    /// activity check still applies.
+    async fn around(&self, user: &MacroUserIdStr<'static>) -> bool {
+        self.activity
+            .used_since(user, Utc::now() - AWAY_AFTER)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, "could not read whether the user is away; generating");
+            })
+            .unwrap_or(true)
+    }
+
+    /// Move past the claimed day, committing what passed review, and report
+    /// `outcome`; a failure keeps the day for a later claim.
+    async fn pass(&self, claim: &RefreshClaim, outcome: ClaimOutcome) -> ClaimOutcome {
         match tokio::time::timeout(
-            GIVE_UP_TIMEOUT,
-            self.give_up(claim.user.clone(), claim.date),
+            PASS_TIMEOUT,
+            self.commit_kept(claim.user.clone(), claim.date),
         )
         .await
         {
-            Ok(Ok(())) => ClaimOutcome::GaveUp,
+            Ok(Ok(())) => outcome,
             Ok(Err(error)) => {
-                tracing::warn!(error = ?error, "memory refresh could not give up the day");
+                tracing::warn!(error = ?error, "memory refresh could not pass the day");
                 ClaimOutcome::Retry
             }
             Err(_) => {
-                tracing::warn!("memory refresh timed out giving up the day");
+                tracing::warn!("memory refresh timed out passing the day");
                 ClaimOutcome::Retry
             }
         }
@@ -365,7 +395,7 @@ impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
 
     /// Commit whatever pieces of `date` passed review and move past the day.
     #[tracing::instrument(skip_all, fields(date = %date, kept = tracing::field::Empty), err)]
-    async fn give_up(&self, user: MacroUserIdStr<'static>, date: NaiveDate) -> Result<()> {
+    async fn commit_kept(&self, user: MacroUserIdStr<'static>, date: NaiveDate) -> Result<()> {
         let Some(snapshot) = self.pending(&user, date).await? else {
             return Ok(());
         };

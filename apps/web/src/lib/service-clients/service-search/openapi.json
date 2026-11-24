@@ -1896,6 +1896,21 @@
             },
             "description": "Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default."
           },
+          "exclude_views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailSearchView"
+            },
+            "description": "Leave out the threads in these mailbox views. Search only."
+          },
+          "favorite": {
+            "type": ["boolean", "null"],
+            "description": "True for the caller's favorite threads only, false to leave them out.\nSearch only."
+          },
+          "has_attachment": {
+            "type": ["boolean", "null"],
+            "description": "True for threads with an attachment on any message, false for threads\nwith none. Search only."
+          },
           "importance": {
             "type": ["boolean", "null"],
             "description": "Filter by email importance. None to not filter. True to show only important emails\n(drafts, personal, sent, or uncategorized). False to show only unimportant emails\n(those categorized as promotions, social, updates, or forums)."
@@ -1910,6 +1925,13 @@
           "is_read": {
             "type": ["boolean", "null"],
             "description": "Filter by the email thread's read flag, independently of notification state."
+          },
+          "label_names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailLabelMatch"
+            },
+            "description": "Tags or labels each thread must carry, or must not, by name, as typing\n`label:` or `in:<name>` into the search does. A name matches the\ncaller's tags with that label and the labels with that name in the\ncaller's inboxes, ignoring case; a name that is neither matches\nnothing. Search only."
           },
           "link_ids": {
             "type": "array",
@@ -1943,9 +1965,26 @@
             },
             "description": "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
           },
+          "sent_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Only messages sent at or after this instant. Mail with no sent time\nnever matches. Search only."
+          },
+          "sent_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Only messages sent before this instant. Mail with no sent time never\nmatches. Search only."
+          },
           "shared": {
             "$ref": "#/components/schemas/SharedEmailFilter",
             "description": "Controls whether shared email threads are included in results.\nDefaults to \"exclude\" (only the user's own threads)."
+          },
+          "text_matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailTextMatch"
+            },
+            "description": "Words or phrases each message must contain, or must not, in one part\nof it, as typing `subject:`, `from:`, `to:`, `cc:`, `bcc:` or a minus\ninto the search does. Search only."
           },
           "view": {
             "oneOf": [
@@ -1957,6 +1996,21 @@
                 "description": "Only threads in this mailbox view. Search only: listing email takes\nits view as a parameter of its own, so expanding this into a list\nfilter is an error."
               }
             ]
+          }
+        }
+      },
+      "EmailLabelMatch": {
+        "type": "object",
+        "description": "A tag or provider label that an email thread must, or must not, carry,\nnamed by its label.",
+        "required": ["name"],
+        "properties": {
+          "exclude": {
+            "type": "boolean",
+            "description": "Leave out the threads that carry it instead."
+          },
+          "name": {
+            "type": "string",
+            "description": "The label of one of the caller's tags, or the name of a label in one\nof the caller's inboxes, ignoring case."
           }
         }
       },
@@ -2110,6 +2164,10 @@
                 "type": "string",
                 "format": "date-time"
               },
+              "has_received_mail": {
+                "type": "boolean",
+                "description": "Whether the thread holds mail the user received, not only mail they\nsent or drafted. A thread without any was never in the inbox, so it is\nnot archived when it is out of the inbox."
+              },
               "inbox_visible": {
                 "type": "boolean"
               },
@@ -2218,7 +2276,31 @@
       "EmailSearchView": {
         "type": "string",
         "description": "A mailbox view the Email list scopes a search to, as its tabs do.",
-        "enum": ["sent", "drafts"]
+        "enum": ["sent", "drafts", "calendar"]
+      },
+      "EmailTextMatch": {
+        "type": "object",
+        "description": "A word or phrase that must, or must not, appear in one part of a message.",
+        "required": ["part", "text"],
+        "properties": {
+          "exclude": {
+            "type": "boolean",
+            "description": "Leave out the messages that match instead."
+          },
+          "part": {
+            "$ref": "#/components/schemas/EmailTextPart",
+            "description": "The part of the message matched."
+          },
+          "text": {
+            "type": "string",
+            "description": "One word, matched as a search word is (a prefix unless the search is\nexact), or several words, matched as an adjacent phrase."
+          }
+        }
+      },
+      "EmailTextPart": {
+        "type": "string",
+        "description": "The part of an email message a search condition matches.",
+        "enum": ["any", "subject", "from", "to", "cc", "bcc"]
       },
       "EmptyResponse": {
         "type": "object",
@@ -4855,7 +4937,7 @@
           },
           "query": {
             "type": "string",
-            "description": "The search query string. Must not be empty; one character is enough."
+            "description": "The search query string. Must not be empty; one character is enough.\nWhen the search reaches email it also reads Gmail's operators:\n`subject:`, `from:`, `to:`, `cc:`, `bcc:`, `in:` a Mail view (`inbox`,\n`signal`, `noise`, `archived`, `sent`, `drafts`, `calendar`, `shared`,\n`favorites`) or a tag or label name, `label:`, `is:unread`, `is:read`,\n`is:starred`, `is:shared`, `has:attachment`, `after:`/`before:` a day\n(`2017/06/01`), `newer_than:`/`older_than:` a span (`3d`, `2w`, `1m`,\n`1y`), and a minus before an operator to leave matching mail out. A\nquery that types an operator searches email only. A minus before a\nword or quoted phrase leaves out mail containing it beside an operator\nor in a search of email alone; elsewhere it is part of the word."
           },
           "search_on": {
             "$ref": "#/components/schemas/SearchOn",
@@ -4864,6 +4946,10 @@
           "term_matching": {
             "$ref": "#/components/schemas/TermMatching",
             "description": "How a query of several terms matches document content. Defaults to\n`all`, the strict AND that AI tools and the SDK rely on; the web\napp's Search view asks for `dynamic`."
+          },
+          "time_zone": {
+            "type": ["string", "null"],
+            "description": "The IANA time zone (such as `America/New_York`) the query's typed\ndates are read in: `after:2017/06/01` starts at that day's midnight\nthere, and `newer_than:1m` counts a month back on its calendar.\nDefaults to UTC."
           }
         }
       },
@@ -4874,6 +4960,17 @@
           "next_cursor": {
             "type": ["string", "null"],
             "description": "The next cursor to use for paginating results"
+          },
+          "query_filters": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EmailFilters",
+                "description": "The email filters the query's typed operators (`subject:`, `in:`,\n`after:` and the rest) became, each date as the instant it bounds.\nAbsent when the query typed none."
+              }
+            ]
           },
           "results": {
             "type": "array",

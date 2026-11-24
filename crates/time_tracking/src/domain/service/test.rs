@@ -6,34 +6,39 @@ use crate::{
     domain::{events::TimeEntryTopicEvent, models::FieldEdit},
     test_support::{
         AUTHOR, EDITOR, FakeAccess, FakeRepo, FixedRollout, OTHER_TASK, OUTSIDER,
-        RecordingPublisher, TASK, TestClock, VIEWER, noon, user,
+        RecordingPublisher, RecordingUpdates, TASK, TestClock, VIEWER, noon, user,
     },
 };
 
-type Service = TimeTrackingServiceImpl<FakeRepo, FakeAccess, RecordingPublisher, TestClock>;
+type Service =
+    TimeTrackingServiceImpl<FakeRepo, FakeAccess, RecordingPublisher, RecordingUpdates, TestClock>;
 
 struct Harness {
     service: Service,
     repo: FakeRepo,
     events: RecordingPublisher,
+    updates: RecordingUpdates,
     clock: TestClock,
 }
 
 fn harness_with(rollout: bool) -> Harness {
     let repo = FakeRepo::with_live_tasks(&[TASK, OTHER_TASK]);
     let events = RecordingPublisher::default();
+    let updates = RecordingUpdates::default();
     let clock = TestClock::at(noon());
     let service = TimeTrackingServiceImpl::new(
         repo.clone(),
         Arc::new(FakeAccess::team()),
         Arc::new(FixedRollout(rollout)),
         events.clone(),
+        updates.clone(),
     )
     .with_clock(clock.clone());
     Harness {
         service,
         repo,
         events,
+        updates,
         clock,
     }
 }
@@ -361,6 +366,7 @@ async fn an_author_reduced_to_viewer_still_corrects_their_own_entry() {
         Arc::new(FakeAccess::default().grant(AUTHOR, TASK, AccessLevel::View)),
         Arc::new(FixedRollout(true)),
         events,
+        RecordingUpdates::default(),
     )
     .with_clock(TestClock::at(noon()));
     service
@@ -774,4 +780,142 @@ async fn undo_restarts_the_first_timer_at_its_original_start() {
 
     assert_eq!(restarted.timer.started_at, first.started_at);
     assert!(matches!(too_early, TimeTrackingError::InvalidInput(_)));
+}
+
+// The person's other sessions
+
+fn entries_of(task_id: &str) -> TimeTrackingChange {
+    TimeTrackingChange {
+        timer: false,
+        task_id: Some(task_id.to_string()),
+    }
+}
+
+fn timer_with(saved_on: Option<&str>) -> TimeTrackingChange {
+    TimeTrackingChange {
+        timer: true,
+        task_id: saved_on.map(str::to_string),
+    }
+}
+
+#[tokio::test]
+async fn each_entry_change_tells_the_authors_sessions_which_task_to_read_again() {
+    let harness = harness();
+    let author = user(AUTHOR);
+    log(&harness, AUTHOR, 1, 45).await;
+    harness
+        .service
+        .update_entry(
+            &author,
+            Uuid::from_u128(1),
+            TimeEntryChanges {
+                minutes: Some(60),
+                ..TimeEntryChanges::default()
+            },
+        )
+        .await
+        .unwrap();
+    harness
+        .service
+        .delete_entry(&author, Uuid::from_u128(1))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        harness.updates.sent(),
+        vec![
+            (AUTHOR.to_string(), entries_of(TASK)),
+            (AUTHOR.to_string(), entries_of(TASK)),
+            (AUTHOR.to_string(), entries_of(TASK)),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn timer_changes_name_the_task_whose_entries_they_saved() {
+    let harness = harness();
+    let author = user(AUTHOR);
+    harness
+        .service
+        .start_timer(&edit_receipt(AUTHOR, TASK), StartTimer::default())
+        .await
+        .unwrap();
+    harness.clock.advance(TimeDelta::minutes(20));
+    let switched = harness
+        .service
+        .start_timer(&edit_receipt(AUTHOR, OTHER_TASK), StartTimer::default())
+        .await
+        .unwrap();
+    harness.clock.advance(TimeDelta::minutes(10));
+    harness
+        .service
+        .stop_timer(&author, stop(&switched.timer, TimerEnding::Now))
+        .await
+        .unwrap();
+    let restarted = harness
+        .service
+        .start_timer(&edit_receipt(AUTHOR, TASK), StartTimer::default())
+        .await
+        .unwrap();
+    harness
+        .service
+        .discard_timer(&author, restarted.timer.id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        harness.updates.sent(),
+        vec![
+            (AUTHOR.to_string(), timer_with(None)),
+            (AUTHOR.to_string(), timer_with(Some(TASK))),
+            (AUTHOR.to_string(), timer_with(Some(OTHER_TASK))),
+            (AUTHOR.to_string(), timer_with(None)),
+            (AUTHOR.to_string(), timer_with(None)),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn replays_and_refusals_tell_no_session() {
+    let harness = harness();
+    let author = user(AUTHOR);
+    log(&harness, AUTHOR, 1, 45).await;
+    let started = harness
+        .service
+        .start_timer(&edit_receipt(AUTHOR, TASK), StartTimer::default())
+        .await
+        .unwrap();
+    harness
+        .service
+        .stop_timer(&author, stop(&started.timer, TimerEnding::Now))
+        .await
+        .unwrap();
+    let sent_before = harness.updates.sent().len();
+
+    log(&harness, AUTHOR, 1, 45).await;
+    harness
+        .service
+        .stop_timer(&author, stop(&started.timer, TimerEnding::Now))
+        .await
+        .unwrap();
+    let refused = harness
+        .service
+        .delete_entry(&user(EDITOR), Uuid::from_u128(1))
+        .await;
+
+    assert!(matches!(refused, Err(TimeTrackingError::NotAuthor)));
+    assert_eq!(harness.updates.sent().len(), sent_before);
+}
+
+#[tokio::test]
+async fn nothing_is_sent_while_the_rollout_is_off() {
+    let harness = harness_with(false);
+
+    let refused = harness
+        .service
+        .log_entry(&edit_receipt(AUTHOR, TASK), typed(1, 45))
+        .await;
+
+    assert!(refused.is_err());
+    assert!(harness.updates.sent().is_empty());
 }

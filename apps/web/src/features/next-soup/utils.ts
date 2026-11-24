@@ -899,9 +899,9 @@ export function markChannelNotificationsSeenOnOpen(
   }).filter((notification) =>
     channelReadScope === 'inbox-row'
       ? !notificationIsRead(notification)
-      : isTopLevelChannelNotification(notification) &&
-        (!notificationIsRead(notification) ||
-          isUnseenChannelInvite(notification))
+      : isUnseenChannelInvite(notification) ||
+        (isTopLevelChannelNotification(notification) &&
+          !notificationIsRead(notification))
   );
   if (notifications.length === 0) return;
 

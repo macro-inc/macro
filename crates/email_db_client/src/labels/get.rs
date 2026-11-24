@@ -7,6 +7,61 @@ use sqlx::PgPool;
 use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
 
+/// A message carrying a label, and its thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LabelledMessage {
+    pub message_id: Uuid,
+    pub thread_id: Uuid,
+}
+
+/// Up to `limit` messages of `link_id` carrying the provider label, in message
+/// id order after `after` (the nil id for the first page).
+#[tracing::instrument(skip(pool, provider_label_id), err)]
+pub async fn fetch_labelled_messages_page(
+    pool: &PgPool,
+    link_id: Uuid,
+    provider_label_id: &str,
+    after: Uuid,
+    limit: i64,
+) -> anyhow::Result<Vec<LabelledMessage>> {
+    let mut tx = pool.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await?;
+
+    // The inner LIMIT and the OFFSET 0 fence keep one index range read and one
+    // lookup per message of the page: with the tables joined, a generic plan
+    // scans every mailbox's messages.
+    let mut messages = sqlx::query_as!(
+        LabelledMessage,
+        r#"
+        SELECT ml.message_id AS "message_id!", m.thread_id AS "thread_id!"
+        FROM email_labels l
+        CROSS JOIN LATERAL (
+            SELECT ml.message_id
+            FROM email_message_labels ml
+            WHERE ml.label_id = l.id AND ml.message_id > $3
+            ORDER BY ml.message_id
+            LIMIT $4
+        ) ml
+        CROSS JOIN LATERAL (
+            SELECT em.thread_id FROM email_messages em WHERE em.id = ml.message_id OFFSET 0
+        ) m
+        WHERE l.link_id = $1 AND l.provider_label_id = $2
+        "#,
+        link_id,
+        provider_label_id,
+        after,
+        limit,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    messages.sort_by_key(|message| message.message_id);
+    Ok(messages)
+}
+
 /// retrieves a message label if it exists
 #[tracing::instrument(skip(pool), err)]
 pub async fn fetch_message_label(

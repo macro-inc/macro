@@ -63,7 +63,7 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static>
     /// The Chat Completions API takes a flat `reasoning_effort` field, accepted
     /// only by reasoning models (the GPT-5 and GPT-6 families and the
     /// `o`-series); anything
-    /// else returns `None`, since sending it elsewhere 400s. `mini` / `nano`
+    /// else returns `None`, since sending it elsewhere 400s. `mini` / `nano` / `luna`
     /// variants get a lower effort. `temperature` is never set (reasoning models
     /// reject it).
     pub fn thinking_params(
@@ -85,7 +85,7 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static>
             .and_then(|effort| effort.explicit_for(&self.model.to_string()))
             .map_or_else(
                 || {
-                    if model.contains("mini") || model.contains("nano") {
+                    if model.contains("mini") || model.contains("nano") || model.contains("luna") {
                         "low"
                     } else {
                         "high"
@@ -205,7 +205,7 @@ impl<'a, H: HttpClientExt + Clone + Default + std::fmt::Debug + 'static>
             .and_then(|effort| effort.explicit_for(&self.model.to_string()))
             .map_or_else(
                 || {
-                    if model.contains("mini") || model.contains("nano") {
+                    if model.contains("mini") || model.contains("nano") || model.contains("luna") {
                         "low"
                     } else {
                         "high"

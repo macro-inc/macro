@@ -6,7 +6,11 @@ import {
   getUploadFilePreviewSource,
   type UploadFile,
 } from '@core/util/uploadFile';
-import type { InputAttachmentData, InputAttachmentTracker } from './types';
+import type {
+  InputAttachmentData,
+  InputAttachmentKind,
+  InputAttachmentTracker,
+} from './types';
 import {
   buildUploadedAttachment,
   getAttachmentKindFromFile,
@@ -18,7 +22,7 @@ export { getAttachmentKindFromFile } from './utils/file-helpers';
 
 function createAttachmentPreviewSrc(
   file: UploadFile,
-  kind: 'image' | 'video' | 'document'
+  kind: InputAttachmentKind
 ): string | undefined {
   if (kind === 'document') return undefined;
 
@@ -55,9 +59,9 @@ function replacePendingAttachment(
  */
 async function resolveMediaDimensions(
   file: UploadFile,
-  kind: 'image' | 'video' | 'document'
+  kind: InputAttachmentKind
 ): Promise<{ width: number; height: number } | undefined> {
-  if (kind === 'document') return undefined;
+  if (kind !== 'image' && kind !== 'video') return undefined;
   try {
     const source = getUploadFilePreviewSource(file);
     const dims =
@@ -77,13 +81,21 @@ export async function uploadInputAttachments(options: {
   uploadFile: (file: File) => Promise<UploadResult>;
   /** Stop publishing uploads after the owning draft is disposed. */
   isActive?: () => boolean;
-}): Promise<void> {
+  /** Overrides classifying each file by its type, as for a voice memo. */
+  kind?: InputAttachmentKind;
+  /** Leave failures to the caller, which reports them in its own UI. */
+  quiet?: boolean;
+}): Promise<string[]> {
   const isActive = options.isActive ?? (() => true);
+  const failure = (message: string) => {
+    if (!options.quiet) toast.failure(message);
+  };
+  const attached: string[] = [];
   for (const file of options.files) {
     if (!isActive()) break;
     const uploadSource = createUploadFile(file);
     const pendingId = crypto.randomUUID();
-    const pendingKind = getAttachmentKindFromFile(uploadSource);
+    const pendingKind = options.kind ?? getAttachmentKindFromFile(uploadSource);
     const previewSrc = createAttachmentPreviewSrc(uploadSource, pendingKind);
 
     options.tracker.addAttachment({
@@ -101,6 +113,7 @@ export async function uploadInputAttachments(options: {
     // A full tracker rejected this file; do not upload an invisible attachment.
     if (!options.tracker.attachments().some((item) => item.id === pendingId)) {
       if (previewSrc) URL.revokeObjectURL(previewSrc);
+      // Not quiet: the caller's own failure says nothing about the limit.
       toast.failure(`Could not attach ${file.name}: attachment limit reached`);
       continue;
     }
@@ -116,7 +129,7 @@ export async function uploadInputAttachments(options: {
       if (!isActive()) continue;
 
       if (result.failed) {
-        toast.failure(result.reason ?? `Failed to upload ${file.name}`);
+        failure(result.reason ?? `Failed to upload ${file.name}`);
         continue;
       }
 
@@ -124,7 +137,7 @@ export async function uploadInputAttachments(options: {
       if (!isActive()) continue;
       const uploaded = buildUploadedAttachment(file, pendingKind, result);
       if (!uploaded) {
-        toast.failure(`Failed to upload ${file.name}`);
+        failure(`Failed to upload ${file.name}`);
         continue;
       }
 
@@ -143,9 +156,10 @@ export async function uploadInputAttachments(options: {
         pendingId,
         uploaded
       );
+      if (retainedPreview) attached.push(uploaded.id);
     } catch (error) {
       console.error('failed to upload attachment', error);
-      if (isActive()) toast.failure(`Failed to upload ${file.name}`);
+      if (isActive()) failure(`Failed to upload ${file.name}`);
     } finally {
       if (!retainedPreview) {
         options.tracker.removeAttachment(pendingId);
@@ -153,4 +167,5 @@ export async function uploadInputAttachments(options: {
       }
     }
   }
+  return attached;
 }

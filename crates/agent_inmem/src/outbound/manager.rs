@@ -15,6 +15,7 @@ use agent_runtime_protocol::domain::connection::{RuntimeConnection, ServerChanne
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use agent_session::domain::model::AgentSessionId;
 use ai_billing::domain::{AiAdmissionService, DisabledAiAdmissionService};
+use chat::domain::models::current_model;
 use dashmap::DashMap;
 use model_owner::Owner;
 
@@ -294,15 +295,16 @@ fn rebuilt_state(
     facts: &SessionFacts,
     frames: Vec<agent_session::domain::model::Message>,
 ) -> SessionState {
+    // The session resumes on this model, so its settings carry over to it.
+    let model = current_model(&facts.model);
     let restored_effort = replay_reasoning_effort(&frames);
-    let reasoning_effort =
-        if agent::ReasoningEffort::supported(&facts.model).contains(&restored_effort) {
-            restored_effort
-        } else {
-            agent::ReasoningEffort::default()
-        };
+    let reasoning_effort = if agent::ReasoningEffort::supported(model).contains(&restored_effort) {
+        restored_effort
+    } else {
+        agent::ReasoningEffort::default()
+    };
     let restored_speed = replay_speed(&frames);
-    let speed = if restored_speed.supported(&facts.model) {
+    let speed = if restored_speed.supported(model) {
         restored_speed
     } else {
         agent::ModelSpeed::Standard

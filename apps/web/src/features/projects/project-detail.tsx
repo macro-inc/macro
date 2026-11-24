@@ -2,20 +2,18 @@ import { MobileDiscussion } from '@app/components/discussion/mobile-discussion';
 import { useTouchTopBarsFloat } from '@app/components/view-shell';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
-import {
-  projectDetailRoute,
-  projectTaskRoute,
-  tasksSplitRoute,
-} from '@app/routes/routes';
+import { projectDetailRoute, tasksSplitRoute } from '@app/routes/routes';
 import { useSplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { enableTimeTracking } from '@core/constant/featureFlags';
 import { createOpenTracker } from '@core/internal/open-tracker';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -34,9 +32,12 @@ import {
   canEditProject,
   type ProjectDetail as ProjectDetailData,
   type ProjectSection,
+  projectSections,
+  shownProjectSection,
 } from './core/project';
 import type { ProjectRoute } from './core/route';
 import { NewProjectTaskPill } from './new-project-task';
+import { useOpenProjectTask } from './open-project-task';
 import {
   ProjectBreadcrumbItem,
   type ProjectBreadcrumbProps,
@@ -54,6 +55,7 @@ import { ProjectWorkspace } from './views/project-workspace';
 export type ProjectDetailHeaderProps = {
   source: ProjectSource;
   commands: ReturnType<ProjectsContext['createCommands']>;
+  sections: readonly ProjectSection[];
   section: ProjectSection;
   onSectionChange(section: ProjectSection): void;
   onShare(): void;
@@ -107,6 +109,14 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const navigate = useNavigate();
+  const timeFlag = useFeatureFlag(enableTimeTracking);
+  const sections = () => projectSections(timeFlag().enabled);
+  const shownSection = () =>
+    shownProjectSection(props.route.section, timeFlag());
+  const openTask = useOpenProjectTask({
+    projectId: () => props.route.id,
+    section: shownSection,
+  });
   const section = (section: ProjectSection) => {
     if (props.onSectionChange) return props.onSectionChange(section);
     // Router navigation pushes history and records the navigation interaction.
@@ -143,8 +153,11 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const header: ProjectDetailHeaderProps = {
     source,
     commands,
+    get sections() {
+      return sections();
+    },
     get section() {
-      return props.route.section;
+      return shownSection();
     },
     onSectionChange: section,
     onShare: openShare,
@@ -156,12 +169,9 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   return (
     <>
       {/* Phones own one combined task menu in their one-page workspace.
-          Tablets still need creation from Overview, outside the task list. */}
-      <Show
-        when={
-          isTouchDevice() && !isMobile() && props.route.section === 'overview'
-        }
-      >
+          Tablets still need creation from Overview and Time, outside the
+          task list. */}
+      <Show when={isTouchDevice() && !isMobile() && shownSection() !== 'tasks'}>
         <NewProjectTaskPill
           onCreateTask={canCreateTask() ? createTask : undefined}
         />
@@ -170,7 +180,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
           shared scope intact; only a separate Overview registers the project. */}
       <Show
         when={
-          !isMobile() && props.route.section === 'overview'
+          !isMobile() && shownSection() === 'overview'
             ? source.project()?.id
             : undefined
         }
@@ -203,11 +213,11 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         }}
       >
         <Suspense
-          fallback={<ProjectContentSkeleton section={props.route.section} />}
+          fallback={<ProjectContentSkeleton section={shownSection()} />}
         >
           <Switch>
             <Match when={source.loading() && !source.project()}>
-              <ProjectContentSkeleton section={props.route.section} />
+              <ProjectContentSkeleton section={shownSection()} />
             </Match>
             <Match when={source.project()}>
               {(project) => (
@@ -218,37 +228,8 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                   project={project()}
                   source={source}
                   commands={commands}
-                  section={props.route.section}
-                  onOpenTask={(task, options) => {
-                    const event = options?.event;
-                    if (
-                      !isTouchDevice() &&
-                      !(
-                        event?.shiftKey ||
-                        event?.metaKey ||
-                        event?.ctrlKey ||
-                        event?.altKey
-                      )
-                    ) {
-                      fireAndForget(
-                        navigate({
-                          route: projectTaskRoute,
-                          params: {
-                            projectId: props.route.id,
-                            section: props.route.section,
-                            taskId: task.id,
-                          },
-                        }),
-                        'project-detail'
-                      );
-                      return true;
-                    }
-                    layout.openWithSplit(
-                      { type: 'md', id: task.id },
-                      { preferNewSplit: options?.event?.shiftKey }
-                    );
-                    return true;
-                  }}
+                  section={shownSection()}
+                  onOpenTask={(task, options) => openTask(task.id, options)}
                   onCreateTask={createTask}
                   description={
                     <ProjectDescription
@@ -284,7 +265,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
             <Match when={true}>
               <ProjectUnavailable
                 projectId={props.route.id}
-                section={props.route.section}
+                section={shownSection()}
                 onRetry={source.refresh}
               />
             </Match>

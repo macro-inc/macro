@@ -215,7 +215,7 @@ impl HydrateRequest {
             query,
             operation_name,
             variables: parse_variables(variables)?,
-            data: serde_wasm_bindgen::from_value(data).map_err(err_js)?,
+            data: json_value_from_js(data)?,
             identity,
             scope: None,
         })
@@ -1539,17 +1539,55 @@ fn query_update_values(
 }
 
 fn has_unsafe_json_integer(value: &serde_json::Value) -> bool {
-    const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
     match value {
-        serde_json::Value::Number(number) => {
-            !number.is_f64()
-                && number
-                    .as_i64()
-                    .is_none_or(|n| !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&n))
-        }
+        serde_json::Value::Number(number) => is_unsafe_integer(number),
         serde_json::Value::Array(values) => values.iter().any(has_unsafe_json_integer),
         serde_json::Value::Object(values) => values.values().any(has_unsafe_json_integer),
         _ => false,
+    }
+}
+
+/// An integer outside JS's safe range.
+fn is_unsafe_integer(number: &serde_json::Number) -> bool {
+    const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
+    !number.is_f64()
+        && number
+            .as_i64()
+            .is_none_or(|n| !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&n))
+}
+
+/// A JSON value from JS, as `serde_wasm_bindgen` reads it: written by the
+/// host's `JSON.stringify` and parsed here once, which avoids a Wasm/JS
+/// crossing for every nested field and array element. A value that
+/// `JSON.stringify` cannot write, or whose text does not parse back (a lone
+/// surrogate), is read the old way. Both read numbers as the JS value they
+/// are, so an integer past the safe range becomes a float here too. A
+/// property whose value is `undefined`, which `JSON.parse` never produces,
+/// is left out where the old way read it as null.
+fn json_value_from_js(value: JsValue) -> Result<serde_json::Value, JsValue> {
+    if let Some(text) = js_sys::JSON::stringify(&value)
+        .ok()
+        .and_then(|text| text.as_string())
+        && let Ok(mut parsed) = serde_json::from_str(&text)
+    {
+        unsafe_integers_to_floats(&mut parsed);
+        return Ok(parsed);
+    }
+    serde_wasm_bindgen::from_value(value).map_err(err_js)
+}
+
+fn unsafe_integers_to_floats(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Number(number) if is_unsafe_integer(number) => {
+            if let Some(float) = number.as_f64().and_then(serde_json::Number::from_f64) {
+                *number = float;
+            }
+        }
+        serde_json::Value::Array(values) => values.iter_mut().for_each(unsafe_integers_to_floats),
+        serde_json::Value::Object(values) => {
+            values.values_mut().for_each(unsafe_integers_to_floats)
+        }
+        _ => {}
     }
 }
 

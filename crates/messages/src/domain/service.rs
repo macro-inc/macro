@@ -925,7 +925,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 }
                 // Static media is already readable by any authenticated user who
                 // has its UUID, matching static_file_service's read policy.
-                MessageReferenceKind::StaticImage | MessageReferenceKind::StaticVideo
+                MessageReferenceKind::StaticImage
+                | MessageReferenceKind::StaticVideo
+                | MessageReferenceKind::StaticAudio
                     if !mention =>
                 {
                     Uuid::parse_str(id)
