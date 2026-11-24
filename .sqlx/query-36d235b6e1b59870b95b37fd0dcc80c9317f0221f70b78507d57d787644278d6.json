@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT e.entry_date, e.user_id, d.name AS task_name, e.minutes, e.note,\n                           e.source AS \"source: TimeEntrySource\"\n                    FROM time_entry e\n                    JOIN \"Document\" d ON d.id = e.task_id\n                    WHERE e.task_id = ANY($1::text[])\n                      AND e.entry_date BETWEEN $2 AND $3\n                      AND d.\"deletedAt\" IS NULL\n                    ORDER BY e.entry_date, e.id\n                    LIMIT $4\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entry_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "task_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "source: TimeEntrySource",
+        "type_info": {
+          "Custom": {
+            "name": "time_entry_source",
+            "kind": {
+              "Enum": [
+                "manual",
+                "timer"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Date",
+        "Date",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "36d235b6e1b59870b95b37fd0dcc80c9317f0221f70b78507d57d787644278d6"
+}
