@@ -3,6 +3,9 @@ import type { CacheHost } from './host/types';
 import { rotateCacheScope } from './scope';
 import { beginCacheWriteSession, endCacheWriteSession } from './session-writes';
 
+/** How long a logout waits for one cache to be wiped. */
+export const LOGOUT_CLEAR_TIMEOUT_MS = 10_000;
+
 const hosts = new Set<CacheHost>();
 // Factories capture the original backend/scope and only accept typed safe-to-
 // reopen failures. A different current host is never a repair substitute.
@@ -65,6 +68,55 @@ function forgetAllSessionRecords() {
   for (const owner of sessionRecords.keys()) forgetSessionRecords(owner);
 }
 
+/** A wipe still running at the limit goes on, for storage nobody opens again. */
+async function settleWithin(
+  wiping: Promise<void>,
+  timeoutMs: number
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error('cache clear timeout')),
+      timeoutMs
+    );
+  });
+  try {
+    await Promise.race([wiping, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+type ClearedStorage = {
+  owner: CacheHost;
+  host: CacheHost;
+  recover: RecoverCacheHost | undefined;
+};
+
+async function wipe({ owner, host, recover }: ClearedStorage): Promise<void> {
+  // A preceding login may have recovered storage while this logout was
+  // waiting. Pin that owner now; keep the original snapshot pinned too.
+  const current = retainCacheHost(
+    sessionRecords.get(owner)?.retained?.host ?? host
+  );
+  try {
+    await (current?.host ?? host).clear();
+  } catch (error) {
+    const replacement = recover?.(error);
+    if (!replacement) throw error;
+    const recovered = retainCacheHost(replacement);
+    replacement.dispose();
+    if (!recovered) throw error;
+    try {
+      await recovered.host.clear();
+    } finally {
+      recovered.release();
+    }
+  } finally {
+    current?.release();
+  }
+}
+
 // Snapshot before a drain: session teardown may unregister the old host.
 function prepareCacheClear() {
   const storageHosts = [
@@ -91,31 +143,9 @@ function prepareCacheClear() {
         return;
       }
       const results = await Promise.allSettled(
-        storageHosts.map(async ({ owner, host, recover }) => {
-          // A preceding login may have recovered storage while this logout was
-          // waiting. Pin that owner now; keep the original snapshot pinned too.
-          const current = retainCacheHost(
-            sessionRecords.get(owner)?.retained?.host ?? host
-          );
-          try {
-            try {
-              await (current?.host ?? host).clear();
-            } catch (error) {
-              const replacement = recover?.(error);
-              if (!replacement) throw error;
-              const recovered = retainCacheHost(replacement);
-              replacement.dispose();
-              if (!recovered) throw error;
-              try {
-                await recovered.host.clear();
-              } finally {
-                recovered.release();
-              }
-            }
-            forgetSessionRecords(owner);
-          } finally {
-            current?.release();
-          }
+        storageHosts.map(async (storage) => {
+          await settleWithin(wipe(storage), LOGOUT_CLEAR_TIMEOUT_MS);
+          forgetSessionRecords(storage.owner);
         })
       );
       if (results.some((result) => result.status === 'rejected')) {
@@ -125,7 +155,6 @@ function prepareCacheClear() {
     },
   };
 }
-
 /** Close writes through every logout wipe and teardown, preserving the host. */
 export function clearRegisteredCaches(
   clearSession: (clearCaches: () => Promise<void>) => Promise<void> = (clear) =>

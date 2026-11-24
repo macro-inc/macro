@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNoopCacheHost } from './host/noop-host';
 import { createRetirableCacheHost } from './host/retirable-host';
 import type { CacheHost } from './host/types';
+import { INITIAL_CACHE_REVISION } from './protocol';
 
 function hostWithClear(clear: () => Promise<unknown>): CacheHost {
   return { clear } as unknown as CacheHost;
@@ -167,6 +168,52 @@ describe('clearRegisteredCaches', () => {
     expect(localStorage.getItem('graphql-cache:scope')).toBe(
       '00000000-0000-4000-8000-000000000001'
     );
+  });
+
+  it('rotates the scope when a cache is not wiped within ten seconds, and lets the wipe end', async () => {
+    vi.useFakeTimers();
+    localStorage.setItem('graphql-cache:scope', 'current-scope');
+    const wipes: (() => void)[] = [];
+    const dispose = vi.fn();
+    const {
+      clearRegisteredCaches,
+      recordSessionCacheWrite,
+      registerCacheHost,
+    } = await import('./lifecycle');
+    // The same module instance the lifecycle uses.
+    const { createRetirableCacheHost } = await import('./host/retirable-host');
+    const host = createRetirableCacheHost({
+      ...createNoopCacheHost(),
+      disabled: false,
+      clear: () =>
+        new Promise((resolve) =>
+          wipes.push(() => resolve(INITIAL_CACHE_REVISION))
+        ),
+      dispose,
+    });
+    registerCacheHost(host);
+    recordSessionCacheWrite(host, 'Contact:1');
+    let ended = false;
+    const clearing = clearRegisteredCaches().then(() => {
+      ended = true;
+    });
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(ended).toBe(false);
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('current-scope');
+
+    await vi.advanceTimersByTimeAsync(1);
+    await clearing;
+    expect(localStorage.getItem('graphql-cache:scope')).not.toBe(
+      'current-scope'
+    );
+    // The old storage stays open until its wipe ends.
+    host.dispose();
+    expect(dispose).not.toHaveBeenCalled();
+    expect(wipes).toHaveLength(1);
+    wipes[0]?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(dispose).toHaveBeenCalledOnce();
+    vi.useRealTimers();
   });
 
   it('preserves a persisted scope on login without session-written records or a mounted host', async () => {
