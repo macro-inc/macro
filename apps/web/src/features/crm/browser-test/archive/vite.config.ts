@@ -50,6 +50,7 @@ export default defineConfig({
       },
       ...[
         '@service-storage/client',
+        '@service-search/client',
         '@service-storage/crm-contacts',
         '@service-storage/crm-visibility',
         '@service-storage/crm-contact-edit',

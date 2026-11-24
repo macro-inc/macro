@@ -700,6 +700,25 @@ pub(crate) type DssTimeTrackingState = time_tracking::inbound::axum_router::Time
     AuthorizationService,
 >;
 
+/// Type alias for the time report service.
+pub(crate) type TimeReportServiceType =
+    time_tracking::domain::report_service::TimeReportServiceImpl<
+        time_tracking::outbound::pg_report_repo::PgTimeReportRepository,
+        EntityAccessService,
+        time_tracking::outbound::project_tasks::SystemPropertyProjectTasks<
+            system_properties::SystemPropertiesServiceImpl<
+                system_properties::PgSystemPropertiesRepository,
+            >,
+        >,
+    >;
+
+/// Type alias for the time report router state.
+pub(crate) type DssTimeReportState = time_tracking::inbound::report_router::TimeReportRouterState<
+    TimeReportServiceType,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 /// Type alias for the favorites router state.
 pub(crate) type DssFavoritesState =
     FavoritesRouterState<FavoritesServiceType, EntityAccessService, AuthorizationService>;
@@ -1035,6 +1054,7 @@ pub(crate) struct ApiContext {
     #[from_ref(skip)]
     pub channel_sections_state: DssChannelLabelsState,
     pub time_tracking_state: DssTimeTrackingState,
+    pub time_report_state: DssTimeReportState,
     pub user_api_key_state: DssUserApiKeyState,
     pub account_manager_state: DssAccountManagerState,
     pub reminders_state: DssRemindersState,
@@ -1046,6 +1066,7 @@ pub(crate) struct ApiContext {
     pub graphql_crm_context: graphql_crm::CrmGraphqlContext,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
     pub graphql_time_tracking_context: graphql_time_tracking::TimeTrackingGraphqlContext,
+    pub graphql_time_report_context: graphql_time_tracking::TimeReportGraphqlContext,
     pub graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext,
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
     pub graphql_contacts_context: graphql_contacts::ContactsGraphqlContext,

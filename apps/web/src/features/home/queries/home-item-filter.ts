@@ -21,7 +21,6 @@ export function soupItemMatchesHomeTab(
   return match(tab)
     .with(
       'signal',
-      'recent',
       () => item.tag !== 'emailThread' || item.data.isSignal === true
     )
     .with(

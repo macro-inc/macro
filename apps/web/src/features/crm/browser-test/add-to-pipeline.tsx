@@ -204,6 +204,7 @@ function Fixture() {
     hideContact: () => mutation,
     editContactEmail: () => mutation as never,
     editContactCompany: () => mutation as never,
+    editCompanyDomain: () => mutation,
     createCompany: () => mutation,
     createContact: () => mutation,
     contactInitials: (name) => (name ?? 'IO').slice(0, 2).toUpperCase(),

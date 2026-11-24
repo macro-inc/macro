@@ -10,6 +10,7 @@ import type { MatchType } from './matchType';
 import type { SearchOn } from './searchOn';
 import type { TermMatching } from './termMatching';
 import type { UnifiedSearchRequestCollapse } from './unifiedSearchRequestCollapse';
+import type { UnifiedSearchRequestTimeZone } from './unifiedSearchRequestTimeZone';
 
 export interface UnifiedSearchRequest {
   /** Which calendar events to search. Defaults to `own`: events on the
@@ -27,7 +28,17 @@ index, so it is searched only under Name / NameContent. */
   include_crm?: boolean;
   /** How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field. */
   match_type: MatchType;
-  /** The search query string. Must not be empty; one character is enough. */
+  /** The search query string. Must not be empty; one character is enough.
+When the search reaches email it also reads Gmail's operators:
+`subject:`, `from:`, `to:`, `cc:`, `bcc:`, `in:` a Mail view (`inbox`,
+`signal`, `noise`, `archived`, `sent`, `drafts`, `calendar`, `shared`,
+`favorites`) or a tag or label name, `label:`, `is:unread`, `is:read`,
+`is:starred`, `is:shared`, `has:attachment`, `after:`/`before:` a day
+(`2017/06/01`), `newer_than:`/`older_than:` a span (`3d`, `2w`, `1m`,
+`1y`), and a minus before an operator to leave matching mail out. A
+query that types an operator searches email only. A minus before a
+word or quoted phrase leaves out mail containing it beside an operator
+or in a search of email alone; elsewhere it is part of the word. */
   query: string;
   /** Fields to search on (Name, Content, NameContent). Defaults to Content */
   search_on?: SearchOn;
@@ -35,4 +46,9 @@ index, so it is searched only under Name / NameContent. */
 `all`, the strict AND that AI tools and the SDK rely on; the web
 app's Search view asks for `dynamic`. */
   term_matching?: TermMatching;
+  /** The IANA time zone (such as `America/New_York`) the query's typed
+dates are read in: `after:2017/06/01` starts at that day's midnight
+there, and `newer_than:1m` counts a month back on its calendar.
+Defaults to UTC. */
+  time_zone?: UnifiedSearchRequestTimeZone;
 }

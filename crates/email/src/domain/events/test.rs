@@ -468,7 +468,7 @@ fn system_label(provider_label_id: &str) -> LabelRef {
     }
 }
 
-fn label_change(label: LabelRef, added: bool) -> Option<EmailMacroEvent> {
+fn label_change(label: LabelRef, added: bool) -> EmailMacroEvent {
     EmailMacroEvent::thread_label_change(
         Uuid::nil(),
         user_id("macro|owner@example.com"),
@@ -496,8 +496,7 @@ fn thread_label_change_maps_system_labels_to_semantic_events() {
     ];
 
     for (label, added, expected_type, state_field, expected_state) in cases {
-        let event = label_change(system_label(label), added)
-            .unwrap_or_else(|| panic!("{label} added={added} should map to an event"));
+        let event = label_change(system_label(label), added);
         let value = serde_json::to_value(event.event()).expect("serializable");
         assert_eq!(value["event_type"], expected_type, "{label} added={added}");
         assert_eq!(
@@ -508,22 +507,37 @@ fn thread_label_change_maps_system_labels_to_semantic_events() {
 }
 
 #[test]
-fn thread_label_change_skips_unpublished_system_labels() {
-    for label in ["IMPORTANT", "SENT", "DRAFT"] {
-        assert!(
-            label_change(system_label(label), true).is_none(),
-            "{label} add should not publish"
-        );
-        assert!(
-            label_change(system_label(label), false).is_none(),
-            "{label} remove should not publish"
-        );
+fn thread_label_change_requests_a_reindex_for_labels_without_their_own_event() {
+    for label in [
+        "IMPORTANT",
+        "SENT",
+        "DRAFT",
+        "CATEGORY_PERSONAL",
+        "CATEGORY_PROMOTIONS",
+    ] {
+        for added in [true, false] {
+            let event = label_change(system_label(label), added);
+            let value = serde_json::to_value(event.event()).expect("serializable");
+            assert_eq!(
+                value["event_type"], "email.threads_reindex_requested",
+                "{label} added={added}"
+            );
+            assert_eq!(
+                value["metadata"]["thread_ids"],
+                serde_json::json!([Uuid::nil()]),
+                "{label} added={added}"
+            );
+            assert_eq!(
+                value["metadata"]["reason"], "provider_changed",
+                "{label} added={added}"
+            );
+        }
     }
 }
 
 #[test]
 fn thread_label_change_maps_user_labels_to_diff() {
-    let added_event = label_change(user_label(), true).expect("user label maps to an event");
+    let added_event = label_change(user_label(), true);
     let value = serde_json::to_value(added_event.event()).expect("serializable");
     assert_eq!(value["event_type"], "email.thread_labels_updated");
     assert_eq!(
@@ -532,17 +546,11 @@ fn thread_label_change_maps_user_labels_to_diff() {
     );
     assert_eq!(value["metadata"]["removed"], serde_json::json!([]));
 
-    let removed_event = label_change(user_label(), false).expect("user label maps to an event");
+    let removed_event = label_change(user_label(), false);
     let value = serde_json::to_value(removed_event.event()).expect("serializable");
     assert_eq!(value["metadata"]["added"], serde_json::json!([]));
     assert_eq!(
         value["metadata"]["removed"][0]["provider_label_id"],
         "Label_1"
     );
-}
-
-#[test]
-fn thread_label_change_skips_gmail_category_labels() {
-    assert!(label_change(system_label("CATEGORY_PROMOTIONS"), true).is_none());
-    assert!(label_change(system_label("CATEGORY_SOCIAL"), false).is_none());
 }

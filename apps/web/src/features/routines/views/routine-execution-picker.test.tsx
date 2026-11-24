@@ -1,3 +1,4 @@
+import { Model } from '@core/component/AI/constant/model';
 import {
   cleanup,
   fireEvent,
@@ -438,6 +439,33 @@ describe('routine execution picker', () => {
       prompt
     );
     expect((prompt as HTMLTextAreaElement).value).toBe('Keep writing');
+  });
+
+  it('shows a retired Macro model as its replacement without changing the draft', () => {
+    setCatalogs({
+      'in-memory': {
+        status: 'success',
+        models: [{ id: Model.gpt62Sol, name: 'GPT-6.2 Sol' }],
+      },
+    });
+    const { onChange } = mount({ kind: 'model', model: 'openai/gpt-5.6' });
+    expect(
+      screen.getByRole('button', { name: 'Choose an agent or model' })
+        .textContent
+    ).toContain('GPT-6.2 Sol');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps a model id another runtime saved, even one Macro retired', () => {
+    mount({
+      kind: 'agent',
+      agentId: externalId,
+      modelOverride: 'openai/gpt-5.6',
+    });
+    expect(screen.getByRole('status').textContent).toContain(
+      'model "openai/gpt-5.6" is not available'
+    );
   });
 
   it('retains a saved model when discovery fails or returns an empty catalog', () => {

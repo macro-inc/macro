@@ -1,7 +1,9 @@
 # desktop-cef
 
 Status: shipped macOS desktop app. The desktop release workflow builds it,
-packages it as a signed DMG, and publishes the release.
+packages it as a signed DMG, launches that DMG's app on a macOS runner (the
+`QA macOS release app` job, `../../tests/macos/qa.mjs`), and only then promotes
+it to installed apps; see `../src-tauri/README.md#desktop-native-updates`.
 
 ## What it is
 

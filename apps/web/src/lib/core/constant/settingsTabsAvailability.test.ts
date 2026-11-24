@@ -1,6 +1,10 @@
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useSettingsTabs } from './settingsTabsConfig';
+import {
+  NATIVE_APP_TAB_ITEM,
+  settingsSlugToTab,
+  useSettingsTabs,
+} from './settingsTabsConfig';
 
 const platform = vi.hoisted(() => ({ current: 'web' }));
 const touch = vi.hoisted(() => ({ current: false }));
@@ -20,6 +24,7 @@ vi.mock('../context/user', () => ({
 vi.mock('../util/platform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../util/platform')>()),
   isPlatform: (target: string) => target === platform.current,
+  getPlatform: () => platform.current,
   getNativeMobilePlatform: () =>
     ['ios', 'android'].includes(platform.current)
       ? platform.current
@@ -27,7 +32,10 @@ vi.mock('../util/platform', async (importOriginal) => ({
 }));
 
 let dispose: () => void;
-afterEach(() => dispose?.());
+afterEach(() => {
+  dispose?.();
+  platform.current = 'web';
+});
 
 describe('Downloads settings', () => {
   // Phones, tablets and the mobile apps have no Downloads page; computers get
@@ -62,6 +70,52 @@ describe('Downloads settings', () => {
       touch.current = false;
     }
   );
+});
+
+describe('Native app settings', () => {
+  // The installed apps get a page for themselves, named for the platform,
+  // last in Personal; the browser has no installed app to describe.
+  it.each([
+    { host: 'web', onTouch: false, label: undefined },
+    { host: 'web', onTouch: true, label: undefined },
+    { host: 'desktop', onTouch: false, label: 'Desktop App' },
+    { host: 'ios', onTouch: true, label: 'iOS App' },
+    { host: 'android', onTouch: true, label: 'Android App' },
+  ])('on $host with touch=$onTouch is $label', ({ host, onTouch, label }) => {
+    platform.current = host;
+    touch.current = onTouch;
+    const tabs = createRoot((cleanup) => {
+      dispose = cleanup;
+      flagEnabled = () => false;
+      return useSettingsTabs();
+    });
+
+    expect(tabs.isAvailable('Native App')).toBe(label !== undefined);
+    const personal = tabs
+      .groups()
+      .find((group) => group.id === 'personal')
+      ?.items.map((item) => item.tab);
+    expect(personal?.at(-1) === 'Native App').toBe(label !== undefined);
+    if (label) {
+      expect(NATIVE_APP_TAB_ITEM.label).toBe(label);
+      expect(NATIVE_APP_TAB_ITEM.englishLabel).toBe(label);
+    }
+    touch.current = false;
+  });
+
+  // The old Mobile App and Desktop App pages showed the installed version in
+  // the apps and the downloads in a browser.
+  it.each([
+    { host: 'web', expected: 'Downloads' },
+    { host: 'desktop', expected: 'Native App' },
+    { host: 'ios', expected: 'Native App' },
+    { host: 'android', expected: 'Native App' },
+  ])('lands old app page links on $expected on $host', ({ host, expected }) => {
+    platform.current = host;
+    expect(settingsSlugToTab('mobile-app')).toBe(expected);
+    expect(settingsSlugToTab('desktop-app')).toBe(expected);
+    expect(settingsSlugToTab('app')).toBe('Native App');
+  });
 });
 
 describe('Notifications settings', () => {

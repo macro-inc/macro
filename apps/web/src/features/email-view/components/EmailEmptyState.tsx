@@ -11,6 +11,7 @@ import { Match, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { canSearchEmailTab } from '../constants';
 import { useEmailView } from '../email-view-context';
+import { emailSearchScopeLabel } from '../search/email-search-scope';
 import type { EmailTab } from '../types';
 
 const EMAIL_DOCS_URL = `${DOCS_BASE}/product/email`;
@@ -81,13 +82,23 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
 }
 
 export function EmailEmptyState() {
-  const { state, setInboxIds, setTab, filtersChanged, clearFilters } =
-    useEmailView();
+  const {
+    state,
+    parsedSearch,
+    setInboxIds,
+    setTab,
+    filtersChanged,
+    clearFilters,
+  } = useEmailView();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
-  // Scheduled has no search or filters; text typed on another tab stays behind.
+  // Spam and Trash have no search; text typed on another tab stays behind.
   const searchText = () =>
-    canSearchEmailTab(state.tab) ? state.search.trim() : '';
+    canSearchEmailTab(state.tab) ? parsedSearch().query : '';
+  const searchedView = () => {
+    const scope = parsedSearch().scope;
+    return scope ? emailSearchScopeLabel(scope) : undefined;
+  };
   const noInboxesSelected = () => state.inboxIds?.length === 0;
 
   // These states fill the list pane, which is narrow beside the reading pane,
@@ -126,11 +137,15 @@ export function EmailEmptyState() {
           <EmptyStatePanel
             centered
             graphic={EmptyStateNoSearchMatchGraphic}
-            title={`No results for "${search()}"`}
+            title={
+              searchedView()
+                ? `No results for "${search()}" in ${searchedView()}`
+                : `No results for "${search()}"`
+            }
             description={
-              state.tab === 'focus'
-                ? 'Focus search covers subjects, senders, and previews. Try a different query.'
-                : 'Search across subjects, senders, and message content. Try a different query.'
+              searchedView()
+                ? 'Search all mail by removing the filter, or try a different query.'
+                : 'Search covers subjects, senders, and message content in all mail except Spam and Trash. Try a different query.'
             }
             documentationUrl={`${DOCS_BASE}/product/search`}
           />

@@ -85,6 +85,9 @@ pub mod pipelines;
 /// Company and contact chip titles, read many at a time.
 #[cfg(feature = "ports")]
 pub mod previews;
+/// Companies, contacts and deal pipelines another CRM's import writes.
+#[cfg(feature = "ports")]
+pub mod record_import;
 
 /// Pipeline outcome and per-amount currency fields.
 #[cfg(feature = "ports")]
@@ -93,3 +96,7 @@ pub mod pipeline_commercial;
 /// Explicit contact field edits.
 #[cfg(feature = "ports")]
 pub mod contact_update;
+
+/// Adding and removing a company's domains.
+#[cfg(feature = "ports")]
+pub mod company_domains;

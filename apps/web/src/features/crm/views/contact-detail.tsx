@@ -11,6 +11,7 @@ import { contactEmails } from '../core/contact';
 import {
   type ContactSection,
   type CrmRecordScope,
+  RECORD_PANEL_ORDER,
   sameRecordScope,
 } from '../core/record';
 import { ContactDiscussionSection } from './contact-discussion-section';
@@ -146,7 +147,7 @@ function ContactContent(props: ContactProps) {
       <SidePanel.Section
         id="contact-properties"
         title="Properties"
-        order={30}
+        order={RECORD_PANEL_ORDER.properties}
         defaultOpen
         render={(renderSection) => (
           <EntityPropertiesSection
@@ -157,7 +158,11 @@ function ContactContent(props: ContactProps) {
           />
         )}
       />
-      <SidePanel.Section id="contact-references" title="References" order={20}>
+      <SidePanel.Section
+        id="contact-references"
+        title="References"
+        order={RECORD_PANEL_ORDER.references}
+      >
         <RecordReferencesSection scope={scope()} />
       </SidePanel.Section>
     </SidePanel.Layout>

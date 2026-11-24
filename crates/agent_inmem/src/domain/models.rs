@@ -103,7 +103,8 @@ pub fn supports_images(id: &str) -> Option<bool> {
 /// provider Macro routes it to serves it, which can be less than the model
 /// itself reads: Fireworks serves MiniMax M3 at 512k of its native 1M.
 ///
-/// Sources (2026-10-10): the model pages at https://developers.openai.com/api/docs/models
+/// Sources (2026-10-10, Haiku 5.5, GPT-6.2 Sol and GPT-6 Luna 2026-11-24):
+/// the model pages at https://developers.openai.com/api/docs/models
 /// and https://fireworks.ai/models, Google's Gemini 3.8 Flash model card,
 /// Anthropic's model overview, and Cerebras' gpt-oss-120b listing. Fireworks
 /// lists no window for Qwen 3.8 Max; 262,144 is the model's own. Unknown
@@ -111,12 +112,10 @@ pub fn supports_images(id: &str) -> Option<bool> {
 #[must_use]
 pub fn context_window(id: &str) -> Option<u64> {
     Some(match resolve(id) {
-        "anthropic/claude-sonnet-5-5" | "anthropic/claude-opus-5-5" => 1_000_000,
-        "anthropic/claude-haiku-4-5" => 200_000,
-        "openai/gpt-6-astra" | "openai/gpt-6.1-sol" | "openai/gpt-5.6" | "openai/gpt-5.5" => {
-            1_050_000
-        }
-        "openai/gpt-5.6-mini" | "openai/gpt-5-mini" => 400_000,
+        "anthropic/claude-sonnet-5-5"
+        | "anthropic/claude-opus-5-5"
+        | "anthropic/claude-haiku-5-5" => 1_000_000,
+        "openai/gpt-6-astra" | "openai/gpt-6.2-sol" | "openai/gpt-6-luna" => 1_050_000,
         "google/gemini-3.8-flash" => 1_048_576,
         "fireworks/kimi-k3"
         | "fireworks/deepseek-v4p1-flash-1017"

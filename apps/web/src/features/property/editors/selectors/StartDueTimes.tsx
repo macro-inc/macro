@@ -44,9 +44,10 @@ type StartDueTimesProps = {
  * The dates picker once its dates have times: the clock times for the
  * active end, typed or picked, and a calendar to move that end to another
  * day. Due times on the start's day count on from the start with the length
- * they give, as a calendar event's end times do. A start time moves on to
- * the due date and a due time closes the picker. Mount it once per active
- * end, so each starts on that end's time with nothing typed.
+ * they give, as a calendar event's end times do, and a first start time falls
+ * on the due date's day. A start time moves on to the due date and a due time
+ * closes the picker. Mount it once per active end, so each starts on that
+ * end's time with nothing typed.
  */
 export function StartDueTimes(props: StartDueTimesProps) {
   const [query, setQuery] = createSignal('');
@@ -59,19 +60,25 @@ export function StartDueTimes(props: StartDueTimesProps) {
 
   const value = () => props.dates[props.field];
 
-  // The day the listed times fall on, before an option's day offset.
+  // The day the listed times fall on, before an option's day offset. An end
+  // not set yet takes the other end's day.
   const anchorDay = () => {
     const { start, due } = props.dates;
     if (props.field === 'due' && start && (!due || isSameDay(start, due))) {
       return startOfDay(start);
     }
-    return startOfDay(value() ?? props.dates.start ?? new Date());
+    const other = props.field === 'start' ? due : start;
+    return startOfDay(value() ?? other ?? new Date());
   };
 
   const options = createMemo<TimeOption[]>(() => {
-    const { start, due } = props.dates;
+    const { start, due, wholeDay } = props.dates;
     if (props.field === 'due' && start && (!due || isSameDay(start, due))) {
-      return endTimeOptions(format(start, 'HH:mm'), props.hour12);
+      const ends = endTimeOptions(format(start, 'HH:mm'), props.hour12);
+      // Beside a date without a time there is no length to label times with.
+      return wholeDay
+        ? ends.map((option) => ({ ...option, detail: undefined }))
+        : ends;
     }
     return dayTimeOptions(props.hour12);
   });
@@ -79,9 +86,10 @@ export function StartDueTimes(props: StartDueTimesProps) {
   const optionAt = (option: TimeOption) =>
     addDays(anchorDay(), option.dayOffset);
 
+  // An end saved without a time has no current time, only the hour it is held at.
   const currentOption = () => {
     const at = value();
-    if (!at) return undefined;
+    if (!at || props.dates.wholeDay === props.field) return undefined;
     return options().find(
       (option) =>
         isSameDay(optionAt(option), at) && option.value === format(at, 'HH:mm')
@@ -127,7 +135,9 @@ export function StartDueTimes(props: StartDueTimesProps) {
 
   const move = (step: number) => {
     const all = options();
-    const index = all.findIndex((option) => option.id === highlighted());
+    let index = all.findIndex((option) => option.id === highlighted());
+    // With no row highlighted, Down starts at the first row and Up at the last.
+    if (index < 0) index = step > 0 ? -1 : 0;
     const next = all[(index + step + all.length) % all.length];
     setMoved(next?.id);
     scrollTo(next?.id);

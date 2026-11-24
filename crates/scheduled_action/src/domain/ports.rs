@@ -391,6 +391,13 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<InProgressExecution>> + Send;
 
+    /// Stop the routine's run in progress, on whichever instance runs it.
+    /// The run ends as stopped soon after; with none running, nothing happens.
+    fn stop_run(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// The routine's finished runs, newest first, each with the routines it
     /// created that still follow it.
     fn get_execution_records(
@@ -454,6 +461,28 @@ pub struct SuggestionOrigin {
     pub kind: &'static str,
     /// The surface it belongs to most.
     pub surface: Option<&'static str>,
+}
+
+/// The inboxes (email link ids) an owner receives mail in: their own and those
+/// delegated to them. Object-safe, so the scheduled action service need not
+/// know the email store's type.
+#[async_trait::async_trait]
+pub trait OwnerInboxes: Send + Sync + 'static {
+    /// Which of `inboxes` `owner` receives mail in. Only those are read, so
+    /// the cost follows a routine's picks, not how many inboxes the owner has.
+    async fn among(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        inboxes: &[Uuid],
+    ) -> std::result::Result<Vec<Uuid>, OwnerInboxesError>;
+}
+
+/// Why an owner's inboxes couldn't be read. A save that hits it can be retried.
+#[derive(Debug, thiserror::Error)]
+pub enum OwnerInboxesError {
+    /// The email store failed.
+    #[error("the owner's inboxes couldn't be read: {0}")]
+    Internal(Report),
 }
 
 /// Finds what a suggestion was. Object-safe, so the scheduled action service
@@ -1268,6 +1297,8 @@ pub enum RunEnd {
     Failed,
     /// Shutdown or the event worker stopped it.
     Interrupted,
+    /// Its owner stopped it.
+    Stopped,
     /// The owner's AI allowance refused the run before it started.
     AiLimitReached,
 }

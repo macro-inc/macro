@@ -113,26 +113,6 @@ export const rememberMobileEmailAttribution = (): void => {
 };
 
 /**
- * Ad parameters for a capture that is still on the phone: the current URL,
- * filled in from the utm cookies root preload already stores.
- */
-export const adAttributionForCapture = (): Record<string, string> => {
-  const found: Record<string, string> = {};
-  if (typeof document === 'undefined') return found;
-  for (const key of AD_ATTRIBUTION_PARAMS) {
-    const fromCookie = readCookie(key);
-    const accepted = fromCookie ? acceptedAttributionValue(fromCookie) : null;
-    if (accepted) found[key] = accepted;
-  }
-  const params = searchParams();
-  for (const key of AD_ATTRIBUTION_PARAMS) {
-    const accepted = acceptedAttributionValue(params.get(key) ?? '');
-    if (accepted) found[key] = accepted;
-  }
-  return found;
-};
-
-/**
  * Person properties for a desktop signup that followed the mobile email.
  * Null when this browser did not open that link.
  */

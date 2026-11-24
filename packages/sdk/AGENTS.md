@@ -97,6 +97,10 @@ enforced by the ordinary backend APIs.
   no access request lets someone change another person's entry; a 409
   `timer_over_limit` is `TimerOverLimitError` carrying the timer to resolve
   when the refusal names one; check `timer` before using it.
+  Reports are `macro.time.summary` / `exportCsv` (`scope: 'mine' | 'team'`)
+  and `initiative.timeSummary` / `exportTimeCsv` for a project, over DSS
+  `/time/summary` and `/time/export` (`entities/time/report.ts`); totals come
+  back keyed by `User` and `Task` handles, never ids.
 - `users.search(nameOrEmail)` is one `GET /contacts/search`: the server
   ranks the caller's contacts and current team (teammates first, then, for a
   caller on the list-aware directory, `interacted`/`invited` and then email

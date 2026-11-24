@@ -13,8 +13,11 @@
 //! own. Running from `main` on a schedule, it is one of the few workflows
 //! Google's identity provider admits.
 //! Re-running an existing job is how this stays within GitHub's rule that
-//! events created with the workflow token never start workflows. The iOS
-//! counterpart is [`super::ios_release_watch`].
+//! events created with the workflow token never start workflows. Reading
+//! Play opens an edit, which invalidates any other open edit, so a PR is
+//! skipped while a publish run is queued or running (see
+//! `scripts/android_release_watch.sh`). The iOS counterpart is
+//! [`super::ios_release_watch`].
 
 use gh_workflow::expr::typed::{Bool, Expr, StepHandle, StepOutput, Str, github};
 use gh_workflow::{

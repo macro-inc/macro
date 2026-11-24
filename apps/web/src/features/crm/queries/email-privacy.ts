@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import {
@@ -14,7 +15,7 @@ import type {
   crmEmailPrivacyClient,
 } from '@service-storage/crm-email-privacy';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createEffect } from 'solid-js';
 import type {
   EmailConsent,
   EmailPrivacy,
@@ -257,12 +258,35 @@ export function createEmailConsentQuery(
 export function createEmailPrivacySource(
   deps: EmailPrivacyDependencies,
   teamId: Accessor<string | undefined>,
-  userId: Accessor<string | undefined>
+  userId: Accessor<string | undefined>,
+  /** The app's primary email link, which changes when a mailbox is linked. */
+  primaryLinkId: Accessor<string | undefined>
 ) {
   const query = useQuery(
     () => emailPrivacyOptions(deps, teamId(), userId()),
     () => deps.client
   );
+
+  // A mailbox linked in place (native OAuth, no page reload) leaves these
+  // settings and the policy view cached without it. Reread both once per new
+  // primary link the settings don't report yet. This never changes consent.
+  let reread: string | undefined;
+  createEffect(() => {
+    const linkId = primaryLinkId();
+    const reported = query.isSuccess ? query.data.mailboxLinkId : linkId;
+    if (!linkId || reported === linkId || reread === linkId) return;
+
+    reread = linkId;
+    fireAndForget(
+      deps.client.invalidateQueries({ queryKey: crmKeys.emailPrivacy._def }),
+      'crm'
+    );
+    fireAndForget(
+      deps.client.invalidateQueries({ queryKey: crmKeys.emailPolicy._def }),
+      'crm'
+    );
+  });
+
   const update = createEmailPrivacyMutation(deps, teamId, userId);
   const createExcludedThreads = (after: Accessor<string | undefined>) =>
     useQuery(

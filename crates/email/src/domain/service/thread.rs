@@ -10,6 +10,7 @@ use entity_access::domain::models::{
     AccessLevel, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
 };
 use frecency::domain::ports::FrecencyQueryService;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -150,7 +151,7 @@ where
             },
             async {
                 self.email_repo
-                    .labels_by_message_ids(&message_ids)
+                    .labels_by_message_ids(&message_ids, label_reader(receipt))
                     .await
                     .map_err(anyhow::Error::from)
             },
@@ -339,7 +340,7 @@ where
         // independent of the fetched message page (unlike per-message labels).
         let labels = self
             .email_repo
-            .labels_by_thread_ids(&[thread_row.db_id])
+            .labels_by_thread_ids(&[thread_row.db_id], label_reader(&receipt))
             .await
             .map_err(anyhow::Error::from)?
             .into_iter()
@@ -405,6 +406,7 @@ where
         &self,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, ParsedMessage>, EmailErr> {
+        let reader = batch_label_reader(&receipts);
         let thread_ids = email_thread_ids_from_receipts(receipts)?;
 
         if thread_ids.is_empty() {
@@ -432,7 +434,7 @@ where
             },
             async {
                 self.email_repo
-                    .labels_by_message_ids(&message_ids)
+                    .labels_by_message_ids(&message_ids, reader.as_ref())
                     .await
                     .map_err(anyhow::Error::from)
             },
@@ -460,6 +462,7 @@ where
         &self,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, Message>, EmailErr> {
+        let reader = batch_label_reader(&receipts);
         let thread_ids = email_thread_ids_from_receipts(receipts)?;
 
         if thread_ids.is_empty() {
@@ -487,7 +490,7 @@ where
             },
             async {
                 self.email_repo
-                    .labels_by_message_ids(&message_ids)
+                    .labels_by_message_ids(&message_ids, reader.as_ref())
                     .await
                     .map_err(anyhow::Error::from)
             },
@@ -500,6 +503,25 @@ where
             .map(|message| (message.thread_db_id, message))
             .collect())
     }
+}
+
+/// Who the labels of a receipt's thread are read for.
+fn label_reader(
+    receipt: &EntityAccessReceipt<ViewAccessLevel>,
+) -> Option<&MacroUserIdStr<'static>> {
+    receipt.get_authenticated_user().ok()
+}
+
+/// Who a batch's labels are read for: the one person who holds every receipt,
+/// or no one when the receipts are not all the same person's.
+fn batch_label_reader(
+    receipts: &[EntityAccessReceipt<ViewAccessLevel>],
+) -> Option<MacroUserIdStr<'static>> {
+    let reader = label_reader(receipts.first()?)?;
+    receipts
+        .iter()
+        .all(|receipt| label_reader(receipt) == Some(reader))
+        .then(|| reader.clone())
 }
 
 pub(super) fn email_thread_ids_from_receipts(

@@ -136,6 +136,10 @@ export function useChannelRailActivity(
       latestTargets,
       mentionCounts,
       unreadChannelIds,
+      unreadOrMentionedChannelIds: new Set([
+        ...unreadChannelIds,
+        ...mentionCounts.keys(),
+      ]),
       unreadNotificationIds,
       unreadCounts,
     };
@@ -272,6 +276,11 @@ export function useChannelRailActivity(
     targetChannelId,
     targetLabel,
     unreadChannelIds: () => notificationActivity().unreadChannelIds,
+    /** Channels with an unread message, or an unread mention of the viewer in
+     * a thread, which leaves the channel's own messages read. What an unread
+     * filter keeps: both light Chat's dot in the app rail. */
+    unreadOrMentionedChannelIds: () =>
+      notificationActivity().unreadOrMentionedChannelIds,
     unreadCount: (group: ChannelsGroup) =>
       notificationActivity().unreadCounts[group],
   };

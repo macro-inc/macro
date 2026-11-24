@@ -92,7 +92,7 @@ export function ChannelsMobileView(props: {
             !pinnedIds().has(channel.id) ||
             channelActivity.incomingCallIds().has(channel.id)) &&
           (!props.preferences?.unreadOnly ||
-            channelActivity.unreadChannelIds().has(channel.id))
+            channelActivity.unreadOrMentionedChannelIds().has(channel.id))
       );
     const sort = props.preferences?.sort;
     if (!sort || sort === 'manual') return channels;

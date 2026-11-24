@@ -20,7 +20,11 @@ import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { PROPERTY_OPTION_IDS } from '@property/identifiers';
 import type { Accessor, JSX } from 'solid-js';
 import { TASK_SORT_DEFINITIONS } from './constants';
-import { taskGanttDates, taskGanttTimed } from './queries/task-gantt';
+import {
+  taskGanttDates,
+  taskGanttTimed,
+  taskGanttWholeDayEnd,
+} from './queries/task-gantt';
 import { createTaskGanttQueries } from './queries/task-gantt-queries';
 import { useTasksView } from './tasks-view-context';
 import type { TaskCreateOptions } from './types';
@@ -99,6 +103,7 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
         <Gantt.Bar
           {...taskGanttDates(task(), startDates())}
           timed={startDates() && taskGanttTimed(task())}
+          wholeDay={startDates() ? taskGanttWholeDayEnd(task()) : undefined}
           regroup={startDates()}
           onReschedule={
             startDates() && queries.canReschedule(task().id)

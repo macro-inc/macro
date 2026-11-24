@@ -395,7 +395,7 @@ function Properties(props: { class?: string }) {
             definitions={composer.availableProperties()}
             properties={composer.draftProperties()}
             onAdd={composer.addProperty}
-            onSave={(id, value) => composer.setPropertyValues(id, value)}
+            onSave={composer.setPropertyValue}
           />
         </EntityComposer.Properties>
         <Modals />
