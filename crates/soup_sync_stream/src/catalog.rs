@@ -70,8 +70,7 @@ pub(crate) enum LaneSpec {
 /// A Soup-paged lane before saved state picks its variables.
 pub(crate) struct SoupLaneSpec {
     pub(crate) id: &'static str,
-    pub(crate) query: &'static str,
-    pub(crate) operation_name: &'static str,
+    pub(crate) query: &'static LaneQuery,
     /// The first page's `initial` input of a pass started at the given time.
     pub(crate) input: fn(DateTime<Utc>) -> Map<String, Value>,
     pub(crate) kind: SoupLaneKind,
@@ -105,21 +104,120 @@ struct EmailWindow {
     days: i64,
 }
 
-const CHANNELS_QUERY: &str = include_str!("catalog/channels.graphql");
-const CHANNEL_IDS_QUERY: &str = include_str!("catalog/channel_ids.graphql");
-const MINIMAL_TASKS_QUERY: &str = include_str!("catalog/minimal_tasks.graphql");
-const MINIMAL_DOCUMENTS_QUERY: &str = include_str!("catalog/minimal_documents.graphql");
-const SOUP_BACKFILL_QUERY: &str = include_str!("catalog/soup_backfill.graphql");
-const SOUP_MAIL_BACKFILL_QUERY: &str = include_str!("catalog/soup_mail_backfill.graphql");
-const CRM_CONTACTS_QUERY: &str = include_str!("catalog/crm_contacts.graphql");
-const TASK_IDS_QUERY: &str = include_str!("catalog/task_ids.graphql");
-const TASK_PROJECT_IDS_QUERY: &str = include_str!("catalog/task_project_ids.graphql");
-const DOCUMENT_IDS_QUERY: &str = include_str!("catalog/document_ids.graphql");
-const SHARED_EMAIL_IDS_QUERY: &str = include_str!("catalog/shared_email_ids.graphql");
+/// A lane query: its document, its operation, and what the client's cache
+/// requires of that operation's pages.
+///
+/// The cache chooses those requirements by operation name
+/// (`soup_filter_cache_adapter::backfill_requirements`), native apps already
+/// shipped included, so an operation keeps its name once a lane runs it. The
+/// adapter's tests compare every query here with what the cache does.
+#[derive(Debug)]
+pub struct LaneQuery {
+    /// The query document, generated from the app's GraphQL documents by
+    /// `apps/web/scripts/generate-sync-lane-queries.ts`.
+    pub document: &'static str,
+    /// The operation the lane runs.
+    pub operation: &'static str,
+    /// The cache refuses a page with a row lacking a required projection.
+    pub complete_projections: bool,
+    /// The cache refuses a page with an incomplete property projection.
+    pub complete_properties: bool,
+}
+
+impl LaneQuery {
+    const fn new(document: &'static str, operation: &'static str) -> Self {
+        Self {
+            document,
+            operation,
+            complete_projections: false,
+            complete_properties: false,
+        }
+    }
+
+    /// Rows with every projection the cache's local filtering needs.
+    const fn complete_rows(self) -> Self {
+        Self {
+            complete_projections: true,
+            ..self
+        }
+    }
+
+    /// Complete property projections too.
+    const fn complete_properties(self) -> Self {
+        Self {
+            complete_properties: true,
+            ..self
+        }
+    }
+}
+
+const CHANNELS_QUERY: LaneQuery = LaneQuery::new(
+    include_str!("catalog/channels.graphql"),
+    "SoupBackfillSyncChannels",
+)
+.complete_rows();
+const CHANNEL_IDS_QUERY: LaneQuery = LaneQuery::new(
+    include_str!("catalog/channel_ids.graphql"),
+    "SoupSyncChannelIds",
+);
+const MINIMAL_TASKS_QUERY: LaneQuery = LaneQuery::new(
+    include_str!("catalog/minimal_tasks.graphql"),
+    "SoupBackfillSyncTasks",
+)
+.complete_rows();
+const MINIMAL_DOCUMENTS_QUERY: LaneQuery = LaneQuery::new(
+    include_str!("catalog/minimal_documents.graphql"),
+    "SoupBackfillSyncDocuments",
+)
+.complete_rows();
+const SOUP_BACKFILL_QUERY: LaneQuery = LaneQuery::new(
+    include_str!("catalog/soup_backfill.graphql"),
+    "SoupBackfill",
+)
+.complete_rows()
+.complete_properties();
+const SOUP_MAIL_BACKFILL_QUERY: LaneQuery = LaneQuery::new(
+    include_str!("catalog/soup_mail_backfill.graphql"),
+    "SoupMailBackfill",
+)
+.complete_properties();
+const CRM_CONTACTS_QUERY: LaneQuery =
+    LaneQuery::new(include_str!("catalog/crm_contacts.graphql"), "CrmContacts");
+const TASK_IDS_QUERY: LaneQuery =
+    LaneQuery::new(include_str!("catalog/task_ids.graphql"), "SoupSyncTaskIds");
+const TASK_PROJECT_IDS_QUERY: LaneQuery = LaneQuery::new(
+    include_str!("catalog/task_project_ids.graphql"),
+    "SoupSyncTaskProjectIds",
+);
+const DOCUMENT_IDS_QUERY: LaneQuery = LaneQuery::new(
+    include_str!("catalog/document_ids.graphql"),
+    "SoupSyncDocumentIds",
+);
+const SHARED_EMAIL_IDS_QUERY: LaneQuery = LaneQuery::new(
+    include_str!("catalog/shared_email_ids.graphql"),
+    "SoupSyncSharedEmailIds",
+);
 /// Calendar windows' query.
-pub(crate) const CALENDAR_QUERY: &str = include_str!("catalog/calendar_occurrences.graphql");
-/// Calendar windows' operation.
-pub(crate) const CALENDAR_OPERATION: &str = "CalendarOccurrences";
+pub(crate) const CALENDAR_QUERY: LaneQuery = LaneQuery::new(
+    include_str!("catalog/calendar_occurrences.graphql"),
+    "CalendarOccurrences",
+);
+
+/// Every query a lane runs.
+pub const LANE_QUERIES: &[&LaneQuery] = &[
+    &CHANNELS_QUERY,
+    &CHANNEL_IDS_QUERY,
+    &MINIMAL_TASKS_QUERY,
+    &MINIMAL_DOCUMENTS_QUERY,
+    &SOUP_BACKFILL_QUERY,
+    &SOUP_MAIL_BACKFILL_QUERY,
+    &CRM_CONTACTS_QUERY,
+    &TASK_IDS_QUERY,
+    &TASK_PROJECT_IDS_QUERY,
+    &DOCUMENT_IDS_QUERY,
+    &SHARED_EMAIL_IDS_QUERY,
+    &CALENDAR_QUERY,
+];
 
 const TASKS: &str = "tasks";
 const TASK_PROJECTS: &str = "task-projects";
@@ -144,8 +242,7 @@ fn first_pass() -> Vec<LaneSpec> {
         // are not a lane: the app's contact directory backfill keeps them.
         LaneSpec::Soup(SoupLaneSpec {
             id: CHANNELS,
-            query: CHANNELS_QUERY,
-            operation_name: "SoupBackfillSyncChannels",
+            query: &CHANNELS_QUERY,
             input: |_| channels_input(),
             kind: SoupLaneKind::Hydrate,
             restart_on_run: true,
@@ -154,8 +251,7 @@ fn first_pass() -> Vec<LaneSpec> {
         }),
         LaneSpec::Soup(SoupLaneSpec {
             id: TASKS,
-            query: MINIMAL_TASKS_QUERY,
-            operation_name: "SoupBackfillSyncTasks",
+            query: &MINIMAL_TASKS_QUERY,
             input: |_| rows(task_filters(), "UPDATED_AT", HYDRATE_PAGE),
             kind: SoupLaneKind::Hydrate,
             restart_on_run: false,
@@ -165,8 +261,7 @@ fn first_pass() -> Vec<LaneSpec> {
         // Project chips answer from these records once the lane completed.
         LaneSpec::Soup(SoupLaneSpec {
             id: TASK_PROJECTS,
-            query: SOUP_BACKFILL_QUERY,
-            operation_name: "SoupBackfill",
+            query: &SOUP_BACKFILL_QUERY,
             input: |_| rows(task_project_filters(), "VIEWED_UPDATED", HYDRATE_PAGE),
             kind: SoupLaneKind::Hydrate,
             restart_on_run: false,
@@ -175,8 +270,7 @@ fn first_pass() -> Vec<LaneSpec> {
         }),
         LaneSpec::Soup(SoupLaneSpec {
             id: "email-recent",
-            query: SOUP_MAIL_BACKFILL_QUERY,
-            operation_name: "SoupMailBackfill",
+            query: &SOUP_MAIL_BACKFILL_QUERY,
             input: |now| mail_rows(EMAIL_RECENT_DAYS, HYDRATE_PAGE, now),
             kind: SoupLaneKind::Hydrate,
             restart_on_run: false,
@@ -187,8 +281,7 @@ fn first_pass() -> Vec<LaneSpec> {
         // `email-shared-ids` reconciles the scope.
         LaneSpec::Soup(SoupLaneSpec {
             id: EMAIL_SHARED,
-            query: SOUP_MAIL_BACKFILL_QUERY,
-            operation_name: "SoupMailBackfill",
+            query: &SOUP_MAIL_BACKFILL_QUERY,
             input: |now| {
                 with_email_recency(
                     email_rows(shared_email_filters(), HYDRATE_PAGE),
@@ -203,8 +296,7 @@ fn first_pass() -> Vec<LaneSpec> {
         }),
         LaneSpec::Soup(SoupLaneSpec {
             id: DOCUMENTS_RECENT,
-            query: MINIMAL_DOCUMENTS_QUERY,
-            operation_name: "SoupBackfillSyncDocuments",
+            query: &MINIMAL_DOCUMENTS_QUERY,
             input: |_| rows(document_filters(), "VIEWED_UPDATED", HYDRATE_PAGE),
             kind: SoupLaneKind::Hydrate,
             restart_on_run: false,
@@ -219,8 +311,7 @@ fn first_pass() -> Vec<LaneSpec> {
         // moving row cannot be missed and then deleted.
         ids_lane(
             "tasks-ids",
-            TASK_IDS_QUERY,
-            "SoupSyncTaskIds",
+            &TASK_IDS_QUERY,
             |_| rows(task_filters(), "CREATED_AT", MEMBERSHIP_PAGE),
             &[TASKS],
         ),
@@ -228,22 +319,19 @@ fn first_pass() -> Vec<LaneSpec> {
         // answered from it cannot outlive the viewer's access.
         ids_lane(
             "task-projects-ids",
-            TASK_PROJECT_IDS_QUERY,
-            "SoupSyncTaskProjectIds",
+            &TASK_PROJECT_IDS_QUERY,
             |_| rows(task_project_filters(), "CREATED_AT", MEMBERSHIP_PAGE),
             &[TASK_PROJECTS],
         ),
         ids_lane(
             "channels-ids",
-            CHANNEL_IDS_QUERY,
-            "SoupSyncChannelIds",
+            &CHANNEL_IDS_QUERY,
             |_| rows(channel_filters(), "CREATED_AT", MEMBERSHIP_PAGE),
             &[CHANNELS],
         ),
         ids_lane(
             "documents-ids",
-            DOCUMENT_IDS_QUERY,
-            "SoupSyncDocumentIds",
+            &DOCUMENT_IDS_QUERY,
             |_| rows(document_filters(), "CREATED_AT", MEMBERSHIP_PAGE),
             &[DOCUMENTS_RECENT, DOCUMENTS_REST],
         ),
@@ -251,8 +339,7 @@ fn first_pass() -> Vec<LaneSpec> {
         // deleted only once it is no longer shared with the viewer.
         ids_lane(
             "email-shared-ids",
-            SHARED_EMAIL_IDS_QUERY,
-            "SoupSyncSharedEmailIds",
+            &SHARED_EMAIL_IDS_QUERY,
             |_| rows(shared_email_filters(), "CREATED_AT", MEMBERSHIP_PAGE),
             &[EMAIL_SHARED],
         ),
@@ -261,7 +348,7 @@ fn first_pass() -> Vec<LaneSpec> {
 
 fn second_pass() -> Vec<LaneSpec> {
     vec![
-        hydrate_lane("crm-contacts", CRM_CONTACTS_QUERY, "CrmContacts", |_| {
+        hydrate_lane("crm-contacts", &CRM_CONTACTS_QUERY, |_| {
             let mut filters = excluded_filters();
             filters.insert(
                 "crmContactFilter".to_owned(),
@@ -274,17 +361,14 @@ fn second_pass() -> Vec<LaneSpec> {
         }),
         // Core entities except documents and tasks (their own lanes), plus
         // CRM companies and foreign entities.
-        hydrate_lane("core-rest", SOUP_BACKFILL_QUERY, "SoupBackfill", |_| {
+        hydrate_lane("core-rest", &SOUP_BACKFILL_QUERY, |_| {
             rows(core_rest_filters(), "VIEWED_UPDATED", HYDRATE_PAGE)
         }),
         LaneSpec::Soup(SoupLaneSpec {
             coverage: Some(Coverage("document")),
-            ..soup_hydrate(
-                DOCUMENTS_REST,
-                MINIMAL_DOCUMENTS_QUERY,
-                "SoupBackfillSyncDocuments",
-                |_| rows(document_filters(), "VIEWED_UPDATED", HYDRATE_PAGE),
-            )
+            ..soup_hydrate(DOCUMENTS_REST, &MINIMAL_DOCUMENTS_QUERY, |_| {
+                rows(document_filters(), "VIEWED_UPDATED", HYDRATE_PAGE)
+            })
         }),
         LaneSpec::Calendar {
             id_prefix: "calendar-far",
@@ -292,45 +376,34 @@ fn second_pass() -> Vec<LaneSpec> {
         },
         LaneSpec::Soup(SoupLaneSpec {
             max_items: Some(EMAIL_OLDER_MAX_ITEMS),
-            ..soup_hydrate(
-                "email-older",
-                SOUP_MAIL_BACKFILL_QUERY,
-                "SoupMailBackfill",
-                |now| mail_rows(EMAIL_OLDER_DAYS, HYDRATE_PAGE, now),
-            )
+            ..soup_hydrate("email-older", &SOUP_MAIL_BACKFILL_QUERY, |now| {
+                mail_rows(EMAIL_OLDER_DAYS, HYDRATE_PAGE, now)
+            })
         }),
-        hydrate_lane("tasks-details", SOUP_BACKFILL_QUERY, "SoupBackfill", |_| {
+        hydrate_lane("tasks-details", &SOUP_BACKFILL_QUERY, |_| {
             rows(task_filters(), "UPDATED_AT", HYDRATE_PAGE)
         }),
         LaneSpec::Soup(SoupLaneSpec {
             max_items: Some(DOCUMENTS_RECENT_MAX_ITEMS),
-            ..soup_hydrate(
-                "documents-details",
-                SOUP_BACKFILL_QUERY,
-                "SoupBackfill",
-                |_| rows(document_filters(), "VIEWED_UPDATED", HYDRATE_PAGE),
-            )
+            ..soup_hydrate("documents-details", &SOUP_BACKFILL_QUERY, |_| {
+                rows(document_filters(), "VIEWED_UPDATED", HYDRATE_PAGE)
+            })
         }),
         // Threads with their first message page.
-        hydrate_lane(
-            "email-content",
-            SOUP_BACKFILL_QUERY,
-            "SoupBackfill",
-            |now| mail_rows(EMAIL_CONTENT_DAYS, EMAIL_CONTENT_PAGE, now),
-        ),
+        hydrate_lane("email-content", &SOUP_BACKFILL_QUERY, |now| {
+            mail_rows(EMAIL_CONTENT_DAYS, EMAIL_CONTENT_PAGE, now)
+        }),
     ]
 }
 
 fn soup_hydrate(
     id: &'static str,
-    query: &'static str,
-    operation_name: &'static str,
+    query: &'static LaneQuery,
     input: fn(DateTime<Utc>) -> Map<String, Value>,
 ) -> SoupLaneSpec {
     SoupLaneSpec {
         id,
         query,
-        operation_name,
         input,
         kind: SoupLaneKind::Hydrate,
         restart_on_run: false,
@@ -341,23 +414,21 @@ fn soup_hydrate(
 
 fn hydrate_lane(
     id: &'static str,
-    query: &'static str,
-    operation_name: &'static str,
+    query: &'static LaneQuery,
     input: fn(DateTime<Utc>) -> Map<String, Value>,
 ) -> LaneSpec {
-    LaneSpec::Soup(soup_hydrate(id, query, operation_name, input))
+    LaneSpec::Soup(soup_hydrate(id, query, input))
 }
 
 fn ids_lane(
     id: &'static str,
-    query: &'static str,
-    operation_name: &'static str,
+    query: &'static LaneQuery,
     input: fn(DateTime<Utc>) -> Map<String, Value>,
     scopes: &'static [&'static str],
 ) -> LaneSpec {
     LaneSpec::Soup(SoupLaneSpec {
         kind: SoupLaneKind::Membership(scopes),
-        ..soup_hydrate(id, query, operation_name, input)
+        ..soup_hydrate(id, query, input)
     })
 }
 

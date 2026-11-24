@@ -21,4 +21,5 @@ uuid = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 cache-turso = { path = "../client/cache-turso" }
 pollster = { workspace = true }
+soup_sync_stream = { path = "../soup_sync_stream" }
 tempfile = { workspace = true }

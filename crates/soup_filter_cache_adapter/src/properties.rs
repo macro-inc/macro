@@ -196,12 +196,10 @@ pub async fn augment_authoritative_response<S: DurableRead>(
             result.push(ProjectionMutation::Delete(key));
         }
     }
-    if matches!(
-        operation,
-        Some("SoupBackfill" | "SoupMailBackfill" | "SoupSharedMailBackfill")
-    ) && result
-        .iter()
-        .any(|mutation| matches!(mutation, ProjectionMutation::MarkIncomplete { .. }))
+    if crate::backfill_requirements(operation).complete_properties
+        && result
+            .iter()
+            .any(|mutation| matches!(mutation, ProjectionMutation::MarkIncomplete { .. }))
     {
         return Err(error("Soup backfill contains an incomplete property projection").into());
     }

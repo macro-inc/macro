@@ -7,8 +7,8 @@ mod test;
 
 use crate::calendar::{CalendarWindow, calendar_windows, iso_instant};
 use crate::catalog::{
-    CALENDAR_OPERATION, CALENDAR_PAGE, CALENDAR_QUERY, LaneSpec, SoupLaneKind, SoupLaneSpec,
-    lane_specs, with_updated_since,
+    CALENDAR_PAGE, CALENDAR_QUERY, LaneSpec, SoupLaneKind, SoupLaneSpec, lane_specs,
+    with_updated_since,
 };
 use crate::lane::{
     INPUT_VARIABLE, LaneDraft, LaneError, LaneId, LaneKind, LanePlan, Paging, SOUP_CARRIED_FIELDS,
@@ -136,8 +136,8 @@ fn soup_lane(
     let draft = |variables: Value, items_before: u32, pass_started_at: String| {
         Ok(LaneDraft {
             id: catalog_id(spec.id)?,
-            query: spec.query,
-            operation_name: spec.operation_name,
+            query: spec.query.document,
+            operation_name: spec.query.operation,
             variables: Map::from_iter([(INPUT_VARIABLE.to_owned(), variables)]),
             paging: Paging::Soup,
             kind: match spec.kind {
@@ -200,8 +200,8 @@ fn calendar_lane(
     input.insert("first".to_owned(), Value::from(CALENDAR_PAGE));
     Ok(LaneDraft {
         id: catalog_id(&format!("{id_prefix}-{index}"))?,
-        query: CALENDAR_QUERY,
-        operation_name: CALENDAR_OPERATION,
+        query: CALENDAR_QUERY.document,
+        operation_name: CALENDAR_QUERY.operation,
         variables: Map::from_iter([(INPUT_VARIABLE.to_owned(), Value::Object(input))]),
         paging: Paging::Calendar,
         kind: LaneKind::Calendar {

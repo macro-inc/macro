@@ -57,6 +57,32 @@ pub enum SoupFilterCompileOutcome {
     Supported(ValidatedIndexQuery),
 }
 
+/// What the cache requires of a page written under `operation`, chosen by
+/// the operation's name.
+///
+/// The streamed sync's lane queries declare what they expect of these
+/// (`soup_sync_stream::LANE_QUERIES`), and native apps already shipped choose
+/// by the same names, so a lane operation keeps its name;
+/// `test/sync_lane_requirements.rs` holds the two together.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BackfillRequirements {
+    /// Refuse the page when a row lacks a required cache projection.
+    pub complete_projections: bool,
+    /// Refuse the page when a row's property projection is incomplete.
+    pub complete_properties: bool,
+}
+
+/// [`BackfillRequirements`] for a page of `operation`.
+pub fn backfill_requirements(operation: Option<&str>) -> BackfillRequirements {
+    BackfillRequirements {
+        complete_projections: operation.is_some_and(|name| name.starts_with("SoupBackfill")),
+        complete_properties: matches!(
+            operation,
+            Some("SoupBackfill" | "SoupMailBackfill" | "SoupSharedMailBackfill")
+        ),
+    }
+}
+
 /// Compile one GraphQL Soup request into generic predicate-index IR.
 pub fn compile_filter_request(
     filters: serde_json::Value,
@@ -204,9 +230,7 @@ pub fn authoritative_projection_mutations_for(
         || mutations
             .values()
             .any(|mutation| matches!(mutation, ProjectionMutation::MarkIncomplete { profile, .. } if profile == &vocabulary::profile_v4()));
-    if operation_name.is_some_and(|name| name.starts_with("SoupBackfill"))
-        && has_incomplete_projection
-    {
+    if backfill_requirements(operation_name).complete_projections && has_incomplete_projection {
         return Err(SoupFilterCacheAdapterError(
             "SoupBackfill page contains an incomplete required cache projection".to_owned(),
         ));

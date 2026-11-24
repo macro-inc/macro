@@ -47,6 +47,8 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 
 - Depends on: `cache-core`, `item_filter_index`, `predicate_index`,
   `graphql_soup_filter_input`, `soup_filter_projection` (no-default-features).
+  Tests also use `soup_sync_stream` (native only) to check its lane queries
+  against `backfill_requirements`.
 - Used by: `apps/web/tauri/graphql_cache_plugin` (native) and
   `crates/client/cache-wasm` (wasm, web).
 
@@ -89,6 +91,10 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   through `Engine::pass_reads` and keeps what it read for the write that
   follows, which reuses it only while `Storage::write_position` holds still.
 
+- What a page must hold (`backfill_requirements`) is chosen by operation
+  name, and the streamed sync's server names its lane operations: change a
+  name or a rule only together with `soup_sync_stream::LANE_QUERIES`, keeping
+  names native apps already shipped rely on.
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under
   `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]`.

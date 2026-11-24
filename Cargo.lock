@@ -19925,6 +19925,7 @@ dependencies = [
  "serde",
  "serde_json",
  "soup-filter-projection",
+ "soup_sync_stream",
  "tempfile",
  "thiserror 2.0.18",
  "tracing",

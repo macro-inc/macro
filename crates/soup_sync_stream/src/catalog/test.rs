@@ -1,3 +1,4 @@
+use crate::catalog::{LANE_QUERIES, LaneQuery};
 use crate::lane::{LaneKind, LanePlan};
 use crate::request::SyncPlan;
 use apollo_compiler::{
@@ -130,8 +131,8 @@ fn minimal_lanes_select_the_fields_local_filtering_needs() {
         ] {
             assert!(query.contains(field), "{id} selects {field}");
         }
-        // The cache refuses a `SoupBackfill…` page whose rows are incomplete.
-        assert!(lane.operation_name.starts_with("SoupBackfillSync"), "{id}");
+        // The cache refuses this lane's pages when their rows are incomplete.
+        assert!(lane_query(lane).complete_projections, "{id}");
     }
 }
 
@@ -208,5 +209,19 @@ fn queries_and_variables_are_valid_against_the_server_schema() {
 fn queries_carry_no_client_only_directives() {
     for lane in every_planned_lane() {
         assert!(!lane.query.contains('@'), "{}", lane.id);
+    }
+}
+
+fn lane_query(lane: &LanePlan) -> &'static LaneQuery {
+    LANE_QUERIES
+        .iter()
+        .find(|query| query.operation == lane.operation_name && query.document == lane.query)
+        .unwrap_or_else(|| panic!("{} runs a query missing from LANE_QUERIES", lane.id))
+}
+
+#[test]
+fn every_lane_runs_a_listed_query() {
+    for lane in every_planned_lane() {
+        lane_query(&lane);
     }
 }

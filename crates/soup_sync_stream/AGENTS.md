@@ -62,9 +62,12 @@ whose pages took the least time first.
 - Change a lane: `src/catalog.rs`, then
   `src/catalog/test/expected_lanes.json`. The catalog test validates every
   lane's query and variables against `static_assets/schema.graphql`. Keep a
-  lane's id (the cache's saved state and members key on it) and a minimal
-  lane's `SoupBackfillSync…` operation name (the cache refuses incomplete rows
-  for it).
+  lane's id (the cache's saved state and members key on it) and its query's
+  operation name: the cache, in native apps already shipped too, chooses what
+  it requires of a page by that name. Each `LaneQuery` in `LANE_QUERIES`
+  declares those requirements, and `soup_filter_cache_adapter`'s
+  `sync_lane_requirements` test compares them with the cache's own
+  `backfill_requirements`.
 
 ## Checks
 
