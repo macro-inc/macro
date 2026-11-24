@@ -106,7 +106,9 @@ per-entity-type search plus a unified search across them — mounted into
   are their own source beside CRM, on only while `DATABASE_ROW_SEARCH_FLAG`
   (`enable-database-row-search`) is on for the caller and the search has no
   tag filter, email operator, or regexp/query matching. The `database_rows`
-  index only proposes rows, narrowed to the databases the caller reaches now;
+  index only proposes rows, narrowed to the databases the caller reaches now
+  (at most `MAX_SEARCHED_DATABASES`, a terms filter, the span records when
+  that cap cut the list); the caller's sources are read once per search;
   `domain::database_rows` shows a row only after the primary database says,
   uncached, that the caller views its database through their current
   memberships (`CurrentDatabaseAccess`), the database is a live untrashed
