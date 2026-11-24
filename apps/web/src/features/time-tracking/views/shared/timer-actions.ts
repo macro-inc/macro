@@ -133,8 +133,9 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
   /**
    * Undo a switch from what the server says it stopped: discard the new
    * timer, start the stopped one again at its own start, and only then delete
-   * the entry it saved, so a failed step never loses the time. No other timer
-   * change runs in between.
+   * the entry it saved, so a failed step never loses the time. If that delete
+   * fails, the restarted timer is discarded again, so the entry stays the one
+   * record of the interval. No other timer change runs in between.
    */
   async function undoSwitch(
     stopped: TimeEntryFieldsFragment,
@@ -152,7 +153,14 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
         startedAt,
       });
       if (restarted.isErr()) return err(restarted.error);
-      return writes.remove(stopped);
+      const removed = await writes.remove(stopped);
+      if (removed.isOk()) return removed;
+      const restartedId =
+        restarted.value.kind === 'committed'
+          ? restarted.value.data?.timeTracking.runningTimer?.id
+          : undefined;
+      if (restartedId) await timerOps.discard(restartedId);
+      return removed;
     });
     if (undone.isErr() && !began) return fail(undone.error);
     if (undone.isErr()) toast.failure(t('timeTracking.undoFailed'));
