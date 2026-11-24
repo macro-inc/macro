@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
+import { $selectTrailingParagraph } from '@channel/Input/utils/select-trailing-paragraph';
 import { toast } from '@core/component/Toast/Toast';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { IMAGE_INPUT_WARNING } from '../state/image-input';
@@ -229,7 +230,9 @@ export function AgentInput(props: AgentInputProps) {
       // On a virtual keyboard Enter is a newline, as in channels; the send
       // button is the only way to submit.
       if (isTouchDevice()) return false;
-      if (canSend()) send();
+      // Send after Lexical's Enter update, not inside it: a clear nested in
+      // that update was merged into it, and the sent text stayed.
+      if (canSend()) queueMicrotask(send);
       return true;
     })
     .onFocusLeave({
@@ -244,10 +247,16 @@ export function AgentInput(props: AgentInputProps) {
     .onChange(setMarkdown);
 
   // A parent can restore or clear the draft after the editor has mounted.
+  // Importing markdown parks the caret at the start, so someone typing when
+  // a refused message comes back keeps typing at the end of the box.
   createEffect(() => {
     const next = markdown();
-    if (next !== editor.controls.getMarkdown())
-      editor.controls.setMarkdown(next);
+    if (next === editor.controls.getMarkdown()) return;
+    const typing =
+      editor.lexical.getRootElement()?.contains(document.activeElement) ??
+      false;
+    editor.controls.setMarkdown(next);
+    if (typing) editor.lexical.update(() => $selectTrailingParagraph());
   });
 
   const { isCompact, hasMultilineContent } = createComposerLayout(

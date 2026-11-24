@@ -1,6 +1,8 @@
+import type { InputAttachmentData } from '@channel/Input';
 import { setPreferredSpeed } from '@core/component/AI/signal/speed';
 import type { TurnState } from '@service-agent-fold/generated/types';
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import { err, ok } from 'neverthrow';
 import { createSignal, mergeProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UnifiedModelSelectorState } from '../../agents-view/components/unified-model-selector/root';
@@ -25,6 +27,7 @@ const speedOption = (values: string[]) => ({
 
 const mocks = vi.hoisted(() => ({
   session: (): { canEdit?: boolean; harness?: string } => ({ canEdit: false }),
+  sessionId: (): string => 'session-1',
   turn: () => 'idle' as TurnState,
   issue: vi.fn(),
   selectModel: vi.fn(),
@@ -34,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   steerQueued: vi.fn(),
   upload: vi.fn(),
   consumeNotes: vi.fn(),
+  toastFailure: vi.fn(),
   metadata: () =>
     undefined as { model: string; configOptions: unknown[] } | undefined,
   input: undefined as AgentInputProps | undefined,
@@ -45,14 +49,11 @@ vi.mock('@app/features/changes/context/changes-controller', () => ({
   useOptionalChanges: () => ({ consumeSendableNotes: mocks.consumeNotes }),
 }));
 vi.mock('@channel/Input', () => ({
-  createInputAttachmentTracker: () => ({
-    attachments: () => [],
-    clearAttachments: vi.fn(),
-    removeAttachment: vi.fn(),
-  }),
   uploadInputAttachments: mocks.upload,
 }));
-vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.toastFailure },
+}));
 vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
 vi.mock('../context/AgentSessionContext', () => ({
   useAgentSession: () => ({
@@ -79,7 +80,7 @@ vi.mock('../context/AgentSessionContext', () => ({
     steer: mocks.steer,
     steerFailed: () => new Set(),
     turn: () => mocks.turn(),
-    sessionId: () => 'session-1',
+    sessionId: () => mocks.sessionId(),
     registerQuoteInsert: vi.fn(),
   }),
 }));
@@ -92,7 +93,7 @@ vi.mock('../ui', () => ({
     mocks.queued = props;
     return null;
   },
-  ComposerNotice: () => null,
+  ComposerNotice: (props: { text: string }) => <p>{props.text}</p>,
 }));
 vi.mock('@app/features/agents-view/model-selector', () => ({
   UnifiedModelSelector: (props: { state: UnifiedModelSelectorState }) => {
@@ -107,6 +108,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.turn = () => 'idle';
   mocks.metadata = () => undefined;
+  mocks.sessionId = () => 'session-1';
   mocks.session = () => ({ canEdit: false });
   mocks.issue.mockResolvedValue({ isErr: () => false });
   setPreferredSpeed('priority');
@@ -268,6 +270,7 @@ it('retains the draft if editing access is revoked while applying speed', async 
       })
   );
   render(() => <AgentComposer />);
+  mocks.input?.onDraftChange?.('');
   mocks.input?.onSend('Keep after permission change', []);
   expect(mocks.selectModel).toHaveBeenCalledWith('openai/gpt-6-astra', {
     configId: 'speed',
@@ -282,6 +285,58 @@ it('retains the draft if editing access is revoked while applying speed', async 
   expect(mocks.consumeNotes).not.toHaveBeenCalled();
 });
 
+it('keeps text typed while a rejected speed change was out', async () => {
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
+  mocks.metadata = () => ({
+    model: 'openai/gpt-6-astra',
+    configOptions: [speedOption(['standard', 'priority', 'ultrafast'])],
+  });
+  let fail!: () => void;
+  mocks.selectModel.mockImplementation(
+    () =>
+      new Promise<void>((_, reject) => {
+        fail = () => reject(new Error('Unavailable'));
+      })
+  );
+  render(() => <AgentComposer />);
+  mocks.input?.onDraftChange?.('');
+  mocks.input?.onSend('First message', []);
+  mocks.input?.onDraftChange?.('Typed meanwhile');
+  fail();
+
+  await vi.waitFor(() =>
+    expect(mocks.input?.draft).toBe('First message\n\nTyped meanwhile')
+  );
+  expect(mocks.issue).not.toHaveBeenCalled();
+});
+
+it('keeps text typed while access was revoked during a speed change', async () => {
+  const [canEdit, setCanEdit] = createSignal(true);
+  mocks.session = () => ({ canEdit: canEdit(), harness: 'in-memory' });
+  mocks.metadata = () => ({
+    model: 'openai/gpt-6-astra',
+    configOptions: [speedOption(['standard', 'priority', 'ultrafast'])],
+  });
+  let finish!: () => void;
+  mocks.selectModel.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+  );
+  render(() => <AgentComposer />);
+  mocks.input?.onDraftChange?.('');
+  mocks.input?.onSend('First message', []);
+  mocks.input?.onDraftChange?.('Typed meanwhile');
+  setCanEdit(false);
+  finish();
+
+  await vi.waitFor(() =>
+    expect(mocks.input?.draft).toBe('First message\n\nTyped meanwhile')
+  );
+  expect(mocks.issue).not.toHaveBeenCalled();
+});
+
 it('allows another prompt after a failed turn', () => {
   mocks.session = () => ({ canEdit: true });
   mocks.turn = () => 'failed';
@@ -292,5 +347,200 @@ it('allows another prompt after a failed turn', () => {
   expect(mocks.issue).toHaveBeenCalledWith({
     type: 'prompt',
     prompt: 'Try again',
+  });
+});
+
+describe('a message the harness does not take', () => {
+  const attachment: InputAttachmentData = {
+    id: 'file-1',
+    name: 'notes.txt',
+    kind: 'document',
+  };
+
+  // The real input clears itself before handing the message over.
+  const sendFromInput = (
+    text: string,
+    attachments: InputAttachmentData[] = []
+  ) => {
+    mocks.input?.onDraftChange?.('');
+    mocks.input?.onSend(text, attachments);
+  };
+
+  beforeEach(() => {
+    mocks.session = () => ({ canEdit: true, harness: 'macrod' });
+  });
+
+  it('keeps the draft when the agent has no runtime to run it on', async () => {
+    mocks.issue.mockResolvedValue(
+      err([
+        {
+          code: 'NO_RUNTIME_ACCESS',
+          message: 'The agent is not connected to a computer',
+        },
+      ])
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    await vi.waitFor(() => expect(mocks.input?.draft).toBe('Run the tests'));
+    // The transcript says why; a toast would say it twice.
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+  });
+
+  it('says above the input why the message came back, until the next send', async () => {
+    let answer!: (result: unknown) => void;
+    mocks.issue.mockResolvedValueOnce(
+      err([
+        {
+          code: 'NO_RUNTIME_ACCESS',
+          message: 'This agent runs on a machine that is not connected.',
+        },
+      ])
+    );
+    mocks.issue.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    expect(
+      await screen.findByText(
+        'Not sent: This agent runs on a machine that is not connected.'
+      )
+    ).toBeTruthy();
+    // A polite live region, so a screen reader hears why the text came back.
+    expect(screen.getByRole('status').textContent).toBe(
+      'Not sent: This agent runs on a machine that is not connected.'
+    );
+    // Editing the message keeps the reason; sending it clears it, even before
+    // the input has emptied itself.
+    mocks.input?.onDraftChange?.('Run the tests again');
+    expect(screen.queryByText(/^Not sent:/)).toBeTruthy();
+    mocks.input?.onSend('Run the tests again', []);
+    expect(screen.queryByText(/^Not sent:/)).toBeNull();
+    answer(ok({ status: 'accepted', actionId: 'a' }));
+  });
+
+  it('drops the reason when the composer moves to another session', async () => {
+    const [session, setSession] = createSignal('session-1');
+    mocks.sessionId = session;
+    mocks.issue.mockResolvedValue(
+      err([{ code: 'NO_RUNTIME_ACCESS', message: 'Not connected.' }])
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    expect(await screen.findByText('Not sent: Not connected.')).toBeTruthy();
+    setSession('session-2');
+    expect(screen.queryByText(/^Not sent:/)).toBeNull();
+  });
+
+  it('keeps an earlier reason when a later send fails without one', async () => {
+    let answer!: (result: unknown) => void;
+    mocks.issue.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+    mocks.issue.mockResolvedValueOnce(
+      err([{ code: 'NO_RUNTIME_ACCESS', message: 'Not connected.' }])
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('First message');
+    sendFromInput('Second message');
+    expect(await screen.findByText('Not sent: Not connected.')).toBeTruthy();
+
+    answer(err([{ code: 'HTTP_ERROR' }]));
+    await vi.waitFor(() => expect(mocks.toastFailure).toHaveBeenCalled());
+    expect(screen.queryByText('Not sent: Not connected.')).toBeTruthy();
+  });
+
+  it('keeps the reason while the returned files are still there', async () => {
+    mocks.issue.mockResolvedValue(
+      err([{ code: 'NO_RUNTIME_ACCESS', message: 'Not connected.' }])
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('', [attachment]);
+
+    expect(await screen.findByText('Not sent: Not connected.')).toBeTruthy();
+    mocks.input?.onDraftChange?.('x');
+    mocks.input?.onDraftChange?.('');
+    expect(screen.queryByText('Not sent: Not connected.')).toBeTruthy();
+  });
+
+  it('drops the reason once the returned message is cleared away', async () => {
+    mocks.issue.mockResolvedValue(
+      err([{ code: 'NO_RUNTIME_ACCESS', message: 'Not connected.' }])
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    expect(await screen.findByText('Not sent: Not connected.')).toBeTruthy();
+    mocks.input?.onDraftChange?.('');
+    expect(screen.queryByText(/^Not sent:/)).toBeNull();
+  });
+
+  it('keeps the draft and says so when the send fails', async () => {
+    mocks.issue.mockResolvedValue(err([{ code: 'HTTP_ERROR' }]));
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    await vi.waitFor(() => expect(mocks.input?.draft).toBe('Run the tests'));
+    expect(mocks.toastFailure).toHaveBeenCalledWith(
+      'The message could not be sent'
+    );
+    // The toast says it; there is no reason to repeat above the input.
+    expect(screen.queryByText(/^Not sent:/)).toBeNull();
+  });
+
+  it('keeps the draft when the request throws', async () => {
+    mocks.issue.mockRejectedValue(new Error('offline'));
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    await vi.waitFor(() => expect(mocks.input?.draft).toBe('Run the tests'));
+  });
+
+  it('puts the refused message before what was typed meanwhile', async () => {
+    let answer!: (result: unknown) => void;
+    mocks.issue.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('First message');
+    mocks.input?.onDraftChange?.('Second thought');
+    answer(err([{ code: 'HTTP_ERROR' }]));
+
+    await vi.waitFor(() =>
+      expect(mocks.input?.draft).toBe('First message\n\nSecond thought')
+    );
+  });
+
+  it('gives back the files that rode the refused message', async () => {
+    mocks.issue.mockResolvedValue(err([{ code: 'HTTP_ERROR' }]));
+    render(() => <AgentComposer />);
+    sendFromInput('With a file', [attachment]);
+
+    await vi.waitFor(() =>
+      expect(mocks.input?.attachments).toEqual([attachment])
+    );
+  });
+
+  it('leaves the composer empty once the message is taken', async () => {
+    mocks.issue.mockResolvedValue(ok({ status: 'accepted', actionId: 'a' }));
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests', [attachment]);
+
+    await vi.waitFor(() => expect(mocks.issue).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(mocks.input?.draft).toBe('');
+    expect(mocks.input?.attachments).toEqual([]);
   });
 });

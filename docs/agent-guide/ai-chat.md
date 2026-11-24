@@ -2406,6 +2406,27 @@ must stay hidden; subsequent live messages must still appear.
   than queued. Waiting prompts are written through to the session store as they are
   accepted, edited, or removed, and are restored when the session resumes after a
   harness restart — they must not disappear if the managing replica drains.
+- The composer clears on Send. A send that fails or is refused (a network
+  failure, the queue full, or an external agent with no runtime it may run on)
+  puts the message back in the composer with its attached files, ahead of
+  anything typed since, with the caret left at the end. It always lands in
+  the session it was sent to: in the composer that sent it, else another
+  composer open on that session in this window (for example one reopened
+  while the send was out), or else in that session's saved draft,
+  never replacing text typed there since. Its files come back as far as the
+  ten-file cap allows; one that no longer fits is turned away with the
+  attachment-limit notice. A send stopped before it reached the agent (a
+  rejected speed change, or editing access lost meanwhile) comes back the same
+  way. Any pending bubble it
+  showed is retracted, so a resend appears once. A no-runtime refusal is
+  explained in the transcript, and the composer that sent it shows
+  "Not sent: <reason>" above the input (a polite live region; the line wraps
+  so the harness's "what to do" half stays readable on a phone) while the
+  message is still there:
+  editing keeps it, and its next send, emptying the box of text and files, or
+  switching session clears it. Another composer that takes a refused message
+  in shows no reason. Any other failure shows "The message could not be sent"
+  and leaves an earlier reason in place.
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.
   The list is capped at the smaller of 40% of the viewport height and 24rem. Past that

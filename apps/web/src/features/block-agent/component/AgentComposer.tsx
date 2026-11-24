@@ -27,7 +27,15 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { isNoRuntimeAccessError } from '@service-agent-harness/no-runtime-access';
-import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  type Component,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  Show,
+} from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import {
   createSessionAttachmentTracker,
@@ -90,18 +98,33 @@ export function AgentComposer(props: {
   const changes = useOptionalChanges();
   const readOnly = () => session()?.canEdit === false;
 
+  // Why the last message this composer sent came back, when the harness
+  // said: shown above the input while that message is still in it, so until
+  // the next send, the box is emptied of text and files, or the composer
+  // moves to another session.
+  const [refusal, setRefusal] = createSignal<string>();
+  createEffect(on(sessionId, () => setRefusal(undefined), { defer: true }));
+
   // The fold speculates the action the moment it is issued, so success is
-  // observed there; only a refusal needs saying here.
-  const act = async (action: AgentAction, failure: string) => {
-    if (readOnly()) return;
+  // observed there; only a refusal needs saying here. Resolves whether the
+  // harness took the action, and its reason when it refused, so a refused
+  // prompt can go back to the draft.
+  const act = async (
+    action: AgentAction,
+    failure: string
+  ): Promise<{ taken: boolean; refusal?: string }> => {
+    if (readOnly()) return { taken: false };
     try {
       const result = await issue(action);
-      // A stopped agent says why in the transcript instead.
-      if (result?.isErr() && !result.error.some(isNoRuntimeAccessError))
-        toast.failure(failure);
+      if (!result?.isErr()) return { taken: true };
+      // A stopped agent says why in the transcript instead of a toast.
+      const refused = result.error.find(isNoRuntimeAccessError);
+      if (refused) return { taken: false, refusal: refused.message };
+      toast.failure(failure);
     } catch {
       toast.failure(failure);
     }
+    return { taken: false };
   };
 
   const [configuring, setConfiguring] = createSignal(false);
@@ -186,6 +209,12 @@ export function AgentComposer(props: {
   // agent can only reach a file by a URL it can fetch. The chips and the
   // upload flow are the channel composer's.
   const attachmentTracker = createSessionAttachmentTracker(sessionId);
+  createEffect(() => {
+    const empty =
+      persistedDraft.draft().trim().length === 0 &&
+      attachmentTracker.attachments().length === 0;
+    if (empty) setRefusal(undefined);
+  });
   const attachFiles = (files: File[]) => {
     if (readOnly()) return;
     fireAndForget(
@@ -203,6 +232,10 @@ export function AgentComposer(props: {
   // behind a running turn with the files still on them.
   const send = async (markdown: string, attachments: InputAttachmentData[]) => {
     if (readOnly() || configuring()) return;
+    setRefusal(undefined);
+    // Read the session now: the answer can outlive a switch. A message that
+    // comes back goes ahead of anything typed meanwhile.
+    const sentTo = sessionId();
     const meta = metadata();
     const tiers = speedOption();
     const tier = speed();
@@ -211,7 +244,7 @@ export function AgentComposer(props: {
       try {
         await selectModel(meta.model, { configId: tiers.id, value: tier });
       } catch {
-        persistedDraft.setDraft(markdown);
+        persistedDraft.restore(sentTo, markdown);
         toast.failure('The speed setting could not be applied. Please retry.');
         return;
       } finally {
@@ -219,7 +252,7 @@ export function AgentComposer(props: {
       }
     }
     if (readOnly()) {
-      persistedDraft.setDraft(markdown);
+      persistedDraft.restore(sentTo, markdown);
       return;
     }
     // Queued review notes ride this send: taking them here marks them sent
@@ -229,11 +262,22 @@ export function AgentComposer(props: {
     const prompt = [markdown, notes]
       .filter((part) => part.length > 0)
       .join('\n\n');
-    fireAndForget(
-      act(promptActionOf(prompt, attachments), 'The message could not be sent'),
-      'agent-composer'
-    );
+    // The composer clears at once, as a sent message reads as sent; the
+    // fold shows it pending. A failed or refused send retracts any such
+    // bubble, so the message comes back here rather than vanishing.
     attachmentTracker.clearAttachments();
+    const sent = await act(
+      promptActionOf(prompt, attachments),
+      'The message could not be sent'
+    );
+    // Back in front of whatever was typed meanwhile, with its files, in the
+    // session it was sent to even if this composer has gone since.
+    if (sent.taken) return;
+    persistedDraft.restore(sentTo, prompt);
+    attachmentTracker.restore(sentTo, attachments);
+    // Only a reason replaces one: a later send failing for no stated reason
+    // leaves an earlier refusal's reason with its returned message.
+    if (sent.refusal && sessionId() === sentTo) setRefusal(sent.refusal);
   };
 
   // Focus plumbing between the input and the queue list above it: Up at the
@@ -294,6 +338,18 @@ export function AgentComposer(props: {
           </div>
         </div>
       </Show>
+      {/* Mounted throughout, so a reason that appears is announced, and out
+          of the column's flow while empty, so it adds no gap. The harness's
+          reasons say what to do at the end; they wrap, never cut. */}
+      <div role="status" aria-live="polite" class="min-w-0 empty:absolute">
+        <Show when={refusal()}>
+          {(reason) => (
+            <p class="pb-2 text-xs text-ink-extra-muted wrap-anywhere">
+              Not sent: {reason()}
+            </p>
+          )}
+        </Show>
+      </div>
       <Show when={resuming()}>
         <ComposerNotice text="Waking the agent's sandbox…" active />
       </Show>

@@ -15,6 +15,10 @@ shows its text once, that Up / Enter / Escape edit, save and restore, and
 that a long prompt's closed preview ends in an ellipsis before the row's
 controls on desktop and phone.
 
+`sent.html` mounts the composer with its draft owned by the page, as a session
+block does, and lists what it sends; `sent.browser.e2e.ts` types fast and
+presses Enter twice, and the box must be empty after each send.
+
 `activity.html` replays one long agent turn through the transcript's message
 view: a run of 74 steps across programs, direct calls and thoughts, with one
 program timing out and one operation failing. The page answers the harness's

@@ -21,6 +21,9 @@ type CreateInputAttachmentTrackerOptions = {
   maxAttachments?: number;
 };
 
+/** How many files one draft holds unless a caller says otherwise. */
+export const DEFAULT_MAX_ATTACHMENTS = 10;
+
 const holdStoredAttachments = createSharedDrafts<InputAttachmentTracker>();
 
 /**
@@ -55,7 +58,7 @@ function buildAttachmentTracker(
       })
     : raw;
 
-  const maxAttachments = options.maxAttachments ?? 10;
+  const maxAttachments = options.maxAttachments ?? DEFAULT_MAX_ATTACHMENTS;
 
   const hasPending = createMemo(() =>
     attachments().some((attachment) => attachment.pending === true)
