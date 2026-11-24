@@ -76,21 +76,17 @@ pub(super) async fn wipe_keeping_queue(
     let file = SalvageFile::decode(&bytes.unwrap_or_default());
     let (owner, read) = read_before_wipe(scope, owner, &sidecar, file).await?;
     let unwritten = match read.frame {
-        Some(queue) => sidecar
-            .write_tail(read.end, &queue.to_frame())
-            .await
-            .is_err()
-            .then_some((read.end, queue)),
+        Some(queue) => write_queue(&sidecar, read.end, queue).await,
         None => None,
+    };
+    let end = match unwritten {
+        Some(_) => note_loss(&sidecar, read.end).await,
+        None => read.end,
     };
     let owner = wipe(owner).await?;
     // A full disk has room again.
     let unwritten = match unwritten {
-        Some((end, queue)) => sidecar
-            .write_tail(end, &queue.to_frame())
-            .await
-            .is_err()
-            .then_some(queue),
+        Some(queue) => write_queue(&sidecar, end, queue).await,
         None => None,
     };
     Ok((
@@ -100,6 +96,22 @@ pub(super) async fn wipe_keeping_queue(
             report: read.report,
         },
     ))
+}
+
+/// Returns the queue when the side file would not take it.
+async fn write_queue(sidecar: &Sidecar, end: u64, queue: SalvagedQueue) -> Option<SalvagedQueue> {
+    let written = sidecar.write_tail(end, &queue.to_frame()).await;
+    written.is_err().then_some(queue)
+}
+
+/// Says that the database is wiped without a copy, for whoever comes next if
+/// this worker dies before it is written. Returns where the next frame goes.
+async fn note_loss(sidecar: &Sidecar, end: u64) -> u64 {
+    let loss = SalvageFile::loss();
+    match sidecar.write_tail(end, &loss).await {
+        Ok(()) => end + loss.len() as u64,
+        Err(_) => end,
+    }
 }
 
 async fn wipe(owner: OpfsOwner) -> Result<OpfsOwner, JsValue> {

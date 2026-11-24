@@ -12,6 +12,7 @@ const FORMAT_VERSION: u8 = 1;
 const QUEUE: u8 = 1;
 const READ_ATTEMPT: u8 = 2;
 const IMPORT_ATTEMPT: u8 = 3;
+const LOSS: u8 = 4;
 
 /// What a side file says: the last queue written to it, how often reading a
 /// database's queue was started, and how often importing that queue was.
@@ -21,6 +22,8 @@ const IMPORT_ATTEMPT: u8 = 3;
 #[derive(Debug, Default)]
 pub struct SalvageFile {
     queue: Option<SalvagedQueue>,
+    /// What was queued after that queue may be lost.
+    lost: bool,
     end: u64,
     reads: u32,
     imports: u32,
@@ -45,6 +48,7 @@ impl SalvageFile {
                     };
                 }
                 READ_ATTEMPT => file.reads += 1,
+                LOSS => file.lost = true,
                 IMPORT_ATTEMPT => file.imports += 1,
                 _ => break,
             }
@@ -79,14 +83,23 @@ impl SalvageFile {
         self.queue.as_ref()
     }
 
-    /// Consumes the file's queue.
+    /// Consumes the file's queue, which is not all there was once something
+    /// queued after it may be lost.
     pub fn into_queue(self) -> Option<SalvagedQueue> {
+        if self.lost {
+            return self.queue.map(SalvagedQueue::after_loss);
+        }
         self.queue
     }
 
     /// The frame that says reading a database's queue has started.
     pub fn read_attempt() -> Vec<u8> {
         frame(READ_ATTEMPT, &[])
+    }
+
+    /// The frame that says a database is wiped whose queue is not here.
+    pub fn loss() -> Vec<u8> {
+        frame(LOSS, &[])
     }
 
     /// The frame that says importing the queue has started.

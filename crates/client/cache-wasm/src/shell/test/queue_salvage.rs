@@ -47,6 +47,10 @@ async fn leave_side_file(scope: &str, bytes: &[u8]) {
 
 /// A closed database of one account that queues one mutation.
 async fn closed_with_queue(scope: &str) {
+    closed_with(scope, UUID).await;
+}
+
+async fn closed_with(scope: &str, uuid: &str) {
     let engine = fresh_engine(scope).await;
     resolved(engine.write_query(
         write_context(None),
@@ -57,8 +61,28 @@ async fn closed_with_queue(scope: &str) {
         Some("user-1".into()),
     ))
     .await;
-    queue_one_mutation(&engine).await;
+    queue_mutation(&engine, uuid).await;
     resolved(engine.close()).await;
+}
+
+/// Lets no queue's frame into a side file, as on a full disk.
+async fn refuse_queue_frames(refuse: bool) {
+    run_js(
+        "return (async () => {
+          const handle = FileSystemSyncAccessHandle.prototype;
+          if (name === '') { handle.write = handle.writeAnything; return; }
+          handle.writeAnything = handle.write;
+          handle.write = function (bytes, options) {
+            const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            const body = bytes.byteLength - 13;
+            if (body > 0 && view.getUint32(0, true) === body)
+              throw new DOMException('full', 'QuotaExceededError');
+            return this.writeAnything(bytes, options);
+          };
+        })()",
+        if refuse { "refuse" } else { "" },
+    )
+    .await;
 }
 
 /// Wipes as an engine does that dies before it opens the next database.
@@ -277,6 +301,25 @@ async fn a_queue_lost_behind_an_older_copy_is_never_called_kept() {
             wipe_and_die(SCOPE).await;
         }
         let (engine, _, queue) = open(SCOPE, !dies).await;
+        assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_wiped_queue_that_left_no_copy_is_never_called_kept() {
+    const SCOPE: &str = "cache-wasm-salvage-no-copy";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let older = read_side_file(SCOPE).await;
+    for recovery in [false, true] {
+        closed_with(SCOPE, "00000000-0000-4000-8000-000000000012").await;
+        write_side_file(SCOPE, &older).await;
+        refuse_queue_frames(true).await;
+        wipe_and_die(SCOPE).await;
+        refuse_queue_frames(false).await;
+        let (engine, _, queue) = open(SCOPE, recovery).await;
         assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
         assert_kept(&engine, SCOPE).await;
         close_and_destroy(&engine, SCOPE).await;

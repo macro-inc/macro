@@ -2703,9 +2703,13 @@ async fn move_opfs_pair(from: &str, to: &str) {
 }
 
 async fn queue_one_mutation(engine: &CacheEngine) {
+    queue_mutation(engine, "00000000-0000-4000-8000-000000000011").await;
+}
+
+async fn queue_mutation(engine: &CacheEngine, uuid: &str) {
     resolved(engine.enqueue_optimistic_mutation(
         None,
-        "00000000-0000-4000-8000-000000000011".into(),
+        uuid.into(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_variables()),

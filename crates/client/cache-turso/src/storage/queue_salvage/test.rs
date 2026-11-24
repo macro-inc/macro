@@ -290,6 +290,22 @@ fn import_attempts_count_since_their_queue() {
 }
 
 #[test]
+fn a_loss_leaves_the_queue_before_it_in_doubt() {
+    block_on(async {
+        let mut storage = fresh();
+        enqueue(&mut storage, "First").await;
+        let queue = carried(&storage);
+        let (frame, loss) = (queue.to_frame(), SalvageFile::loss());
+        let decoded = |frames: &[&[u8]]| SalvageFile::decode(&frames.concat()).into_queue();
+        let doubted = Some(queue.clone().after_loss());
+        assert_eq!(decoded(&[&loss, &frame]), Some(queue.clone()));
+        assert_eq!(decoded(&[&frame, &loss]), doubted);
+        assert_eq!(decoded(&[&frame, &loss, &frame[..9]]), doubted);
+        assert_eq!(decoded(&[&frame, &loss, &frame]), Some(queue));
+    });
+}
+
+#[test]
 fn the_account_and_policy_travel_and_the_database_marker_stays() {
     block_on(async {
         let mut storage = fresh();
