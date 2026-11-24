@@ -298,6 +298,36 @@ fn cases() -> Vec<Case> {
     );
     with(
         case(
+            "a tag still finds a shared thread beside a label",
+            &[],
+            &[1, 4, 5],
+        ),
+        &|args| {
+            args.thread_ids = shared();
+            args.label_conditions = vec![label(&["travel"], true, false)];
+        },
+    );
+    with(
+        case("a label of an inbox the viewer manages", &[], &[1, 5]),
+        &|args| {
+            args.thread_ids = shared();
+            args.label_link_ids = vec![LINK.to_string(), OTHER_LINK.to_string()];
+            args.label_conditions = vec![label(&["travel"], false, false)];
+        },
+    );
+    with(
+        case(
+            "no inbox whose labels the viewer reads",
+            &["lunch"],
+            &[1, 2, 3],
+        ),
+        &|args| {
+            args.label_link_ids = Vec::new();
+            args.label_conditions = vec![label(&["newsletters"], false, true)];
+        },
+    );
+    with(
+        case(
             "include_labels leaves out a shared thread's own label",
             &[],
             &[1],

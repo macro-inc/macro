@@ -368,12 +368,14 @@ impl EmailQueryBuilder {
                 clauses(text, keyword_fields, text_fields)
             })
             .sum();
-        // Each address or label filter a request lists is a clause of its own.
+        // Each address filter a request lists is a clause of its own; the
+        // excluded labels are two together: their names and the inboxes.
+        let excluded_labels = if self.exclude_labels.is_empty() { 0 } else { 2 };
         let listed_filters = self.sender.len()
             + self.cc.len()
             + self.bcc.len()
             + self.recipients.len()
-            + self.exclude_labels.len();
+            + excluded_labels;
         let compact = term_clauses + listed_filters > MAX_TERM_CLAUSES;
 
         // In subject_only mode (name search), replace with a match on TITLE_KEY (subject).
