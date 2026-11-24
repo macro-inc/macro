@@ -168,9 +168,13 @@ projects.
 - Email text terms go into one `simple_query_string`
   (`emails::build_text_query_string`), where a `term*` prefix is not
   analyzed: `follow-up*` looks for one token `follow-up`, which the index
-  never holds. A partial term the tokenizer splits into several words is
-  matched with `create_query` instead (`emails::text_terms_query`), so it
-  follows the rules above.
+  never holds. A partial term of several UAX #29 words is matched with
+  `create_query` instead (`emails::text_terms_query`), so it follows the
+  rules above, a Thai run included. A term of one word with punctuation
+  around it (`follow-`, `Re:`) matches by that word alone, as a prefix or,
+  under three characters, as the whole word. A one-word term `single_word`
+  does not count (a Devanagari word with a virama) stays an uncapped
+  `term*`.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:

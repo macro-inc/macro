@@ -13,6 +13,7 @@ use opensearch_query_builder::{
     BoolQuery, BoolQueryBuilder, QueryType, Script, ScriptQuery, SimpleQueryStringQuery,
     WildcardQuery,
 };
+use unicode_segmentation::UnicodeSegmentation;
 
 pub(crate) struct EmailSearchConfig;
 
@@ -229,16 +230,19 @@ fn text_terms_query<'a>(
     all.build().into()
 }
 
-/// Whether a partial `term` long enough to match as a prefix is one the
-/// analyzer splits into several words. A phrase in quotes or an address
-/// already matches as a phrase in [`build_text_query_string`], and an
-/// `exact` or short term as its analyzed words.
+/// Whether a partial `term` long enough to match as a prefix holds several
+/// Unicode (UAX #29) words (`follow-up`, `AT&T`, `東京都`, and a Thai run,
+/// which the tokenizer keeps as one token), as the shared term builder
+/// decides. A phrase in quotes or an address already matches as a phrase in
+/// [`build_text_query_string`], and a short term as its analyzed words. A
+/// word UAX #29 keeps whole stays an uncapped prefix, even one
+/// [`single_word`] does not count, such as a Devanagari word with a virama.
 fn reads_as_several_words(term: &str, match_type: &str) -> bool {
-    match_type != "exact"
+    match_type == "partial"
         && !term.contains('@')
         && !term.contains(' ')
         && term.chars().count() >= MIN_PREFIX_LEN
-        && single_word(term).is_none()
+        && term.unicode_words().nth(1).is_some()
 }
 
 /// Builds the simple_query_string over the email-address fields.
@@ -289,14 +293,32 @@ const MIN_PREFIX_LEN: usize = 3;
 /// force phrase matching — otherwise `default_operator: "AND"` would turn
 /// `(reply test)` into `reply AND test` and match each token independently
 /// anywhere in the field instead of as an adjacent phrase.
+///
+/// A partial term that is one word with punctuation around it (`follow-`,
+/// `Re:`, `(lunch)`) matches by that word alone, as
+/// [`child_content_query`](super::query::child_content_query) does: the
+/// prefix is not analyzed, so `follow-*` would look for a token `follow-`
+/// the index never holds.
 fn build_text_query_string(terms: &[String], match_type: &str) -> String {
     let exact = match_type == "exact";
+    let partial = match_type == "partial";
     terms
         .iter()
         .map(|term| {
             if term.contains('@') || term.contains(' ') {
-                format!("\"{}\"", term)
-            } else if exact || term.chars().count() < MIN_PREFIX_LEN {
+                return format!("\"{}\"", term);
+            }
+            if exact {
+                return format!("({})", term);
+            }
+            if partial && let Some(word) = single_word(term) {
+                return if word.chars().count() < MIN_PREFIX_LEN {
+                    format!("({})", word)
+                } else {
+                    format!("{}*", word)
+                };
+            }
+            if term.chars().count() < MIN_PREFIX_LEN {
                 format!("({})", term)
             } else {
                 format!("{}*", term)

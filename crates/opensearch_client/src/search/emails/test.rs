@@ -902,12 +902,17 @@ fn a_hyphenated_word_alone_needs_no_query_string() {
 }
 
 #[test]
-fn an_exact_short_or_quoted_hyphenated_term_stays_in_the_query_string() {
+fn a_term_of_one_word_or_an_exact_short_or_quoted_one_stays_in_the_query_string() {
     for (terms, match_type, query) in [
         (vec!["follow-up"], "exact", "(follow-up)"),
+        (vec!["follow-up"], "regexp", "follow-up*"),
         (vec!["東京"], "partial", "(東京)"),
         (vec!["the follow-up"], "partial", "\"the follow-up\""),
         (vec!["node.js"], "partial", "node.js*"),
+        (vec!["follow-"], "partial", "follow*"),
+        (vec!["Re:"], "partial", "(Re)"),
+        (vec!["c++"], "partial", "(c)"),
+        (vec!["नमस्ते"], "partial", "नमस्ते*"),
     ] {
         let terms: Vec<String> = terms.into_iter().map(str::to_string).collect();
 
@@ -916,6 +921,21 @@ fn an_exact_short_or_quoted_hyphenated_term_stays_in_the_query_string() {
         assert_eq!(
             json["bool"]["should"][0]["simple_query_string"]["query"], query,
             "{terms:?} in {match_type} match"
+        );
+    }
+}
+
+#[test]
+fn a_run_unicode_splits_into_words_matches_as_a_phrase_prefix() {
+    for term in ["東京都", "AT&T", "สวัสดี"] {
+        let terms = vec![term.to_string()];
+
+        let json = terms_query(&terms, "partial", &[], &["subject"]).to_json();
+
+        assert_eq!(
+            json["bool"]["should"][0]["bool"]["must"][0]["bool"]["should"][0],
+            phrase_prefix("subject", term),
+            "{term}"
         );
     }
 }

@@ -274,7 +274,7 @@ async fn typed_email_conditions_keep_exactly_the_messages_they_name() -> anyhow:
 const MARY_JANE: (&str, &str) = ("Mary-Jane Watts", "mj@probe.example");
 
 /// Mail holding words the analyzer splits at a hyphen, and mail holding the
-/// same words apart.
+/// same words apart, in one field and across two.
 fn hyphenated_messages() -> Vec<Message> {
     let message = |n, subject, content, sender| Message {
         thread: thread(n),
@@ -290,8 +290,13 @@ fn hyphenated_messages() -> Vec<Message> {
         tagged: false,
     };
     vec![
-        message(11, "Follow-up on the re-org", "see the e-mail below", BO),
-        message(12, "follow the plan", "up next: mail", CY),
+        message(
+            11,
+            "Re: Follow-up on the re-org",
+            "see the e-mail below",
+            BO,
+        ),
+        message(12, "follow the plan", "we follow it up next: mail", CY),
         message(13, "Quarterly numbers", "attached", MARY_JANE),
     ]
 }
@@ -307,7 +312,10 @@ fn hyphenated_cases() -> Vec<Case> {
         case("re-org", &["re-org"], &[11]),
         case("e-mail in the body", &["e-mail"], &[11]),
         case("Mary-Jane, a sender name", &["Mary-Jane"], &[13]),
-        case("follow-up beside a word", &["follow-up", "re-org"], &[11]),
+        case("follow-up beside a word", &["below", "follow-up"], &[11]),
+        case("two hyphenated words", &["follow-up", "re-org"], &[11]),
+        case("a pasted reply subject", &["Re:", "Follow-up"], &[11]),
+        case("follow-, on the way to follow-up", &["follow-"], &[11, 12]),
         case("follow, one word", &["follow"], &[11, 12]),
     ];
     let mut with = |mut case: Case, set: &dyn Fn(&mut UnifiedEmailSearchArgs)| {
