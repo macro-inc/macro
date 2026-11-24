@@ -71,6 +71,7 @@ use graphql_soup::{
     resolve_soup, resolve_soup_agent_session, resolve_soup_email_thread,
     resolve_soup_email_threads, resolve_soup_entity, resolve_soup_updates,
 };
+use graphql_time_tracking::{GraphqlTimeTracking, TimeTrackingMutationRoot};
 use graphql_work_feed::{
     GraphqlWorkFeedPage, WorkFeedInput, WorkFeedMutationRoot, WorkFeedSubscriptionRoot,
     resolve_work_feed,
@@ -114,6 +115,7 @@ pub struct CompleteMutationRoot<
     GraphqlEmailMutation<ES, SoupEmailThreadMutationOutput<E>>,
     graphql_email::GraphqlEmailSendMutation<ES, SoupEmailThreadMutationOutput<E>>,
     InitiativeMutationRoot<E>,
+    TimeTrackingMutationRoot<E>,
     CalendarMutationRoot,
     WorkFeedMutationRoot<E>,
     NotificationInboxMutationRoot<E>,
@@ -142,6 +144,7 @@ impl<
             GraphqlEmailMutation::<ES, SoupEmailThreadMutationOutput<E>>::new(),
             graphql_email::GraphqlEmailSendMutation::<ES, SoupEmailThreadMutationOutput<E>>::default(),
             InitiativeMutationRoot::<E>::default(),
+            TimeTrackingMutationRoot::<E>::default(),
             CalendarMutationRoot,
             WorkFeedMutationRoot::<E>::default(),
             NotificationInboxMutationRoot::<E>::default(),
@@ -218,6 +221,21 @@ pub type SharedSoupSchema<S, R, NS, AS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR
         AR,
         AcR,
     >;
+
+/// The Soup service a schema's query root runs on. Request data the
+/// resolvers look up by that service's type, such as
+/// [`graphql_soup::PrimaryChannelSoup`], is typed through it so it cannot
+/// drift from the schema: `PrimaryChannelSoup<<Schema as SoupSchemaService>::Service>`.
+pub trait SoupSchemaService {
+    /// The query root's Soup service: `Arc<S>` in a [`SharedSoupSchema`].
+    type Service;
+}
+
+impl<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR, M, Sub> SoupSchemaService
+    for Schema<SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>, M, Sub>
+{
+    type Service = S;
+}
 
 /// GraphQL Soup schema type backed by the no-op services, used only for
 /// SDL export or introspection.
@@ -876,6 +894,14 @@ where
         .await
     }
 
+    /// The authenticated user's running timer and the server's clock.
+    async fn time_tracking(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<GraphqlTimeTracking<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
+        graphql_time_tracking::resolve_time_tracking(ctx, &self.user_id).await
+    }
+
     /// AI routines the authenticated user can access.
     async fn scheduled_actions(
         &self,
@@ -976,6 +1002,12 @@ where
     #[graphql(flatten)]
     async fn contact_directory(&self) -> graphql_contacts::GraphqlContactsQuery {
         graphql_contacts::GraphqlContactsQuery::new(self.user_id.clone())
+    }
+
+    /// Authenticated user channel fields supplied by `graphql_channel`.
+    #[graphql(flatten)]
+    async fn channels(&self) -> graphql_channel::GraphqlChannelUserQuery {
+        graphql_channel::GraphqlChannelUserQuery::new(self.user_id.clone())
     }
 
     /// Authenticated user calendar fields supplied by `graphql_calendar`.

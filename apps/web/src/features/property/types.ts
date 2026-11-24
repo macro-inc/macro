@@ -73,7 +73,7 @@ export type Property = {
   | { valueType: 'STRING'; value: string | null }
   | { valueType: 'NUMBER'; value: number | null }
   | { valueType: 'BOOLEAN'; value: boolean | null }
-  | { valueType: 'DATE'; value: Date | null }
+  | { valueType: 'DATE'; value: Date | null; hasTime?: boolean }
   | { valueType: 'DATE_RANGE'; value: DateRangeValue | null }
   // Multi-value types (select values are option IDs, not display values)
   | { valueType: 'SELECT_STRING'; value: string[] | null }
@@ -178,13 +178,16 @@ export type { SetPropertyValue } from '@service-properties/generated/schemas/set
 export type PropertyApiValues =
   | { valueType: 'STRING'; value: string | null }
   | { valueType: 'NUMBER'; value: number | null }
-  | { valueType: 'DATE'; value: Date | null }
+  | { valueType: 'DATE'; value: Date | null; hasTime?: boolean }
   | { valueType: 'DATE_RANGE'; value: DateRangeValue | null }
   | { valueType: 'BOOLEAN'; value: boolean | null }
   | { valueType: 'SELECT_STRING'; values: string[] | null }
   | { valueType: 'SELECT_NUMBER'; values: string[] | null }
   | { valueType: 'ENTITY'; refs: EntityReference[] | null }
   | { valueType: 'LINK'; values: string[] | null };
+
+/** A date property's value as it is saved: its moment and whether it has a time of day. */
+export type DateApiValue = Extract<PropertyApiValues, { valueType: 'DATE' }>;
 
 // Result type for API responses
 type ApiError = {

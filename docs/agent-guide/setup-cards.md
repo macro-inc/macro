@@ -13,11 +13,12 @@ tasks**, or **Import customers**. Customers shows it only to team members.
 The button opens a dialog listing that category's apps (Files: Notion, Google
 Drive, Dropbox, OneDrive, Box, Confluence; Tasks: Linear, Jira, Asana, GitHub,
 Trello, monday.com; Customers: HubSpot, Salesforce, Close, Airtable). A
-disconnected row offers **Connect** (`Connect <App>`). GitHub connects through
-Macro's native GitHub MCP server (`api.githubcopilot.com/mcp`): authorization
-opens in a new tab, and the row flips to connected when the app regains focus.
-Every other app opens Pipedream's Connect UI inside the dialog. A connected row
-(native MCP or Pipedream) shows a check and **Import** (`Import from <App>`).
+disconnected row offers **Connect** (`Connect <App>`). Connecting follows the
+server's answer: a consent page in a new tab (the row flips to connected when
+the app regains focus) or the embedded connect dialog inside the import dialog.
+GitHub links the Macro GitHub account. A connected row shows a check and, when
+the server says its connection can be imported from (`importAvailable`),
+**Import** (`Import from <App>`).
 
 - Every **Import** closes the dialog and opens an agent chat beside the current
   view with an unsent prompt. Notion, Linear and Jira open workspace importers
@@ -41,6 +42,16 @@ Every other app opens Pipedream's Connect UI inside the dialog. A connected row
   for replanning while unrelated objects continue.
   If a linked data source disappears after planning, plan and approve again to
   choose its database or task-list format; the old review cannot guess a new shape.
+
+Personal choices create owner-only copies. Personal tasks omit teammate
+assignees because assignment grants access; the import report lists the omitted
+assignee count. For Notion, when an old destination
+folder was explicitly shared, personal copies go into the matching path under
+**Notion (personal)**. The import report lists each relocation; the old shared
+folder stays as it is. A later shared plan uses a separate shared folder when
+reusing the old folder would expose personal contents, and the report explains
+that separation.
+
 - Files also offers **Upload files** and **Upload a folder** (Drive's own
   uploads), and Customers offers **Upload a CSV** (the existing CSV import).
   Each closes the dialog first.

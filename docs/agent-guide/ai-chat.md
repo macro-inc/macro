@@ -69,14 +69,13 @@ tool list. Expand the discovery row to see the results. An app name alone does
 not establish that the requested action is supported.
 
 For a suitable unconnected app, the assistant offers **Connect <app>**. Clicking
-it opens the hosted authorization flow over the agent transcript on web. For an
-overlaid app (one with its own MCP server, see Settings → Integrations) it
-opens that server's OAuth consent in a new tab instead, and the session
-continues once the server is authorized; the agent then reaches the app
-through that server rather than Pipedream. In
+it asks the server how to connect (`POST /connectors/app/{slug}/connect`) and
+follows the answer: the embedded connect dialog over the agent transcript on
+web, or a consent page in a new tab, and the session continues once the server
+records the connection. In
 native apps, consent opens in the system browser, which returns to Macro on its
 own after authorization (**Return to Macro** is the fallback link). The waiting
-dialog's **Done** checks Pipedream for an account the flow created, and callbacks
+dialog's **Done** asks the server to record an account the flow created, and callbacks
 from canceled or expired attempts cannot resume the agent. After the
 backend verifies and registers the connection, the agent session sends a visible
 continuation message in the same conversation. Before that message reaches the
@@ -297,7 +296,8 @@ right preview instead of a standalone split. The Agents sidebar stays left and c
 be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
-The phone list shows startable custom agents as bubbles above the Favorites, Waiting on you, and Conversations sections. Tap a bubble to focus the accessory composer with that agent selected. New agent opens the roster creation flow. The title menu opens Conversations, Agents, Routines, and Archived. Archived has history-based Back and search, and keeps the navigation dock but no composer; Back restores the list or page it was opened from. Long-press a row for its entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
+The phone collection uses one measured floating header. An initial nonshrinking spacer inside the unpadded list scroller reserves the island row; its single 20/26 heading follows the bubbles and sticks at that same measured inset while rows scroll beneath it. Archived shares this layout, with its heading immediately below the islands.
+The phone list shows startable custom agents as bubbles above a sticky **Conversations** heading, followed by Waiting on you, Favorites, and the remaining rows. The hamburger opens the shell's left navigation drawer with Conversations, Archived, an Agents row with New agent, and routines with their schedules and New routine. Custom agents appear only in the bubbles, not as drawer rows. Choosing a destination closes the drawer. The Agents roster and Routines list keep the hamburger when opened from this drawer; external links and other entry points retain Back. This choice follows the current history entry on Back and Forward. Archived keeps the hamburger, has no bubbles or Back button, and retains the dock and accessory composer. Conversation and archive totals appear only after all pages load. Empty views use the shared AI illustration without search or filter controls; **Start a conversation** focuses the existing composer. Tap a bubble to focus that composer with its agent selected. Long-press a row for entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
 draft, attachments, agent, model, repository, and branch. Tap the agent/model pill to open the phone model sheet. Its search and
 Suggested models sit above Built-in and Your agents; All models opens a pushed
@@ -420,7 +420,8 @@ attachment in the attachment grid, not as message markdown.
 
 ## Ask AI entry points
 
-**Ask AI** in desktop search (including Tab) and the command menu opens
+**Ask AI** in desktop search (its button, or Cmd+Enter, Ctrl+Enter
+elsewhere, even from the search field) and the command menu opens
 an agent session. A nonempty search query is sent as the first prompt once the
 session is ready. With the Agents workspace enabled, an empty search replaces its
 split with the Agents workspace's new-conversation composer; otherwise it opens an
@@ -490,7 +491,7 @@ the shimmer.
   cannot receive their MCP callbacks. Check the runtime error before retrying, and
   start a new session after correcting its gateway network configuration.
 
-- Open **Go to Agents** → `/app/component/agents`. The workspace uses one
+- Open **Go to Agents** → `/app/agents` (`/app/component/agents` remains a compatibility link). The workspace uses one
   sidebar for Chat and Code.
   The desktop footer contains **Agents**, **Routines**, and **Archived**.
   **Agents** opens the same roster as the composer’s **Create agent** action.
@@ -547,6 +548,9 @@ the shimmer.
   combines Type, Status, and Pull request filters; choices within a category are
   ORed and categories are ANDed. Sort and filters are remembered per user;
   previously saved grouping is ignored by the redesigned desktop list.
+  The phone list's **Group conversations** offers Status (default) and None:
+  Needs you and Working show counts above an uncounted Recent, a list that is
+  all Recent has no heading, and Archived shows no count.
   With `enable-agent-updates`, **Open PRs** remains between Waiting on you and
   Conversations, showing non-waiting active coding sessions with open or draft
   PRs. Each session appears in only one section; disabling Open PRs returns its
@@ -575,17 +579,18 @@ the shimmer.
   not remount it.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
-  actions. On desktop, **Archived** in the footer opens a searchable main-pane
-  list with the loaded count, code identity, and archive date. Hover or focus a
+  actions. On desktop, **Archived** in the footer opens `/app/agents/archive`, a searchable main-pane
+  list with the loaded count, code identity, and archive date. Its single heading stays inside the list content padding, not in a separate workspace header. The phone drawer opens the same durable route with the normal collection heading and independent archive filters. Reload, direct links, and Back/Forward retain the destination; old in-place archive entries migrate without adding a history step. Hover or focus a
   row for **Unarchive** and **More actions**; right-click offers the same actions.
   Unarchive restores the row to the sidebar. Non-action code/date cells open the
   conversation while icons and action buttons retain their own behavior. The
   archived page reads more pages while fewer than 20 matching rows are loaded,
   then pages near the scroll end. Empty results appear only after paging finishes;
   counts describe loaded rows, not a server total. Phone has its own Archived view.
+  Conversation-name tooltips appear only when the rendered label is clipped. Each open request checks its current width, so resizing before reopening updates whether the tooltip appears; phone rows do not show hover tooltips.
   Runs of routines with **Show runs in Home and Agents** off (the default) are
   left out until **Show hidden routine runs** is checked in the **Filter
-  conversations** menu, which counts it on the filter badge and unchecks it with
+  conversations** menu, which adds it to the count in the filter button and unchecks it with
   **Clear filters**; runs of routines with it on are always listed. Every
   routine run keeps its clock icon in the desktop row. The list starts without
   hidden runs each time the Agents view opens.
@@ -615,11 +620,7 @@ the shimmer.
   16px top padding when expanded. Light mode uses a faint shadow outline and
   layered outer shadow; dark mode retains the production glass rim and shadow.
   Both modes retain the production composer background.
-- The starting page uses the shared grouped **Auto / Chat / Code** Tabs pill,
-  below the input on desktop and above it in the phone drawer. The shared Tabs
-  component owns spacing, selection, focus, and touch treatment; the composer
-  does not resize or recolor its parts. Verify switching modes with the pointer
-  and keyboard on desktop and at 390×844.
+- Full new-session pages share Home's **Auto / Chat / Code** Tabs and repository row below the composer on desktop and phone, using the same composition, spacing, and alignment. The compact phone list accessory retains its grouped upper drawer. Opening a sent conversation leaves the preflight modes behind. The shared Tabs component owns selection, focus, and touch treatment; verify pointer and keyboard changes on desktop and at 390×844.
   Chat and Code limit the offered agents; the choice
   lasts only while the composer is mounted, and every composer opens in **Auto**. Auto is
   behind the `enable-composer-auto-mode` PostHog flag (Macro employees only), which the
@@ -730,14 +731,7 @@ the shimmer.
 - On Home and New conversation, selecting Code expands the input even
   with an empty or short draft. Both pages place the composer above the viewport's
   vertical center. The heading stays anchored while the composer expands downward,
-  with controls inside the composer. Only the plus attachment action stays on the
-  left of the bottom row. The right group contains mode/repository controls on
-  the Agents desktop composer, then the agent/model selector, dictation, and Send.
-  Home keeps mode and repository controls in its existing drawer below. Mode/repository
-  controls can wrap above the final model, dictation, and Send controls.
-  On mobile, grouped Auto/Chat/Code stays above the composer with repository
-  controls; both pickers open standard bottom drawers. Selecting Chat hides
-  repository controls without remounting the editor or losing the draft.
+  with model and send controls inside the composer. Only the plus attachment action stays on the left of the bottom row; the right group contains the agent/model selector, dictation, and Send. Home and full new-session views place mode and repository controls together in their shared row below the input. The compact phone list composer keeps grouped modes and repository controls in its upper drawer. Both pickers open standard bottom drawers. Selecting Chat hides repository controls without remounting the editor or losing the draft.
   Reduced-motion preferences disable the expansion animation. **Repository**
   (**Auto-detect** with a GitHub icon unless a default was saved) opens a searchable list:
   **Auto-detect**, then the repositories the signed-in user reaches
@@ -773,7 +767,8 @@ the shimmer.
   the owner must have access through the connected GitHub App.
   Paired macrod agents also receive the repository choice. With native Herdr,
   macrod finds an existing clone or clones it using local Git credentials, then
-  creates a managed worktree from a fresh `origin/main`. **Branch** shows `main`
+  creates a worktree from a fresh `origin/main` and opens the session in its own
+  Herdr workspace. **Branch** shows `main`
   and cannot be changed for local sessions. The native Claude/Codex TUI remains
   interactive in Herdr, and local turns appear in the Macro transcript.
 - Sending starts a session with the chosen agent's configured default model;
@@ -866,7 +861,7 @@ the shimmer.
   TUI. The session page streams its tool calls and replies, and its permission
   prompts appear as approvals. Other runtimes started inside herdr get a live
   view tab per session that can prompt and interrupt it; approvals stay in Macro.
-  This works in herdr 0.9 and in the herdr app (herdr-core, with `hc` on `PATH`),
+  This works in herdr 0.9 and in the herdr app (herdr-core, which names its `hc` in each terminal's `HC_BIN`),
   where session tabs open in macrod's space. Under herdr-core, Codex reports no
   status, so its permission prompts must be answered in Herdr; see "Herdr
   versions" in `crates/coding_agent_worker/README.md`.
@@ -938,8 +933,7 @@ the shimmer.
 
 ## Routine run history
 
-On phones, Routines uses the shared header islands: Back to the previous page,
-its title, Search, and Create Routine actions stay above the list. Opening a routine replaces them with Back,
+On phones, the Routines list uses the shared hamburger drawer when opened from the Agents drawer, and Back when opened from elsewhere. Search and Create Routine actions remain above its in-page heading and count. Opening a routine replaces them with Back,
 the routine title, save status, and its action menu. Overview and Runs tabs remain
 in the page below the islands; desktop breadcrumbs and toolbar stay unchanged.
 
@@ -1391,8 +1385,7 @@ results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
 routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
 they remain discoverable through `DescribeCodeTools`. User-review
-tools, `AskUser`, connector discovery, tool loading for connected apps,
-and explicit provider code execution retain their direct lifecycle. Connected
+tools, `AskUser`, connector discovery, and tool loading for connected apps retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
 Sessions without a user owner can't run in-process turns at all.
@@ -1460,12 +1453,13 @@ returned JSON, or code-mode wording. An `ExecuteCode` call joins the tool group
 of its turn segment and shows only its observed SDK operations, each a compact
 row (label plus status) counted as one step; `SearchTools`, `LoadTools`,
 `DescribeCodeTools` and `ReadCodeDocs` are hidden and not counted. A group
-never opens on its own, so a step that failed and was recovered from is counted
-on the finished row (**Used 6 tools · 1 failed**) and shown in the expanded
-list; a program that failed or timed out before reporting a step is one failed
-step, one that reported steps counts the ones that failed, and one that was
-cancelled is not counted as failed. While the program
-runs, the group's live line names its observed operations. There is no
+never opens on its own. The finished row counts every step alike (**Used 6
+tools**), and the expanded list shows a failed, timed out, or cancelled step
+like any other: the transcript never names a tool failure, and the agent
+explains one in its reply. A program that failed before reporting a step is
+one step. While the program runs, the group's live line names its observed
+operations; a program that fails or stops without naming one leaves the line
+on the step before it. There is no
 separate API-call count wrapper or per-label aggregation once activity is
 available. Activity refreshes about once per second while a run is active,
 survives reload, and is capped at the first 128 requests. These are advisory
@@ -1520,8 +1514,8 @@ code runs, using the same execution journal as the full session view. The final
 tool receipt carries those operations into the shared fold, so posted step
 snapshots retain the names and outcomes without exposing source or returned JSON.
 A code run without observed SDK requests reads only as how far it got:
-**Working on it**, **Finished a step**, **A step failed**, or
-**Step interrupted**.
+**Working on it** or **Finished a step**; one that failed or was interrupted
+without naming a step is left out of the line and the summary.
 People never see that the agent works in code: no surface names `ExecuteCode`,
 shows a program or its JSON, or words a step as code, scripts, the SDK or
 requests. `DescribeCodeTools`, `ReadCodeDocs`, `SearchTools` and `LoadTools`
@@ -1622,17 +1616,21 @@ credential is never exposed to the browser. Unsupported recording environments
 show a disabled microphone. Every supported browser uses Whisper; there are
 no browser speech-recognition or language-pack installation flows.
 
-While dictating, a scrolling microphone-volume timeline and **Cancel dictation** / **Use dictation**
-replace the composer controls. Cancel (or Escape) preserves the original draft.
+While dictating, a row covers the composer: **Cancel dictation** where + was,
+an Aa mark, a scrolling microphone-volume timeline, the elapsed time, and **Use
+dictation** drawn like Send. The row takes focus, so Enter or Space confirms and
+Escape cancels at every step. Cancel preserves the original draft.
 Bars sample microphone volume on a fixed timer (every 80ms), independent of recording chunks: silence stays dotted, louder speech
 creates taller bars, and earlier levels move left without changing height.
 Volume analysis stays on-device and stops on confirm, cancel, error, or close.
 Use dictation stops recording, waits for Whisper, and appends plain text to
 the draft without sending it. Existing rich text and attachments remain intact.
-If the browser stops listening on its own, **Ready** waits for confirmation.
-While **Finishing…**, the checkmark is disabled and Cancel remains available.
-No provider name or transcription hint appears below the composer; only the
-recording limit and failures do.
+If the browser stops listening at the limit, the row says **Limit reached** and
+waits for confirmation. While **Transcribing…**, the checkmark shows a spinner
+and Cancel remains available. A failed transcription is stated in the row and
+the checkmark becomes **Try transcribing again**. No provider name or
+transcription hint appears below the composer; notes there (no speech, a
+capture failure) clear after a few seconds or when the draft changes.
 Starting dictation in another composer releases the previous session without
 moving focus back to it. Closing the composer releases the microphone. Capture failures
 appear below the composer.
@@ -1641,10 +1639,9 @@ Whisper dictation supports WebM, MP4, and Ogg recording depending on browser.
 Recordings stop just before five minutes or near 8 MB and wait for confirmation.
 Cancel discards the recording; cancel during transcription aborts the request and
 ignores any late result. If the service is temporarily at capacity, the composer
-stays in **Finishing…** while TanStack retries up to twice with exponential backoff,
+stays in **Transcribing…** while TanStack retries up to twice with exponential backoff,
 jitter, and the server's `Retry-After` delay. Cancel also cancels these retries.
-Other failures keep the recording in memory for an explicit retry with the
-checkmark. No audio or transcript is stored in the query cache or persisted by the dictation
+Other failures keep the recording in memory for an explicit retry. No audio or transcript is stored in the query cache or persisted by the dictation
 endpoint. Provider diagnostics exclude response content. The server detects
 the audio container and inspects its duration before contacting OpenAI, requires a
 signed-in user (bots and internal callers are refused), and rate limits each
@@ -1754,18 +1751,23 @@ where the text is an ordinary prompt; the model's `AskUser` tool and user-tool
 review remain independent of this development setting.
 
 An agent session (the `/app/channel/<channel>/agent/<session>` pane) can pause its turn to
-ask you something. A card titled `<bot> is asking` with trailing text `Waiting for you`
-appears in the transcript, and the notice `The agent is waiting for your answer above` sits
-over the composer. Forms have one control per field (radios for a choice, an `Other` text
-box when the agent allows a custom answer, checkboxes for multi-select, text/number inputs)
-plus `Submit` / `Decline` / `Cancel`; a link request shows the target host and URL with an
-`Open` button that only opens a new tab after you click it. Once answered the card collapses
-to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right and the agent
-continues. Messages typed while a question is open queue behind it; the composer's `Stop`
+ask you something. A card titled `<bot> is asking`, with the status `Waiting for you` under
+the title, appears in the transcript, and the notice `The agent is waiting for your answer above; Skip lets it continue without one`
+sits over the composer. The same card shows in a channel reply's live tail under the agent's
+typing row. Forms have one control per field (radios for a choice, a `Type your own answer`
+row when the agent allows a custom answer, checkboxes for multi-select, text/number inputs).
+The footer has `Skip` on the left (it declines, and the agent continues without an
+answer) and `Submit` on the right. There is no Cancel: stopping the agent is the
+composer's `Stop`. Submit is disabled until every required question has an answer. A skipped native question reaches the agent as `skipped`. A link
+request shows the target host and URL with an `Open` button that only opens a new tab after
+you click it. An email draft under review has `Skip` under the composer. Once resolved the card
+collapses to `Question · <text>` with `Answered` / `Skipped` / `Cancelled` on the right and
+the agent continues. Messages typed while a question is open queue behind it; the composer's `Stop`
 square cancels the question and the turn. A directly authenticated user with
 edit access to the session may answer; agent runs and runtimes cannot answer
 questions or permission requests, even using a user's credentials. Viewers see
-the form locked with `Waiting for an editor`. The owner and everyone
+the form locked with `Waiting for an editor` and `Only people who can edit this session can
+answer.`, on the session and in the channel tail alike. The owner and everyone
 who has prompted or answered the session also receive an `agent_session_waiting_for_input`
 notification (inbox, browser, and iOS push) when the question is asked; it stays until
 marked done.
@@ -1971,9 +1973,10 @@ adding a second nested disclosure. Counts come from structured responses,
 edits show additions/deletions, and other tools show their outcome. A Macro
 tool call keeps the same label as its successful row in every state,
 never the tool's code name: while it runs its text shimmers; a call cut off when
-its turn ends reads **Stopped**; a failed call is faded with **Failed** in the failure
-color after its label (for example **Add to calendar Failed**), and when the
-tool gave a reason, the row's caret opens it. Only a call whose arguments do
+its turn ends reads **Stopped**; a failed call looks like a finished one, with
+no **Failed** label, failure color, or fade, and when the tool gave a reason,
+the row's caret opens it. A terminal call that exited non-zero shows its exit
+code only inside its output. Only a call whose arguments do
 not fit the tool (still arriving, or malformed) keeps the summary row with the
 tool's name. Labels stay in the present tense (**Fetch**, **Read email**) until
 a result arrives.
@@ -1998,11 +2001,11 @@ dots and the step the agent is on (**Reading AgentMessage.tsx**, **Running bun
 run check**), taking turns every 2s among steps running at once and otherwise
 naming the latest; **Thinking** while the trailing thought streams. No working
 row stacks under it, and an earlier group never shows as working. Once the turn
-moves on, the group settles to **Used N tools**, with failed steps counted in
-the failure color (**· 2 failed**).
+moves on, the group settles to **Used N tools**, with no failure count.
 
 A subagent row is titled by the call's short description, else the first line
-of its brief, and says **Running**, **Done**, or **Failed**; expanding it shows
+of its brief, and says **Running** or **Done** (a failed one says nothing);
+expanding it shows
 the **Instructions** and the **Result**, its own steps in a bounded scrolling
 area inside its card. A long title truncates before the state, never over it,
 on phones too.
@@ -2042,8 +2045,8 @@ side-by-side project groups stack below 672px of available container width,
 including a narrow split on a wide screen. Check full long and unbroken titles
 at phone width and in a narrow split, then open a task from its title.
 A finished call
-with no view shows **Couldn't render dashboard**; failed calls show a
-**Failed** summary row without a disclosure.
+with no view shows **Couldn't render dashboard**; a failed call shows only its
+plain row, without a disclosure.
 
 The development gallery at `/app/component/agent-ui` includes **Replay tool
 calls** and **Replay fast batch**, both using the message renderer. Check that
@@ -2274,6 +2277,18 @@ unsent notes persist per session in localStorage. A fresh capture expands files
 with at most 40 changed lines (additions + deletions) and collapses larger files,
 on desktop and phones. File toggles and **Collapse all / Expand all** override
 these defaults; selecting a file in the tree expands it.
+
+An agent's references to changed files in its reply are links: markdown links
+(`[pane.tsx:12](apps/web/src/pane.tsx#L12)`) and inline code that names a changed
+file (`apps/web/src/pane.tsx:12-14`, an absolute checkout path, or a path from a
+subdirectory that only one changed file ends in). Clicking one opens the Changes
+pane, expands and scrolls to the file, lights the referenced lines on the head side
+(old side for a deleted file), and scrolls the first referenced line into view; a
+line outside the diff's hunks lights nothing and leaves the file header in view.
+`file://` links and bare names with a line (`package.json:5`) work too. A relative
+link to an unchanged file opens it on GitHub at the capture's head commit; an
+absolute one, or one climbing out with `..`, shows a toast. Bare identifiers in code (`pane`) never link, and
+sessions without changes keep links as before.
 
 The Changes pane header and sidebar totals display the linked PR's `additions`
 and `deletions` returned by the GitHub API, without summing transcript edits.
@@ -2654,10 +2669,16 @@ the caret after them, waiting for what to change.
 Ask the AI to find or reuse an existing booking link before creating another.
 `ListBookingLinks` returns personal links, current team IDs, full settings and
 shareable URLs (including paused links). It also supplies the revision used to
-protect edits from concurrent settings changes.
+protect edits from concurrent settings changes, and the connected accounts a
+personal link can book on: a draft's `emailLinkId` puts its bookings on that
+account's calendar, with invitations from its address. Saving refuses a newly
+chosen account you can't book on, and Google Meet newly asked of an account that
+can't add a video meeting; an unchanged choice whose account was removed since
+still saves, and that link takes no bookings until another account is chosen.
 
 Booking links are confirmed in conversation, with no special booking form. The AI
-first explains the proposed meeting details, ownership and named hosts, time zone,
+first explains the proposed meeting details, ownership and named hosts, the
+calendar account when it is not the primary one, time zone,
 availability and date exceptions, booking rules, guest questions and whether the
 link accepts bookings. It asks whether to proceed and waits for your reply before
 calling `CreateBookingLink` or `EditBookingLink`. An initial request to create a

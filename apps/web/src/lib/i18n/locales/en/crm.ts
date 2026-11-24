@@ -5,9 +5,15 @@ export default {
   listLoadFailed: "Couldn't load this list.",
   listReloadHelp: 'Please try again to reload this view.',
   tryAgain: 'Try again',
-  memberAccessShort: 'CRM',
   memberAccessAlways: 'Owners and admins always have CRM access.',
   memberAccessFor: 'CRM access for {{name}}',
+  memberAccess: 'CRM access',
+  memberAccessOff: 'No CRM access',
+  memberAccessFixed: 'Always has CRM access',
+  memberAccessTitle: 'Who can use CRM',
+  memberAccessLoadFailed: "Couldn't load who can use CRM.",
+  memberAccessDescription:
+    "People without CRM access don't see Customers or CRM records. They keep their own email contribution settings.",
   policyChange: 'Change',
   policyRules: 'Sharing rules',
   policyEdit: 'Edit JSON',
@@ -212,6 +218,29 @@ export default {
     'This contact or company is no longer available to edit.',
   contactEditInvalid:
     'This change is unavailable. Check the value and try again.',
+  domain: 'Domain',
+  domains: 'Domains',
+  addDomain: 'Add domain',
+  manageCompanyDomain: 'Domain options for {{domain}}',
+  primaryDomain: 'Primary',
+  primaryCompanyDomain: '{{domain}} (primary)',
+  removeCompanyDomain: 'Remove',
+  companyDomainPlaceholder: 'example.com',
+  companyDomainAddHelp:
+    'Mail and new contacts from this domain go to this company.',
+  companyDomainRemoveHelp:
+    'Contacts and email history stay. New mail from this domain is no longer filed under this company.',
+  companyDomainTaken:
+    '{{company}} already has this domain. Remove it there first.',
+  companyDomainTakenArchived:
+    'An archived company already has this domain. A team admin can restore it or remove the domain from it.',
+  companyDomainInvalid:
+    'This domain can’t be added. Enter a company domain such as example.com; personal email providers can’t be added.',
+  companyDomainNamesCompany:
+    'The company is named after this domain. Rename the company first.',
+  companyDomainAdminRequired:
+    'Email sync is off for this company, so only a team admin can remove its domains.',
+  companyDomainUnavailable: 'This company is no longer available to edit.',
 
   navigation: 'CRM navigation',
   records: 'Records',
@@ -272,7 +301,8 @@ export default {
   toolsNavigation: 'CRM tools',
   import: 'Import',
   export: 'Export',
-  settings: 'CRM settings',
+  settings: 'Settings',
+  settingsLabel: 'CRM settings',
   pipelineTrack: 'Track',
   pipelineTrackChoice: 'Track {{choice}}',
   pipelineTrackCompanies: 'Companies',

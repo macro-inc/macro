@@ -109,9 +109,15 @@ sender/generic-address checks.
   its size, and the formatting limit its comparisons. `extract_reply_html`
   keeps a clipped body whole, as it does one with no reply separator. Code
   that parses a body as received again (rather than the sanitized HTML) goes
-  through `bounded_html` too. html5ever also checks each attribute name in a
-  tag against every earlier one before anything reaches the tree; a tag with
-  150,000 attributes takes about 20 s, which is accepted.
+  through `bounded_html` too, in other crates as well: `parse_document`,
+  `parse_fragment` and `BoundedHtml` are public, and `email_api_client`'s
+  Outlook calendar `conference_body::split` refuses a clipped event body
+  rather than write it back cut short. Work on the bounded tree, never a
+  second parse of the raw body: another parser or scripting mode
+  (`<noscript>`) can build a different tree. html5ever also checks each
+  attribute name in a tag against every earlier one before anything reaches
+  the tree; a tag with 150,000 attributes takes about 20 s, which is
+  accepted.
 - Walk a parsed message with a loop, not recursion: nesting depth is the
   sender's choice, and a deep enough message overflows the stack. Reply
   stripping still recurses once per level (`get_previous_html_recursively`),

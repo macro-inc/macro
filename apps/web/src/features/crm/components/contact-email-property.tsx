@@ -6,16 +6,31 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { propertyPillClasses } from '@property/extractors/property-pill-classes';
 import { useSearchInputFocus } from '@property/utils';
-import { Badge, Button, Dialog, Dropdown, Input, Tooltip } from '@ui';
+import {
+  Badge,
+  Button,
+  buttonClasses,
+  Dialog,
+  Dropdown,
+  Input,
+  Tooltip,
+} from '@ui';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import type { ContactEmailChange } from '../core/contact';
-import { contactPropertyTouchTarget } from './contact-property-styles';
+import {
+  contactPropertyIconTouchTarget,
+  contactPropertyTouchTarget,
+} from './contact-property-styles';
 
 type ChangeEmail = (email: string, change: ContactEmailChange) => Promise<void>;
 
-/** One pending change at a time, with the rejection kept beside its control. */
-function createEmailChange(
-  change: ChangeEmail,
+/**
+ * One pending change at a time to one of a record's listed values (a
+ * contact's addresses, a company's domains), with the rejection kept beside
+ * its control.
+ */
+export function createValueChange<Kind>(
+  change: (value: string, kind: Kind) => Promise<void>,
   message: (e: unknown) => string
 ) {
   const [saving, setSaving] = createSignal(false);
@@ -30,12 +45,12 @@ function createEmailChange(
     error,
     clearError: () => setError(undefined),
     /** Resolves to whether the server committed the change. */
-    async run(email: string, kind: ContactEmailChange) {
+    async run(value: string, kind: Kind) {
       if (saving()) return false;
       setSaving(true);
       setError(undefined);
       try {
-        await change(email, kind);
+        await change(value, kind);
         return true;
       } catch (cause) {
         if (active) setError(message(cause));
@@ -47,8 +62,11 @@ function createEmailChange(
   };
 }
 
-/** The property popover on desktop and the shared dialog on touch. */
-function EmailEditor(props: {
+/**
+ * The property popover on desktop and the shared dialog on touch, shared by
+ * the contact email and company domain fields.
+ */
+export function ValueEditor(props: {
   open: boolean;
   onOpenChange(open: boolean): void;
   title: string;
@@ -96,7 +114,7 @@ function EmailEditor(props: {
   );
 }
 
-function EmailError(props: { message: string | undefined }) {
+export function ValueError(props: { message: string | undefined }) {
   return (
     <Show when={props.message}>
       {(message) => (
@@ -122,7 +140,7 @@ function ContactEmailAddress(props: {
   const [open, setOpen] = createSignal(false);
   // The kind of the change in flight, so its rejection reads correctly.
   let requested: ContactEmailChange = 'remove';
-  const request = createEmailChange(props.change, (error) =>
+  const request = createValueChange(props.change, (error) =>
     props.errorMessage(error, requested)
   );
   let triggerElement: HTMLButtonElement | undefined;
@@ -150,13 +168,13 @@ function ContactEmailAddress(props: {
       : props.email;
 
   return (
-    <EmailEditor
+    <ValueEditor
       open={open()}
       onOpenChange={changeOpen}
       title={t('crm.email')}
       anchor={() => triggerElement?.getBoundingClientRect()}
       trigger={
-        <Tooltip label={label()}>
+        <Tooltip label={label()} class="min-w-0 max-w-full">
           <button
             ref={triggerElement}
             type="button"
@@ -198,7 +216,7 @@ function ContactEmailAddress(props: {
             {t('crm.contactEmailLinksCompany')}
           </p>
         </Show>
-        <EmailError message={request.error()} />
+        <ValueError message={request.error()} />
         <div class="flex flex-wrap items-center justify-end gap-2">
           <Show when={request.saving()}>
             <span role="status" class="mr-auto text-sm text-ink-muted">
@@ -229,11 +247,15 @@ function ContactEmailAddress(props: {
           </Show>
         </div>
       </div>
-    </EmailEditor>
+    </ValueEditor>
   );
 }
 
-/** The add control: a labelled pill while blank, a plus beside addresses. */
+/**
+ * The add control: a labelled pill while blank, then the property panel's
+ * add-value button beside the addresses. One element serves both, so focus
+ * returned after the first address is added stays on it.
+ */
 function AddContactEmail(props: {
   blank: boolean;
   change: ChangeEmail;
@@ -242,7 +264,7 @@ function AddContactEmail(props: {
 }) {
   const [open, setOpen] = createSignal(false);
   const [draft, setDraft] = createSignal('');
-  const request = createEmailChange(props.change, props.errorMessage);
+  const request = createValueChange(props.change, props.errorMessage);
   let triggerElement: HTMLButtonElement | undefined;
   const [emailInput, setEmailInput] = createSignal<HTMLInputElement>();
   useSearchInputFocus(emailInput, () => open() && !isTouchDevice());
@@ -263,7 +285,7 @@ function AddContactEmail(props: {
   };
 
   return (
-    <EmailEditor
+    <ValueEditor
       open={open()}
       onOpenChange={changeOpen}
       title={t('crm.addEmail')}
@@ -276,10 +298,18 @@ function AddContactEmail(props: {
               props.ref(element);
             }}
             type="button"
-            class={propertyPillClasses({
-              empty: true,
-              class: contactPropertyTouchTarget,
-            })}
+            class={
+              props.blank
+                ? propertyPillClasses({
+                    empty: true,
+                    class: contactPropertyTouchTarget,
+                  })
+                : buttonClasses({
+                    variant: 'ghost',
+                    size: 'icon-xs',
+                    class: `text-ink-extra-muted not-data-disabled:focus-visible:text-ink focus-visible:ring-2 focus-visible:ring-accent/20 ${contactPropertyIconTouchTarget}`,
+                  })
+            }
             aria-label={t('crm.addEmail')}
             aria-expanded={open()}
             aria-haspopup="dialog"
@@ -324,7 +354,7 @@ function AddContactEmail(props: {
             request.clearError();
           }}
         />
-        <EmailError message={request.error()} />
+        <ValueError message={request.error()} />
         <div class="flex flex-wrap items-center justify-end gap-2">
           <Button
             variant="ghost"
@@ -344,7 +374,7 @@ function AddContactEmail(props: {
           </Button>
         </div>
       </form>
-    </EmailEditor>
+    </ValueEditor>
   );
 }
 
@@ -352,6 +382,8 @@ function AddContactEmail(props: {
  * Every address of a contact, primary first. Each address opens its own
  * actions and a trailing control adds another. Without the server's address
  * list the addresses stay read-only and only a blank contact can add one.
+ * The addresses wrap among themselves, so the add control stays beside the
+ * last one instead of wrapping onto a line of its own.
  */
 export function ContactEmailProperty(props: {
   emails: string[];
@@ -366,29 +398,37 @@ export function ContactEmailProperty(props: {
   let addElement: HTMLButtonElement | undefined;
 
   return (
-    <div class="flex min-w-0 max-w-full flex-wrap items-center gap-1">
-      <For each={props.emails}>
-        {(email) => (
-          <Show
-            when={props.manageable}
-            fallback={
-              <Badge variant="ghost" size="sm" class="min-w-0 max-w-full">
-                <EnvelopeIcon class="size-3 shrink-0" />
-                <span class="ph-no-capture truncate">{email}</span>
-              </Badge>
-            }
-          >
-            <ContactEmailAddress
-              email={email}
-              primary={email === props.primary}
-              linksCompany={email === props.companyEmail}
-              change={props.change}
-              errorMessage={props.errorMessage}
-              focusAfterRemoval={() => addElement?.focus()}
-            />
-          </Show>
-        )}
-      </For>
+    <div
+      role="group"
+      aria-label={t('crm.email')}
+      class="flex min-w-0 max-w-full items-end gap-1"
+    >
+      <Show when={props.emails.length > 0}>
+        <div class="flex min-w-0 flex-wrap items-center gap-1">
+          <For each={props.emails}>
+            {(email) => (
+              <Show
+                when={props.manageable}
+                fallback={
+                  <Badge variant="ghost" size="sm" class="min-w-0 max-w-full">
+                    <EnvelopeIcon class="size-3 shrink-0" />
+                    <span class="ph-no-capture truncate">{email}</span>
+                  </Badge>
+                }
+              >
+                <ContactEmailAddress
+                  email={email}
+                  primary={email === props.primary}
+                  linksCompany={email === props.companyEmail}
+                  change={props.change}
+                  errorMessage={props.errorMessage}
+                  focusAfterRemoval={() => addElement?.focus()}
+                />
+              </Show>
+            )}
+          </For>
+        </div>
+      </Show>
       <Show when={props.manageable || props.emails.length === 0}>
         <AddContactEmail
           blank={props.emails.length === 0}

@@ -27,6 +27,7 @@ import type { SoupProperty } from '../../service-clients/service-storage/generat
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { queryClient } from '../client';
 import {
+  bumpSoupEntityTouchedAt,
   getSoupEntityById,
   invalidateSoupEntity,
   optimisticUpdateSoupEntity,
@@ -58,9 +59,6 @@ function toPropertyTargetEntityType(
   if (entityType === 'CALENDAR_EVENT') {
     // Not a property target yet; surface a real error instead of a bad request.
     throw new Error('calendar events do not support properties');
-  }
-  if (entityType === 'CONTACT') {
-    throw new Error('crm contacts do not support properties');
   }
   return entityType;
 }
@@ -665,6 +663,9 @@ function handleCommittedPropertySave(
 ): void {
   if (disposition.kind !== 'committed') return;
 
+  // A saved property is the viewer's own touch (a PropertyChanged activity),
+  // so Recent moves the item now rather than after a later refetch.
+  bumpSoupEntityTouchedAt(item.entityId);
   trackTaskPropertySave(
     item.entityId,
     getPropertyDefinitionId(item.property),

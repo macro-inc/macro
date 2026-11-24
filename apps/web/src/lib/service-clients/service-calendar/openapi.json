@@ -1604,7 +1604,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Assigned hosts."
+            "description": "Assigned hosts. Empty in responses to the booker, since a Macro user\nidentity carries the host's sign-in address."
           },
           "id": {
             "type": "string",
@@ -1659,6 +1659,27 @@
             "description": "Snapshot of the meeting title."
           }
         }
+      },
+      "BookingAccount": {
+        "type": "object",
+        "description": "A connected account whose primary calendar the host can write, so a\npersonal link can book on it.",
+        "required": ["emailLinkId", "emailAddress", "videoMeetings"],
+        "properties": {
+          "emailAddress": {
+            "type": "string",
+            "description": "The account's address, which invitations for its bookings come from."
+          },
+          "emailLinkId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Connected inbox identity, set as a link's `emailLinkId`."
+          },
+          "videoMeetings": {
+            "type": "boolean",
+            "description": "Whether its calendar adds a video meeting to a booking that asks for\none (`googleMeet`): Google Meet on Google, Microsoft Teams on Outlook."
+          }
+        },
+        "additionalProperties": false
       },
       "BookingAttendance": {
         "type": "string",
@@ -1793,6 +1814,11 @@
             "format": "int32",
             "description": "Meeting duration.",
             "minimum": 0
+          },
+          "emailLinkId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Connected inbox whose primary calendar takes this link's bookings, so\nthe event lands there and its invitation comes from that address.\nAbsent books on the host's primary inbox. Personal links only: team\nlinks book on each host's primary inbox."
           },
           "enabled": {
             "type": "boolean",
@@ -1999,6 +2025,11 @@
             "description": "Meeting duration.",
             "minimum": 0
           },
+          "emailLinkId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The connected account, an `emailLinkId` from the listing's `accounts`,\nwhose primary calendar takes this link's bookings and sends their\ninvitations from its address. Omit to book on the host's primary\naccount. Personal links only; team links book on each host's primary\naccount. `googleMeet` needs an account whose `videoMeetings` is true."
+          },
           "enabled": {
             "type": "boolean",
             "description": "Whether new bookings are accepted."
@@ -2075,9 +2106,17 @@
           "profileId",
           "revision",
           "schedules",
+          "accounts",
           "links"
         ],
         "properties": {
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingAccount"
+            },
+            "description": "Connected accounts a personal link can book on, as its `emailLinkId`;\nempty for a team."
+          },
           "links": {
             "type": "array",
             "items": {
@@ -2790,6 +2829,82 @@
         "description": "Provider selected from the persisted calendar account and email binding.",
         "enum": ["google", "outlook"]
       },
+      "CalendarReplacementChanges": {
+        "type": "object",
+        "description": "Edits laid over the saved event in its replacement, as an event update\nwould apply them; omitted fields keep the saved value.",
+        "properties": {
+          "attendees": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/CalendarAttendeeInputBody"
+            },
+            "description": "Replacement guest list."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Replacement description; an empty string clears it."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Replacement location; an empty string clears it."
+          },
+          "recurrenceLines": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Replacement recurrence properties; an empty list clears them. Applies\nonly to a whole series, and drops its copied occurrences like a time\nchange."
+          },
+          "reminders": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EventReminders",
+                "description": "Replacement reminder configuration."
+              }
+            ]
+          },
+          "time": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EventTime",
+                "description": "Replacement time. On a whole series, a time change drops the copied\nchanged and cancelled occurrences, as Outlook does."
+              }
+            ]
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "Replacement title."
+          },
+          "transparency": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EventTransparency",
+                "description": "Replacement transparency."
+              }
+            ]
+          },
+          "visibility": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EventVisibility",
+                "description": "Replacement visibility."
+              }
+            ]
+          }
+        }
+      },
       "CalendarReplacementView": {
         "type": "object",
         "description": "Safe preview and recovery response; never exposes the opaque provider snapshot.",
@@ -2828,7 +2943,7 @@
           },
           "isSeries": {
             "type": "boolean",
-            "description": "Entire recurring series, including exceptions, is replaced."
+            "description": "The replacement is a recurring series."
           },
           "operationId": {
             "type": "string",
@@ -3427,6 +3542,17 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Exact calendar copy; defaults to canonical."
+          },
+          "changes": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarReplacementChanges",
+                "description": "Unsaved edits the replacement carries instead of the saved values;\nomit to copy the saved event as it is."
+              }
+            ]
           },
           "recurrenceId": {
             "type": ["string", "null"],

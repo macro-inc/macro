@@ -8,6 +8,7 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
 import type { CrmActivityViewState } from '../core/activity-view';
+import type { CompanyDomainChange } from '../core/company';
 import type { ContactEmailChange, CrmContact } from '../core/contact';
 
 export type ActivityFilters = {
@@ -93,6 +94,8 @@ export type CrmContext = {
     record: Accessor<PipelineEntryRecord>
   ): AddToPipelineSource;
   PipelineSharing: PipelineSharing;
+  /** CRM settings' Who can use CRM; renders nothing for viewers who can't change it. */
+  MemberAccess: Component;
   createPipelineTransfer(pipeline: Pipeline): PipelineTransfer;
   downloadCsv(content: string, filename: string): Promise<{ saved: boolean }>;
   /** Profile picture lookup for a contact; presentation owns the fallback. */
@@ -241,6 +244,11 @@ export type CrmContext = {
     { contact: CrmContact; companyId: string | null },
     CrmContact
   >;
+  editCompanyDomain(): CrmMutation<{
+    companyId: string;
+    domain: string;
+    change: CompanyDomainChange;
+  }>;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;
   hideContact(): CrmMutation<{ contactId: string; hidden: boolean }>;
   setEmailSync(): CrmMutation<{ companyId: string; emailSync: boolean }>;

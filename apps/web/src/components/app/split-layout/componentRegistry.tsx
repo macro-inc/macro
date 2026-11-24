@@ -242,6 +242,11 @@ registerComponent('getting-started', () => (
   <RedirectSplit to={{ type: 'component', id: 'home' }} />
 ));
 
+// Retired New Home: restored layouts open the Notifications view it replaced.
+registerComponent('new-home', () => (
+  <RedirectSplit to={{ type: 'component', id: 'notifications' }} />
+));
+
 registerComponent('new-project', withAuth(CreateProjectView), {
   splitPanelLayout: 'composable',
 });
@@ -298,6 +303,9 @@ registerComponent(
   () => composableLayout()
 );
 registerComponent('routines', () => <AgentsRouteView />, {
+  splitPanelLayout: 'composable',
+});
+registerComponent('agents-archive', () => <AgentsRouteView />, {
   splitPanelLayout: 'composable',
 });
 registerComponent('agents', () => <AgentsRouteView />, {

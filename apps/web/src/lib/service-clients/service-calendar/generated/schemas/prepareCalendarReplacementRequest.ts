@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PrepareCalendarReplacementRequestCalendarId } from './prepareCalendarReplacementRequestCalendarId';
+import type { PrepareCalendarReplacementRequestChanges } from './prepareCalendarReplacementRequestChanges';
 import type { PrepareCalendarReplacementRequestRecurrenceId } from './prepareCalendarReplacementRequestRecurrenceId';
 
 /**
@@ -13,6 +14,7 @@ import type { PrepareCalendarReplacementRequestRecurrenceId } from './prepareCal
 export interface PrepareCalendarReplacementRequest {
   /** Exact calendar copy; defaults to canonical. */
   calendarId?: PrepareCalendarReplacementRequestCalendarId;
+  changes?: PrepareCalendarReplacementRequestChanges;
   /** Original-start key; omitted to replace the entire series. */
   recurrenceId?: PrepareCalendarReplacementRequestRecurrenceId;
   /** Omit the provider conference in the replacement. */

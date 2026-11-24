@@ -83,6 +83,7 @@ import {
   BookingReceiptRoutePage,
   EmailCallback,
   EmailLinkCallback,
+  GithubConnectRoutePage,
   LoginPage,
   LoginPopupSuccess,
   OnboardingPage,
@@ -98,6 +99,7 @@ import {
   agentSetupDoneRoute,
   agentSetupRoute,
   agentSignupRoute,
+  agentsArchiveRoute,
   agentsRoute,
   agentsViewRoute,
   appRoute,
@@ -144,6 +146,7 @@ import {
   foldersRoute,
   formRespondRoute,
   forYouRoute,
+  githubConnectRoute,
   homeCalendarRoute,
   homeChannelRoute,
   homeDocumentRoute,
@@ -278,6 +281,10 @@ export function appRouteElements(): JSX.Element {
           definition={loginPopupSuccessRoute}
           component={LoginPopupSuccess}
         />
+        <Route
+          definition={githubConnectRoute}
+          component={GithubConnectRoutePage}
+        />
         <Route definition={loginRoute} component={LoginPage} />
         <Route definition={welcomeRoute} component={WelcomePage} />
         <Route
@@ -338,6 +345,11 @@ export function appRouteElements(): JSX.Element {
         />
         <Route
           definition={routinesRoute}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
+        />
+        <Route
+          definition={agentsArchiveRoute}
           component={AgentsRouteView}
           loading={AgentsViewSkeleton}
         />

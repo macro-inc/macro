@@ -84,11 +84,31 @@ enforced by the ordinary backend APIs.
   `missingApps` names apps its Ask AI step needs that aren't connected, for
   the draft's review to ask for. A routine's `apps` (`RoutineApp`) are its
   task's `mcp_servers`, sent only when given.
+- `src/entities/task-templates/`: personal/team template handles, replay-safe
+  creation keys, optional default task titles and task-sharing defaults, selected
+  fields with optional defaults, and revision-guarded writes. Team membership and
+  creator/admin management stay server-authorized.
+- `src/entities/time/`: `task.logTime`, `timeEntries`, `timeLogged` and
+  `startTimer` (on `Task`), `TimeEntry` (`edit`, `remove`) and `Timer`
+  (`macro.time.timer()`, `stop`, `discard`) over DSS `/time`. There is no
+  single-entry read: entry fields come from the listing or write that
+  returned them, and `TimeEntry.byId` only edits or removes. A 403
+  `not_author` is `NotTimeEntryAuthorError`, not `MacroForbiddenError`, since
+  no access request lets someone change another person's entry; a 409
+  `timer_over_limit` is `TimerOverLimitError` carrying the timer to resolve
+  when the refusal names one; check `timer` before using it.
 - `users.search(nameOrEmail)` is one `GET /contacts/search`: the server
-  ranks the caller's contacts and current team (teammates first, at most 20)
+  ranks the caller's contacts and current team (teammates first, then, for a
+  caller on the list-aware directory, `interacted`/`invited` and then email
+  contacts; at most 20; each person carries `lists`)
   and the SDK seeds User handles with each name and agent flag, keeping that
   order. It is not a global directory, and the full `GET /contacts` list stays
-  out of the SDK.
+  out of the SDK. `users.inList(list, { maxItems, pageSize })` pages one
+  contacts list (`ContactListKey`) over `GET /contacts/lists/{list}/members`,
+  naming each page with one auth `getUserNamesWithEmail` batch
+  (`User.named`); `users.teammates()` collects the `teammates` list. The route
+  reads the list tables for every caller, whatever their `contacts-list-reads`
+  flag, so stored lists can be incomplete until the list backfill has run.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
 - `Contact.addEmail` / `removeEmail` / `setEmail` (choose the primary) edit a
@@ -182,7 +202,11 @@ enforced by the ordinary backend APIs.
   `@hey-api/openapi-ts`'s template in `apps/web/patches/` (root
   `patchedDependencies`; the Nix node_modules build reads patches only there),
   then `bun run generate`. `hey-api-openapi-ts-0.99.0.patch` makes stopping an
-  SSE stream quiet; carry it forward on a generator upgrade.
+  SSE stream quiet and reconnects a stream the server ended (a restart or
+  deploy), like `EventSource`; carry it forward on a generator upgrade.
+  `listen({ onDrop, onOpen })` tells callers each drop and each open; resync
+  after a reopen, not at the drop. `resume` (with `onEventId` for the cursor)
+  asks the server to replay its short, per-process window: still resync.
 - Keep the human-session-only Passwords vault endpoints, including batch import
   and name matching, private favorites and the human review of agent access requests, in coverage
   exclusions; normal human-session authorization and secret disclosure are
@@ -198,6 +222,7 @@ enforced by the ordinary backend APIs.
 
 - Use POST to start channel calls and call-id scoped joins/leaves; the legacy GET starts a call as a side effect.
 - One item's mute, snooze and unmute are `muteNotifications`/`unmuteNotifications` on every favoritable handle; keep mute-all, email unsubscribe and bulk item preferences in the app-only coverage exclusions.
+- `notifications.send` pings people about an entity: it takes a required `body` (at most 280 characters; a ping has no title), a `NotificationLink` handle and `User` handles (`to` omitted pings the caller) and returns `{ notified, skipped }`, never raw ids; a recipient without access or whose inbox would not list the link is skipped with its reason, never shared with.
 - Keep additive `/channel-sections` endpoints app-only; the public channel-label API retains its legacy membership semantics.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
@@ -226,6 +251,8 @@ the existing gateway prefixes.
 
 - The SDK is a root Bun workspace member: its dependencies resolve from the
   root `bun.lock`, and there is no `bun.lock` here.
+  Remove obsolete package-local `node_modules` before generation so they cannot
+  shadow the patched generators installed at the root.
 - Dependency changes require refreshing both platform hashes in
   `nix-support/node_modules-hashes.json`; use
   `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
@@ -236,12 +263,13 @@ the existing gateway prefixes.
   by them and fails on an untagged method. A new or changed public method
   signature or hint tag updates that package's tool snapshots (`bunx vitest
   run -u` there); doc text alone does not.
-- Every entity's namespace class carries one `@routing` sentence ("Use when …;
-  not …") that agents route on, and may carry an `@agent` block: how that area
-  of Macro works, for agents only. Both are stripped from the public
-  reference, and code-mode generation fails without the routing sentence. Put
-  an area's rules there, never in `crates/prompt`; cross-namespace search
-  guidance lives on `SearchNamespace` in `search/namespace.ts`.
+- Give each code-mode documentation topic exactly one `@routing` sentence
+  ("Use when …; not …") on a participating namespace class; tasks, task
+  templates and time tracking share that sentence. An `@agent` block
+  describes the area for agents only. Both tags are stripped from the public reference, and code-mode
+  generation fails without the routing sentence. Put area rules there, never
+  in `crates/prompt`; cross-namespace search guidance lives on
+  `SearchNamespace` in `search/namespace.ts`.
 - Code mode puts each relevant entity's index in the agent turn, at most 48
   KiB: a method's signature and the first sentence of its doc, cut at 160
   characters. Anything else reaches an agent only through `ReadCodeDocs`, which
@@ -303,6 +331,7 @@ the existing gateway prefixes.
   with `system_properties`' `StatusOption` and `PriorityOption`. Task create
   `propertyValues` replace the service defaults (creator assigned, Not
   started), so `Task.create` spells them out when it sends any.
+- Omit `shareWithTeam` from task requests when unspecified so the backend applies session-aware defaults; preserve explicit true and false.
 - `crm.emailPrivacy` (`src/entities/crm-email-privacy/`, the `crmEmailPrivacy` code-mode category) wraps own-member policy and existing privacy endpoints; preserve exact observed tokens, caller-supplied idempotency keys, preview slot identities and explicit partial counts. Never refresh a token or retry a sharing decision after a conflict. Rule target handles do not fetch content on inspection. Validation and replacement share server admission limits; preserve their named errors and never treat validation as reserved capacity. Live growth may later fail a Team read; withdrawal stays available.
 - CRM records and initiatives share `messages/discussion.ts`: their comments are
   messages under a `crm_company`, `crm_contact` or `initiative` parent.

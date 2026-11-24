@@ -48,6 +48,7 @@ vi.mock('../context/crm-context', () => ({
       state.accessState?.() ?? (state.canAccess() ? 'allowed' : 'denied'),
     retryAccess: state.retryAccess,
     feedback: { success: vi.fn() },
+    MemberAccess: () => <p>Who can use CRM</p>,
   }),
 }));
 vi.mock('./use-crm', () => {
@@ -139,6 +140,17 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+it('opens with who can use CRM, above email contribution', () => {
+  render(() => <Crm />);
+
+  const access = screen.getByText('Who can use CRM');
+  const contribution = screen.getByText('Email contribution settings');
+  expect(
+    access.compareDocumentPosition(contribution) &
+      Node.DOCUMENT_POSITION_FOLLOWING
+  ).toBeTruthy();
+});
 
 it('does not construct protected settings sources for a denied member', () => {
   state.role = 'member';

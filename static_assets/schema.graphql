@@ -459,6 +459,38 @@ type CompleteMutationRoot {
 	"""
 	deleteInitiative(initiativeId: ID!): Boolean!
 	"""
+	Log typed time on a task the viewer can edit. Replaying an `id` returns
+	the entry the first request stored, so a retried request logs once.
+	"""
+	logTime(input: LogTimeInput!): LogTimePayload!
+	"""
+	Change one of the viewer's own entries.
+	"""
+	updateTimeEntry(input: UpdateTimeEntryInput!): UpdateTimeEntryPayload!
+	"""
+	Delete one of the viewer's own entries. An entry that is already gone
+	counts as deleted, so a retried delete settles instead of failing.
+	"""
+	deleteTimeEntry(input: DeleteTimeEntryInput!): DeleteTimeEntryPayload!
+	"""
+	Start timing a task the viewer can edit. A timer running on another
+	task stops and saves its entry in the same step; when that timer ran
+	past the limit the start is refused with `TIMER_OVER_LIMIT` until the
+	viewer stops or discards it.
+	"""
+	startTimer(input: StartTimerInput!): StartTimerPayload!
+	"""
+	Stop the viewer's timer and save its entry. A timer past the limit is
+	refused with `TIMER_OVER_LIMIT` unless `endedAt` or `logAll` says what
+	to log. Stopping a timer that already stopped returns its entry; one
+	that was discarded returns none.
+	"""
+	stopTimer(input: StopTimerInput!): StopTimerPayload!
+	"""
+	Discard the viewer's timer without saving anything.
+	"""
+	discardTimer(timerId: ID!): DiscardTimerPayload!
+	"""
 	Create an event on one of the viewer's writable calendars.
 	"""
 	createCalendarEvent(input: CreateCalendarEventInput!): GraphqlCalendarMutationPayload!
@@ -1279,6 +1311,44 @@ input DeleteSavedViewInput {
 }
 
 """
+One's own entry to delete, and the task it was logged on.
+"""
+input DeleteTimeEntryInput {
+	"""
+	The entry to delete.
+	"""
+	id: ID!
+	"""
+	The task the entry was logged on, whose Time logged the reply returns.
+	"""
+	taskId: ID!
+}
+
+"""
+The reply to `deleteTimeEntry`.
+"""
+type DeleteTimeEntryPayload {
+	"""
+	The entry that no longer exists.
+	"""
+	deletedEntryId: ID!
+	"""
+	The task with its new Time logged; null when the viewer can no longer see it.
+	"""
+	task: GraphqlSoupDocument
+}
+
+"""
+The reply to `discardTimer`.
+"""
+type DiscardTimerPayload {
+	"""
+	The viewer's time tracking after the discard.
+	"""
+	timeTracking: GraphqlTimeTracking!
+}
+
+"""
 One entity duplication in a batch.
 """
 input DuplicateEntityInput {
@@ -1643,7 +1713,7 @@ The typed activity-action vocabulary. One member per durable action, plus
 with an undecodable payload) surface with their raw tag and payload
 instead of failing the page.
 """
-union GraphqlActivityAction = GraphqlActivityCreated | GraphqlActivityEdited | GraphqlActivityOpened | GraphqlActivityDeleted | GraphqlActivityMessaged | GraphqlActivitySent | GraphqlActivityResponded | GraphqlActivityPropertyChanged | GraphqlActivityParticipantAdded | GraphqlActivityParticipantRemoved | GraphqlActivityCallStarted | GraphqlActivityTaskAdded | GraphqlActivityTaskRemoved | GraphqlActivityUnknownAction
+union GraphqlActivityAction = GraphqlActivityCreated | GraphqlActivityEdited | GraphqlActivityOpened | GraphqlActivityDeleted | GraphqlActivityMessaged | GraphqlActivitySent | GraphqlActivityResponded | GraphqlActivityPropertyChanged | GraphqlActivityParticipantAdded | GraphqlActivityParticipantRemoved | GraphqlActivityCallStarted | GraphqlActivityTaskAdded | GraphqlActivityTaskRemoved | GraphqlActivityTimeLogged | GraphqlActivityUnknownAction
 
 """
 A call was started in the entity.
@@ -1927,6 +1997,39 @@ type GraphqlActivityTaskRemoved {
 	this object has nothing as a field but we need at least 1 field
 	"""
 	nothing: Boolean!
+}
+
+"""
+How time was logged.
+"""
+enum GraphqlActivityTimeLogSource {
+	"""
+	Typed as a length.
+	"""
+	MANUAL
+	"""
+	Saved by stopping a timer.
+	"""
+	TIMER
+}
+
+"""
+Time was logged on the entity (a task). The entry's note is never part of
+activity.
+"""
+type GraphqlActivityTimeLogged {
+	"""
+	Whole minutes logged.
+	"""
+	minutes: Int!
+	"""
+	The day the time counts for, in `YYYY-MM-DD` form, as the person chose it.
+	"""
+	entryDate: String!
+	"""
+	How the time was logged.
+	"""
+	source: GraphqlActivityTimeLogSource!
 }
 
 """
@@ -3535,7 +3638,8 @@ input GraphqlChannelLiteral @oneOf {
 	"""
 	The is participant option. Filters by whether the requesting user is an
 	active participant; its presence widens the candidate set to team channels
-	of the user's teams they have not joined.
+	of the user's teams they have not joined, and, when the filter admits only
+	channels it names by id, to public channels too.
 	"""
 	isParticipant: Boolean
 	"""
@@ -4033,6 +4137,12 @@ type GraphqlContact {
 	Macro profile name, then this viewer's address-book name; null means use email fallback.
 	"""
 	name: String
+	"""
+	Keys of the viewer's lists this person is in (`teammates`, `interacted`,
+	`invited`, `gmail`, `outlook`; more may be added), each once. Empty for
+	the viewer, and for a person in no list.
+	"""
+	lists: [String!]!
 }
 
 """
@@ -4504,13 +4614,19 @@ input GraphqlDateLiteral @oneOf {
 }
 
 """
-A date-time property value.
+A date property value.
 """
 type GraphqlDatePropertyValue {
 	"""
-	The stored date-time formatted as RFC 3339.
+	The stored instant formatted as RFC 3339.
 	"""
 	value: String!
+	"""
+	Whether its time of day was set. Without one the value stands for a
+	whole day, shown as the day its instant falls on in the viewer's time
+	zone.
+	"""
+	hasTime: Boolean!
 }
 
 """
@@ -5051,6 +5167,10 @@ enum GraphqlEmailSyncStatus {
 	"""
 	NEEDS_REAUTH
 	"""
+	The provider serves no mailbox for the account.
+	"""
+	MAILBOX_UNAVAILABLE
+	"""
 	Synchronization is disabled.
 	"""
 	INACTIVE
@@ -5078,9 +5198,9 @@ type GraphqlEmailThreadFocus {
 	"""
 	needsReply: Boolean!
 	"""
-	The owner sent the latest message and should come back to the thread: it
-	has an open loop or has waited for an answer. Never true together with
-	`needs_reply`.
+	The owner sent the latest message and the thread is back to follow up:
+	no answer came in the wait, or its due day has come. Never true together
+	with `needs_reply`.
 	"""
 	needsFollowUp: Boolean!
 	"""
@@ -6845,7 +6965,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlPasswordAccessRequestedMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlComputerSetupMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
+union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlPasswordAccessRequestedMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlComputerSetupMetadata | GraphqlPingMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
 
 """
 A notification associated with a shared entity, including entities outside Soup.
@@ -7036,6 +7156,42 @@ type GraphqlPasswordAccessRequestedMetadata {
 	Item display name when the request was made.
 	"""
 	itemName: String!
+}
+
+"""
+Metadata for a notification its sender wrote.
+"""
+type GraphqlPingMetadata {
+	"""
+	What the sender wrote.
+	"""
+	body: String!
+	"""
+	The linked entity's name when it was sent, when it has one that reads
+	the same to every recipient.
+	"""
+	entityName: String
+	"""
+	The agent whose code sent it, when one did.
+	"""
+	agentId: ID
+	"""
+	The sending agent's name when it was sent.
+	"""
+	agentName: String
+	"""
+	The sending agent's avatar when it was sent.
+	"""
+	agentAvatarUrl: String
+	"""
+	The channel message it opens at, when the sender linked one.
+	"""
+	messageId: ID
+	"""
+	The top-level message the linked message replies to, when it is a
+	reply.
+	"""
+	threadId: ID
 }
 
 """
@@ -7484,6 +7640,10 @@ enum GraphqlPropertyTargetEntityType {
 	"""
 	COMPANY
 	"""
+	CRM contact target.
+	"""
+	CONTACT
+	"""
 	Row of a Macro database table.
 	"""
 	DATABASE_ROW
@@ -7730,6 +7890,28 @@ type GraphqlRoutineRunFinishedMetadata {
 	Whether the run succeeded.
 	"""
 	succeeded: Boolean!
+}
+
+"""
+The viewer's running timer.
+"""
+type GraphqlRunningTimer {
+	"""
+	The timer's id, kept by the entry it becomes when it stops.
+	"""
+	id: ID!
+	"""
+	The task being timed.
+	"""
+	taskId: ID!
+	"""
+	When it started, RFC 3339, by the server's clock.
+	"""
+	startedAt: String!
+	"""
+	The task being timed; null when the viewer can no longer see it.
+	"""
+	task: GraphqlSoupDocument
 }
 
 """
@@ -8135,9 +8317,14 @@ input GraphqlSetPropertyValue @oneOf {
 	"""
 	boolean: Boolean
 	"""
-	An RFC 3339 date-time value.
+	An RFC 3339 date-time value standing for a whole day, shown as the day
+	it falls on in the viewer's time zone.
 	"""
 	date: String
+	"""
+	An RFC 3339 date-time whose time of day was set.
+	"""
+	dateWithTime: String
 	"""
 	A span from a start date-time to an end one.
 	"""
@@ -8813,6 +9000,10 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	participants: [GraphqlSoupChannelParticipant!]!
 	"""
+	The bots that participate in the channel. `participants` lists users only.
+	"""
+	botParticipants: [GraphqlSoupChannelBotParticipant!]!
+	"""
 	The latest message.
 	"""
 	latestMessage: GraphqlSoupChannelMessagePreview
@@ -8866,6 +9057,32 @@ type GraphqlSoupChannelAgentDm {
 	The persona's avatar URL, when it has one.
 	"""
 	avatarUrl: String
+}
+
+"""
+A bot that participates in a soup channel.
+"""
+type GraphqlSoupChannelBotParticipant {
+	"""
+	The identifier of the channel.
+	"""
+	channelId: ID!
+	"""
+	The identifier of the bot.
+	"""
+	botId: ID!
+	"""
+	The role.
+	"""
+	role: String!
+	"""
+	The joined timestamp in RFC 3339 format.
+	"""
+	joinedAt: String!
+	"""
+	The left timestamp in RFC 3339 format.
+	"""
+	leftAt: String
 }
 
 """
@@ -9486,6 +9703,12 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	timeline. Deeper history belongs to the viewer's activity feed.
 	"""
 	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	A page of the time logged on this task, newest day first, `limit`
+	entries at a time (50 by default, at most 200), continuing `after` a
+	cursor a previous page returned. A document that is not a task has none.
+	"""
+	timeEntries(limit: Int, after: String): GraphqlTimeEntryPage!
 	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
@@ -10848,6 +11071,108 @@ type GraphqlTeamRolePermission {
 }
 
 """
+Time a person logged on a task.
+"""
+type GraphqlTimeEntry {
+	"""
+	The entry's id; a timer's entry keeps the timer's id.
+	"""
+	id: ID!
+	"""
+	The task document the time was spent on.
+	"""
+	taskId: ID!
+	"""
+	The person who logged it.
+	"""
+	userId: String!
+	"""
+	The logger's own calendar day for the work, `YYYY-MM-DD`.
+	"""
+	date: String!
+	"""
+	Length in whole minutes; the truth even when a start and end are given.
+	"""
+	minutes: Int!
+	"""
+	What the time was spent on.
+	"""
+	note: String
+	"""
+	When the work started, RFC 3339, if known.
+	"""
+	startedAt: String
+	"""
+	When the work ended, RFC 3339, given exactly when `startedAt` is.
+	"""
+	endedAt: String
+	"""
+	How the entry was made.
+	"""
+	source: GraphqlTimeEntrySource!
+	"""
+	When it was logged, RFC 3339.
+	"""
+	createdAt: String!
+	"""
+	When it last changed, RFC 3339.
+	"""
+	updatedAt: String!
+	"""
+	Whether the authenticated viewer may change or delete it: only its author may.
+	"""
+	canEdit: Boolean!
+}
+
+"""
+A page of a task's time entries, newest day first.
+"""
+type GraphqlTimeEntryPage {
+	"""
+	Entries of this page.
+	"""
+	entries: [GraphqlTimeEntry!]!
+	"""
+	Pass as `after` for the next page; null on the last page.
+	"""
+	nextCursor: String
+}
+
+"""
+How a time entry was made.
+"""
+enum GraphqlTimeEntrySource {
+	"""
+	Typed by a person.
+	"""
+	MANUAL
+	"""
+	Saved when a timer stopped.
+	"""
+	TIMER
+}
+
+"""
+The authenticated viewer's time tracking state.
+"""
+type GraphqlTimeTracking {
+	"""
+	The viewer's id: one record per person.
+	"""
+	id: ID!
+	"""
+	The viewer's running timer; nobody sees another person's.
+	"""
+	runningTimer: GraphqlRunningTimer
+	"""
+	The server's clock when this response was made, RFC 3339. Compare it
+	with the device's clock when the response arrives, never from a cached
+	copy, to count a timer by the server's clock.
+	"""
+	serverNow: String!
+}
+
+"""
 A span with absolute instants.
 """
 type GraphqlTimedEventTime {
@@ -10908,6 +11233,10 @@ type GraphqlUser {
 	A permission-filtered page of task identifiers within an initiative.
 	"""
 	initiativeTasks(initiativeId: ID!, input: InitiativeTasksInput): InitiativeTasksPage!
+	"""
+	The authenticated user's running timer and the server's clock.
+	"""
+	timeTracking: GraphqlTimeTracking!
 	"""
 	AI routines the authenticated user can access.
 	"""
@@ -10974,6 +11303,27 @@ type GraphqlUser {
 		emails: [String!]!
 	): [GraphqlContact!]!
 	"""
+	The viewer's contacts whom the text names, across the whole directory:
+	their whole name, or for one word their first name, equals it, or each
+	typed word starts a word of the name they are shown with (their Macro
+	profile name, else the viewer's address-book label, else their
+	address's local part). Ranked by contact list (interacted or invited,
+	then teammates, then connected inboxes, then anyone else; teammates,
+	then anyone else, for a directory without lists), then exact names,
+	then user ID. There is no continuation. An address or user ID names
+	nobody: look it up with `contactsByEmails` or `contactsByUserIds`.
+	"""
+	contactsNamedBy(
+		"""
+		Typed text, at most 512 UTF-8 bytes and 32 words.
+		"""
+		search: String!,
+		"""
+		Maximum contacts, at least 1; defaults to 20 and is capped at 50.
+		"""
+		limit: Int
+	): [GraphqlContact!]!
+	"""
 	Read one page of the viewer's personal contacts with resolved names.
 	"""
 	contacts(
@@ -10994,6 +11344,20 @@ type GraphqlUser {
 		"""
 		matching: GraphqlContactMatching
 	): GraphqlContactPage!
+	"""
+	The id of the authenticated user's direct message with `userId`, the
+	one a first message to them would reuse, while the authenticated user
+	is still in it: of several, one both are in, then one only `userId`
+	left, then the oldest, then the lowest id. Null when they are in none,
+	or when `userId` is the authenticated user. Asking never creates one.
+	"""
+	directMessageChannelId(userId: ID!): ID
+	"""
+	When the authenticated user last viewed the channel, in RFC 3339
+	format, whether or not they are still in it. Null when they never
+	viewed it. Their own activity row needs no access to the channel.
+	"""
+	channelViewedAt(channelId: ID!): String
 	"""
 	Every calendar visible across owned and delegated inboxes, primaries
 	and writables first.
@@ -11374,6 +11738,54 @@ input InviteCalendarEventGuestsInput {
 A scalar that can represent any JSON value.
 """
 scalar JSON
+
+"""
+Typed time to log on a task.
+"""
+input LogTimeInput {
+	"""
+	A UUIDv7 the client chose, so a replayed request logs once.
+	"""
+	id: ID!
+	"""
+	The task document the time was spent on.
+	"""
+	taskId: ID!
+	"""
+	The logger's own calendar day for the work, `YYYY-MM-DD`.
+	"""
+	date: String!
+	"""
+	Length in whole minutes, 1 to 1440.
+	"""
+	minutes: Int!
+	"""
+	What the time was spent on, up to 2000 characters.
+	"""
+	note: String
+	"""
+	When the work started, RFC 3339; given with `endedAt` or not at all.
+	"""
+	startedAt: String
+	"""
+	When the work ended, RFC 3339, after `startedAt`.
+	"""
+	endedAt: String
+}
+
+"""
+The reply to `logTime`.
+"""
+type LogTimePayload {
+	"""
+	The entry as stored; a replay returns the entry the first request stored.
+	"""
+	entry: GraphqlTimeEntry!
+	"""
+	The task with its new Time logged; null when the viewer can no longer see it.
+	"""
+	task: GraphqlSoupDocument
+}
 
 """
 Input for marking an email thread as seen.
@@ -12506,6 +12918,34 @@ Opaque versioned supplement containing authoritative server-only facts.
 scalar SoupCacheProjection
 
 """
+Where a Soup page reads its channels.
+"""
+enum SoupChannelReads {
+	"""
+	The default: the channel query reads the read replica, as ordinary
+	Soup lists do.
+	"""
+	REPLICA
+	"""
+	The channel query reads the primary, where the REST channel list reads
+	it, so the page's channels, with their members and activity, reflect
+	every membership change committed before it ran. Nothing else moves:
+	other entity types and per-item lookups keep the database they read.
+	Served only for channel directory pages: a timestamp sort (not NAME,
+	PROPERTY or NOTIFIED_AT), newest first, at most 100 items, channel
+	threads excluded by a nil-id filter, no `favoritesOnly: true`, no CRM
+	association of any kind (company, contact or activity), neither as
+	`crmAssociation` nor as a `crmAssociated` literal anywhere in the
+	document filter (a CRM email scope is allowed), and either no
+	channel filter or one that admits only
+	channels it names by id: at most 100 id literals, with nothing beside
+	them but at most two isParticipant literals in the whole tree. Any
+	other page is refused.
+	"""
+	PRIMARY
+}
+
+"""
 Input for continuing a Soup query.
 """
 input SoupContinuationInput {
@@ -12528,6 +12968,11 @@ input SoupContinuationInput {
 	used or the continuation flips order mid-list.
 	"""
 	sortDirection: GraphqlSortDirection
+	"""
+	Where the page reads its channels. Defaults to REPLICA. The cursor
+	does not carry it, so re-send whatever the initial query used.
+	"""
+	channelReads: SoupChannelReads
 }
 
 """
@@ -12578,6 +13023,10 @@ input SoupInitialInput {
 	Direction to order the page in. Defaults to DESC.
 	"""
 	sortDirection: GraphqlSortDirection
+	"""
+	Where the page reads its channels. Defaults to REPLICA.
+	"""
+	channelReads: SoupChannelReads
 }
 
 """
@@ -12631,6 +13080,89 @@ type SoupUpdated {
 	The hydrated entity for this update.
 	"""
 	item: GraphqlSoupEntity!
+}
+
+"""
+A task to start timing.
+"""
+input StartTimerInput {
+	"""
+	A UUIDv7 the client chose, so a replayed start starts one timer.
+	"""
+	id: ID!
+	"""
+	The task document to time.
+	"""
+	taskId: ID!
+	"""
+	The IANA zone whose day a stopped previous timer's entry takes; UTC when omitted.
+	"""
+	timeZone: String
+	"""
+	An earlier start, RFC 3339, within the last 24 hours; only Undo on a switch sends it.
+	"""
+	startedAt: String
+}
+
+"""
+The reply to `startTimer`.
+"""
+type StartTimerPayload {
+	"""
+	The viewer's time tracking, with the new timer running.
+	"""
+	timeTracking: GraphqlTimeTracking!
+	"""
+	The entry saved for the timer this start stopped; null when none ran
+	or the start was a replay.
+	"""
+	stoppedEntry: GraphqlTimeEntry
+	"""
+	The stopped timer's task with its new Time logged.
+	"""
+	stoppedTask: GraphqlSoupDocument
+}
+
+"""
+The viewer's timer to stop, and what to log for it.
+"""
+input StopTimerInput {
+	"""
+	The running timer.
+	"""
+	timerId: ID!
+	"""
+	The IANA zone whose day the entry takes; UTC when omitted.
+	"""
+	timeZone: String
+	"""
+	When the person says they stopped, RFC 3339; resolves a timer past the limit.
+	"""
+	endedAt: String
+	"""
+	Log until now however long the timer ran; resolves a timer past the limit.
+	"""
+	logAll: Boolean
+}
+
+"""
+The reply to `stopTimer`.
+"""
+type StopTimerPayload {
+	"""
+	The viewer's time tracking after the stop.
+	"""
+	timeTracking: GraphqlTimeTracking!
+	"""
+	The saved entry; a timer stopped before returns the entry it saved,
+	and a discarded one returns null.
+	"""
+	entry: GraphqlTimeEntry
+	"""
+	The entry's task with its new Time logged; null without an entry or
+	when the viewer can no longer see it.
+	"""
+	task: GraphqlSoupDocument
 }
 
 """
@@ -12916,6 +13448,50 @@ input UpdateSavedViewInput {
 	Explicit sharing change; omission preserves the existing share.
 	"""
 	sharing: SavedViewSharingInput
+}
+
+"""
+Changes to one's own entry. Omitted fields stay; `null` clears a note or span.
+"""
+input UpdateTimeEntryInput {
+	"""
+	The entry to change.
+	"""
+	id: ID!
+	"""
+	A new day, `YYYY-MM-DD`.
+	"""
+	date: String
+	"""
+	A new length in whole minutes, 1 to 1440.
+	"""
+	minutes: Int
+	"""
+	A new note, or `null` to remove it.
+	"""
+	note: String
+	"""
+	A new start, RFC 3339, or `null` with `endedAt` to remove the span.
+	"""
+	startedAt: String
+	"""
+	A new end, RFC 3339, or `null` with `startedAt` to remove the span.
+	"""
+	endedAt: String
+}
+
+"""
+The reply to `updateTimeEntry`.
+"""
+type UpdateTimeEntryPayload {
+	"""
+	The entry as stored.
+	"""
+	entry: GraphqlTimeEntry!
+	"""
+	The task with its new Time logged; null when the viewer can no longer see it.
+	"""
+	task: GraphqlSoupDocument
 }
 
 """

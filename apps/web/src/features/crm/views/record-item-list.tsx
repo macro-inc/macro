@@ -2,11 +2,16 @@ import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-h
 import { dateBucket } from '@app/features/soup/collection/date-buckets';
 import { createKeyedProjection } from '@app/lib/queries/soup/create-keyed-projection';
 import { usePending } from '@app/observability/flow';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
+  createEntityDraggable,
+  type EntityData,
+  EntityRowIcon,
+  EntityRowTitle,
   ListEntity,
   ListEntityMetadataQueryProvider,
   ListLayoutProvider,
-  type NarrowLayoutVariant,
 } from '@entity';
 import {
   createMemo,
@@ -32,8 +37,9 @@ import { recordItemMatchesSearch } from '../core/record-search';
 
 /**
  * One of a CRM record's soup lists (emails, files, calls or references):
- * unified-list rows that open in a split, paging in as the end scrolls into
- * view. A failed request shows a retry instead of the empty state.
+ * unified-list rows, or the information panel's compact rows with `panel`,
+ * that open in a split, paging in as the end scrolls into view. A failed
+ * request shows a retry instead of the empty state.
  */
 export function RecordItemList(props: {
   source: ItemListSource;
@@ -45,8 +51,11 @@ export function RecordItemList(props: {
   /** Clear the search when this list has its own search control. */
   onClearSearch?: () => void;
   search?: string;
-  /** Row layout when the list is narrow, e.g. in the information panel. */
-  narrowLayout?: NarrowLayoutVariant;
+  /**
+   * Rows for the information panel: the side panel's own item rows, like a
+   * document's References, instead of the list's.
+   */
+  panel?: boolean;
   /** Property IDs to display as inline reference pills when needed. */
   referencePropertyIds?: readonly string[];
   /** Group the existing newest-first list by its last-updated date. */
@@ -56,6 +65,9 @@ export function RecordItemList(props: {
 }) {
   const { openEntity } = useCrmContext().createNavigation();
   const workspace = useOptionalCrmWorkspace();
+  const open = (entity: EntityData, event?: MouseEvent | KeyboardEvent) => {
+    if (!workspace?.host.record.openItem(entity, event)) openEntity(entity);
+  };
   // Reading `data` before the first page resolves would suspend the tab.
   const items = () =>
     props.source.isPending ? [] : (props.source.data?.entities ?? []);
@@ -106,16 +118,18 @@ export function RecordItemList(props: {
       <Switch>
         <Match when={loading()}>
           <CrmListSkeleton
-            count={props.narrowLayout === 'condensed' ? 2 : undefined}
+            count={props.panel ? 2 : undefined}
+            panel={props.panel}
           />
         </Match>
         <Match when={props.source.isError}>
           <Show
-            when={props.narrowLayout !== 'condensed'}
+            when={!props.panel}
             fallback={
               <CrmListRetry
                 message="Couldn't load this list."
                 onRetry={() => props.source.refetch()}
+                inline
               />
             }
           >
@@ -134,11 +148,11 @@ export function RecordItemList(props: {
                 when={props.search?.trim()}
                 fallback={
                   <Show
-                    when={props.narrowLayout !== 'condensed'}
+                    when={!props.panel}
                     fallback={
-                      <div class="p-3 text-xs text-ink-muted">
+                      <p class="text-xs text-ink-muted">
                         {props.empty ?? 'No items yet.'}
-                      </div>
+                      </p>
                     }
                   >
                     {props.emptyContent ?? (
@@ -160,12 +174,17 @@ export function RecordItemList(props: {
             <Show
               when={props.source.isFetchNextPageError}
               fallback={
-                <CrmListSkeleton label="Searching more items" count={2} />
+                <CrmListSkeleton
+                  label="Searching more items"
+                  count={2}
+                  panel={props.panel}
+                />
               }
             >
               <CrmListRetry
                 message="Couldn't load more."
                 onRetry={() => props.source.fetchNextPage()}
+                inline={props.panel}
               />
             </Show>
             <Show
@@ -179,7 +198,7 @@ export function RecordItemList(props: {
         </Match>
         <Match when={items().length > 0}>
           <ListEntityMetadataQueryProvider>
-            <ListLayoutProvider ref={listRef} narrowLayout={props.narrowLayout}>
+            <ListLayoutProvider ref={listRef}>
               <div
                 ref={setListRef}
                 class="flex flex-col"
@@ -199,7 +218,11 @@ export function RecordItemList(props: {
                     }
                   >
                     <Show when={!props.source.isFetchNextPageError}>
-                      <CrmListSkeleton label="Searching more items" count={2} />
+                      <CrmListSkeleton
+                        label="Searching more items"
+                        count={2}
+                        panel={props.panel}
+                      />
                     </Show>
                   </Show>
                 </Show>
@@ -214,16 +237,23 @@ export function RecordItemList(props: {
                           />
                         )}
                       </Show>
-                      <ListEntity
-                        entity={entity}
-                        hideCheckbox
-                        timestamp={entity.updatedAt}
-                        onClick={(event) => {
-                          if (!workspace?.host.record.openItem(entity, event))
-                            openEntity(entity);
-                        }}
-                        referencePropertyIds={props.referencePropertyIds}
-                      />
+                      <Show
+                        when={props.panel}
+                        fallback={
+                          <ListEntity
+                            entity={entity}
+                            hideCheckbox
+                            timestamp={entity.updatedAt}
+                            onClick={(event) => open(entity, event)}
+                            referencePropertyIds={props.referencePropertyIds}
+                          />
+                        }
+                      >
+                        <PanelItemRow
+                          entity={entity}
+                          onOpen={(event) => open(entity, event)}
+                        />
+                      </Show>
                     </>
                   )}
                 </For>
@@ -236,6 +266,7 @@ export function RecordItemList(props: {
               <CrmListRetry
                 message="Couldn't load more."
                 onRetry={() => props.source.fetchNextPage()}
+                inline={props.panel}
               />
             }
           >
@@ -243,11 +274,60 @@ export function RecordItemList(props: {
               <div ref={setSentinelRef} class="h-px" />
             </Show>
             <Show when={props.source.isFetchingNextPage}>
-              <CrmListSkeleton label="Loading more items" count={2} />
+              <CrmListSkeleton
+                label="Loading more items"
+                count={2}
+                panel={props.panel}
+              />
             </Show>
           </Show>
         </Match>
       </Switch>
+    </div>
+  );
+}
+
+/**
+ * An item row shaped like a document's References row in its side panel:
+ * 12px text in a 32px row that starts at the section's text edge, so the
+ * information panel reads as one scale. Opens and drags like the list rows do.
+ */
+function PanelItemRow(props: {
+  entity: EntityData;
+  onOpen: (event: MouseEvent | KeyboardEvent) => void;
+}) {
+  const navigation = useSplitNavigationHandler<HTMLDivElement>((event) =>
+    props.onOpen(event)
+  );
+  const draggable = createEntityDraggable({
+    entity: props.entity,
+    splitId: useSplitPanel()?.handle?.id,
+  });
+  return (
+    <div
+      ref={draggable}
+      role="button"
+      tabIndex={0}
+      data-entity-id={props.entity.id}
+      class="flex min-h-8 min-w-0 items-center gap-1.5 rounded-lg py-1 text-xs leading-5 text-ink hover:bg-hover/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      onMouseDown={navigation.onMouseDown}
+      onClick={navigation.onClick}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        props.onOpen(event);
+      }}
+    >
+      <span class="size-4 shrink-0">
+        <EntityRowIcon
+          entity={props.entity}
+          suppressClick
+          showTooltip={false}
+        />
+      </span>
+      <span class="ph-no-capture flex min-w-0 truncate">
+        <EntityRowTitle entity={props.entity} />
+      </span>
     </div>
   );
 }

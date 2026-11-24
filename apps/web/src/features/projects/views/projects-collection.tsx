@@ -1,3 +1,4 @@
+import type { GanttCreation } from '@app/components/gantt/create-gantt-creation';
 import { Gantt } from '@app/components/gantt/gantt';
 import type { GanttGroupMove } from '@app/components/gantt/gantt-group-drag';
 import { ganttGroupPlacement } from '@app/components/gantt/gantt-group-placement';
@@ -31,6 +32,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compareDateDesc } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { EntitySelectionToolbarModal } from '@entity/EntitySelectionToolbarModal';
+import { buildStartDateDefaultProperty } from '@entity/extractors-property/property-helpers';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
@@ -39,6 +41,7 @@ import {
   SYSTEM_PROPERTY_IDS,
 } from '@property/identifiers';
 import type { Property, PropertyApiValues } from '@property/types';
+import { rescheduledStartDue } from '@property/utils/start-due';
 import { Button, ButtonGroup, Dropdown, Input } from '@ui';
 import {
   type Accessor,
@@ -78,7 +81,11 @@ import {
   projectGroupMoveValue,
   projectGroupPropertyId,
 } from '../queries/project-group-move';
-import { projectTimelineDates } from '../queries/project-timeline';
+import {
+  projectTimelineDates,
+  projectTimelineTimed,
+  projectTimelineWholeDay,
+} from '../queries/project-timeline';
 import {
   ProjectSavedViewActions,
   ProjectSavedViewStatus,
@@ -315,6 +322,59 @@ export function ProjectsCollection(props: {
     );
     return apiValues ? { property, apiValues } : undefined;
   };
+  const startDatesEnabled = () => context.startDatesEnabled?.() ?? false;
+  const projectRow = (id: string) => {
+    const state = collection.state();
+    return state.kind === 'ready'
+      ? state.rows.find((row) => row.project.id === id)
+      : undefined;
+  };
+  const canRescheduleProject = (id: string) => {
+    const row = projectRow(id);
+    return (
+      !!row &&
+      canEditProject(row.project) &&
+      !commands.pending() &&
+      projectTimelineDates(row, true).end != null
+    );
+  };
+  /** Saves the dates a timeline bar was dropped at, the ends that moved only. */
+  const rescheduleProject = async (id: string, range: GanttCreation) => {
+    const row = projectRow(id);
+    const due = row?.properties.find(
+      (property) =>
+        property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.DUE_DATE
+    );
+    if (!row || !due || !canRescheduleProject(id))
+      throw new Error('Project is no longer editable');
+    const start =
+      row.properties.find(
+        (property) =>
+          property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.START_DATE
+      ) ?? buildStartDateDefaultProperty();
+    const dates = projectTimelineDates(row, true);
+    if (dates.start == null) throw new Error('Project has no start to move');
+    const ends = rescheduledStartDue(
+      {
+        start: new Date(dates.start),
+        due: dates.end ? new Date(dates.end) : null,
+        wholeDay: projectTimelineWholeDay(row),
+      },
+      range
+    );
+    if (!ends.length) return;
+    await commands.saveProperties(
+      ends.map(({ field, value, hasTime }) => ({
+        id,
+        property: field === 'due' ? due : start,
+        value: {
+          valueType: 'DATE' as const,
+          value,
+          ...(hasTime ? { hasTime: true } : {}),
+        },
+      }))
+    );
+  };
   const moveProjectGroup = async (move: GanttGroupMove) => {
     const update = resolveGroupMove(move);
     if (!update)
@@ -528,24 +588,18 @@ export function ProjectsCollection(props: {
     else collection.setPriority(selected ? id : '');
   };
   const filterControl = () => (
-    <div class="relative shrink-0">
-      <ListFilterDropdown
-        grouped
-        size="icon-md"
-        label="Filter projects"
-        groups={filters()}
-        open={openMenu() === 'filters'}
-        onOpenChange={(open) => setOpenMenu(open ? 'filters' : undefined)}
-        isSelected={isFilterSelected}
-        onSelectionChange={selectFilter}
-        onClear={clearFilters}
-      />
-      <Show when={activeCount()}>
-        <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 not-touch:top-0.5 not-touch:right-0.5 not-touch:size-3.5 not-touch:translate-x-0 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-          {activeCount()}
-        </span>
-      </Show>
-    </div>
+    <ListFilterDropdown
+      grouped
+      size={activeCount() ? 'md' : 'icon-md'}
+      label="Filter projects"
+      activeCount={activeCount()}
+      groups={filters()}
+      open={openMenu() === 'filters'}
+      onOpenChange={(open) => setOpenMenu(open ? 'filters' : undefined)}
+      isSelected={isFilterSelected}
+      onSelectionChange={selectFilter}
+      onClear={clearFilters}
+    />
   );
   const dueDateControl = () => (
     <Dropdown>
@@ -871,6 +925,7 @@ export function ProjectsCollection(props: {
           >
             <ProjectsGantt
               collection={collection}
+              startDates={startDatesEnabled()}
               items={ganttRows.items}
               groupMoves={{
                 scope: groupMoveScope(),
@@ -912,7 +967,16 @@ export function ProjectsCollection(props: {
                   <Gantt.Row>
                     {label}
                     <Gantt.Bar
-                      {...projectTimelineDates(entity())}
+                      {...projectTimelineDates(entity(), startDatesEnabled())}
+                      timed={
+                        startDatesEnabled() && projectTimelineTimed(entity())
+                      }
+                      regroup={startDatesEnabled()}
+                      onReschedule={
+                        startDatesEnabled() && canRescheduleProject(entity().id)
+                          ? (range) => rescheduleProject(entity().id, range)
+                          : undefined
+                      }
                       title={entity().project.name}
                       deadlineWarning={
                         statusOptionId(entity()) !==

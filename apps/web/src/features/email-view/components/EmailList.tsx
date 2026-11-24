@@ -29,6 +29,7 @@ import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { t } from '@app/lib/i18n';
 import { makePersistedState } from '@app/lib/persistence';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
+import { holdRowPress } from '@components/app/mobile/rowPress';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
@@ -70,10 +71,6 @@ import {
 import type { CacheSnapshot } from 'virtua';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { canMarkNotDone } from '../../next-soup/actions/can-mark-not-done';
-import {
-  persistSoupNavigationTouchHighlight,
-  soupNavigationTouchHighlight,
-} from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { openEntityInSplitFromUnifiedList } from '../../next-soup/utils';
 import { canSearchEmailTab, isExcludedEmailFolder } from '../constants';
 import {
@@ -92,6 +89,7 @@ import { createEmailRowActionState } from '../primitives/row-action-state';
 import { createScrollAnchor } from '../primitives/scroll-anchor';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
 import type { EmailListPane } from '../reader-pane';
+import { formatEmailSearch } from '../search/email-search-scope';
 import { EMAIL_TOUR } from '../tour';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
@@ -103,6 +101,7 @@ import {
   EmailFocusScore,
 } from './EmailFocusBadges';
 import { EmailRowActions, EmailStarAction } from './EmailRowActions';
+import { EmailSearchLocation } from './EmailSearchLocation';
 
 type EmailActionRow = {
   entity: WithNotification<EntityData>;
@@ -146,8 +145,21 @@ export function EmailList(props: EmailListProps) {
     openThread,
     selectedThread,
     filterByTag,
+    parsedSearch,
   } = useEmailView();
   const analytics = useAnalytics();
+  // Results of a search that reaches beyond the inbox say which are archived.
+  const searchReachesArchived = () => {
+    const search = parsedSearch();
+    if (!canSearchEmailTab(state.tab) || !search.query) return false;
+
+    // The inbox views hold no archived mail, and in Archived it all is.
+    const scope = search.scope;
+    return (
+      scope === undefined ||
+      !['inbox', 'focus', 'signal', 'noise', 'archived'].includes(scope)
+    );
+  };
   usePending('email.list.items', () => source.isLoading());
   // The wait is still a wait when the previous rows stay on screen for it.
   const showsPreviousRows = () => source.showsPreviousRows?.() ?? false;
@@ -163,8 +175,8 @@ export function EmailList(props: EmailListProps) {
     } = {}
   ) {
     markRowNotificationsSeenOnOpen(entity, notificationSource);
-    const finishTouchHighlight = options.event
-      ? persistSoupNavigationTouchHighlight(options.event)
+    const releaseRowPress = options.event
+      ? holdRowPress(options.event)
       : undefined;
 
     fireAndForget(
@@ -172,7 +184,7 @@ export function EmailList(props: EmailListProps) {
         splitHandle: panel.handle,
         referredFrom: 'mail',
         openInNewSplit: options.openInNewSplit,
-      }).finally(() => finishTouchHighlight?.()),
+      }).finally(() => releaseRowPress?.()),
       'open-entity-in-split'
     );
   }
@@ -597,7 +609,7 @@ export function EmailList(props: EmailListProps) {
   // The tutorial introduces the inbox; search results are not the inbox.
   const showsTutorial = () =>
     state.tab === 'important' &&
-    !(canSearchEmailTab(state.tab) && state.search.trim());
+    !(canSearchEmailTab(state.tab) && parsedSearch().query);
 
   function showsEmptyViewport() {
     return (
@@ -662,7 +674,11 @@ export function EmailList(props: EmailListProps) {
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
   createSearchScrollReset({
-    query: () => state.search,
+    // A filter with no words, or an `in:` still being typed, runs no search.
+    query: () => {
+      const search = parsedSearch();
+      return search.query ? formatEmailSearch(search.scope, search.query) : '';
+    },
     showsPreviousRows,
     reset: () =>
       setPersistedListState((current) => ({ ...current, scrollOffset: 0 })),
@@ -827,10 +843,7 @@ export function EmailList(props: EmailListProps) {
 
               <Match when={true}>
                 <div
-                  ref={(element) => {
-                    setViewport(element);
-                    soupNavigationTouchHighlight(element);
-                  }}
+                  ref={setViewport}
                   aria-busy={showsPreviousRows()}
                   classList={{ 'opacity-50': showsPreviousRows() }}
                   class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none transition-opacity"
@@ -912,9 +925,15 @@ export function EmailList(props: EmailListProps) {
                                       }
                                       onFilterByTag={filterByTag}
                                       meta={
-                                        <EmailFocusReason
-                                          entity={entityRow().entity}
-                                        />
+                                        <>
+                                          <EmailSearchLocation
+                                            entity={entityRow().entity}
+                                            reachesArchived={searchReachesArchived()}
+                                          />
+                                          <EmailFocusReason
+                                            entity={entityRow().entity}
+                                          />
+                                        </>
                                       }
                                       metaEnd={
                                         <EmailFocusScore

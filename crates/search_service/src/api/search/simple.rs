@@ -73,6 +73,11 @@ pub enum SearchError {
     /// ran out
     #[error("too many of your searches are running at once; retry with fewer at once")]
     Busy,
+    /// The account's user API keys used their search allowance
+    #[error(
+        "search rate limit reached for this account's API keys; retry after {retry_after_seconds}s"
+    )]
+    RateLimited { retry_after_seconds: u64 },
     /// Opensearch error occurred
     #[error("unable to search")]
     Search(#[from] OpensearchClientError),
@@ -107,23 +112,25 @@ impl IntoResponse for SearchError {
             | SearchError::NoQueryOrTermsProvided
             | SearchError::NoChannelIds => StatusCode::BAD_REQUEST,
             SearchError::NameSearch(NameSearchError::IncompatibleCursor) => StatusCode::BAD_REQUEST,
-            SearchError::Busy => StatusCode::TOO_MANY_REQUESTS,
+            SearchError::Busy | SearchError::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
             SearchError::Search(_) | SearchError::NameSearch(_) | SearchError::InternalError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
 
+        let retry_after = match &self {
+            SearchError::Busy => Some(BUSY_RETRY_AFTER_SECONDS.to_string()),
+            SearchError::RateLimited {
+                retry_after_seconds,
+            } => Some(retry_after_seconds.to_string()),
+            _ => None,
+        };
         let body = Json(ErrorResponse {
             message: self.to_string().into(),
         });
-        match self {
-            SearchError::Busy => (
-                status_code,
-                [(header::RETRY_AFTER, BUSY_RETRY_AFTER_SECONDS)],
-                body,
-            )
-                .into_response(),
-            _ => (status_code, body).into_response(),
+        match retry_after {
+            Some(seconds) => (status_code, [(header::RETRY_AFTER, seconds)], body).into_response(),
+            None => (status_code, body).into_response(),
         }
     }
 }

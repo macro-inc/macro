@@ -33,9 +33,13 @@ pub enum TeamAgentStatus {
     Starting,
     /// Its computer is up, and the agent has reported itself online.
     Running,
-    /// Its computer is asleep, stopped, unreachable or ending.
+    /// Its computer is asleep, stopped or ending, or no fleet is attached.
     Paused,
-    /// Its computer gave up and needs attention.
+    /// Its computer is past setup but not answering; it comes back by
+    /// itself.
+    Unhealthy,
+    /// Its computer gave up and needs attention, or the invite died before
+    /// buying one.
     Failed,
     /// Its computer is gone.
     Released,
@@ -283,6 +287,8 @@ pub enum ComputerState {
     AwaitingAgent,
     /// Asleep, waking, stopping, stopped, or no fleet is attached.
     Paused,
+    /// Past setup, unreachable or restarting after a crash.
+    Unhealthy,
     /// Gave up.
     Failed,
     /// Released and destroyed.
@@ -300,11 +306,30 @@ impl TeamAgentStatus {
             ComputerState::AwaitingAgent if !came_online => Self::Starting,
             ComputerState::AwaitingAgent | ComputerState::Ready => Self::Running,
             ComputerState::Paused => Self::Paused,
+            ComputerState::Unhealthy => Self::Unhealthy,
             ComputerState::Failed => Self::Failed,
             ComputerState::Released => Self::Released,
         }
     }
+
+    /// An agent whose invite made its account at `created_at` but has no
+    /// computer yet: still provisioning within [`ORPHANED_INVITE_AFTER`],
+    /// then failed, since the invite that should have bought it died.
+    pub fn without_computer(created_at: DateTime<Utc>, now: DateTime<Utc>) -> Self {
+        if now - created_at < ORPHANED_INVITE_AFTER {
+            Self::Provisioning
+        } else {
+            Self::Failed
+        }
+    }
 }
+
+/// How long an invited agent may have no computer before its invite counts
+/// as dead. The invite reserves the computer in the request that made the
+/// account, and the slowest step it waits on, the charge, hands over to a
+/// worker after `hosted_runtimes::domain::lifecycle::CHARGE_TAKEOVER` (two
+/// minutes); this leaves ample room past that.
+pub const ORPHANED_INVITE_AFTER: chrono::Duration = chrono::Duration::minutes(10);
 
 /// Why an invite was refused or failed.
 #[derive(Debug, thiserror::Error)]
@@ -376,3 +401,6 @@ impl TeamAgentError {
         Self::Internal(rootcause::Report::new(error).into_dynamic())
     }
 }
+
+#[cfg(test)]
+mod test;

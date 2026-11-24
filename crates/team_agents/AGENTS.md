@@ -64,8 +64,11 @@ closed). `resolve(agent)` admits an account to its own team, for the vault's
 `AgentDirectory`, whose adapter lives in document_storage_service's outbound.
 
 An agent's status comes from its computer (`provisioning`, `paused`,
-`failed`, `released`), except that an up computer is `starting` until the
-agent first reports itself online and `running` after. The agent reports with
+`unhealthy`, `failed`, `released`), except that an up computer is `starting`
+until the agent first reports itself online and `running` after. An agent
+with no computer yet is `provisioning` for `ORPHANED_INVITE_AFTER` (10
+minutes) after its account was made, then `failed`: the invite that should
+have bought it died. The agent reports with
 its own API key: `POST /team_agents/me/online` (the starter agent calls it once
 per run when its presence socket opens) stamps `team_agents.first_online_at`
 once. Every report first tells the computer

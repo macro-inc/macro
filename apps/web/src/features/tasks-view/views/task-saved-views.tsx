@@ -39,8 +39,15 @@ import {
   DeleteSavedViewDialog,
   SavedViewDialog,
 } from '../../saved-views/views/saved-view-dialogs';
-import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
-import { TASK_DUE_DATE_BUCKETS } from '../core/task-due-date';
+import {
+  isTaskDateSort,
+  TASK_GROUP_OPTIONS,
+  TASK_SORT_OPTIONS,
+} from '../constants';
+import {
+  TASK_DUE_DATE_BUCKETS,
+  TASK_START_DATE_BUCKETS,
+} from '../core/task-due-date';
 import { TASK_VIEWER } from '../filters/task-facets';
 import { useTaskProjectLabels } from '../filters/task-project-options';
 import {
@@ -56,7 +63,7 @@ import { useTasksView } from '../tasks-view-context';
 const LAYOUT_LABELS = { list: 'List', board: 'Board', gantt: 'Gantt' };
 
 function sortDirectionLabel(sort: TaskSavedViewConfig['sort'][number]) {
-  if (sort.id.startsWith('due_date_')) return 'missing last';
+  if (isTaskDateSort(sort.id)) return 'missing last';
   if (sort.id === 'status' || sort.id === 'priority')
     return sort.reversed ? 'reverse order' : 'option order';
   if (sort.id === 'title')
@@ -82,6 +89,15 @@ function TaskSavedViewSummary(props: {
       return `Custom range (${filter.start ?? 'Any'} – ${filter.end ?? 'Any'})`;
     if (filter.type === 'has_due_date') return 'Has due date';
     return TASK_DUE_DATE_BUCKETS.find((bucket) => bucket.id === filter.type)
+      ?.label;
+  };
+  const startDateLabel = () => {
+    const filter = props.config.startDate;
+    if (!filter) return;
+    if (filter.type === 'range')
+      return `Custom range (${filter.start ?? 'Any'} – ${filter.end ?? 'Any'})`;
+    if (filter.type === 'has_start_date') return 'Has start date';
+    return TASK_START_DATE_BUCKETS.find((bucket) => bucket.id === filter.type)
       ?.label;
   };
   const people = useContactFilterLabels(() =>
@@ -131,6 +147,9 @@ function TaskSavedViewSummary(props: {
         </p>
       </Show>
       <Show when={dueDateLabel()}>{(label) => <p>Due date: {label()}</p>}</Show>
+      <Show when={startDateLabel()}>
+        {(label) => <p>Start date: {label()}</p>}
+      </Show>
       <p>Layout: {LAYOUT_LABELS[props.config.layout]}</p>
       <p>
         Group by:{' '}

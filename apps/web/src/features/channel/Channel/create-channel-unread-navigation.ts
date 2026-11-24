@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   isGraphqlServerFault,
   isTransientRequestError,
@@ -37,16 +38,26 @@ export function createChannelUnreadNavigation(options: {
     options.channelId,
     () => true
   );
+  // A server fault is retried like a transport failure; keep what we have.
+  const failed = () => {
+    const error = channelNotifications.error;
+    return (
+      !!error && !isTransientRequestError(error) && !isGraphqlServerFault(error)
+    );
+  };
+  const notificationsStatus = ():
+    | 'loading'
+    | 'failed'
+    | 'retrying'
+    | 'ready' => {
+    if (channelNotifications.isPending) return 'loading';
+    if (!failed() && channelNotifications.data !== undefined) return 'ready';
+    // A retry keeps the earlier error until its answer arrives.
+    return channelNotifications.isFetching ? 'retrying' : 'failed';
+  };
   const notifications = createMemo(() => {
     if (channelNotifications.isPending) return [];
-    // A server fault is retried like a transport failure; keep what we have.
-    const error = channelNotifications.error;
-    if (
-      error &&
-      !isTransientRequestError(error) &&
-      !isGraphqlServerFault(error)
-    )
-      return [];
+    if (failed()) return [];
     const records = channelNotifications.data ?? [];
     return notificationSource.withLocalOverrides
       ? records.map(notificationSource.withLocalOverrides)
@@ -106,6 +117,16 @@ export function createChannelUnreadNavigation(options: {
   });
 
   return {
+    /** The channel's unread notifications, with local marks applied. */
+    notifications,
+    /** Whether `notifications` is known, or still loading or failed. */
+    notificationsStatus,
+    retryNotifications: () => {
+      fireAndForget(
+        channelNotifications.refetch(),
+        'channel-unread-notifications'
+      );
+    },
     chip: unreadChip,
     unreadByThread,
     unreadByMessage,

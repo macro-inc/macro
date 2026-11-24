@@ -1,9 +1,8 @@
-import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
+import { ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArchiveIcon from '@icon/system/regular/archive.svg';
 import BellIcon from '@icon/system/regular/bell-simple.svg';
@@ -25,14 +24,7 @@ import { tourTarget } from '@ui/components/Tour';
 import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
-import {
-  EMAIL_INBOX_TAB_IDS,
-  EMAIL_TAB_IDS,
-  EMAIL_TAB_LABELS,
-  EMAIL_TABS,
-  isEmailInboxTab,
-} from '../constants';
-import { switchesEmailTabs } from '../email-search-focus';
+import { EMAIL_TAB_LABELS, EMAIL_TABS, isEmailInboxTab } from '../constants';
 import { useEmailView } from '../email-view-context';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
@@ -54,12 +46,6 @@ const LIBRARY_TAB_IDS = [
   'spam',
   'trash',
 ] as const satisfies readonly EmailTab[];
-const DESKTOP_TAB_IDS = [
-  'important',
-  ...PRIMARY_TAB_IDS,
-  ...LIBRARY_TAB_IDS,
-] as const;
-
 const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   important: SignalIcon,
   noise: NoiseIcon,
@@ -78,11 +64,11 @@ const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
 };
 
 function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
-  const { state, setTab, savedViewActive } = useEmailView();
+  const { shownTab, setTab, savedViewActive } = useEmailView();
 
   return (
     <ViewSidebar.Item
-      active={!savedViewActive() && state.tab === props.id}
+      active={!savedViewActive() && shownTab() === props.id}
       {...pressHandlers(() => {
         setTab(props.id);
         props.onNavigate?.();
@@ -97,7 +83,11 @@ function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
 }
 
 export function EmailNavigation(props: { onNavigate?: () => void }) {
-  const { state, setTab, savedViewActive } = useEmailView();
+  const { shownTab, selectInbox, savedViewActive } = useEmailView();
+  const inboxShown = () => {
+    const tab = shownTab();
+    return tab === 'inbox' || (tab !== 'search' && isEmailInboxTab(tab));
+  };
   const isVisible = useVisibleEmailTab();
   return (
     <Show
@@ -139,14 +129,9 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
         <ViewSidebar.Nav aria-label="Email tabs">
           <ViewSidebar.Item
             ref={tourTarget(EMAIL_TOUR.inbox)}
-            active={!savedViewActive() && isEmailInboxTab(state.tab)}
+            active={!savedViewActive() && inboxShown()}
             {...pressHandlers(() => {
-              // Reopen the Inbox view that was last open: Focus, Signal or Noise.
-              setTab(
-                !savedViewActive() && isEmailInboxTab(state.tab)
-                  ? state.tab
-                  : 'important'
-              );
+              selectInbox();
               props.onNavigate?.();
             })}
           >
@@ -190,26 +175,8 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
 }
 
 export function EmailSidebar() {
-  const isVisible = useVisibleEmailTab();
-  const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
-  const { state, setTab } = useEmailView();
-
-  const tabIds = () =>
-    (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(isVisible);
-
-  useViewTabHotkeys({
-    scopeId: panel.splitHotkeyScope,
-    enabled: panel.isPanelActive,
-    ids: tabIds,
-    // Desktop groups the Inbox views under Inbox, so Tab moves between its
-    // header tabs instead of walking the sidebar.
-    sequentialIds: () =>
-      isTouchDevice() ? tabIds() : EMAIL_INBOX_TAB_IDS.filter(isVisible),
-    activeId: () => state.tab,
-    setActiveId: setTab,
-    shouldHandleSequentialKeyEvent: switchesEmailTabs,
-  });
+  const { state } = useEmailView();
 
   return (
     <ViewSidebar.Root reorderId="email" aria-label="Email navigation">

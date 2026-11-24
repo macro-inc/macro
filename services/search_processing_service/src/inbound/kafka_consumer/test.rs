@@ -156,6 +156,25 @@ fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEve
     .expect("attached event")
 }
 
+fn received_thread_reindex_event(thread_ids: Vec<Uuid>, offset: i64) -> ReceivedEvent {
+    let event = DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
+        EMAIL_LINK_ID.to_string(),
+        EmailTopicEvent::ThreadsReindexRequested(ThreadsReindexRequestedMetadata {
+            link_id: EMAIL_LINK_ID,
+            owner: user_id(),
+            thread_ids,
+            reason: ThreadsReindexReason::ProviderChanged,
+        }),
+    ));
+    attach_event_coordinates(
+        Ok::<_, EventBrokerError>(event),
+        0,
+        offset,
+        tracing::Span::none(),
+    )
+    .expect("attached event")
+}
+
 fn received_agent_session_event(session: Uuid, offset: i64) -> ReceivedEvent {
     use ::agent_session::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
@@ -2530,6 +2549,182 @@ async fn queued_agent_session_reread_absorbs_later_hints_without_blocking() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn one_mailbox_reindex_burst_spreads_across_workers() {
+    let (pool, mut receivers) = test_pool(WORKER_COUNT, WORKER_CHANNEL_CAPACITY);
+    let threads: Vec<Uuid> = (0..60)
+        .map(|index| Uuid::from_u128(60_000 + index))
+        .collect();
+
+    for (offset, thread) in (0..).zip(&threads) {
+        let outcome = tokio::time::timeout(
+            BLOCKED_HANDOFF_TIMEOUT,
+            pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+                vec![*thread],
+                offset,
+            ))),
+        )
+        .await
+        .expect("one mailbox's reindex requests must not all wait on one worker");
+        assert!(matches!(outcome, HandoffOutcome::HandedOff));
+    }
+
+    let busy_workers = receivers
+        .iter_mut()
+        .map(|receiver| receiver.try_recv().is_ok())
+        .filter(|received| *received)
+        .count();
+    assert!(
+        busy_workers > WORKER_COUNT / 2,
+        "a mailbox's threads must spread across workers, got {busy_workers}"
+    );
+}
+
+#[tokio::test]
+async fn thread_reindex_queues_behind_the_threads_earlier_events() {
+    let (pool, mut receivers) = test_pool(WORKER_COUNT, WORKER_CHANNEL_CAPACITY);
+    let thread_worker = pool.shard_index(&EMAIL_THREAD_ID.to_string());
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_backfilled_event(
+            EMAIL_THREAD_ID,
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID],
+            2
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+
+    let receiver = &mut receivers[thread_worker];
+    assert_eq!(receiver.try_recv().expect("backfilled event").offset, 1);
+    assert_eq!(
+        receiver
+            .try_recv()
+            .expect("reindex request on the thread's worker")
+            .offset,
+        2
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn queued_thread_reindex_absorbs_later_requests_for_the_thread() {
+    let (pool, mut receivers) = test_pool(1, 1);
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID],
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    for offset in 2..40 {
+        let outcome = tokio::time::timeout(
+            BLOCKED_HANDOFF_TIMEOUT,
+            pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+                vec![EMAIL_THREAD_ID],
+                offset,
+            ))),
+        )
+        .await
+        .expect("a reindex request for a thread with a queued reread must not wait");
+        assert!(matches!(outcome, HandoffOutcome::Coalesced));
+    }
+
+    assert_eq!(receivers[0].recv().await.expect("queued reread").offset, 1);
+    assert!(matches!(
+        receivers[0].try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
+}
+
+#[tokio::test]
+async fn thread_reindex_behind_another_thread_event_is_not_absorbed() {
+    let (pool, mut receivers) = test_pool(1, 3);
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID],
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_backfilled_event(
+            EMAIL_THREAD_ID,
+            2
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    // The queued reread runs before the event between them, so it cannot
+    // cover a request published after that event.
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID],
+            3
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+
+    for offset in 1..=3 {
+        assert_eq!(
+            receivers[0].try_recv().expect("queued event").offset,
+            offset
+        );
+    }
+}
+
+#[tokio::test]
+async fn reindex_request_for_several_threads_is_never_coalesced() {
+    let (pool, mut receivers) = test_pool(1, 3);
+
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID],
+            1
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+    // A reread of its first thread does not cover the second.
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID, SECOND_EMAIL_THREAD_ID],
+            2
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+
+    // Handing it off released the first request's claim on its thread, so a
+    // later request queues behind it.
+    assert!(matches!(
+        pool.handoff(Ok::<_, EventBrokerError>(received_thread_reindex_event(
+            vec![EMAIL_THREAD_ID],
+            3
+        )))
+        .await,
+        HandoffOutcome::HandedOff
+    ));
+
+    for offset in 1..=3 {
+        assert_eq!(
+            receivers[0].try_recv().expect("queued event").offset,
+            offset
+        );
+    }
+}
+
+#[tokio::test(start_paused = true)]
 async fn agent_session_flood_does_not_delay_email_events_on_other_partitions() {
     const AGENT_PARTITION: i32 = 1;
     const EMAIL_PARTITION: i32 = 4;
@@ -2855,7 +3050,7 @@ fn email_events_shard_by_thread_and_link_scoped_events_by_producer_key() {
             reason: ThreadsReindexReason::ContactsChanged,
         }),
     ));
-    assert_eq!(ordering_key(&multi_thread), EMAIL_LINK_ID.to_string());
+    assert_eq!(ordering_key(&multi_thread), EMAIL_THREAD_ID.to_string());
 }
 
 #[test]

@@ -71,6 +71,7 @@ export default {
   statusStarting: 'Starting',
   statusRunning: 'Running',
   statusPaused: 'Paused',
+  statusUnhealthy: 'Not responding',
   statusFailed: 'Needs attention',
   statusReleased: 'Released',
   statusSetupFailed: 'Setup failed',

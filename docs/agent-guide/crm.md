@@ -207,7 +207,10 @@ Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 <record>`. The CRM sidebar stays visible throughout.
 Contact properties use Tasks-style pills in the header and **Record details**.
 The email property lists every address the contact holds, the primary first,
-followed by an add control (**Add email** while blank, a plus afterwards). Save
+followed by an add control: **Add email** while blank, then a plus button named
+**Add email** at the end of the addresses' last line, which it never leaves for
+a line of its own, even in the narrow **Record details** column (long addresses
+truncate). Save
 adds the address; Cancel or Escape discards the draft, and invalid input stays
 open. Each address pill opens its own actions: **Make primary** and **Remove**.
 Removing an address deletes nothing; the contact's Emails tab and the email
@@ -243,8 +246,26 @@ moving it. Personal-email sync reuses a unique existing contact, preserving its
 chosen company through sent/received refreshes and source cleanup. Ambiguous
 matches are left unchanged. CRM settings and domain admission still apply.
 
+A company's **Record details** lists its domains under **Website**, the primary
+first, followed by **Add domain** (a plus button once it has one). Adding a
+domain the organization also uses files its mail and new contacts under this
+company instead of a company of their own; the company keeps its name and
+primary domain, and contacts already filed elsewhere stay where they are.
+Personal email providers are refused, and so is a domain another company of the
+team has: the message names that company, or says an archived company has it.
+Each domain pill opens **Remove**. Removing deletes no contact or mail; new mail
+from the domain is then filed as before it was added. The domain the company is
+named after can't be removed until the company is renamed, and only a team
+admin can remove a domain from a company whose email sync is off. The SDK
+(`company.addDomain`, `company.removeDomain`), `PUT`/`DELETE
+/crm/companies/{id}/domains` and the `AddCompanyDomain` and
+`RemoveCompanyDomain` agent tools do the same.
+
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
+With the keyboard on the record pane (as a record opens, with nothing focused,
+or after a click on its text), Tab, Shift+Tab and the number keys move along
+them.
 On phones and tablets, the current section appears as a labeled header island
 with a caret. When the host collapses it, the section icon and caret keep its
 accessible label. Embedded phone headers put the switcher below the breadcrumb
@@ -276,9 +297,18 @@ company requires an explicit confirmation: every person is restored, including t
 archived individually, while email syncing stays off. Re-enable **Sync Emails** under
 **Email sharing** separately. A person whose company is archived offers **Open company**
 so that restoration happens there first. Unfiled people restore directly. Company row
-**Archive / Restore** actions also confirm the cascade. Record details and References
-appear first in both information panels; company Properties, Lists and Email sharing
-follow. Neither panel has a duplicate visibility control.
+**Archive / Restore** actions also confirm the cascade. Both information panels, on
+desktop and in the phone **Show details** sheet, list **Record details**, then
+**Properties**, then the company-only **Lists** and **Email sharing**, with
+**References** last; as in a task's or document's panel, Properties come before
+References. Record details rows use the same text size and small muted labels as the
+Properties rows. Neither panel has a
+duplicate visibility control. A contact's
+Properties hold the team's custom properties only: Stage, Owner and Revenue are
+company-only, so its **Add property** list leaves them out (a company's leaves
+out task-only properties). **Add property** attaches one, such as a Phone text
+or a LinkedIn link, and it saves, clears and survives a reload like a company
+property. On a phone the panel opens from **Show details** in the record header.
 
 Verify successful changes update open People, Companies, Team and ordinary Cmd-K;
 late responses must not reintroduce archived rows or hide restored rows with an
@@ -415,7 +445,7 @@ contact also reference its company. The side panel contains References, with no
 empty Sharing section.
 
 In workspace activity and a company or contact's embedded sections, clicking a
-Task, Email, Note, or Call opens its authorized detail inside Customers.
+Task, Email, Note, Call, or file opens its authorized detail inside Customers.
 The CRM sidebar stays in place and the breadcrumb shows the source view, record
 trail (when present), and selected item, without section labels such as Tasks or
 Files or an extra separator before preview titles. The current record breadcrumb
@@ -432,6 +462,10 @@ Reload keeps the selected item's URL. Shift-click uses the existing separate
 split behavior; modified row clicks keep the existing split behavior. On touch,
 the existing header and breadcrumb conventions apply without a new navigation UI.
 Verify that tasks display their status and properties, not the Drive editor.
+A file in Files (an upload or an imported email attachment) opens in its own
+viewer, as in Drive; notes, tasks, snippets and skills open in the Markdown
+editor. Verify a PDF, a Word file and an image render, never "This document
+couldn't be displayed."
 
 Links to the retired Databases views still resolve: a record's `/databases`
 section opens the record, `/databases/<id>` and `/app/companies/database/<id>`
@@ -524,8 +558,8 @@ company's CRM fields. Use **Add column** or a column header's menu to customize
 columns. Pipeline Stage options initially copy the team's current deal stages. Open
 pipelines refresh other editors' changes periodically; a local edit refreshes
 immediately after saving.
-Every pipeline that tracks a company or contact also has **Outcome**: **Open**, **Won**, or **Lost**, independent
-of Stage. Edit it from the table, a board card, a record's Pipelines card, or
+Every pipeline that tracks a company or contact also has **Outcome**: **Open**, **Won**, **Lost**, or **Declined**
+(a deal the team turned down: closed, but not lost), independent of Stage. Edit it from the table, a board card, a record's Pipelines card, or
 Add deal; select it in filters or board grouping like any other select. New
 entries start Open. Existing exact “Closed won” and “Closed lost” stage labels
 seed the outcome once, with the stages themselves retained.
@@ -620,7 +654,7 @@ Rows match companies by domain and contacts by email, creating missing ones
 pipeline columns of the same name, adding missing custom select options. Monetary
 amounts and currency codes occupy separate CSV columns; omitted currencies
 default to USD, and unsupported currency or Outcome labels refuse the affected
-row. Outcome exports and imports as Open, Won or Lost. A record
+row. Outcome exports and imports as Open, Won, Lost or Declined. A record
 the pipeline already had is not added again, so retrying an interrupted import
 adds only what is missing; several rows for one new record add separate entries
 (deals), as an export of such a pipeline lists them. Relation and non-person entity columns are skipped,
@@ -673,9 +707,11 @@ and adds only missing rows. A pipeline's own **Import CSV** also takes a
 Companies export. Use preview
 and cancel for browser checks against hosted dev data.
 
-`CRM settings` shows the settings in the Customers pane, in place of the open
-list, pipeline, or record, and highlights its sidebar item. The back arrow
-(**Close CRM settings**) returns to that same list, pipeline, or record; picking
+The sidebar's **Settings** (named `CRM settings`, as Calendar's sidebar
+**Settings** is named `Calendar settings`) shows CRM settings in the Customers
+pane under a **Settings** title, in place of the open list, pipeline, or record,
+and highlights its sidebar item. The back arrow (**Close settings**) returns to
+that same list, pipeline, or record; picking
 another sidebar destination, or browser Back, also leaves settings. On touch
 the back arrow is the only control in the header. It is the same page as
 Settings > CRM, with the same member and admin permissions; check both roles.
@@ -831,13 +867,19 @@ Go To hotkeys, or the mobile dock. Company/contact search, Quick Access, user-ca
 actions, and the Customer / Contact picker retire immediately when access is revoked.
 Preference mutations return 503 while the deployment
 rollout is disabled; existing access checks continue to enforce stored denials.
-In team settings, admins and owners see a **CRM** switch in each member's row,
-after the member's seat plan and role and before Remove, only while
-`enable-crm-member-access-changes` is enabled. Owner and admin rows have no
-switch; one note under the list says they always have CRM access. Rows stay one
-line where they fit; where a member's row can't keep about 140px for the name
-beside its controls (phones, narrow splits), the controls wrap below the name.
+In team settings, admins and owners find **CRM access** in each person's ⋯
+(a menu on desktop, a sheet on touch), after the seat plan and role and before
+**Remove from team**, only while `enable-crm-member-access-changes` is enabled.
+It changes in place; for owners and admins it shows on and fixed, with the
+reason, and one note under the list says they always have CRM access. A member
+whose access is off reads **No CRM access** on their row's summary line.
 A failed save keeps the previous state and can be retried; members do not see these controls.
+CRM settings (Settings > CRM, and the CRM sidebar's settings entry) opens with
+**Who can use CRM**, the same switch for every person Members shows as a person
+row, in the same order, each named `CRM access for <name>`. Owners and admins show
+it on and disabled, with **Owner · Always has CRM access** or **Admin · Always has
+CRM access** on their row. Both places write the same team setting, so a change in
+one shows in the other; members, and everyone while the flag is off, see no section.
 An independently shared item can remain open after revocation, but its CRM record
 breadcrumbs and task-creation preset disappear. Previews, including email mentions,
 drop retired snapshots when the cache generation changes. A CRM deep

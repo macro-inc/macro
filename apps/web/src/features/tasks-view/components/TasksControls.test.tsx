@@ -12,6 +12,10 @@ const view = await vi.hoisted(async () => {
   return { scope: 'tasks-controls-test-scope', state, setState };
 });
 
+const startDates = vi.hoisted(() => ({ enabled: true }));
+vi.mock('@property/hooks/useStartDateEnabled', () => ({
+  useStartDateEnabled: () => () => startDates.enabled,
+}));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({
@@ -26,18 +30,25 @@ vi.mock('@app/components/view-shell', async () => ({
   ListSortDropdown: (props: {
     label: string;
     open?: boolean;
+    options: { id: string }[];
     triggerRef?: (element: HTMLButtonElement) => void;
   }) => (
     <button
       type="button"
       ref={props.triggerRef}
       aria-expanded={props.open ? 'true' : 'false'}
+      data-options={props.options.map((option) => option.id).join(' ')}
     >
       {props.label}
     </button>
   ),
-  ListGroupDropdown: (props: { label: string }) => (
-    <button type="button">{props.label}</button>
+  ListGroupDropdown: (props: { label: string; options: { id: string }[] }) => (
+    <button
+      type="button"
+      data-options={props.options.map((option) => option.id).join(' ')}
+    >
+      {props.label}
+    </button>
   ),
   useViewControlHotkeys: (
     await import('@app/components/view-shell/use-view-control-hotkeys')
@@ -102,6 +113,26 @@ it('offers sort and grouping while not searching', () => {
     'Group by',
   ]);
 });
+
+it.each([true, false])(
+  'offers Start date sorting and grouping only with start dates on (%s)',
+  (enabled) => {
+    startDates.enabled = enabled;
+    try {
+      render(() => <TasksControls />);
+      const options = (name: string) =>
+        screen.getByRole('button', { name }).dataset.options?.split(' ') ?? [];
+      expect(options('Sort tasks').includes('start_date_earliest')).toBe(
+        enabled
+      );
+      expect(options('Sort tasks').includes('due_date_earliest')).toBe(true);
+      expect(options('Group by').includes('start_date')).toBe(enabled);
+      expect(options('Group by').includes('due_date')).toBe(true);
+    } finally {
+      startDates.enabled = true;
+    }
+  }
+);
 
 it('leaves only grouping in the view options while searching', () => {
   view.setState('search', 'brief');

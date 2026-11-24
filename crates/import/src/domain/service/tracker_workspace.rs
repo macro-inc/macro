@@ -1,11 +1,11 @@
 //! Issue tracker planning and writes. The shared workspace engine owns jobs,
 //! leases, approval, cancellation, adoption and session notifications.
 
+use connectors::McpConnectionsService;
 use futures::StreamExt;
 use import_notion::domain::ports::NotionConnections;
 use import_tracker::domain::model::{Group, Inventory, Issue, TrackerError};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_select::ConnectorSelect;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tracing::Instrument;
@@ -20,9 +20,9 @@ use crate::domain::models::{
     WrittenKind, WrittenObject,
 };
 use crate::domain::ports::{
-    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportedTaskProperties,
-    NotionPlanRepo, NotionRunRepo, PlanRow, Result, SharedEntity, SlackWorkspaceSource,
-    TrackerTaskRelations, WorkspaceWriter, WrittenObjects,
+    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility,
+    ImportedTaskProperties, NotionPlanRepo, NotionRunRepo, PlanRow, Result, SharedEntity,
+    SlackWorkspaceSource, TrackerTaskRelations, WorkspaceWriter, WrittenObjects,
 };
 
 mod claim;
@@ -55,7 +55,7 @@ struct TrackerMeta {
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
     R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
-    S: ConnectorSelect,
+    S: McpConnectionsService,
     C: EntityCreator + WorkspaceWriter,
     W: SlackWorkspaceSource,
     N: NotionConnections,
@@ -487,12 +487,16 @@ where
                     self.repo
                         .mark_imported(user, row.id, &entity_id, &entity_type, None)
                         .await?;
+                    if matches!(meta.object, TrackerObject::Issue(_)) {
+                        self.repo.clear_task_notices(user, row.id).await?;
+                    }
                     return Ok(());
                 }
                 TeamClaim::Waiting { .. } => return Ok(()),
                 TeamClaim::Held | TeamClaim::Free => {}
             }
         }
+        let visibility = ImportVisibility::from_shared(meta.plan.shared);
         let id = values::target_id(row.id);
         match &meta.object {
             TrackerObject::Group(group) => {
@@ -503,7 +507,7 @@ where
                         id,
                         &group.title,
                         &values::group_body(group),
-                        meta.plan.shared && team.is_some(),
+                        visibility,
                     )
                     .await?;
                 self.repo
@@ -517,19 +521,28 @@ where
                     .await?;
             }
             TrackerObject::Issue(issue) => {
-                self.creator
+                let created = self
+                    .creator
                     .create_tracker_task(
                         user,
                         id,
                         &issue.title,
                         &values::task_body(issue),
                         &values::properties(issue),
-                        false,
+                        visibility,
                     )
                     .await?;
+                if let Some(notice) = created.notice {
+                    self.repo
+                        .record_task_notice(user, row.id, id, notice)
+                        .await?;
+                }
                 self.repo
                     .record_written(user, &[WrittenObject::own(row.id, WrittenKind::Task, id)])
                     .await?;
+                if meta.plan.shared {
+                    self.repo.clear_task_notices(user, row.id).await?;
+                }
             }
         }
         Ok(())

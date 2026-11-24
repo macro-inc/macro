@@ -72,6 +72,7 @@ import {
   useCompanyQuery,
   useCreateCompanyMutation,
   useCreateContactMutation,
+  useEditCompanyDomainMutation,
   useSetCompanyHiddenMutation,
   useSetCompanyNameMutation,
   useSetEmailSyncMutation,
@@ -118,6 +119,12 @@ const CrmRecordTasks = lazy(async () => ({
 
 const CrmActivityTasks = lazy(async () => ({
   default: (await import('./activity-tasks-adapter')).CrmActivityTasks,
+}));
+
+// Team › Members owns the roster and its CRM access switch.
+const CrmMemberAccess = lazy(async () => ({
+  default: (await import('@app/features/settings/views/crm-member-access'))
+    .CrmMemberAccessSection,
 }));
 
 /**
@@ -255,6 +262,7 @@ export function createAppCrmContext(): CrmContext {
         record
       ),
     PipelineSharing: PipelineShare,
+    MemberAccess: CrmMemberAccess,
     createPipelineTransfer: (pipeline) =>
       createPipelineTransfer(deps, pipeline),
     feedback: toast,
@@ -413,6 +421,7 @@ export function createAppCrmContext(): CrmContext {
     renameContact: (...args) => useSetContactNameMutation(deps, ...args),
     editContactEmail: () => useSetContactEmailMutation(deps),
     editContactCompany: () => useSetContactCompanyMutation(deps),
+    editCompanyDomain: () => useEditCompanyDomainMutation(deps),
     hideCompany: (...args) => useSetCompanyHiddenMutation(deps, ...args),
     hideContact: (...args) => useSetContactHiddenMutation(deps, ...args),
     setEmailSync: (...args) => useSetEmailSyncMutation(deps, ...args),

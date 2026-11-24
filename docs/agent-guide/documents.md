@@ -88,9 +88,11 @@ to request again.
 This workflow also applies to the existing chat, folder, project, database, call,
 and agent-session Share menus, using the access levels that each supports.
 
-Reviewers see a pending count on **Share**. Entering an item with pending requests
+Reviewers see a pending count on **Share**, after its label (after the icon
+where the header hides the label), and its tooltip and accessible name read
+"N pending permission requests". Entering an item with pending requests
 opens Share once for that visit; requests arriving during the visit update the
-badge. On mobile, review requests in the **People** tab. **Permission requests**
+count. On mobile, review requests in the **People** tab. **Permission requests**
 lets a reviewer choose an access level and **Grant access**, or **Deny**. Team
 owners/admins and the human responsible for a bot-owned item review on its behalf.
 Only the first review of a request succeeds. Grants notify the requester; denials
@@ -2481,10 +2483,9 @@ stay text instead of becoming mentions, long pastes do not collapse into a
    focused**.
 2. `type_text` the title, then `submitKey: "Enter"` to drop into the body. Tab
    from the title also moves to the start of the body, without inserting a
-   paragraph. While a document is open, Tab and Shift+Tab never switch the
-   hosting view's tabs (e.g. Drive's My Files / Recent): opened from Drive,
-   focus a non-editable control in the document, press Tab, and the
-   document must stay open.
+   paragraph. While a document is open, Tab, Shift+Tab and the number keys
+   never leave it: opened from Drive, focus a non-editable control in the
+   document, press Tab and `2`, and the document must stay open.
 3. Type paragraphs with plain `type_text`; use Enter between paragraphs. Do NOT use `fill` —
    the editor is contenteditable and `fill` does not work on it.
 4. The document auto-saves continuously (collaborative CRDT; no save button). The tab title

@@ -41,6 +41,9 @@ import { resolveAccessRequest } from './queries/row-actions';
 import { NotificationsView } from './views/notifications-view';
 
 const filterStorage = createUserScopedStorage('macro:notifications:filters:v1');
+const displayStorage = createUserScopedStorage(
+  'macro:notifications:condensed:v1'
+);
 
 function userName(userId: string): string | undefined {
   const parts = getDisplayNameParts(tryMacroId(userId), {
@@ -95,6 +98,10 @@ function createAppNotificationsInboxContext(
     filterStorage: {
       read: () => filterStorage.read(userId),
       write: (value) => filterStorage.write(userId, value),
+    },
+    displayStorage: {
+      read: () => displayStorage.read(userId),
+      write: (value) => displayStorage.write(userId, value),
     },
   };
 }

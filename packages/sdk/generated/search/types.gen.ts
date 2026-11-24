@@ -389,7 +389,10 @@ export type ChannelFilters = {
     /**
      * Filter by whether the requesting user is an active participant of the channel.
      * Presence of this filter also widens the candidate set to team channels of the
-     * user's teams that they have not joined, so `false` matches those channels.
+     * user's teams that they have not joined, so `false` matches those channels,
+     * and, when the filter admits only channels it names by id, to public
+     * channels too. Soup listings apply the filter and its widening; channel
+     * search (`/search`) reads only the channels the user joined and ignores it.
      * None to ignore (participant channels only, today's default).
      */
     is_participant?: boolean | null;
@@ -1281,6 +1284,12 @@ export type EmailSearchResponseItem = {
  */
 export type EmailSearchResponseItemWithMetadata = EmailSearchResponseItem & {
     created_at: string;
+    /**
+     * Whether the thread holds mail the user received, not only mail they
+     * sent or drafted. A thread without any was never in the inbox, so it is
+     * not archived when it is out of the inbox.
+     */
+    has_received_mail?: boolean;
     inbox_visible: boolean;
     is_draft: boolean;
     is_important: boolean;
@@ -1806,10 +1815,14 @@ export type PropertyValue = {
      */
     value: string;
 } | {
+    /**
+     * True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone.
+     */
+    has_time?: boolean;
     type: 'Date';
     /**
-     * Date/timestamp value
-     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
+     * Date value, with or without a time of day
+     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
      */
     value: string;
 } | {
@@ -2627,7 +2640,7 @@ export type UnifiedSearchErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     /**
-     * The caller's other searches kept every slot of its lane busy for 20 seconds; retry after `Retry-After` seconds.
+     * The caller's other searches kept every slot of its lane busy for 20 seconds, or the account's user API keys used their shared search allowance (200 at once, then one a second); retry after `Retry-After` seconds.
      */
     429: ErrorResponse;
     500: ErrorResponse;
@@ -2661,7 +2674,7 @@ export type SimpleUnifiedSearchErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     /**
-     * The caller's other searches kept every slot of its lane busy for 20 seconds; retry after `Retry-After` seconds.
+     * The caller's other searches kept every slot of its lane busy for 20 seconds, or the account's user API keys used their shared search allowance (200 at once, then one a second); retry after `Retry-After` seconds.
      */
     429: ErrorResponse;
     500: ErrorResponse;

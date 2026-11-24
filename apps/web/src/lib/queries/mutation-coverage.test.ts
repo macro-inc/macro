@@ -88,6 +88,16 @@ const policies = {
     'authoritative: irreversible deletion requires server confirmation',
   DuplicateEntities: 'authoritative: server assigns the copy identity',
   SetEntityFavorite: 'inactive: UI uses SetFavorite',
+  LogTime:
+    'custom: client entry id, the task entry list link, and Time logged on the task',
+  UpdateTimeEntry:
+    'custom: whole-entry edit queued per entry, and Time logged on the task',
+  DeleteTimeEntry: 'custom: entry list removal and Time logged on the task',
+  StartTimer:
+    'authoritative: the server clock starts it and may stop and save another timer',
+  StopTimer:
+    'authoritative: the server clock decides the length, and a long timer needs a choice',
+  DiscardTimer: 'authoritative: the server confirms which timer it removed',
 } satisfies Record<
   string,
   | 'resolver'

@@ -102,6 +102,23 @@ fn initiative_property_changes_keep_the_initiative_identity() {
 }
 
 #[test]
+fn crm_contact_property_changes_are_activity_on_the_contact() {
+    let mut metadata = update(Some(user("macro|seamus@example.com")));
+    metadata.entity_type = PropertyEntityType::Contact;
+    metadata.entity_id = "0193a9f0-0000-7000-8000-000000000001".to_string();
+    let event = envelope(PropertyTopicEvent::EntityPropertyUpdated(metadata));
+    let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+        panic!("expected contact activity");
+    };
+    assert_eq!(activities[0].entity_type, ActivityEntityType::CrmContact);
+    assert_eq!(
+        activities[0].entity_id,
+        "0193a9f0-0000-7000-8000-000000000001"
+    );
+    assert!(matches!(activities[0].action, Action::PropertyChanged(_)));
+}
+
+#[test]
 fn database_row_property_changes_have_no_activity() {
     let mut metadata = update(Some(user("macro|seamus@example.com")));
     metadata.entity_type = PropertyEntityType::DatabaseRow;

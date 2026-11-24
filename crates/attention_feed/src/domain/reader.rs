@@ -26,6 +26,27 @@ mod test;
 /// Most candidate pages one feed page reads while refilling after drops.
 pub const MAX_FILL_ROUNDS: usize = 4;
 
+/// How `request`'s feed would list a new notification about `entity`, through
+/// the source's own gates and hydration, before any notification exists:
+/// `entity` is probed as if one were pending now. `None` when it would not.
+pub async fn listed<S: CandidateSource>(
+    source: &S,
+    request: CandidateRequest,
+    entity: Entity<'static>,
+) -> Result<Option<S::Entity>, Report> {
+    let page = source
+        .page(CandidateRequest {
+            own_work: false,
+            limit: 1,
+            after: None,
+            only: Some(vec![entity]),
+            assume_attention: true,
+            ..request
+        })
+        .await?;
+    Ok(page.items.into_iter().next().map(|item| item.entity))
+}
+
 /// Most candidate keys recomputed per source request.
 const RECOMPUTE_CHUNK: usize = 200;
 
@@ -198,7 +219,12 @@ where
     #[tracing::instrument(
         name = "attention_feed.current",
         skip_all,
-        fields(user = %request.viewer.user, keying = ?request.keying, keys = keys.len()),
+        fields(
+            user = %request.viewer.user,
+            keying = ?request.keying,
+            read = ?request.read,
+            keys = keys.len(),
+        ),
         err
     )]
     pub async fn current(
