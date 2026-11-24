@@ -13,6 +13,10 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({
     handle: {
       currentEntryState: () => entry.state,
+      captureEntryState: () => {
+        for (const [key, capture] of entry.captors)
+          entry.state[key] = capture();
+      },
       registerEntryStateCaptor: (key: string, capture: () => unknown) => {
         entry.captors.set(key, capture);
         return () => entry.captors.delete(key);
@@ -71,10 +75,8 @@ it('returns to the chosen section when Back comes back to the contact', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Files' }));
   expect(screen.getByText('Showing files')).toBeTruthy();
 
-  // Opening an item captures the entry before the contact unmounts.
-  entry.state = Object.fromEntries(
-    [...entry.captors].map(([key, capture]) => [key, capture()])
-  );
+  // A file opened from the section swaps the block out without a leave
+  // guard, so nothing captures the entry on the way out.
   first.unmount();
 
   render(() => <ContactBlockAdapter />);
@@ -84,9 +86,6 @@ it('returns to the chosen section when Back comes back to the contact', () => {
 it('opens another contact previewed in the same entry on its overview', () => {
   const first = render(() => <ContactBlockAdapter />);
   fireEvent.click(screen.getByRole('button', { name: 'Files' }));
-  entry.state = Object.fromEntries(
-    [...entry.captors].map(([key, capture]) => [key, capture()])
-  );
   first.unmount();
 
   entry.blockId = 'contact-2';

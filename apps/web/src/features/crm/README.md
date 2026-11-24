@@ -293,7 +293,8 @@ header island that opens the shared bottom drawer with the current section
 checked under **Switch view**. The standalone company and contact blocks keep
 that choice in their history entry (`useEntryState`, keyed by record so a
 preview host's other records start on Overview), so Back from an item opened
-in a section returns to it. A collapsed host keeps the section icon and
+in a section returns to it. They save it as it changes: opening a file swaps
+the block without leaving its entry, so no leave guard captures it. A collapsed host keeps the section icon and
 accessible label; embedded phone headers put the switcher below the breadcrumb
 and action row. Keep the
 workspace's mobile view strip separate. Restore that strip when access loss

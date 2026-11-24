@@ -13,6 +13,7 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { useEntryState } from '@components/app/split-layout/entry-state';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import {
   createParamsState,
@@ -35,6 +36,13 @@ export function CompanyBlockAdapter() {
     `crm.recordSection:company:${companyId}`,
     { default: 'overview' }
   );
+  const panel = useSplitPanelOrThrow();
+  const chooseSection = (next: CompanySection) => {
+    setSection(next);
+    // Opening a file swaps this block out without leaving its history
+    // entry, which is when entry state is otherwise captured.
+    panel.handle.captureEntryState();
+  };
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: params.navigate,
   });
@@ -57,7 +65,7 @@ export function CompanyBlockAdapter() {
               >
                 <CompanyTabs
                   value={section()}
-                  onChange={setSection}
+                  onChange={chooseSection}
                   compact={isCollapsed()}
                 />
               </div>
