@@ -50,7 +50,7 @@ pub use soup::{
     PredicateFilterResult,
 };
 pub use sync::SyncFailure;
-pub(crate) use sync::{NativeSyncHooks, SyncPublication, WeakEngineHandle};
+pub(crate) use sync::{NativeSyncHooks, SyncApplyFailure, SyncPublication, WeakEngineHandle};
 
 /// Mirrors `ReadResult` in `apps/web/src/lib/graphql-cache/protocol.ts`.
 #[derive(Debug, Serialize)]

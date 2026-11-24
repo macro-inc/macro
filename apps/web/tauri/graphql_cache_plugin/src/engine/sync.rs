@@ -134,6 +134,29 @@ pub(crate) enum SyncPublication {
     },
     /// A calendar window was committed; notify like `graphql_cache_calendar_commit`.
     CalendarCommitted(WriteResultWire),
+    /// A frame's write failed, possibly after committing part of it; notify
+    /// like a write without change hints, so every view refreshes.
+    WriteFailed {
+        /// The engine's revision after the failure.
+        revision: String,
+    },
+}
+
+/// A frame that did not apply.
+pub(crate) struct SyncApplyFailure {
+    /// Why the run stops.
+    pub(crate) failure: SyncFailure,
+    /// What to publish before the run stops.
+    pub(crate) publication: Option<SyncPublication>,
+}
+
+impl From<SyncFailure> for SyncApplyFailure {
+    fn from(failure: SyncFailure) -> Self {
+        Self {
+            failure,
+            publication: None,
+        }
+    }
 }
 
 /// The engine as a streamed sync run holds it: without keeping it alive, so
@@ -179,7 +202,7 @@ impl WeakEngineHandle {
         &self,
         run: &mut SyncRun,
         hooks: &NativeSyncHooks,
-    ) -> Result<Option<SyncPublication>, SyncFailure> {
+    ) -> Result<Option<SyncPublication>, SyncApplyFailure> {
         // The cache was shut down or replaced: the run stops with it.
         let inner = self.inner.upgrade().ok_or(SyncFailure::Aborted)?;
         let mut state = inner.lock().await;
@@ -198,17 +221,28 @@ impl WeakEngineHandle {
         {
             listener(current);
         }
-        let applied = applied.map_err(|error| match error {
-                SyncWriteError::Stream(error) => SyncFailure::Stream {
+        let applied = match applied {
+            Ok(applied) => applied,
+            Err(SyncWriteError::Stream(error)) => {
+                return Err(SyncFailure::Stream {
                     message: error.to_string(),
-                },
-                SyncWriteError::Engine(error) => SyncFailure::Write {
-                    message: error.to_string(),
-                },
-                SyncWriteError::Hooks(error) => SyncFailure::Write {
-                    message: error.to_string(),
-                },
-            })?;
+                }
+                .into());
+            }
+            // A write that fails may already have committed part of the
+            // frame, so views refresh against the current revision rather
+            // than miss it.
+            Err(error) => {
+                return Err(SyncApplyFailure {
+                    failure: SyncFailure::Write {
+                        message: error.to_string(),
+                    },
+                    publication: Some(SyncPublication::WriteFailed {
+                        revision: engine.current_revision().to_string(),
+                    }),
+                });
+            }
+        };
         Ok(applied.map(|applied| match applied {
             SyncApplied::Recorded => SyncPublication::Recorded,
             SyncApplied::Hydrated { result, .. } => SyncPublication::Hydrated {

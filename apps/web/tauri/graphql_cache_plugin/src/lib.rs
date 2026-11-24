@@ -210,6 +210,11 @@ fn emit_sync_publication<R: Runtime>(app: &AppHandle<R>, publication: engine::Sy
             emit_ops_affected(app, &affected.affected_ops, None, None);
             emit_cache_changed(app, &affected.revision, false, None);
         }
+        // A failed write may have committed part of its frame: every view
+        // refreshes.
+        engine::SyncPublication::WriteFailed { revision } => {
+            emit_cache_changed(app, &revision, false, None);
+        }
         // Like `graphql_cache_calendar_commit`.
         engine::SyncPublication::CalendarCommitted(result) => {
             emit_ops_affected(

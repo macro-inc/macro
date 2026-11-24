@@ -12,7 +12,9 @@
 //! prepares later pages during writes instead of idling.
 
 pub use crate::engine::SyncFailure;
-use crate::engine::{NativeSyncHooks, SyncPublication, WeakEngineHandle, WriteResultWire};
+use crate::engine::{
+    NativeSyncHooks, SyncApplyFailure, SyncPublication, WeakEngineHandle, WriteResultWire,
+};
 use async_trait::async_trait;
 use cache_core::sync::{SyncHooks, SyncRun, SyncRunResult, SyncStartArgs};
 use serde::ser::{Serialize, SerializeStruct, Serializer};
@@ -511,8 +513,18 @@ async fn read_stream(
                 if cancel.is_cancelled() {
                     return Err(SyncFailure::Aborted);
                 }
-                if let Some(publication) = engine.sync_apply_next(run, hooks).await? {
-                    publish.push(publication);
+                match engine.sync_apply_next(run, hooks).await {
+                    Ok(Some(publication)) => publish.push(publication),
+                    Ok(None) => {}
+                    Err(SyncApplyFailure {
+                        failure,
+                        publication,
+                    }) => {
+                        if let Some(publication) = publication {
+                            publish.push(publication);
+                        }
+                        return Err(failure);
+                    }
                 }
             }
             // Dropping the chunk returns its budget: the reader may read on.

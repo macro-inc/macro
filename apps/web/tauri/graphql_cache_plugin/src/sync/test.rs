@@ -211,6 +211,7 @@ fn describe(publication: SyncPublication) -> String {
         }
         SyncPublication::Deleted { keys, .. } => format!("deleted {}", keys.join(",")),
         SyncPublication::CalendarCommitted(_) => "calendar".to_owned(),
+        SyncPublication::WriteFailed { .. } => "write failed".to_owned(),
     }
 }
 
@@ -415,7 +416,11 @@ fn a_page_for_another_account_publishes_its_new_authority_generation() {
     let opener = Arc::new(FakeOpener::default());
     opener.responses.lock().unwrap().push_back((
         200,
-        vec![Chunk::Bytes(ndjson(&[page, lane_done("tasks", 1, 1), end()]))],
+        vec![Chunk::Bytes(ndjson(&[
+            page,
+            lane_done("tasks", 1, 1),
+            end(),
+        ]))],
     ));
     let runs = runs_with(&opener);
     let (published, publish) = recorder();
@@ -480,6 +485,49 @@ fn failures_keep_written_pages_and_report_progress() {
     let state = block_on(handle.sync_lane_states()).unwrap();
     assert_eq!(state[0].resume, Some(json!({"cursor": "c1"})));
     assert_eq!(state[0].completed_at, None);
+}
+
+#[test]
+fn a_failed_page_write_refreshes_every_view_before_the_run_fails() {
+    let handle = engine();
+    let mut unwritable = soup_page("tasks", 1, &[3], None);
+    // The query's `$input` is missing, so the page cannot be normalized.
+    unwritable["variables"] = json!({});
+    let opener = Arc::new(FakeOpener::default());
+    opener.responses.lock().unwrap().push_back((
+        200,
+        vec![Chunk::Bytes(ndjson(&[
+            soup_page("tasks", 0, &[1, 2], Some("c1")),
+            unwritable,
+        ]))],
+    ));
+    let runs = SyncRuns {
+        publish_interval: Duration::MAX,
+        ..SyncRuns::default()
+    };
+    runs.install_opener(opener.clone());
+    let (published, publish) = recorder();
+
+    let outcome = block_on(runs.start(handle.downgrade(), args(), publish));
+
+    assert!(
+        matches!(
+            outcome,
+            SyncRunOutcome::Failed {
+                failure: SyncFailure::Write { .. },
+                ..
+            }
+        ),
+        "{outcome:?}"
+    );
+    assert_eq!(
+        *published.lock().unwrap(),
+        [
+            "recorded",
+            "hydrated advanced=true reset=false",
+            "write failed"
+        ]
+    );
 }
 
 #[test]
