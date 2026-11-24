@@ -387,6 +387,26 @@ fn an_unreadable_write_leaves_the_others() {
 }
 
 #[test]
+fn an_id_is_never_given_to_another_write() {
+    block_on(async {
+        let mut storage = fresh();
+        let first = enqueue(&mut storage, "First").await;
+        let lost = enqueue(&mut storage, "Unreadable").await;
+        execute(
+            &storage,
+            "UPDATE optimistic_layers SET optimistic_data_json = '[' WHERE mutation_id = 2",
+        );
+        let read = salvage(&storage);
+        assert_eq!(read.dropped, 1);
+        let mut next = fresh();
+        next.import_queue(&through_file(&read.queue.unwrap()), 0)
+            .unwrap();
+        // A page may still hold the ID of the write that was lost.
+        assert!(enqueue(&mut next, "Second").await > lost && lost > first);
+    });
+}
+
+#[test]
 fn an_invalid_projection_is_left_behind() {
     block_on(async {
         let mut storage = fresh();
