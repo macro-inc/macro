@@ -79,8 +79,11 @@ export function createNativeUpdates(flush: () => Promise<void>) {
     try {
       setPreparing(true);
       // Fetch the deployed web bundle while saves finish, so the new version
-      // starts on it instead of asking for another restart.
-      const staging = stageDeployedBundle();
+      // starts on it instead of asking for another restart. Work that blocks
+      // the restart would only leave a download behind.
+      const staging = hasAutomaticReloadHolds()
+        ? undefined
+        : stageDeployedBundle();
       await Promise.race([
         preparation.prepare(),
         new Promise<never>((_, reject) => {

@@ -112,6 +112,9 @@ function TauriProvider(props: { children: JSX.Element }) {
   }
 
   createEffect(() => {
+    // Staging the next launch's bundle during a desktop restart can find one
+    // that needs the update being installed; the restart answers it.
+    if (nativeUpdates.preparing()) return;
     const reason = nativeUpdateRequired();
     // A missing cache command opens the dialog once with its reason, even
     // after the bundle updater's request was dismissed: it replaces a toast.

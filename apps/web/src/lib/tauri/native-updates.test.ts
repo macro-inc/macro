@@ -9,6 +9,8 @@ const native = vi.hoisted(() => ({
   telemetryError: vi.fn(),
   stage: vi.fn(async () => 'staged'),
   calls: [] as string[],
+  held: false,
+  toastFailure: vi.fn(),
 }));
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: { error: native.telemetryError },
@@ -26,10 +28,12 @@ vi.mock('@core/util/platform', () => ({
 vi.mock('@app/observability/native-update', () => ({
   reportNativeUpdate: native.report,
 }));
-vi.mock('@core/component/Toast/Toast', () => ({ toast: {} }));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: native.toastFailure },
+}));
 vi.mock('./stage-bundle', () => ({ stageDeployedBundle: native.stage }));
 vi.mock('@core/util/reloadForNewerBuild', () => ({
-  hasAutomaticReloadHolds: () => false,
+  hasAutomaticReloadHolds: () => native.held,
 }));
 
 import { createNativeUpdates } from './native-updates';
@@ -37,6 +41,7 @@ import { createNativeUpdates } from './native-updates';
 afterEach(() => {
   native.listeners.clear();
   native.calls.length = 0;
+  native.held = false;
   native.reports.length = 0;
   vi.clearAllMocks();
 });
@@ -148,5 +153,22 @@ it('stages the deployed web bundle before installing the app update', async () =
   finishStaging('staged');
   await restarting;
   expect(native.calls).toContain('restart_native_update');
+  dispose();
+});
+
+it('neither stages nor restarts while a call or upload blocks the restart', async () => {
+  native.calls.push('ready');
+  native.held = true;
+  const { updates, dispose } = createRoot((dispose) => ({
+    updates: createNativeUpdates(async () => {}),
+    dispose,
+  }));
+  await vi.waitFor(() => expect(updates.status().status).toBe('Ready'));
+
+  await updates.restart();
+
+  expect(native.stage).not.toHaveBeenCalled();
+  expect(native.calls).not.toContain('restart_native_update');
+  expect(native.toastFailure).toHaveBeenCalledOnce();
   dispose();
 });

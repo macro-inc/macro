@@ -728,8 +728,10 @@ download it and offer "Update ready" for a second restart. The download stays
 pending (`pending_bundle_root`), and startup keeps it even when it rejects the
 saved bundle the old app ran, and prefers it over a saved bundle it is newer than;
 it is applied before the first document loads, so the new launch reports
-`native_bundle_startup_selection=completed_download`. Installs on quit don't
-stage, since quitting starts no network work. Mobile updates remain managed by the app stores. Debug, recording,
+`native_bundle_startup_selection=completed_download`. A check that no longer
+offers a pending download (a rolled-back deploy) forgets it, so a later launch
+can't start on it. Installs on quit don't stage, since quitting starts no network
+work, and neither does a restart that a call, upload or import blocks. Mobile updates remain managed by the app stores. Debug, recording,
 branch, and `--no-default-features` builds do not auto-install native updates.
 
 When an install fails, **Restart to update** relaunches the version still
