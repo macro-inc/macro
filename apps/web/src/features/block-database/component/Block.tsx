@@ -465,7 +465,7 @@ const Block: Component = () => {
                   fallback={
                     <DatabasePageNoTables
                       onCreateTable={createTable()}
-                      onOpenTable={selectTableFromMenu}
+                      onOpenTable={selectTable}
                     />
                   }
                 >
