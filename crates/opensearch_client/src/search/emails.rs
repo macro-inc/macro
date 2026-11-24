@@ -86,9 +86,8 @@ pub enum EmailTextFields {
 }
 
 impl EmailTextFields {
-    /// The address fields, matched by segment as [`build_keyword_query_string`]
-    /// does, and the text fields, matched by prefix as [`text_terms_query`]
-    /// does.
+    /// The address fields, matched as [`addresses_query`] does, and the text
+    /// fields, matched by prefix as [`text_terms_query`] does.
     fn fields(self) -> (&'static [&'static str], &'static [&'static str]) {
         match self {
             Self::Any => (EMAIL_KEYWORD_FIELDS, EMAIL_TEXT_FIELDS),
@@ -157,28 +156,142 @@ fn sent_between_query<'a>(
     Some(ScriptQuery::new(script).into())
 }
 
-/// Matches `terms`, all of them, against the address fields by segment or
-/// the text fields by prefix.
+/// The most clauses a search's terms and text conditions may cost before they
+/// are matched in the compact form ([`terms_query`]). OpenSearch refuses a
+/// query of more than 1,024 clauses; this leaves room for the filters. In the
+/// compact form the 50 terms the search service accepts cost 800.
+const MAX_TERM_CLAUSES: usize = 900;
+
+/// The most clauses `term` costs in the full form: one per token the analyzer
+/// may split it into, in each field, or one where it is quoted or is one word.
+/// A whole address is never split.
+fn clauses(
+    term: &str,
+    keyword_fields: &'static [&'static str],
+    text_fields: &'static [&'static str],
+) -> usize {
+    let tokens = match one_word(term) {
+        Some(_) => 1,
+        None => most_tokens(term),
+    };
+    let segments = if is_address_phrase(term) { 1 } else { tokens };
+    let words = if is_text_phrase(term) { 1 } else { tokens };
+    let parts = segment_fields(keyword_fields).len();
+    keyword_fields.len() - parts + parts * segments + text_fields.len() * words
+}
+
+/// The most tokens the analyzer splits `term` into: its Unicode (UAX #29)
+/// segments but ASCII punctuation and spaces, symbols included.
+fn most_tokens(term: &str) -> usize {
+    let token = |c: char| !c.is_ascii_punctuation() && !c.is_whitespace();
+    let tokens = term
+        .split_word_bounds()
+        .filter(|segment| segment.chars().any(token))
+        .count();
+    tokens.max(1)
+}
+
+/// The fewest tokens the analyzer splits `term` into: its Unicode (UAX #29)
+/// words that hold a letter or a digit, a run of a script written without
+/// spaces counted once. The tokenizer drops the other words `unicode_words`
+/// finds, such as the `₂` of `CO₂`.
+fn fewest_tokens(term: &str) -> usize {
+    let mut tokens = 0;
+    let mut in_run = false;
+    for segment in term.split_word_bounds() {
+        let run = segment.chars().all(in_spaceless_script);
+        let word = segment
+            .chars()
+            .any(|c| c.is_alphabetic() || c.is_ascii_digit());
+        if (run && !in_run) || (word && !run) {
+            tokens += 1;
+        }
+        in_run = run;
+    }
+    tokens
+}
+
+/// Whether the standard tokenizer keeps a run of characters like `c` as one
+/// token: Thai, Lao, Myanmar and Khmer.
+fn in_spaceless_script(c: char) -> bool {
+    matches!(c, '\u{0E00}'..='\u{0EFF}' | '\u{1000}'..='\u{109F}' | '\u{1780}'..='\u{17FF}')
+}
+
+/// Whether `term` is quoted in the text fields: a phrase in quotes or an
+/// address.
+fn is_text_phrase(term: &str) -> bool {
+    term.contains('@') || term.chars().any(char::is_whitespace)
+}
+
+/// Whether `term` is quoted in the address fields, where a dot separates
+/// segments too.
+fn is_address_phrase(term: &str) -> bool {
+    is_text_phrase(term) || term.contains('.')
+}
+
+/// The `.parts` sub-fields among the address fields.
+fn segment_fields(keyword_fields: &'static [&'static str]) -> Vec<&'static str> {
+    let parts = keyword_fields
+        .iter()
+        .filter(|field| field.ends_with(".parts"));
+    parts.copied().collect()
+}
+
+/// Matches `terms`, all of them, against the address fields or the text
+/// fields. In the compact form, for a search whose terms would cost too many
+/// clauses, a term of several tokens matches them adjacent and whole, as one
+/// clause per field.
 fn terms_query<'a>(
     terms: &'a [String],
     match_type: &str,
     keyword_fields: &'static [&'static str],
     text_fields: &'static [&'static str],
+    compact: bool,
 ) -> QueryType<'a> {
     let mut combined = BoolQueryBuilder::new();
     combined.minimum_should_match(1);
-    if !keyword_fields.is_empty() {
-        combined.should(
-            SimpleQueryStringQuery::new(
-                build_keyword_query_string(terms, match_type),
-                keyword_fields.iter().copied(),
-            )
-            .default_operator("AND")
-            .into(),
-        );
+    for query in addresses_query(terms, match_type, keyword_fields, compact) {
+        combined.should(query);
     }
-    combined.should(text_terms_query(terms, match_type, text_fields));
+    combined.should(text_terms_query(terms, match_type, text_fields, compact));
     combined.build().into()
+}
+
+/// Matches `terms`, all of them, against the whole addresses by local part, or
+/// against their `.parts` by segment, which match everything the whole
+/// addresses do except mail indexed before it had any. They are two queries,
+/// because a pattern for one never matches the other's fields and would cost a
+/// clause in each of them. Regexp syntax runs in all of them.
+fn addresses_query<'a>(
+    terms: &[String],
+    match_type: &str,
+    keyword_fields: &'static [&'static str],
+    compact: bool,
+) -> Vec<QueryType<'a>> {
+    let holds_syntax = |term: &String| escape_syntax(term) != *term;
+    let queries = if match_type == "regexp" && terms.iter().any(holds_syntax) {
+        vec![(build_regexp_address_string(terms), keyword_fields.to_vec())]
+    } else {
+        let segments = segment_fields(keyword_fields);
+        let addresses = keyword_fields
+            .iter()
+            .copied()
+            .filter(|field| !segments.contains(field))
+            .collect();
+        vec![
+            (build_address_query_string(terms), addresses),
+            (build_segment_query_string(terms, compact), segments),
+        ]
+    };
+    queries
+        .into_iter()
+        .filter(|(_, fields)| !fields.is_empty())
+        .map(|(query, fields)| {
+            SimpleQueryStringQuery::new(query, fields)
+                .default_operator("AND")
+                .into()
+        })
+        .collect()
 }
 
 /// Matches `terms`, all of them, against the text fields. A partial term the
@@ -186,20 +299,22 @@ fn terms_query<'a>(
 /// adjacent in one field, the last as a prefix, as the shared term builder
 /// matches it ([`create_query`]): a `term*` prefix is not analyzed, so it
 /// would look for one token `follow-up` the index never holds. Every other
-/// term goes in the simple_query_string [`build_text_query_string`] builds.
+/// term, and that one too in the compact form, goes in the simple_query_string
+/// [`build_text_query_string`] builds.
 fn text_terms_query<'a>(
     terms: &'a [String],
     match_type: &str,
     text_fields: &'static [&'static str],
+    compact: bool,
 ) -> QueryType<'a> {
     let (several_words, others): (Vec<&String>, Vec<&String>) = terms
         .iter()
-        .partition(|term| reads_as_several_words(term, match_type));
+        .partition(|term| !compact && reads_as_several_words(term, match_type));
     let others = (!others.is_empty()).then(|| {
         let others: Vec<String> = others.into_iter().cloned().collect();
         QueryType::from(
             SimpleQueryStringQuery::new(
-                build_text_query_string(&others, match_type),
+                build_text_query_string(&others, match_type, compact),
                 text_fields.iter().copied(),
             )
             .default_operator("AND"),
@@ -230,32 +345,6 @@ fn text_terms_query<'a>(
     all.build().into()
 }
 
-/// The fewest tokens the analyzer splits `term` into: its Unicode (UAX #29)
-/// words that hold a letter or a digit, a run of a script written without
-/// spaces counted once. The tokenizer drops the other words `unicode_words`
-/// finds, such as the `₂` of `CO₂`.
-fn fewest_tokens(term: &str) -> usize {
-    let mut tokens = 0;
-    let mut in_run = false;
-    for segment in term.split_word_bounds() {
-        let run = segment.chars().all(in_spaceless_script);
-        let word = segment
-            .chars()
-            .any(|c| c.is_alphabetic() || c.is_ascii_digit());
-        if (run && !in_run) || (word && !run) {
-            tokens += 1;
-        }
-        in_run = run;
-    }
-    tokens
-}
-
-/// Whether the standard tokenizer keeps a run of characters like `c` as one
-/// token: Thai, Lao, Myanmar and Khmer.
-fn in_spaceless_script(c: char) -> bool {
-    matches!(c, '\u{0E00}'..='\u{0EFF}' | '\u{1000}'..='\u{109F}' | '\u{1780}'..='\u{17FF}')
-}
-
 /// Whether a partial `term` long enough to match as a prefix is several tokens
 /// (`follow-up`, `AT&T`, `東京都`). A phrase in quotes or an address already
 /// matches as a phrase in [`build_text_query_string`], and a short term as its
@@ -264,81 +353,108 @@ fn in_spaceless_script(c: char) -> bool {
 /// of one token into a clause for each word that starts with it.
 fn reads_as_several_words(term: &str, match_type: &str) -> bool {
     match_type == "partial"
-        && !term.contains('@')
-        && !term.contains(' ')
+        && !is_text_phrase(term)
         && term.chars().count() >= MIN_PREFIX_LEN
         && fewest_tokens(term) >= 2
 }
 
-/// Builds the simple_query_string over the email-address fields.
-/// Single-word terms become `(term | term@*)` — an exact segment-token match
-/// on the `.parts` sub-fields OR an exact-local-part match on the raw
-/// address. The `term@*` pattern is redundant with `.parts` once the index
-/// carries the sub-fields but keeps the query compatible with an index that
-/// predates them. This deliberately does NOT use a trailing `*` on the bare
-/// term, so partial segments don't leak across addresses (e.g. `ali` won't
-/// match `alice@example.com` via this group).
-/// Terms containing `@`, `.`, or spaces (quoted phrases from
-/// `split_search_terms`) are wrapped in quotes to force phrase matching. On
-/// the `.parts` sub-fields the `email_parts` analyzer splits such terms into
-/// segment tokens, so the phrase requires an in-order adjacent run —
-/// `mail.foo.com`, `foo.com`, and full addresses all match `x@mail.foo.com`,
-/// but reordered or gapped segments don't. Without the quotes,
-/// `default_operator: "AND"` would match each segment independently anywhere
-/// in the field.
-/// A term of one word with punctuation around it (`-lunch`) matches by that
-/// word alone ([`one_word`]).
-/// The email pattern is lowercased because email addresses are case-insensitive.
+/// Builds the simple_query_string over the whole addresses. A one-word term
+/// becomes `term@*`, an exact match on the local part, which the `.parts`
+/// sub-fields match too; it finds mail indexed before they existed. This
+/// deliberately does NOT use a trailing `*` on the bare term, so partial
+/// segments don't leak across addresses (e.g. `ali` won't match
+/// `alice@example.com`). A term containing `@`, `.`, or spaces matches a full
+/// address only. A term of one word with punctuation around it (`-lunch`)
+/// matches by that word alone ([`one_word`]).
+/// The local part is lowercased because email addresses are case-insensitive.
 /// Terms are ANDed together with `+`.
-fn build_keyword_query_string(terms: &[String], match_type: &str) -> String {
+fn build_address_query_string(terms: &[String]) -> String {
     terms
         .iter()
         .map(|term| {
-            if term.contains('@') || term.contains('.') || term.contains(' ') {
-                return format!("\"{}\"", escape_syntax(term, match_type));
+            if is_address_phrase(term) {
+                return phrase(term);
             }
-            let word = escape_syntax(one_word(term, match_type), match_type);
-            format!("({} | {}@*)", word, word.to_lowercase())
+            let word = escape_syntax(one_word(term).unwrap_or(term));
+            format!("{}@*", word.to_lowercase())
         })
         .collect::<Vec<_>>()
         .join(" + ")
 }
 
+/// Builds the simple_query_string over the `.parts` sub-fields, where a bare
+/// word matches a whole segment. Terms containing `@`, `.`, or spaces (quoted
+/// phrases from `split_search_terms`) are wrapped in quotes to force phrase
+/// matching: the `email_parts` analyzer splits such terms into segment tokens,
+/// so the phrase requires an in-order adjacent run — `mail.example.com`,
+/// `example.com`, and full addresses all match `x@mail.example.com`, but
+/// reordered or gapped segments don't. Without the quotes,
+/// `default_operator: "AND"` would match each segment independently anywhere
+/// in the field, at one clause per segment, so the compact form quotes every
+/// term.
+/// Terms are ANDed together with `+`.
+fn build_segment_query_string(terms: &[String], compact: bool) -> String {
+    terms
+        .iter()
+        .map(|term| {
+            if compact || is_address_phrase(term) {
+                return phrase(term);
+            }
+            let word = one_word(term).unwrap_or(term);
+            format!("({})", escape_syntax(word))
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
+}
+
+/// Builds the simple_query_string that runs regexp input, whose punctuation is
+/// syntax, over every address field: `(term | term@*)`, a segment or a local
+/// part.
+fn build_regexp_address_string(terms: &[String]) -> String {
+    terms
+        .iter()
+        .map(|term| {
+            if is_address_phrase(term) {
+                return format!("\"{}\"", term);
+            }
+            format!("({} | {}@*)", term, term.to_lowercase())
+        })
+        .collect::<Vec<_>>()
+        .join(" + ")
+}
+
+/// `term` as one phrase, its punctuation literal.
+fn phrase(term: &str) -> String {
+    format!("\"{}\"", escape_syntax(term))
+}
+
 /// The word of a term that is one token with nothing but ASCII punctuation
-/// around it (`-lunch`, `(lunch`, `Re:`), one Unicode (UAX #29) word or a Thai
-/// run, or the whole term. A prefix is not analyzed, so with the punctuation
-/// it would look for a token the index never holds. The index does hold a
-/// symbol as a token, so a term with one (`C♯`) stays whole, as regexp input
-/// does.
-fn one_word<'a>(term: &'a str, match_type: &str) -> &'a str {
+/// around it (`-lunch`, `(lunch`, `Re:`): one Unicode (UAX #29) word or a Thai
+/// run. A prefix is not analyzed, so with the punctuation it would look for a
+/// token the index never holds. The index does hold a symbol as a token, so a
+/// term with one (`C♯`) is more than its word.
+fn one_word(term: &str) -> Option<&str> {
     let run = term.trim_matches(|c: char| c.is_ascii_punctuation());
-    if match_type != "regexp" && !run.is_empty() && run.chars().all(in_spaceless_script) {
-        return run;
+    if !run.is_empty() && run.chars().all(in_spaceless_script) {
+        return Some(run);
     }
 
     let mut words = term.unicode_word_indices();
     let (Some((start, word)), None) = (words.next(), words.next()) else {
-        return term;
+        return None;
     };
     let mut around = term[..start]
         .chars()
         .chain(term[start + word.len()..].chars());
-    if match_type != "regexp" && around.all(|c| c.is_ascii_punctuation()) {
-        word
-    } else {
-        term
-    }
+    around.all(|c| c.is_ascii_punctuation()).then_some(word)
 }
 
 /// `term` as literal text for a simple_query_string, which otherwise reads
 /// punctuation in it as syntax: a leading `-` as NOT, so `-lunch` matched
 /// every message whose addresses lack `lunch`, `|` as OR, `(` as a group and
-/// `~2` as a fuzzy match. Regexp input keeps its punctuation, which is syntax
-/// there.
-fn escape_syntax(term: &str, match_type: &str) -> String {
-    if match_type == "regexp" {
-        return term.to_string();
-    }
+/// `~2` as a fuzzy match. Regexp input is not escaped: its punctuation is
+/// syntax.
+fn escape_syntax(term: &str) -> String {
     let mut escaped = String::with_capacity(term.len());
     for c in term.chars() {
         if matches!(c, '+' | '|' | '-' | '"' | '*' | '(' | ')' | '~' | '\\') {
@@ -364,35 +480,46 @@ const MIN_PREFIX_LEN: usize = 3;
 /// quotes to
 /// force phrase matching — otherwise `default_operator: "AND"` would turn
 /// `(reply test)` into `reply AND test` and match each token independently
-/// anywhere in the field instead of as an adjacent phrase.
+/// anywhere in the field instead of as an adjacent phrase. The compact form
+/// quotes every other term that is not a prefix too, so that it costs one
+/// clause per field.
 ///
 /// A term that is one word with punctuation around it (`follow-`, `Re:`,
 /// `-lunch`) matches by that word alone ([`one_word`]), as
-/// [`child_content_query`](super::query::child_content_query) does. A partial
-/// term of several Unicode words that is not a phrase prefix (`CO₂`) cannot be
-/// a prefix, which is one token, so it is quoted.
-fn build_text_query_string(terms: &[String], match_type: &str) -> String {
-    let exact = match_type == "exact";
+/// [`child_content_query`](super::query::child_content_query) does. Any other
+/// term cannot be a prefix, which is one token, so it is quoted (`CO₂`, `C♯7`).
+fn build_text_query_string(terms: &[String], match_type: &str, compact: bool) -> String {
     terms
         .iter()
         .map(|term| {
-            if term.contains('@') || term.contains(' ') {
-                return format!("\"{}\"", escape_syntax(term, match_type));
+            if match_type == "regexp" {
+                return regexp_text(term);
             }
-            let word = one_word(term, match_type);
-            let literal = escape_syntax(word, match_type);
-            let several_words = word.unicode_words().nth(1).is_some();
-            let one_token = word.chars().all(in_spaceless_script);
-            if exact || word.chars().count() < MIN_PREFIX_LEN {
-                format!("({})", literal)
-            } else if match_type == "partial" && several_words && !one_token {
-                format!("\"{}\"", literal)
-            } else {
-                format!("{}*", literal)
+            if is_text_phrase(term) {
+                return phrase(term);
+            }
+            let word = one_word(term).unwrap_or(term);
+            let prefix = match_type == "partial" && word.chars().count() >= MIN_PREFIX_LEN;
+            match (prefix, one_word(term)) {
+                (true, Some(word)) => format!("{}*", escape_syntax(word)),
+                (true, None) => phrase(term),
+                (false, _) if compact => phrase(term),
+                (false, _) => format!("({})", escape_syntax(word)),
             }
         })
         .collect::<Vec<_>>()
         .join(" + ")
+}
+
+/// A term of regexp input, whose punctuation is syntax, in the text fields.
+fn regexp_text(term: &str) -> String {
+    if is_text_phrase(term) {
+        format!("\"{}\"", term)
+    } else if term.chars().count() < MIN_PREFIX_LEN {
+        format!("({})", term)
+    } else {
+        format!("{}*", term)
+    }
 }
 
 pub(crate) struct EmailQueryBuilder {
@@ -570,6 +697,17 @@ impl EmailQueryBuilder {
             self.inner.build_content_bool_query()?
         };
 
+        let terms = self
+            .inner
+            .terms
+            .iter()
+            .map(|term| clauses(term, EMAIL_KEYWORD_FIELDS, EMAIL_TEXT_FIELDS));
+        let conditions = self.text_conditions.iter().map(|condition| {
+            let (keyword_fields, text_fields) = condition.fields.fields();
+            clauses(&condition.text, keyword_fields, text_fields)
+        });
+        let compact = terms.chain(conditions).sum::<usize>() > MAX_TERM_CLAUSES;
+
         // In subject_only mode (name search), replace with a match on TITLE_KEY (subject).
         // Otherwise replace with simple_query_string across all email fields.
         if self.subject_only && !self.inner.terms.is_empty() {
@@ -584,6 +722,7 @@ impl EmailQueryBuilder {
                 &self.inner.match_type,
                 EMAIL_KEYWORD_FIELDS,
                 EMAIL_TEXT_FIELDS,
+                compact,
             ));
         }
 
@@ -596,6 +735,7 @@ impl EmailQueryBuilder {
                 &self.inner.match_type,
                 keyword_fields,
                 text_fields,
+                compact,
             );
             if condition.exclude {
                 content_bool_query.must_not(query);

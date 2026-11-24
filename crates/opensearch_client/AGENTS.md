@@ -67,9 +67,9 @@ projects.
   known bug is `#[ignore = "known bug: ..."]`; the fix removes the ignore.
   `tests/content_search/email_operators.rs` runs the same way and checks the
   conditions typed Mail search operators become (`EmailTextCondition`,
-  `EmailLabelCondition`, excluded threads, sent bounds) and hyphenated words
-  in email text inside the unified request; it needs the emails index empty
-  too.
+  `EmailLabelCondition`, excluded threads, sent bounds), hyphenated and
+  punctuated words in email text and searches at the term cap inside the
+  unified request; it needs the emails index empty too.
 
 ## Gotchas
 
@@ -170,17 +170,29 @@ projects.
   analyzed: `follow-up*` looks for one token `follow-up`, which the index
   never holds. A partial term of several tokens is matched with
   `create_query` instead (`emails::text_terms_query`), so it follows the
-  rules above. Never give `match_phrase_prefix` a term the tokenizer may read
-  as one token (`CO₂` is `co`): it becomes a clause per word that shares the
-  prefix, up to 256 in each field. A term that is one token with ASCII
-  punctuation around it (`follow-`, `Re:`, `-lunch`, a Thai run) matches by
-  that word alone, as a prefix or, under three characters, as the whole word;
-  one `single_word` does not count (a Devanagari word with a virama) is an uncapped `term*`
+  rules above. A term that is one token with ASCII punctuation around it
+  (`follow-`, `Re:`, `-lunch`, a Thai run) matches by that word alone, as a
+  prefix or, under three characters, as the whole word; one `single_word`
+  does not count (a Devanagari word with a virama) is an uncapped `term*`
   too. A term with a symbol in it (`C♯`) stays whole, since the tokenizer
   keeps symbols. Everything a `simple_query_string` would read as syntax is
   escaped (`emails::escape_syntax`): unescaped, the address clause of
   `-lunch` was NOT `lunch` and matched every other message. Only regexp input
   keeps its punctuation.
+- OpenSearch refuses a query of more than 1,024 clauses on an index shard
+  (`too_many_nested_clauses`). A search of email alone then fails with a 500,
+  and a search of several kinds answers without the email hits. An email term
+  is one clause in each of 16 fields, and one per token where it is neither
+  quoted nor a prefix, so a search whose terms cost more than
+  `emails::MAX_TERM_CLAUSES` is built in the compact form, which quotes every
+  term that is not a prefix. Keep whole addresses and their `.parts` in
+  separate clauses (`emails::addresses_query`): a pattern for one costs a
+  clause in each field of the other and never matches there. Never give
+  `match_phrase_prefix` a term the tokenizer may read as one token (`CO₂` is
+  `co`): it becomes a clause per word that shares the prefix, up to 256 in
+  each field. `email_operators.rs` runs every shape of term at the cap of 50
+  terms. A `has_child` clause counts as one in its parent's query and has its
+  own limit.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:

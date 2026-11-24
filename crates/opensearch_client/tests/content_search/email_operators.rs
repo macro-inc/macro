@@ -461,6 +461,131 @@ async fn a_term_of_one_token_finds_its_mail_whatever_shares_its_prefix() -> anyh
     search_seeded(messages, cases).await
 }
 
+/// The most terms the search service accepts (`MAX_SEARCH_TERMS`).
+const TERM_CAP: usize = 50;
+
+/// [`TERM_CAP`] terms of each shape, by name. Those of several words end in a
+/// word that starts several others, so a phrase prefix expands it.
+static TERMS_AT_THE_CAP: LazyLock<Vec<(&'static str, Vec<String>)>> = LazyLock::new(|| {
+    let letter = |n: usize| ('a'..='z').cycle().nth(n).unwrap_or('a');
+    let ideograph = |n: usize| ('一'..='龥').nth(n).unwrap_or('一');
+    let emoji = |n: usize| ('😀'..='🙏').cycle().nth(n).unwrap_or('😀');
+    let consonant = |n: usize| ('ก'..='ฮ').cycle().nth(n).unwrap_or('ก');
+    let shapes: [(&'static str, &dyn Fn(usize) -> String); 17] = [
+        ("words", &|n| format!("word{n}")),
+        ("minus words", &|n| format!("-word{n}")),
+        ("hyphenated words", &|n| format!("word{n}-{}", letter(n))),
+        // The most hyphenated words the full form holds beside plain ones.
+        ("words and 9 hyphenated words", &|n| match n {
+            0..41 => format!("word{n}"),
+            _ => format!("word{n}-{}", letter(n)),
+        }),
+        ("dates", &|n| {
+            format!("2025-{:02}-{:02}", n % 12 + 1, n % 28 + 1)
+        }),
+        ("forty segments", &|n| {
+            let segments: Vec<String> = (n..n + 40).map(|s| letter(s).to_string()).collect();
+            segments.join("-")
+        }),
+        ("two ideographs", &|n| {
+            [ideograph(2 * n), ideograph(2 * n + 1)].iter().collect()
+        }),
+        ("three ideographs", &|n| {
+            (3 * n..3 * n + 3).map(ideograph).collect()
+        }),
+        ("Thai runs", &|n| format!("กาน{}", consonant(n))),
+        ("words with a superscript", &|n| format!("word{n}²")),
+        ("forty emoji", &|n| (n..n + 40).map(emoji).collect()),
+        ("a word and an emoji", &|n| format!("word{n}{}", emoji(n))),
+        ("emoji and a hyphenated word", &|n| {
+            let before: String = (n..n + 4).map(emoji).collect();
+            format!("{before}word{n}-{}", letter(n))
+        }),
+        ("urls", &|n| {
+            format!("https://probe{n}.example/a/word{n}-b/c?d=e{n}")
+        }),
+        ("addresses", &|n| format!("word{n}@probe{n}.example")),
+        ("phrases", &|n| format!("word{n} probe{n} word{n}")),
+        ("phrases over a tab and a line", &|n| {
+            format!("word{n}\tprobe{n}\nword{n}\tprobe{n}")
+        }),
+    ];
+    shapes
+        .into_iter()
+        .map(|(name, term)| (name, (0..TERM_CAP).map(term).collect()))
+        .collect()
+});
+
+/// Holds every term of [`TERMS_AT_THE_CAP`], and every term's last word again
+/// as the start of another.
+static HOLDS_EVERY_TERM: LazyLock<String> = LazyLock::new(|| {
+    TERMS_AT_THE_CAP
+        .iter()
+        .flat_map(|(_, terms)| terms)
+        .map(|term| format!("{term} {term}x\n"))
+        .collect()
+});
+
+/// Every shape as [`TERM_CAP`] terms, with every filter a search can carry
+/// beside them, and as [`TERM_CAP`] left-out words.
+fn cap_cases() -> Vec<Case> {
+    let mut cases = Vec::new();
+    for (name, terms) in TERMS_AT_THE_CAP.iter() {
+        let terms: Vec<&str> = terms.iter().map(String::as_str).collect();
+        // Regexp input with no syntax in it runs up to the cap too.
+        let match_types: &[&'static str] = match *name {
+            "words" => &["partial", "exact", "regexp"],
+            _ => &["partial", "exact"],
+        };
+        for match_type in match_types {
+            let mut found = case(name, &terms, &[31]);
+            found.args.link_ids = vec![LINK.to_string()];
+            found.args.exclude_link_ids = vec![thread(2).to_string()];
+            found.args.exclude_thread_ids = vec![thread(34).to_string()];
+            found.args.include_labels = vec!["INBOX".to_string()];
+            found.args.exclude_labels = vec!["TRASH".to_string(), "SPAM".to_string()];
+            found.args.label_conditions = vec![label(&["travel"], true, true)];
+            found.args.sender = vec![BO.1.to_string()];
+            found.args.recipients = vec![ANA.1.to_string()];
+            found.args.importance = Some(true);
+            found.args.sent_after_millis = Some(JANUARY_2025);
+            found.args.sent_before_millis = Some(NOVEMBER_2025);
+            cases.push(Case {
+                match_type,
+                ..found
+            });
+
+            let left_out: &[u128] = match *name {
+                "words"
+                | "minus words"
+                | "words and 9 hyphenated words"
+                | "words with a superscript" => &[33],
+                _ => &[32, 33],
+            };
+            let mut without = case(name, &[], left_out);
+            without.args.text_conditions = terms
+                .iter()
+                .map(|term| text(EmailTextFields::Any, term, true))
+                .collect();
+            cases.push(Case {
+                match_type,
+                ..without
+            });
+        }
+    }
+    cases
+}
+
+#[tokio::test]
+async fn a_search_at_the_term_cap_finds_the_mail_that_holds_every_term() -> anyhow::Result<()> {
+    let messages = vec![
+        message_holding(31, HOLDS_EVERY_TERM.as_str()),
+        message_holding(32, "word1 and nothing else"),
+        message_holding(33, "none of them"),
+    ];
+    search_seeded(messages, cap_cases()).await
+}
+
 /// Seeds `messages` into an `emails` index holding nothing else, runs each
 /// case, removes what it seeded, and fails on any case that kept other
 /// messages than it names.
