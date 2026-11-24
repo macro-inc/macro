@@ -234,6 +234,11 @@ const QUEUE_RECHECK_MS = 1_000;
 const QUEUE_RECHECK_MAX_MS = 30_000;
 /** Waits before asking the server again whether it has a send. */
 const SERVER_LOOKUP_RETRIES_MS = [500, 1_000];
+/**
+ * How long a delete waits for the device's copy of a reply's root before it
+ * goes without the root: the server's answer brings the root then.
+ */
+const ROOT_READ_BUDGET_MS = 500;
 
 /**
  * Waits for the queue to settle one write, or the transaction that replaced
@@ -467,21 +472,25 @@ export function predictedRoot(
   };
 }
 
-/** The root as it will read once the live reply is deleted. */
+/** The root as it will read once its live `reply` is deleted. */
 export function predictedRootWithout(
   root: ChannelMessageFieldsFragment,
-  replyId: string
+  reply: Pick<ChannelMessageFieldsFragment, 'id' | 'createdAt'>
 ): ChannelMessageFieldsFragment {
   if (!root.thread) return root;
-  // The preview holds only live replies; the one after it in a longer
-  // thread is not known here, and comes with the server's root.
+  const preview = root.thread.preview.filter(({ id }) => id !== reply.id);
+  const replyCount = Math.max(0, root.thread.replyCount - 1);
+  // The server reads the latest live reply. It is known while the preview
+  // holds every reply, or when the deleted one was not the latest; otherwise
+  // it comes with the server's root, as does the reply after the preview in
+  // a longer thread.
+  let { latestReplyAt } = root.thread;
+  if (replyCount === 0) latestReplyAt = null;
+  else if (preview.length === replyCount)
+    latestReplyAt = preview[preview.length - 1]?.createdAt ?? latestReplyAt;
   return {
     ...root,
-    thread: {
-      ...root.thread,
-      preview: root.thread.preview.filter((reply) => reply.id !== replyId),
-      replyCount: Math.max(0, root.thread.replyCount - 1),
-    },
+    thread: { ...root.thread, preview, replyCount, latestReplyAt },
   };
 }
 
@@ -553,17 +562,30 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     return record?.__typename === CHANNEL_MESSAGE_TYPENAME ? record : undefined;
   }
 
-  /** The root of a live reply on the device; undefined for anything else. */
-  async function liveReplyRoot(
+  /**
+   * The root of a live reply on the device as it will read once the reply is
+   * deleted; undefined for anything else, or when the device takes longer
+   * than a delete waits for it.
+   */
+  function rootWithoutReply(
     deletion: Pick<ChannelDelete, 'channelId' | 'id'>
   ): Promise<ChannelMessageFieldsFragment | undefined> {
-    const reply = await readStoredMessage(
-      deps.host,
-      deletion.channelId,
-      deletion.id
+    const read = Effect.promise(async () => {
+      const reply = await readStoredMessage(
+        deps.host,
+        deletion.channelId,
+        deletion.id
+      );
+      if (!reply?.threadId || reply.deletedAt !== null) return undefined;
+      const root = await readMessage(reply.threadId);
+      return root && predictedRootWithout(root, reply);
+    });
+    return Effect.runPromise(
+      Effect.timeoutOrElse(read, {
+        duration: ROOT_READ_BUDGET_MS,
+        orElse: () => Effect.succeed(undefined),
+      })
     );
-    if (!reply?.threadId || reply.deletedAt !== null) return undefined;
-    return readMessage(reply.threadId);
   }
 
   async function stored(
@@ -865,8 +887,10 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     remove(deletion) {
       const deletedAt = now();
       // A live reply also leaves its root's preview and count; the queue
-      // applies both at once. Read while the delete already hides the message.
-      const reading = liveReplyRoot(deletion);
+      // applies both at once. The device answers this read in milliseconds,
+      // and a stored message stays on screen until the delete is queued, so
+      // the delete waits for it only briefly.
+      const reading = rootWithoutReply(deletion);
       return queuedWrite({
         operation: 'channel.write.delete',
         channelId: deletion.channelId,
@@ -898,9 +922,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
                     deletedAt,
                     updatedAt: deletedAt,
                   },
-                  ...(root && {
-                    root: predictedRootWithout(root, deletion.id),
-                  }),
+                  ...(root && { root }),
                 },
               } as OptimisticResponse<DeleteChannelMessageMutation>,
               options

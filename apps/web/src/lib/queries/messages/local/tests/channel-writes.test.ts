@@ -227,6 +227,73 @@ describe('createChannelWrites', () => {
     expect(rootOf(calls[2])).toBeUndefined();
   });
 
+  it('gives the root the latest live reply’s time once its newest reply is deleted', async () => {
+    const rootId = graphqlMessage(2).id;
+    const replies = [3, 4, 5].map((n) =>
+      graphqlMessage(n, { threadId: rootId })
+    );
+    const thread = (count: number, preview = replies) =>
+      graphqlMessage(2, {
+        thread: {
+          ...graphqlMessage(2).thread!,
+          replyCount: count,
+          latestReplyAt: replies.at(-1)!.createdAt,
+          preview,
+        },
+      });
+    const deleteNewest = async (root: ReturnType<typeof graphqlMessage>) => {
+      const { writes, calls } = setup(
+        () => ({ disposition: { kind: 'committed' } }),
+        [root, ...replies]
+      );
+      await writes
+        .remove({ channelId: CHANNEL_ID, id: replies[2]!.id, nonce: 'd' })
+        .catch(() => undefined);
+      return (
+        calls[0]!.context.optimisticResponse as {
+          deleteChannelMessage: {
+            root?: { thread: { latestReplyAt: string | null } };
+          };
+        }
+      ).deleteChannelMessage.root?.thread.latestReplyAt;
+    };
+
+    // The preview holds every reply: the one before it is now the latest.
+    expect(await deleteNewest(thread(3))).toBe(replies[1]!.createdAt);
+    // A longer thread's latest reply is not on the device: the server's
+    // root brings it, and the deleted one's time stays until then.
+    expect(await deleteNewest(thread(5))).toBe(replies[2]!.createdAt);
+  });
+
+  it('sends a delete without the root when the device is slow to read it', async () => {
+    vi.useFakeTimers();
+    const rootId = graphqlMessage(2).id;
+    const reply = graphqlMessage(3, { threadId: rootId });
+    const { writes, calls, host } = setup(
+      () => ({ disposition: { kind: 'committed' } }),
+      [graphqlMessage(2), reply]
+    );
+    // The device holds the read; the stored reply stays on screen until the
+    // delete is queued, so the delete does not wait for it.
+    host.readRecordsByKeys = () => new Promise(() => undefined);
+
+    const removing = writes
+      .remove({ channelId: CHANNEL_ID, id: reply.id, nonce: 'd' })
+      .catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(calls).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(calls).toHaveLength(1);
+    expect(
+      (
+        calls[0]!.context.optimisticResponse as {
+          deleteChannelMessage: { root?: unknown };
+        }
+      ).deleteChannelMessage.root
+    ).toBeUndefined();
+    await removing;
+  });
+
   it('shows a waiting reply in its thread, not at the live end', async () => {
     const root = graphqlMessage(1);
     const reply = graphqlMessage(8, { threadId: root.id });
