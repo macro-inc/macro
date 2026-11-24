@@ -106,6 +106,11 @@ TanStack path in `../` runs untouched.
   `channel.page.store` child span of the page.
 - Keep the prewarm pace under the engine's idle checkpoint quiet period, or
   every channel forces a checkpoint.
+- A pushed message reaches an open timeline only once the device has reread
+  it, and its unread notification often gets there first. Code that fetches
+  what the timeline lacks waits for it to settle on the device path, as the
+  unread navigation's parent lookup does (`followsPushes`), or every push
+  fetches its own message again.
 
 ## Related
 
