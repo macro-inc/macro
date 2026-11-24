@@ -101,15 +101,25 @@ export class LinkedMessageChannel {
   }
 }
 
+type HeldLock = { released: Promise<void>; release: () => void };
+
+function holdLock(): HeldLock {
+  let release = () => {};
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { released, release };
+}
+
 /**
  * The Web Locks of one origin. `abandon` frees those whose name starts with
  * `prefix`, as the browser does when the holder is gone.
  */
 export function originLocks() {
-  const held = new Map<string, PromiseWithResolvers<void>>();
-  const free = (name: string, lock: PromiseWithResolvers<void>): void => {
+  const held = new Map<string, HeldLock>();
+  const free = (name: string, lock: HeldLock): void => {
     if (held.get(name) === lock) held.delete(name);
-    lock.resolve();
+    lock.release();
   };
   const request = async (
     name: string,
@@ -122,16 +132,16 @@ export function originLocks() {
           reject(new DOMException('aborted', 'AbortError'))
         )
       );
-      await Promise.race([holder.promise, aborted]);
+      await Promise.race([holder.released, aborted]);
     }
     if (options.mode === 'shared')
       return await callback({ name, mode: 'shared' });
-    const lock = Promise.withResolvers<void>();
+    const lock = holdLock();
     held.set(name, lock);
     try {
       return await Promise.race([
         callback({ name, mode: 'exclusive' }),
-        lock.promise,
+        lock.released,
       ]);
     } finally {
       free(name, lock);
