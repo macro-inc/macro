@@ -200,9 +200,8 @@ export const welcomeRoute = defineRoute({
 });
 
 /**
- * Mobile-web visitors can't sign up on a phone, so instead of pushing them
- * through Google SSO + onboarding we capture their email and email them a
- * link to open on desktop. The marketing site redirects mobile browsers here.
+ * The retired phone email capture. Phones now sign up like desktop, so old
+ * links forward to /signup with their query.
  */
 export const mobileEmailSignupRoute = defineRoute({
   id: 'mobile-email-signup',

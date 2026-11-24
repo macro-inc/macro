@@ -77,8 +77,8 @@ import {
 } from 'solid-js';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
+import { FirstRunEmailSync } from './FirstRunEmailSync';
 import GlobalShortcuts from './GlobalHotkeys';
-import { InitialInteractiveOnboardingModal } from './InitialInteractiveOnboardingModal';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
@@ -225,8 +225,8 @@ export function PageContent(props: ParentProps) {
 }
 
 /**
- * Sends first-time desktop users into the onboarding flow at /onboarding, and
- * new agents on any platform to their setup page.
+ * Sends first-time web users (desktop and phone browsers) into the onboarding
+ * flow at /onboarding, and new agents on any platform to their setup page.
  * App chrome runs it, so it fires on any app destination (marketing SSO lands
  * on /app, not /login) and never on the onboarding pages themselves.
  */
@@ -245,7 +245,7 @@ function useNewOnboardingRedirect() {
       navigate('/agent-setup', { replace: true });
       return;
     }
-    if (isMobile() || isNativeMobilePlatform()) return;
+    if (isNativeMobilePlatform()) return;
     // Preserve the deep link the user arrived on (a shared doc, an invite)
     // as ?next, and a lifecycle-email ?step, so finish() and the flow can
     // resume. Base-relative so navigate() can resolve it against the router.
@@ -412,7 +412,7 @@ export function AppChrome(props: ParentProps) {
           <MobileDockRow vertical={dockEdge() !== 'bottom'} />
         </FloatRegion>
       </Show>
-      <InitialInteractiveOnboardingModal />
+      <FirstRunEmailSync />
       <Suspense>
         <Show when={isAuthenticated()}>
           <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />

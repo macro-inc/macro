@@ -9,10 +9,9 @@ import {
 } from '@app/features/scheduling/public-booking';
 import { useRouteParams } from '@app/lib/split-router';
 import { publishLoginSuccess } from '@core/auth/login-events';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { lazy } from '@core/util/lazy';
-import { getWebOrigin } from '@core/util/webOrigin';
+import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { onCleanup, onMount } from 'solid-js';
 import {
@@ -35,18 +34,17 @@ export function LoginPage() {
   return <Login />;
 }
 
-/**
- * Phone browsers (including Meta's in-app browser) leave their email on the
- * website's `/mobile-signup` and get a link to finish signing up on desktop.
- */
 export function SignupPage() {
-  if (isMobile() && !isNativeMobilePlatform()) {
-    window.location.replace(
-      `${getWebOrigin()}/mobile-signup${window.location.search}`
-    );
-    return null;
-  }
   return <Login signupMode />;
+}
+
+/** The retired phone email capture forwards to signup, keeping attribution. */
+export function MobileEmailSignupRedirect() {
+  const navigate = useNavigate();
+  onMount(() => {
+    navigate(`/signup${window.location.search}`, { replace: true });
+  });
+  return null;
 }
 
 export function WelcomePage() {

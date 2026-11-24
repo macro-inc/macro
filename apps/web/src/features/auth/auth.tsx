@@ -7,12 +7,10 @@ import {
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableMicrosoftSignup } from '@core/constant/featureFlags';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { deepEqual } from '@core/util/compareUtils';
 import { getNativeMobilePlatform } from '@core/util/platform';
-import { getWebOrigin } from '@core/util/webOrigin';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { createMemo, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -26,19 +24,19 @@ import {
 import { ssoFallbackNotice } from './core/sso-fallback';
 import { createAppAuthContext } from './create-app-auth-context';
 import { AuthView } from './views/auth-view';
-import { MobileWebSignupView } from './views/mobile-web-signup-view';
 
 /**
- * /login and /signup. Once authenticated, first-time desktop users continue
- * into onboarding in place; everyone else proceeds into the app.
+ * /login and /signup. Once authenticated, first-time web users (desktop and
+ * phone browsers) continue into onboarding in place; the native apps proceed
+ * into the app.
  */
 export function Login(props: { signupMode?: boolean }) {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const email = typeof params.email === 'string' ? params.email : undefined;
   const microsoftSignup = useFeatureFlag(enableMicrosoftSignup);
-  const desktopSignup = () =>
-    props.signupMode === true && !isMobile() && !isNativeMobilePlatform();
+  const webSignup = () =>
+    props.signupMode === true && !isNativeMobilePlatform();
   return (
     <AuthProvider value={createAppAuthContext()}>
       <AuthView
@@ -60,14 +58,12 @@ export function Login(props: { signupMode?: boolean }) {
           if (referral) window.location.href = `/app?referral=${referral}`;
         }}
         signupJourney={
-          desktopSignup()
-            ? (slots) => <OnboardingSignup {...slots} />
-            : undefined
+          webSignup() ? (slots) => <OnboardingSignup {...slots} /> : undefined
         }
         onSignIn={() => navigate('/login')}
         onAgentSignup={() => navigate('/signup/agent')}
-        // Desktop sign-up resolves into onboarding's frame either way.
-        pending={desktopSignup() ? () => <OnboardingPending /> : undefined}
+        // Web sign-up resolves into onboarding's frame either way.
+        pending={webSignup() ? () => <OnboardingPending /> : undefined}
         signedIn={(user) => (
           <PostAuthGate
             user={user()}
@@ -127,7 +123,7 @@ function PostAuthGate(props: { user: AuthUser; redirect: unknown }) {
       postAuthTarget({
         tutorialComplete: props.user.tutorialComplete,
         isAgent: props.user.isAgent,
-        onboardsOnThisDevice: !isMobile() && !isNativeMobilePlatform(),
+        onboardsOnThisDevice: !isNativeMobilePlatform(),
         redirect: props.redirect,
       }),
     undefined,
@@ -151,19 +147,4 @@ function PostLoginRedirect(props: { target: string }) {
     navigate(props.target, { replace: true });
   });
   return <LoadingBlock />;
-}
-
-/** Mobile-web visitors get a desktop link instead of signing up on a phone. */
-export function MobileWebSignup() {
-  const navigate = useNavigate();
-  return (
-    <AuthProvider value={createAppAuthContext()}>
-      <MobileWebSignupView
-        onLogin={() => navigate('/login')}
-        onBackHome={() => {
-          window.location.href = getWebOrigin();
-        }}
-      />
-    </AuthProvider>
-  );
 }

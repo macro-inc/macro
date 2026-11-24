@@ -18,7 +18,6 @@ import {
   type FakeAuthWorld,
 } from '../tests/fake-auth-context';
 import { AuthView } from '../views/auth-view';
-import { MobileWebSignupView } from '../views/mobile-web-signup-view';
 import { FIXTURE_KEYS } from './fixture-keys';
 
 /**
@@ -194,12 +193,6 @@ function Fixture() {
           <main data-testid="landed" class="p-8 text-ink">
             Entered Macro at {read<string>(FIXTURE_KEYS.landed)}
           </main>
-        </Match>
-        <Match when={page === 'mobile-signup'}>
-          <MobileWebSignupView
-            onLogin={() => location.assign(`${location.pathname}?page=login`)}
-            onBackHome={() => land('/home-page')}
-          />
         </Match>
         <Match when={true}>
           <AuthView

@@ -245,18 +245,6 @@ test('returning from Google sign-up settles into onboarding without flashing', a
   ).toEqual({ signedOut: false, placeholderAfterStep: false });
 });
 
-test('a mobile-web visitor gets a desktop link instead of signing up', async ({
-  page,
-}) => {
-  await openFixture(page, '/?page=mobile-signup');
-  await page.getByLabel('Email address').fill('visitor@acme.com');
-  await page.getByRole('button', { name: 'Sign Up' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Macro is better on desktop.' })
-  ).toBeVisible();
-  expect(await fakeCalls(page)).toContain('lead:visitor@acme.com');
-});
-
 test('a failed provider sign-up falls back to the email form with the reason', async ({
   page,
 }) => {

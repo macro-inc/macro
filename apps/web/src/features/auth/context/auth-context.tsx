@@ -1,6 +1,5 @@
 import type { AppEvents } from '@app/lib/analytics/app-events';
 import { type Accessor, createContext, useContext } from 'solid-js';
-import type { MobileWelcomeResult } from '../core/mobile-welcome';
 
 export type AuthUser = {
   id: string;
@@ -35,12 +34,7 @@ export type VerifyCodeResult =
   | { t: 'rate-limited' }
   | { t: 'failed' };
 
-type AuthEventName =
-  | 'login'
-  | 'sign_up_click'
-  | 'mobile_web_welcome_viewed'
-  | 'mobile_web_signup_sent_viewed'
-  | 'login_from_onboarding';
+type AuthEventName = 'login' | 'sign_up_click';
 type TrackAuth = <E extends AuthEventName>(
   event: E,
   data?: E extends keyof AppEvents ? AppEvents[E] : Record<string, unknown>
@@ -64,15 +58,7 @@ export type AuthContext = {
   redeemSessionToken(token: string): Promise<boolean>;
   /** Refreshes everything that depends on who is signed in. */
   completeLogin(): Promise<void>;
-  sendMobileWelcomeEmail(email: string): Promise<MobileWelcomeResult>;
-  identify(user: {
-    id: string;
-    email: string | undefined;
-    /** Person properties set once. Mobile capture uses this for attribution. */
-    setOnce?: Record<string, string>;
-  }): void;
-  /** Ad conversions for a mobile-web lead, deduplicated by email. */
-  trackMobileSignupLead(email: string): void;
+  identify(user: { id: string; email: string | undefined }): void;
   pageView(name: AuthIntent): void;
   track: TrackAuth;
   notifyFailure(message: string): void;

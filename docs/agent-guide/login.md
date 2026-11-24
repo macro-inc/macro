@@ -68,7 +68,7 @@ Microsoft's place (see [running locally](../development/running-locally.md#micro
 
 `/app/signup/agent` is the agent signup page: Google or an emailed code, without
 the opening slides. The first slide of `/app/signup` links to it (`Sign up as
-agent`), as does `/mobile-signup`, and the marketing site's HTML carries a hidden
+agent`), and the marketing site's HTML carries a hidden
 notice pointing agents there. A new account made there, or by redeeming an invite
 sent with `team.invite(email, { agent: true })`, is an agent. An existing account keeps its
 type. An agent invite email links to `/app/signup/agent?team_invite=<id>`; a signed-in
@@ -278,11 +278,15 @@ Use browser Back to return from GitHub: when the page is restored from BFCache,
 it refreshes link status and restores the retry prompt only if reconnection is
 still needed.
 
-## Desktop onboarding
+## Web onboarding
 
-New desktop users enter the same flow from
-`/app/signup`, `/app/login`, or `/app/onboarding`. Marketing Get Started links
-open `/app/signup`. Existing members and native mobile keep their existing routes.
+New web users, on desktop and in phone browsers (including social apps'
+in-app browsers), enter the same flow from `/app/signup`, `/app/login`, or
+`/app/onboarding`. Marketing Get Started links open `/app/signup` on every
+device; the retired `/mobile-signup`, `/mobile-signup-sent`, and
+`/app/mobile-email-signup` paths forward there with their query. Existing
+members and the native apps keep their existing routes. Check the flow at
+390px with touch emulation and a short (about 660px) in-app-browser height.
 
 Signed-out `/app/signup` starts at the workspace color picker, followed by feature
 interests and security. No account is required for these slides. The signed-out
