@@ -181,6 +181,52 @@ describe('createChannelWrites', () => {
     );
   });
 
+  it("takes a deleted reply out of its root's preview and count", async () => {
+    const rootId = graphqlMessage(2).id;
+    const replies = [3, 4].map((n) => graphqlMessage(n, { threadId: rootId }));
+    const root = graphqlMessage(2, {
+      thread: {
+        ...graphqlMessage(2).thread!,
+        replyCount: 2,
+        preview: replies,
+      },
+    });
+    const gone = graphqlMessage(5, {
+      threadId: rootId,
+      deletedAt: NOW.toISOString(),
+    });
+    const top = graphqlMessage(6);
+    const { writes, calls } = setup(
+      () => ({ disposition: { kind: 'committed' } }),
+      [root, ...replies, gone, top]
+    );
+    const removal = (id: string) => ({ channelId: CHANNEL_ID, id, nonce: 'd' });
+
+    // A collapsed thread shows the preview, and with no connection the
+    // server's root does not come until the delete is sent.
+    await writes.remove(removal(replies[0]!.id)).catch(() => undefined);
+    await writes.remove(removal(gone.id)).catch(() => undefined);
+    await writes.remove(removal(top.id)).catch(() => undefined);
+
+    const rootOf = (call: (typeof calls)[number]) =>
+      (
+        call.context.optimisticResponse as {
+          deleteChannelMessage: {
+            root?: {
+              thread: { replyCount: number; preview: { id: string }[] };
+            };
+          };
+        }
+      ).deleteChannelMessage.root;
+    expect(rootOf(calls[0])?.thread.replyCount).toBe(1);
+    expect(rootOf(calls[0])?.thread.preview.map((m) => m.id)).toEqual([
+      replies[1]!.id,
+    ]);
+    // Already deleted, it is in neither; a top-level message has no root.
+    expect(rootOf(calls[1])).toBeUndefined();
+    expect(rootOf(calls[2])).toBeUndefined();
+  });
+
   it('shows a waiting reply in its thread, not at the live end', async () => {
     const root = graphqlMessage(1);
     const reply = graphqlMessage(8, { threadId: root.id });

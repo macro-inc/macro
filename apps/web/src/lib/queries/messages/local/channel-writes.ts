@@ -42,7 +42,7 @@ import {
 } from './channel-map';
 import { queryChannelNetwork } from './channel-network';
 import type { ChannelPageEntry } from './channel-pages';
-import { readTimelineRecords } from './channel-pages';
+import { readStoredMessage, readTimelineRecords } from './channel-pages';
 import type { ChannelSyncRuntime } from './channel-sync-runtime';
 import { announceWritten } from './channel-tab-writes';
 
@@ -467,6 +467,24 @@ export function predictedRoot(
   };
 }
 
+/** The root as it will read once the live reply is deleted. */
+export function predictedRootWithout(
+  root: ChannelMessageFieldsFragment,
+  replyId: string
+): ChannelMessageFieldsFragment {
+  if (!root.thread) return root;
+  // The preview holds only live replies; the one after it in a longer
+  // thread is not known here, and comes with the server's root.
+  return {
+    ...root,
+    thread: {
+      ...root.thread,
+      preview: root.thread.preview.filter((reply) => reply.id !== replyId),
+      replyCount: Math.max(0, root.thread.replyCount - 1),
+    },
+  };
+}
+
 interface Write<TData, TVariables extends AnyVariables> {
   operation: string;
   channelId: string;
@@ -533,6 +551,19 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     }
     const record = records?.[0];
     return record?.__typename === CHANNEL_MESSAGE_TYPENAME ? record : undefined;
+  }
+
+  /** The root of a live reply on the device; undefined for anything else. */
+  async function liveReplyRoot(
+    deletion: Pick<ChannelDelete, 'channelId' | 'id'>
+  ): Promise<ChannelMessageFieldsFragment | undefined> {
+    const reply = await readStoredMessage(
+      deps.host,
+      deletion.channelId,
+      deletion.id
+    );
+    if (!reply?.threadId || reply.deletedAt !== null) return undefined;
+    return readMessage(reply.threadId);
   }
 
   async function stored(
@@ -833,6 +864,9 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
 
     remove(deletion) {
       const deletedAt = now();
+      // A live reply also leaves its root's preview and count; the queue
+      // applies both at once. Read while the delete already hides the message.
+      const reading = liveReplyRoot(deletion);
       return queuedWrite({
         operation: 'channel.write.delete',
         channelId: deletion.channelId,
@@ -840,30 +874,39 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         uuid: crypto.randomUUID(),
         deletes: deletion.id,
         applied: (message) => message.deletedAt !== null,
-        run: (client, options) =>
-          executeOptimisticMutation(
-            client as Client,
-            DeleteChannelMessageDocument,
-            {
-              input: {
-                channelId: deletion.channelId,
-                id: deletion.id,
-                nonce: deletion.nonce,
-              },
-            },
-            {
-              deleteChannelMessage: {
-                __typename: WRITE_TYPENAME,
-                message: {
-                  __typename: CHANNEL_MESSAGE_TYPENAME,
+        run: async (client, options) => {
+          // Taken before the read: the mutation joins the write's span.
+          const span = Telemetry.captureContext();
+          const root = await reading;
+          return span.run(() =>
+            executeOptimisticMutation(
+              client as Client,
+              DeleteChannelMessageDocument,
+              {
+                input: {
+                  channelId: deletion.channelId,
                   id: deletion.id,
-                  deletedAt,
-                  updatedAt: deletedAt,
+                  nonce: deletion.nonce,
                 },
               },
-            } as OptimisticResponse<DeleteChannelMessageMutation>,
-            options
-          ).toPromise(),
+              {
+                deleteChannelMessage: {
+                  __typename: WRITE_TYPENAME,
+                  message: {
+                    __typename: CHANNEL_MESSAGE_TYPENAME,
+                    id: deletion.id,
+                    deletedAt,
+                    updatedAt: deletedAt,
+                  },
+                  ...(root && {
+                    root: predictedRootWithout(root, deletion.id),
+                  }),
+                },
+              } as OptimisticResponse<DeleteChannelMessageMutation>,
+              options
+            ).toPromise()
+          );
+        },
         written: (data) => data.deleteChannelMessage,
       });
     },
