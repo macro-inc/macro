@@ -96,7 +96,7 @@
 /* Match the desktop Month material, with one small line per available slot. */
 .phone-month-bar > .calendar-event-title {
   display: block;
-  flex: 0 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -123,23 +123,4 @@
   line-height: var(--phone-month-event-height);
   right: 2px;
   overflow: hidden;
-}
-
-/* At phone widths, retain both a readable title and a trailing visible time. */
-@container (max-width: 500px) {
-  .phone-month-bar:has(.calendar-event-time) {
-    flex-wrap: wrap;
-    column-gap: 2px;
-    row-gap: 0;
-    align-content: center;
-  }
-  .phone-month-bar:has(.calendar-event-time) > .calendar-event-title {
-    max-width: calc(100% - 8px);
-    font-size: var(--text-xxs);
-    line-height: 1;
-  }
-  .phone-month-bar > .calendar-event-time {
-    font-size: var(--text-xxs);
-    line-height: 1;
-  }
 }

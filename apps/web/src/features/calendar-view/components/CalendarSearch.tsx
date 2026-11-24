@@ -3,6 +3,7 @@ import { useCalendarView } from '@app/features/calendar/components/CalendarViewC
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { defaultComposerValues } from '@app/features/calendar/primitives/default-composer-values';
 import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import {
@@ -57,6 +58,7 @@ import {
   CalendarSearchLoadingRows,
   formatEventWhen,
 } from './calendar-search-preview';
+import { useOpenEventComposer } from './use-open-event-composer';
 
 type CalendarSearchResult = WithSearch<
   Extract<EntityData, { type: 'calendar_event' }>
@@ -170,6 +172,7 @@ function CalendarSearchControl(props: {
   // The standalone page has no visible grid; preview requests supply metadata.
   const navigation = props.page ? undefined : useCalendarNavigation();
   const panel = useSplitPanelOrThrow();
+  const openEventComposer = useOpenEventComposer();
   const [open, setOpenInternal] = createSignal(!!props.page);
   const setOpen = (next: boolean) => {
     setOpenInternal(next);
@@ -504,6 +507,31 @@ function CalendarSearchControl(props: {
     }
   };
 
+  const emptyStateActions = () => {
+    if (!props.page) return {};
+    return {
+      primaryAction: {
+        label: t('calendar.searchCreateEvent'),
+        onClick: () =>
+          fireAndForget(
+            openEventComposer({
+              initialValues: {
+                ...defaultComposerValues(new Date(), true),
+                title: query(),
+              },
+            }),
+            'calendar-search'
+          ),
+      },
+      secondaryAction: {
+        label: t('calendar.searchClear'),
+        onClick: () => {
+          changeQuery('');
+          focusInput();
+        },
+      },
+    };
+  };
   const resultsBody = () => (
     <>
       <Show
@@ -514,13 +542,18 @@ function CalendarSearchControl(props: {
               <EmptyStatePanel
                 centered
                 graphic={EmptyStateCalendarSearchGraphic}
-                graphicClass="size-28 -mb-3"
+                graphicClass="size-28"
                 title={t('calendar.searchFind')}
                 titleClass="text-sm"
                 description={t('calendar.searchHint')}
-                descriptionClass="mt-0.5 text-xs leading-5"
-                topSpacerClass="basis-0"
-                class="h-auto min-h-44 px-4 pb-4 pt-3 touch:pt-3 @4xl:px-4"
+                descriptionClass="text-xs leading-5"
+                {...emptyStateActions()}
+                topSpacerClass={props.page ? 'grow basis-0' : 'basis-0'}
+                class={
+                  props.page
+                    ? 'min-h-0 flex-1 px-4 pb-0 touch:pt-0 @4xl:px-4'
+                    : 'h-auto min-h-44 px-4 pb-4 pt-3 touch:pt-3 @4xl:px-4'
+                }
               />
             </Show>
             <Show when={query().length >= MIN_QUERY_LENGTH}>
@@ -528,7 +561,7 @@ function CalendarSearchControl(props: {
                 ref={listRef}
                 class={cn(
                   props.page
-                    ? 'min-h-0 flex-1 overflow-y-auto p-2'
+                    ? 'flex min-h-0 flex-1 flex-col overflow-y-auto py-2'
                     : 'max-h-80 overflow-y-auto p-1'
                 )}
               >
@@ -561,15 +594,22 @@ function CalendarSearchControl(props: {
                         <EmptyStatePanel
                           centered
                           graphic={EmptyStateCalendarSearchGraphic}
-                          graphicClass="size-28 -mb-3"
+                          graphicClass="size-28"
                           title={t('calendar.searchEmpty')}
                           titleClass="text-sm"
                           description={t('calendar.searchNoResults', {
                             query: query(),
                           })}
-                          descriptionClass="mt-0.5 text-xs leading-5"
-                          topSpacerClass="basis-0"
-                          class="h-auto min-h-44 px-4 pb-4 pt-3 touch:pt-3 @4xl:px-4"
+                          descriptionClass="text-xs leading-5"
+                          topSpacerClass={
+                            props.page ? 'grow basis-0' : 'basis-0'
+                          }
+                          {...emptyStateActions()}
+                          class={
+                            props.page
+                              ? 'min-h-0 flex-1 px-4 pb-0 touch:pt-0 @4xl:px-4'
+                              : 'h-auto min-h-44 px-4 pb-4 pt-3 touch:pt-3 @4xl:px-4'
+                          }
                         />
                       }
                     >
@@ -580,7 +620,7 @@ function CalendarSearchControl(props: {
                             class={cn(
                               'flex w-full items-center gap-1.5 rounded-lg',
                               props.page
-                                ? 'min-h-16 border-b border-edge-muted px-4 py-2'
+                                ? 'min-h-16 border-b border-edge-muted py-2'
                                 : 'p-1.5 px-2',
                               !props.page &&
                                 index() === activeIndex() &&
@@ -695,7 +735,7 @@ function CalendarSearchControl(props: {
   );
   if (props.page)
     return (
-      <div class="flex min-h-0 flex-1 flex-col bg-page">
+      <div class="flex min-h-0 flex-1 flex-col gap-3 bg-page px-4">
         {pageField()}
         {resultsBody()}
       </div>

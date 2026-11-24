@@ -283,11 +283,11 @@ export function Header(props: {
       >
         <Show when={mobile} fallback="Today">
           <span
-            class="relative size-8 shrink-0 pointer-events-none"
+            class="relative size-5 mobile:size-6 shrink-0 pointer-events-none"
             aria-hidden="true"
           >
-            <CalendarBlankIcon class="size-8" />
-            <span class="absolute inset-x-0 top-3.5 text-center text-xxs font-bold leading-none tabular-nums">
+            <CalendarBlankIcon class="size-5 mobile:size-6" />
+            <span class="absolute inset-x-0 top-[42%] text-center text-xxs font-medium leading-none tabular-nums">
               {today().getDate()}
             </span>
           </span>
