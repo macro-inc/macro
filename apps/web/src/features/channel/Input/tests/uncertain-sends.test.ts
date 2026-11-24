@@ -1,5 +1,6 @@
 import {
   clearComposerStorage,
+  endComposerSession,
   endComposerStorageClear,
 } from '@core/auth/clear-composer-storage';
 import { ThrownResultError } from '@core/util/result';
@@ -107,6 +108,17 @@ describe('createUncertainSends', () => {
     endComposerStorageClear();
     // The same person signed in again: the draft is gone, so this is new.
     expect(sends.idFor(send('hello'))).not.toBe(first);
+  });
+
+  it('forgets every uncertain send when a sign-in replaces the session', () => {
+    const sends = ids();
+    const first = sends.idFor(send('hello'));
+    const out = sends.idFor(send('still out'));
+    sends.restored(send('hello'), first, unknown);
+    endComposerSession();
+    sends.restored(send('still out'), out, unknown);
+    expect(sends.idFor(send('hello'))).not.toBe(first);
+    expect(sends.idFor(send('still out'))).not.toBe(out);
   });
 
   it('remembers no send that failed after its session ended', () => {

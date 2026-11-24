@@ -4,6 +4,7 @@ import {
   clearComposerStorage,
   composerStorageGeneration,
   composerStorageWritable,
+  endComposerSession,
   endComposerStorageClear,
 } from './clear-composer-storage';
 
@@ -48,6 +49,15 @@ it('retires mounted autosavers before wiping their saved data', () => {
   expect(valueAtRetire).toBe('draft');
   if (active) localStorage.setItem(key, 'late cleanup');
   expect(localStorage.getItem(key)).toBeNull();
+});
+
+it('refuses drafts read before a sign-in replaced the session, keeping stored ones', () => {
+  localStorage.setItem('input-value-channel-1', 'draft');
+  const before = composerStorageGeneration();
+  endComposerSession();
+  expect(composerStorageWritable(before)).toBe(false);
+  expect(composerStorageWritable(composerStorageGeneration())).toBe(true);
+  expect(localStorage.getItem('input-value-channel-1')).toBe('draft');
 });
 
 it('refuses drafts read before a sign-out or during it', () => {

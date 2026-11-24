@@ -1,20 +1,22 @@
 export const COMPOSER_STORAGE_CLEARED = 'macro:composer-storage-cleared';
+/** Sent as a session ends, whether or not its drafts are cleared with it. */
+export const COMPOSER_SESSION_ENDED = 'macro:composer-session-ended';
 
 let generation = 0;
 let clearing = false;
 
 /**
- * Changes each time composer storage is cleared: work that will write a
- * draft later reads it first, and writes only while
- * `composerStorageWritable` says so.
+ * Changes each time a session ends, which clears composer storage unless a
+ * sign-in replaced it: work that will write a draft later reads it first, and
+ * writes only while `composerStorageWritable` says so.
  */
 export function composerStorageGeneration(): number {
   return generation;
 }
 
 /**
- * Whether a draft read under `captured` may still be written back: composer
- * storage was not cleared since, and no sign-out is clearing it now.
+ * Whether a draft read under `captured` may still be written back: its
+ * session did not end since, and no sign-out is clearing composer storage now.
  */
 export function composerStorageWritable(captured: number): boolean {
   return !clearing && captured === generation;
@@ -32,10 +34,19 @@ export function endComposerStorageClear(): void {
   generation += 1;
 }
 
+/**
+ * Ends what composers hold of the session, not the drafts they stored: a
+ * sign-in can replace a session without a sign-out.
+ */
+export function endComposerSession(): void {
+  generation += 1;
+  window.dispatchEvent(new Event(COMPOSER_SESSION_ENDED));
+}
+
 /** Remove saved composer text and attachment references on explicit logout. */
 export function clearComposerStorage(): void {
-  generation += 1;
   clearing = true;
+  endComposerSession();
   // Retire mounted autosavers before removing data; auth teardown can await I/O.
   window.dispatchEvent(new Event(COMPOSER_STORAGE_CLEARED));
   for (let index = localStorage.length - 1; index >= 0; index--) {

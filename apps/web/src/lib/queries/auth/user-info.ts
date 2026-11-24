@@ -1,3 +1,4 @@
+import { endComposerSession } from '@core/auth/clear-composer-storage';
 import { syncPushRegistrations } from '@core/auth/push-registration-lifecycle';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -107,6 +108,7 @@ export function invalidateAllAfterLogin() {
       resetGraphqlSoupDoneSession();
       resetGraphqlPresenceRequests();
       resetTeamCalendarSession();
+      endComposerSession();
       await span.span('auth.reset_account_sources', resetQueryAccountSession);
       const invalidated = cacheSession.ready
         .catch((error: unknown) => {

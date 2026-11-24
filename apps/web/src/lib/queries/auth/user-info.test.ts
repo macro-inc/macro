@@ -82,6 +82,10 @@ vi.mock('@service-auth/client', () => ({
   },
 }));
 
+import {
+  composerStorageGeneration,
+  composerStorageWritable,
+} from '@core/auth/clear-composer-storage';
 import { calendarKeys } from '../calendar/keys';
 import { subscribeToTeamCalendarReset } from '../calendar/team-cache';
 import { calendarTeamKeys } from '../calendar/team-keys';
@@ -163,6 +167,15 @@ describe('login display-intent lifetime', () => {
     expect(
       queryClient.getQueryData(graphqlSoupKeys.doneSession.queryKey)
     ).not.toBe('previous-session');
+  });
+
+  it('ends the composers’ session, so nothing of the old one is written back', async () => {
+    client.current = new QueryClient();
+    const before = composerStorageGeneration();
+
+    await invalidateAllAfterLogin();
+
+    expect(composerStorageWritable(before)).toBe(false);
   });
 });
 
