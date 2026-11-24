@@ -3035,6 +3035,48 @@ describe('normalizedCacheExchange', () => {
     expect(unbound).toHaveBeenCalledOnce();
   });
 
+  it('asks again for a query whose earlier answer was on its way when updates were missed', async () => {
+    let refetch = () => {};
+    const network = makeSubject<OperationResult>();
+    const forwarded: Operation[] = [];
+    const client = createClient({
+      url: 'http://localhost/graphql',
+      exchanges: [
+        normalizedCacheExchange(host, {
+          onUpdatesMissed: (listener) => {
+            refetch = listener;
+            return () => {};
+          },
+        }),
+        () => (ops$) => {
+          pipe(
+            ops$,
+            subscribe((operation) => forwarded.push(operation))
+          );
+          return network.source;
+        },
+      ],
+    });
+    const shown: unknown[] = [];
+    const { unsubscribe } = pipe(
+      client.query(QUERY, { input: { limit: 2 } }),
+      subscribe((result) => shown.push(result.data))
+    );
+    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+
+    refetch();
+    await tick();
+    expect(forwarded).toHaveLength(1);
+    network.next(queryResult(forwarded[0]!, { from: 'before' }));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
+    network.next(queryResult(forwarded[1]!, { from: 'after' }));
+    await tick();
+
+    expect(shown.at(-1)).toEqual({ from: 'after' });
+    expect(forwarded).toHaveLength(2);
+    unsubscribe();
+  });
+
   it('lets its queue owner go when a sent request was given up by its caller', async () => {
     const letGo = vi.fn();
     const mutationQueueLocks = {

@@ -535,6 +535,8 @@ export function normalizedCacheExchange(
   return ({ forward, client }) => {
     /** Operations registered with the host, for push-driven re-execution. */
     const activeOps = new Map<number, Operation>();
+    // Asked for while urql still waits for their answer, which drops the ask.
+    const owedRefetches = new Set<number>();
     const documentReader = createDocumentQueryReader(host);
     // Teardown and generation changes cancel document reads in flight. The
     // read is already stale then, so the cancellation is not a cache failure.
@@ -1656,17 +1658,32 @@ export function normalizedCacheExchange(
       }
 
       function refetchActiveQueries() {
-        for (const operation of activeOps.values())
-          client.reexecuteOperation(
-            makeOperation('query', operation, {
-              ...operation.context,
-              requestPolicy:
-                operation.context.requestPolicy === 'cache-only'
-                  ? 'cache-only'
-                  : 'network-only',
-              cacheSessionGeneration: cacheSessionGeneration.capture(),
-            })
-          );
+        for (const operation of activeOps.values()) {
+          if (operation.context.requestPolicy !== 'cache-only')
+            owedRefetches.add(operation.key);
+          refetchActiveQuery(operation);
+        }
+      }
+
+      function refetchActiveQuery(operation: Operation) {
+        client.reexecuteOperation(
+          makeOperation('query', operation, {
+            ...operation.context,
+            requestPolicy:
+              operation.context.requestPolicy === 'cache-only'
+                ? 'cache-only'
+                : 'network-only',
+            cacheSessionGeneration: cacheSessionGeneration.capture(),
+          })
+        );
+      }
+
+      /** Asks again once `result` has reached its subscribers. */
+      function refetchOwed(result: OperationResult) {
+        if (result.operation.kind !== 'query' || result.hasNext) return;
+        const operation = activeOps.get(result.operation.key);
+        if (operation && owedRefetches.has(operation.key))
+          refetchActiveQuery(operation);
       }
 
       async function writeThrough(
@@ -1878,6 +1895,8 @@ export function normalizedCacheExchange(
         shared,
         filter((op) => op.kind === 'query'),
         mergeMap((op) => {
+          if (op.context.requestPolicy === 'network-only')
+            owedRefetches.delete(op.key);
           // A contextless same-key revalidation shares the mounted reader's
           // scope and its reread rank.
           const mounted = activeOps.get(op.key)?.context;
@@ -1935,6 +1954,7 @@ export function normalizedCacheExchange(
             hydrationRequests.delete(op.key);
             subscriptionGenerations.delete(op.key);
             activeOps.delete(op.key);
+            owedRefetches.delete(op.key);
             liveQueries.delete(op.key);
             documentReader.forget(op.key);
             queryStates.delete(op.key);
@@ -2006,6 +2026,7 @@ export function normalizedCacheExchange(
       options.signal?.addEventListener('abort', dispose, { once: true });
       return pipe(
         merge([affectedResults$, cacheResults$, mutationPrep$, forwarded$]),
+        tap(refetchOwed),
         map((result) => {
           if (
             result.operation.kind !== 'query' ||
