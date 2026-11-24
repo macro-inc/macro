@@ -159,7 +159,6 @@ const OTHER_LINK: Uuid = Uuid::from_u128(2);
 fn inboxes() -> ViewerInboxes {
     ViewerInboxes {
         link_ids: vec![OWN_LINK],
-        user_ids: vec!["macro|viewer@example.com".into()],
     }
 }
 
@@ -198,7 +197,7 @@ async fn exclude_searches_only_the_viewers_inboxes() {
             .unwrap(),
     );
 
-    assert_eq!(scope.user_ids, vec!["macro|viewer@example.com".to_string()]);
+    assert_eq!(scope.inbox_link_ids, vec![OWN_LINK]);
     assert!(scope.thread_ids.is_empty());
     assert!(!scope.ids_only);
     assert!(service.0.shared_requests.lock().unwrap().is_empty());
@@ -219,7 +218,7 @@ async fn only_searches_shared_threads_and_never_the_viewers_inboxes() {
     );
 
     assert!(scope.ids_only);
-    assert!(scope.user_ids.is_empty());
+    assert!(scope.inbox_link_ids.is_empty());
     assert_eq!(
         scope.thread_ids,
         vec![Uuid::from_u128(10), Uuid::from_u128(11)]
@@ -253,7 +252,7 @@ async fn include_adds_shared_threads_to_the_viewers_inboxes() {
     );
 
     assert!(!scope.ids_only);
-    assert_eq!(scope.user_ids, vec!["macro|viewer@example.com".to_string()]);
+    assert_eq!(scope.inbox_link_ids, vec![OWN_LINK]);
     assert_eq!(scope.thread_ids, vec![Uuid::from_u128(10)]);
 }
 
@@ -580,7 +579,7 @@ async fn attachment_kinds_are_checked_hit_by_hit() {
     );
 
     assert!(!scope.ids_only);
-    assert_eq!(scope.user_ids, inboxes().user_ids);
+    assert_eq!(scope.inbox_link_ids, inboxes().link_ids);
     assert_eq!(scope.hit_states.attachments, vec![AttachmentKind::Document]);
 }
 
@@ -631,7 +630,7 @@ async fn folders_search_the_threads_the_folder_list_shows() {
         scope.thread_ids,
         vec![Uuid::from_u128(30), Uuid::from_u128(31)]
     );
-    assert!(scope.user_ids.is_empty());
+    assert!(scope.inbox_link_ids.is_empty());
     assert_eq!(
         service.0.project_requests.lock().unwrap().as_slice(),
         &[(vec!["folder".to_string()], vec![], true, false)]
@@ -809,7 +808,7 @@ async fn favorites_narrow_the_search_by_id() {
             .unwrap(),
     );
     assert_eq!(scope.required_thread_ids, vec![favorite, named]);
-    assert_eq!(scope.user_ids, inboxes().user_ids);
+    assert_eq!(scope.inbox_link_ids, inboxes().link_ids);
 
     let starred_and_named = EmailFilters {
         favorite: Some(true),

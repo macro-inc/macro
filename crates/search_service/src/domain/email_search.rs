@@ -60,8 +60,6 @@ pub(crate) struct SharedThread {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct ViewerInboxes {
     pub link_ids: Vec<Uuid>,
-    /// The owners the email index files those inboxes' messages under.
-    pub user_ids: Vec<String>,
 }
 
 /// Thread-level conditions every email hit must meet.
@@ -187,8 +185,9 @@ pub(crate) enum EmailScope {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct EmailThreads {
-    /// Mailboxes searched, by index owner. Unused when `ids_only`.
-    pub user_ids: Vec<String>,
+    /// Inboxes searched, by link: never by owner, since an owner's inboxes
+    /// are delegated one by one. Unused when `ids_only`.
+    pub inbox_link_ids: Vec<Uuid>,
     /// Threads reached besides those mailboxes, or with `ids_only` the only
     /// threads searched.
     pub thread_ids: Vec<Uuid>,
@@ -467,11 +466,11 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
                 ..Default::default()
             },
             (None, SharedEmailFilter::Exclude) => EmailThreads {
-                user_ids: inboxes.user_ids.clone(),
+                inbox_link_ids: inboxes.link_ids.clone(),
                 ..Default::default()
             },
             (None, SharedEmailFilter::Include) => EmailThreads {
-                user_ids: inboxes.user_ids.clone(),
+                inbox_link_ids: inboxes.link_ids.clone(),
                 thread_ids: shared_ids,
                 ..Default::default()
             },
