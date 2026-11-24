@@ -75,14 +75,13 @@ export interface CacheCoordinatorPageAdapterOptions {
   onStartupProgress?: (
     progress: Extract<CoordinatorToTabEnvelope, { kind: 'engine-startup' }>
   ) => void;
+  /** The coordinator answered a `ping`. */
+  onPong?: () => void;
   onOwnerChanged?: (ownerEpoch: number | undefined) => void;
-  /** Another context holds the database, so the cache stays off until reload. */
-  /** `superseded`: a newer build took the database over, so this build never
-   * gets it back. */
+  /** Nothing can open the database for now. A later engine ends that. */
   onCacheUnavailable?: (
     reason: string,
-    superseded: boolean,
-    unavailableReason: CacheUnavailableReason | undefined
+    unavailableReason: CacheUnavailableReason
   ) => void;
   /** A newer app build took the database over; this page should reload. */
   onCacheSuperseded?: (reason: string) => void;
@@ -322,6 +321,14 @@ export class CacheCoordinatorPageAdapter {
         tabId: this.tabId,
         request,
       })
+    );
+  }
+
+  /** Asks the coordinator to answer, through `onPong`; whether it was asked. */
+  ping(): boolean {
+    if (this.closed || !this.registered) return false;
+    return this.postCoordinator(
+      withVersion<TabToCoordinatorEnvelope>({ kind: 'ping', tabId: this.tabId })
     );
   }
 
@@ -757,12 +764,11 @@ export class CacheCoordinatorPageAdapter {
         else this.options.onProtocolError?.(error);
         break;
       }
-      case 'terminal-error':
-        this.failTerminal(
-          message.storageUntouched
-            ? new CacheBootstrapExhaustedError(message.error)
-            : new Error(message.error)
-        );
+      case 'pong':
+        this.options.onPong?.();
+        break;
+      case 'connection-closed':
+        this.failTerminal(new WorkerRestartedError(message.reason));
         break;
       case 'cache-unavailable':
         this.options.onCacheUnavailable?.(

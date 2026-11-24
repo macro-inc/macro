@@ -459,16 +459,66 @@ describe('CacheCoordinatorPageAdapter', () => {
 
     port.receive({
       ...version,
-      kind: 'cache-unavailable',
-      reason: 'a newer version of the app took over the local cache',
-      superseded: true,
+      kind: 'connection-closed',
+      reason: 'tab MessagePort messageerror',
     });
 
-    expect(onCacheUnavailable).toHaveBeenCalledExactlyOnceWith(
-      'a newer version of the app took over the local cache',
-      true,
-      undefined
+    expect(onTerminalError).toHaveBeenCalledExactlyOnceWith(
+      expect.any(WorkerRestartedError)
     );
+    expect(port.closed).toBe(true);
+  });
+
+  it('asks the coordinator to answer, unless there is no connection', async () => {
+    const onPong = vi.fn();
+    const port = new FakeCoordinatorPort();
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+      createDedicatedWorker: () => new FakeWorker(),
+      onPong,
+    });
+    expect(adapter.ping()).toBe(false);
+    const started = adapter.start();
+    await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+    port.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+    await started;
+
+    expect(adapter.ping()).toBe(true);
+    expect(port.messages.at(-1)).toMatchObject({
+      message: { kind: 'ping', tabId: 'tab-a' },
+    });
+    port.receive({ ...version, kind: 'pong' });
+    expect(onPong).toHaveBeenCalledOnce();
+
+    await adapter.dispose({ graceful: false });
+    expect(adapter.ping()).toBe(false);
+  });
+
+  it('listens for pagehide only while it is connected', async () => {
+    const listening = new Set<unknown>();
+    vi.stubGlobal('addEventListener', (type: string, listener: unknown) => {
+      if (type === 'pagehide') listening.add(listener);
+    });
+    vi.stubGlobal('removeEventListener', (type: string, listener: unknown) => {
+      if (type === 'pagehide') listening.delete(listener);
+    });
+    try {
+      const port = await registeredAdapter({});
+      expect(listening.size).toBe(1);
+
+      port.receive({
+        ...version,
+        kind: 'connection-closed',
+        reason: 'tab MessagePort messageerror',
+      });
+
+      expect(listening.size).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('registers with its build time and relays a newer build taking over', async () => {

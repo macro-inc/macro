@@ -1301,6 +1301,23 @@ describe('CoordinatorRouter', () => {
     });
   });
 
+  it('answers a ping, so a page can tell a lost connection from a slow engine', async () => {
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a');
+
+    await router.handleTabMessage(tab as CoordinatorMessagePort, {
+      ...version,
+      kind: 'ping',
+      tabId: 'tab-a',
+    });
+
+    expect(messagesOfKind(tab, 'pong')).toHaveLength(1);
+  });
+
   /** An active engine of an older build, plus a second tab of that build. */
   const holdTheDatabase = async (buildTime: number) => {
     vi.useFakeTimers();
@@ -3110,6 +3127,14 @@ describe('CoordinatorRouter', () => {
         reason: 'engine envelope owner tuple does not match its direct route',
       })
     );
+    // The tab hears that this connection ended, and makes another.
+    expect(messagesOfKind(tabA, 'connection-closed')).toEqual([
+      expect.objectContaining({ reason: 'tab MessagePort messageerror' }),
+    ]);
+    expect(tabA.events.indexOf('post:connection-closed')).toBeLessThan(
+      tabA.events.indexOf('close')
+    );
+    expect(messagesOfKind(tabB, 'connection-closed')).toEqual([]);
     expect(router.snapshot()?.state).toMatchObject({
       kind: 'activating',
       ownerEpoch: 2,

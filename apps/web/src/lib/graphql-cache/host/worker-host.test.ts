@@ -38,6 +38,7 @@ import { CacheRequestTimeoutError } from './errors';
 import { CacheNavigationError } from './navigation-error';
 import {
   createWorkerCacheHost,
+  PING_TIMEOUT_MS,
   UNANSWERED_AUTHORITY_READS,
 } from './worker-host';
 
@@ -113,6 +114,10 @@ class FakePageAdapter {
   readonly authorityRequests: CacheRequest[] = [];
   readonly ignoredKinds = new Set<CacheRequest['kind']>();
   readonly errors = new Map<CacheRequest['kind'], string>();
+  readonly ping = vi.fn(() => {
+    queueMicrotask(() => this.options.onPong?.());
+    return true;
+  });
   readonly dispose = vi.fn(
     async (_options: PageAdapterDisposeOptions = {}): Promise<void> => {}
   );
@@ -2056,16 +2061,61 @@ describe('createWorkerCacheHost', () => {
     await expect(read).rejects.toMatchObject({
       errorCode: 'owner-lock-unavailable',
     });
-    // A refused request names no reason; the host had finished starting.
-    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        name: 'CacheUnavailableError',
-        unavailableReason: undefined,
-        phase: 'operation',
-      })
-    );
-    expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
-    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
+    expect(onInitializationError).not.toHaveBeenCalled();
+    expect(adapter.dispose).not.toHaveBeenCalled();
+    host.dispose();
+  });
+
+  it('connects again when the coordinator stops answering', async () => {
+    vi.useFakeTimers();
+    const adapters: FakePageAdapter[] = [];
+    configureAdapter = (fake) => adapters.push(fake);
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    await host.currentRevision();
+    const [lost] = adapters;
+    lost.ignoredKinds.add('read');
+    lost.ping.mockImplementation(() => true);
+    await vi.advanceTimersByTimeAsync(1);
+    const read = expect(
+      host.readQuery({ query: 'query Q { q }' })
+    ).rejects.toEqual(new CacheRequestTimeoutError('read'));
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await read;
+    expect(lost.ping).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(PING_TIMEOUT_MS);
+
+    expect(lost.dispose).toHaveBeenCalledOnce();
+    expect(adapters).toHaveLength(2);
+    await expect(host.readQuery({ query: 'query Q { q }' })).resolves.toEqual({
+      kind: 'miss',
+    });
+    expect(onInitializationError).not.toHaveBeenCalled();
+    host.dispose();
+  });
+
+  it('stays connected to a coordinator that answers while its engine is slow', async () => {
+    vi.useFakeTimers();
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('read');
+    await vi.advanceTimersByTimeAsync(1);
+    const read = expect(
+      host.readQuery({ query: 'query Q { q }' })
+    ).rejects.toEqual(new CacheRequestTimeoutError('read'));
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await read;
+    await vi.advanceTimersByTimeAsync(10 * PING_TIMEOUT_MS);
+
+    expect(adapter.ping).toHaveBeenCalledOnce();
+    expect(adapter.dispose).not.toHaveBeenCalled();
+    host.dispose();
   });
 
   it('retires quietly and asks the app to reload when a newer build takes over', async () => {

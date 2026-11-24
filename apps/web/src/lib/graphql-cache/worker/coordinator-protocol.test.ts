@@ -218,8 +218,8 @@ describe('coordinator runtime protocol', () => {
     };
     for (const valid of [
       cacheUnavailable,
-      { ...cacheUnavailable, superseded: true },
-      { ...cacheUnavailable, unavailableReason: 'files-busy' },
+      { ...cacheUnavailable, unavailableReason: 'recovery-failed' },
+      { ...version, kind: 'pong' },
       superseded,
       removeStale,
     ]) {
@@ -227,7 +227,9 @@ describe('coordinator runtime protocol', () => {
     }
     for (const invalid of [
       { ...cacheUnavailable, reason: '' },
-      { ...cacheUnavailable, superseded: false },
+      { ...cacheUnavailable, superseded: true },
+      { ...cacheUnavailable, unavailableReason: undefined },
+      { ...version, kind: 'pong', extra: true },
       { ...cacheUnavailable, unavailableReason: 'disk on fire' },
       { ...superseded, reason: '' },
       { ...superseded, superseded: true },
@@ -692,7 +694,7 @@ describe('coordinator runtime protocol', () => {
       openOutcome: 'opened-existing',
     },
     { ...version, kind: 'protocol-error', error: 'bad envelope' },
-    { ...version, kind: 'terminal-error', error: 'recovery exhausted' },
+    { ...version, kind: 'connection-closed', reason: 'tab messageerror' },
   ])('accepts coordinator-to-tab envelope $kind', (message) => {
     expect(validateCoordinatorToTabEnvelope(message).ok).toBe(true);
   });

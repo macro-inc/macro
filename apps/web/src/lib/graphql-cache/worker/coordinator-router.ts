@@ -403,7 +403,16 @@ export class CoordinatorRouter {
     port.onmessageerror = () => {
       const tabId = this.portTabs.get(port);
       if (tabId) {
-        this.loseTab(tabId, 'tab MessagePort messageerror');
+        const reason = 'tab MessagePort messageerror';
+        // Only what the page sends is lost: it can still be told.
+        this.postToTab(
+          tabId,
+          envelope<CoordinatorToTabEnvelope>({
+            kind: 'connection-closed',
+            reason,
+          })
+        );
+        this.loseTab(tabId, reason);
         return;
       }
       const registration = this.pendingRegistrations.get(port);
@@ -463,6 +472,12 @@ export class CoordinatorRouter {
     match(message)
       .with({ kind: 'tab-visibility' }, ({ visible }) => {
         this.applyActions(core.setTabVisibility(tabId, visible));
+      })
+      .with({ kind: 'ping' }, () => {
+        this.postToTab(
+          tabId,
+          envelope<CoordinatorToTabEnvelope>({ kind: 'pong' })
+        );
       })
       .with({ kind: 'cache-request' }, ({ request }) => {
         this.applyActions(

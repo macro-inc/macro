@@ -114,6 +114,12 @@ export type TabToCoordinatorEnvelope =
       request: CacheRequest;
     }
   | {
+      /** Asks for a `pong`, to tell a lost connection from a slow engine. */
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
+      kind: 'ping';
+      tabId: string;
+    }
+  | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'attach-engine-port';
       tabId: string;
@@ -215,19 +221,21 @@ export type CoordinatorToTabEnvelope =
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
-      kind: 'terminal-error';
-      error: string;
-      storageUntouched?: true;
+      kind: 'pong';
     }
   | {
-      /** Another context holds the database; stop using the cache until reload. */
+      /** The coordinator dropped this page; it may register again. */
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
+      kind: 'connection-closed';
+      reason: string;
+    }
+  | {
+      coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
+      /** Nothing can open the database for now; requests are refused until an
+       * engine does. */
       kind: 'cache-unavailable';
       reason: string;
-      /** Why it failed closed; absent when a newer build took it over. */
-      unavailableReason?: CacheUnavailableReason;
-      /** A newer build took the database over, so retrying cannot help. */
-      superseded?: true;
+      unavailableReason: CacheUnavailableReason;
     }
   | {
       /** A newer app build took the database over. The page stops using the
@@ -1098,6 +1106,11 @@ export function validateTabToCoordinatorEnvelope(
         return pass(value as TabToCoordinatorEnvelope);
       }
       break;
+    case 'ping':
+      if (hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'tabId'])) {
+        return pass(value as TabToCoordinatorEnvelope);
+      }
+      break;
     case 'disconnect-tab':
       if (
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'tabId', 'reason']) &&
@@ -1288,6 +1301,12 @@ export function validateCoordinatorToTabEnvelope(
         return pass(value as CoordinatorToTabEnvelope);
       }
       break;
+    case 'pong':
+      if (hasOnlyKeys(value, ['coordinatorVersion', 'kind'])) {
+        return pass(value as CoordinatorToTabEnvelope);
+      }
+      break;
+    case 'connection-closed':
     case 'cache-superseded':
       if (
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'reason']) &&
