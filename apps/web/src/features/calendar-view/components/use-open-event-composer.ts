@@ -1,6 +1,7 @@
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import type { ComposerOpenRequest } from '@app/features/calendar/core/composer-session';
 import { canEditCalendarEvent } from '@app/features/calendar/utils/event-interaction';
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -52,10 +53,10 @@ export function useOpenEventComposer() {
             try {
               const confirmed = await confirmDialog(
                 {
-                  title: 'You still have remaining changes',
-                  body: 'Closing this event will discard your changes.',
-                  confirmLabel: 'Discard',
-                  cancelLabel: 'Keep editing',
+                  title: t('calendar.discardTitle'),
+                  body: t('calendar.discardBody'),
+                  confirmLabel: t('calendar.discard'),
+                  cancelLabel: t('calendar.keepEditing'),
                   tone: 'danger',
                 },
                 { owner }

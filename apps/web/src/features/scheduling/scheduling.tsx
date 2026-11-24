@@ -6,33 +6,24 @@ import {
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
-import { writeClipboardData } from '@core/util/dataTransfer';
-import { getWebOrigin } from '@core/util/webOrigin';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { useNavigate } from '@solidjs/router';
 import { type ParentProps, Suspense } from 'solid-js';
+import { copyBookingLink, schedulingLink } from './booking-link';
 import { bookingLinksSearch } from './booking-links-search';
 import { SchedulingProvider } from './context/scheduling-context';
 import { bookingLinkAgentSeed } from './core/booking-agent';
-import type { SchedulingProfile, SchedulingScope } from './core/types';
+import type { SchedulingScope } from './core/types';
 import { useBookingAccounts } from './queries/booking-accounts';
 import {
   createSchedulingSource,
   useManageBookingMutation,
 } from './queries/source';
 import { BookingWorkspaceView } from './views/booking-workspace-view';
-
-export function schedulingLink(
-  profile: Pick<SchedulingProfile, 'id'>,
-  slug?: string
-) {
-  return `${getWebOrigin()}/app/book/${encodeURIComponent(profile.id)}${slug ? `/${encodeURIComponent(slug)}` : ''}`;
-}
 
 function SchedulingHost(props: ParentProps) {
   const navigate = useNavigate();
@@ -106,16 +97,8 @@ function SchedulingHost(props: ParentProps) {
         link: schedulingLink,
         openTeamSettings: () => settings.openSettings('Team'),
         copyLink: async (profile, slug) => {
-          if (
-            await writeClipboardData({
-              'text/plain': schedulingLink(profile, slug),
-            })
-          ) {
-            toast.success('Booking link copied');
-          } else {
-            toast.failure('Could not copy booking link');
+          if (!(await copyBookingLink(profile, slug)))
             throw new Error('Could not copy booking link');
-          }
         },
       }}
     >

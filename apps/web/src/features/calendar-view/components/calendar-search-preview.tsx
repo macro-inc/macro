@@ -32,9 +32,7 @@ export function formatEventWhen(
   if (!time) return '';
   if (time.kind === 'allDay') {
     const date = parseLocalDate(time.startDate);
-    return date
-      ? `${formatDateLabel(date)} · ${t('calendar.agendaAllDay')}`
-      : '';
+    return date ? `${formatDateLabel(date)} · ${t('calendar.allDay')}` : '';
   }
   const start = new Date(time.startsAt);
   if (Number.isNaN(start.getTime())) return '';
@@ -99,40 +97,42 @@ export function CalendarEventPreviewContent(props: {
         <CaretLeftIcon class="size-3" />
         {t('calendar.backToSearch')}
       </button>
-      <div class="flex flex-col gap-1 px-2 pb-2">
-        <div class="flex min-w-0 items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            class="size-2.5 shrink-0 rounded-sm"
-            style={{ 'background-color': props.color }}
-          />
-          <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
-            {props.event.name || t('calendar.searchUntitled')}
-          </span>
-          <Show when={props.event.isRecurring}>
-            <RepeatIcon
-              aria-hidden={false}
-              class="size-3 shrink-0 text-ink-muted"
-              aria-label={t('calendar.searchRepeats')}
+      <div class="flex flex-col gap-2 px-2 pb-2">
+        <div class="flex flex-col gap-1">
+          <div class="flex min-w-0 items-center gap-1.5">
+            <span
+              aria-hidden="true"
+              class="size-2.5 shrink-0 rounded-sm"
+              style={{ 'background-color': props.color }}
             />
+            <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+              {props.event.name || t('calendar.searchUntitled')}
+            </span>
+            <Show when={props.event.isRecurring}>
+              <RepeatIcon
+                aria-hidden={false}
+                class="size-3 shrink-0 text-ink-muted"
+                aria-label={t('calendar.composerRepeats')}
+              />
+            </Show>
+          </div>
+          <Show when={when()}>
+            {(label) => (
+              <span class="truncate text-xs text-ink-muted">{label()}</span>
+            )}
+          </Show>
+          <Show when={organizer()}>
+            {(name) => (
+              <span class="truncate text-xs text-ink-muted">{name()}</span>
+            )}
+          </Show>
+          <Show when={detail()}>
+            {(text) => (
+              <span class="truncate text-xs text-ink-muted">{text()}</span>
+            )}
           </Show>
         </div>
-        <Show when={when()}>
-          {(label) => (
-            <span class="truncate text-xs text-ink-muted">{label()}</span>
-          )}
-        </Show>
-        <Show when={organizer()}>
-          {(name) => (
-            <span class="truncate text-xs text-ink-muted">{name()}</span>
-          )}
-        </Show>
-        <Show when={detail()}>
-          {(text) => (
-            <span class="truncate text-xs text-ink-muted">{text()}</span>
-          )}
-        </Show>
-        <span class="mt-1 border-t border-edge-muted pt-1.5 text-xs text-ink-extra-muted">
+        <span class="border-t border-edge-muted pt-1.5 text-xs text-ink-extra-muted">
           {t('calendar.searchOutsideRange')}
         </span>
       </div>

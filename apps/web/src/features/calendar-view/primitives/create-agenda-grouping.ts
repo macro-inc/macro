@@ -1,9 +1,6 @@
-import {
-  type AgendaDayGroup,
-  agendaDay,
-  agendaShift,
-} from '@app/features/calendar/primitives/agenda-window';
+import type { AgendaDayGroup } from '@app/features/calendar/primitives/agenda-window';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import { addDays, startOfDay } from 'date-fns';
 import { type Accessor, createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
@@ -14,7 +11,7 @@ export interface AgendaWindowGroups {
 type WindowSource = Accessor<AgendaWindowGroups>;
 
 /** Merge only confirmed empty boundaries; query ownership stays with each bounded window. */
-export function mergeAgendaWindowGroups(
+function mergeAgendaWindowGroups(
   windows: { index: number; value: AgendaWindowGroups }[],
   today = new Date()
 ) {
@@ -23,7 +20,7 @@ export function mergeAgendaWindowGroups(
   let previous:
     | { group: AgendaDayGroup<CalendarEvent>; complete: boolean }
     | undefined;
-  const todayTime = agendaDay(today).getTime();
+  const todayTime = startOfDay(today).getTime();
   windows.forEach((window, index) => {
     for (const group of window.value.groups) {
       const emptyBoundary =
@@ -34,9 +31,9 @@ export function mergeAgendaWindowGroups(
         group.events.length === 0;
       const adjacent =
         previous &&
-        agendaShift(previous.group.end, 1).getTime() === group.start.getTime();
+        addDays(previous.group.end, 1).getTime() === group.start.getTime();
       const includesToday =
-        (group.start <= today && group.end >= agendaDay(today)) ||
+        (group.start <= today && group.end >= startOfDay(today)) ||
         previous?.group.end.getTime() === todayTime;
       if (previous && emptyBoundary && adjacent && !includesToday)
         previous.group.end = group.end;

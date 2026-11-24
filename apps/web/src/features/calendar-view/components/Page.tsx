@@ -72,8 +72,8 @@ import {
   calendarFocusTargetId,
   useCalendarFocus,
 } from '../calendar-focus-target';
-import { CalendarMonth } from '../calendar-month';
 import { phoneMonthRange } from '../core/phone-month-layout';
+import { PhoneMonthBars } from '../views/mobile/month-bars';
 import { CalendarLoadingSkeleton } from './CalendarLoadingSkeleton';
 
 interface CalendarScrollTarget {
@@ -138,7 +138,6 @@ function CalendarScrollIndicators(props: {
           <ScrollIndicators
             scrollRef={() => scrollTarget.scrollElement}
             appearance="gradient"
-            gradientColor={isMobile() ? 'panel' : 'surface'}
             class="h-6"
           />
         </Portal>
@@ -477,8 +476,8 @@ export function Page(props: {
                 isMobile() && pager.periodView() === 'dayGridMonth'
               }
             />
-            <Show when={pager.periodView() === 'dayGridMonth'}>
-              <CalendarMonth
+            <Show when={isMobile() && pager.periodView() === 'dayGridMonth'}>
+              <PhoneMonthBars
                 range={grid.dateInfo()}
                 initialDate={props.initialDate}
                 events={visibleEvents()}

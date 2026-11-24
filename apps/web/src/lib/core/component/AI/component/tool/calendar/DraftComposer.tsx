@@ -11,7 +11,7 @@
 import type { CreateCalendarEventFormControllerOptions } from '@app/features/calendar/components/composer/create-calendar-event-form-controller';
 import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
 import { eventGuestOptions } from '@app/features/calendar/components/composer/guest-options';
-import { ComposerRoot } from '@app/features/calendar/components/composer/root/ComposerRoot';
+import { ComposerRoot } from '@app/features/calendar/components/composer/parts/ComposerRoot';
 import type { ComposerMetadataChanges } from '@app/features/calendar/core/composer-metadata';
 import { useCalendarGuestInvitesFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { createAgentComposer } from '@app/features/calendar/primitives/create-agent-composer';
@@ -352,7 +352,6 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
                   onCancel={() =>
                     fireAndForget(agent.cancel(), 'ai-calendar-compose')
                   }
-                  macroCallsEnabled
                   resolveAppLink={resolveAppLink}
                 />
               </ComposerRoot>
@@ -362,7 +361,6 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
           <MobileAgentComposer
             model={agent.model}
             resolveAppLink={resolveAppLink}
-            macroCallsEnabled
             onCancel={() =>
               fireAndForget(agent.cancel(), 'ai-calendar-compose')
             }

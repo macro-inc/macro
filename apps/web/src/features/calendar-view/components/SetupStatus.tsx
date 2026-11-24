@@ -233,13 +233,11 @@ export function SetupStatus(props: SetupProps) {
 }
 
 /** Offers missing setup above a grid that shows events, in the page's flow. */
-export function SetupBanner(
-  props: SetupProps & { class?: string; fullWidth?: boolean }
-) {
+export function SetupBanner(props: SetupProps & { fullWidth?: boolean }) {
   const setup = useCalendarSetup(props);
   return (
     <Show when={setup.besideGrid()}>
-      <div class={cn('shrink-0', props.class)}>
+      <div class="shrink-0">
         <div
           role="status"
           class={cn(

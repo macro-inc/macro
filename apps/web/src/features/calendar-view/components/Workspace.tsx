@@ -1,6 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
 import {
-  CALENDAR_PAGE_IDS,
+  CALENDAR_PAGE_COUNT,
   type CalendarPageId,
   CalendarPagerContextProvider,
   useCalendarPager,
@@ -10,6 +10,7 @@ import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeU
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import { CALENDAR_GRID_FULL_HEADER_WIDTH } from '@app/features/calendar/primitives/create-calendar-composer-pinning';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import { t } from '@app/lib/i18n';
 import { createRenderQueue } from '@app/lib/utils/create-render-queue';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import {
@@ -20,7 +21,7 @@ import { SplitPanel } from '@components/app/split-panel';
 import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Layer } from '@ui';
-import { SnapPager } from '@ui/components/SnapPager';
+import { SnapPager } from '@ui/components/SnapPager/SnapPager';
 import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
@@ -46,11 +47,11 @@ import { CALENDAR_TOUR, calendarTour } from '../tour';
 import { AgendaContent } from '../views/agenda/AgendaContent';
 import { AgendaNavigation } from '../views/agenda/AgendaNavigation';
 import { AgendaSetup } from '../views/agenda/AgendaSetup';
+import { CalendarGridNavigation } from '../views/CalendarGridNavigation';
 import { CalendarComposerDock } from '../views/composer/CalendarComposerDock';
 import { CalendarComposerHost } from '../views/composer/CalendarComposerHost';
-import { CalendarGridNavigation } from '../views/grid-navigation/CalendarGridNavigation';
 import { MobileCalendarGridAxis } from '../views/mobile/calendar-grid-axis';
-import { SelectedCalendarEvent } from '../views/selection/SelectedCalendarEvent';
+import { SelectedCalendarEvent } from '../views/SelectedCalendarEvent';
 import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
 import { Page } from './Page';
@@ -90,9 +91,10 @@ function CalendarPages() {
   >([calendarPager.activePageId()]);
 
   const mountNeighbors = () => {
-    const neighbors = CALENDAR_PAGE_IDS.filter(
-      (id) => !mountedPages().includes(id)
-    );
+    const neighbors = Array.from(
+      { length: CALENDAR_PAGE_COUNT },
+      (_, id) => id
+    ).filter((id) => !mountedPages().includes(id));
 
     for (const id of neighbors) {
       mountQueue.enqueue(String(id), () =>
@@ -164,7 +166,7 @@ function CalendarPages() {
         ref={setViewport}
         class="relative flex min-w-0 min-h-0 flex-1 overflow-hidden"
         role="region"
-        aria-label="Calendar periods"
+        aria-label={t('calendar.periods')}
       >
         <Show
           when={isMobile() && calendarPager.periodView() !== 'dayGridMonth'}
@@ -174,10 +176,7 @@ function CalendarPages() {
             viewport={viewport}
           />
         </Show>
-        <SnapPager.Viewport
-          class="size-full min-w-0 min-h-0"
-          aria-label="Calendar period pages"
-        >
+        <SnapPager.Viewport class="size-full min-w-0 min-h-0">
           <For each={calendarPager.pager.pages()}>
             {(page) => (
               <SnapPager.Page page={page}>

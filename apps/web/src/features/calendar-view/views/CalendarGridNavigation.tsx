@@ -4,10 +4,10 @@ import {
   CalendarNavigationProvider,
 } from '@app/features/calendar/context/calendar-navigation-context';
 import { timeGridScroller } from '@app/features/calendar/utils/time-grid-scroller';
-import { SnapPager } from '@ui/components/SnapPager';
+import { SnapPager } from '@ui/components/SnapPager/SnapPager';
 import type { ParentProps } from 'solid-js';
 import { onCleanup } from 'solid-js';
-import { useCalendarViewport } from '../../context/calendar-viewport-context';
+import { useCalendarViewport } from '../context/calendar-viewport-context';
 
 /** Adapts the grid pager to workspace navigation without exposing its renderer. */
 export function CalendarGridNavigation(
@@ -17,15 +17,13 @@ export function CalendarGridNavigation(
 ) {
   const calendarPager = useCalendarPager();
   const viewport = useCalendarViewport();
-  if (viewport) {
-    onCleanup(
-      viewport.register(() => ({
-        date: calendarPager.navigationDate().getTime(),
-        gridScrollTop: timeGridScroller(calendarPager.activePage()?.element())
-          ?.scrollTop,
-      }))
-    );
-  }
+  onCleanup(
+    viewport.register(() => ({
+      date: calendarPager.navigationDate().getTime(),
+      gridScrollTop: timeGridScroller(calendarPager.activePage()?.element())
+        ?.scrollTop,
+    }))
+  );
   const navigation: CalendarNavigationContext = {
     periodView: calendarPager.periodView,
     activeDate: calendarPager.activeDate,

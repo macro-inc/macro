@@ -1,7 +1,8 @@
 import {
-  StandaloneComposer,
+  CalendarComposerEditor,
   type StandaloneComposerProps,
-} from '@app/features/calendar/views/composer/StandaloneComposer';
+} from '@app/features/calendar/CalendarComposerEditor';
+import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { onMount } from 'solid-js';
 
@@ -13,10 +14,12 @@ export function EventComposerSplit(
 ) {
   const panel = useSplitPanelOrThrow();
   onMount(() =>
-    panel.handle.setDisplayName(props.event ? 'Edit event' : 'New event')
+    panel.handle.setDisplayName(
+      props.event ? t('calendar.editEvent') : t('calendar.newEvent')
+    )
   );
   return (
-    <StandaloneComposer
+    <CalendarComposerEditor
       {...props}
       onSaved={props.onSaveSuccess}
       onClose={() => panel.handle.close()}

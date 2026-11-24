@@ -25,5 +25,9 @@ export interface CalendarViewportContext {
 
 const Context = createContext<CalendarViewportContext>();
 export const CalendarViewportProvider = Context.Provider;
-/** Inline or independently hosted calendars do not require history retention. */
-export const useCalendarViewport = () => useContext(Context);
+export function useCalendarViewport() {
+  const viewport = useContext(Context);
+  if (!viewport)
+    throw new Error('Calendar viewport requires CalendarViewportProvider');
+  return viewport;
+}

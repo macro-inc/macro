@@ -36,9 +36,11 @@ export function PhoneMonthEvent(props: {
         <span class="block truncate font-medium">
           {props.event.title || t('calendar.agendaUntitled')}
         </span>
-        <span class="block truncate text-xs opacity-80">
-          {time()}
-          <Show when={location()}> · {location()}</Show>
+        <span class="flex min-w-0 items-center gap-2 text-xs text-ink-muted">
+          <span class="shrink-0">{time()}</span>
+          <Show when={location()}>
+            {(place) => <span class="truncate">{place()}</span>}
+          </Show>
         </span>
       </span>
       <Show when={props.event.attendees.length}>

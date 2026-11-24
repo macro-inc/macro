@@ -1,44 +1,28 @@
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
-import { type ButtonSize, Dropdown } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import { Dropdown } from '@ui';
+import type { JSX } from 'solid-js';
 
-/** Menu presentation; consumers compose its trigger and creation items. */
+/** Menu presentation; consumers supply creation actions. */
 export function CalendarCreateMenu(props: {
-  /** The trigger's content when there is no presentation. */
-  trigger?: JSX.Element;
   children: JSX.Element;
-  class?: string;
-  contentClass?: string;
-  size?: ButtonSize;
-  presentation?: 'sidebar' | 'toolbar';
+  presentation: 'sidebar' | 'toolbar';
   restoreFocus?: boolean;
 }) {
   return (
     <Dropdown
-      modal={props.presentation === undefined}
+      modal={false}
       placement={
         props.presentation === 'toolbar' ? 'bottom-end' : 'bottom-start'
       }
     >
-      <Show
-        when={props.presentation}
-        fallback={
-          <Dropdown.Trigger size={props.size} class={props.class}>
-            {props.trigger}
-          </Dropdown.Trigger>
-        }
-      >
-        {(presentation) => (
-          <Dropdown.Trigger
-            as={ViewCreateButton}
-            presentation={presentation()}
-            menu
-            aria-label="New event, call, or booking link"
-          />
-        )}
-      </Show>
+      <Dropdown.Trigger
+        as={ViewCreateButton}
+        presentation={props.presentation}
+        menu
+        aria-label="New event, call, or booking link"
+      />
       <Dropdown.Content
-        class={props.contentClass ?? 'w-80 max-w-[calc(100vw-2rem)]'}
+        class="w-80 max-w-[calc(100vw-2rem)]"
         onCloseAutoFocus={(event) => {
           if (props.restoreFocus === false) event.preventDefault();
         }}

@@ -1,7 +1,7 @@
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
-import { agendaDay } from '@app/features/calendar/primitives/agenda-window';
 import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
+import { startOfDay } from 'date-fns';
 import { createMemo, Show } from 'solid-js';
 import { AgendaWindowList } from './AgendaWindowList';
 
@@ -10,7 +10,7 @@ export function AgendaContent() {
   const navigation = useCalendarNavigation();
   const account = useUserId();
   const date = createMemo(() =>
-    agendaDay(navigation.navigationDate() ?? new Date())
+    startOfDay(navigation.navigationDate() ?? new Date())
   );
   // Preserve navigation requests, including Today when the day is unchanged.
   const session = createMemo(() =>

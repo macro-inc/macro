@@ -1,4 +1,4 @@
-import { AgendaDayHeader } from '@app/features/calendar/components/agenda/day-header/AgendaDayHeader';
+import { AgendaDayHeader } from '@app/features/calendar/components/agenda/AgendaDayHeader';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useTeamOooEvents } from '@app/features/calendar/hooks/use-team-ooo';
@@ -11,11 +11,12 @@ import {
 import { getCalendarSupportedRange } from '@app/features/calendar/utils/calendar-supported-range';
 import { mergeCalendarOverlays } from '@app/features/calendar-team/core/merge';
 import { formatLocale, t } from '@app/lib/i18n';
-import { usePending } from '@app/observability/flow';
+import { TraceFlow, usePending } from '@app/observability/flow';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { Key } from '@solid-primitives/keyed';
+import { addDays, eachDayOfInterval } from 'date-fns';
 import { createMemo, For, Match, onCleanup, Show, Switch } from 'solid-js';
-import { useAgendaGrouping } from '../../context/agenda-grouping-context';
+import type { AgendaGrouping } from '../../primitives/create-agenda-grouping';
 import { AgendaOccurrence } from './AgendaOccurrence';
 
 /** One bounded source window; stable day containers keep late data from resetting the list. */
@@ -23,6 +24,20 @@ export function AgendaWindow(props: {
   anchor: Date;
   index: number;
   active: boolean;
+  grouping: AgendaGrouping;
+}) {
+  return (
+    <TraceFlow name="calendar.agenda.window">
+      <AgendaWindowBody {...props} />
+    </TraceFlow>
+  );
+}
+
+function AgendaWindowBody(props: {
+  anchor: Date;
+  index: number;
+  active: boolean;
+  grouping: AgendaGrouping;
 }) {
   const view = useCalendarView();
   const window = createMemo(() => agendaWindow(props.anchor, props.index));
@@ -58,11 +73,9 @@ export function AgendaWindow(props: {
   const visibleEvents = createMemo(() =>
     mergeCalendarOverlays(data.visibleEvents(), team.events())
   );
-  usePending(
-    'calendar.agenda.window',
-    () => queryWindow() !== undefined && data.isLoading()
+  const days = createMemo(() =>
+    eachDayOfInterval({ start: window().start, end: addDays(window().end, -1) })
   );
-  const days = createMemo(() => agendaEventsByDay([], window().start));
   const grouped = createMemo(() =>
     groupAgendaDays(
       agendaEventsByDay(visibleEvents(), window().start),
@@ -72,7 +85,7 @@ export function AgendaWindow(props: {
         (next >= supported.start && next < supported.end)
     )
   );
-  const grouping = useAgendaGrouping();
+  const grouping = props.grouping;
   onCleanup(
     grouping.register(props.index, () => ({
       groups: grouped(),
@@ -97,40 +110,25 @@ export function AgendaWindow(props: {
           const group = () =>
             grouping
               .groups(props.index)
-              .find((item) => item.start.getTime() === day.date.getTime());
-          const supportedDay =
-            day.date >= supported.start && day.date < supported.end;
+              .find((item) => item.start.getTime() === day.getTime());
+          const supportedDay = day >= supported.start && day < supported.end;
           return (
             <section
-              data-agenda-day={day.date.toDateString()}
-              data-agenda-group-end={group()?.end.toDateString()}
+              data-agenda-day={day.getTime()}
+              data-agenda-group-end={group()?.end.getTime()}
             >
               <Show when={group()}>
                 {(entry) => (
                   <div class="mb-6">
-                    <Show
-                      when={entry().start.getTime() !== entry().end.getTime()}
-                      fallback={<AgendaDayHeader date={entry().start} />}
-                    >
-                      <h2 class="sticky top-0 z-10 border-b border-edge bg-surface px-5 py-3 text-sm font-semibold text-ink-muted">
-                        {entry().start.toLocaleDateString(formatLocale(), {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                        })}{' '}
-                        –{' '}
-                        {entry().end.toLocaleDateString(formatLocale(), {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </h2>
-                    </Show>
+                    <AgendaDayHeader date={entry().start} end={entry().end} />
                     <Switch
                       fallback={
-                        <p class="ml-24 flex min-h-12 items-center px-1 text-xs text-ink-extra-muted">
-                          {t('calendar.agendaNoEvents')}
-                        </p>
+                        <div class="flex max-w-2xl gap-3 px-5">
+                          <span class="w-16 shrink-0" aria-hidden="true" />
+                          <p class="flex min-h-12 items-center px-1 text-xs text-ink-extra-muted">
+                            {t('calendar.agendaNoEvents')}
+                          </p>
+                        </div>
                       }
                     >
                       <Match when={!supportedDay}>
@@ -138,7 +136,14 @@ export function AgendaWindow(props: {
                           {t('calendar.agendaOutOfRange')}
                         </p>
                       </Match>
-                      <Match when={data.isLoading()}>
+                      <Match
+                        when={
+                          data.isLoading() ||
+                          (team.isPending() &&
+                            !entry().events.length &&
+                            !failed())
+                        }
+                      >
                         <p
                           role="status"
                           class="min-h-12 px-5 py-3 text-sm text-ink-muted"
@@ -146,7 +151,7 @@ export function AgendaWindow(props: {
                           {t('calendar.agendaLoading')}
                         </p>
                       </Match>
-                      <Match when={entry().events.length > 0}>
+                      <Match when={entry().events.length > 0 || failed()}>
                         <Key each={entry().events} by="id">
                           {(event) => <AgendaOccurrence event={event()} />}
                         </Key>
@@ -158,22 +163,6 @@ export function AgendaWindow(props: {
                             {t('calendar.agendaLoadError')}
                           </p>
                         </Show>
-                      </Match>
-                      <Match when={failed()}>
-                        <p
-                          role="alert"
-                          class="min-h-12 px-5 py-3 text-sm text-ink-muted"
-                        >
-                          {t('calendar.agendaLoadError')}
-                        </p>
-                      </Match>
-                      <Match when={team.isPending()}>
-                        <p
-                          role="status"
-                          class="min-h-12 px-5 py-3 text-sm text-ink-muted"
-                        >
-                          {t('calendar.agendaLoading')}
-                        </p>
                       </Match>
                     </Switch>
                   </div>

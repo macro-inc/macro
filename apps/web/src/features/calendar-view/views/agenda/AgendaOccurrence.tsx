@@ -1,4 +1,4 @@
-import { AgendaEventRow } from '@app/features/calendar/components/agenda/event-row/AgendaEventRow';
+import { AgendaEventRow } from '@app/features/calendar/components/agenda/AgendaEventRow';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { createEffect, createSignal, on, onCleanup } from 'solid-js';

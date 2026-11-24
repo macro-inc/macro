@@ -1,11 +1,11 @@
 import { ViewSkeleton } from '@app/components/view-shell/ViewSkeleton';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
-import { AgendaSkeleton } from '@app/features/calendar/components/agenda/skeleton/AgendaSkeleton';
+import { AgendaSkeleton } from '@app/features/calendar/components/agenda/AgendaSkeleton';
 import { CalendarGridSkeleton } from '@app/features/calendar/components/CalendarGridSkeleton';
 import type { CalendarPeriodView } from '@app/features/calendar/types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Show } from 'solid-js';
-import { CalendarMainSkeleton } from './views/calendar-header/CalendarMainSkeleton';
+import { CalendarMainSkeleton } from './views/CalendarMainSkeleton';
 import { MobileCalendarMainSkeleton } from './views/mobile/calendar-main-skeleton';
 
 const monthTitle = () =>

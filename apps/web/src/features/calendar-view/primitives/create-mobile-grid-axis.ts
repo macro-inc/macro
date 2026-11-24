@@ -122,7 +122,21 @@ export function createMobileGridAxis(
       const schedule = () => {
         if (frame === undefined) frame = requestAnimationFrame(measure);
       };
-      const mutation = new MutationObserver(schedule);
+      const mutation = new MutationObserver((records) => {
+        if (
+          records.every((record) => {
+            const target =
+              record.target instanceof Element
+                ? record.target
+                : record.target.parentElement;
+            return target?.closest(
+              '[data-calendar-current-time-line],[data-calendar-card-fade]'
+            );
+          })
+        )
+          return;
+        schedule();
+      });
       mutation.observe(element, {
         childList: true,
         subtree: true,

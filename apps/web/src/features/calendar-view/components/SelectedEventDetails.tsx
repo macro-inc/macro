@@ -1,4 +1,4 @@
-import { ComposerDropTarget } from '@app/features/calendar/components/composer/drop-target/ComposerDropTarget';
+import { ComposerDropTarget } from '@app/features/calendar/components/composer/parts/ComposerDropTarget';
 import { hasEveryoneElseDeclined } from '@app/features/calendar/components/EventContent';
 import { EventDetails } from '@app/features/calendar/components/EventDetails';
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
@@ -27,10 +27,6 @@ import { useForwardEventEmail } from '@app/features/calendar-view/components/use
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { copyCalendarEventMention } from '@app/features/calendar-view/copy-event-mention';
 import { downloadCalendarEventIcs } from '@app/features/calendar-view/download-event-ics';
-import {
-  startUiOperation,
-  type UiOperation,
-} from '@app/observability/ui-operation';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
@@ -470,10 +466,10 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
   const openEventComposer = useOpenEventComposer();
   const host = useCalendarComposerHost();
   let content: HTMLDivElement | undefined;
-  let operation: UiOperation | undefined;
   const pinned = () => host?.cardPinned() ?? false;
   const { drag, docked, dockRect, anchorRect, maxHeight } =
     createCalendarPanelPlacement({
+      kind: 'event-card',
       boundary: () => host?.boundary() ?? props.boundary,
       dock: () => host?.dock(),
       surface: () => content,
@@ -486,15 +482,10 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
       onPin: () => host?.setCardPinned(true),
       onUnpin: () => host?.setCardPinned(false),
       onStart: () => {
-        operation = startUiOperation('calendar.event_card.drag');
         host?.setDrag(drag);
       },
-      onFinish: (outcome) => {
+      onFinish: () => {
         host?.setDrag(undefined);
-        operation?.span.setAttr('calendar.event_card.drag_outcome', outcome);
-        if (outcome === 'cancelled') operation?.cancel();
-        else operation?.afterPaint();
-        operation = undefined;
       },
     });
   const deleteDialog = useDeleteEventDialog({

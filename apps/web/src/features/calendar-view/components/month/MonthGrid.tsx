@@ -39,7 +39,7 @@ export function MonthGrid(props: {
   return (
     <div
       class="phone-month-bars"
-      aria-label="Month calendar"
+      aria-label={t('calendar.monthCalendar')}
       style={{ '--phone-month-event-height': `${PHONE_MONTH_EVENT_HEIGHT}px` }}
     >
       <div
@@ -84,7 +84,7 @@ export function MonthGrid(props: {
                   {(day, index) => (
                     <button
                       type="button"
-                      class="phone-month-day"
+                      class="phone-month-day outline-none focus-visible:inset-ring-2 focus-visible:inset-ring-accent aria-pressed:not-focus-visible:inset-ring-1 aria-pressed:inset-ring-accent"
                       style={{ 'grid-column': index() + 1 }}
                       classList={{
                         'phone-month-day-selected':

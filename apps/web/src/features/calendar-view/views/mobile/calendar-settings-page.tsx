@@ -1,10 +1,13 @@
 import { ViewShell } from '@app/components/view-shell';
 import { AVAILABILITY_TIME_BOUNDS } from '@app/features/calendar/availability/availability';
 import { useAvailabilitySettings } from '@app/features/calendar/availability/settings';
+import { availabilityTimeOptions } from '@app/features/calendar/availability/time-options';
 import { createCalendarSettingsControls } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { TurnOffCalendarDialog } from '@app/features/calendar/components/TurnOffCalendarDialog';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { useCalendarTeamSettings } from '@app/features/calendar-team/calendar-team';
+import { calendarSharingOptions } from '@app/features/calendar-team/components/team-sharing-settings';
+import { t } from '@app/lib/i18n';
 import { usePending } from '@app/observability/flow';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import { toast } from '@core/component/Toast/Toast';
@@ -25,17 +28,6 @@ import {
   CalendarSettingsSelect,
   CalendarSettingsSwitch,
 } from './calendar-settings-parts';
-
-const SHARING_OPTIONS = [
-  { id: 'busy_only', name: 'Busy blocks' },
-  { id: 'all', name: 'Event details' },
-  { id: 'none', name: 'Nothing' },
-];
-const HOURS = Array.from({ length: 48 }, (_, index) => {
-  const hour = Math.floor(index / 2);
-  const minute = index % 2 ? '30' : '00';
-  return { id: `${String(hour).padStart(2, '0')}:${minute}`, hour, minute };
-});
 
 /** The phone page uses the same preferences and mutations as the desktop settings. */
 export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
@@ -59,19 +51,15 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
   const endTime = createMemo(() => availability.settings().endTime);
   const timeOptions = (edge: 'start' | 'end', selected: string) => {
     const bounds = AVAILABILITY_TIME_BOUNDS[edge];
-    return HOURS.filter(({ id, hour, minute }) => {
-      const minutes = hour * 60 + Number(minute);
-      // Preserve a valid older setting without expanding the offered workday range.
-      return (
-        id === selected || (minutes >= bounds.min && minutes <= bounds.max)
-      );
-    }).map(({ id, hour, minute }) => ({
-      id,
-      name:
-        preferences.timeFormat === '24-hour'
-          ? id
-          : `${hour % 12 || 12}:${minute} ${hour < 12 ? 'AM' : 'PM'}`,
-    }));
+    return availabilityTimeOptions(0, 23.5, preferences.timeFormat)
+      .filter(({ value }) => {
+        const [hour, minute] = value.split(':').map(Number);
+        const minutes = hour * 60 + minute;
+        return (
+          value === selected || (minutes >= bounds.min && minutes <= bounds.max)
+        );
+      })
+      .map(({ value, label }) => ({ id: value, name: label }));
   };
   const startOptions = createMemo(() => timeOptions('start', startTime()));
   const endOptions = createMemo(() => timeOptions('end', endTime()));
@@ -85,7 +73,9 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
         >
           <ViewShell.TopBarTitle>
             <h1 class="truncate px-3 text-base font-semibold">
-              {busyPage() ? 'Busy calendars' : 'Calendar settings'}
+              {busyPage()
+                ? t('calendar.busyCalendars')
+                : t('calendar.settingsTitle')}
             </h1>
           </ViewShell.TopBarTitle>
         </ViewShell.TopBar>
@@ -94,23 +84,23 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
             <Show
               when={!busyPage()}
               fallback={
-                <CalendarSettingsGroup title="Which calendars make you busy">
+                <CalendarSettingsGroup title={t('calendar.busyCalendarsTitle')}>
                   <Show when={busy.isError}>
                     <p role="alert" class="p-4">
-                      Could not load busy calendars.
+                      {t('calendar.busyCalendarsError')}
                       <Button
                         variant="ghost"
                         onClick={() =>
                           fireAndForget(busy.refetch(), 'calendar-settings')
                         }
                       >
-                        Retry
+                        {t('common.retry')}
                       </Button>
                     </p>
                   </Show>
                   <Show when={busy.isLoading}>
                     <p role="status" class="p-4">
-                      Loading calendars…
+                      {t('calendar.loadingCalendars')}
                     </p>
                   </Show>
                   <For
@@ -142,7 +132,7 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                                 {
                                   onError: () =>
                                     toast.failure(
-                                      'Could not save which calendars make you busy'
+                                      t('calendar.busyCalendarsSaveError')
                                     ),
                                 }
                               );
@@ -161,29 +151,29 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
               }
             >
               <div class="flex flex-col gap-5 py-2">
-                <CalendarSettingsGroup title="Display">
+                <CalendarSettingsGroup title={t('calendar.display')}>
                   <CalendarSettingsSwitch
-                    label="Show weekends"
+                    label={t('calendar.showWeekends')}
                     checked={view.displaySettings.showWeekends}
                     onChange={controls.changeShowWeekends}
                   />
                   <CalendarSettingsSelect
-                    label="Week starts on"
+                    label={t('calendar.weekStartsOn')}
                     value={String(view.displaySettings.weekStartsOn)}
                     options={[
-                      { id: '0', name: 'Sunday' },
-                      { id: '1', name: 'Monday' },
+                      { id: '0', name: t('calendar.sunday') },
+                      { id: '1', name: t('calendar.monday') },
                     ]}
                     onChange={(value) =>
                       controls.changeWeekStartsOn(value === '1' ? 1 : 0)
                     }
                   />
                   <CalendarSettingsSelect
-                    label="Time format"
+                    label={t('calendar.timeFormat')}
                     value={view.displaySettings.timeFormat}
                     options={[
-                      { id: '12-hour', name: '12-hour' },
-                      { id: '24-hour', name: '24-hour' },
+                      { id: '12-hour', name: t('calendar.twelveHour') },
+                      { id: '24-hour', name: t('calendar.twentyFourHour') },
                     ]}
                     onChange={(value) =>
                       controls.changeTimeFormat(
@@ -192,7 +182,7 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                     }
                   />
                 </CalendarSettingsGroup>
-                <CalendarSettingsGroup title="Accounts">
+                <CalendarSettingsGroup title={t('calendar.accounts')}>
                   <For each={controls.accounts()}>
                     {(account) => (
                       <CalendarSettingsRow>
@@ -202,8 +192,8 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                           </div>
                           <div class="text-sm text-ink-muted">
                             {account.provider === 'GMAIL'
-                              ? 'Google Calendar'
-                              : 'Outlook Calendar'}
+                              ? t('calendar.googleCalendar')
+                              : t('calendar.outlookCalendar')}
                           </div>
                         </div>
                         <Button
@@ -216,10 +206,10 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                           onClick={() => controls.runAccountAction(account)}
                         >
                           {account.action === 'turnOff'
-                            ? 'Turn off'
+                            ? t('calendar.turnOff')
                             : account.action === 'reconnect'
-                              ? 'Reconnect'
-                              : 'Enable'}
+                              ? t('calendar.reconnect')
+                              : t('calendar.enable')}
                         </Button>
                       </CalendarSettingsRow>
                     )}
@@ -233,25 +223,25 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                       onClick={controls.connectAnotherAccount}
                     >
                       <Plus class="size-5" />
-                      Connect another account
+                      {t('viewMenus.connectAnotherAccount')}
                     </Button>
                   </CalendarSettingsRow>
                 </CalendarSettingsGroup>
-                <CalendarSettingsGroup title="Availability">
+                <CalendarSettingsGroup title={t('calendar.availability')}>
                   <CalendarSettingsSelect
-                    label="Start time"
+                    label={t('calendar.settingsStartTime')}
                     value={availability.settings().startTime}
                     options={startOptions()}
                     onChange={availability.setStartTime}
                   />
                   <CalendarSettingsSelect
-                    label="End time"
+                    label={t('calendar.settingsEndTime')}
                     value={availability.settings().endTime}
                     options={endOptions()}
                     onChange={availability.setEndTime}
                   />
                   <CalendarSettingsSwitch
-                    label="Exclude weekends"
+                    label={t('calendar.excludeWeekends')}
                     checked={availability.settings().excludeWeekends}
                     onChange={availability.setExcludeWeekends}
                   />
@@ -263,7 +253,7 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                       class="justify-between"
                       onClick={() => setBusyPage(true)}
                     >
-                      <span>Busy calendars</span>
+                      <span>{t('calendar.busyCalendars')}</span>
                       <span class="flex items-center gap-2 text-ink-muted">
                         {busy.isSuccess
                           ? busyCalendars().filter(
@@ -275,9 +265,9 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                     </Button>
                   </CalendarSettingsRow>
                 </CalendarSettingsGroup>
-                <CalendarSettingsGroup title="Preferences">
+                <CalendarSettingsGroup title={t('calendar.preferences')}>
                   <CalendarSettingsSwitch
-                    label="Next meeting countdown"
+                    label={t('calendar.meetingCountdown')}
                     checked={preferences.showNextMeetingBadge}
                     onChange={(value) =>
                       setPreferences('showNextMeetingBadge', value)
@@ -290,10 +280,10 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                         <CalendarSettingsRow
                           label={
                             sharing.teamLoading
-                              ? 'Loading team sharing…'
+                              ? t('calendar.loadingTeamSharing')
                               : sharing.error
-                                ? 'Team sharing unavailable'
-                                : 'Join a team to share your calendar'
+                                ? t('calendar.teamSharingUnavailable')
+                                : t('calendar.joinTeamToShare')
                           }
                         >
                           <Show when={sharing.error}>
@@ -302,16 +292,16 @@ export function MobileCalendarSettingsPage(props: { onBack: () => void }) {
                               size="sm"
                               onClick={sharing.onRetry}
                             >
-                              Retry
+                              {t('common.retry')}
                             </Button>
                           </Show>
                         </CalendarSettingsRow>
                       }
                     >
                       <CalendarSettingsSelect
-                        label="Share with teammates"
+                        label={t('calendar.shareWithTeammates')}
                         value={sharing.sharing}
-                        options={SHARING_OPTIONS}
+                        options={calendarSharingOptions()}
                         disabled={sharing.sharing === undefined}
                         onChange={(value) => {
                           if (

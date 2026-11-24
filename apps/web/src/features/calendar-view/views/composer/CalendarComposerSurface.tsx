@@ -1,4 +1,5 @@
-import { ComposerDropTarget } from '@app/features/calendar/components/composer/drop-target/ComposerDropTarget';
+import { CalendarComposerEditor } from '@app/features/calendar/CalendarComposerEditor';
+import { ComposerDropTarget } from '@app/features/calendar/components/composer/parts/ComposerDropTarget';
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import type { CalendarComposerSession } from '@app/features/calendar/primitives/create-calendar-composer-session';
 import { createCalendarPanelPlacement } from '@app/features/calendar/primitives/create-calendar-panel-placement';
@@ -6,12 +7,7 @@ import {
   classifyOpenEventOutsidePress,
   handleOpenEventOutsidePress,
 } from '@app/features/calendar/utils/open-event-outside-press';
-import { StandaloneComposer } from '@app/features/calendar/views/composer/StandaloneComposer';
 import { t } from '@app/lib/i18n';
-import {
-  startUiOperation,
-  type UiOperation,
-} from '@app/observability/ui-operation';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Popover } from '@kobalte/core/popover';
@@ -27,9 +23,9 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
   const session = props.session;
   const pinned = host.composerPinned;
   let content: HTMLDivElement | undefined;
-  let operation: UiOperation | undefined;
   const { drag, docked, dockRect, anchorRect, maxHeight } =
     createCalendarPanelPlacement({
+      kind: 'composer',
       boundary: host.boundary,
       dock: host.dock,
       surface: () => content,
@@ -42,15 +38,10 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
       },
       onUnpin: () => host.sessions.setPinned(session.key, false),
       onStart: () => {
-        operation = startUiOperation('calendar.composer.drag');
         host.setDrag(drag);
       },
-      onFinish: (outcome) => {
+      onFinish: () => {
         host.setDrag(undefined);
-        operation?.span.setAttr('calendar.composer.drag_outcome', outcome);
-        if (outcome === 'cancelled') operation?.cancel();
-        else operation?.afterPaint();
-        operation = undefined;
       },
     });
   onMount(() => {
@@ -129,7 +120,7 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
           <Popover.Title class="sr-only">
             {session.request.event?.title || t('calendar.newEvent')}
           </Popover.Title>
-          <StandaloneComposer
+          <CalendarComposerEditor
             {...session.request}
             pinned={pinned()}
             onTogglePin={

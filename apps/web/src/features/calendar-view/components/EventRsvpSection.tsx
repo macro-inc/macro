@@ -5,6 +5,8 @@ import { EventRsvpScope } from '@app/features/calendar/components/event-rsvp/Eve
 import { EventRsvpStatus } from '@app/features/calendar/components/event-rsvp/EventRsvpStatus';
 import { EventRsvpRoot } from '@app/features/calendar/context/event-rsvp-context';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import { t } from '@app/lib/i18n';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 /**
  * RSVP controls for the connected account's own attendance.
@@ -13,30 +15,32 @@ import type { CalendarEvent } from '@app/features/calendar/types';
 export function EventRsvpSection(props: {
   event: CalendarEvent;
   buttonSize?: 'sm' | 'md';
-  agenda?: boolean;
 }) {
   return (
     <EventRsvpRoot event={props.event}>
-      <EventRsvpRow
-        class={
-          props.agenda
-            ? 'border-edge-muted border-t bg-surface px-4 py-2.5 text-sm text-ink sm:text-xs mobile:border-0 mobile:px-6 mobile:pt-4 mobile:pb-2'
-            : 'border-edge-muted border-t bg-active px-4 py-2.5 text-sm text-ink-muted sm:text-xs mobile:border-0 mobile:bg-transparent mobile:px-6 mobile:pt-4 mobile:pb-2'
-        }
-      >
+      <EventRsvpRow class="border-edge-muted border-t bg-active px-4 py-2.5 text-sm text-ink-muted sm:text-xs mobile:border-0 mobile:bg-transparent mobile:px-6 mobile:pt-4 mobile:pb-2">
         <span class="flex shrink-0 items-center gap-2">
-          Going?
+          {t('calendar.going')}
           <EventRsvpStatus />
         </span>
         <div class="ml-auto flex shrink-0 gap-3 lg:gap-2">
-          <EventRsvpChoice response="accepted" size={props.buttonSize}>
-            Yes
+          <EventRsvpChoice
+            response="accepted"
+            size={isTouchDevice() ? 'sheet' : props.buttonSize}
+          >
+            {t('calendar.replyYes')}
           </EventRsvpChoice>
-          <EventRsvpChoice response="tentative" size={props.buttonSize}>
-            Maybe
+          <EventRsvpChoice
+            response="tentative"
+            size={isTouchDevice() ? 'sheet' : props.buttonSize}
+          >
+            {t('calendar.replyMaybe')}
           </EventRsvpChoice>
-          <EventRsvpChoice response="declined" size={props.buttonSize}>
-            No
+          <EventRsvpChoice
+            response="declined"
+            size={isTouchDevice() ? 'sheet' : props.buttonSize}
+          >
+            {t('calendar.replyNo')}
           </EventRsvpChoice>
         </div>
         <EventRsvpError />

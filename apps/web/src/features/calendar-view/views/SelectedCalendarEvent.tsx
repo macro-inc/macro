@@ -1,7 +1,7 @@
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import { canEditCalendarEvent } from '@app/features/calendar/utils/event-interaction';
 import { type ComponentProps, Show } from 'solid-js';
-import { SelectedEventDetails } from '../../components/SelectedEventDetails';
+import { SelectedEventDetails } from '../components/SelectedEventDetails';
 
 type SelectedCalendarEventProps = ComponentProps<typeof SelectedEventDetails>;
 

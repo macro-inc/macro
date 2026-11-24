@@ -57,12 +57,10 @@
   text-align: left;
 }
 .phone-month-day:last-of-type { border-right: 0; }
-.phone-month-day:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 .phone-month-day:disabled { opacity: 0.4; }
 .phone-month-day-outside { color: var(--color-ink-extra-muted); }
 .phone-month-day-selected {
   background: var(--color-selected);
-  box-shadow: inset 0 0 0 1px var(--color-accent);
   color: var(--color-accent);
 }
 .phone-month-date {

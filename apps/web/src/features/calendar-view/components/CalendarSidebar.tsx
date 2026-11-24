@@ -21,16 +21,16 @@ import {
   DEFAULT_CALENDAR_SOURCE,
   TEAM_OOO_SOURCE_ID,
 } from '@app/features/calendar/types';
+import { calendarMonthLabel } from '@app/features/calendar/utils/calendar-label';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
 import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
-import { formatLocale, t } from '@app/lib/i18n';
+import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import PlusIcon from '@icon/system/regular/plus.svg';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { Key } from '@solid-primitives/keyed';
 import {
@@ -68,12 +68,7 @@ function MiniMonthControl(props: CalendarMonthSelectorProps) {
         props.onChange(new Date(date.getFullYear(), date.getMonth(), 1))
       }
     >
-      <span class="min-w-0 truncate">
-        {new Intl.DateTimeFormat(formatLocale(), {
-          month: 'long',
-          year: 'numeric',
-        }).format(props.month)}
-      </span>
+      <span class="min-w-0 truncate">{calendarMonthLabel(props.month)}</span>
       <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
     </MonthYearPickerPopover>
   );
@@ -395,7 +390,7 @@ function DesktopCalendarSidebar() {
 
   return (
     <ViewSidebar.Root
-      aria-label="Calendar navigation"
+      aria-label={t('calendar.navigation')}
       reorderId="calendar"
       data-calendar-sidebar=""
       class={composerHost?.drag()?.state.active ? 'invisible' : undefined}
@@ -409,18 +404,7 @@ function DesktopCalendarSidebar() {
       <ViewSidebar.Primary>
         <CalendarCreateMenu
           restoreFocus={!composerHost?.sessions.state.session}
-          presentation={isTouchDevice() ? undefined : 'sidebar'}
-          size="md"
-          class="h-(--sidebar-row-height) w-full min-w-0 justify-start gap-(--sidebar-label-gap) px-(--sidebar-item-inset) text-left touch:h-11"
-          trigger={
-            <>
-              <ViewSidebar.Icon>
-                <PlusIcon class="size-4" />
-              </ViewSidebar.Icon>
-              <span class="min-w-0 flex-1 truncate">New</span>
-              <CaretDownIcon class="size-3.5 shrink-0" />
-            </>
-          }
+          presentation="sidebar"
         >
           <CalendarCreateEventItem onSelect={closeOverlay} />
           <CalendarCreateCallItem onSelect={closeOverlay} />
@@ -455,7 +439,7 @@ function DesktopCalendarSidebar() {
       {/* Outside the scrolling list, so a long list never slides it under Settings. */}
       <ConnectCalendarsPromotion class="px-(--sidebar-gutter) pt-2" />
       <ViewSidebar.Footer class="border-0 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+0.75rem)]">
-        <ViewSidebar.Nav aria-label="Calendar tools">
+        <ViewSidebar.Nav aria-label={t('calendar.tools')}>
           <CalendarSettingsDropdown sidebar />
         </ViewSidebar.Nav>
       </ViewSidebar.Footer>

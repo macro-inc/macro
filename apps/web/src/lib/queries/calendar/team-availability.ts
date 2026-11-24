@@ -7,7 +7,7 @@ import { calendarKeys } from './keys';
 
 type AvailabilityRange = { start: Date; end: Date };
 
-export function teamAvailabilityOptions(
+function teamAvailabilityOptions(
   userId: string | undefined,
   range: AvailabilityRange | undefined,
   members: readonly string[]

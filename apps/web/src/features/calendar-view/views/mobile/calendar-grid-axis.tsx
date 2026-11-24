@@ -1,5 +1,5 @@
 import { MOBILE_EDGE_FADE_FALLOFF, mobileEdgeFade } from '@core/util/edge-fade';
-import { type Accessor, For, Show } from 'solid-js';
+import { type Accessor, Index, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { createMobileGridAxis } from '../../primitives/create-mobile-grid-axis';
 
@@ -34,20 +34,20 @@ export function MobileCalendarGridAxis(props: {
               transform: `translateY(${labelBleed() - axis.state.scrollTop}px)`,
             }}
           >
-            <For each={axis.state.labels}>
+            <Index each={axis.state.labels}>
               {(label) => (
                 <div
                   class="absolute inset-x-0 text-right"
                   style={{
-                    top: `${label.top}px`,
-                    height: `${label.height}px`,
+                    top: `${label().top}px`,
+                    height: `${label().height}px`,
                     'padding-right': 'var(--calendar-phone-axis-gap)',
                   }}
                 >
-                  {label.text}
+                  {label().text}
                 </div>
               )}
-            </For>
+            </Index>
             <Show when={axis.state.now}>
               {(now) => (
                 <div

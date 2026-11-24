@@ -29,7 +29,7 @@ export function MonthDaySheet(props: {
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
         <MobileDrawer.Content
-          aria-label="Day events"
+          aria-label={t('calendar.dayEvents')}
           maxHeight={80}
           targetHeight={50}
           ref={props.ref}
@@ -38,21 +38,24 @@ export function MonthDaySheet(props: {
           <div class="flex shrink-0 items-center justify-between gap-3 px-6 pb-4">
             <Button
               variant="ghost"
-              class="h-auto min-w-0 justify-start px-0 text-left text-xl font-semibold text-ink"
+              size="lg"
+              class="min-w-0"
               onClick={props.onOpenDay}
-              aria-label="Open day view"
+              aria-label={t('calendar.openDayView')}
             >
-              {props.date.toLocaleDateString(formatLocale(), {
-                weekday: 'short',
-                month: 'long',
-                day: 'numeric',
-              })}
+              <MobileDrawer.Title class="text-xl font-semibold">
+                {props.date.toLocaleDateString(formatLocale(), {
+                  weekday: 'short',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </MobileDrawer.Title>
             </Button>
             <Button
               variant="secondary"
               size="icon-lg"
               class="shrink-0"
-              aria-label="Create event on selected day"
+              aria-label={t('calendar.createOnDay')}
               onClick={props.onCreate}
             >
               <PlusIcon class="size-5" />

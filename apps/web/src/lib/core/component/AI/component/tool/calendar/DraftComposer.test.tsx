@@ -1,10 +1,9 @@
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
-import type { AgentComposer } from '@app/features/calendar/views/composer/AgentComposer';
 import type { VisibleCalendar } from '@queries/calendar/calendars';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import type { Link } from '@service-email/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { type ComponentProps, For, type JSX } from 'solid-js';
+import { For, type JSX } from 'solid-js';
 import {
   afterEach,
   beforeEach,
@@ -106,7 +105,7 @@ vi.mock('@app/features/calendar/views/composer/AgentComposer', async () => {
     '@app/features/calendar/context/calendar-composer-context'
   );
   return {
-    AgentComposer: (props: ComponentProps<typeof AgentComposer>) => {
+    AgentComposer: () => {
       const model = useCalendarComposer();
       const controller = model.controller;
       return (
@@ -123,9 +122,6 @@ vi.mock('@app/features/calendar/views/composer/AgentComposer', async () => {
               {(option) => <option value={option.id}>{option.label}</option>}
             </For>
           </select>
-          <output aria-label="Macro calls enabled">
-            {String(props.macroCallsEnabled)}
-          </output>
           <output aria-label="Time format">{model.range.timeFormat}</output>
           <output aria-label="Conference">
             {controller.state().conference}

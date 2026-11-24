@@ -1,30 +1,32 @@
 import { useViewShell, ViewSidebar } from '@app/components/view-shell';
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
+import { CalendarSwatch } from '@app/features/calendar/components/CalendarSwatch';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { CalendarColorPicker } from '@app/features/calendar/components/calendar-color-picker';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
 import { useHasTeammates } from '@app/features/calendar/hooks/use-team-ooo';
 import { TEAM_OOO_SOURCE_ID } from '@app/features/calendar/types';
+import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
 import { groupCalendarSourcesByAccount } from '@app/features/calendar/utils/calendar-source-groups';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
+import { copyBookingLink } from '@app/features/scheduling/booking-link';
 import {
   bookingLinksSearch,
   bookingLinksSearchCodec,
 } from '@app/features/scheduling/booking-links-search';
 import { useSchedulingProfileWithAutoSetupQuery } from '@app/features/scheduling/queries/source';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import { bookingLinksRoute, calendarSettingsRoute } from '@app/routes/routes';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { touchHandler } from '@core/directive/touchHandler';
 import { useAddInboxFlow } from '@core/email-link';
-import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { getWebOrigin } from '@core/util/webOrigin';
 import BackIcon from '@icon/system/regular/caret-left.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import GearIcon from '@icon/system/regular/gear.svg';
@@ -33,11 +35,11 @@ import { Button, Checkbox } from '@ui';
 import { batch, createSignal, For, Show } from 'solid-js';
 
 const VIEWS = [
-  { value: 'agenda', label: 'Agenda' },
-  { value: 'timeGridDay', label: 'Day' },
-  { value: 'timeGridThreeDay', label: '3 days' },
-  { value: 'timeGridWeek', label: 'Week' },
-  { value: 'dayGridMonth', label: 'Month' },
+  'agenda',
+  'timeGridDay',
+  'timeGridThreeDay',
+  'timeGridWeek',
+  'dayGridMonth',
 ] as const;
 
 function MobileBookingLinks() {
@@ -46,7 +48,7 @@ function MobileBookingLinks() {
   const source = useSchedulingProfileWithAutoSetupQuery(
     () => ({
       id: user() ?? 'me',
-      name: 'Personal',
+      name: t('viewMenus.personal'),
       canEdit: true,
       canManageBookings: true,
     }),
@@ -56,19 +58,19 @@ function MobileBookingLinks() {
   const copy = async (slug: string) => {
     const owner = profile();
     if (!owner?.revision) return;
-    const url = `${getWebOrigin()}/app/book/${encodeURIComponent(owner.id)}/${encodeURIComponent(slug)}`;
-    if (await writeClipboardData({ 'text/plain': url }))
-      toast.success('Booking link copied');
-    else toast.failure('Could not copy booking link');
+    await copyBookingLink(owner, slug);
   };
   return (
-    <section aria-label="Booking links" class="flex flex-col gap-2">
+    <section
+      aria-label={t('calendar.bookingLinks')}
+      class="flex flex-col gap-2"
+    >
       <div class="flex items-center justify-between px-3 text-xs font-medium text-ink-extra-muted">
-        <span>Booking links</span>
+        <span>{t('calendar.bookingLinks')}</span>
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="New booking link"
+          aria-label={t('calendar.newBookingLink')}
           onClick={() =>
             fireAndForget(
               navigate(
@@ -91,9 +93,17 @@ function MobileBookingLinks() {
         </Button>
       </div>
       <Show when={source.isLoading}>
-        <p role="status" class="px-3 text-sm text-ink-muted">
-          Loading booking links…
-        </p>
+        <ListSkeleton.Root
+          class="px-3"
+          label={t('calendar.loadingBookingLinks')}
+        >
+          <ListSkeleton.Row>
+            <ListSkeleton.Bar class="h-4 w-32" />
+          </ListSkeleton.Row>
+          <ListSkeleton.Row>
+            <ListSkeleton.Bar class="h-4 w-40" />
+          </ListSkeleton.Row>
+        </ListSkeleton.Root>
       </Show>
       <Show when={source.isError}>
         <Button
@@ -102,7 +112,7 @@ function MobileBookingLinks() {
             fireAndForget(source.refetch(), 'calendar-booking-links')
           }
         >
-          Retry booking links
+          {t('calendar.retryBookingLinks')}
         </Button>
       </Show>
       <For each={profile()?.eventTypes.filter((event) => event.enabled) ?? []}>
@@ -121,7 +131,7 @@ function MobileBookingLinks() {
       <CopyAvailabilityButton
         class="w-full justify-start"
         size="lg"
-        label="Copy availability"
+        label={t('calendar.copyAvailability')}
       />
       <ViewSidebar.Item
         onClick={() =>
@@ -131,7 +141,7 @@ function MobileBookingLinks() {
           )
         }
       >
-        Manage booking links
+        {t('calendar.manageBookingLinks')}
       </ViewSidebar.Item>
     </section>
   );
@@ -159,11 +169,13 @@ export function MobileCalendarSidebar() {
       view.sources().filter((source) => source.emailLinkId)
     );
   return (
-    <ViewSidebar.Root aria-label="Calendar navigation" class="bg-menu">
+    <ViewSidebar.Root aria-label={t('calendar.navigation')} class="bg-menu">
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton class="shrink-0" />
-          <ViewSidebar.Title>Calendar</ViewSidebar.Title>
+          <ViewSidebar.Title>
+            {t('calendar.composerCalendar')}
+          </ViewSidebar.Title>
         </div>
       </ViewSidebar.Header>
       <div class="relative flex min-h-0 flex-1 flex-col">
@@ -172,25 +184,28 @@ export function MobileCalendarSidebar() {
             when={selected()}
             fallback={
               <>
-                <ViewSidebar.Nav aria-label="Calendar views">
+                <ViewSidebar.Nav aria-label={t('calendar.views')}>
                   <For each={VIEWS}>
                     {(item) => (
                       <ViewSidebar.Item
-                        active={navigation.periodView() === item.value}
-                        onClick={() => navigation.changeView(item.value)}
+                        active={navigation.periodView() === item}
+                        onClick={() => navigation.changeView(item)}
                       >
-                        {item.label}
+                        {calendarPeriodLabel(item)}
                       </ViewSidebar.Item>
                     )}
                   </For>
                 </ViewSidebar.Nav>
-                <section aria-label="Calendars" class="flex flex-col gap-2">
+                <section
+                  aria-label={t('calendar.calendars')}
+                  class="flex flex-col gap-2"
+                >
                   <div class="flex items-center justify-between px-3 text-xs font-medium text-ink-extra-muted">
-                    <span>Calendars</span>
+                    <span>{t('calendar.calendars')}</span>
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      aria-label="Connect a calendar account"
+                      aria-label={t('calendar.connectAccount')}
                       onClick={() =>
                         fireAndForget(
                           connect({ scopes: 'gmail_and_calendar' }),
@@ -227,9 +242,9 @@ export function MobileCalendarSidebar() {
                                   changeVisibility(source.id, checked)
                                 }
                                 class="flex min-h-11 w-full gap-3 rounded-lg px-3 text-base"
-                                style={{ '--color-accent': source.color }}
                               >
                                 <Checkbox.Control />
+                                <CalendarSwatch color={source.color} />
                                 <Checkbox.Label class="min-w-0 flex-1 truncate">
                                   {source.name}
                                 </Checkbox.Label>
@@ -243,8 +258,10 @@ export function MobileCalendarSidebar() {
                 </section>
                 <ShowFeatureFlag flag={enableCalendarTeamOoo}>
                   <Show when={hasTeammates()}>
-                    <section aria-label="Team">
-                      <div class="px-3 text-xs text-ink-extra-muted">Team</div>
+                    <section aria-label={t('calendar.team')}>
+                      <div class="px-3 text-xs text-ink-extra-muted">
+                        {t('calendar.team')}
+                      </div>
                       <Checkbox
                         checked={view.isSourceVisible(TEAM_OOO_SOURCE_ID)}
                         onChange={(checked) =>
@@ -253,7 +270,9 @@ export function MobileCalendarSidebar() {
                         class="flex min-h-11 gap-3 px-3"
                       >
                         <Checkbox.Control />
-                        <Checkbox.Label>Out of office</Checkbox.Label>
+                        <Checkbox.Label>
+                          {t('calendar.eventKindOutOfOffice')}
+                        </Checkbox.Label>
                       </Checkbox>
                     </section>
                   </Show>
@@ -265,7 +284,7 @@ export function MobileCalendarSidebar() {
             {(source) => (
               <section
                 class="flex flex-col gap-3"
-                aria-label="Calendar options"
+                aria-label={t('calendar.options')}
               >
                 <ViewSidebar.Item
                   onClick={(event) => {
@@ -274,13 +293,13 @@ export function MobileCalendarSidebar() {
                   }}
                 >
                   <BackIcon class="size-5" />
-                  Back
+                  {t('common.back')}
                 </ViewSidebar.Item>
                 <h2 class="px-3 text-base font-medium">{source().name}</h2>
                 <div class="flex items-center justify-between px-3">
-                  <span>Calendar color</span>
+                  <span>{t('calendar.color')}</span>
                   <CalendarColorPicker
-                    label={`${source().name} color`}
+                    label={t('calendar.namedColor', { name: source().name })}
                     color={source().color}
                     overridden={
                       preferences.sourceColors[source().id] !== undefined
@@ -304,7 +323,7 @@ export function MobileCalendarSidebar() {
                     setSelectedId(undefined);
                   }}
                 >
-                  Show only this calendar
+                  {t('calendar.showOnly')}
                 </ViewSidebar.Item>
               </section>
             )}
@@ -317,10 +336,10 @@ export function MobileCalendarSidebar() {
           falloff="mobile"
         />
       </div>
-      <div class="shrink-0 pb-2 pt-2" data-calendar-settings-footer>
-        <MobileDrawer.Section class="mx-2">
+      <div class="shrink-0 p-2" data-calendar-settings-footer>
+        <MobileDrawer.Section>
           <ViewSidebar.Item
-            class="rounded-[20px]"
+            class="rounded-3xl"
             onClick={() => {
               shell.aside.collapse();
               fireAndForget(
@@ -332,7 +351,7 @@ export function MobileCalendarSidebar() {
             <ViewSidebar.Icon>
               <GearIcon class="size-5" />
             </ViewSidebar.Icon>
-            Settings
+            {t('common.settings')}
           </ViewSidebar.Item>
         </MobileDrawer.Section>
       </div>

@@ -55,11 +55,7 @@ export function CalendarSettingsSelect(props: {
 }) {
   return (
     <CalendarSettingsRow label={props.label}>
-      <SettingsSelect
-        {...props}
-        class="min-w-0 max-w-[55%]"
-        triggerClass="settings-input border-0 bg-transparent text-ink-muted shadow-none"
-      />
+      <SettingsSelect {...props} class="min-w-0 max-w-[55%]" />
     </CalendarSettingsRow>
   );
 }

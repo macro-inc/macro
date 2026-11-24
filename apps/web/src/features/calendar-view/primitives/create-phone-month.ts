@@ -11,20 +11,18 @@ const monthKey = (date: Date | undefined) =>
   date ? `${date.getFullYear()}-${date.getMonth()}` : '';
 
 export function createPhoneMonth<T extends MonthEvent>(options: {
-  start: Accessor<Date | undefined>;
-  month: Accessor<Date | undefined>;
+  start: Accessor<Date>;
+  month: Accessor<Date>;
   initialDate: Date;
   events: Accessor<readonly T[]>;
   showWeekends: Accessor<boolean>;
   focusDate: Accessor<Date | undefined>;
-  dayCount?: Accessor<number>;
+  dayCount: Accessor<number>;
 }) {
   const [picked, setPicked] = createSignal<{ date: Date; month: string }>();
   const days = createMemo(() => {
     const start = options.start();
-    return start
-      ? agendaEventsByDay(options.events(), start, options.dayCount?.() ?? 42)
-      : [];
+    return agendaEventsByDay(options.events(), start, options.dayCount());
   });
   const visibleDays = createMemo(() =>
     days().filter(
@@ -57,7 +55,6 @@ export function createPhoneMonth<T extends MonthEvent>(options: {
   };
   return {
     days: visibleDays,
-    weekdays: () => visibleDays().slice(0, options.showWeekends() ? 7 : 5),
     selected,
     events: () =>
       days().find((day) => isSameLocalDate(day.date, selected()))?.events ?? [],

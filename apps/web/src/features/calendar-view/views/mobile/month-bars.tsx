@@ -1,5 +1,6 @@
 import { calendarSelectionToEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
+import { createLocalToday } from '@app/features/calendar/primitives/create-local-today';
 import type {
   CalendarEvent,
   CalendarTimeFormat,
@@ -9,13 +10,7 @@ import { beginInteraction } from '@app/observability/flow';
 import type { DatesSetArg } from '@fullcalendar/core';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { addDays } from 'date-fns';
-import {
-  batch,
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-} from 'solid-js';
+import { batch, createEffect, createMemo, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import {
   type CalendarFocusTarget,
@@ -47,19 +42,14 @@ export function PhoneMonthBars(props: {
   const openComposer = useOpenEventComposer();
   const [sheetState, setSheetState] = createStore<{
     open: boolean;
-    pickedMonth?: string;
     ignoredFocus?: number;
   }>({ open: false });
   const setOpen = (open: boolean) => setSheetState('open', open);
   let handledFocus: number | undefined;
   const [sheet, setSheet] = createSignal<HTMLDivElement>();
-  const [today, setToday] = createSignal(new Date());
-  const timer = setInterval(() => setToday(new Date()), 60_000);
-  onCleanup(() => clearInterval(timer));
+  const today = createLocalToday();
   const currentMonth = () =>
     props.range?.view.currentStart ?? props.initialDate;
-  const monthKey = () =>
-    `${currentMonth().getFullYear()}-${currentMonth().getMonth()}`;
   const range = createMemo(() => phoneMonthRange(currentMonth()));
   const month = createPhoneMonth({
     start: () => range().start,
@@ -106,19 +96,19 @@ export function PhoneMonthBars(props: {
     });
   };
   const openDaySheet = (date: Date) => {
+    month.pick(date);
+    setOpen(true);
+  };
+  const pick = (date: Date) => {
     const interaction = beginInteraction('calendar.month.day.open');
     try {
-      month.pick(date);
-      setSheetState({ open: true, pickedMonth: monthKey() });
+      batch(() => {
+        cancelPendingFocus();
+        openDaySheet(date);
+      });
     } finally {
       interaction.end();
     }
-  };
-  const pick = (date: Date) => {
-    batch(() => {
-      cancelPendingFocus();
-      openDaySheet(date);
-    });
   };
   let navigatedFocus: string | undefined;
   createEffect(() => {
@@ -180,9 +170,7 @@ export function PhoneMonthBars(props: {
         month={currentMonth()}
         today={today()}
         timeFormat={props.timeFormat}
-        selected={
-          sheetState.pickedMonth === monthKey() ? month.selected() : undefined
-        }
+        selected={sheetState.open ? month.selected() : undefined}
         capacity={capacity()}
         cardRef={setCard}
         isSupported={(date) => date >= supported.start && date < supported.end}

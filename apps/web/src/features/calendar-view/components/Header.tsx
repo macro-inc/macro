@@ -5,16 +5,20 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
+import { CalendarViewTabs } from '@app/features/calendar/components/CalendarViewTabs';
 import { MonthYearPickerPopover } from '@app/features/calendar/components/month-picker/MonthPickerPopover';
 import { PeriodSelector } from '@app/features/calendar/components/PeriodSelector';
-import { CalendarViewTabs } from '@app/features/calendar/components/view-tabs/CalendarViewTabs';
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
 import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
 import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
+import { createLocalToday } from '@app/features/calendar/primitives/create-local-today';
+import {
+  calendarMonthLabel,
+  calendarPeriodLabel,
+} from '@app/features/calendar/utils/calendar-label';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
-import { formatLocale, t } from '@app/lib/i18n';
+import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import { beginInteraction } from '@app/observability/flow';
 import { calendarSearchRoute } from '@app/routes/routes';
@@ -63,34 +67,6 @@ import { CalendarSearch } from './CalendarSearch';
 
 /** What the period controls give up, in order, when they would not fit their row. */
 const CONTROLS_COLLAPSE_ORDER = ['todayLabel'] as const;
-
-function createLocalToday() {
-  const [today, setToday] = createSignal(new Date());
-  let refreshTimer: number | undefined;
-
-  const scheduleRefresh = () => {
-    const now = new Date();
-    const nextMidnight = new Date(now);
-    nextMidnight.setDate(nextMidnight.getDate() + 1);
-    nextMidnight.setHours(0, 0, 0, 0);
-
-    refreshTimer = window.setTimeout(
-      () => {
-        setToday(new Date());
-        scheduleRefresh();
-      },
-      nextMidnight.getTime() - now.getTime() + 100
-    );
-  };
-
-  scheduleRefresh();
-
-  onCleanup(() => {
-    if (refreshTimer !== undefined) clearTimeout(refreshTimer);
-  });
-
-  return today;
-}
 
 export function Header(props: {
   presentation: 'workspace' | 'preview';
@@ -191,7 +167,7 @@ export function Header(props: {
     previousPeriod: navigation.previousPeriod,
     nextPeriod: navigation.nextPeriod,
     navigateToToday: navigation.navigateToToday,
-    goToDate: isTouchDevice() ? undefined : goToDate,
+    goToDate,
   });
 
   const currentDate = createMemo(
@@ -211,7 +187,7 @@ export function Header(props: {
       <Show when={shell} fallback={props.children}>
         {/* Floats over the pane, which reserves its measured height. */}
         <ViewShell.TopBar
-          class="touch:flex"
+          touch
           navigation={
             <ViewSidebar.Toggle action="expand" presentation="pill" />
           }
@@ -259,46 +235,43 @@ export function Header(props: {
     </CalendarCreateMenu>
   );
 
-  const previous = (compact = false) => {
-    const Control = compact ? ButtonGroup.Button : Button;
+  const previous = () => {
     return (
-      <Control
+      <ButtonGroup.Button
         aria-label={`Previous ${periodLabel()}`}
         tooltip={{
           content: `Previous ${periodLabel()}`,
           hotkey: TOKENS.calendar.period.previous,
         }}
         variant="ghost"
-        size={compact ? 'icon-md' : 'icon-lg'}
+        size="icon-md"
         class="border-transparent bg-transparent"
         onClick={navigation.previousPeriod}
       >
-        <CaretLeftIcon class={compact ? 'size-4' : 'size-5'} />
-      </Control>
+        <CaretLeftIcon class="size-4" />
+      </ButtonGroup.Button>
     );
   };
-  const next = (compact = false) => {
-    const Control = compact ? ButtonGroup.Button : Button;
+  const next = () => {
     return (
-      <Control
+      <ButtonGroup.Button
         aria-label={`Next ${periodLabel()}`}
         tooltip={{
           content: `Next ${periodLabel()}`,
           hotkey: TOKENS.calendar.period.next,
         }}
         variant="ghost"
-        size={compact ? 'icon-md' : 'icon-lg'}
+        size="icon-md"
         class="border-transparent bg-transparent"
         onClick={navigation.nextPeriod}
       >
-        <CaretRightIcon class={compact ? 'size-4' : 'size-5'} />
-      </Control>
+        <CaretRightIcon class="size-4" />
+      </ButtonGroup.Button>
     );
   };
-  const todayButton = (mobile: boolean, compact = false) => {
-    const Control = compact ? ButtonGroup.Button : Button;
+  const todayButton = (mobile: boolean) => {
     return (
-      <Control
+      <Button
         aria-label="Go to today"
         tooltip={{
           content: 'Go to today',
@@ -319,7 +292,7 @@ export function Header(props: {
             </span>
           </span>
         </Show>
-      </Control>
+      </Button>
     );
   };
   return (
@@ -339,8 +312,8 @@ export function Header(props: {
             <ViewShell.TopBarIsland class="size-10 justify-center p-0">
               {todayButton(true)}
             </ViewShell.TopBarIsland>
-            <ViewShell.TopBarIsland class="size-10 justify-center p-0">
-              <Show when={searchEnabled()}>
+            <Show when={searchEnabled()}>
+              <ViewShell.TopBarIsland class="size-10 justify-center p-0">
                 <Button
                   variant="ghost"
                   size="icon-lg"
@@ -355,8 +328,8 @@ export function Header(props: {
                 >
                   <SearchIcon class="size-5 mobile:size-6" />
                 </Button>
-              </Show>
-            </ViewShell.TopBarIsland>
+              </ViewShell.TopBarIsland>
+            </Show>
           </TouchHeaderRight>
         </TouchHeader>
       </Match>
@@ -383,8 +356,8 @@ export function Header(props: {
             >
               {props.leading}
               <HeaderActionGroup label="Calendar navigation" size="md">
-                {previous(true)}
-                {next(true)}
+                {previous()}
+                {next()}
               </HeaderActionGroup>
               {todayButton(collapsed('todayLabel'))}
               <div class="flex-1" />
@@ -428,7 +401,6 @@ export function Header(props: {
                 }
               >
                 <CalendarSearch
-                  inline
                   compact={searchOverlaysControls()}
                   expanded={
                     searchOverlaysControls() ? searchExpanded() : undefined
@@ -460,10 +432,7 @@ export function Header(props: {
                 triggerSize="md"
               >
                 <span class="min-w-0 truncate text-xl font-semibold text-ink">
-                  {new Intl.DateTimeFormat(formatLocale(), {
-                    month: 'long',
-                    year: 'numeric',
-                  }).format(currentDate())}
+                  {calendarMonthLabel(currentDate())}
                 </span>
                 <CaretDownIcon class="size-3 text-ink-muted" />
               </MonthYearPickerPopover>

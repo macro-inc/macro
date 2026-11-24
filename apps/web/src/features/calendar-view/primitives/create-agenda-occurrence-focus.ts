@@ -9,19 +9,12 @@ interface AgendaOccurrenceFocusOptions<T extends OccurrenceIdentity> {
   target: Accessor<CalendarFocusTarget | undefined>;
   element: Accessor<HTMLElement | undefined>;
   focus: (event: T, element: HTMLElement, requestId: number) => void;
-  schedule?: (callback: () => void) => () => void;
 }
 
 /** Waits for a row's DOM, then rejects superseded targets before focusing it. */
 export function createAgendaOccurrenceFocus<T extends OccurrenceIdentity>(
   options: AgendaOccurrenceFocusOptions<T>
 ) {
-  const schedule =
-    options.schedule ??
-    ((callback: () => void) => {
-      const frame = requestAnimationFrame(callback);
-      return () => cancelAnimationFrame(frame);
-    });
   createEffect(() => {
     const target = options.target();
     const event = options.event();
@@ -33,19 +26,9 @@ export function createAgendaOccurrenceFocus<T extends OccurrenceIdentity>(
     )
       return;
 
-    const cancel = schedule(() => {
-      const current = options.target();
-      const row = options.element();
-      const occurrence = options.event();
-      if (!current || current.requestId !== target.requestId) return;
-      if (!row?.isConnected) return;
-      if (
-        current.eventId !== occurrence.eventId ||
-        current.occurrenceKey !== occurrence.occurrenceKey
-      )
-        return;
-      options.focus(occurrence, row, current.requestId);
+    const frame = requestAnimationFrame(() => {
+      if (element.isConnected) options.focus(event, element, target.requestId);
     });
-    onCleanup(cancel);
+    onCleanup(() => cancelAnimationFrame(frame));
   });
 }

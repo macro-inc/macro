@@ -68,8 +68,4 @@ export default {
   endDate: 'End date',
   editStartDate: 'Edit {{subject}} start date',
   editEndDate: 'Edit {{subject}} end date',
-  time: 'Time',
-  chooseTime: 'Choose {{label}}',
-  startTimeField: '{{subject}} start time',
-  endTimeField: '{{subject}} end time',
 };

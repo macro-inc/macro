@@ -8,10 +8,9 @@ import { createAgendaPaging } from '@app/features/calendar/primitives/create-age
 import { getCalendarSupportedRange } from '@app/features/calendar/utils/calendar-supported-range';
 import { t } from '@app/lib/i18n';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
-import { AgendaGroupingContext } from '../../context/agenda-grouping-context';
 import { useCalendarViewport } from '../../context/calendar-viewport-context';
 import { createAgendaGrouping } from '../../primitives/create-agenda-grouping';
-import { SelectedCalendarEvent } from '../selection/SelectedCalendarEvent';
+import { SelectedCalendarEvent } from '../SelectedCalendarEvent';
 import { AgendaWindow } from './AgendaWindow';
 
 export function AgendaWindowList(props: { date: Date }) {
@@ -21,19 +20,17 @@ export function AgendaWindowList(props: { date: Date }) {
   const viewportState = useCalendarViewport();
   const navigation = useCalendarNavigation();
   const paging = createAgendaPaging(viewport, props.date, {
-    initialPosition: viewportState?.initial?.agenda,
+    initialPosition: viewportState.initial?.agenda,
     canLoadWindow: (index) =>
       clipAgendaWindow(agendaWindow(props.date, index), supportedRange) !==
       undefined,
   });
-  if (viewportState) {
-    onCleanup(
-      viewportState.register(() => ({
-        date: (navigation.navigationDate() ?? props.date).getTime(),
-        agenda: paging.capturePosition(),
-      }))
-    );
-  }
+  onCleanup(
+    viewportState.register(() => ({
+      date: (navigation.navigationDate() ?? props.date).getTime(),
+      agenda: paging.capturePosition(),
+    }))
+  );
   const grouping = createAgendaGrouping();
   onMount(paging.positionInitial);
 
@@ -46,17 +43,16 @@ export function AgendaWindowList(props: { date: Date }) {
         class="min-h-0 flex-1 overflow-y-auto touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+var(--calendar-grid-bottom-gap,12px))] [overflow-anchor:none]"
         onScroll={paging.onScroll}
       >
-        <AgendaGroupingContext.Provider value={grouping}>
-          <For each={paging.indices()}>
-            {(index) => (
-              <AgendaWindow
-                anchor={props.date}
-                index={index}
-                active={paging.activeWindow() === index}
-              />
-            )}
-          </For>
-        </AgendaGroupingContext.Provider>
+        <For each={paging.indices()}>
+          {(index) => (
+            <AgendaWindow
+              grouping={grouping}
+              anchor={props.date}
+              index={index}
+              active={paging.activeWindow() === index}
+            />
+          )}
+        </For>
       </div>
       <Show when={viewport()}>
         {(boundary) => (
