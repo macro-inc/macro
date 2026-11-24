@@ -78,6 +78,7 @@ import {
 import { EntityPropertyEditor } from './entity-property-editor';
 import { useAllProperties } from './hooks/useAllProperties';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
+import { LinkPropertyEditor } from './link-property-editor';
 import {
   closePropertyEditor,
   hasPropertyEditorPropertyAddedHandler,
@@ -281,9 +282,11 @@ export function PropertyEditorDialog(props: {
     setCreatePropertyInitialName(initialName);
   };
 
-  // The create dialog offers a built-in property only where it applies, so it
-  // needs the entity type when every selected entity shares one. A host with
-  // no selection (a draft) supplies it through its properties context.
+  // The property list and the create dialog offer a property only where the
+  // server lets it apply (Stage on a company, Parent Task on a task), so they
+  // need the entity type when every selected entity shares one. A host with
+  // no selection (a draft) supplies it to the create dialog through its
+  // properties context.
   const selectedEntityType = () => {
     const [first, ...rest] = props.state.selectedEntities.map(
       propertyEditorEntityType
@@ -448,6 +451,7 @@ export function PropertyEditorDialog(props: {
                   existingPropertyIds={props.properties?.map(
                     (p) => p.propertyDefinitionId
                   )}
+                  forEntityType={selectedEntityType()}
                   onTagSelected={
                     !props.onPropertyAdded &&
                     props.state.selectedEntities.length > 0 &&
@@ -553,8 +557,12 @@ function PropertyList(props: {
   onTagSelected?: () => void;
   properties?: PropertyDefinitionDomain[];
   existingPropertyIds?: string[];
+  forEntityType?: EntityType;
 }) {
-  const allProperties = useAllProperties(() => !props.properties);
+  const allProperties = useAllProperties(
+    () => !props.properties,
+    () => props.forEntityType
+  );
   const properties = () => props.properties ?? allProperties();
 
   const { filteredProperties } = usePropertySelection(
@@ -1361,6 +1369,17 @@ function PropertyValueEditor(props: {
     );
   });
 
+  // A definition says nothing about the value a saved item already holds, so
+  // until the item's properties are read its links are unknown, not empty.
+  const savedValueState = (): 'known' | 'loading' | 'failed' => {
+    const property = resolvedProperty();
+    if (props.properties || !singleEntity()) return 'known';
+    if (property && 'value' in property) return 'known';
+    // A refused project read answers with an empty list and an error.
+    if (entityPropertiesQuery.error) return 'failed';
+    return entityPropertiesQuery.data === undefined ? 'loading' : 'known';
+  };
+
   const handleSubmit = (
     value: string | number | boolean | Date | EntityReference
   ) => {
@@ -1428,10 +1447,22 @@ function PropertyValueEditor(props: {
           setInputType={props.setInputType}
         />
       </Match>
-      <Match when={propertyType() === 'LINK'}>
-        <div class="p-4 text-center text-ink-muted">
-          Link editing not yet implemented
-        </div>
+      <Match when={propertyType() === 'LINK' && resolvedProperty()}>
+        {(property) => (
+          <LinkPropertyEditor
+            property={property()}
+            searchValue={props.searchValue}
+            selectedIndex={props.selectedIndex}
+            setSelectedIndex={props.setSelectedIndex}
+            onSave={props.onSave}
+            setKeybindings={props.setKeybindings}
+            setPlaceholder={props.setPlaceholder}
+            selectedEntityCount={
+              props.properties ? 1 : props.selectedEntities.length
+            }
+            savedValueState={savedValueState()}
+          />
+        )}
       </Match>
     </Switch>
   );

@@ -41,6 +41,7 @@ import { SuggestionNamespace } from './entities/suggestions/namespace';
 import { TaskTemplateNamespace } from './entities/task-templates/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
+import { TimeNamespace } from './entities/time/namespace';
 import { UiNamespace } from './entities/ui/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
@@ -283,6 +284,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   readonly teams: TeamNamespace;
 
+  /** Your running timer and your own or your team's time; time is logged and read on the task. */
+  readonly time: TimeNamespace;
+
   readonly users: UserNamespace;
 
   readonly webhooks: WebhooksNamespace;
@@ -350,6 +354,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.tasks = new TaskNamespace(client);
     this.taskTemplates = new TaskTemplateNamespace(client);
     this.teams = new TeamNamespace(client);
+    this.time = new TimeNamespace(client);
     this.users = new UserNamespace(client);
     this.webhooks = new WebhooksNamespace(client);
     this.workspace = new WorkspaceNamespace(client);
@@ -645,6 +650,36 @@ export {
 } from './entities/task-templates/task-template';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
+export {
+  NotTimeEntryAuthorError,
+  TimerOverLimitError,
+} from './entities/time/errors';
+export type {
+  TimeExport,
+  TimeGroup,
+  TimeGrouping,
+  TimePeriodOptions,
+  TimeScopeOptions,
+  TimeSummary,
+  TimeSummaryOptions,
+  TimeTotal,
+  TimeTotalKey,
+} from './entities/time/report';
+export type {
+  LogTimeOptions,
+  StartTimerOptions,
+  TimeEntriesOptions,
+  TimerStart,
+} from './entities/time/task-time';
+export {
+  TimeEntry,
+  type TimeEntryChanges,
+} from './entities/time/time-entry';
+export { type StopTimerOptions, Timer } from './entities/time/timer';
+export type {
+  ContactListKey,
+  ListMembersOptions,
+} from './entities/users/namespace';
 export {
   ExternalProfilePicture,
   type ProfilePicture,

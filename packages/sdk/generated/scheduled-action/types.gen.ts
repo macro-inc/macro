@@ -793,6 +793,11 @@ export type ExecutionResult = {
     steps?: Array<{
         [key: string]: unknown;
     }>;
+    /**
+     * The owner stopped the run before it finished. Older records, and
+     * replicas built before it, leave it out.
+     */
+    stopped?: boolean;
     version: number;
 };
 
@@ -2947,6 +2952,35 @@ export type ListScheduledActionHistoryResponses = {
 };
 
 export type ListScheduledActionHistoryResponse = ListScheduledActionHistoryResponses[keyof ListScheduledActionHistoryResponses];
+
+export type StopScheduledActionRunData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/stop';
+};
+
+export type StopScheduledActionRunErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type StopScheduledActionRunError = StopScheduledActionRunErrors[keyof StopScheduledActionRunErrors];
+
+export type StopScheduledActionRunResponses = {
+    /**
+     * The stop was sent, or nothing was running
+     */
+    204: void;
+};
+
+export type StopScheduledActionRunResponse = StopScheduledActionRunResponses[keyof StopScheduledActionRunResponses];
 
 export type UnshareScheduledActionTemplateData = {
     body?: never;

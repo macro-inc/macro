@@ -1,18 +1,14 @@
 import ArrowUpRight from '@icon/system/regular/arrow-up-right.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import { setPageSeo } from '../../../app/utils/utilSeo';
-import { AgentMcpSetup } from '../components/agents/AgentStories';
-import {
-  AgentDeliverableStory,
-  AgentMeetingStory,
-  AgentTeamworkStory,
-} from '../components/agents/AgentWorkflowStories';
-import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
+import { AgentMcpSetup } from '../components/agents/AgentMcpSetup';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
 import { TutorialVideoEmbed } from '../components/TutorialVideoEmbed';
 import './agents-page.css';
+import { FeaturePhoneScreens } from '../components/FeatureScreenshot';
+import { featureScreens, phoneScreens } from '../core/feature-screens';
 
 const agentsFaq = [
   {
@@ -86,47 +82,27 @@ export function RouteAgents() {
       </div>
       <FeaturePageSection
         id="agent-sources"
-        demo={{
-          tone: 'agents',
-        }}
         title="Unified memory, across your whole team."
         description="ChatGPT and Claude build up memory from your chats. Macro builds memory from your files, your email, your tasks, everything your team is talking about in channels, and all of your calls. It works across your team too, so agents know what everyone is working on and who is responsible for what."
-      >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <AgentMeetingStory />}
-        />
-      </FeaturePageSection>
+        screen={featureScreens['agent-sources']}
+      />
       <FeaturePageSection
         id="agent-collaboration"
-        demo={{
-          tone: 'agents',
-        }}
         title="First-class citizens, just like people."
         description="Agents work right inside your channels. @mention one to get it working on something with the whole conversation as context, or assign it a task in Macro Tasks, just like a teammate. Hosted agents keep working after you close the app; pick up the same conversation on another device."
-      >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <AgentTeamworkStory />}
-        />
-      </FeaturePageSection>
+        screen={featureScreens['agent-collaboration']}
+      />
       <FeaturePageSection
         id="agent-actions"
-        demo={{
-          tone: 'agents',
-        }}
         title="One search tool across everything."
         description="We put the same effort into our tools and MCP as the app itself. Connected to separate apps, an agent has to search each one, then deduplicate and work out what happened. In Macro it uses one search tool across your files, email, tasks, messages, and calls."
-      >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <AgentDeliverableStory />}
-        />
-      </FeaturePageSection>
+        screen={featureScreens['agent-actions']}
+      />
       <FeaturePageSection
         id="existing-agents"
         title="Bring your own agents."
         description="Point Claude Code, Codex, or any MCP client at your workspace, or run agents on your own machine with macrod. Your team’s memory and Macro’s tools work with all the latest models from every provider, so you’re never locked into one."
+        screen={featureScreens['existing-agents']}
       >
         <div class="agents-connections">
           <div class="agents-connection-paths">
@@ -167,6 +143,7 @@ export function RouteAgents() {
           </details>
         </div>
       </FeaturePageSection>
+      <FeaturePhoneScreens screens={phoneScreens['agents']} product="Agents" />
       <FeaturePageFaq
         guide={{ href: '/agents#guide', label: 'agents' }}
         id="agents-faq-title"

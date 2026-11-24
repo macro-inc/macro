@@ -727,6 +727,13 @@ impl AccessRepository for MockRepo {
         Ok(self.channel_users.lock().await.clone())
     }
 
+    async fn get_current_channel_users(
+        &self,
+        _channel_id: &Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        Ok(self.channel_users.lock().await.clone())
+    }
+
     async fn get_call_channel(
         &self,
         _call_id: &Uuid,

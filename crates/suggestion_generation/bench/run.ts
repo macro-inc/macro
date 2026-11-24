@@ -3,15 +3,16 @@
 // transcripts (they are deleted with the sessions), and read back what it
 // wrote, how long it took and what it cost.
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 import { SQL } from 'bun';
 
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
-import { type Persona, type Variant, ownerEmail, recentMessages, scenario, scenarioName } from './personas';
+import { type Persona, type Variant, ownerEmail, recentMessages, scenario, scenarioName, sentMessages, windowMessages } from './personas';
 import { clearInbox, writeInbox } from './stub';
+import type { WorkList } from './finding';
 
 const REPO = resolve(import.meta.dir, '../../..');
 export const CACHE = join(homedir(), '.cache/suggestions-bench');
@@ -73,9 +74,14 @@ export type Generation = {
   sessions: SessionRow[];
   routines: RoutineRow[];
   cards: CardRow[];
-  /** From the request to the first suggestion it wrote, and to the generation's end. */
+  /** From the request to the first suggestion it wrote, to the last, and to the generation's end. */
   firstMs?: number;
+  lastMs?: number;
   wallMs?: number;
+  /** The work streams a finding step listed, as its drafting session read them; none where no session read a list. */
+  workList?: WorkList;
+  /** Why a brief's work list couldn't be read: the bench's fault, so the list goes unjudged rather than scored empty. */
+  listError?: string;
   cost: Cost;
   /** The transcripts, one JSON line per log entry. */
   transcript?: string;
@@ -184,19 +190,220 @@ export async function assertClean(db: SQL, user: string) {
 const SESSIONS = `SELECT s.session_id::text, s.kind, s.surfaces, s.ending, s.opened_at::text, s.ended_at::text
   FROM suggestion_generation_session s WHERE s.generation_id = $1 ORDER BY s.opened_at`;
 
-/** Keeps every log line of the generation's sessions while they exist. */
+/** What a drafting session's brief says before the work streams it was given. */
+const WORK_LIST_MARK = 'The streams of work a step found';
+/** The mark where the brief puts it: at the start of a line. */
+const LINE_MARK = new RegExp(`(^|\\n)${WORK_LIST_MARK}`, 'g');
+
+function* strings(value: unknown): Generator<string> {
+  if (typeof value === 'string') yield value;
+  else if (Array.isArray(value)) for (const item of value) yield* strings(item);
+  else if (value && typeof value === 'object') for (const item of Object.values(value)) yield* strings(item);
+}
+
+type TranscriptRow = { session?: string; direction?: string; created_at?: string; content?: { method?: unknown; params?: unknown } };
+
+/** Whether `row` is a prompt the harness sent a runtime. */
+const isPrompt = (row: TranscriptRow) => row?.direction === 'to_runtime' && row.content?.method === 'session/prompt';
+
+
+/** Whether `value` has the shape of a work list (`finding.ts` `WORK_LIST`). */
+function isWorkList(value: unknown): value is WorkList {
+  const list = value as WorkList | null;
+  if (!list || typeof list !== 'object' || typeof list.person !== 'string' || !Array.isArray(list.streams)) return false;
+  return list.streams.every(
+    (stream) =>
+      stream &&
+      typeof stream === 'object' &&
+      (['name', 'cadence', 'what', 'action', 'handled_by', 'keeps'] as const).every((field) => typeof stream[field] === 'string') &&
+      Number.isInteger(stream.count) &&
+      Array.isArray(stream.senders) &&
+      stream.senders.every((sender) => sender && typeof sender === 'object' && typeof sender.name === 'string' && typeof sender.email === 'string') &&
+      isTexts(stream.labels) &&
+      isTexts(stream.examples),
+  );
+}
+
+const isTexts = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === 'string');
+
+/** Where `text`'s `<untrusted>` blocks start and end. */
+const untrustedSpans = (text: string) => [...text.matchAll(/<untrusted>\n[\s\S]*?\n<\/untrusted>/g)].map((m) => [m.index, m.index + m[0].length] as const);
+
+/**
+ * `text` with markdown's backslash escapes undone. The prompt the harness
+ * sends a runtime escapes punctuation (`handled\_by`); JSON escapes only
+ * `"`, `\` and `/` before punctuation, so every other backslash before
+ * punctuation is markdown's.
+ */
+export function unescapeMarkdown(text: string): string {
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const next = text[i + 1];
+    if (text[i] === '\\' && next !== undefined && /^[!-\/:-@\[-`{-~]$/.test(next)) {
+      out += '"\\/'.includes(next) ? text[i] + next : next;
+      i++;
+    } else {
+      out += text[i];
+    }
+  }
+  return out;
+}
+
+/**
+ * `text` with the links a Markdown round trip makes of a bare address,
+ * domain or URL undone: `[x](mailto:x)` and `[x](x)` read as `x`, and so
+ * does a link element (`<m-link>{"url":…,"text":"x"}</m-link>`) whose
+ * target is `x` spelled as a link (`x`, `https://x`, `mailto:x`). A link
+ * whose text isn't its target was written as one and stays, an element as
+ * the Markdown link it was written as. A quote the round trip unescaped
+ * leaves the list no longer JSON, which reads as the list's error.
+ */
+export function unlinkMarkdown(text: string): string {
+  return text
+    .replace(/<m-link>(\{[^<>]*?\})<\/m-link>/g, (element, body: string) => {
+      try {
+        const link = JSON.parse(body) as { url?: unknown; text?: unknown };
+        if (typeof link.text !== 'string' || typeof link.url !== 'string') return element;
+        // A text with a scheme of its own is a URL, linked as written; any other is an address or a
+        // host (`mill.example:8443/po` has a port, not a scheme), given a slash only where it is bare:
+        // no path, query or fragment.
+        const t = link.text;
+        const hosts = /[/?#]/.test(t) ? [t] : [t, `${t}/`];
+        const spelled = /^([a-z][a-z0-9+.-]*:\/\/|(mailto|tel):)/i.test(t) ? [t] : [t, ...hosts.flatMap((host) => [`https://${host}`, `http://${host}`]), `mailto:${t}`];
+        return spelled.includes(link.url) ? t : `[${t}](${link.url})`;
+      } catch {
+        return element;
+      }
+    })
+    .replace(/\[([^[\]\n]+)\]\((?:mailto:)?([^)\s]+)\)/g, (link, label: string, target: string) => (label === target ? label : link));
+}
+
+/**
+ * The work list one brief carried, if it carried one. The brief starts a
+ * line with `WORK_LIST_MARK`, outside any `<untrusted>` block, and the list's
+ * block follows that line. The mark inside a block is mail (a subject, say),
+ * and inside a line it is quoted (a dismissed routine's name): neither is the
+ * list. The block holds the list in a fenced `json` block, which the
+ * harness's Markdown round trip leaves as written, or (in briefs before the
+ * fence) bare, with the round trip's escapes to undo.
+ */
+function listIn(row: TranscriptRow): WorkList | undefined {
+  for (const text of strings(row.content?.params)) {
+    const spans = untrustedSpans(text);
+    const at = [...text.matchAll(LINE_MARK)].map((m) => m.index + m[1].length).find((start) => !spans.some(([from, to]) => start > from && start < to));
+    if (at === undefined) continue;
+    const block = /^[^\n]*\n<untrusted>\n(?:\n```json\n([\s\S]*?)\n```\n\n|([\s\S]*?)\n)<\/untrusted>/.exec(text.slice(at));
+    if (!block) throw new Error(`a brief says it carries a work list but has no <untrusted> block after it`);
+    let list: unknown;
+    try {
+      list = JSON.parse(block[1] ?? unlinkMarkdown(unescapeMarkdown(block[2])));
+    } catch (error) {
+      throw new Error(`a brief's work list isn't JSON: ${String(error).slice(0, 200)}`);
+    }
+    if (!isWorkList(list)) throw new Error("a brief's work list hasn't the list's shape (finding.ts WORK_LIST)");
+    return list;
+  }
+  return undefined;
+}
+
+/** `workListOf`, with why it couldn't read a list in place of throwing. */
+export function readWorkList(rows: Iterable<unknown>): { list?: WorkList; error?: string } {
+  try {
+    return { list: workListOf(rows) };
+  } catch (error) {
+    return { error: String(error instanceof Error ? error.message : error).slice(0, 300) };
+  }
+}
+
+/**
+ * Read `generation`'s work list again from its sessions' transcript, where
+ * it was saved or beside the run file at `runPath` (a run directory moved
+ * with its transcripts). A re-read can only correct the run's reading with
+ * what it finds, never take it away:
+ * - a list found is the list; a transcript or brief that can't be read is
+ *   the list's error;
+ * - finding no list, the run's reading stands: its list, its error, or none
+ *   read (the transcript may hold only some sessions, or briefs the bench
+ *   can't tell from others);
+ * - a transcript that is gone, or holds no prompt to a runtime (empty, say),
+ *   can't say what was read: the run's reading stands, and with neither a
+ *   list nor an error, whether its sessions read one is unknown, an error.
+ * Says why when the run's reading stands.
+ */
+export function rereadList(generation: Generation, runPath: string): string | undefined {
+  const saved = generation.transcript;
+  if (!saved) return undefined;
+  const transcript = [saved, join(dirname(runPath), basename(saved))].find((file) => existsSync(file));
+  const unknown = (why: string) => {
+    if (!generation.workList && !generation.listError) generation.listError = `${why}, and the run read no list, so whether its sessions read one is unknown`;
+    return `${why}, so its work list is judged as the run first read it`;
+  };
+  if (!transcript) return unknown(`${saved} is gone`);
+  let rows: unknown[];
+  try {
+    rows = readFileSync(transcript, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as unknown);
+  } catch (error) {
+    generation.workList = undefined;
+    generation.listError = `reading ${transcript}: ${String(error).slice(0, 200)}`;
+    return undefined;
+  }
+  if (!rows.some((row) => isPrompt(row as TranscriptRow))) return unknown(`${transcript} holds no prompt to a runtime`);
+  const { list, error } = readWorkList(rows);
+  if (!list && !error) return `${transcript} holds no brief with a list, so the run's reading of it stands`;
+  generation.workList = list;
+  generation.listError = error;
+  return undefined;
+}
+
+/**
+ * The work list a generation's drafting sessions were briefed with, from
+ * their transcript rows. Each session reads its share of the streams in the
+ * earliest prompt the harness sent its runtime; the shares put together, in
+ * the order the sessions started, are the list (a retried session reads the
+ * same share again, which counts once). A brief that says it carries a list
+ * the bench can't read throws: the drafting brief (the finding PR's
+ * `prompt.rs`) and `WORK_LIST_MARK` have drifted apart.
+ */
+export function workListOf(rows: Iterable<unknown>): WorkList | undefined {
+  const prompts = [...rows]
+    .map((row) => row as TranscriptRow)
+    .filter(isPrompt)
+    // `capture` writes `created_at` at a fixed width in UTC, so its text sorts as its time does.
+    .sort((a, b) => ((a.created_at ?? '') < (b.created_at ?? '') ? -1 : (a.created_at ?? '') > (b.created_at ?? '') ? 1 : 0));
+  const shares = new Map<string | undefined, WorkList>();
+  for (const row of prompts) {
+    if (shares.has(row.session)) continue;
+    const list = listIn(row);
+    if (list) shares.set(row.session, list);
+  }
+  const lists = [...shares.values()];
+  if (!lists.length) return undefined;
+  const seen = new Set<string>();
+  const streams = lists
+    .flatMap((list) => list.streams)
+    .filter((stream) => {
+      const key = JSON.stringify(stream);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  return { person: lists[0].person, streams };
+}
+
 async function capture(db: SQL, generation: string, seen: Map<string, unknown>) {
   const rows = await db.unsafe(
-    `SELECT l.id::text, l.agent_session_id::text AS session, l.direction, l.content, l.created_at::text
+    `SELECT l.id::text, l.agent_session_id::text AS session, l.direction, l.content,
+            to_char(l.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at
        FROM agent_session_log l
        JOIN suggestion_generation_session s ON s.session_id = l.agent_session_id
-      WHERE s.generation_id = $1`,
+      WHERE s.generation_id = $1
+      ORDER BY l.created_at, l.id`,
     [generation],
   );
   for (const row of rows) seen.set(row.id, row);
 }
 
-async function costOf(db: SQL, user: string, from: Date, to: Date): Promise<Cost> {
+export async function costOf(db: SQL, user: string, from: Date, to: Date): Promise<Cost> {
   const rows = await db.unsafe(
     `SELECT model, count(*)::int AS calls, coalesce(sum(input_tokens), 0)::bigint AS input,
             coalesce(sum(output_tokens), 0)::bigint AS output, coalesce(sum(total), 0)::float8 AS usd
@@ -306,7 +513,7 @@ export async function generate(
   const transcript = new Map<string, unknown>();
   let asked: number | undefined;
   try {
-    writeInbox(at.instance, email, recentMessages(persona, variant, now));
+    writeInbox(at.instance, email, recentMessages(persona, variant, now), windowMessages(persona, variant, now), sentMessages(persona, variant, now));
     const token = await login(at, email);
     const route = trigger === 'onboarding' ? 'generate' : 'regenerate';
     asked = Date.now();
@@ -359,11 +566,22 @@ export async function generate(
     if (undelivered) result.error = `${undelivered} of ${result.sessions.length} sessions never got their prompt (delivery_unknown): the stack is overloaded; run fewer at once (--concurrency)`;
     result.routines = await routinesOf(db, user);
     result.cards = await cardsOf(db, user);
+    const [last] = await db.unsafe(
+      `SELECT greatest((SELECT max(created_at) FROM suggestion WHERE user_id = $1),
+                       (SELECT max(created_at) FROM routine_suggestion WHERE user_id = $1)) AS at`,
+      [user],
+    );
+    if (last?.at) result.lastMs = new Date(last.at).getTime() - start;
+    await capture(db, row.id, transcript);
+    ({ list: result.workList, error: result.listError } = readWorkList(transcript.values()));
     // Usage rows land as each model call settles: give the last ones a moment.
     await Bun.sleep(5000);
     result.cost = await costOf(db, user, new Date(start - 1000), new Date());
   } catch (error) {
     result.error = String(error).slice(0, 500);
+    // A generation that ran out of time may have briefed its drafting sessions: its list is scored all the same, from the transcript as it stands now.
+    if (result.generationId) await capture(db, result.generationId, transcript).catch(() => {});
+    if (transcript.size && !result.workList) ({ list: result.workList, error: result.listError } = readWorkList(transcript.values()));
     // A generation that failed or ran out of time may still have spent: count it.
     if (asked !== undefined) {
       result.wallMs ??= Date.now() - asked;

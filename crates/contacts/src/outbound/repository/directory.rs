@@ -8,7 +8,7 @@ use crate::domain::models::contact::{Contact, ContactId, ContactName};
 use crate::domain::models::list::ContactList;
 use crate::domain::models::listed::ListedContact;
 use crate::domain::models::page::{ContactCursor, ContactIdEntry, ContactIdPage, ContactPageSize};
-use crate::domain::models::people::{PeopleSearchLimit, PersonMatch};
+use crate::domain::models::people::{NamedPeopleQuery, PeopleSearchLimit, PersonMatch};
 use crate::domain::models::query::ContactLookup;
 use crate::domain::ports::ContactListReader;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -55,10 +55,11 @@ fn parse_lists(keys: &[String]) -> Vec<ContactList> {
         .collect()
 }
 
-/// The list keys of people search's second group, after teammates.
+/// The list keys of people search's second group, after teammates, and of the
+/// named-people read's first, before teammates.
 const INTERACTED_GROUP: [ContactList; 2] = [ContactList::Interacted, ContactList::Invited];
 
-/// The list keys of people search's third group.
+/// The list keys of people search's and the named-people read's third group.
 const INBOX_GROUP: [ContactList; 2] = [ContactList::Gmail, ContactList::Outlook];
 
 fn keys(lists: &[ContactList]) -> Vec<&str> {
@@ -261,6 +262,60 @@ impl ContactListReader for DbContactsRepository {
     }
 
     #[tracing::instrument(
+        name = "contacts.lists.people_named.read",
+        skip_all,
+        fields(limit = i64::from(limit.get()), result_count = tracing::field::Empty),
+        err
+    )]
+    async fn name_listed_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &NamedPeopleQuery,
+        limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        // The read's cost follows the viewer's directory size, so bound it.
+        let mut transaction = self.db.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *transaction)
+            .await?;
+        let rows = sqlx::query_file!(
+            "src/outbound/repository/directory/people_named.sql",
+            viewer.as_ref(),
+            query.text(),
+            i64::from(limit.get()),
+            ContactList::Teammates.as_ref(),
+            &keys(&INTERACTED_GROUP) as &[&str],
+            &keys(&INBOX_GROUP) as &[&str],
+        )
+        .fetch_all(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+
+        tracing::Span::current().record("result_count", rows.len() as i64);
+        rows.into_iter()
+            .map(|row| {
+                let user_id = MacroUserIdStr::try_from(row.user_id)?;
+                let name = ContactName {
+                    user_id: user_id.clone(),
+                    first_name: row.first_name,
+                    last_name: row.last_name,
+                }
+                .display_name();
+                Ok(PersonMatch {
+                    contact: Contact {
+                        id: ContactId::for_viewer(&viewer, &user_id),
+                        user_id,
+                        name,
+                        lists: parse_lists(&row.lists),
+                    },
+                    is_teammate: row.is_teammate,
+                    is_agent: row.is_agent,
+                })
+            })
+            .collect()
+    }
+
+    #[tracing::instrument(
         name = "contacts.lists.inbox_contacts.read",
         skip_all,
         fields(count = tracing::field::Empty),
@@ -286,5 +341,90 @@ impl ContactListReader for DbContactsRepository {
         rows.into_iter()
             .map(|id| Ok(MacroUserIdStr::try_from(id)?))
             .collect()
+    }
+
+    #[tracing::instrument(
+        name = "contacts.lists.members.read",
+        skip_all,
+        fields(
+            list = list.as_ref(),
+            limit = i64::from(limit.get()),
+            has_cursor = after.is_some(),
+            count = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn list_members(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        list: ContactList,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> Result<ContactIdPage, Report> {
+        let after = after.map(ContactCursor::position);
+        let fetch = i64::from(limit.get()) + 1;
+        let mut transaction = self.db.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *transaction)
+            .await?;
+        // Each list is its own statement: a stored or inbox list names its
+        // key as a literal, so its partial index applies.
+        let ids = match list {
+            ContactList::Teammates => {
+                sqlx::query_file_scalar!(
+                    "src/outbound/repository/directory/list_members/teammates.sql",
+                    viewer.as_ref(),
+                    after,
+                    fetch,
+                )
+                .fetch_all(&mut *transaction)
+                .await?
+            }
+            ContactList::Interacted => {
+                sqlx::query_file_scalar!(
+                    "src/outbound/repository/directory/list_members/interacted.sql",
+                    viewer.as_ref(),
+                    after,
+                    fetch,
+                )
+                .fetch_all(&mut *transaction)
+                .await?
+            }
+            ContactList::Invited => {
+                sqlx::query_file_scalar!(
+                    "src/outbound/repository/directory/list_members/invited.sql",
+                    viewer.as_ref(),
+                    after,
+                    fetch,
+                )
+                .fetch_all(&mut *transaction)
+                .await?
+            }
+            ContactList::Gmail => {
+                sqlx::query_file_scalar!(
+                    "src/outbound/repository/directory/list_members/gmail.sql",
+                    viewer.as_ref(),
+                    after,
+                    fetch,
+                )
+                .fetch_all(&mut *transaction)
+                .await?
+            }
+            ContactList::Outlook => {
+                sqlx::query_file_scalar!(
+                    "src/outbound/repository/directory/list_members/outlook.sql",
+                    viewer.as_ref(),
+                    after,
+                    fetch,
+                )
+                .fetch_all(&mut *transaction)
+                .await?
+            }
+        };
+        transaction.commit().await?;
+
+        let page = id_page(ids, limit)?;
+        tracing::Span::current().record("count", page.contacts.len() as i64);
+        Ok(page)
     }
 }

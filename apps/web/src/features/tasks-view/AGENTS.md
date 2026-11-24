@@ -51,9 +51,9 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Show at most three individual tag chips; keep a sole tag as its named chip even in collapsed layouts, otherwise collapse the folder path first, then more tags on measured overflow, and truncate the title last while preserving open tag editors; re-evaluate new tags when editing ends without requiring a resize.
 - Keep the tag chip or collapsed multi-tag overflow after the title on phone rows instead of dropping tags with the desktop columns.
 - Keep the touch sidebar button on the left and Search/Filters on the right; task views, projects, and saved views live in the sidebar sheet. `CollectionPanes` retains the list beside task/project details on wide touch.
-- Tab and Shift+Tab cycle sidebar tabs only over a list. Keep `TasksSidebar`'s key-time check for an open project or task: the sidebar remounts whenever the view crosses its layout breakpoint, so it registers after an open pane and eclipses any override the pane holds.
+- The sidebar's views are not tabs: Tab is focus order in the Tasks list and an open task, and the number keys pick nothing. A project's Overview and Tasks tabs take Tab and the number keys (`ProjectDetailHeader`).
 
-- Save filters, relative due dates or valid calendar bounds, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
+- Save filters, relative due and start dates or valid calendar bounds, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.
 - Label the semantic viewer token Me, explain it with “Matches whoever opens this saved view,” and resolve it only when executing a filter; a selected fixed user stays fixed.
 - Limit new Assignee choices to team members and available agents without contact discovery; reuse existing selected-first ordering at opening and keep rows stable while selecting; preserve selected outsiders, the semantic Me token, Unassigned, and broad Created by options.

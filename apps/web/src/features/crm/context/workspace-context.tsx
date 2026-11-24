@@ -13,6 +13,8 @@ import type { CrmRecordRef, CrmRecordSection } from '../core/record';
 /** A new `seek` asks to show the same message again. */
 export type CrmCommentTarget = { commentId: string; seek: string };
 
+export type CrmRecordOpenOptions = { followLink?: boolean };
+
 /** Records opened inside the workspace; the route holds them. */
 export type CrmRecordNavigation = {
   /** Records opened from the list, oldest first; empty on the list. */
@@ -21,8 +23,12 @@ export type CrmRecordNavigation = {
   section: Accessor<CrmRecordSection | undefined>;
   /** A Discussion message of the shown record to scroll to. */
   commentTarget: Accessor<CrmCommentTarget | undefined>;
-  /** Shows the last record of `trail` at its Overview. */
-  open(trail: readonly CrmRecordRef[]): void;
+  /**
+   * Shows the last record of `trail` at its Overview, here even when another
+   * split shows it. A link from one record to another (`followLink`) goes to
+   * the split already showing that record instead, as entity links do.
+   */
+  open(trail: readonly CrmRecordRef[], options?: CrmRecordOpenOptions): void;
   setSection(section: CrmRecordSection): void;
   item: Accessor<
     | {

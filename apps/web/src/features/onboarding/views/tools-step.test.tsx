@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 describe('onboarding tools', () => {
-  it('keeps Drive and Sheets available, hides excluded Google apps, and reuses native connections', async () => {
+  it('keeps Drive and Sheets available, hides excluded Google apps, and re-enables held connections', async () => {
     const { fake } = renderWithFakeOnboarding(
       () => <ToolsStep onContinue={vi.fn()} />,
       {
@@ -25,14 +25,7 @@ describe('onboarding tools', () => {
           ['linear', 'Linear'],
           ['notion', 'Notion'],
         ].map(([slug, name]) => ({ slug, name, iconUrl: null })),
-        nativeTools: [
-          {
-            url: 'https://mcp.linear.app/mcp/',
-            authenticated: true,
-            enabled: false,
-            server_name: 'My issues',
-          },
-        ],
+        connectors: [{ slug: 'linear', status: 'disabled' }],
       }
     );
     for (const name of ['Gmail', 'Google Calendar']) {
@@ -76,43 +69,37 @@ describe('onboarding tools', () => {
   });
 });
 
-it('keeps native GitHub available during hosted connection failures and offers retry', () => {
+it('holds connecting while connection status is unknown and offers retry', () => {
   const { fake } = renderWithFakeOnboarding(
     () => <ToolsStep onContinue={vi.fn()} />,
     {
-      connectionFailures: ['pipedream'],
+      connectorsFail: true,
       catalog: [
         { slug: 'github', name: 'GitHub', iconUrl: null },
         { slug: 'stripe', name: 'Stripe', iconUrl: null },
       ],
     }
   );
-  expect(
-    (
-      screen.getByRole('button', {
-        name: 'Connect GitHub',
-      }) as HTMLButtonElement
-    ).disabled
-  ).toBe(false);
-  expect(
-    (
-      screen.getByRole('button', {
-        name: 'Connect Stripe',
-      }) as HTMLButtonElement
-    ).disabled
-  ).toBe(true);
+  for (const name of ['GitHub', 'Stripe'])
+    expect(
+      (
+        screen.getByRole('button', {
+          name: `Connect ${name}`,
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(true);
   fireEvent.click(
     screen.getByRole('button', { name: 'Retry connection status' })
   );
   expect(fake.calls()).toContain('retryConnections');
 });
-it('distinguishes a linked GitHub account from repository setup', () => {
+it('offers repository setup once GitHub is connected', () => {
   const { fake } = renderWithFakeOnboarding(
     () => <ToolsStep onContinue={vi.fn()} />,
-    { githubLinkStatus: 'linked' }
+    { connectors: [{ slug: 'github', status: 'connected' }] }
   );
   expect(
-    screen.getByRole('button', { name: 'Account linked to GitHub' })
+    screen.getByRole('button', { name: 'Connected to GitHub' })
   ).toBeTruthy();
   fireEvent.click(
     screen.getByRole('button', { name: 'Configure GitHub repositories' })
@@ -127,7 +114,7 @@ it('tracks a connector once its connection lands, not ones already connected', a
         { slug: 'linear', name: 'Linear', iconUrl: null },
         { slug: 'notion', name: 'Notion', iconUrl: null },
       ],
-      connectedTools: ['linear'],
+      connectors: [{ slug: 'linear', status: 'connected' }],
     }
   );
   fireEvent.click(screen.getByRole('button', { name: 'Connect Notion' }));
@@ -152,7 +139,7 @@ it('reports a GitHub connect that lands after the OAuth reload', async () => {
   savePendingConnectors(new Set(['github']));
   const { fake } = renderWithFakeOnboarding(
     () => <ToolsStep onContinue={vi.fn()} />,
-    { githubLinkStatus: 'linked' }
+    { connectors: [{ slug: 'github', status: 'connected' }] }
   );
   await waitFor(() =>
     expect(

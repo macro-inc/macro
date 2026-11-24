@@ -39,10 +39,11 @@ pub struct ToolCallSpan {
 }
 
 impl ToolCallSpan {
-    /// Begin telemetry for a call of `tool_name` with `arguments`, under the
-    /// process-wide [`ContentPolicy`].
+    /// Begin telemetry for a call of `tool_name` with `arguments`, under
+    /// [`ContentPolicy::current`] (the process-wide policy, or none inside
+    /// [`genai_telemetry::withhold_content`]).
     pub fn begin(tool_name: &str, arguments: &serde_json::Value) -> Self {
-        Self::begin_with_policy(tool_name, arguments, ContentPolicy::from_env())
+        Self::begin_with_policy(tool_name, arguments, ContentPolicy::current())
     }
 
     /// [`Self::begin`] with an explicit content policy.
@@ -120,8 +121,17 @@ impl ToolCallSpan {
                 self.span.set_error("tool_not_found", "no such tool");
             }
             Err(error @ ToolSetError::Deserialization(_)) => {
-                tracing::warn!(tool_name = %self.tool_name, error = %error, "tool call could not be dispatched");
-                // The message quotes the arguments it could not read.
+                // The message quotes the arguments it could not read, and the
+                // event lands on the caller's span too: inside
+                // `withhold_content` it says only what kind of failure it was.
+                if genai_telemetry::content_withheld() {
+                    tracing::warn!(
+                        tool_name = %self.tool_name,
+                        "tool call could not be dispatched: its arguments did not match the tool's schema"
+                    );
+                } else {
+                    tracing::warn!(tool_name = %self.tool_name, error = %error, "tool call could not be dispatched");
+                }
                 self.span.set_error(
                     "invalid_arguments",
                     self.error_description(

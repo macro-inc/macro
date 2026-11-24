@@ -1,5 +1,6 @@
 import { TasksFilterDrawer } from '@app/features/tasks-view/components/TasksFilterDrawer';
 import { TasksContent } from '@app/features/tasks-view/tasks-content';
+import { ProjectTimeEntry } from '@app/features/time-tracking/project-time';
 import { t } from '@app/lib/i18n';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -67,6 +68,12 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
                 {props.description}
               </MobileProjectDescription>
               {props.discussion}
+              <div class="mt-3 empty:hidden">
+                <ProjectTimeEntry
+                  project={props.project}
+                  onOpenTask={props.onOpenTask}
+                />
+              </div>
             </ProjectSummary>
           </div>
           <section aria-label={t('nav.tasks')}>

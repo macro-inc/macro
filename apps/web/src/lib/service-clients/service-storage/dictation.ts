@@ -45,8 +45,8 @@ export function transcribeDictation(
         }
         return {
           code: 'HTTP_ERROR',
-          message:
-            'Transcription failed. Select the checkmark to retry, or cancel.',
+          // The panel offers the retry beside this text.
+          message: 'Transcription failed.',
         };
       },
     }

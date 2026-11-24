@@ -20,7 +20,10 @@ fn unreadable(n: u128) -> Value {
     row
 }
 
-async fn store<S: Storage>(engine: &mut Engine<S>, rows: Vec<Value>) {
+async fn store<S: cache_core::predicate::PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    rows: Vec<Value>,
+) {
     let data = json!({"user":{"id":VIEWER,"emailLinks":[{"id":id(1000)},{"id":id(1001)}],"soup":{"items":rows}}});
     write(engine, QUERY, &data).await;
 }

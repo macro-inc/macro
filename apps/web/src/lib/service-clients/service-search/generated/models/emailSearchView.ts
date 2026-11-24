@@ -15,4 +15,5 @@ export type EmailSearchView =
 export const EmailSearchView = {
   sent: 'sent',
   drafts: 'drafts',
+  calendar: 'calendar',
 } as const;

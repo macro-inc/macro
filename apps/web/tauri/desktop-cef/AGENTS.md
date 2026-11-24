@@ -1,13 +1,16 @@
 # desktop-cef
 
 Status: shipped macOS desktop app. The desktop release workflow builds it,
-packages it as a signed DMG, and publishes the release.
+packages it as a signed DMG, launches that DMG's app on a macOS runner (the
+`QA macOS release app` job, `../../tests/macos/qa.mjs`), and only then promotes
+it to installed apps; see `../src-tauri/README.md#desktop-native-updates`.
 
 ## What it is
 
 The macOS desktop app rendered with Chromium (CEF) instead of WKWebView. It is a
 thin binary over `../src-tauri` (`app_lib::run_with`) that selects
-`tauri-runtime-cef`.
+`tauri-runtime-cef`. It runs on Apple silicon Macs with macOS 14 (Sonoma) or
+later, the newest minimum of the binaries it bundles.
 
 ## Scope
 
@@ -58,6 +61,19 @@ the same renderer code, but it skips AppKit's event timing.
 
 ## Gotchas
 
+- `bundle.macOS.minimumSystemVersion` in `tauri.conf.json` is the app's
+  `LSMinimumSystemVersion`; macOS refuses to open the app on anything older.
+  Keep it at the highest `minos` (`otool -l`) of any binary in the bundle,
+  since dyld won't load a library built for a newer macOS. Today that is 14.0,
+  from the Nix-built `libiconv`, `libcharset` and `macrod` (nixpkgs' default
+  Darwin target); Chromium's own is `mac_min_system_version` in its
+  `build/config/mac/mac_sdk.gni` (13.0 on CEF 151). When a CEF or nixpkgs bump
+  raises one, raise this value in the same change and tell whoever owns the
+  download pages and customer docs, which state the requirement. The release's
+  `Validate signed DMG` step fails while it is lower than any binary's `minos`.
+  The update feed carries the value, and installed apps on an older macOS skip
+  that release (`../src-tauri/README.md#desktop-native-updates`).
+
 - Keep this a separate workspace. A `[patch]` applies to every target in its
   workspace, so moving the CEF Tauri patches into `../Cargo.toml` would rebuild
   iOS and Android against the CEF branch.
@@ -71,9 +87,17 @@ the same renderer code, but it skips AppKit's event timing.
   (`nix build .#checks.x86_64-linux.tauri-cargo-lockfiles`).
 - `../src-tauri` must resolve `tauri` through `[patch.crates-io]` (a version
   requirement, not a git dependency) so this workspace can repoint it.
-- The `cef` feature of `../src-tauri` adds no dependencies; it switches the
-  served origin to `http://tauri.localhost` and the `AppRuntime` alias to
-  `tauri::DynRuntime`. It only compiles in this workspace.
+- The `cef` feature of `../src-tauri` switches the served origin to
+  `http://tauri.localhost` and the `AppRuntime` alias to `tauri::DynRuntime`,
+  and adds the `minidump` reader for Chromium's crash dumps. It only compiles
+  in this workspace.
+- `crash_reporter.cfg`, bundled into `Contents/Resources`, turns on Crashpad
+  with no `ServerURL`: dumps must stay on the Mac, and the app sends only a
+  signature of each to PostHog
+  (`../src-tauri/README.md#native-crash-reports`). Never add a server URL.
+  The app finds the dumps in the runtime's default `root_cache_path`, so
+  setting `.root_cache_path` on the `Cef` builder means updating
+  `crash_reports::setup` too.
 - The CEF Tauri fork's `on_web_content_process_terminate` callback takes a
   webview and termination details; the regular fork takes only a webview.
   Check both workspaces when changing shared callback registration.

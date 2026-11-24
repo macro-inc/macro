@@ -1,13 +1,11 @@
 import { VIEW_SHELL_TOUR } from '@app/components/view-shell/tour';
-import { isMcpToolConnected } from '@app/features/tours/core/connected-tools';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableInAppTours } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
+import { useConnectors } from '@queries/connectors';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { useMcpServersQuery } from '@queries/mcp-servers';
-import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
 import { createMediaQuery } from '@solid-primitives/media';
 import { Button } from '@ui';
 import { Tour, useTour } from '@ui/components/Tour';
@@ -206,7 +204,7 @@ function ConnectAction(props: { connector: ViewTourConnector }) {
         {(connector) => (
           <McpConnectAction
             label={connector().label}
-            tools={connector().kind === 'mcp' ? connector().tools : []}
+            apps={connector().kind === 'mcp' ? connector().apps : []}
             onConnect={() => openSettingsInSplit('Connected')}
           />
         )}
@@ -229,19 +227,14 @@ function EmailConnectAction(props: { label: string; onConnect: () => void }) {
 
 function McpConnectAction(props: {
   label: string;
-  tools: readonly string[];
+  apps: readonly string[];
   onConnect: () => void;
 }) {
-  const native = useMcpServersQuery({ neverSuspend: true });
-  const pipedream = usePipedreamConnectionsQuery({ neverSuspend: true });
-  const connected = () => {
-    if (!native.isSuccess || !pipedream.isSuccess) return true;
-    const sources = {
-      native: native.data ?? [],
-      pipedream: pipedream.data ?? [],
-    };
-    return props.tools.some((tool) => isMcpToolConnected(tool, sources));
-  };
+  const connectors = useConnectors();
+  // Unknown counts as connected so the button never flashes in.
+  const connected = () =>
+    !connectors.ready() ||
+    props.apps.some((app) => connectors.connectedApps().has(app));
   return (
     <Show when={!connected()}>
       <ConnectButton label={props.label} onClick={props.onConnect} />

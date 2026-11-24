@@ -1,8 +1,8 @@
 use super::*;
 use crate::parsed_document::parsed_document;
+use cache_core::store::DurableRead;
 use cache_core::{
     document::{OperationKind, resolve_args},
-    normalize::normalize,
     predicate::PredicateIndexStorage,
     value::{CacheValue, EntityKey, Record},
 };
@@ -271,7 +271,7 @@ fn mutation_owners(
     Ok(owners)
 }
 
-async fn owners<S: PredicateIndexStorage>(
+async fn owners<S: DurableRead>(
     storage: &S,
     property: &EntityKey<'_>,
     definition: Uuid,
@@ -315,6 +315,7 @@ async fn owners<S: PredicateIndexStorage>(
         .map_err(error)?;
         result.extend(
             storage
+                .storage()
                 .reconcile_predicate_index(&query, &[])
                 .await
                 .map_err(ProjectionError::Storage)?
@@ -329,24 +330,22 @@ async fn owners<S: PredicateIndexStorage>(
     Ok(result)
 }
 
-pub(super) async fn prepare<S: PredicateIndexStorage>(
-    schema: &cache_core::meta::Schema,
+pub(super) async fn prepare<S: DurableRead>(
     storage: &S,
-    query: &str,
-    operation: Option<&str>,
-    variables: &Map<String, Value>,
-    data: &Value,
+    response: &WriteResponse<'_>,
     reuse: bool,
 ) -> Result<BTreeMap<RecordKey, Changes>, ProjectionError<S::Error>> {
-    let document = parsed_document(query).map_err(error)?;
-    let op = document.operation(operation).map_err(error)?;
-    let updates: BTreeMap<_, _> = normalize(schema, op, variables, data)
-        .map_err(error)?
-        .into_iter()
-        .collect();
+    let (schema, query, operation, variables, data) = (
+        response.schema(),
+        response.query(),
+        response.operation(),
+        response.variables(),
+        response.data(),
+    );
+    let updates = response.updates()?;
     let mut result: BTreeMap<RecordKey, Changes> = BTreeMap::new();
     let mut snapshot_children = BTreeSet::new();
-    for (key, record) in &updates {
+    for (key, record) in updates {
         if !is_parent(key) {
             continue;
         }
@@ -372,7 +371,7 @@ pub(super) async fn prepare<S: PredicateIndexStorage>(
             result
                 .entry(RecordKey::new(key.to_string()).map_err(error)?)
                 .or_default()
-                .snapshot = Some(snapshot(properties, &updates));
+                .snapshot = Some(snapshot(properties, updates));
         }
     }
     let routed = mutation_owners(schema, query, operation, variables, data)?;
@@ -386,7 +385,7 @@ pub(super) async fn prepare<S: PredicateIndexStorage>(
             result.entry(parent.clone()).or_default().snapshot = Some(Err(()));
         }
     }
-    for (key, update) in &updates {
+    for (key, update) in updates {
         if !key.as_ref().starts_with("GraphqlProperty:")
             || !update.fields.contains_key("value")
             || snapshot_children.contains(key)
@@ -395,7 +394,7 @@ pub(super) async fn prepare<S: PredicateIndexStorage>(
         }
         let mut record = if reuse {
             storage
-                .get_batch(std::slice::from_ref(key))
+                .read_records(std::slice::from_ref(key))
                 .await
                 .map_err(ProjectionError::Storage)?
                 .pop()
@@ -429,7 +428,7 @@ pub(super) async fn prepare<S: PredicateIndexStorage>(
     Ok(result)
 }
 
-pub(super) async fn deletion_updates<S: PredicateIndexStorage>(
+pub(super) async fn deletion_updates<S: DurableRead>(
     storage: &S,
     keys: &[String],
 ) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
@@ -440,7 +439,7 @@ pub(super) async fn deletion_updates<S: PredicateIndexStorage>(
     {
         let key = EntityKey(key.clone().into());
         let Some(record) = storage
-            .get_batch(std::slice::from_ref(&key))
+            .read_records(std::slice::from_ref(&key))
             .await
             .map_err(ProjectionError::Storage)?
             .pop()
@@ -453,7 +452,7 @@ pub(super) async fn deletion_updates<S: PredicateIndexStorage>(
         };
         for parent in owners(storage, &key, definition).await? {
             let Some(state) = storage
-                .load_projection_states(std::slice::from_ref(&parent))
+                .read_projection_states(std::slice::from_ref(&parent))
                 .await
                 .map_err(ProjectionError::Storage)?
                 .pop()
