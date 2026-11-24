@@ -8353,6 +8353,305 @@ export const listCompanyContactsPageResponse = zod
   .describe("One page of a company's contacts.");
 
 /**
+ * @summary Add a domain the organization uses to a company, so mail and new contacts
+from it are filed under this company instead of a company of its own. Any
+team member who can see the company may add one. The company's name and
+primary domain stay. Refused for a personal or generic email provider
+(400) and for a domain another company of the team tracks (409, naming it
+when the caller can see it). Returns the company without its contacts.
+Idempotent.
+ */
+export const addCrmCompanyDomainParams = zod.object({
+  company_id: zod.uuid().describe('The company to update'),
+});
+
+export const addCrmCompanyDomainBody = zod
+  .object({
+    domain: zod
+      .string()
+      .describe(
+        'A bare domain such as \"example.com\": no scheme, path or email. An\nidentical retry is accepted.'
+      ),
+  })
+  .describe(
+    "One of a company's domains. It travels in the body, as a contact's\naddresses do."
+  );
+
+export const addCrmCompanyDomainResponse = zod
+  .object({
+    contacts: zod
+      .array(
+        zod
+          .object({
+            companyDomain: zod
+              .boolean()
+              .optional()
+              .describe(
+                "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+              ),
+            companyDomainEmails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+              ),
+            companyId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+              ),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod
+              .string()
+              .nullish()
+              .describe(
+                "The contact's primary email address; absent for contacts added by\nname alone."
+              ),
+            emails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
+              ),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          )
+      )
+      .describe(
+        'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers. Empty when the request set\n`includeContacts=false`.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this company.'),
+    description: zod
+      .string()
+      .nullish()
+      .describe(
+        "Display description from the primary domain's directory entry."
+      ),
+    domains: zod
+      .array(
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the domain belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the domain record was created.'),
+            domain: zod.string().describe('The domain (e.g. \"acme.com\").'),
+            id: zod.uuid().describe('The id of the domain record.'),
+          })
+          .describe('A CRM domain associated with a company.')
+      )
+      .describe(
+        'All domains associated with this company, ordered by creation\ntime ascending (primary first).'
+      ),
+    emailSync: zod
+      .boolean()
+      .describe('Whether email sync is enabled for this company.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the company is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint 404s for them); admin\/owner callers see\nhidden companies so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the company.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe(
+        "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+      ),
+    teamId: zod
+      .uuid()
+      .describe('The id of the team that owns this company record.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this company.'),
+  })
+  .describe(
+    "A CRM company as returned by `GET \/crm\/companies\/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` \/ `description`\nresolved from the primary domain's `crm_domain_directory` entry). It\nembeds the company's contacts unless the caller asks it not to\n(`includeContacts=false`)."
+  );
+
+/**
+ * @summary Remove a domain from a company. Contacts, their addresses and mail stay;
+later mail from the domain is filed as it was before the domain was
+added. The domain the company is named after stays until the company is
+renamed (400). Removing a domain from a company whose email sync is off
+requires an admin or owner (403). Returns the company without its
+contacts. Idempotent.
+ */
+export const removeCrmCompanyDomainParams = zod.object({
+  company_id: zod.uuid().describe('The company to update'),
+});
+
+export const removeCrmCompanyDomainBody = zod
+  .object({
+    domain: zod
+      .string()
+      .describe(
+        'A bare domain such as \"example.com\": no scheme, path or email. An\nidentical retry is accepted.'
+      ),
+  })
+  .describe(
+    "One of a company's domains. It travels in the body, as a contact's\naddresses do."
+  );
+
+export const removeCrmCompanyDomainResponse = zod
+  .object({
+    contacts: zod
+      .array(
+        zod
+          .object({
+            companyDomain: zod
+              .boolean()
+              .optional()
+              .describe(
+                "Whether the contact has an address on one of its company's domains.\nSuch a contact cannot be unlinked from the company or moved to another.\nOlder servers omit this classification; clients must then keep it read-only."
+              ),
+            companyDomainEmails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                "The addresses on one of the company's domains. The last one cannot be\nremoved while the contact is linked to the company."
+              ),
+            companyId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+              ),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod
+              .string()
+              .nullish()
+              .describe(
+                "The contact's primary email address; absent for contacts added by\nname alone."
+              ),
+            emails: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'Every address the contact is known by: the primary first, then the\nrest oldest first. Older servers omit it; clients then show `email`.'
+              ),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the primary address uses a known personal provider. Linking\nor switching the company needs this and `companyDomain = false`.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          )
+      )
+      .describe(
+        'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers. Empty when the request set\n`includeContacts=false`.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this company.'),
+    description: zod
+      .string()
+      .nullish()
+      .describe(
+        "Display description from the primary domain's directory entry."
+      ),
+    domains: zod
+      .array(
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the domain belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the domain record was created.'),
+            domain: zod.string().describe('The domain (e.g. \"acme.com\").'),
+            id: zod.uuid().describe('The id of the domain record.'),
+          })
+          .describe('A CRM domain associated with a company.')
+      )
+      .describe(
+        'All domains associated with this company, ordered by creation\ntime ascending (primary first).'
+      ),
+    emailSync: zod
+      .boolean()
+      .describe('Whether email sync is enabled for this company.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the company is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint 404s for them); admin\/owner callers see\nhidden companies so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the company.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe(
+        "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+      ),
+    teamId: zod
+      .uuid()
+      .describe('The id of the team that owns this company record.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this company.'),
+  })
+  .describe(
+    "A CRM company as returned by `GET \/crm\/companies\/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` \/ `description`\nresolved from the primary domain's `crm_domain_directory` entry). It\nembeds the company's contacts unless the caller asks it not to\n(`includeContacts=false`)."
+  );
+
+/**
  * @summary Toggle email contribution for a CRM company without archiving its records.
 Individual consent and all remaining exclusions still apply.
  */

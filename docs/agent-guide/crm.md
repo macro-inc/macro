@@ -246,6 +246,21 @@ moving it. Personal-email sync reuses a unique existing contact, preserving its
 chosen company through sent/received refreshes and source cleanup. Ambiguous
 matches are left unchanged. CRM settings and domain admission still apply.
 
+A company's **Record details** lists its domains under **Website**, the primary
+first, followed by **Add domain** (a plus button once it has one). Adding a
+domain the organization also uses files its mail and new contacts under this
+company instead of a company of their own; the company keeps its name and
+primary domain, and contacts already filed elsewhere stay where they are.
+Personal email providers are refused, and so is a domain another company of the
+team has: the message names that company, or says an archived company has it.
+Each domain pill opens **Remove**. Removing deletes no contact or mail; new mail
+from the domain is then filed as before it was added. The domain the company is
+named after can't be removed until the company is renamed, and only a team
+admin can remove a domain from a company whose email sync is off. The SDK
+(`company.addDomain`, `company.removeDomain`), `PUT`/`DELETE
+/crm/companies/{id}/domains` and the `AddCompanyDomain` and
+`RemoveCompanyDomain` agent tools do the same.
+
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
 With the keyboard on the record pane (as a record opens, with nothing focused,
@@ -282,9 +297,13 @@ company requires an explicit confirmation: every person is restored, including t
 archived individually, while email syncing stays off. Re-enable **Sync Emails** under
 **Email sharing** separately. A person whose company is archived offers **Open company**
 so that restoration happens there first. Unfiled people restore directly. Company row
-**Archive / Restore** actions also confirm the cascade. Record details and References
-appear first in both information panels, then Properties; company Lists and Email
-sharing follow. Neither panel has a duplicate visibility control. A contact's
+**Archive / Restore** actions also confirm the cascade. Both information panels, on
+desktop and in the phone **Show details** sheet, list **Record details**, then
+**Properties**, then the company-only **Lists** and **Email sharing**, with
+**References** last; as in a task's or document's panel, Properties come before
+References. Record details rows use the same text size and small muted labels as the
+Properties rows. Neither panel has a
+duplicate visibility control. A contact's
 Properties hold the team's custom properties only: Stage, Owner and Revenue are
 company-only, so its **Add property** list leaves them out (a company's leaves
 out task-only properties). **Add property** attaches one, such as a Phone text
@@ -426,7 +445,7 @@ contact also reference its company. The side panel contains References, with no
 empty Sharing section.
 
 In workspace activity and a company or contact's embedded sections, clicking a
-Task, Email, Note, or Call opens its authorized detail inside Customers.
+Task, Email, Note, Call, or file opens its authorized detail inside Customers.
 The CRM sidebar stays in place and the breadcrumb shows the source view, record
 trail (when present), and selected item, without section labels such as Tasks or
 Files or an extra separator before preview titles. The current record breadcrumb
@@ -443,6 +462,10 @@ Reload keeps the selected item's URL. Shift-click uses the existing separate
 split behavior; modified row clicks keep the existing split behavior. On touch,
 the existing header and breadcrumb conventions apply without a new navigation UI.
 Verify that tasks display their status and properties, not the Drive editor.
+A file in Files (an upload or an imported email attachment) opens in its own
+viewer, as in Drive; notes, tasks, snippets and skills open in the Markdown
+editor. Verify a PDF, a Word file and an image render, never "This document
+couldn't be displayed."
 
 Links to the retired Databases views still resolve: a record's `/databases`
 section opens the record, `/databases/<id>` and `/app/companies/database/<id>`

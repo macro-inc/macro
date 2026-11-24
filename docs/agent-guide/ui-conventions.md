@@ -32,8 +32,13 @@ while the user last pressed or focused something in that pane), so a field,
 an editor, a button, a detail beside the list or an open item without tabs
 keeps normal focus order, at every width and with the sidebar collapsed.
 Sidebar navigation (views, folders, scopes) is not tabs and takes no Tab or
-number keys; tabs atop a list that is the sidebar (Chat's rail, New Home) are
-that pane's top bar. Nothing else in a view binds `Tab`. Action groups use
+number keys; tabs atop a list that is the sidebar (Chat's rail) are
+that pane's top bar. A destination (`ViewSidebar.Item` in a `ViewSidebar.Nav`)
+or a view on the app rail chosen with the mouse leaves the keyboard on the pane
+even though the browser leaves focus on the button, so the next Tab switches
+the tabs; a right click, or a control there that opens a menu, dialog or
+picker or discloses a folder, chooses nothing, and a sidebar reached with the
+keyboard stays focus order. Nothing else in a view binds `Tab`. Action groups use
 `variant="secondary" finish="raised"`, fully rounded ends, and 8px gaps. Keep
 the right side of a bar at one height: detail headers use `sm`/`icon-sm` segments
 (28px controls); collection headers, beside New and Search, use `md`/`icon-md`
@@ -244,7 +249,10 @@ rows reads on until one matches or the directory ends; only a failed page shows 
 **Retry options** button. Closing and reopening starts at the first page, without
 clearing selected/custom chips.
 Explicit participant/agent/thread choices remain scoped extras. Matching addresses
-are deduplicated while keeping the caller's selected representation. Other recipient surfaces
+are deduplicated while keeping the caller's selected representation. Picking a
+selected row again removes it, except where the picker sets
+`markAlreadyAdded` (the email composers): there it is dimmed with its check and
+can't be picked; its chip's X or Backspace removes it. Other recipient surfaces
 are migrating separately; these controls do not change the AI planner's people pool.
 
 ## Property people pickers

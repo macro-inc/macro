@@ -65,7 +65,8 @@
       "minimumSystemVersion": "14.0",
       "entitlements": "entitlements.plist",
       "files": {
-        "Resources/Assets.car": "../src-tauri/icons/macos/Assets.car"
+        "Resources/Assets.car": "../src-tauri/icons/macos/Assets.car",
+        "Resources/crash_reporter.cfg": "crash_reporter.cfg"
       },
       "infoPlist": "../src-tauri/icons/macos/Info.plist"
     }

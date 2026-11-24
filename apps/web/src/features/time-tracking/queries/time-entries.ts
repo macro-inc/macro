@@ -35,6 +35,7 @@ import {
 import type { Client } from '@urql/core';
 import type { Accessor } from 'solid-js';
 import { v5 as uuidv5, v7 as uuidv7 } from 'uuid';
+import type { TimeEntryValues } from '../core/entry-values';
 import { type TimeWriteResult, timeWriteResult } from './write-result';
 
 const TASK_TYPENAME = 'GraphqlSoupDocument';
@@ -45,15 +46,6 @@ const ENTRY_EDIT_UUID_NAMESPACE = '4d0c1f0a-5a3e-4f4e-9a7c-6b2e8f1d3c90';
 
 /** Where the cache reads a task's Time logged before a write predicts it. */
 export type TimeLoggedHost = Pick<CacheHost, 'readRecordsByKeys'>;
-
-/** Values a person types for an entry. Dates are `YYYY-MM-DD`, instants ISO strings. */
-export type TimeEntryValues = {
-  date: string;
-  minutes: number;
-  note: string | null;
-  startedAt: string | null;
-  endedAt: string | null;
-};
 
 function taskInput(taskId: string): SoupEntityInput {
   return { entityType: 'DOCUMENT', entityId: taskId };

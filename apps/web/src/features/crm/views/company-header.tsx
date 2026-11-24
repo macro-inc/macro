@@ -7,11 +7,11 @@ import {
   formatRelativeTimestamp,
 } from '@entity';
 import ClockIcon from '@icon/system/regular/clock.svg';
-import GlobeIcon from '@icon/system/regular/globe.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Badge, Tooltip } from '@ui';
-import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, onMount, Show } from 'solid-js';
 import { AddToPipeline } from '../add-to-pipeline';
+import { CompanyDomainField } from './company-domain-field';
 import { CompanyVisibilityButton } from './company-visibility-button';
 import { useSetCompanyNameMutation } from './use-crm';
 
@@ -116,14 +116,9 @@ export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
             class="mb-6 mt-3 flex flex-wrap items-center gap-2"
             aria-label="Company details"
           >
-            <For each={company().domains}>
-              {(domain) => (
-                <Badge variant="ghost" size="sm">
-                  <GlobeIcon class="size-3" />
-                  {domain.domain}
-                </Badge>
-              )}
-            </For>
+            <Show when={company().id} keyed>
+              {(_id) => <CompanyDomainField company={company()} />}
+            </Show>
             {/* `updatedAt` carries `crm_companies.last_interaction`, which
                 the backend keeps fresh from synced workspace emails. */}
             <Show when={company().updatedAt}>

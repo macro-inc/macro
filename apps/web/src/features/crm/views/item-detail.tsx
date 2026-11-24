@@ -1,7 +1,7 @@
 import {
   EntityDetail,
   entityDetailBlockType,
-  entityDetailHostsSplitHeader,
+  entityDetailOpensMarkdown,
 } from '@app/components/entity-detail/EntityDetail';
 import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
 import { EntityDetailFrame } from '@app/components/entity-detail/EntityDetailFrame';
@@ -193,7 +193,7 @@ function CrmDocumentDetail(props: {
 }) {
   const route = useCrmWorkspace().host.record;
   const markdown = () =>
-    entityDetailHostsSplitHeader(props.target) ? props.target : undefined;
+    entityDetailOpensMarkdown(props.target) ? props.target : undefined;
   const duplicate = (id: string, name: string) =>
     route.openItem({ ...props.target, name, id });
   return (

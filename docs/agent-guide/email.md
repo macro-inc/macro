@@ -67,7 +67,9 @@ their shared local order. The unnamed group has no grip or keyboard move control
 Accounts stays pinned at the top and is not a drop target. Section order is per
 account and survives reloads. `Tab`, `Shift+Tab` and `1`–`3` move between the Inbox
 tabs in the header (Focus, Signal, Noise) while the keyboard is on the list or
-nothing has focus, as after `Escape` closes a thread. On any control (a row's
+nothing has focus, as after `Escape` closes a thread, and right after a click on
+a sidebar folder or account (Inbox, after Favorites) or on Mail in the app rail.
+On any control (a row's
 sender name, checkbox or actions, Load more, a header button), in the search
 field, in an open thread, and in another mailbox, whose header has no tabs,
 `Tab` is browser focus order. Leaving the
@@ -180,6 +182,11 @@ toast and rolls back instead of waiting for reconnect, so pressing it again work
 
 Recipient fields turn complete addresses into chips when the typed or pasted
 text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
+A person already in the field still appears among the suggestions, dimmed with
+a check, and picking that row does nothing; the highlight starts on the first
+row that can be picked, so Enter and Tab never remove anyone. Remove a
+recipient with its chip's X or Backspace. `recipient-already-added.app.e2e.ts`
+in the app browser configuration checks this in To, Cc and Bcc, and To on a phone.
 Enter or a click picks the highlighted suggestion; on a complete typed address,
 Enter or Tab adds that address unless an arrow key picked another row. Type,
 paste, or Tab straight after picking one and check that both recipients stay
@@ -1545,8 +1552,14 @@ from Drafts and confirm its content and sending inbox; edit it again. Reconnect
 and check that exactly one draft remains and the open editor keeps any new text.
 On a cold app start, reopen a local draft thread before another GraphQL query has
 initialized the cache. Its subscription must observe settlement and adopt the
-server ID. If its identity read fails, it must remain cache-only until a later
-cache event resolves it; never send the unresolved handle to the server.
+server ID. If its identity read fails, or the cache has not answered it within
+a second, the thread is read from the server without storing the answer until a
+later cache event resolves it: a local handle comes back not found, which the
+view ignores for a draft the outbox still holds, and nothing is cached over the
+draft. A positively identified local draft is never sent to the server. To
+check the fallback, hold the tab's cache reads (drop `read` and
+`read-records-by-keys` requests to the cache coordinator) and open a thread from
+a message reference: it must load within a couple of seconds.
 Keep a reopened offline draft open while reconnecting: the composer must remain
 mounted when the local thread handle resolves to its server ID. After syncing,
 reopen the original local thread URL and confirm the composer still loads; then

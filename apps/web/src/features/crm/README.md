@@ -114,12 +114,19 @@ Only admins/owners can change visibility. Company archive cascades to all people
 and disables email syncing; company restore explicitly confirms restoring every
 person, including individually archived people, while email syncing stays off.
 A person under an archived company routes to that company before restoration.
-Both information panels start with Record details and References, then
-Properties, with no duplicate visibility toggle. A company's Properties pin
+Both information panels take their order from `RECORD_PANEL_ORDER`
+(`core/record.ts`): Record details, Properties, the company-only Lists and Email
+sharing, then References last, so Properties sit ahead of References as in the
+app's other side panels; neither has a duplicate visibility toggle. Record
+details rows use the side panel's label/value grid
+(`SidePanel.Grid`/`SidePanel.Row`), so their labels and values share the
+Properties rows' text size, muted label style and label column; long names and
+domains wrap. The References empty and error states are muted lines at the
+section's text edge, like the Lists section's. A company's Properties pin
 Stage, Owner and Revenue before the team's custom properties; a contact's list
 only custom properties (a phone number, a LinkedIn link), since the built-in CRM
-properties are company-only. Company-only Lists and Email sharing follow.
-Both use the shared `EntityPropertiesSection` and the same edit rule.
+properties are company-only. Both use the shared `EntityPropertiesSection` and
+the same edit rule.
 
 Contact headers and Record details share `ContactEmailField` and
 `ContactCompanyField`. The email field lists every address as a Tasks-style
@@ -157,6 +164,14 @@ The Emails tab sends every address in `eca`, and Files adds one
 email-attachment participant leaf per address; the server rejects the whole
 Emails request when an address is no longer the contact's, so both read the
 committed list.
+
+A company's Record details lists its domains with `CompanyDomainField`, built
+like the email field from the same `record-value-editor` shell: one pill per
+domain, primary first, each opening Remove, and a trailing Add domain control.
+Only the committed response updates the cached company's domain list; the
+company's contact details and Team list refresh with it, since which contacts
+sit on the company's domains changes, and so does Soup. A refused add keeps its
+draft and names the company that already has the domain when the server does.
 
 People, Companies and company Team use an exclusive Visible/Archived filter.
 `people-visibility` keeps the workspace choice local to the account/team/role/view,
@@ -297,6 +312,10 @@ Tasks and Files. The current record breadcrumb returns to the captured section
 and entry state. Preview headers append their own live title and menu after the
 source trail without an extra separator; do not duplicate the selected title in
 the prefix. Modified clicks keep their existing split behavior.
+It opens notes, tasks, snippets and skills in `MarkdownDetail` and every other
+file (PDF, Word, image, video, canvas, code, CSV) through `EntityDetail`, by
+the shared `entityDetailOpensMarkdown`; `entityDetailHostsSplitHeader` is
+whether a detail hosts its touch header, not which viewer it uses.
 Standalone record previews retain their normal navigation outside the workspace.
 Record-detail lists and activity membership remain unchanged.
 Sales Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
