@@ -1,0 +1,45 @@
+packages/sdk/specs/storage.json
+  s_daac47ed1cb766::t_81668f862a6bf4 50687-50692
+packages/sdk/generated/search/types.gen.ts
+  s_daac47ed1cb766::t_81668f862a6bf4 1565
+packages/sdk/generated/cognition/types.gen.ts
+  s_daac47ed1cb766::t_81668f862a6bf4 856
+packages/sdk/specs/cognition.json
+  s_daac47ed1cb766::t_81668f862a6bf4 5068-5073
+packages/sdk/generated/storage/types.gen.ts
+  s_daac47ed1cb766::t_81668f862a6bf4 11647
+packages/sdk/specs/search.json
+  s_daac47ed1cb766::t_81668f862a6bf4 2857-2862
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/fileType.ts
+  s_daac47ed1cb766::t_8af58f1612314f 448-453
+apps/web/src/lib/service-clients/service-cognition/openapi.json
+  s_daac47ed1cb766::t_c326fae368ccf3 5068-5073
+apps/web/src/lib/service-clients/service-search/generated/models/fileType.ts
+  s_daac47ed1cb766::t_56e1c630217b1b 448-453
+apps/web/src/lib/service-clients/service-search/openapi.json
+  s_daac47ed1cb766::t_ae8818e2d87697 2857-2862
+apps/web/src/lib/service-clients/service-storage/generated/schemas/fileType.ts
+  s_daac47ed1cb766::t_0107a2fe2ec2bb 448-453
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_daac47ed1cb766::t_df5ae888f6570f 28227-28232,84010-84015,84522-84527
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_daac47ed1cb766::t_c6cc5299ef8ec6 50687-50692
+crates/documents/src/domain/ports.rs
+  s_daac47ed1cb766::t_92e95273288b5c 43-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c084b3890eca777dcc1c900a2fb45c11579ed0b0",
+  "prompts": {},
+  "sessions": {
+    "s_daac47ed1cb766": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5cc4efcb-4b26-48d2-bf9c-aaee3d38345e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
