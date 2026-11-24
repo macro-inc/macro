@@ -48,7 +48,7 @@ scheduler's spec.
   when it may no longer hold or the person may not see what it says: once one
   of the topic's suggestions became done or resolved after the topic was last
   named (taking that back brings it back), and while the person can't open its
-  source, or it can't be checked.
+  source, the message it names was deleted, or either can't be checked.
 - A reply suggestion carries `waitingSince` and `from` (the sender's name,
   never an address): its email thread's newest message, or its channel
   message, unless the person sent it, read when a session writes it

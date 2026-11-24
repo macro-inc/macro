@@ -639,7 +639,7 @@ where
         });
         done.sort_by(|a, b| b.state_changed_at.cmp(&a.state_changed_at));
         let mut open = self.viewable_all(user, open).await;
-        let done = self.viewable_all(user, done).await;
+        let mut done = self.viewable_all(user, done).await;
         let span = tracing::Span::current();
         let new = open
             .shown
@@ -657,6 +657,7 @@ where
             None => {
                 let topics = self.topics(user, &open.shown, &open.shown).await?;
                 name_topics_from(&topics, &mut open.shown);
+                name_topics_from(&topics, &mut done.shown);
                 span.record("suggestions.topics", topics.len());
                 Some(topics)
             }

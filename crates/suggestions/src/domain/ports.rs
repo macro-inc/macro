@@ -315,7 +315,7 @@ pub trait SuggestionAccess: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Whether `part` is one of `target`'s item's own parts, such as a
-    /// message of its channel. Parts never move, so writes check this once.
+    /// message of its channel; one since deleted isn't.
     fn is_part_of(
         &self,
         target: &Target,

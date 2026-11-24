@@ -64,8 +64,9 @@ impl<S: EntityAccessService> SuggestionAccess for EntitySuggestionAccess<S> {
     }
 }
 
-/// Whether `part` is a part of `target`'s item: a message of its channel or
-/// of its email thread. Other items have no parts a suggestion can name.
+/// Whether `part` is a part of `target`'s item: a message of its channel that
+/// wasn't deleted, or one of its email thread. Other items have no parts a
+/// suggestion can name.
 pub(crate) async fn part_of(
     pool: &PgPool,
     target: &Target,
@@ -80,7 +81,7 @@ pub(crate) async fn part_of(
                 r#"SELECT EXISTS (
                        SELECT 1 FROM comms_messages
                        WHERE id = $1 AND parent_entity_type = 'channel'
-                         AND parent_entity_id = $2
+                         AND parent_entity_id = $2 AND deleted_at IS NULL
                    ) AS "found!""#,
                 part,
                 item.to_string(),

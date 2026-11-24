@@ -151,16 +151,16 @@ Writes answer `{ ok, problems }`; when `ok` is false, fix what `problems` says a
 Last, have every suggestion you wrote checked against its items by a reader who has seen nothing else. Run these lines as written, inside `main` after the helpers, with `keys` the `dedupKey`s to check (first, every suggestion you wrote this run), `topicKeys` the topics to check (first, every one you named this run) and `now` the date line at the end of this brief:
 
 ```typescript
-const source = async ({ entityType, entityId }: { entityType: string; entityId: string }) => {
-  if (entityType === 'email_thread') return (await each(await macro.email.byId(entityId).messages(), async (m) => [(await m.from())?.name, day(await m.sentAt()), await m.subject(), await m.body()].join(' '))).join(' ');
+const source = async ({ entityType, entityId, partId }: { entityType: string; entityId: string; partId?: string | null }) => {
+  if (entityType === 'email_thread') return (await each((await macro.email.byId(entityId).messages()).filter((m) => !partId || m.id === partId), async (m) => [(await m.from())?.name, day(await m.sentAt()), await m.subject(), await m.body()].join(' '))).join(' ');
   if (entityType === 'document') { const d = macro.documents.byId(entityId); return [await d.name(), await d.content()].join(' '); }
   if (entityType === 'call') { const c = macro.calls.byId(entityId); return [await c.name(), day(await c.startedAt()), ...(await c.transcript()).map((x) => [x.speakerId, x.content].join(' '))].join(' '); }
-  if (entityType === 'channel') return (await each(await take(macro.channels.byId(entityId).messages(), 60), async (m) => [(await m.author())?.id, day(await m.createdAt()), await m.content()].join(' '))).join(' ');
+  if (entityType === 'channel') return (await each(partId ? [macro.channels.byId(entityId).message(partId)] : await take(macro.channels.byId(entityId).messages(), 60), async (m) => [(await m.author())?.id, day(await m.createdAt()), await m.content()].join(' '))).join(' ');
   return '';
 };
 const { suggestions, topics } = await macro.suggestions.review();
 const claims = [
-  ...suggestions.filter((i) => keys.includes(i.dedupKey)).map((i) => ({ key: i.dedupKey, about: i.about, words: [i.title, i.summary, i.prompt ?? ''] })),
+  ...suggestions.filter((i) => keys.includes(i.dedupKey)).map((i) => ({ key: i.dedupKey, about: i.about.map(({ entityType, entityId }) => ({ entityType, entityId, partId: undefined })), words: [i.title, i.summary, i.prompt ?? ''] })),
   ...topics.filter((t) => t.reason && topicKeys.includes(t.key)).map((t) => ({ key: 'topic ' + t.key, words: [t.reason?.text ?? ''], about: t.reason ? [t.reason.source] : [] })),
 ];
 return { data: (await each(claims, async ({ key, about, words }) => {

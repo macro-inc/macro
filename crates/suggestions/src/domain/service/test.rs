@@ -33,6 +33,10 @@ pub(crate) fn user(id: &'static str) -> MacroUserIdStr<'static> {
 pub(crate) struct FakeAccess {
     denied: Mutex<HashSet<String>>,
     failing: Mutex<HashSet<String>>,
+    /// Parts since deleted.
+    deleted: Mutex<HashSet<String>>,
+    /// Items asked about, in order, a question for each.
+    asked: Mutex<Vec<String>>,
 }
 
 /// The access check couldn't answer.
@@ -44,6 +48,7 @@ impl SuggestionAccess for FakeAccess {
     type Err = AccessDown;
 
     async fn can_view(&self, _: &MacroUserIdStr<'_>, target: &Target) -> Result<bool, Self::Err> {
+        self.asked.lock().unwrap().push(target.entity_id.clone());
         if self.failing.lock().unwrap().contains(&target.entity_id) {
             return Err(AccessDown);
         }
@@ -51,7 +56,7 @@ impl SuggestionAccess for FakeAccess {
     }
 
     async fn is_part_of(&self, target: &Target, part: &str) -> Result<bool, Self::Err> {
-        Ok(part.starts_with(&target.entity_id))
+        Ok(part.starts_with(&target.entity_id) && !self.deleted.lock().unwrap().contains(part))
     }
 }
 

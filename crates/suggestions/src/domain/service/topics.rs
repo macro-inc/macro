@@ -62,8 +62,8 @@ where
     }
 
     /// The topics of `suggestions`, each with its reason while the reason
-    /// holds and the person can open the item it was read in. They can open
-    /// what the suggestions `viewable` are about, so that isn't checked again.
+    /// holds and the person can open what it was read in. They can open the
+    /// items the suggestions `viewable` are about, so those aren't checked again.
     pub(super) async fn topics(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -71,42 +71,67 @@ where
         viewable: &[Suggestion],
     ) -> Result<Vec<Topic>, SuggestionError> {
         let mut stored = self.stored_topics(user, topic_keys(suggestions)).await?;
-        let viewable: HashSet<(EntityType, &str)> = viewable
+        let viewable: HashSet<Target> = viewable
             .iter()
             .flat_map(|suggestion| &suggestion.about)
-            .map(|target| (target.entity_type, target.entity_id.as_str()))
+            .map(whole)
             .collect();
-        let viewable = &viewable;
-        futures::stream::iter(&mut stored)
-            .for_each_concurrent(ACCESS_CHECKS_AT_ONCE, |topic| async move {
-                let Some(reason) = &topic.reason else {
-                    return;
-                };
-                let source = &reason.source;
-                let shown = !topic.settled_since_named()
-                    && (viewable.contains(&(source.entity_type, source.entity_id.as_str()))
-                        || self.can_open(user, source).await);
-                if !shown {
-                    topic.reason = None;
-                }
-            })
-            .await;
+        for topic in &mut stored {
+            if topic.settled_since_named() {
+                topic.reason = None;
+            }
+        }
+        let sources: HashSet<Target> = stored
+            .iter()
+            .filter_map(|topic| topic.reason.as_ref())
+            .map(|reason| reason.source.clone())
+            .collect();
+        let open = self.open_sources(user, sources, viewable).await;
+        for topic in &mut stored {
+            topic.reason = topic
+                .reason
+                .take()
+                .filter(|reason| open.contains(&reason.source));
+        }
         Ok(topics_of(suggestions, &stored))
     }
 
-    /// Whether the person can open the item a topic's reason was read in; one
-    /// that can't be checked is logged and counts as closed.
-    async fn can_open(&self, user: &MacroUserIdStr<'_>, source: &Target) -> bool {
-        match self.access.can_view(user, source).await {
-            Ok(viewable) => viewable,
-            Err(error) => {
-                tracing::warn!(
-                    ?error,
-                    "could not check a topic's source; its reason is left out"
-                );
-                false
-            }
-        }
+    /// Those of `sources`, where topics' reasons were read, that the person
+    /// can open and that still hold the part named; the items `viewable` are
+    /// already known. Each item and each part is checked once, a few at a time.
+    async fn open_sources(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        sources: HashSet<Target>,
+        viewable: HashSet<Target>,
+    ) -> HashSet<Target> {
+        let items: HashSet<Target> = sources.iter().map(whole).collect();
+        let viewable = &viewable;
+        let items: HashSet<Target> = futures::stream::iter(items)
+            .map(|item| async move {
+                let open =
+                    viewable.contains(&item) || checked(self.access.can_view(user, &item).await);
+                open.then_some(item)
+            })
+            .buffer_unordered(ACCESS_CHECKS_AT_ONCE)
+            .filter_map(futures::future::ready)
+            .collect()
+            .await;
+        let readable = sources
+            .into_iter()
+            .filter(|source| items.contains(&whole(source)));
+        futures::stream::iter(readable)
+            .map(|source| async move {
+                let there = match &source.part_id {
+                    Some(part) => checked(self.access.is_part_of(&source, part).await),
+                    None => true,
+                };
+                there.then_some(source)
+            })
+            .buffer_unordered(ACCESS_CHECKS_AT_ONCE)
+            .filter_map(futures::future::ready)
+            .collect()
+            .await
     }
 
     /// The person's topics `keys`, as stored.
@@ -162,4 +187,24 @@ where
         }
         Ok(Some(key))
     }
+}
+
+/// The item `target` is, or is a part of.
+fn whole(target: &Target) -> Target {
+    Target {
+        part_id: None,
+        ..target.clone()
+    }
+}
+
+/// What a check of a topic's source answered; one that failed is logged and
+/// counts as closed.
+fn checked<Error: std::fmt::Debug>(answer: Result<bool, Error>) -> bool {
+    answer.unwrap_or_else(|error| {
+        tracing::warn!(
+            ?error,
+            "could not check a topic's source; its reason is left out"
+        );
+        false
+    })
 }

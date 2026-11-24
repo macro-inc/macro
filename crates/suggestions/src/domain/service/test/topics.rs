@@ -294,6 +294,57 @@ async fn a_reason_is_hidden_with_its_source(pool: PgPool) {
     assert_eq!(texts(&h.topics().await), [Some("Deposit due June 2")]);
 }
 
+/// A reason read in a message is hidden once the message is deleted, though
+/// the channel it was in is open and a suggestion is about that channel.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reason_is_hidden_with_the_message_it_was_read_in(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let (session, ..) = h.offsite().await;
+    let message = Target {
+        part_id: Some("contract-clause".to_owned()),
+        ..document("contract")
+    };
+    let quoted = NameTopic {
+        reason: Some(TopicReason {
+            source: message,
+            ..reason("Deposit due June 2")
+        }),
+        ..offsite()
+    };
+    assert!(h.name(session, quoted).await.ok);
+    assert_eq!(texts(&h.topics().await), [Some("Deposit due June 2")]);
+    h.access
+        .deleted
+        .lock()
+        .unwrap()
+        .insert("contract-clause".to_owned());
+    assert_eq!(texts(&h.topics().await), [None]);
+    assert_eq!(h.topics().await[0].open, 2);
+}
+
+/// Topics whose reasons were read in one item ask about it once.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reasons_with_one_source_check_it_once(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "suggestions").await;
+    for key in ["event:offsite", "event:launch", "event:review"] {
+        assert!(
+            h.name(session, named(key, "An event", Some("June 2")))
+                .await
+                .ok
+        );
+        let suggestion = NewSuggestion {
+            topic: TopicChange::To(key.to_owned()),
+            ..entity_suggestion(&format!("{key}:reply"))
+        };
+        assert!(h.suggest(session, suggestion).await.ok);
+    }
+    h.access.asked.lock().unwrap().clear();
+    assert_eq!(texts(&h.topics().await), [Some("June 2"); 3]);
+    let asked = h.access.asked.lock().unwrap();
+    assert_eq!(asked.iter().filter(|id| *id == "contract").count(), 1);
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_reason_is_read_in_an_item_the_person_can_open(pool: PgPool) {
     let h = harness(pool, true).await;

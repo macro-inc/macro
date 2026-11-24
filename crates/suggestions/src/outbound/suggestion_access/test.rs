@@ -72,6 +72,22 @@ async fn email_link(pool: &PgPool) -> Uuid {
     id
 }
 
+/// What a deleted message said is gone: nothing may cite it or quote it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_deleted_message_is_no_part_of_its_channel(pool: PgPool) {
+    let channel = channel(&pool).await;
+    let message = channel_message(&pool, channel).await;
+    let item = target(EntityType::Channel, channel);
+    let part = message.to_string();
+    assert!(part_of(&pool, &item, &part).await.unwrap());
+    sqlx::query("UPDATE comms_messages SET deleted_at = now() WHERE id = $1")
+        .bind(message)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(!part_of(&pool, &item, &part).await.unwrap());
+}
+
 /// A suggestion names a part only together with the item it belongs to.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_part_counts_only_with_its_own_item(pool: PgPool) {
