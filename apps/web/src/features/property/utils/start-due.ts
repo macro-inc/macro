@@ -215,9 +215,10 @@ export function withoutTimes(dates: StartDue): StartDue {
  * The dates after a clock time is picked for `field`, as minutes past the
  * midnight of `day`. A new start time moves the due date with it, keeping
  * the length, as a calendar event's end follows its start. With no length to
- * keep (no start yet, or a start after the due date), a start time past the
- * due date moves the due date to it. A due time before the start moves the
- * start back to it.
+ * keep (no start yet, a start after the due date, or an end saved without a
+ * time), a start time past the due date moves the due date to it, and one
+ * before it leaves the due date as it is. A due time before the start moves
+ * the start back to it.
  */
 export function pickTime(
   dates: StartDue,
@@ -228,7 +229,7 @@ export function pickTime(
   const at = atClock(day, minutes);
   if (field === 'start') {
     const { start, due } = dates;
-    if (start && due && due >= start) {
+    if (start && due && due >= start && !dates.wholeDay) {
       return {
         dates: {
           ...dates,
