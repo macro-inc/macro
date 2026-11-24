@@ -1,0 +1,27 @@
+.sqlx/query-75e474bd3ac592df8efea0112c36fd4e010f749f3e0b1c0b9e9692de92608ff2.json
+  s_daac47ed1cb766::t_8dae8e2fb03116 1-23
+.sqlx/query-813c9d7e3741f612f5649d1c920a090458b01b3c010875ef466ebc5f93069b37.json
+  s_daac47ed1cb766::t_854d38872a2c1c 1-15
+.sqlx/query-9f308b5c7ab42567ce55c27c0786e73c8339a8b625d6c9cf29f2fd88c471add4.json
+  s_daac47ed1cb766::t_1e62384fc417df 1-23
+.sqlx/query-ae1905c7a59893fd971f42c9d35fc4b9f6c3a6fa294d49df526a2f9dcba95aa7.json
+  s_daac47ed1cb766::t_b62c758f9f9b31 1-28
+.sqlx/query-d0cea143f036dbf6bad04e109f7c1c4c543b2afcd4ca3dd4ba48b13f6116ff22.json
+  s_daac47ed1cb766::t_aac2ebd89ac9f5 1-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c96f49c999373db649ec47ff1fdfa11eef32f367",
+  "prompts": {},
+  "sessions": {
+    "s_daac47ed1cb766": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5cc4efcb-4b26-48d2-bf9c-aaee3d38345e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
