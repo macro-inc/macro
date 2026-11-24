@@ -276,35 +276,45 @@ try {
 
   // Beside two more splits the Email pane is narrower than a 400px window
   // leaves it (about 295px at 1000px, 263px at 900px); Search must still fit.
+  const session = browser;
   const closeSplit = 'button[aria-label="Close split"]';
-  await browser.$('button[aria-label="Email"]').click();
+  await session.$('button[aria-label="Email"]').click();
   for (const splits of [2, 3]) {
-    await browser.keys('\\');
-    await browser.waitUntil(
-      async () => (await browser.$$(closeSplit).length) === splits,
+    await session.keys('\\');
+    await session.waitUntil(
+      async () => (await session.$$(closeSplit).length) === splits,
       { timeout: 10_000, timeoutMsg: `Expected ${splits} splits` }
     );
   }
   for (const width of [1000, 900]) {
-    await browser.setWindowSize(width, 900);
+    await session.setWindowSize(width, 900);
     await expectEmailHeaderFits(
-      browser,
+      session,
       `split-header-${width}`,
       `a third of a ${width}px window`
     );
   }
   // The Email split is the first; close the two opened beside it.
   for (const splits of [2, 0]) {
-    const buttons = await browser.$$(closeSplit);
-    await buttons[buttons.length - 1]!.click();
-    await browser.waitUntil(
-      async () => (await browser.$$(closeSplit).length) === splits,
+    // A WebDriver click on the 16px corner button does not close the split.
+    await session.execute((selector) => {
+      const buttons = document.querySelectorAll<HTMLElement>(selector);
+      buttons[buttons.length - 1]?.click();
+    }, closeSplit);
+    await session.waitUntil(
+      async () => (await session.$$(closeSplit).length) === splits,
       { timeout: 10_000, timeoutMsg: `Expected ${splits} close buttons` }
     );
   }
-  await browser.setWindowSize(windowSize.width, windowSize.height);
-  await expectEmailHeaderFits(browser, 'single-split-header', 'one split');
-  console.log('PASS: Email header fits a third of a 900px window');
+  await session.setWindowSize(windowSize.width, windowSize.height);
+  // The view options go first and come back last, after the tabs' labels.
+  await session
+    .$('button[aria-label$="reading pane"]')
+    .waitForDisplayed({ timeout: 5000 });
+  await expectEmailHeaderFits(session, 'single-split-header', 'one split');
+  console.log(
+    'PASS: Email header fits a third of a 900px window and restores its labels'
+  );
 
   assert.equal(await nativeHttpReachable(browser, fixture.origin), true);
   assert(
