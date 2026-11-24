@@ -238,6 +238,7 @@ fn insert_graphql_context_data(
         macro_user_id.clone(),
     ));
     data.insert(state.graphql_time_tracking_context.clone());
+    data.insert(state.graphql_time_report_context.clone());
     data.insert(graphql_time_tracking::time_entries_loader(
         state.graphql_time_tracking_context.clone(),
         macro_user_id.clone(),

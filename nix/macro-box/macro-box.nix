@@ -179,6 +179,15 @@ in
             pkgs.gnugrep
           ];
         } "bash ${./files}/test-start-agent.sh && touch $out";
+        # The screen take-over's freeze helper: the drive fence, its lock, and
+        # the dead-man timer, against a fake systemctl.
+        macro-box-agent-pause = pkgs.runCommand "macro-box-agent-pause" {
+          nativeBuildInputs = [
+            pkgs.bash
+            pkgs.coreutils
+            pkgs.util-linux
+          ];
+        } "bash ${./files}/test-macro-agent-pause.sh ${./files}/macro-agent-pause && touch $out";
       };
     };
 }

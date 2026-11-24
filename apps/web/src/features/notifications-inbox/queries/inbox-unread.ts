@@ -1,5 +1,9 @@
-import { NotificationInboxUnreadUpdatesDocument } from '@service-storage/graphql/generated/graphql';
-import type { Client } from '@urql/core';
+import {
+  type NotificationInboxRowType,
+  NotificationInboxUnreadUpdatesDocument,
+  NotificationInboxUnreadUpdatesWithoutChatDocument,
+} from '@service-storage/graphql/generated/graphql';
+import type { Client, CombinedError, DocumentInput } from '@urql/core';
 import {
   type Accessor,
   createEffect,
@@ -13,6 +17,12 @@ import { toRowType } from './decode';
 
 const RESUBSCRIBE_DELAY_MS = 3_000;
 
+const CHAT_COUNT_REFUSED = /(?:Cannot query|Unknown) field ["']chatCount["']/;
+
+/** Whether the server is from before `chatCount`. */
+const refusesChatCount = (error: CombinedError): boolean =>
+  error.graphQLErrors.some(({ message }) => CHAT_COUNT_REFUSED.test(message));
+
 /**
  * The latest counts each client delivered. urql shares one subscription
  * among every reader of it on a client and replays nothing to a reader that
@@ -20,6 +30,17 @@ const RESUBSCRIBE_DELAY_MS = 3_000;
  * the next change; it starts from these instead.
  */
 const latestCounts = new WeakMap<Client, readonly InboxUnreadCount[]>();
+
+type UnreadUpdatesDocument = DocumentInput<
+  {
+    notificationInboxUnreadUpdates: readonly {
+      rowType: NotificationInboxRowType;
+      count: number;
+      chatCount?: number;
+    }[];
+  },
+  Record<string, never>
+>;
 
 /**
  * The unread rows of the viewer's whole inbox by kind, kept live.
@@ -29,6 +50,10 @@ const latestCounts = new WeakMap<Client, readonly InboxUnreadCount[]>();
  * the latest payload is the answer. A stream that errors, or a transport
  * that reconnects, may have missed a change; opening the stream again
  * fetches the counts afresh.
+ *
+ * The web app can go live before the new server tasks serve, and a server
+ * can be rolled back under it. One that refuses `chatCount` is asked for the
+ * counts without it, until the next time the stream opens.
  */
 export function createInboxUnread(options: {
   client: Accessor<Client>;
@@ -42,13 +67,22 @@ export function createInboxUnread(options: {
     let retry: ReturnType<typeof setTimeout> | undefined;
     let stopStream: (() => void) | undefined;
 
-    const startStream = () => {
-      clearTimeout(retry);
-      stopStream?.();
+    const openStream = (document: UnreadUpdatesDocument) => {
       const { unsubscribe } = pipe(
-        client.subscription(NotificationInboxUnreadUpdatesDocument, {}),
+        client.subscription(document, {}),
         subscribe((result) => {
           if (result.error) {
+            if (
+              document === NotificationInboxUnreadUpdatesDocument &&
+              refusesChatCount(result.error)
+            ) {
+              // Before the refused stream goes: it can be the last one
+              // holding the socket open, and a new socket counts as a
+              // reconnect, which would ask for `chatCount` again.
+              openStream(NotificationInboxUnreadUpdatesWithoutChatDocument);
+              unsubscribe();
+              return;
+            }
             unsubscribe();
             retry = setTimeout(startStream, RESUBSCRIBE_DELAY_MS);
             return;
@@ -59,12 +93,18 @@ export function createInboxUnread(options: {
             type: toRowType(entry.rowType),
             passwordRequests: entry.rowType === 'PASSWORD_ACCESS_REQUESTED',
             count: entry.count,
+            chatCount: entry.chatCount,
           }));
           latestCounts.set(client, next);
           setCounts(next);
         })
       );
       stopStream = unsubscribe;
+    };
+    const startStream = () => {
+      clearTimeout(retry);
+      stopStream?.();
+      openStream(NotificationInboxUnreadUpdatesDocument);
     };
 
     startStream();

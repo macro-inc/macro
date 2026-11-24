@@ -526,6 +526,41 @@ fn calendar_details_browser_tests_run_when_the_replaced_queries_change() {
     );
 }
 
+/// The agent screen suite renders the viewer and the agent DM's top bar over
+/// stubs of the channel and team queries, so it runs when any of them change.
+#[test]
+fn agent_screen_browser_tests_run_when_the_viewer_or_dm_header_change() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let filters = yaml
+        .split("filters: |")
+        .nth(1)
+        .and_then(|rest| rest.split("id: filter").next())
+        .expect("path-check filters");
+    let screen = filters
+        .split("agent_screen_changed:")
+        .nth(1)
+        .expect("agent_screen_changed filter");
+    for path in [
+        "apps/web/src/features/agent-screen/**",
+        "apps/web/src/features/channel/Channel/ChannelDetail.tsx",
+        "apps/web/src/features/settings/views/team-agent-dm-status.tsx",
+        "apps/web/src/components/app/split-layout/**",
+        "apps/web/src/components/ui/components/Dialog.tsx",
+    ] {
+        assert!(screen.contains(path), "{path} runs the suite: {screen}");
+    }
+    let step = browser_job(&yaml)
+        .split("- name: Agent Screen Browser Tests")
+        .nth(1)
+        .and_then(|rest| rest.split("- name:").next())
+        .expect("agent screen browser step");
+    assert!(
+        step.contains("needs.path-check.outputs.agent_screen_changed == 'true'")
+            && step.contains("just test-agent-screen-browser"),
+        "the step runs the suite when the agent screen changes: {step}"
+    );
+}
+
 #[test]
 fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");

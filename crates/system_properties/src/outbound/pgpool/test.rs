@@ -589,8 +589,12 @@ async fn project_membership_reads_the_project_property(pool: Pool<Postgres>) -> 
     .await?;
 
     assert_eq!(
-        repo.project_task_ids(first).await?,
+        repo.project_task_ids(first, None).await?,
         ["extra", "task-a", "task-b", "two"]
+    );
+    assert_eq!(
+        repo.project_task_ids(first, Some(2)).await?,
+        ["extra", "task-a"]
     );
     let mut projects = repo
         .task_projects(&[
@@ -696,6 +700,30 @@ async fn task_status_policy_rejection_is_typed_and_retained_completion_succeeds(
         Some(
             serde_json::json!({"type": "SelectOption", "value": [StatusOption::Completed.uuid()]})
         )
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_capped_project_read_gives_up_at_the_report_timeout(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let mut holder = pool.begin().await?;
+    sqlx::query!("LOCK TABLE entity_properties IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *holder)
+        .await?;
+
+    let read = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        repo.project_task_ids(Uuid::now_v7(), Some(2)),
+    )
+    .await;
+    holder.rollback().await?;
+
+    assert!(
+        matches!(read, Ok(Err(_))),
+        "a capped read waited out the lock instead of its statement timeout"
     );
     Ok(())
 }

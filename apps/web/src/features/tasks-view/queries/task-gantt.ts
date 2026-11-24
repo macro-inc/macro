@@ -1,3 +1,4 @@
+import type { GanttTimedEnd } from '@app/components/gantt/gantt-time';
 import type { TaskEntityWithProperties } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { DateField } from '@property/utils/start-due';
@@ -53,4 +54,12 @@ export function taskGanttWholeDay(
   const due = hasTime(task, SYSTEM_PROPERTY_IDS.DUE_DATE);
   if (start === due) return undefined;
   return start ? 'due' : 'start';
+}
+
+/** `taskGanttWholeDay` as a timeline bar names its ends. */
+export function taskGanttWholeDayEnd(
+  task: TaskEntityWithProperties
+): GanttTimedEnd | undefined {
+  const end = taskGanttWholeDay(task);
+  return end === 'due' ? 'end' : end;
 }

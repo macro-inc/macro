@@ -1,7 +1,9 @@
 mod admission;
 mod appearance;
 mod check;
+mod inboxes;
 mod owned_purge;
+mod stop;
 mod sub_routines;
 mod user_cleanup;
 
@@ -439,6 +441,25 @@ pub(crate) fn service(enabled: bool) -> Arc<TestService> {
             grants(&repo),
         )
         .with_event_routines(Rollout(Some(enabled))),
+    )
+}
+
+/// A service with event routines on that checks inbox filters against `inboxes`.
+pub(crate) fn inbox_service(
+    inboxes: Arc<dyn crate::domain::ports::OwnerInboxes>,
+) -> Arc<TestService> {
+    let repo = Arc::new(FakeRepo::default());
+    let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+    tokio::spawn(async move { while rx.recv().await.is_some() {} });
+    Arc::new(
+        ScheduledActionServiceImpl::new(
+            Arc::clone(&repo),
+            Arc::new(FakeExecutor::default()),
+            tx,
+            grants(&repo),
+        )
+        .with_event_routines(Rollout(Some(true)))
+        .with_owner_inboxes(inboxes),
     )
 }
 
@@ -955,6 +976,10 @@ async fn nonowners_can_neither_read_nor_manage_routines() {
         );
         assert_policy(
             svc.execute_action_now(owner_receipt(id)).await,
+            ActionPolicyError::NotFound,
+        );
+        assert_policy(
+            svc.stop_run(owner_receipt(id)).await,
             ActionPolicyError::NotFound,
         );
     }

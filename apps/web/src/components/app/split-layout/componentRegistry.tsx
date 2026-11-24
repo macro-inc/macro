@@ -1,3 +1,4 @@
+import { AGENT_SCREEN_ROUTE_ID } from '@app/features/agent-screen/core/route';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
@@ -23,6 +24,10 @@ import {
 } from './split-router/app-route-shell';
 
 // Views load as their own chunks the first time a split opens them.
+const AgentScreenView = lazyNamed(
+  () => import('@app/features/agent-screen/route-views'),
+  'AgentScreenView'
+);
 const ForYouRouteView = lazyNamed(
   () => import('@app/features/suggestions/route-views'),
   'ForYouRouteView'
@@ -34,10 +39,6 @@ const PasswordsRouteView = lazyNamed(
 const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
-);
-const NewHomeRouteView = lazyNamed(
-  () => import('@app/features/new-home/route-views'),
-  'NewHomeRouteView'
 );
 const NotificationsRouteView = lazyNamed(
   () => import('@app/features/notifications-inbox/route-views'),
@@ -246,6 +247,11 @@ registerComponent('getting-started', () => (
   <RedirectSplit to={{ type: 'component', id: 'home' }} />
 ));
 
+// Retired New Home: restored layouts open the Notifications view it replaced.
+registerComponent('new-home', () => (
+  <RedirectSplit to={{ type: 'component', id: 'notifications' }} />
+));
+
 registerComponent('new-project', withAuth(CreateProjectView), {
   splitPanelLayout: 'composable',
 });
@@ -283,14 +289,19 @@ registerComponent(
   () => <HomeRouteView />,
   () => composableLayout(true)
 );
-// New Home's rail item and `g h`: it sends the split on to Recent or
-// Notifications, so it takes the shell they draw on desktop.
-registerComponent(
-  'new-home',
-  () => <NewHomeRouteView />,
-  () => composableLayout()
-);
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
+// Opened as split content by `agentScreenContent` (member card, DM header,
+// Settings → Machines); the route renders the same view from the URL.
+registerComponent(AGENT_SCREEN_ROUTE_ID, (params) =>
+  typeof params.harnessId === 'string' && params.harnessId ? (
+    <AgentScreenView
+      harnessId={params.harnessId}
+      continueDriving={params.continueDriving === 'true'}
+    />
+  ) : (
+    <NotFound />
+  )
+);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent(
   'for-you',

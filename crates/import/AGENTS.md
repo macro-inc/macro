@@ -176,6 +176,12 @@ from this import's other databases into it are not linked.
   or a row batch and recording it duplicates that one object or batch, and a
   crash between applying a schema op and recording it fails that database on
   resume (Macro refuses the column id).
+- Stage new plan rows with UUIDv7 ids and list tied creation timestamps by id
+  ascending in SQL and after owner/team deduplication. A staging transaction
+  shares one creation timestamp, so monotonic ids preserve sibling input order
+  through writing and completion. Preserve existing ids: legacy random-id ties
+  become stable without reconstructing their original order. Keep the ledger
+  list inside its local 15-second statement timeout.
 - `team_id` on a Notion row means "the team's copy": only shared objects take
   it, at `claim_importing` (staged → importing) before anything is written, so
   `import_entity_team_object_key` makes a second teammate's claim fail. A
@@ -311,3 +317,40 @@ contract; original source values remain in the task body.
 Jira ids include the cloud id. Epic groups have a separate identity from their
 issue task. Tracker imports never use the generic accept/finalize paths; those
 paths reject workspace-plan rows so approval cannot be bypassed.
+
+## HubSpot CRM imports
+
+`ImportFromHubspot` uses the same reviewed lifecycle with no decision model
+(`domain/service/hubspot_workspace.rs` + `plan`). The host registers an
+`import_hubspot::domain::HubspotConnections` reader and a `CrmImportWriter`
+(`ai_tools::HubspotCrmWriter`, over `crm::domain::record_import`) with
+`with_hubspot`; hosts without them answer "not available". A plan needs a team
+whose CRM the user may use (`ImportError::CrmAccessRequired`) and a HubSpot
+connection (`HubspotError::NotConnected`, which the tool turns into a connect
+prompt), both checked before the run starts, so neither leaves a failed import; every row is shared with the team and not shareable, so the card
+offers no sharing choice. Rows are keyed `{portal}:{type}:{id}` (pipeline ids
+are words, record ids numbers), so re-runs and teammates dedupe through the
+ledger and the `import_entity_hubspot_team_object_key` index.
+
+Plans are fully decided when staged: deals with no company or no live pipeline
+are `skip` with a reason; everything Macro CRM cannot hold is a typed
+`HubspotLoss` on the row, counted into the report's `hubspot` section with the
+owner match summary kept on the first row (`hubspotSummary`, not `summary`,
+which the shared report reads as text). Writes go pipelines, companies,
+contacts, deals. Each object is claimed for the team, then reuses a
+`WrittenKind::CrmRecord` marker from a stopped write, then a natural key
+(company domain, the contact's primary address, the deal's HubSpot URL in
+the `Source link` of its company's entries in that pipeline, matched by its
+path since the host follows the portal's region, read once per company and
+pipeline per write), and only then
+creates. Stage labels are shortened to fit a select option, suffix included,
+and told apart without case. A company a teammate links during the write is
+read again before its contacts and deals are refused. A shutdown leaves the
+object it cut short importing for the adopting process, and only a row the
+write marked imported becomes a link target.
+A contact or deal whose company is not imported yet fails and retries;
+only a company the owner left out leaves its contacts without one
+(`ContactWithoutCompany`, counted for this review only). Left open: a crash between creating a name-only company, an
+address-less contact or a pipeline and recording its marker duplicates that
+one record. Deleted CRM copies are not re-imported (their targets read as live).
+

@@ -927,6 +927,7 @@ jobs:
       - name: Download Build Artifacts
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
+          pattern: macro-*
           path: release-artifacts
           merge-multiple: 'true'
       - name: Upload Release Artifacts
@@ -936,10 +937,219 @@ jobs:
           tag_name: ${{ steps.metadata.outputs.tag }}
           files: release-artifacts/*
           fail_on_unmatched_files: 'true'
+  qa-macos:
+    needs:
+      - resolve-ref
+      - build-dmg
+    name: QA macOS release app
+    runs-on:
+      - nscloud-macos-sequoia-arm64-12x28-with-cache
+      - nscloud-cache-tag-macro-desktop-macos
+      - nscloud-cache-size-100gb
+    env:
+      DESKTOP_NIX_CACHE_SIZE_GB: '100'
+      QA_SUITE: smoke
+      QA_REF: ${{ needs.resolve-ref.outputs.ref }}
+      QA_REPORT: ''
+      QA_ATTEMPTS: '2'
+      QA_DMG_DIR: qa-dmg
+    timeout-minutes: 45
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ needs.resolve-ref.outputs.ref }}
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Checkout QA harness
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ github.sha }}
+          path: .qa-harness
+          sparse-checkout: apps/web/tests/macos
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Record tested commit
+        run: |-
+          echo "QA_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "QA_OUT=$RUNNER_TEMP/qa-out" >> "$GITHUB_ENV"
+        shell: bash
+      - name: Assert arm64 runner
+        run: |
+          set -euo pipefail
+          if [ "$(uname -m)" != "arm64" ]; then
+            echo "macOS DMG builds must run on an arm64/aarch64 runner, got $(uname -m)" >&2
+            exit 1
+          fi
+        shell: bash
+      - name: Mount macOS Nix binary cache
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          path: ~/.cache/macro-desktop-nix
+        continue-on-error: true
+      - name: Install Nix
+        run: |
+          set -euo pipefail
+          if ! command -v nix >/dev/null 2>&1; then
+            curl --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
+              --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+              sh -s -- install macos --no-confirm \
+              --extra-conf "experimental-features = nix-command flakes" \
+              --extra-conf "sandbox = false" \
+              --extra-conf "trusted-users = root runner"
+          fi
+          echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+          echo "NIX_REMOTE=daemon" >> "$GITHUB_ENV"
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          export NIX_REMOTE=daemon
+          nix --version
+        shell: bash
+      - id: nix-cache
+        name: Configure macOS Nix binary cache
+        run: |
+          set -euo pipefail
+
+          # The Apple linker/SDK live outside Nix. Do not reuse their outputs after the
+          # runner image changes its macOS or Xcode version.
+          toolchain_key=$(
+            { xcodebuild -version && sw_vers -buildVersion; } |
+              shasum -a 256 | awk '{print $1}'
+          )
+          cache_root="$HOME/.cache/macro-desktop-nix"
+          cache_dir="$cache_root/$toolchain_key"
+          mkdir -p "$cache_dir"
+          cache_url="file://$cache_dir?compression=zstd&trusted=true&priority=10"
+
+          # The mounted cache root is a symlink; the trailing slash measures its contents.
+          du -sk "$cache_root/" | awk '{printf "Restored macOS Nix cache: %.2f GiB\n", $1 / 1048576}'
+
+          # Initialize an empty cache before adding it as a substituter. Only this local,
+          # repository-specific cache accepts unsigned paths; public caches still require
+          # signatures. Keep the normal /nix store and its daemon-managed permissions.
+          nix store info --store "$cache_url" --json
+          {
+            echo "DESKTOP_NIX_CACHE_ROOT=$cache_root"
+            echo "DESKTOP_NIX_CACHE_DIR=$cache_dir"
+            echo "DESKTOP_NIX_CACHE_URL=$cache_url"
+            echo "NIX_CONFIG<<DESKTOP_NIX_CONFIG_EOF"
+            printf '%s\n' "${NIX_CONFIG:-}"
+            echo "extra-substituters = $cache_url"
+            echo "DESKTOP_NIX_CONFIG_EOF"
+          } >> "$GITHUB_ENV"
+        shell: bash
+        continue-on-error: true
+      - id: metadata
+        name: Derive artifact metadata
+        run: |
+          set -euo pipefail
+          tag="${RAW_REF#refs/tags/}"
+          if [ -z "$tag" ]; then
+            tag="${GITHUB_REF_NAME:-untagged}"
+          fi
+          safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+        shell: bash
+        env:
+          RAW_REF: ${{ needs.resolve-ref.outputs.ref }}
+      - name: Download macOS DMG
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: macro-dmg-${{ steps.metadata.outputs.safe_tag }}
+          path: qa-dmg
+      - name: Copy the app out of the DMG
+        run: |
+          set -euo pipefail
+
+          # The signed, notarized DMG build-dmg uploaded, opened the way a user opens it:
+          # mount it and copy the app out. ditto keeps the signature, the stapled ticket
+          # and the bundle's extended attributes intact.
+          dmg=$(find "$QA_DMG_DIR" -maxdepth 1 -type f -name '*.dmg' -print -quit)
+          if [ -z "$dmg" ]; then
+            echo "::error::no DMG in the macro-dmg artifact" >&2
+            find "$QA_DMG_DIR" -maxdepth 2 -print >&2 || true
+            exit 1
+          fi
+          echo "Testing $(basename "$dmg")"
+          echo "QA_DMG=$(cd "$(dirname "$dmg")" && pwd)/$(basename "$dmg")" >> "$GITHUB_ENV"
+
+          mount_dir=$(mktemp -d)
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" "$dmg"
+          trap 'hdiutil detach "$mount_dir" >/dev/null 2>&1 || true; rmdir "$mount_dir" >/dev/null 2>&1 || true' EXIT
+          mounted_app=$(find "$mount_dir" -maxdepth 1 -type d -name '*.app' -print -quit)
+          if [ -z "$mounted_app" ]; then
+            echo "::error::no app bundle in $(basename "$dmg")" >&2
+            find "$mount_dir" -maxdepth 2 -print >&2 || true
+            exit 1
+          fi
+
+          app_dir="$RUNNER_TEMP/macro-qa"
+          rm -rf "$app_dir"
+          mkdir -p "$app_dir"
+          ditto "$mounted_app" "$app_dir/$(basename "$mounted_app")"
+          echo "QA_APP=$app_dir/$(basename "$mounted_app")" >> "$GITHUB_ENV"
+          du -sh "$app_dir/$(basename "$mounted_app")"
+        shell: bash
+      - name: Block analytics for the QA launch
+        run: |
+          set -euo pipefail
+
+          # The release app embeds the production PostHog key. Without this, every QA
+          # launch would count the runner as a new desktop user. Point the analytics
+          # proxy at nothing for this runner; the host is read from the web app, which
+          # owns it, so the two cannot drift apart.
+          host=$(sed -n "s#^[[:space:]]*api_host: 'https://\([^/']*\).*#\1#p" apps/web/src/lib/analytics/analytics.ts)
+          if [ -z "$host" ]; then
+            echo "::error::could not read the PostHog api_host from apps/web/src/lib/analytics/analytics.ts" >&2
+            exit 1
+          fi
+
+          printf '0.0.0.0 %s\n:: %s\n' "$host" "$host" | sudo tee -a /etc/hosts >/dev/null
+          sudo dscacheutil -flushcache
+          sudo killall -HUP mDNSResponder || true
+
+          # Refuse to launch the app while analytics are still reachable.
+          if curl --silent --max-time 10 --output /dev/null "https://$host/"; then
+            echo "::error::$host is still reachable after blocking it in /etc/hosts" >&2
+            exit 1
+          fi
+          echo "Blocked analytics host $host for this job"
+        shell: bash
+      - name: Launch the app and run the QA checks
+        run: |
+          set -uo pipefail
+
+          # Runs the harness from the workflow's own commit (checked out beside the tree
+          # under test), so older refs can be QA'd with today's checks. QA_DMG names the
+          # release DMG the app came from and adds its notarization checks; QA_ATTEMPTS
+          # relaunches a failed launch. The `+` expansion keeps an empty array legal
+          # under `set -u` on Bash before 4.4.
+          release_args=()
+          if [ -n "${QA_DMG:-}" ]; then
+            release_args+=(--dmg "$QA_DMG")
+          fi
+          nix develop --command bun .qa-harness/apps/web/tests/macos/qa.mjs \
+            --app "$QA_APP" --out "$QA_OUT" --suite "$QA_SUITE" \
+            --ref "$QA_REF" --sha "$QA_SHA" --report "$QA_REPORT" \
+            --attempts "${QA_ATTEMPTS:-1}" ${release_args[@]+"${release_args[@]}"}
+        shell: bash
+      - name: Upload QA results
+        if: '!cancelled()'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          path: ${{ runner.temp }}/qa-out
+          name: macos-qa-release-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: '14'
   publish-release:
     needs:
       - resolve-ref
       - publish-installers
+      - qa-macos
     if: startsWith(needs.resolve-ref.outputs.ref, 'refs/tags/v')
     name: Sign and publish desktop updates
     runs-on: ubuntu-latest
@@ -977,6 +1187,7 @@ jobs:
       - name: Download Build Artifacts
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
         with:
+          pattern: macro-*
           path: release-artifacts
           merge-multiple: 'true'
       - name: Sign updater artifacts

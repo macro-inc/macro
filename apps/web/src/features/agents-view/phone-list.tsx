@@ -1,6 +1,5 @@
 import { createListController } from '@app/components/list';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
-import { ChannelPinGrid } from '@app/features/channels-view/components/ChannelPins';
 import { toEntityActionListState } from '@app/features/next-soup/actions';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import EmptyStateAi from '@app/lib/design/empty-state-ai.svg';
@@ -14,7 +13,7 @@ import { Button, EmptyStatePanel } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { AgentBubble } from './components/agent-bubble/agent-bubble';
 import { ConversationSkeleton } from './components/conversation-skeleton/conversation-skeleton';
-import { PhoneListHeading } from './components/phone-list-heading';
+import { PhoneListSection } from './components/phone-list-section';
 import { SessionStatusGlyph } from './components/session-status-glyph/session-status-glyph';
 import type { ConversationActions } from './context/conversation-actions';
 import {
@@ -150,6 +149,19 @@ export function PhoneAgentsList(props: {
       )}
     </For>
   );
+  const collectionTitle = () =>
+    props.archived ? t('viewMenus.archived') : t('agentWork.conversations');
+  const collectionCount = () => {
+    if (!exhausted()) return undefined;
+    return props.archived
+      ? props.archivedTotalCount
+      : props.conversationTotalCount;
+  };
+  const collectionRows = () => {
+    if (props.archived) return listState.archived();
+    if (props.search) return sortConversations(visible(), 'updated');
+    return sections().conversations;
+  };
   return (
     <div class="flex size-full min-h-0 flex-col">
       <MobileListLayout
@@ -168,153 +180,147 @@ export function PhoneAgentsList(props: {
         }
       >
         <MaybeSoupEntityActionDrawerManager>
+          {/* Reserve the floating islands once; section headings scroll with their rows. */}
           <div
-            class="flex min-h-0 flex-1 flex-col overflow-auto"
+            data-agents-list-scroll
+            class="min-h-0 flex-1 overflow-y-auto pt-(--mobile-content-inset-top)"
             onScroll={(event) => listState.loadMoreNearEnd(event.currentTarget)}
           >
-            {/* Keep the scrollport unpadded: sticky top is measured from its
-                padding edge. Reserve the islands in content, not a second offset. */}
-            <div
-              aria-hidden="true"
-              class="h-(--mobile-content-inset-top) shrink-0"
-            />
-            <Show
-              when={!props.archived && !props.rosterLoading && !props.search}
-            >
-              <ChannelPinGrid horizontal>
-                <For each={startableCustomAgents(props.roster)}>
-                  {(agent) => (
-                    <AgentBubble
-                      agent={agent}
-                      onSelect={() => props.onSelectAgent(agent)}
-                    />
-                  )}
-                </For>
-                <AgentBubble onSelect={props.onCreateAgent} />
-              </ChannelPinGrid>
-            </Show>
-            <PhoneListHeading
-              title={
-                props.archived
-                  ? t('viewMenus.archived')
-                  : t('agentWork.conversations')
-              }
-              count={
-                exhausted()
-                  ? props.archived
-                    ? props.archivedTotalCount
-                    : props.conversationTotalCount
-                  : undefined
-              }
-            />
-            <Show
-              when={empty()}
-              fallback={
-                <>
-                  <Show
-                    when={
-                      !props.archived &&
-                      !props.search &&
-                      sections().waiting.length > 0
-                    }
-                  >
-                    <section
-                      aria-label={t('agentWork.waitingOnYou')}
-                      class="mx-3 mb-3 shrink-0 rounded-[20px] bg-surface-3 py-1"
+            <div class="flex min-h-full flex-col gap-5">
+              <Show
+                when={!props.archived && !props.rosterLoading && !props.search}
+              >
+                <div
+                  role="group"
+                  aria-label={t('nav.agents')}
+                  class="scrollbar-hidden flex shrink-0 gap-2 overflow-x-auto overscroll-x-contain px-(--mobile-chrome-gutter) pt-2"
+                >
+                  <For each={startableCustomAgents(props.roster)}>
+                    {(agent) => (
+                      <AgentBubble
+                        agent={agent}
+                        onSelect={() => props.onSelectAgent(agent)}
+                      />
+                    )}
+                  </For>
+                  <AgentBubble onSelect={props.onCreateAgent} />
+                </div>
+              </Show>
+              <div class="flex min-h-0 flex-1 flex-col gap-3">
+                <Show
+                  when={
+                    !props.archived &&
+                    !props.search &&
+                    sections().waiting.length > 0
+                  }
+                >
+                  <div class="px-3">
+                    <PhoneListSection.Root
+                      title={t('agentWork.waitingOnYou')}
+                      card
                     >
-                      <h2 class="flex h-9 items-center gap-1.5 px-3 text-sm font-semibold text-ink-muted">
-                        <span class="flex w-5 justify-center">
-                          <SessionStatusGlyph state="waiting" />
-                        </span>
-                        {t('agentWork.waitingOnYou')}
-                        <span class="font-normal text-ink-extra-muted/70">
-                          {sections().waiting.length}
-                        </span>
-                      </h2>
-                      {renderRows(sections().waiting, true)}
-                    </section>
-                  </Show>
-                  <Show
-                    when={
-                      !props.archived &&
-                      !props.search &&
-                      sections().favorites.length > 0
-                    }
-                  >
-                    <section
-                      aria-label={t('agentWork.favorites')}
-                      class="mx-3 mb-3 shrink-0 rounded-[20px] bg-surface-3 py-1"
+                      <PhoneListSection.Heading
+                        title={t('agentWork.waitingOnYou')}
+                        count={sections().waiting.length}
+                        icon={<SessionStatusGlyph state="waiting" />}
+                        card
+                      />
+                      <PhoneListSection.Body>
+                        {renderRows(sections().waiting, true)}
+                      </PhoneListSection.Body>
+                    </PhoneListSection.Root>
+                  </div>
+                </Show>
+                <Show
+                  when={
+                    !props.archived &&
+                    !props.search &&
+                    sections().favorites.length > 0
+                  }
+                >
+                  <div class="px-3">
+                    <PhoneListSection.Root
+                      title={t('agentWork.favorites')}
+                      card
                     >
-                      <h2 class="flex h-9 items-center gap-1.5 px-3 text-sm font-semibold text-ink-muted">
-                        <span class="flex w-5 justify-center">
-                          <StarIcon class="size-3.5" />
-                        </span>
-                        {t('agentWork.favorites')}
-                        <span class="font-normal text-ink-extra-muted/70">
-                          {sections().favorites.length}
-                        </span>
-                      </h2>
-                      {renderRows(sections().favorites)}
-                    </section>
-                  </Show>
-                  {renderRows(
-                    props.archived
-                      ? listState.archived()
-                      : props.search
-                        ? sortConversations(visible(), 'updated')
-                        : sections().conversations
-                  )}
-                  <Show when={exhausted() && visible().length === 0}>
-                    <p class="py-8 text-center text-sm text-ink-muted">
-                      {props.search
-                        ? t('agentWork.noSearchMatches', {
-                            query: props.search,
-                          })
-                        : t('agentWork.noFilterMatches')}
-                    </p>
-                  </Show>
-                  <Show when={props.loading || props.loadingNextPage}>
-                    <ConversationSkeleton rows={3} />
-                  </Show>
-                  <Show when={props.error}>
-                    <Button variant="ghost" onClick={props.onRetry}>
-                      {t('agentWork.retryLoading')}
-                    </Button>
-                  </Show>
-                  <Show
-                    when={
-                      props.hasNextPage &&
-                      !props.loadingNextPage &&
-                      !props.error
-                    }
-                  >
-                    <Button variant="ghost" onClick={props.onLoadMore}>
-                      {t('agentWork.loadMoreActivity')}
-                    </Button>
-                  </Show>
-                </>
-              }
-            >
-              <EmptyStatePanel
-                centered
-                graphic={EmptyStateAi}
-                title={
-                  props.archived
-                    ? t('agentWork.noArchivedConversationsTitle')
-                    : t('agentWork.noConversationsYet')
-                }
-                primaryAction={
-                  props.archived
-                    ? undefined
-                    : {
-                        label: t('agentWork.startConversation'),
-                        icon: PlusIcon,
-                        onClick: props.onFocusComposer,
+                      <PhoneListSection.Heading
+                        title={t('agentWork.favorites')}
+                        count={sections().favorites.length}
+                        icon={<StarIcon class="size-3.5" />}
+                        card
+                      />
+                      <PhoneListSection.Body>
+                        {renderRows(sections().favorites)}
+                      </PhoneListSection.Body>
+                    </PhoneListSection.Root>
+                  </div>
+                </Show>
+                <PhoneListSection.Root title={collectionTitle()}>
+                  <PhoneListSection.Heading
+                    title={collectionTitle()}
+                    count={collectionCount()}
+                  />
+                  <PhoneListSection.Body>
+                    <Show
+                      when={empty()}
+                      fallback={
+                        <>
+                          {renderRows(collectionRows())}
+                          <Show when={exhausted() && visible().length === 0}>
+                            <p class="py-8 text-center text-sm text-ink-muted">
+                              {props.search
+                                ? t('agentWork.noSearchMatches', {
+                                    query: props.search,
+                                  })
+                                : t('agentWork.noFilterMatches')}
+                            </p>
+                          </Show>
+                          <Show when={props.loading || props.loadingNextPage}>
+                            <ConversationSkeleton rows={3} />
+                          </Show>
+                          <Show when={props.error}>
+                            <Button variant="ghost" onClick={props.onRetry}>
+                              {t('agentWork.retryLoading')}
+                            </Button>
+                          </Show>
+                          <Show
+                            when={
+                              props.hasNextPage &&
+                              !props.loadingNextPage &&
+                              !props.error
+                            }
+                          >
+                            <Button variant="ghost" onClick={props.onLoadMore}>
+                              {t('agentWork.loadMoreActivity')}
+                            </Button>
+                          </Show>
+                        </>
                       }
-                }
-                class="min-h-80 flex-1 [--mobile-content-inset-top:0px]"
-              />
-            </Show>
+                    >
+                      <EmptyStatePanel
+                        centered
+                        graphic={EmptyStateAi}
+                        title={
+                          props.archived
+                            ? t('agentWork.noArchivedConversationsTitle')
+                            : t('agentWork.noConversationsYet')
+                        }
+                        primaryAction={
+                          props.archived
+                            ? undefined
+                            : {
+                                label: t('agentWork.startConversation'),
+                                icon: PlusIcon,
+                                onClick: props.onFocusComposer,
+                              }
+                        }
+                        class="h-auto min-h-80 flex-1 overflow-visible [--mobile-content-inset-top:0px]"
+                      />
+                    </Show>
+                  </PhoneListSection.Body>
+                </PhoneListSection.Root>
+              </div>
+            </div>
           </div>
         </MaybeSoupEntityActionDrawerManager>
       </MobileListLayout>

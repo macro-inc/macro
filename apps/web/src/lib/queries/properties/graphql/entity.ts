@@ -1,6 +1,7 @@
 import { createUrqlMutation } from '@app/lib/urql-solid/create-urql-mutation';
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
 import type { UrqlMutationExecutor } from '@app/lib/urql-solid/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import {
   executeOptimisticMutation,
@@ -386,6 +387,64 @@ export function entityPropertyOptimisticMutationUuid(args: {
   );
 }
 
+/** Adds whose request is still in flight, by the property slot they fill. */
+const pendingAdds = new Map<string, Promise<unknown>>();
+
+/** A save goes out after this even if an add of its property is unanswered. */
+const ADD_HOLD_LIMIT_MS = 30_000;
+
+function entityPropertySlot(input: GraphqlEntityPropertyMutationInput): string {
+  return entityPropertyOptimisticMutationUuid({
+    entityType: toGraphqlPropertyTargetEntityType(input.entityType),
+    entityId: input.entityId,
+    propertyDefinitionId:
+      input.kind === 'add'
+        ? input.propertyDefinitionId
+        : getPropertyDefinitionId(input.property),
+  });
+}
+
+/**
+ * Sends an add, which writes an empty value, and holds saves of the same
+ * property until it is answered: one sent meanwhile could reach the server
+ * first and be cleared by the add.
+ */
+async function sendAdd<T>(slot: string, send: () => Promise<T>): Promise<T> {
+  let release = () => {};
+  const answered = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  // A property can be added again while an earlier add is unanswered, so a
+  // save waits for all of them.
+  const unanswered = Promise.all([pendingAdds.get(slot), answered]);
+  pendingAdds.set(slot, unanswered);
+
+  const forget = async () => {
+    await unanswered;
+    if (pendingAdds.get(slot) === unanswered) pendingAdds.delete(slot);
+  };
+  fireAndForget(forget(), 'entity-properties');
+
+  try {
+    return await send();
+  } finally {
+    release();
+  }
+}
+
+type AddHold = { slot: string; deadline: number };
+
+async function holdForAdds({ slot, deadline }: AddHold): Promise<void> {
+  while (pendingAdds.has(slot)) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return;
+    await Promise.race([
+      pendingAdds.get(slot),
+      new Promise((resolve) => setTimeout(resolve, remaining)),
+    ]);
+  }
+}
+
 type EntityPropertyExecution = Parameters<
   UrqlMutationExecutor<
     SetEntityPropertyMutation,
@@ -395,12 +454,39 @@ type EntityPropertyExecution = Parameters<
 >[0];
 
 async function executeGraphqlEntityPropertyMutation(
-  { client, mutation, input, context }: EntityPropertyExecution,
+  execution: EntityPropertyExecution,
   onEnqueued?: () => void,
   prepareGrouped?: PrepareGroupedPropertyUpdates,
   authorizationEpoch = cacheSessionGeneration.capture()
 ) {
+  const { input } = execution;
+  const send = (hold?: AddHold) =>
+    sendEntityPropertyMutation(
+      execution,
+      onEnqueued,
+      prepareGrouped,
+      authorizationEpoch,
+      hold
+    );
+  const slot = entityPropertySlot(input);
+  if (input.kind === 'add') return sendAdd(slot, () => send());
+
+  const hold = { slot, deadline: Date.now() + ADD_HOLD_LIMIT_MS };
+  await holdForAdds(hold);
+  return send(hold);
+}
+
+async function sendEntityPropertyMutation(
+  { client, mutation, input, context }: EntityPropertyExecution,
+  onEnqueued: (() => void) | undefined,
+  prepareGrouped: PrepareGroupedPropertyUpdates | undefined,
+  authorizationEpoch: ReturnType<typeof cacheSessionGeneration.capture>,
+  hold: AddHold | undefined
+) {
   const args = await prepareMutationArgs(input, prepareGrouped);
+  // Preparing awaits the cache, and an add can start meanwhile.
+  if (hold) await holdForAdds(hold);
+
   const variables: SetEntityPropertyMutationVariables = {
     input: {
       entityType: args.entityType,

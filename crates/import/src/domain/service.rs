@@ -32,6 +32,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 mod admission;
+mod hubspot_workspace;
 pub(crate) mod lifecycle;
 mod notion_workspace;
 mod tracker_workspace;
@@ -317,6 +318,7 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections
         ImportSource,
         Arc<dyn import_tracker::domain::model::TrackerConnections>,
     >,
+    hubspot: Option<HubspotImport>,
     slack_source: Arc<W>,
     mcp_tools: Arc<S>,
     creator: Arc<C>,
@@ -325,6 +327,13 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, N = NoNotionConnections
     notifier: Option<ImportNotify>,
     jobs: WorkspaceJobs,
     mirror_locks: Arc<PersonalMirrorLocks>,
+}
+
+/// The HubSpot reader and the CRM writer a host wires together.
+#[derive(Clone)]
+struct HubspotImport {
+    reader: Arc<dyn import_hubspot::domain::HubspotConnections>,
+    writer: Arc<dyn crate::domain::ports::CrmImportWriter>,
 }
 
 /// Weak slots keep in-run mirror exclusion per user without retaining inactive locks.
@@ -362,6 +371,7 @@ impl<R: Clone, S, C, W: SlackWorkspaceSource, N> Clone for ImportServiceImpl<R, 
             notion: self.notion.clone(),
             workspace_source: self.workspace_source,
             trackers: self.trackers.clone(),
+            hubspot: self.hubspot.clone(),
             slack_source: self.slack_source.clone(),
             mcp_tools: self.mcp_tools.clone(),
             creator: self.creator.clone(),
@@ -387,6 +397,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
             notion: Arc::new(NoNotionConnections),
             workspace_source: ImportSource::Notion,
             trackers: Default::default(),
+            hubspot: None,
             slack_source: Arc::new(NoSlackSource),
             mcp_tools,
             creator,
@@ -410,6 +421,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             notion: self.notion,
             workspace_source: self.workspace_source,
             trackers: self.trackers,
+            hubspot: self.hubspot,
             mcp_tools: self.mcp_tools,
             creator: self.creator,
             recorder: self.recorder,
@@ -429,6 +441,17 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
     ) -> Self {
         self.trackers.insert(ImportSource::Linear, linear);
         self.trackers.insert(ImportSource::Jira, jira);
+        self
+    }
+
+    /// Read HubSpot portals through `reader` and write them into the team's
+    /// CRM through `writer`. Hosts without it report HubSpot as unavailable.
+    pub fn with_hubspot(
+        mut self,
+        reader: Arc<dyn import_hubspot::domain::HubspotConnections>,
+        writer: Arc<dyn crate::domain::ports::CrmImportWriter>,
+    ) -> Self {
+        self.hubspot = Some(HubspotImport { reader, writer });
         self
     }
 
@@ -463,6 +486,7 @@ impl<R, S, C, W: SlackWorkspaceSource, N: Send + Sync + 'static> ImportServiceIm
             notion: connections,
             workspace_source: self.workspace_source,
             trackers: self.trackers,
+            hubspot: self.hubspot,
             mcp_tools: self.mcp_tools,
             creator: self.creator,
             recorder: self.recorder,
@@ -725,8 +749,9 @@ where
                 }
                 .await
             }
-            // Notion rows go through the agent session, never here.
-            ImportSource::Notion | ImportSource::Jira => return,
+            // Notion rows go through the agent session, never here; Jira and
+            // HubSpot rows only through their reviewed workspace writes.
+            ImportSource::Notion | ImportSource::Jira | ImportSource::Hubspot => return,
         };
 
         let persisted = match created {
@@ -1363,6 +1388,11 @@ where
             ImportSource::Jira => {
                 return Err(ImportError::NotReady(
                     "Jira imports require an approved workspace review.",
+                ));
+            }
+            ImportSource::Hubspot => {
+                return Err(ImportError::NotReady(
+                    "HubSpot imports require an approved workspace review.",
                 ));
             }
             ImportSource::Slack => {

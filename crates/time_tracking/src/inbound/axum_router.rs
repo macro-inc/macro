@@ -156,7 +156,11 @@ pub struct TimeTrackingApiError {
 }
 
 impl TimeTrackingApiError {
-    fn new(status: StatusCode, code: TimeTrackingErrorCode, message: impl Into<String>) -> Self {
+    pub(crate) fn new(
+        status: StatusCode,
+        code: TimeTrackingErrorCode,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             code,
             message: message.into(),

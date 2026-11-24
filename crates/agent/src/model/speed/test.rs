@@ -3,11 +3,11 @@ use super::*;
 #[test]
 fn premium_speeds_are_model_specific() {
     assert!(ModelSpeed::Ultrafast.supported("openai/gpt-6-astra"));
-    assert!(ModelSpeed::Ultrafast.supported("openai/gpt-6.1-sol"));
+    assert!(ModelSpeed::Ultrafast.supported("openai/gpt-6.2-sol"));
     assert!(ModelSpeed::Priority.supported("openai/gpt-6-astra"));
-    assert!(ModelSpeed::Priority.supported("openai/gpt-6.1-sol"));
+    assert!(ModelSpeed::Priority.supported("openai/gpt-6.2-sol"));
     assert_eq!(
-        ModelSpeed::offered("openai/gpt-6.1-sol"),
+        ModelSpeed::offered("openai/gpt-6.2-sol"),
         [
             ModelSpeed::Standard,
             ModelSpeed::Priority,

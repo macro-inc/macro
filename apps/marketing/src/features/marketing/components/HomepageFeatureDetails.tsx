@@ -6,8 +6,12 @@ export type ProductPagePath =
   | '/channels'
   | '/documents'
   | '/tasks'
+  | '/calendar'
+  | '/calls'
   | '/agents'
-  | '/crm';
+  | '/crm'
+  | '/github'
+  | '/pricing';
 
 /** Open the full product page through a normal same-tab link. */
 export function HomepageFeatureDetails(props: {

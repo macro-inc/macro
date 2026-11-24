@@ -3,6 +3,7 @@ import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
 } from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
+import { TaskTimerCount } from '@app/features/time-tracking/task-timer-count';
 import {
   Entity,
   isProjectContainedEntity,
@@ -204,6 +205,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
       <Switch>
         <Match when={props.compact}>
           <NarrowLayout {...props}>
+            <TaskTimerCount taskId={props.entity.id} compact />
             <div class="w-8 min-w-0">
               <ListPropertyValue
                 entityId={props.entity.id}
@@ -283,6 +285,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
                     blocked={props.entity.isBlocked}
                     completed={isTaskCompleted(props.entity)}
                   />
+                  <TaskTimerCount taskId={props.entity.id} />
                   <Show when={props.isShared}>
                     <span class="task-shared-badge hidden shrink-0">
                       <SharedBadgeSmall ownerId={props.entity.ownerId} />

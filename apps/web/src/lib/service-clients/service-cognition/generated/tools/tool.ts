@@ -9,6 +9,10 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
+  AddCompanyDomain: {
+    call: types.AddCompanyDomain;
+    response: types.CompanyDomainsResponse;
+  };
   AddSharedCalendarEvent: {
     call: types.AddSharedCalendarEvent;
     response: types.ToolCalendarEvent;
@@ -239,6 +243,10 @@ type ToolParserMap = {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
   };
+  ImportFromHubspot: {
+    call: types.ImportFromHubspot;
+    response: types.HubspotImportResponse;
+  };
   ImportFromJira: {
     call: types.ImportFromJira;
     response: types.TrackerImportResponse;
@@ -455,6 +463,10 @@ type ToolParserMap = {
     call: types.ReadWordDocument;
     response: types.WordDocumentResponse;
   };
+  RemoveCompanyDomain: {
+    call: types.RemoveCompanyDomain;
+    response: types.CompanyDomainsResponse;
+  };
   RemoveFromPipeline: {
     call: types.RemoveFromPipeline;
     response: types.RemoveFromPipelineResponse;
@@ -566,6 +578,10 @@ type ToolParserMap = {
 };
 
 const toolParserMap = {
+  AddCompanyDomain: {
+    call: schemas.AddCompanyDomain,
+    response: schemas.CompanyDomainsResponse,
+  },
   AddSharedCalendarEvent: {
     call: schemas.AddSharedCalendarEvent,
     response: schemas.ToolCalendarEvent,
@@ -810,6 +826,10 @@ const toolParserMap = {
   ImportCompaniesCsv: {
     call: schemas.ImportCompaniesCsv,
     response: schemas.ImportCompaniesCsvResponse,
+  },
+  ImportFromHubspot: {
+    call: schemas.ImportFromHubspot,
+    response: schemas.HubspotImportResponse,
   },
   ImportFromJira: {
     call: schemas.ImportFromJira,
@@ -1060,6 +1080,10 @@ const toolParserMap = {
     call: schemas.ReadWordDocument,
     response: schemas.WordDocumentResponse,
   },
+  RemoveCompanyDomain: {
+    call: schemas.RemoveCompanyDomain,
+    response: schemas.CompanyDomainsResponse,
+  },
   RemoveFromPipeline: {
     call: schemas.RemoveFromPipeline,
     response: schemas.RemoveFromPipelineResponse,
@@ -1197,6 +1221,10 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
+  AddCompanyDomain: {
+    call: types.AddCompanyDomain;
+    response: types.CompanyDomainsResponse;
+  };
   AddSharedCalendarEvent: {
     call: types.AddSharedCalendarEvent;
     response: types.ToolCalendarEvent;
@@ -1427,6 +1455,10 @@ type ToolDataMap = {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
   };
+  ImportFromHubspot: {
+    call: types.ImportFromHubspot;
+    response: types.HubspotImportResponse;
+  };
   ImportFromJira: {
     call: types.ImportFromJira;
     response: types.TrackerImportResponse;
@@ -1642,6 +1674,10 @@ type ToolDataMap = {
   ReadWordDocument: {
     call: types.ReadWordDocument;
     response: types.WordDocumentResponse;
+  };
+  RemoveCompanyDomain: {
+    call: types.RemoveCompanyDomain;
+    response: types.CompanyDomainsResponse;
   };
   RemoveFromPipeline: {
     call: types.RemoveFromPipeline;

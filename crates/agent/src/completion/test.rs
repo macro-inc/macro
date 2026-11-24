@@ -1,6 +1,6 @@
 //! The one-shot paths trace their single model call like the agent loop does.
 use super::*;
-use genai_telemetry::attr;
+use genai_telemetry::{ContentPolicy, attr};
 use opentelemetry::trace::{Status, TracerProvider as _};
 use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider, SpanData};
 use rig_core::test_utils::{MockCompletionModel, MockTurn};
@@ -68,6 +68,79 @@ async fn a_one_shot_completion_traces_its_model_call() {
     );
 }
 
+/// The one-shot paths take the current content policy (`telemetry_for`), so
+/// a structured call made inside `withhold_content` keeps its span's
+/// structure and none of what it was told or answered.
+#[tokio::test]
+async fn a_structured_one_shot_inside_withhold_content_records_no_content() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let response = genai_telemetry::withhold_content(async {
+        let telemetry = GenAiContext::new(None, "find".to_owned(), ContentPolicy::current(), true);
+        let model = TracedModel::new(
+            MockCompletionModel::new([MockTurn::text(r#"{"private":"answer"}"#)]),
+            telemetry.clone(),
+        );
+        prompt_with_history(
+            model,
+            "private instructions",
+            vec![Message::user("a private prompt")],
+            telemetry,
+            Some(serde_json::json!({"response_format": {"type": "json_object"}})),
+        )
+        .await
+    })
+    .await
+    .expect("the completion succeeds");
+    assert_eq!(response.output, r#"{"private":"answer"}"#);
+
+    let spans = finished(&exporter, &provider);
+    let chats = chat_spans(&spans);
+    assert_eq!(chats.len(), 1, "{spans:#?}");
+    assert_eq!(string_attribute(chats[0], attr::INPUT_MESSAGES), None);
+    assert_eq!(string_attribute(chats[0], attr::OUTPUT_MESSAGES), None);
+    for span in &spans {
+        for kv in &span.attributes {
+            let value = kv.value.to_string();
+            assert!(!value.contains("private"), "{} carries {value}", kv.key);
+        }
+    }
+}
+
+/// A context built outside `withhold_content` with capture on records no
+/// content for a call made inside the scope, answered or failed: its
+/// recorders read the scope when they record.
+#[tokio::test]
+async fn a_context_built_before_withhold_content_records_no_content_inside_it() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    for turn in [
+        MockTurn::text(r#"{"private":"answer"}"#),
+        MockTurn::error("upstream refused the private prompt"),
+    ] {
+        let telemetry = GenAiContext::new(None, "find".to_owned(), ContentPolicy::enabled(), true);
+        let model = TracedModel::new(MockCompletionModel::new([turn]), telemetry.clone());
+        let _ = genai_telemetry::withhold_content(prompt_with_history(
+            model,
+            "private instructions",
+            vec![Message::user("a private prompt")],
+            telemetry,
+            None,
+        ))
+        .await;
+    }
+
+    let spans = finished(&exporter, &provider);
+    assert_eq!(chat_spans(&spans).len(), 2, "{spans:#?}");
+    for span in &spans {
+        for kv in &span.attributes {
+            let value = kv.value.to_string();
+            assert!(!value.contains("private"), "{} carries {value}", kv.key);
+        }
+        if let Status::Error { description } = &span.status {
+            assert!(!description.contains("private"), "{description}");
+        }
+    }
+}
+
 /// A provider that refuses the call leaves no turn for the hook to record, so
 /// the traced model itself marks the call as failed.
 #[tokio::test]
@@ -104,6 +177,75 @@ async fn a_failed_one_shot_completion_marks_its_chat_span() {
     );
     assert!(string_attribute(chat, attr::INPUT_MESSAGES).is_some());
     assert_eq!(string_attribute(chat, attr::OUTPUT_MESSAGES), None);
+}
+
+/// A failed call inside `withhold_content` keeps none of the provider's text:
+/// not on its span, and not in the error its caller records.
+#[tokio::test]
+async fn a_failed_one_shot_inside_withhold_content_records_no_content() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let error = genai_telemetry::withhold_content(async {
+        let telemetry = GenAiContext::new(None, "find".to_owned(), ContentPolicy::current(), true);
+        let model = TracedModel::new(
+            MockCompletionModel::new([MockTurn::error("cannot read the private answer")]),
+            telemetry.clone(),
+        );
+        prompt_with_history(
+            model,
+            "private instructions",
+            vec![Message::user("a private prompt")],
+            telemetry,
+            None,
+        )
+        .await
+    })
+    .await
+    .expect_err("the completion fails");
+    assert_eq!(
+        format!("{error:#}"),
+        "the model call failed with a provider error; its text is withheld with the call's content"
+    );
+    // Not "private" alone: with a backtrace, the error names `anyhow::__private`.
+    for planted in ["private answer", "private instructions", "private prompt"] {
+        assert!(!format!("{error:?}").contains(planted), "{error:?}");
+    }
+
+    let spans = finished(&exporter, &provider);
+    let chats = chat_spans(&spans);
+    assert_eq!(chats.len(), 1, "{spans:#?}");
+    assert_eq!(
+        string_attribute(chats[0], attr::ERROR_TYPE).as_deref(),
+        Some("provider_error")
+    );
+    for span in &spans {
+        let status = format!("{:?}", span.status);
+        assert!(!status.contains("private"), "{} ends {status}", span.name);
+        for kv in &span.attributes {
+            let value = kv.value.to_string();
+            assert!(!value.contains("private"), "{} carries {value}", kv.key);
+        }
+        for event in span.events.iter() {
+            let text = format!("{} {:?}", event.name, event.attributes);
+            assert!(!text.contains("private"), "{} records {text}", span.name);
+        }
+    }
+
+    // Outside the scope the caller still gets the provider's text.
+    let telemetry = GenAiContext::new(None, "find".to_owned(), ContentPolicy::current(), true);
+    let model = TracedModel::new(
+        MockCompletionModel::new([MockTurn::error("upstream is down")]),
+        telemetry.clone(),
+    );
+    let error = prompt_with_history(
+        model,
+        "be brief",
+        vec![Message::user("hi")],
+        telemetry,
+        None,
+    )
+    .await
+    .expect_err("the completion fails");
+    assert!(error.to_string().contains("upstream is down"), "{error}");
 }
 
 /// A minimal valid 1x1 PNG.

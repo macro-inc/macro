@@ -913,6 +913,19 @@ where
         graphql_time_tracking::resolve_time_tracking(ctx, &self.user_id).await
     }
 
+    /// The authenticated user's time over a period, for a project, themselves
+    /// or their team, grouped by person, task or day. Only tasks they can see
+    /// count. Reads the latest writes, so read it again after a change.
+    async fn time_summary(
+        &self,
+        ctx: &Context<'_>,
+        input: graphql_time_tracking::TimeSummaryInput,
+    ) -> async_graphql::Result<
+        graphql_time_tracking::GraphqlTimeSummary<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    > {
+        graphql_time_tracking::resolve_time_summary(ctx, &self.user_id, input).await
+    }
+
     /// AI routines the authenticated user can access.
     async fn scheduled_actions(
         &self,

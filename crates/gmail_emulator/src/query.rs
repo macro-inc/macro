@@ -1,7 +1,8 @@
 //! Gmail's `q` search syntax, as far as the emulator understands it:
 //! space-separated terms that must all match, `-` to negate one, quoted
 //! phrases, and the operators `rfc822msgid:`, `from:`, `to:`, `subject:`,
-//! `label:`, `is:`, `in:` and `has:attachment`. `OR`, braces and parentheses
+//! `label:`, `is:`, `in:`, `has:attachment` and `after:` with Unix seconds
+//! (received later than that second). `OR`, braces, parentheses and dates
 //! are not understood; they match as plain words.
 
 use std::collections::BTreeSet;
@@ -30,6 +31,8 @@ enum Predicate {
     /// A place such as `inbox`, `trash` or `anywhere`.
     In(String),
     HasAttachment,
+    /// Received after this Unix second.
+    After(i64),
     Text(String),
 }
 
@@ -77,6 +80,10 @@ fn term(input: &str) -> IResult<&str, Term> {
         Some("is") => Predicate::Is(lowered),
         Some("in") => Predicate::In(lowered),
         Some("has") if lowered == "attachment" => Predicate::HasAttachment,
+        Some("after") => lowered.parse::<i64>().map_or_else(
+            |_| Predicate::Text(format!("after:{lowered}")),
+            Predicate::After,
+        ),
         Some(other) => Predicate::Text(format!("{other}:{lowered}")),
         None => Predicate::Text(lowered),
     };
@@ -114,13 +121,25 @@ impl Query {
     }
 
     pub(crate) fn matches(&self, message: &StoredMessage, labels: &[Label]) -> bool {
-        self.matches_parsed(&message.parsed, &message.labels, labels)
+        self.matches_parsed(
+            &message.parsed,
+            &message.labels,
+            labels,
+            message.internal_date_ms,
+        )
     }
 
-    fn matches_parsed(&self, parsed: &Parsed, held: &BTreeSet<String>, labels: &[Label]) -> bool {
-        self.terms
-            .iter()
-            .all(|term| predicate_matches(&term.predicate, parsed, held, labels) != term.negated)
+    /// Whether a message received at `received_ms` holding `held` meets the query.
+    fn matches_parsed(
+        &self,
+        parsed: &Parsed,
+        held: &BTreeSet<String>,
+        labels: &[Label],
+        received_ms: i64,
+    ) -> bool {
+        self.terms.iter().all(|term| {
+            predicate_matches(&term.predicate, parsed, held, labels, received_ms) != term.negated
+        })
     }
 }
 
@@ -136,6 +155,7 @@ fn predicate_matches(
     parsed: &Parsed,
     held: &BTreeSet<String>,
     labels: &[Label],
+    received_ms: i64,
 ) -> bool {
     match predicate {
         Predicate::MessageId(id) => parsed.message_id.as_deref() == Some(id.as_str()),
@@ -159,12 +179,13 @@ fn predicate_matches(
             other => held.contains(&other.to_uppercase()),
         },
         Predicate::HasAttachment => parsed.has_attachment,
+        Predicate::After(seconds) => received_ms > seconds.saturating_mul(1000),
         Predicate::Text(needle) => parsed.search_text.contains(needle),
     }
 }
 
-/// Whether an arriving message meets a Gmail filter's `criteria`.
-pub(crate) fn filter_matches(criteria: &Value, parsed: &Parsed) -> bool {
+/// Whether a message arriving at `now_ms` meets a Gmail filter's `criteria`.
+pub(crate) fn filter_matches(criteria: &Value, parsed: &Parsed, now_ms: i64) -> bool {
     let text = |key: &str| criteria[key].as_str().map(str::to_lowercase);
     let no_labels = BTreeSet::new();
 
@@ -177,10 +198,10 @@ pub(crate) fn filter_matches(criteria: &Value, parsed: &Parsed) -> bool {
         .is_none_or(|wanted| !wanted || parsed.has_attachment);
     let query = criteria["query"]
         .as_str()
-        .is_none_or(|query| Query::parse(query).matches_parsed(parsed, &no_labels, &[]));
+        .is_none_or(|query| Query::parse(query).matches_parsed(parsed, &no_labels, &[], now_ms));
     let negated_query = criteria["negatedQuery"]
         .as_str()
-        .is_none_or(|query| !Query::parse(query).matches_parsed(parsed, &no_labels, &[]));
+        .is_none_or(|query| !Query::parse(query).matches_parsed(parsed, &no_labels, &[], now_ms));
 
     from && to && subject && attachment && query && negated_query
 }

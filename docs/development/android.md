@@ -919,9 +919,14 @@ and `MIN_NATIVE_BUILD_IOS`; production builds read them from
 raises. See the
 [native compatibility contract](../../apps/web/tauri/src-tauri/README.md).
 
+OTA bundles live in the app's data directory (`bundle-updates`), not its cache
+directory, which Android empties when storage runs low. The first launch of the
+release that moved them ignores the old cache copy and downloads again (see
+[OTA bundle storage](../../apps/web/tauri/src-tauri/README.md#ota-bundle-storage)).
+
 At startup, the updater rejects a saved or previously downloaded OTA whose bundle
-build is older than the binary's embedded bundle, falling back to the embedded
-assets when needed. That prevents an older cached OTA from automatically surviving every
+build is older than the binary's embedded bundle, or that is missing a file its
+completion record lists, falling back to the embedded assets when needed. That prevents an older cached OTA from automatically surviving every
 native upgrade. It does not prove reverse IPC compatibility: a later-built OTA
 or republished rollback can still contain older JS and satisfy the native floor.
 Preserve the legacy command contract on newer binaries when older bundles omit

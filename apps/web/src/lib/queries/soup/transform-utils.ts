@@ -491,6 +491,7 @@ export const createSearchResponseItemMapper = (
             isImportant: result.is_important,
             isDraft: result.is_draft,
             done: !result.inbox_visible,
+            hasReceivedMail: result.has_received_mail,
             participants,
             search,
             snippet: result.snippet ?? undefined,

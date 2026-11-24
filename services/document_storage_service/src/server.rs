@@ -1040,6 +1040,25 @@ async fn run_server() -> anyhow::Result<()> {
         entity_access_service.clone(),
         authorization_state.clone(),
     );
+    // Summaries read the primary: the screens read them again after each
+    // change, and the replica can lag by seconds. Exports read the replica.
+    let time_report_service = Arc::new(
+        time_tracking::domain::report_service::TimeReportServiceImpl::new(
+            time_tracking::outbound::pg_report_repo::PgTimeReportRepository::new(
+                db.clone(),
+                readonly_db.clone(),
+            ),
+            entity_access_service.clone(),
+            time_tracking::outbound::project_tasks::SystemPropertyProjectTasks::new(
+                system_properties_service.clone(),
+            ),
+        ),
+    );
+    let time_report_state = time_tracking::inbound::report_router::TimeReportRouterState::new(
+        time_report_service.clone(),
+        entity_access_service.clone(),
+        authorization_state.clone(),
+    );
 
     let passwords_repository = Arc::new(
         passwords::outbound::postgres::PgRepository::new(db.clone())
@@ -2752,6 +2771,7 @@ async fn run_server() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         time_tracking_state,
+        time_report_state,
         account_manager_state: AccountManagerRouterState::new(
             account_manager_service,
             authorization_state.clone(),
@@ -2821,6 +2841,10 @@ async fn run_server() -> anyhow::Result<()> {
         // the write that changed it.
         graphql_time_tracking_context: graphql_time_tracking::TimeTrackingGraphqlContext::new(
             time_tracking_service,
+            entity_access_service.clone(),
+        ),
+        graphql_time_report_context: graphql_time_tracking::TimeReportGraphqlContext::new(
+            time_report_service,
             entity_access_service.clone(),
         ),
         graphql_scheduled_action_context: ScheduledActionGraphqlContext::new(

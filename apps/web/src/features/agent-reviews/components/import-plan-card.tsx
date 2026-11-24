@@ -1,3 +1,4 @@
+import IconHubSpot from '@icon/import/hubspot.svg';
 import IconJira from '@icon/import/jira.svg';
 import IconNotion from '@icon/import/notion.svg';
 import IconLinear from '@icon/mcp-linear.svg';
@@ -272,6 +273,7 @@ function PlanContents(
             .with('notion', () => <IconNotion class="size-4" />)
             .with('linear', () => <IconLinear class="size-4" />)
             .with('jira', () => <IconJira class="size-4" />)
+            .with('hubspot', () => <IconHubSpot class="size-4" />)
             .exhaustive()}
         </span>
         <Show

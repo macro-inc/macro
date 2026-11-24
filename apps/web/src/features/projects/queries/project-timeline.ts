@@ -1,3 +1,4 @@
+import type { GanttTimedEnd } from '@app/components/gantt/gantt-time';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { DateProperty, Property } from '@property/types';
 import type { DateField } from '@property/utils/start-due';
@@ -59,4 +60,12 @@ export function projectTimelineWholeDay(
   const start = hasTime(row, SYSTEM_PROPERTY_IDS.START_DATE);
   if (start === hasTime(row, SYSTEM_PROPERTY_IDS.DUE_DATE)) return undefined;
   return start ? 'due' : 'start';
+}
+
+/** `projectTimelineWholeDay` as a timeline bar names its ends. */
+export function projectTimelineWholeDayEnd(
+  row: ProjectTimelineRow
+): GanttTimedEnd | undefined {
+  const end = projectTimelineWholeDay(row);
+  return end === 'due' ? 'end' : end;
 }

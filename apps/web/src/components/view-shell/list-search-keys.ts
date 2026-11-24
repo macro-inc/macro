@@ -19,6 +19,11 @@ export type ListSearchSuggestions = {
   active: () => number;
   setActive: (index: number) => void;
   pick: (index: number) => void;
+  /**
+   * Whether picking the row edits the query (adds a filter) rather than
+   * running a search, so the keyboard stays in the field to go on typing.
+   */
+  editsQuery?: (index: number) => boolean;
   /** The list's element id and its active row's, announced from the field. */
   listId?: string;
   activeId?: () => string | undefined;
@@ -26,6 +31,11 @@ export type ListSearchSuggestions = {
 
 export type ListSearchKeysOptions = {
   value: () => string;
+  /**
+   * Whether the view keeps the field open as a search before anything is
+   * typed in it, so Escape in the list closes it.
+   */
+  open?: () => boolean;
   /** Empties the query and collapses the field. */
   clear: () => void;
   /** Moves keyboard focus into the view's result list. */
@@ -121,8 +131,9 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
       return true;
     }
     if (event.key === 'Enter' && active >= 0) {
+      const editsQuery = suggestions.editsQuery?.(active) ?? false;
       suggestions.pick(active);
-      leave('first', true);
+      if (!editsQuery) leave('first', true);
       return true;
     }
 
@@ -140,7 +151,8 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
     onCleanup(
       registerListSearch(scopeId, {
         isActive: () =>
-          options.value().trim().length > 0 && (options.ownsEscape?.() ?? true),
+          (options.value().trim().length > 0 || (options.open?.() ?? false)) &&
+          (options.ownsEscape?.() ?? true),
         clear: options.clear,
       })
     );

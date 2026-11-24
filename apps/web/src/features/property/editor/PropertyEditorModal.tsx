@@ -78,6 +78,12 @@ import {
 import { EntityPropertyEditor } from './entity-property-editor';
 import { useAllProperties } from './hooks/useAllProperties';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
+import { LinkPropertyEditor } from './link-property-editor';
+import {
+  createUnhighlightedArrival,
+  type SavedValueState,
+  SavedValueStatus,
+} from './saved-value-status';
 import {
   closePropertyEditor,
   hasPropertyEditorPropertyAddedHandler,
@@ -752,6 +758,21 @@ function TagAssignmentEditor(props: {
     props.entities[0]?.id === singleEntityForDocTags?.id
       ? singleDocTags
       : undefined;
+  const singleEntityProperties = singleEntityForDocTags
+    ? useEntityPropertiesQuery(
+        () => propertyEditorEntityType(singleEntityForDocTags),
+        () => singleEntityForDocTags.id,
+        false
+      )
+    : undefined;
+  // Until the item's properties are read every tag looks unapplied, so a pick
+  // could only add: the applied tags would neither show nor be removable.
+  // A failed read still allows tagging: its saves are additions and removals
+  // the server merges, so nothing unread is lost.
+  const waitsForSavedTags = () =>
+    Boolean(singleDocTagsSource()) &&
+    singleEntityProperties?.data === undefined &&
+    !singleEntityProperties?.error;
   const currentEntityTagIds = () => {
     const docTags = singleDocTagsSource();
     if (docTags && singleEntityForDocTags) {
@@ -887,6 +908,7 @@ function TagAssignmentEditor(props: {
 
   const rows = createMemo(() => {
     const nextRows: TagAssignmentRow[] = [];
+    if (waitsForSavedTags()) return nextRows;
 
     if (showClearAllAtTop()) {
       nextRows.push({ type: 'clear', separatorBefore: false });
@@ -923,6 +945,12 @@ function TagAssignmentEditor(props: {
     props.searchValue();
     props.setSelectedIndex(0);
   });
+  createUnhighlightedArrival(
+    waitsForSavedTags,
+    () => rows().length > 0,
+    () => hasSearch() && rows()[0]?.type === 'tag',
+    props.setSelectedIndex
+  );
 
   createEffect(() => {
     const index = props.selectedIndex();
@@ -1212,7 +1240,7 @@ function TagAssignmentEditor(props: {
 
   return (
     <Show
-      when={!tagsQuery.isLoading}
+      when={!tagsQuery.isLoading && !waitsForSavedTags()}
       fallback={<CommandMenuEmptyState>Loading tags...</CommandMenuEmptyState>}
     >
       <Show
@@ -1361,12 +1389,25 @@ function PropertyValueEditor(props: {
     if ('value' in property) return property;
 
     const properties = props.properties ?? entityPropertiesQuery.data ?? [];
-    return (
-      properties.find(
-        (entityProperty) => entityProperty.propertyDefinitionId === property.id
-      ) ?? property
+    const saved = properties.find(
+      (entityProperty) => entityProperty.propertyDefinitionId === property.id
     );
+    if (!saved) return property;
+
+    // An item's own copy of a custom property carries no options.
+    return { ...saved, options: saved.options ?? property.options };
   });
+
+  // A definition says nothing about the value a saved item already holds, so
+  // until the item's properties are read its values are unknown, not empty.
+  const savedValueState = (): SavedValueState => {
+    const property = resolvedProperty();
+    if (props.properties || !singleEntity()) return 'known';
+    if (property && 'value' in property) return 'known';
+    // A refused project read answers with an empty list and an error.
+    if (entityPropertiesQuery.error) return 'failed';
+    return entityPropertiesQuery.data === undefined ? 'loading' : 'known';
+  };
 
   const handleSubmit = (
     value: string | number | boolean | Date | EntityReference
@@ -1398,6 +1439,7 @@ function PropertyValueEditor(props: {
             props.properties ? 1 : props.selectedEntities.length
           }
           onSave={props.onSave}
+          savedValueState={savedValueState()}
         />
       </Match>
       <Match when={propertyType() === 'ENTITY'}>
@@ -1413,6 +1455,7 @@ function PropertyValueEditor(props: {
             props.properties ? 1 : props.selectedEntities.length
           }
           onSave={props.onSave}
+          savedValueState={savedValueState()}
         />
       </Match>
       <Match
@@ -1435,10 +1478,22 @@ function PropertyValueEditor(props: {
           setInputType={props.setInputType}
         />
       </Match>
-      <Match when={propertyType() === 'LINK'}>
-        <div class="p-4 text-center text-ink-muted">
-          Link editing not yet implemented
-        </div>
+      <Match when={propertyType() === 'LINK' && resolvedProperty()}>
+        {(property) => (
+          <LinkPropertyEditor
+            property={property()}
+            searchValue={props.searchValue}
+            selectedIndex={props.selectedIndex}
+            setSelectedIndex={props.setSelectedIndex}
+            onSave={props.onSave}
+            setKeybindings={props.setKeybindings}
+            setPlaceholder={props.setPlaceholder}
+            selectedEntityCount={
+              props.properties ? 1 : props.selectedEntities.length
+            }
+            savedValueState={savedValueState()}
+          />
+        )}
       </Match>
     </Switch>
   );
@@ -1457,6 +1512,7 @@ function SelectPropertyEditor(props: {
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
   selectedEntityCount: number;
+  savedValueState: SavedValueState;
 }) {
   const [localSelectedIds, setLocalSelectedIds] = createSignal(
     selectedOptionIds(props.property)
@@ -1506,6 +1562,11 @@ function SelectPropertyEditor(props: {
     props.selectedEntityCount === 1 &&
     'value' in props.property;
 
+  // Adding to options that haven't been read would save only the new one and
+  // drop the rest; a single option is replaced either way.
+  const waitsForSavedValue = () =>
+    props.property.isMultiSelect && props.savedValueState !== 'known';
+
   const filteredOptions = createMemo(() => {
     const options = props.property?.options || [];
     const search = props.searchValue().trim();
@@ -1552,6 +1613,7 @@ function SelectPropertyEditor(props: {
 
   const rows = createMemo(() => {
     const nextRows: SelectPropertyRow[] = [];
+    if (waitsForSavedValue()) return nextRows;
 
     if (showClearAllAtTop()) {
       nextRows.push({ type: 'clear', separatorBefore: false });
@@ -1645,6 +1707,12 @@ function SelectPropertyEditor(props: {
     selectedIndex: props.selectedIndex,
     setSelectedIndex: props.setSelectedIndex,
   });
+  createUnhighlightedArrival(
+    waitsForSavedValue,
+    () => rows().length > 0,
+    () => Boolean(searchQuery()) && rows()[0]?.type === 'option',
+    props.setSelectedIndex
+  );
 
   props.setKeybindings({
     select: (event) => {
@@ -1663,7 +1731,19 @@ function SelectPropertyEditor(props: {
     <Show
       when={rows().length > 0}
       fallback={
-        <CommandMenuEmptyState>No matching options found</CommandMenuEmptyState>
+        <Show
+          when={waitsForSavedValue()}
+          fallback={
+            <CommandMenuEmptyState>
+              No matching options found
+            </CommandMenuEmptyState>
+          }
+        >
+          <SavedValueStatus
+            state={props.savedValueState}
+            valuesLabel={props.property.displayName.toLowerCase()}
+          />
+        </Show>
       }
     >
       <CommandMenuList

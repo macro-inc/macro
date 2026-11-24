@@ -155,6 +155,56 @@ pub(super) async fn inboxes_for_macro_id(
         .collect()
 }
 
+/// Which of `ids` `macro_id` owns or has delegated to it, reading one row per
+/// asked id and never the account's links or a link's other delegates, either
+/// of which can be many. The fence keeps the owned check on the primary key;
+/// the lateral probe keeps the delegated check on
+/// `macro_user_links_link_primary_idx`, where a planner that guesses an account
+/// has about one delegation would otherwise scan them all by primary key.
+#[tracing::instrument(err, skip(pool, macro_id, ids), fields(ids = ids.len()))]
+pub(super) async fn inbox_ids_among(
+    pool: &PgPool,
+    macro_id: MacroUserIdStr<'_>,
+    ids: &[Uuid],
+) -> Result<Vec<Uuid>, sqlx::Error> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut tx = pool.begin().await?;
+    // A check that saves a routine must not hold a connection long if a plan
+    // ever goes wrong.
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *tx)
+        .await?;
+    let theirs = sqlx::query_scalar!(
+        r#"
+        SELECT picked.id AS "id!"
+        FROM (
+            SELECT el.id, el.macro_id
+            FROM email_links el
+            WHERE el.id = ANY($2::uuid[])
+            OFFSET 0
+        ) picked
+        WHERE picked.macro_id = $1
+        UNION
+        SELECT asked.id
+        FROM unnest($2::uuid[]) AS asked(id)
+        CROSS JOIN LATERAL (
+            SELECT 1
+            FROM macro_user_links mul
+            WHERE mul.link_id = asked.id AND mul.primary_macro_id = $1
+            LIMIT 1
+        ) delegated
+        "#,
+        macro_id.as_ref(),
+        ids
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(theirs)
+}
+
 /// Database representation of an initial mailbox backfill status.
 #[derive(Debug, Clone, Copy, sqlx::Type)]
 #[sqlx(type_name = "email_backfill_job_status", rename_all = "PascalCase")]

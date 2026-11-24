@@ -40,7 +40,9 @@ import { sortTasks } from '../constants';
 import {
   type DateBucketBoundaries,
   TASK_DUE_DATE_BUCKETS,
+  TASK_START_DATE_BUCKETS,
   taskDueDatePredicate,
+  taskStartDatePredicate,
 } from '../core/task-due-date';
 import { isProjectTab } from '../core/task-navigation';
 import type { TaskFacetContext } from '../filters/task-facets';
@@ -66,6 +68,7 @@ export type TasksDataSourceInput = Pick<
   | 'sort'
   | 'facets'
   | 'dueDate'
+  | 'startDate'
   | 'savedViewActive'
 >;
 
@@ -168,6 +171,19 @@ function taskInsertFilter(
   };
 }
 
+function dateGroupLabel(
+  groupBy: TasksViewState['groupBy'],
+  key: string
+): string | undefined {
+  const buckets =
+    groupBy === 'due_date'
+      ? TASK_DUE_DATE_BUCKETS
+      : groupBy === 'start_date'
+        ? TASK_START_DATE_BUCKETS
+        : undefined;
+  return buckets?.find((bucket) => bucket.id === key)?.label;
+}
+
 /** Query, service search, and row assembly owned by the production Tasks view. */
 export function useTasksDataSource(
   state: TasksDataSourceInput,
@@ -176,6 +192,7 @@ export function useTasksDataSource(
   const notificationSource = useGlobalNotificationSource();
   const calendar = options.calendar ?? createDateBucketBoundariesSignal();
   const dueDate = () => taskDueDatePredicate(state.dueDate, calendar());
+  const startDate = () => taskStartDatePredicate(state.startDate, calendar());
   const attachNotifications = (entity: TaskEntityWithProperties) =>
     withEntityNotifications(entity, notificationSource);
 
@@ -206,6 +223,7 @@ export function useTasksDataSource(
       nameContains,
       board: options.board?.(),
       dueDate: dueDate(),
+      startDate: startDate(),
       calendar: calendar(),
       searching: !!state.search.trim(),
     });
@@ -218,6 +236,7 @@ export function useTasksDataSource(
     facets: state.facets,
     facetContext: facetContext(),
     dueDate: dueDate(),
+    startDate: startDate(),
   });
 
   const query = useSoupAstItemsQuery(queryArgs, () => ({
@@ -316,6 +335,7 @@ export function useTasksDataSource(
             facetContext: facetContext(),
             reference: options.reference?.(),
             dueDate: dueDate(),
+            startDate: startDate(),
           }),
       });
 
@@ -451,11 +471,7 @@ export function useTasksDataSource(
         );
         const taskGroup: SoupGroup<TaskEntityWithProperties> = {
           id: group.key,
-          label:
-            state.groupBy === 'due_date'
-              ? (TASK_DUE_DATE_BUCKETS.find((bucket) => bucket.id === group.key)
-                  ?.label ?? group.label)
-              : group.label,
+          label: dateGroupLabel(state.groupBy, group.key) ?? group.label,
           entities,
           count: group.totalCount,
         };

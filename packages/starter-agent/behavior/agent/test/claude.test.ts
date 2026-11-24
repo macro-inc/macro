@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { PassThrough } from 'node:stream';
 import type { Options, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { agentClaude, capabilityServer } from '../claude.ts';
+import { agentClaude, capabilityServer, mainLoop } from '../claude.ts';
 
 const wake = {
   request: 'say hello',
@@ -96,6 +96,7 @@ test('every wake has its capability tools beside the MCP servers it was given, a
   expect(options?.env).toEqual({
     PATH: '/bin',
     ANTHROPIC_BASE_URL: 'https://egress/brain/anthropic',
+    ANTHROPIC_CUSTOM_HEADERS: 'x-macro-agent-loop: main',
   });
   expect(options?.env?.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
 });
@@ -209,4 +210,10 @@ test('a wake has one id, which its scripts carry, and one span that records how 
       },
     },
   ]);
+});
+
+test('the main loop keeps headers it was given and adds its own mark', () => {
+  expect(
+    mainLoop({ ANTHROPIC_CUSTOM_HEADERS: 'x-one: 1' }).ANTHROPIC_CUSTOM_HEADERS
+  ).toBe('x-one: 1\nx-macro-agent-loop: main');
 });

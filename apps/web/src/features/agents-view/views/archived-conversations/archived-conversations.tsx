@@ -80,69 +80,73 @@ export function ArchivedConversations(props: {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <section
-        class="flex min-h-0 flex-1 flex-col overflow-auto px-6 py-4"
+        class="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-6 py-4"
         aria-label={t('viewMenus.archived')}
         onScroll={onScroll}
       >
-        <header class="mb-2 flex shrink-0 items-center gap-1.5 pb-2">
-          <h1 class="text-sm font-semibold text-ink">
-            {t('viewMenus.archived')}
-          </h1>
-          <span class="text-xs text-ink-extra-muted/70 tabular-nums">
-            {rows().length}
-          </span>
+        <header class="flex shrink-0 items-center justify-between gap-1.5">
+          <div class="flex items-center gap-1.5">
+            <h1 class="text-sm font-semibold text-ink">
+              {t('viewMenus.archived')}
+            </h1>
+            <span class="text-xs text-ink-extra-muted/70 tabular-nums">
+              {rows().length}
+            </span>
+          </div>
           <SearchBar
-            class="ml-auto w-[200px]"
+            class="w-[200px]"
             label={t('agentWork.searchArchived')}
             placeholder={t('agentWork.searchArchived')}
             value={search()}
             onValueChange={setSearch}
           />
         </header>
-        <div
-          class="flex shrink-0 items-center gap-4 px-3 pb-1 text-xs font-medium text-ink-extra-muted"
-          aria-hidden="true"
-        >
-          <span class="min-w-0 flex-1">{t('agentWork.nameColumn')}</span>
-          <span class="w-[220px] shrink-0">{t('agentWork.codeColumn')}</span>
-          <span class="w-40 shrink-0 text-right">
-            {t('agentWork.archivedColumn')}
-          </span>
-        </div>
         <div class="flex flex-col gap-1">
-          <Key each={rows()} by="id">
-            {(row) => (
-              <ArchivedConversationRow
-                conversation={row()}
-                mode={props.modeForConversation(row())}
-                list={list}
-                actions={props.actions}
-                onOpen={(event) => props.onOpenConversation(row(), event)}
-              />
-            )}
-          </Key>
-          <Show when={!pending() && !props.error && rows().length === 0}>
-            <p class="py-8 text-center text-sm text-ink-muted">
-              {search().trim()
-                ? t('agentWork.noSearchMatches', { query: search().trim() })
-                : t('agentWork.noArchivedConversations')}
-            </p>
-          </Show>
-          <Show when={pending()}>
-            <ConversationSkeleton rows={3} />
-          </Show>
-          <Show when={props.error}>
-            <Button variant="ghost" size="sm" onClick={props.onRetry}>
-              {t('agentWork.retryLoading')}
-            </Button>
-          </Show>
-          <Show
-            when={props.hasNextPage && !props.loadingNextPage && !props.error}
+          <div
+            class="flex shrink-0 items-center gap-4 px-3 text-xs font-medium text-ink-extra-muted"
+            aria-hidden="true"
           >
-            <Button variant="ghost" size="sm" onClick={props.onLoadMore}>
-              {t('agentWork.loadMoreActivity')}
-            </Button>
-          </Show>
+            <span class="min-w-0 flex-1">{t('agentWork.nameColumn')}</span>
+            <span class="w-[220px] shrink-0">{t('agentWork.codeColumn')}</span>
+            <span class="w-40 shrink-0 text-right">
+              {t('agentWork.archivedColumn')}
+            </span>
+          </div>
+          <div class="flex flex-col gap-1">
+            <Key each={rows()} by="id">
+              {(row) => (
+                <ArchivedConversationRow
+                  conversation={row()}
+                  mode={props.modeForConversation(row())}
+                  list={list}
+                  actions={props.actions}
+                  onOpen={(event) => props.onOpenConversation(row(), event)}
+                />
+              )}
+            </Key>
+            <Show when={!pending() && !props.error && rows().length === 0}>
+              <p class="py-8 text-center text-sm text-ink-muted">
+                {search().trim()
+                  ? t('agentWork.noSearchMatches', { query: search().trim() })
+                  : t('agentWork.noArchivedConversations')}
+              </p>
+            </Show>
+            <Show when={pending()}>
+              <ConversationSkeleton rows={3} />
+            </Show>
+            <Show when={props.error}>
+              <Button variant="ghost" size="sm" onClick={props.onRetry}>
+                {t('agentWork.retryLoading')}
+              </Button>
+            </Show>
+            <Show
+              when={props.hasNextPage && !props.loadingNextPage && !props.error}
+            >
+              <Button variant="ghost" size="sm" onClick={props.onLoadMore}>
+                {t('agentWork.loadMoreActivity')}
+              </Button>
+            </Show>
+          </div>
         </div>
       </section>
     </MaybeSoupEntityActionDrawerManager>

@@ -1,6 +1,4 @@
-import { ViewShell, ViewSidebar } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { t } from '@app/lib/i18n';
 import { createSearchParams } from '@app/lib/split-router';
 import { TraceFlow, usePending } from '@app/observability/flow';
 import {
@@ -15,17 +13,18 @@ import { forYouSearch } from './for-you-search';
 import { createSuggestionsFeed } from './primitives/feed';
 import { createRefresh } from './primitives/refresh';
 import { SUGGESTION_ITEM_PARTS } from './suggestion-items';
-import { useSuggestions } from './suggestions';
+import { useForYouRoutines, useSuggestions } from './suggestions';
 import { useSuggestionsFlag } from './use-suggestions-flag';
-import { ForYouRefresh, ForYouView } from './views/for-you-view';
+import { ForYouView } from './views/for-you-view';
 
 function ForYouPage() {
   usePageViewTracking('for-you');
-  const [search] = createSearchParams(forYouSearch);
+  const [search, setSearch] = createSearchParams(forYouSearch);
   const { source, generation, actions } = useSuggestions();
+  const routines = useForYouRoutines();
   const refresh = createRefresh(generation);
   const feed = createSuggestionsFeed(source, actions, { viewer: useUserId() });
-  usePending('suggestions.load', () => feed.view().kind === 'loading');
+  usePending('suggestions.load', () => feed.view('today').kind === 'loading');
   // Leaving the page is when the person has looked: what comes after is new.
   window.addEventListener('pagehide', source.viewed);
   onCleanup(() => {
@@ -34,22 +33,21 @@ function ForYouPage() {
   });
 
   return (
-    <ViewShell.Root aside={false}>
-      <ViewShell.Main>
-        <ViewShell.TopBar>
-          <ViewSidebar.Title caret={false}>{t('nav.forYou')}</ViewSidebar.Title>
-          <div class="ml-auto">
-            <ForYouRefresh refresh={refresh} />
-          </div>
-        </ViewShell.TopBar>
-        <ForYouView
-          feed={feed}
-          parts={SUGGESTION_ITEM_PARTS}
-          focusedId={search.suggestion}
-          onRetry={source.retry}
-        />
-      </ViewShell.Main>
-    </ViewShell.Root>
+    <ForYouView
+      feed={feed}
+      list={search.view ?? 'today'}
+      onSelectList={(list) =>
+        setSearch(
+          { view: list === 'today' ? undefined : list, suggestion: undefined },
+          { history: 'replace' }
+        )
+      }
+      routines={routines}
+      parts={SUGGESTION_ITEM_PARTS}
+      refresh={refresh}
+      focusedId={search.suggestion}
+      onRetry={source.retry}
+    />
   );
 }
 

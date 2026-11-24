@@ -5,6 +5,7 @@ import {
   type SplitSearchState,
 } from '@app/lib/split-router';
 import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { z } from 'zod';
 import { pipelineIdOfTab } from './core/navigation';
 import { COMPANY_SECTIONS, CONTACT_SECTIONS } from './core/record';
@@ -90,7 +91,7 @@ export function crmItemBlockType({
   itemSubType,
 }: CrmItemParams) {
   return itemType === 'document'
-    ? (itemSubType ?? itemFileType ?? 'md')
+    ? (itemSubType ?? fileTypeToBlockName(itemFileType))
     : itemType;
 }
 

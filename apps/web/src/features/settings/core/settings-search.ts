@@ -371,6 +371,18 @@ const SETTINGS: Setting[] = [
     target: 'Mobile app',
     keywords: 'download phone ios android iphone qr code app store play',
   },
+  {
+    tab: 'Native App',
+    title: 'Version and build',
+    target: 'About',
+    keywords: 'installed version build date bundle about',
+  },
+  {
+    tab: 'Native App',
+    title: 'App updates',
+    target: 'Updates',
+    keywords: 'update upgrade check download install restart',
+  },
 ];
 
 /**

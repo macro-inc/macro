@@ -159,7 +159,11 @@ describe('connecting through an embedded dialog', () => {
 describe('connecting on a page', () => {
   it('opens the page in the tab reserved in the click and polls until the connection exists', async () => {
     vi.useFakeTimers();
-    const tab = { closed: false, close: mocks.closeTab };
+    const tab = {
+      closed: false,
+      close: mocks.closeTab,
+      location: { href: '' },
+    };
     mocks.reservePopup.mockReturnValue(tab);
     mocks.start.mockResolvedValue(
       ok({ type: 'openUrl', url: 'https://consent.example/linear' })
@@ -219,6 +223,73 @@ describe('connecting on a page', () => {
     expect(await connectConnector({ key: 'app/linear' })).toBe('closed');
     expect(mocks.closeTab).toHaveBeenCalledOnce();
     expect(mocks.assignUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe('polling a page that cannot report back', () => {
+  const tab = { closed: false, close: vi.fn(), location: { href: '' } };
+  const blip = err([{ code: 'NETWORK_ERROR', message: 'Failed to fetch' }]);
+  const linear = connector('app/linear');
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    tab.closed = false;
+    tab.location.href = '';
+    mocks.reservePopup.mockReturnValue(tab);
+    mocks.start.mockResolvedValue(
+      ok({ type: 'openUrl', url: 'https://consent.example/linear' })
+    );
+  });
+
+  it('sends the tab to the page that closes itself once connected', async () => {
+    mocks.complete.mockResolvedValueOnce(linear);
+    const pending = connectConnector({ key: 'app/linear' });
+    await vi.runAllTimersAsync();
+    expect(await pending).toBe('connected');
+    expect(tab.location.href).toContain(
+      '/pipedream/mcp/connect/callback?status=connected'
+    );
+  });
+
+  it('keeps polling through a failed poll', async () => {
+    mocks.complete
+      .mockResolvedValueOnce(NOT_FOUND)
+      .mockResolvedValueOnce(blip)
+      .mockResolvedValueOnce(NOT_FOUND)
+      .mockResolvedValueOnce(linear);
+    const pending = connectConnector({ key: 'app/linear' });
+    await vi.runAllTimersAsync();
+    expect(await pending).toBe('connected');
+    expect(mocks.complete).toHaveBeenCalledTimes(4);
+  });
+
+  it('still records the connection when the poll after the tab closes fails', async () => {
+    tab.closed = true;
+    mocks.complete.mockResolvedValueOnce(blip).mockResolvedValueOnce(linear);
+    const pending = connectConnector({ key: 'app/linear' });
+    await vi.runAllTimersAsync();
+    expect(await pending).toBe('connected');
+  });
+
+  it('fails and retires the tab when polls fail until the deadline', async () => {
+    mocks.complete.mockResolvedValue(blip);
+    const pending = connectConnector({ key: 'app/linear' });
+    const outcome = expect(pending).rejects.toBeDefined();
+    await vi.runAllTimersAsync();
+    await outcome;
+    expect(tab.location.href).toContain(
+      '/pipedream/mcp/connect/callback?status=error'
+    );
+    expect(mocks.setData).not.toHaveBeenCalled();
+  });
+
+  it('retires a tab still open at the deadline', async () => {
+    const pending = connectConnector({ key: 'app/linear' });
+    await vi.runAllTimersAsync();
+    expect(await pending).toBe('closed');
+    expect(tab.location.href).toContain(
+      '/pipedream/mcp/connect/callback?status=error'
+    );
   });
 });
 

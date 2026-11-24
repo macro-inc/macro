@@ -24,6 +24,7 @@ import {
   filterTaskBoardColumns,
   taskBoardColumns,
   taskBoardMoveValue,
+  taskDeadlineMoveWrites,
   toBoardTask,
 } from './task-board';
 
@@ -507,5 +508,116 @@ describe('property sorting', () => {
           .map((group) => group.key)
       ).toEqual(['earlier', 'later', '']);
     }
+  });
+});
+
+describe('deadline moves', () => {
+  const timeZone = 'America/New_York';
+  // Nov 24, 2026, midnight in New York: the Today column's day.
+  const today = '2026-11-24T05:00:00.000Z';
+  const date = (value: string, hasTime = false) => ({
+    type: 'Date' as const,
+    value,
+    ...(hasTime ? { has_time: true } : {}),
+  });
+  const task = (
+    start: ReturnType<typeof date> | undefined,
+    due: ReturnType<typeof date>
+  ) =>
+    boardEntity('task', [
+      ...(start
+        ? [boardProperty(SYSTEM_PROPERTY_IDS.START_DATE, start, 'DATE')]
+        : []),
+      boardProperty(SYSTEM_PROPERTY_IDS.DUE_DATE, due, 'DATE'),
+    ]);
+
+  it("keeps the due date's time of day on the new day", () => {
+    expect(
+      taskDeadlineMoveWrites(
+        task(
+          date('2026-11-24T20:00:00Z', true),
+          date('2026-11-28T22:00:00Z', true)
+        ),
+        today,
+        timeZone
+      )
+    ).toEqual([
+      {
+        field: 'due',
+        apiValues: {
+          valueType: 'DATE',
+          value: new Date('2026-11-24T22:00:00Z'),
+          hasTime: true,
+        },
+      },
+    ]);
+  });
+
+  it('moves a start left after the due date to the same moment, saved first', () => {
+    const moved = {
+      valueType: 'DATE' as const,
+      value: new Date('2026-11-24T22:00:00Z'),
+      hasTime: true,
+    };
+    expect(
+      taskDeadlineMoveWrites(
+        task(
+          date('2026-11-25T20:00:00Z', true),
+          date('2026-11-28T22:00:00Z', true)
+        ),
+        today,
+        timeZone
+      )
+    ).toEqual([
+      { field: 'start', apiValues: moved },
+      { field: 'due', apiValues: moved },
+    ]);
+  });
+
+  it('keeps a due date without a time a whole day, and clears only the due date', () => {
+    expect(
+      taskDeadlineMoveWrites(
+        task(undefined, date('2026-11-28T05:00:00Z')),
+        today,
+        timeZone
+      )
+    ).toEqual([
+      {
+        field: 'due',
+        apiValues: { valueType: 'DATE', value: new Date(today) },
+      },
+    ]);
+    expect(
+      taskDeadlineMoveWrites(
+        task(
+          date('2026-11-25T20:00:00Z', true),
+          date('2026-11-28T22:00:00Z', true)
+        ),
+        null,
+        timeZone
+      )
+    ).toEqual([
+      { field: 'due', apiValues: { valueType: 'DATE', value: null } },
+    ]);
+  });
+
+  it('keeps the time of day across a clock change', () => {
+    // 5 PM on Oct 30 (EDT) moved to Nov 2 (EST) is still 5 PM.
+    expect(
+      taskDeadlineMoveWrites(
+        task(undefined, date('2026-10-30T21:00:00Z', true)),
+        '2026-11-02T05:00:00.000Z',
+        timeZone
+      )
+    ).toEqual([
+      {
+        field: 'due',
+        apiValues: {
+          valueType: 'DATE',
+          value: new Date('2026-11-02T22:00:00Z'),
+          hasTime: true,
+        },
+      },
+    ]);
   });
 });

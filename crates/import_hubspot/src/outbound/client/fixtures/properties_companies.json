@@ -1,0 +1,5 @@
+{"results": [
+  {"name": "name", "label": "Name", "type": "string", "hubspotDefined": true},
+  {"name": "tier", "label": "Tier", "type": "enumeration"},
+  {"name": "arr_band", "label": "ARR band", "type": "enumeration", "hubspotDefined": false}
+]}

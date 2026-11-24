@@ -204,6 +204,16 @@ pub trait EmailRepo: Send + Sync + 'static {
         macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Link>, Self::Err>> + Send;
 
+    /// Which of `ids` are among the inboxes [`Self::inboxes_for_macro_id`]
+    /// returns for `macro_id`, read by those ids alone, so the cost follows
+    /// `ids` and not how many inboxes the account reaches. The caller bounds
+    /// `ids`.
+    fn inbox_ids_among(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+
     /// Fetch a thread by its database ID (without messages).
     fn thread_by_id(
         &self,

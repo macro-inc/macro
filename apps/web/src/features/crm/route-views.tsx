@@ -19,7 +19,7 @@ export const CompaniesRouteView = withAuth(() => {
   useViewRestoration();
   usePageViewTracking('companies');
   const panel = useSplitPanel();
-  const route = createCrmRoute(() => panel?.handle.captureEntryState());
+  const route = createCrmRoute(panel?.handle);
   const crmView = new URLSearchParams(window.location.search).get(
     CRM_VIEW_URL_PARAM
   );

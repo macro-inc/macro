@@ -5,7 +5,6 @@ import { NotificationsRouteView } from './route-views';
 
 const state = vi.hoisted(() => ({
   notifications: (): boolean => false,
-  newHome: (): 'off' | 'both' | 'new-only' | undefined => 'off',
   flagsLoaded: (): boolean => true,
   replace: vi.fn(),
   pageView: vi.fn(),
@@ -36,12 +35,6 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 vi.mock('./notifications-inbox', () => ({
   NotificationsInbox: () => <div>The inbox</div>,
 }));
-vi.mock('../new-home/use-new-home-mode', () => ({
-  useNewHomeMode: () => () => state.newHome(),
-}));
-vi.mock('../new-home/new-home-notifications', () => ({
-  NewHomeNotificationsView: () => <div>New Home’s Notifications tab</div>,
-}));
 vi.mock('./views/notifications-calendar-pane', () => ({
   NotificationsCalendarPane: () => null,
 }));
@@ -60,7 +53,6 @@ const renderRoute = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   state.notifications = () => false;
-  state.newHome = () => 'off';
   state.flagsLoaded = () => true;
 });
 
@@ -82,39 +74,6 @@ describe('NotificationsRouteView', () => {
     expect(await screen.findByText('The inbox')).toBeTruthy();
     expect(state.replace).not.toHaveBeenCalled();
     expect(state.pageView).toHaveBeenCalledExactlyOnceWith('notifications');
-  });
-
-  it.each(['both', 'new-only'] as const)(
-    'opens New Home’s Notifications tab with New Home on (%s)',
-    async (mode) => {
-      state.newHome = () => mode;
-      renderRoute();
-
-      expect(
-        await screen.findByText('New Home’s Notifications tab')
-      ).toBeTruthy();
-      expect(screen.queryByText('The inbox')).toBeNull();
-      expect(state.replace).not.toHaveBeenCalled();
-      expect(state.pageView).toHaveBeenCalledExactlyOnceWith(
-        'new-home-notifications'
-      );
-    }
-  );
-
-  it('waits for New Home’s flags before choosing the inbox', async () => {
-    const [newHome, setNewHome] = createSignal<'off' | 'both' | undefined>();
-    state.notifications = () => true;
-    state.newHome = newHome;
-    renderRoute();
-
-    expect(screen.queryByText('The inbox')).toBeNull();
-    expect(screen.queryByText('New Home’s Notifications tab')).toBeNull();
-
-    setNewHome('both');
-    expect(
-      await screen.findByText('New Home’s Notifications tab')
-    ).toBeTruthy();
-    expect(screen.queryByText('The inbox')).toBeNull();
   });
 
   it.each([false, true])(

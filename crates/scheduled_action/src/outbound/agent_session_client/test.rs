@@ -174,6 +174,7 @@ async fn all_commands_use_internal_auth_and_domain_wire_contract_at_both_prefixe
                     schedule: "cron `0 0 9 * * *` in UTC".into(),
                 },
             })),
+            withhold_content: false,
         };
         let server = server(vec![
             Reply::json(200, json!({"managed":false})),
@@ -290,6 +291,7 @@ async fn malformed_and_ambiguous_prompt_responses_never_replay() {
                 action: identity(),
                 prompt: "task".into(),
                 context: None,
+                withhold_content: false,
             })
             .await
             .unwrap_err();
@@ -365,6 +367,7 @@ async fn status_and_prompt_requests_have_bounded_timeouts() {
                         action: identity(),
                         prompt: "task".into(),
                         context: None,
+                        withhold_content: false,
                     })
                     .await
                     .map(|_| ())
