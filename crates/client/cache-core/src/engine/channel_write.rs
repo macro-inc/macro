@@ -386,24 +386,24 @@ impl<S: Storage> Engine<S> {
         pending
     }
 
-    /// The pending entries known removed.
-    pub(super) async fn removed_under_pending(
+    /// The channels holding the removal of an entry a queued write changes.
+    pub(super) async fn channels_removed_under_pending(
         &self,
-    ) -> Result<BTreeSet<EntityKey<'static>>, EngineError<S::Error>> {
+    ) -> Result<BTreeSet<String>, EngineError<S::Error>> {
         let query = ChannelGuardQuery {
             keys: self.pending_channel_entries(),
             ..ChannelGuardQuery::default()
         };
         if query.keys.is_empty() {
-            return Ok(query.keys);
+            return Ok(BTreeSet::new());
         }
         let guard = self
             .storage
             .load_channel_guard(&query)
             .await
             .map_err(EngineError::Storage)?;
-        let removed = guard.entries.into_iter().filter(|(_, state)| state.removed);
-        Ok(removed.map(|(key, _)| key).collect())
+        let removed = guard.entries.into_values().filter(|state| state.removed);
+        Ok(removed.map(|state| state.channel_id).collect())
     }
 
     async fn channel_entries(

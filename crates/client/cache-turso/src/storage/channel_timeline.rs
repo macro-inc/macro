@@ -732,20 +732,22 @@ pub(super) fn apply(connection: &Db, write: &ChannelWrite) -> Result<(), TursoSt
 fn apply_eviction(
     connection: &Db,
     eviction: &ChannelEviction,
-    kept: &BTreeSet<EntityKey<'static>>,
+    kept: &BTreeSet<String>,
 ) -> Result<ChannelEvictionOutcome, TursoStorageError> {
     let max_channels = usize::from(eviction.max_channels);
+    let limit = max_channels + 1 + kept.len();
     let mut channel_ids = driver::query(
         connection,
         SYNC_STALE,
         vec![
             Value::from_i64(eviction.touched_before_ms),
-            Value::from_i64(i64::from(eviction.max_channels) + 1),
+            Value::from_i64(i64::try_from(limit).map_err(|_| invariant())?),
         ],
     )?
     .iter()
     .map(|row| required_text(row, 0))
     .collect::<Result<Vec<_>, _>>()?;
+    channel_ids.retain(|channel_id| !kept.contains(channel_id));
     let has_more = channel_ids.len() > max_channels;
     channel_ids.truncate(max_channels);
     let mut doomed = BTreeSet::new();
@@ -753,9 +755,6 @@ fn apply_eviction(
         doomed.extend(load_entries(connection, channel_id, ChannelEntries::All)?);
         driver::execute(connection, COVERAGE_DELETE_CHANNEL, vec![text(channel_id)])?;
         driver::execute(connection, SYNC_DELETE, vec![text(channel_id)])?;
-    }
-    for key in kept {
-        doomed.remove(key.as_ref());
     }
     Ok(ChannelEvictionOutcome {
         deleted_keys: delete_entries(connection, doomed.iter().map(String::as_str))?,
@@ -816,7 +815,7 @@ impl ChannelTimelineStorage for TursoStorage {
     async fn channel_timeline_evict(
         &mut self,
         eviction: &ChannelEviction,
-        kept: &BTreeSet<EntityKey<'static>>,
+        kept: &BTreeSet<String>,
     ) -> Result<ChannelEvictionOutcome, Self::Error> {
         self.require_healthy()?;
         let result = (|| {

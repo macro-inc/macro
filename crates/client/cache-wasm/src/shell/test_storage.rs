@@ -416,7 +416,7 @@ impl ChannelTimelineStorage for BrowserStorage {
     async fn channel_timeline_evict(
         &mut self,
         eviction: &ChannelEviction,
-        kept: &std::collections::BTreeSet<EntityKey<'static>>,
+        kept: &std::collections::BTreeSet<String>,
     ) -> Result<ChannelEvictionOutcome, Self::Error> {
         self.inner.channel_timeline_evict(eviction, kept).await
     }

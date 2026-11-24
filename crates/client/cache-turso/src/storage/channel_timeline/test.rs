@@ -423,7 +423,7 @@ fn pages_read_inside_the_stretch_holding_their_anchor() {
 }
 
 #[test]
-fn writes_persist_across_reopen_and_eviction_takes_all_but_what_it_keeps() {
+fn writes_persist_across_reopen_and_eviction_takes_everything() {
     block_on(async {
         let database = TursoMemoryDatabase::new("channel-commit.db");
         let mut storage = database.open("scope").unwrap();
@@ -459,19 +459,23 @@ fn writes_persist_across_reopen_and_eviction_takes_all_but_what_it_keeps() {
 
         let stats = storage.channel_timeline_stats().await.unwrap();
         assert_eq!((stats.channels, stats.entries), (2, 8));
+        let eviction = ChannelEviction {
+            touched_before_ms: 150,
+            max_channels: 1,
+        };
+        let kept = BTreeSet::from(["c1".to_owned()]);
         let evicted = storage
-            .channel_timeline_evict(
-                &ChannelEviction {
-                    touched_before_ms: 150,
-                    max_channels: 5,
-                },
-                &BTreeSet::from([key("m2")]),
-            )
+            .channel_timeline_evict(&eviction, &kept)
+            .await
+            .unwrap();
+        assert_eq!(evicted, ChannelEvictionOutcome::default());
+        let evicted = storage
+            .channel_timeline_evict(&eviction, &BTreeSet::new())
             .await
             .unwrap();
         assert_eq!(evicted.channel_ids, ["c1"]);
-        // The seven held entries; the removal asked for stays.
-        assert_eq!(evicted.deleted_keys.len(), 7);
+        // The seven held entries and the record of the removed one.
+        assert_eq!(evicted.deleted_keys.len(), 8);
         assert!(!evicted.has_more);
         assert_eq!(
             storage
@@ -480,12 +484,9 @@ fn writes_persist_across_reopen_and_eviction_takes_all_but_what_it_keeps() {
                 .unwrap(),
             ChannelTimelineSnapshot::default()
         );
-        assert_eq!(
-            states(&storage, &["m1", "m2"]).await,
-            [None, Some((8, true))]
-        );
+        assert_eq!(states(&storage, &["m1", "m2"]).await, [None, None]);
         assert_eq!(scalar(&storage, ROW_COUNT), 1);
-        assert_eq!(scalar(&storage, "SELECT COUNT(*) FROM records"), 2);
+        assert_eq!(scalar(&storage, "SELECT COUNT(*) FROM records"), 1);
         assert_eq!(scalar(&storage, SYNC_COUNT), 1);
         assert_eq!(scalar(&storage, "SELECT COUNT(*) FROM channel_coverage"), 1);
     });

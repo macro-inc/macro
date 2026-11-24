@@ -242,13 +242,14 @@ impl ChannelTimelineStorage for InMemoryStorage {
     async fn channel_timeline_evict(
         &mut self,
         eviction: &ChannelEviction,
-        kept: &BTreeSet<EntityKey<'static>>,
+        kept: &BTreeSet<String>,
     ) -> Result<ChannelEvictionOutcome, Self::Error> {
         let mut stale = self
             .channel
             .sync
             .values()
             .filter(|sync| sync.touched_at_ms < eviction.touched_before_ms)
+            .filter(|sync| !kept.contains(&sync.channel_id))
             .map(|sync| (sync.touched_at_ms, sync.channel_id.clone()))
             .collect::<Vec<_>>();
         stale.sort();
@@ -261,7 +262,6 @@ impl ChannelTimelineStorage for InMemoryStorage {
         let deleted = channel_ids
             .iter()
             .flat_map(|channel_id| self.channel.entries(channel_id, ChannelEntries::All))
-            .filter(|key| !kept.contains(key))
             .collect::<BTreeSet<_>>();
         let deleted_keys = deleted
             .iter()

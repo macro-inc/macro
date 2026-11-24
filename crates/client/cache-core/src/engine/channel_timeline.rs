@@ -117,7 +117,7 @@ impl<S: ChannelTimelineStorage> Engine<S> {
         eviction.validate()?;
         self.ensure_revision_can_advance()?;
         self.hydrate_optimistic().await?;
-        let kept = self.removed_under_pending().await?;
+        let kept = self.channels_removed_under_pending().await?;
         let outcome = self
             .storage
             .channel_timeline_evict(eviction, &kept)

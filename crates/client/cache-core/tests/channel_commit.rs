@@ -562,7 +562,9 @@ fn a_pending_edit_never_brings_back_an_entry_known_removed() {
             })
             .await
             .unwrap();
-        apply(&mut engine, "20", &[root("m1", "10")], &whole("20")).await;
+        // Its channel stays for the write, watermark and all.
+        let stats = engine.channel_timeline_stats().await.unwrap();
+        assert_eq!(stats.channels, 1);
         assert_eq!(roots(&mut engine).await, covered(&["m1"]));
 
         for held in [true, false] {
