@@ -1,0 +1,78 @@
+use super::*;
+
+#[test]
+fn mentions_read_as_their_visible_labels() {
+    let markdown = concat!(
+        "Ask <m-user-mention>{\"userId\":\"macro|grace@example.com\",\"email\":\"grace@example.com\"}</m-user-mention>",
+        " about <m-document-mention>{\"documentId\":\"0193a0c4-0000-7000-8000-000000000001\",\"blockName\":\"md\",\"documentName\":\"Roadmap\"}</m-document-mention>",
+    );
+
+    assert_eq!(visible_text(markdown), "Ask grace about Roadmap");
+}
+
+#[test]
+fn text_that_is_not_markup_stays_as_written() {
+    assert_eq!(
+        visible_text("a < b and Vec<String>"),
+        "a < b and Vec<String>"
+    );
+}
+
+#[test]
+fn a_title_column_that_is_not_searchable_leaves_the_title_empty() {
+    let cells = vec![
+        CellInput {
+            kind: None,
+            values: Some(serde_json::json!({"type": "Number", "value": 4})),
+            option_labels: Vec::new(),
+        },
+        CellInput {
+            kind: Some(SearchableKind::Text),
+            values: Some(serde_json::json!({"type": "String", "value": "  notes  "})),
+            option_labels: Vec::new(),
+        },
+    ];
+
+    assert_eq!(
+        row_text(&cells),
+        RowText {
+            title: String::new(),
+            cell_text: vec!["notes".to_owned()],
+        }
+    );
+}
+
+#[test]
+fn links_lose_their_query_string_and_fragment() {
+    assert_eq!(
+        searchable_link("https://files.example.com/report.pdf?X-Amz-Signature=abc#page=2"),
+        vec!["https://files.example.com/report.pdf".to_owned()]
+    );
+    assert_eq!(
+        searchable_link("example.com/launch"),
+        vec!["example.com/launch".to_owned()]
+    );
+}
+
+#[test]
+fn links_lose_their_userinfo() {
+    assert_eq!(
+        searchable_link("https://deploy:hunter2@git.example.com/repo.git"),
+        vec!["https://git.example.com/repo.git".to_owned()]
+    );
+    assert_eq!(
+        searchable_link("deploy:hunter2@git.example.com/repo"),
+        vec!["git.example.com/repo".to_owned()]
+    );
+}
+
+#[test]
+fn links_are_also_held_as_a_reader_sees_them() {
+    assert_eq!(
+        searchable_link("https://münchen.example/straße/plan?token=abc"),
+        vec![
+            "https://xn--mnchen-3ya.example/stra%C3%9Fe/plan".to_owned(),
+            "https://münchen.example/straße/plan".to_owned(),
+        ]
+    );
+}

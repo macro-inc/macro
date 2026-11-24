@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO database_row_search_watermarks\n            (table_id, database_id, indexed_version, column_fingerprint)\n        VALUES ($1, $2, $3, $4)\n        ON CONFLICT (table_id) DO UPDATE SET\n            indexed_version = GREATEST(\n                database_row_search_watermarks.indexed_version,\n                EXCLUDED.indexed_version\n            ),\n            column_fingerprint = EXCLUDED.column_fingerprint,\n            updated_at = now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6ffe5e8dfa5e19d3f5b1aa4b13420bca4e7e4d8189f8d3296d1dc666bfed6d57"
+}

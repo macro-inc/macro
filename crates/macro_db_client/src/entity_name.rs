@@ -88,7 +88,7 @@ pub async fn get_entity_name_and_owner(
         SearchEntityType::CrmCompanies => {
             anyhow::bail!("entity type not supported");
         }
-        SearchEntityType::CalendarEvents => {
+        SearchEntityType::CalendarEvents | SearchEntityType::DatabaseRows => {
             anyhow::bail!("entity type not supported");
         }
     };

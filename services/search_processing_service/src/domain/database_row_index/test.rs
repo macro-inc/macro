@@ -1,0 +1,1014 @@
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Mutex,
+};
+
+use chrono::{TimeZone, Utc};
+use uuid::uuid;
+
+use super::*;
+
+const DATABASE: Uuid = uuid!("10000000-0000-7000-8000-000000000001");
+const TABLE: Uuid = uuid!("20000000-0000-7000-8000-000000000001");
+const ROW_A: Uuid = uuid!("60000000-0000-7000-8000-00000000000a");
+const ROW_B: Uuid = uuid!("60000000-0000-7000-8000-00000000000b");
+const ROW_C: Uuid = uuid!("60000000-0000-7000-8000-00000000000c");
+
+/// Postgres as a table of rows, its journal and the watermarks.
+#[derive(Default)]
+struct FakeSource {
+    state: Mutex<SourceState>,
+    /// The one database's index lock.
+    lock: Arc<tokio::sync::Mutex<()>>,
+    /// Told when a pass first reads rows' text.
+    reading_rows: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    /// Told when a pass next asks for the lock.
+    locking: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+}
+
+#[derive(Default)]
+struct SourceState {
+    /// `None` once the table is gone.
+    table: Option<TableState>,
+    /// `None` once the database is gone.
+    database_searchable: Option<bool>,
+    /// The rows that exist, with their text at the table's version.
+    rows: BTreeMap<Uuid, String>,
+    journal: Vec<(i64, Vec<Uuid>, bool)>,
+    watermarks: HashMap<Uuid, (Uuid, i64)>,
+    /// Tables whose columns or options changed outside their journal.
+    reshaped: Vec<Uuid>,
+    /// Trash the database once this many more table reads have happened.
+    trash_after_reads: Option<usize>,
+    /// A database whose reads fail.
+    failing_database: Option<Uuid>,
+    /// Whether the reshaped-tables lookup times out.
+    reshape_lookup_fails: bool,
+}
+
+impl FakeSource {
+    fn new(version: i64, rows: &[(Uuid, &str)]) -> Self {
+        Self {
+            state: Mutex::new(SourceState {
+                table: Some(TableState {
+                    database_id: DATABASE,
+                    version,
+                    searchable: true,
+                }),
+                database_searchable: Some(true),
+                rows: rows
+                    .iter()
+                    .map(|(row_id, title)| (*row_id, (*title).to_owned()))
+                    .collect(),
+                ..SourceState::default()
+            }),
+            ..Self::default()
+        }
+    }
+
+    fn edit(&self, change: impl FnOnce(&mut SourceState)) {
+        change(&mut self.state.lock().unwrap());
+    }
+
+    fn watermark_of(&self, table_id: Uuid) -> Option<i64> {
+        self.state
+            .lock()
+            .unwrap()
+            .watermarks
+            .get(&table_id)
+            .map(|(_, version)| *version)
+    }
+}
+
+impl SourceState {
+    fn searchable(&self) -> bool {
+        self.database_searchable == Some(true)
+    }
+}
+
+impl DatabaseRowSource for FakeSource {
+    type SweepLease = ();
+    type DatabaseLock = tokio::sync::OwnedMutexGuard<()>;
+
+    async fn lock_database(&self, _database_id: Uuid) -> Result<Self::DatabaseLock, Report> {
+        if let Some(locking) = self.locking.lock().unwrap().take() {
+            let _ = locking.send(());
+        }
+        Ok(self.lock.clone().lock_owned().await)
+    }
+
+    async fn keep_lock_alive(&self, _lock: &mut Self::DatabaseLock) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn unlock_database(&self, lock: Self::DatabaseLock) -> Result<(), Report> {
+        drop(lock);
+        Ok(())
+    }
+
+    async fn lead_stale_sweep(&self) -> Result<Option<()>, Report> {
+        Ok(Some(()))
+    }
+
+    async fn table_state(&self, table_id: Uuid) -> Result<Option<TableState>, Report> {
+        let mut state = self.state.lock().unwrap();
+        if let Some(reads) = state.trash_after_reads.as_mut() {
+            if *reads == 0 {
+                state.database_searchable = Some(false);
+            } else {
+                *reads -= 1;
+            }
+        }
+        Ok(state
+            .table
+            .filter(|_| table_id == TABLE)
+            .map(|table| TableState {
+                searchable: state.searchable(),
+                ..table
+            }))
+    }
+
+    async fn database_tables(&self, database_id: Uuid) -> Result<Option<DatabaseTables>, Report> {
+        let state = self.state.lock().unwrap();
+        if state.failing_database == Some(database_id) {
+            return Err(
+                Report::new_sendsync(std::io::Error::other("connection reset")).into_dynamic(),
+            );
+        }
+        Ok(state.database_searchable.map(|searchable| DatabaseTables {
+            searchable,
+            table_ids: state.table.map(|_| TABLE).into_iter().collect(),
+        }))
+    }
+
+    async fn table_changes(
+        &self,
+        _table_id: Uuid,
+        after: i64,
+        through: i64,
+    ) -> Result<TableChanges, Report> {
+        let state = self.state.lock().unwrap();
+        let in_range: Vec<_> = state
+            .journal
+            .iter()
+            .filter(|(version, _, _)| *version > after && *version <= through)
+            .collect();
+        Ok(TableChanges {
+            versions: in_range.iter().map(|(version, _, _)| *version).collect(),
+            row_ids: in_range
+                .iter()
+                .flat_map(|(_, rows, _)| rows.iter().copied())
+                .collect(),
+            reshapes_text: in_range.iter().any(|(_, _, reshapes)| *reshapes),
+        })
+    }
+
+    async fn table_rows(
+        &self,
+        _table_id: Uuid,
+        after: Option<&RowPlace>,
+        limit: usize,
+    ) -> Result<Vec<RowPlace>, Report> {
+        // Every row sits at the same position, so ids order them.
+        let state = self.state.lock().unwrap();
+        Ok(state
+            .rows
+            .keys()
+            .filter(|row_id| after.is_none_or(|after| **row_id > after.id))
+            .take(limit)
+            .map(|row_id| RowPlace {
+                position: "a".to_owned(),
+                id: *row_id,
+            })
+            .collect())
+    }
+
+    async fn row_texts(&self, row_ids: &[Uuid]) -> Result<Vec<RowSearchText>, Report> {
+        if let Some(reading) = self.reading_rows.lock().unwrap().take() {
+            let _ = reading.send(());
+        }
+        let state = self.state.lock().unwrap();
+        let Some(table) = state.table.filter(|_| state.searchable()) else {
+            return Ok(Vec::new());
+        };
+        Ok(row_ids
+            .iter()
+            .filter_map(|row_id| {
+                state.rows.get(row_id).map(|title| RowSearchText {
+                    row_id: *row_id,
+                    table_id: TABLE,
+                    database_id: DATABASE,
+                    title: title.clone(),
+                    cell_text: Vec::new(),
+                    table_version: table.version,
+                    updated_at: Utc.with_ymd_and_hms(2026, 11, 24, 0, 0, 0).unwrap(),
+                })
+            })
+            .collect())
+    }
+
+    async fn searchable_database_ids(
+        &self,
+        after: Option<Uuid>,
+        _limit: usize,
+    ) -> Result<Vec<Uuid>, Report> {
+        let state = self.state.lock().unwrap();
+        Ok((state.searchable() && after.is_none())
+            .then_some(DATABASE)
+            .into_iter()
+            .collect())
+    }
+
+    async fn searchable_row_ids(&self, row_ids: &[Uuid]) -> Result<Vec<Uuid>, Report> {
+        let state = self.state.lock().unwrap();
+        Ok(row_ids
+            .iter()
+            .filter(|row_id| state.searchable() && state.rows.contains_key(row_id))
+            .copied()
+            .collect())
+    }
+
+    async fn watermark(&self, table_id: Uuid) -> Result<Option<i64>, Report> {
+        Ok(self.watermark_of(table_id))
+    }
+
+    async fn column_fingerprint(&self, _table_id: Uuid) -> Result<String, Report> {
+        Ok("columns".to_owned())
+    }
+
+    async fn raise_watermark(
+        &self,
+        table_id: Uuid,
+        database_id: Uuid,
+        version: i64,
+        _column_fingerprint: &str,
+    ) -> Result<(), Report> {
+        let mut state = self.state.lock().unwrap();
+        let mark = state
+            .watermarks
+            .entry(table_id)
+            .or_insert((database_id, version));
+        mark.1 = mark.1.max(version);
+        Ok(())
+    }
+
+    async fn forget_table(&self, table_id: Uuid) -> Result<(), Report> {
+        self.state.lock().unwrap().watermarks.remove(&table_id);
+        Ok(())
+    }
+
+    async fn forget_database(&self, database_id: Uuid) -> Result<(), Report> {
+        self.state
+            .lock()
+            .unwrap()
+            .watermarks
+            .retain(|_, (database, _)| *database != database_id);
+        Ok(())
+    }
+
+    async fn lagging_tables(
+        &self,
+        after: Option<Uuid>,
+        _limit: usize,
+    ) -> Result<Vec<Uuid>, Report> {
+        let state = self.state.lock().unwrap();
+        let lagging = state.table.is_some_and(|table| {
+            let mark = state.watermarks.get(&TABLE).map(|(_, version)| *version);
+            state.searchable() && mark.is_none_or(|mark| mark < table.version)
+        });
+        Ok((lagging && after.is_none())
+            .then_some(TABLE)
+            .into_iter()
+            .collect())
+    }
+
+    async fn reshaped_tables(&self, _limit: usize) -> Result<Vec<Uuid>, Report> {
+        if self.state.lock().unwrap().reshape_lookup_fails {
+            return Err(
+                Report::new_sendsync(std::io::Error::other("statement timeout")).into_dynamic(),
+            );
+        }
+        Ok(std::mem::take(&mut self.state.lock().unwrap().reshaped))
+    }
+
+    async fn gone_tables(&self, _limit: usize) -> Result<Vec<Uuid>, Report> {
+        let state = self.state.lock().unwrap();
+        Ok(state
+            .watermarks
+            .keys()
+            .filter(|table_id| state.table.is_none() || **table_id != TABLE)
+            .copied()
+            .collect())
+    }
+}
+
+/// The index, with `external_gte` versions and an optional failing write.
+#[derive(Default)]
+struct FakeIndex {
+    documents: Mutex<BTreeMap<Uuid, DatabaseRowDocument>>,
+    fail_next_write: Mutex<bool>,
+    /// How long each write takes.
+    write_takes: Option<std::time::Duration>,
+    /// A scoped delete as this many pages, each taking this long.
+    delete_pages: Option<(usize, std::time::Duration)>,
+    /// Holds the next scoped delete: says when it started, then waits.
+    paused_delete: Mutex<
+        Option<(
+            tokio::sync::oneshot::Sender<()>,
+            tokio::sync::oneshot::Receiver<()>,
+        )>,
+    >,
+}
+
+impl FakeIndex {
+    fn holding(documents: &[(Uuid, &str, i64)]) -> Self {
+        let index = Self::default();
+        for (row_id, title, table_version) in documents {
+            index.documents.lock().unwrap().insert(
+                *row_id,
+                DatabaseRowDocument {
+                    row_id: *row_id,
+                    database_id: DATABASE,
+                    table_id: TABLE,
+                    title: (*title).to_owned(),
+                    cell_text: Vec::new(),
+                    table_version: *table_version,
+                    updated_at: 0,
+                },
+            );
+        }
+        index
+    }
+
+    /// `(row, title, version)` of every document, in row order.
+    fn contents(&self) -> Vec<(Uuid, String, i64)> {
+        self.documents
+            .lock()
+            .unwrap()
+            .values()
+            .map(|document| {
+                (
+                    document.row_id,
+                    document.title.clone(),
+                    document.table_version,
+                )
+            })
+            .collect()
+    }
+}
+
+impl DatabaseRowIndex for FakeIndex {
+    async fn write(&self, writes: Vec<RowIndexWrite>) -> Result<RowWriteOutcome, Report> {
+        if let Some(takes) = self.write_takes {
+            tokio::time::sleep(takes).await;
+        }
+        if std::mem::take(&mut *self.fail_next_write.lock().unwrap()) {
+            return Err(Report::new_sendsync(std::io::Error::other("bulk refused")).into_dynamic());
+        }
+        let mut documents = self.documents.lock().unwrap();
+        let mut outcome = RowWriteOutcome::default();
+        for write in writes {
+            let (row_id, version) = match &write {
+                RowIndexWrite::Upsert(document) => (document.row_id, document.table_version),
+                RowIndexWrite::Delete {
+                    row_id,
+                    table_version,
+                } => (*row_id, *table_version),
+            };
+            if documents
+                .get(&row_id)
+                .is_some_and(|held| held.table_version > version)
+            {
+                outcome.superseded += 1;
+                continue;
+            }
+            match write {
+                RowIndexWrite::Upsert(document) => {
+                    documents.insert(row_id, document);
+                }
+                RowIndexWrite::Delete { .. } => {
+                    documents.remove(&row_id);
+                }
+            }
+            outcome.applied += 1;
+        }
+        Ok(outcome)
+    }
+
+    async fn delete(
+        &self,
+        scope: RowIndexScope,
+        on_page: &(dyn Fn() + Sync),
+    ) -> Result<u64, Report> {
+        if let Some((pages, takes)) = self.delete_pages {
+            for _ in 0..pages {
+                tokio::time::sleep(takes).await;
+                on_page();
+            }
+        }
+        on_page();
+        let paused = self.paused_delete.lock().unwrap().take();
+        if let Some((started, resume)) = paused {
+            let _ = started.send(());
+            let _ = resume.await;
+        }
+        let mut documents = self.documents.lock().unwrap();
+        let before = documents.len();
+        documents.retain(|_, document| match scope {
+            RowIndexScope::Database(database_id) => document.database_id != database_id,
+            RowIndexScope::Table(table_id) => document.table_id != table_id,
+            RowIndexScope::TableOlderThan { table_id, version } => {
+                document.table_id != table_id || document.table_version >= version
+            }
+        });
+        Ok(u64::try_from(before - documents.len()).unwrap())
+    }
+
+    async fn page(&self, after: Option<Uuid>, size: usize) -> Result<Vec<IndexedRow>, Report> {
+        Ok(self
+            .documents
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|document| after.is_none_or(|after| document.row_id > after))
+            .take(size)
+            .map(|document| IndexedRow {
+                row_id: document.row_id,
+                database_id: document.database_id,
+                table_version: document.table_version,
+            })
+            .collect())
+    }
+}
+
+#[tokio::test]
+async fn catching_up_rewrites_only_the_rows_the_journal_names() {
+    let source = FakeSource::new(
+        7,
+        &[(ROW_A, "A at 7"), (ROW_B, "B at 7"), (ROW_C, "C at 7")],
+    );
+    source.edit(|state| {
+        state.watermarks.insert(TABLE, (DATABASE, 5));
+        state.journal = vec![(6, vec![ROW_A], false), (7, vec![ROW_B], false)];
+    });
+    let index = FakeIndex::holding(&[
+        (ROW_A, "A at 5", 5),
+        (ROW_B, "B at 5", 5),
+        (ROW_C, "C at 5", 5),
+    ]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    let outcome = service
+        .reconcile_table(TABLE, PassKind::CatchUp)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, TableOutcome::CaughtUp);
+    assert_eq!(
+        service.index.contents(),
+        vec![
+            (ROW_A, "A at 7".to_owned(), 7),
+            (ROW_B, "B at 7".to_owned(), 7),
+            (ROW_C, "C at 5".to_owned(), 5),
+        ]
+    );
+    assert_eq!(service.source.watermark_of(TABLE), Some(7));
+}
+
+#[tokio::test]
+async fn a_row_the_journal_names_that_is_gone_leaves_the_index() {
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    source.edit(|state| {
+        state.watermarks.insert(TABLE, (DATABASE, 5));
+        state.journal = vec![(6, vec![ROW_B], false)];
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "A at 5", 5), (ROW_B, "B at 5", 5)]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    service
+        .reconcile_table(TABLE, PassKind::CatchUp)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        service.index.contents(),
+        vec![(ROW_A, "A at 5".to_owned(), 5)]
+    );
+}
+
+#[tokio::test]
+async fn a_gap_in_the_journal_reindexes_the_whole_table() {
+    // Version 6 is missing from the journal, so its rows are unknown.
+    let source = FakeSource::new(7, &[(ROW_A, "A at 7"), (ROW_B, "B at 7")]);
+    source.edit(|state| {
+        state.watermarks.insert(TABLE, (DATABASE, 5));
+        state.journal = vec![(7, vec![ROW_A], false)];
+    });
+    let index = FakeIndex::holding(&[
+        (ROW_A, "A at 5", 5),
+        (ROW_B, "B at 5", 5),
+        (ROW_C, "C at 5", 5),
+    ]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    let outcome = service
+        .reconcile_table(TABLE, PassKind::CatchUp)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, TableOutcome::Reindexed);
+    // Every row rewritten, and the row deleted in the missing version gone.
+    assert_eq!(
+        service.index.contents(),
+        vec![
+            (ROW_A, "A at 7".to_owned(), 7),
+            (ROW_B, "B at 7".to_owned(), 7)
+        ]
+    );
+    assert_eq!(service.source.watermark_of(TABLE), Some(7));
+}
+
+#[tokio::test]
+async fn a_relabelled_option_reindexes_the_whole_table() {
+    let source = FakeSource::new(6, &[(ROW_A, "Shipped"), (ROW_B, "Shipped")]);
+    source.edit(|state| {
+        state.watermarks.insert(TABLE, (DATABASE, 5));
+        state.journal = vec![(6, Vec::new(), true)];
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "Launched", 5), (ROW_B, "Launched", 5)]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    let outcome = service
+        .reconcile_table(TABLE, PassKind::CatchUp)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, TableOutcome::Reindexed);
+    assert_eq!(
+        service.index.contents(),
+        vec![
+            (ROW_A, "Shipped".to_owned(), 6),
+            (ROW_B, "Shipped".to_owned(), 6)
+        ]
+    );
+}
+
+#[tokio::test]
+async fn an_older_state_read_late_never_overwrites_a_newer_document() {
+    // A pass that read version 8 lands after another wrote version 9.
+    let source = FakeSource::new(8, &[(ROW_A, "A at 8")]);
+    let index = FakeIndex::holding(&[(ROW_A, "A at 9", 9)]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    service
+        .reconcile_table(TABLE, PassKind::Full)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        service.index.contents(),
+        vec![(ROW_A, "A at 9".to_owned(), 9)]
+    );
+}
+
+#[tokio::test]
+async fn a_replayed_event_changes_nothing() {
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    source.edit(|state| {
+        state.watermarks.insert(TABLE, (DATABASE, 5));
+        state.journal = vec![(6, vec![ROW_A], false)];
+    });
+    let service = DatabaseRowIndexService::new(source, FakeIndex::default());
+
+    let first = service
+        .reconcile_table(TABLE, PassKind::CatchUp)
+        .await
+        .unwrap();
+    let contents = service.index.contents();
+    let replayed = service
+        .reconcile_table(TABLE, PassKind::CatchUp)
+        .await
+        .unwrap();
+
+    assert_eq!(first, TableOutcome::CaughtUp);
+    assert_eq!(replayed, TableOutcome::UpToDate);
+    assert_eq!(service.index.contents(), contents);
+}
+
+#[tokio::test]
+async fn a_failed_write_leaves_the_watermark_so_the_retry_redoes_it() {
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    source.edit(|state| {
+        state.watermarks.insert(TABLE, (DATABASE, 5));
+        state.journal = vec![(6, vec![ROW_A], false)];
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "A at 5", 5)]);
+    *index.fail_next_write.lock().unwrap() = true;
+    let service = DatabaseRowIndexService::new(source, index);
+
+    assert!(
+        service
+            .reconcile_table(TABLE, PassKind::CatchUp)
+            .await
+            .is_err()
+    );
+    assert_eq!(service.source.watermark_of(TABLE), Some(5));
+
+    let retried = service
+        .reconcile_table(TABLE, PassKind::CatchUp)
+        .await
+        .unwrap();
+    assert_eq!(retried, TableOutcome::CaughtUp);
+    assert_eq!(
+        service.index.contents(),
+        vec![(ROW_A, "A at 6".to_owned(), 6)]
+    );
+}
+
+#[tokio::test]
+async fn trash_removes_the_database_and_restore_brings_it_back() {
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6"), (ROW_B, "B at 6")]);
+    source.edit(|state| {
+        state.watermarks.insert(TABLE, (DATABASE, 6));
+        state.database_searchable = Some(false);
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "A at 6", 6), (ROW_B, "B at 6", 6)]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    service
+        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp, None)
+        .await
+        .unwrap();
+    assert_eq!(service.index.contents(), Vec::new());
+    assert_eq!(service.source.watermark_of(TABLE), None);
+
+    // Restored: the forgotten watermark makes the pass reindex every table.
+    service
+        .source
+        .edit(|state| state.database_searchable = Some(true));
+    service
+        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        service.index.contents(),
+        vec![
+            (ROW_A, "A at 6".to_owned(), 6),
+            (ROW_B, "B at 6".to_owned(), 6)
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_purged_database_leaves_the_index() {
+    let source = FakeSource::new(6, &[]);
+    source.edit(|state| {
+        state.table = None;
+        state.database_searchable = None;
+        state.watermarks.insert(TABLE, (DATABASE, 6));
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "A at 6", 6)]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    service
+        .reconcile_database(
+            DATABASE,
+            TableSelection::Tables(vec![TABLE]),
+            PassKind::CatchUp,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(service.index.contents(), Vec::new());
+    assert_eq!(service.source.watermark_of(TABLE), None);
+}
+
+#[tokio::test]
+async fn the_stale_sweep_removes_documents_of_gone_rows_and_tables() {
+    let gone_table = uuid!("20000000-0000-7000-8000-0000000000ff");
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    source.edit(|state| {
+        state.watermarks.insert(gone_table, (DATABASE, 3));
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "A at 6", 6), (ROW_B, "B at 4", 4)]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    let removal = service
+        .remove_stale(None, &CancellationToken::new())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        removal,
+        StaleRemoval {
+            checked: 2,
+            removed: 1,
+            gone_tables: 1,
+        }
+    );
+    assert_eq!(
+        service.index.contents(),
+        vec![(ROW_A, "A at 6".to_owned(), 6)]
+    );
+    assert_eq!(service.source.watermark_of(gone_table), None);
+}
+
+#[tokio::test]
+async fn a_trash_that_lands_during_a_pass_leaves_nothing_indexed() {
+    // The pass reads the table as searchable, then the database is trashed
+    // before its writes land; the trash's deletes carry the same version.
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6"), (ROW_B, "B at 6")]);
+    source.edit(|state| state.trash_after_reads = Some(1));
+    let service = DatabaseRowIndexService::new(source, FakeIndex::default());
+
+    let outcome = service
+        .reconcile_table(TABLE, PassKind::Full)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, TableOutcome::Removed);
+    assert_eq!(service.index.contents(), Vec::new());
+    assert_eq!(service.source.watermark_of(TABLE), None);
+}
+
+#[tokio::test]
+async fn a_sweep_catches_up_a_table_whose_event_was_lost() {
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    source.edit(|state| {
+        state.watermarks.insert(TABLE, (DATABASE, 5));
+        state.journal = vec![(6, vec![ROW_A], false)];
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "A at 5", 5)]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    let catch_up = service
+        .catch_up(&BackfillGate::open(4), &CancellationToken::new())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        catch_up,
+        CatchUp {
+            tables: 1,
+            failed: 0,
+        }
+    );
+    assert_eq!(
+        service.index.contents(),
+        vec![(ROW_A, "A at 6".to_owned(), 6)]
+    );
+    assert_eq!(service.source.watermark_of(TABLE), Some(6));
+}
+
+#[tokio::test]
+async fn a_sweep_reindexes_a_table_whose_tag_was_relabelled_elsewhere() {
+    // The table's version did not move: a tag set's option was relabelled
+    // through the properties service.
+    let source = FakeSource::new(6, &[(ROW_A, "critical")]);
+    source.edit(|state| {
+        state.watermarks.insert(TABLE, (DATABASE, 6));
+        state.reshaped = vec![TABLE];
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "urgent", 6)]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    let reindexed = service
+        .reindex_reshaped(&BackfillGate::open(4), &CancellationToken::new())
+        .await
+        .unwrap();
+
+    assert_eq!(reindexed.tables, 1);
+    assert_eq!(
+        service.index.contents(),
+        vec![(ROW_A, "critical".to_owned(), 6)]
+    );
+}
+
+#[tokio::test]
+async fn a_trash_during_a_backfill_pass_leaves_nothing_indexed() {
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6"), (ROW_B, "B at 6")]);
+    let (reading, read) = tokio::sync::oneshot::channel();
+    *source.reading_rows.lock().unwrap() = Some(reading);
+    let service = DatabaseRowIndexService::new(source, FakeIndex::default());
+
+    // The database is trashed while the backfill reads its rows, and the
+    // trash's event is handled at once.
+    let backfill = service.reconcile_database(DATABASE, TableSelection::All, PassKind::Full, None);
+    let trash = async {
+        read.await.unwrap();
+        service
+            .source
+            .edit(|state| state.database_searchable = Some(false));
+        service
+            .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp, None)
+            .await
+    };
+    let (backfilled, trashed) = tokio::join!(backfill, trash);
+    backfilled.unwrap();
+    trashed.unwrap();
+
+    assert_eq!(service.index.contents(), Vec::new());
+    assert_eq!(service.source.watermark_of(TABLE), None);
+}
+
+#[tokio::test]
+async fn a_restore_overlapping_a_trash_pass_keeps_its_rows() {
+    // The trash pass has decided to delete when the database is restored and
+    // a backfill pass starts. The backfill writes at the same table version
+    // the trash deletes at, so only their order decides what is left.
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6"), (ROW_B, "B at 6")]);
+    source.edit(|state| {
+        state.database_searchable = Some(false);
+        state.watermarks.insert(TABLE, (DATABASE, 6));
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "A at 6", 6), (ROW_B, "B at 6", 6)]);
+    let (deleting, delete_started) = tokio::sync::oneshot::channel();
+    let (resume_delete, resumed) = tokio::sync::oneshot::channel();
+    *index.paused_delete.lock().unwrap() = Some((deleting, resumed));
+    let service = DatabaseRowIndexService::new(source, index);
+
+    let trash = service.reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp, None);
+    let restore = async {
+        delete_started.await.unwrap();
+        service
+            .source
+            .edit(|state| state.database_searchable = Some(true));
+        let (locking, lock_asked) = tokio::sync::oneshot::channel();
+        *service.source.locking.lock().unwrap() = Some(locking);
+        let backfill =
+            service.reconcile_database(DATABASE, TableSelection::All, PassKind::Full, None);
+        let resume = async {
+            // The delete goes on once the backfill has asked for the lock.
+            lock_asked.await.unwrap();
+            let _ = resume_delete.send(());
+        };
+        let (backfilled, ()) = tokio::join!(backfill, resume);
+        backfilled
+    };
+    let (trashed, restored) = tokio::join!(trash, restore);
+    trashed.unwrap();
+    restored.unwrap();
+
+    assert_eq!(
+        service.index.contents(),
+        vec![
+            (ROW_A, "A at 6".to_owned(), 6),
+            (ROW_B, "B at 6".to_owned(), 6)
+        ]
+    );
+    assert_eq!(service.source.watermark_of(TABLE), Some(6));
+}
+
+#[tokio::test]
+async fn a_backfill_goes_on_past_a_database_that_fails() {
+    let failing = uuid!("10000000-0000-7000-8000-0000000000ff");
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    source.edit(|state| state.failing_database = Some(failing));
+    let service = DatabaseRowIndexService::new(source, FakeIndex::default());
+
+    let result = service
+        .backfill(
+            DatabaseRowBackfillRequest {
+                database_ids: vec![failing, DATABASE],
+            },
+            &BackfillGate::open(4),
+            Arc::new(JobProgress::detached()),
+            CancellationToken::new(),
+        )
+        .await;
+
+    // The database after the failing one is still indexed, and the job
+    // reports the failure instead of completing.
+    assert_eq!(
+        service.index.contents(),
+        vec![(ROW_A, "A at 6".to_owned(), 6)]
+    );
+    let error = result.unwrap_err();
+    let cause = std::error::Error::source(&error).unwrap().to_string();
+    assert!(
+        cause.starts_with("1 of 2 databases failed to reindex"),
+        "{cause}"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_pass_that_stalls_is_stopped_and_releases_its_lock() {
+    // OpenSearch stops answering; the pass would hold the lock for good.
+    struct HungIndex;
+    impl DatabaseRowIndex for HungIndex {
+        async fn write(&self, _writes: Vec<RowIndexWrite>) -> Result<RowWriteOutcome, Report> {
+            std::future::pending().await
+        }
+        async fn delete(
+            &self,
+            _scope: RowIndexScope,
+            _on_page: &(dyn Fn() + Sync),
+        ) -> Result<u64, Report> {
+            std::future::pending().await
+        }
+        async fn page(
+            &self,
+            _after: Option<Uuid>,
+            _size: usize,
+        ) -> Result<Vec<IndexedRow>, Report> {
+            std::future::pending().await
+        }
+    }
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    let service = DatabaseRowIndexService::new(source, HungIndex)
+        .with_progress_deadline(std::time::Duration::from_secs(600));
+
+    let error = service
+        .reconcile_table(TABLE, PassKind::Full)
+        .await
+        .unwrap_err();
+
+    assert!(
+        error
+            .iter_reports()
+            .any(|report| report.downcast_current_context::<PassStalled>().is_some()),
+        "{error:?}"
+    );
+    // The lock is free again for the retry.
+    assert!(service.source.lock.try_lock().is_ok());
+    assert_eq!(service.source.watermark_of(TABLE), None);
+}
+
+#[tokio::test]
+async fn a_failing_step_does_not_starve_the_rest_of_the_round() {
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    source.edit(|state| {
+        state.watermarks.insert(TABLE, (DATABASE, 6));
+        state.reshape_lookup_fails = true;
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "A at 6", 6), (ROW_B, "B at 4", 4)]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    let round = service
+        .sweep_once(true, &BackfillGate::open(4), &CancellationToken::new())
+        .await;
+
+    // The reshape lookup failed and the round says so, but the index scan
+    // still removed the gone row.
+    assert_eq!(round.unwrap().failed_steps, vec![SweepStep::ReshapeCheck]);
+    assert_eq!(
+        service.index.contents(),
+        vec![(ROW_A, "A at 6".to_owned(), 6)]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_long_pass_that_keeps_writing_batches_is_not_stopped() {
+    // Three batches of four minutes each: twelve minutes, past a ten-minute
+    // deadline, but no batch takes more than four.
+    let rows: Vec<(Uuid, String)> = (0..(ROWS_PER_BATCH * 3) as u128)
+        .map(|n| {
+            (
+                Uuid::from_u128(0x6000_0000_0000_7000_8000_0000_0000_0000 + n),
+                format!("Row {n}"),
+            )
+        })
+        .collect();
+    let rows: Vec<(Uuid, &str)> = rows
+        .iter()
+        .map(|(id, title)| (*id, title.as_str()))
+        .collect();
+    let source = FakeSource::new(6, &rows);
+    let index = FakeIndex {
+        write_takes: Some(std::time::Duration::from_secs(4 * 60)),
+        ..FakeIndex::default()
+    };
+    let service = DatabaseRowIndexService::new(source, index)
+        .with_progress_deadline(std::time::Duration::from_secs(10 * 60));
+
+    let outcome = service
+        .reconcile_table(TABLE, PassKind::Full)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, TableOutcome::Reindexed);
+    assert_eq!(service.index.contents().len(), ROWS_PER_BATCH * 3);
+    assert_eq!(service.source.watermark_of(TABLE), Some(6));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_long_database_removal_that_keeps_deleting_pages_is_not_stopped() {
+    // A trashed database whose documents take three pages of four minutes
+    // each to delete: twelve minutes, past a ten-minute deadline.
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    source.edit(|state| state.database_searchable = Some(false));
+    let index = FakeIndex {
+        delete_pages: Some((3, std::time::Duration::from_secs(4 * 60))),
+        ..FakeIndex::holding(&[(ROW_A, "A at 6", 6)])
+    };
+    let service = DatabaseRowIndexService::new(source, index)
+        .with_progress_deadline(std::time::Duration::from_secs(10 * 60));
+
+    service
+        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp, None)
+        .await
+        .unwrap();
+
+    assert_eq!(service.index.contents(), Vec::new());
+}

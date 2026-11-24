@@ -16,6 +16,7 @@ pub(super) enum EntityType {
     Call,
     Channel,
     Chat,
+    Database,
     Document,
     Email,
     Message,
@@ -36,6 +37,7 @@ impl EntityType {
             DeclaredMacroEvent::CallMacroEvent(_) => Self::Call,
             DeclaredMacroEvent::ChannelMacroEvent(_) => Self::Channel,
             DeclaredMacroEvent::ChatMacroEvent(_) => Self::Chat,
+            DeclaredMacroEvent::DatabaseMacroEvent(_) => Self::Database,
             DeclaredMacroEvent::DocumentMacroEvent(_) => Self::Document,
             DeclaredMacroEvent::EmailMacroEvent(_) => Self::Email,
             DeclaredMacroEvent::MessageMacroEvent(_) => Self::Message,
@@ -56,6 +58,7 @@ impl EntityType {
         use ::email::domain::events::EmailMacroEvent;
         use calendar_events::domain::events::CalendarMacroEvent;
         use channels::domain::broker_events::ChannelMacroEvent;
+        use databases::domain::events::DatabaseMacroEvent;
         use documents::domain::events::DocumentMacroEvent;
         use messages::outbound::broker::MessageMacroEvent;
         use projects::domain::events::ProjectMacroEvent;
@@ -67,6 +70,7 @@ impl EntityType {
             Self::Call => topic_of::<CallMacroEvent>(),
             Self::Channel => topic_of::<ChannelMacroEvent>(),
             Self::Chat => topic_of::<ChatMacroEvent>(),
+            Self::Database => topic_of::<DatabaseMacroEvent>(),
             Self::Document => topic_of::<DocumentMacroEvent>(),
             Self::Email => topic_of::<EmailMacroEvent>(),
             Self::Message => topic_of::<MessageMacroEvent>(),

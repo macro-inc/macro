@@ -3,6 +3,7 @@ pub mod backfill_control;
 pub mod chat_message_repair;
 #[cfg(feature = "processing")]
 pub mod cloudwatch_backlog;
+pub mod database_row_index;
 pub mod document_email;
 pub mod email_attachment_search;
 pub mod property_search_indexer;

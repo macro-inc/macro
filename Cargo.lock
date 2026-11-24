@@ -6380,6 +6380,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "database_row_search"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "databases",
+ "macro_db_migrator",
+ "mention_utils",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tracing",
+ "url",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "database_sql"
 version = "0.1.0"
 dependencies = [
@@ -14199,6 +14218,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "strum 0.27.2",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -18720,6 +18740,8 @@ dependencies = [
  "chat",
  "chrono",
  "comms_db_client",
+ "database_row_search",
+ "databases",
  "document_sub_type",
  "documents",
  "doppler-config",
@@ -18755,6 +18777,7 @@ dependencies = [
  "model_file_type",
  "model_owner",
  "models_email",
+ "models_opensearch",
  "models_properties",
  "models_search",
  "nom 8.0.0",
@@ -18767,6 +18790,7 @@ dependencies = [
  "psd_engine",
  "rand 0.9.4",
  "rdkafka",
+ "reqwest 0.13.4",
  "rootcause",
  "rust-embed",
  "s3_client",

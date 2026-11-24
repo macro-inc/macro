@@ -9,6 +9,7 @@ export const EMAILS_ALIAS = 'emails';
 export const CALL_RECORDS_ALIAS = 'call_records';
 export const PROJECTS_ALIAS = 'projects';
 export const CALENDAR_EVENTS_ALIAS = 'calendar_events';
+export const DATABASE_ROWS_ALIAS = 'database_rows';
 
 // Underlying physical indices (versioned). Bump the suffix to roll a new
 // version, then swap the alias atomically.
@@ -20,6 +21,7 @@ export const EMAILS_INDEX = 'emails_v2';
 export const CALL_RECORDS_INDEX = 'call_records_v2';
 export const PROJECTS_INDEX = 'projects_v1';
 export const CALENDAR_EVENTS_INDEX = 'calendar_events_v1';
+export const DATABASE_ROWS_INDEX = 'database_rows_v1';
 
 export const ALIAS_TO_INDEX: Record<string, string> = {
   [CHANNELS_ALIAS]: CHANNELS_INDEX,
@@ -30,6 +32,7 @@ export const ALIAS_TO_INDEX: Record<string, string> = {
   [CALL_RECORDS_ALIAS]: CALL_RECORDS_INDEX,
   [PROJECTS_ALIAS]: PROJECTS_INDEX,
   [CALENDAR_EVENTS_ALIAS]: CALENDAR_EVENTS_INDEX,
+  [DATABASE_ROWS_ALIAS]: DATABASE_ROWS_INDEX,
 };
 
 // Backward-compat shorthands used by older migration scripts. They now point

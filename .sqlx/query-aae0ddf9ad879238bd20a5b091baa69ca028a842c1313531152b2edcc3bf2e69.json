@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT position AS \"position!\", id AS \"id!\"\n                FROM database_rows\n                WHERE table_id = $1 AND (position, id) > ($2, $3)\n                ORDER BY position, id\n                LIMIT $4\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "position!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "aae0ddf9ad879238bd20a5b091baa69ca028a842c1313531152b2edcc3bf2e69"
+}

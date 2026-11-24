@@ -111,6 +111,21 @@ OpenSearch, and exposes backfill HTTP routes for each.
   start two. A shutdown leaves running tasks unfollowed and drops deletes still
   waiting for a slot; the `email.mailbox_delete` span's `outcome` and task ids
   say which.
+- Database rows (`domain/database_row_index.rs`): events are hints; a pass
+  reads Postgres through `crates/database_row_search` (the same text rules
+  search's exposure gate uses) and raises the table's watermark only after
+  every write succeeded. Never index from event payloads, and never raise a
+  watermark before the writes for it landed (README "Database rows").
+  Trash and restore do not bump the table version, so every pass that reads
+  and writes a database's documents or moves its watermarks holds that
+  database's advisory lock (`DatabaseRowSource::lock_database`, a
+  transaction-scoped lock on its own pool). Only a table that is gone, which
+  never comes back, is cleaned up without it. The 15-minute sweep
+  (`inbound/database_row_sweep.rs`) is the safety net for lost events and
+  column or option changes outside the journal (column fingerprints on the
+  watermarks, checked every six hours); keep the 15-minute work cheap, and
+  keep whole-table reads (the index scan, the fingerprint check) on the
+  six-hour cadence.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
   already-deleted IDs — target specific IDs for those. Chat messages deleted
   without their delete reaching the index are removed by

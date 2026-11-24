@@ -11,6 +11,8 @@ import {
   CHANNELS_INDEX,
   CHATS_ALIAS,
   CHATS_INDEX,
+  DATABASE_ROWS_ALIAS,
+  DATABASE_ROWS_INDEX,
   DOCUMENTS_ALIAS,
   DOCUMENTS_INDEX,
   EMAILS_ALIAS,
@@ -633,6 +635,39 @@ const PROJECTS_BODY = {
   },
 };
 
+// `database_rows_v1` is flat: one doc per Macro database row, `_id` = row id
+// (`models_opensearch::database_row::DatabaseRowDocument`). It is for candidate
+// retrieval only: search authorizes every hit and rebuilds its title and
+// snippet from Postgres, so no owner or access field is indexed. Writes carry
+// `table_version` as an external_gte version.
+const DATABASE_ROWS_BODY = {
+  settings: {
+    ...SHARD_SETTINGS,
+    ...SLOWLOG_SETTINGS,
+    refresh_interval: '1s',
+  },
+  mappings: {
+    dynamic: 'false',
+    properties: {
+      row_id: { type: 'keyword' },
+      database_id: { type: 'keyword' },
+      table_id: { type: 'keyword' },
+      title: {
+        type: 'text',
+        fields: {
+          keyword: {
+            type: 'keyword',
+            ignore_above: 256,
+          },
+        },
+      },
+      cell_text: { type: 'text' },
+      table_version: { type: 'long' },
+      updated_at: { type: 'date', format: 'epoch_millis' },
+    },
+  },
+};
+
 // `calendar_events_v1` is flat: one doc per **series master** (a
 // `calendar_events` row), `_id` = event id. Recurring instances are not
 // indexed — `calendar_event_occurrences` is materialized only inside a
@@ -1160,6 +1195,11 @@ export const INDEX_SPECS: CreateIndexArgs[] = [
     indexName: CALENDAR_EVENTS_INDEX,
     aliasName: CALENDAR_EVENTS_ALIAS,
     body: CALENDAR_EVENTS_BODY,
+  },
+  {
+    indexName: DATABASE_ROWS_INDEX,
+    aliasName: DATABASE_ROWS_ALIAS,
+    body: DATABASE_ROWS_BODY,
   },
 ];
 

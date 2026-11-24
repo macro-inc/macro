@@ -17,6 +17,7 @@ pub(crate) type SpsEventBroker = MacroEventBrokerService<KafkaEventPublisher, Ta
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub agent_session_indexer: Arc<crate::AgentSessionIndexer>,
+    pub database_row_indexer: Arc<crate::DatabaseRowIndexer>,
     pub db: sqlx::Pool<sqlx::Postgres>,
     pub opensearch_client: Arc<opensearch_client::OpensearchClient>,
     pub authorization_state: MacroAuthorizationState<AuthorizationService>,

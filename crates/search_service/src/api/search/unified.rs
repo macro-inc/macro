@@ -84,6 +84,8 @@ pub async fn handler(
         call_record,
         crm_company,
         calendar_event,
+        // No unified query searches database rows yet.
+        database_row: _,
     } = results.into_iter().split_search_response();
 
     let (

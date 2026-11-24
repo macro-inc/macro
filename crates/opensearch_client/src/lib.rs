@@ -14,6 +14,7 @@ pub mod call_record;
 pub mod channel_message;
 pub mod chat;
 pub mod chat_message_repair;
+pub mod database_row;
 pub mod document;
 pub mod email;
 pub mod project;

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT r.id\n        FROM database_rows r\n        JOIN database_tables t ON t.id = r.table_id\n        JOIN database_entities de ON de.database_id = t.database_id\n        WHERE r.id = ANY($1) AND de.trashed_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1df550a34b482313efb140a89c607dd52397a3552e25f503a4f490960531d4cd"
+}

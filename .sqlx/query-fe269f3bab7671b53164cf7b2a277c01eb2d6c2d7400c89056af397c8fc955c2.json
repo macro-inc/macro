@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM database_row_search_watermarks WHERE database_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fe269f3bab7671b53164cf7b2a277c01eb2d6c2d7400c89056af397c8fc955c2"
+}

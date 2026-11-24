@@ -133,6 +133,7 @@ pub struct Column {
 
 /// Whether a stored cell satisfies a required column. Empty collections represent
 /// no selection; scalar values, including empty text, zero and false, are present.
+#[cfg(feature = "ports")]
 pub(crate) fn cell_has_value(value: &PropertyValue) -> bool {
     match value {
         PropertyValue::SelectOption(values) => !values.is_empty(),

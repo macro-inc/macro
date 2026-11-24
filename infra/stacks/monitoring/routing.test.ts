@@ -218,6 +218,7 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'redis-memory',
     'redis-memory-forecast',
     'routine-suggestions-failures',
+    'search-database-rows-sweep-failing',
     'search-dropped-events',
     'search-email-backlog',
     'search-email-indexer-silent',

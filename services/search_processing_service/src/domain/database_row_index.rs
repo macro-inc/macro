@@ -1,0 +1,1102 @@
+//! Keep the `database_rows` search index in step with Postgres.
+//!
+//! Events are hints to reread: every pass reads the current state from
+//! Postgres, so a delayed, repeated or reordered event can only cause extra
+//! work. A table is caught up from its change journal between the version
+//! the index holds it at (its watermark) and its current version; a gap in
+//! the journal, a column change that rewrites rows' text without naming
+//! them, or an unknown watermark reindexes the whole table instead. Every
+//! write carries the table version its text was read at, so the index keeps
+//! the newest state whatever order writes land in.
+
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::Arc,
+    time::Instant,
+};
+
+use database_row_search::{
+    RowSearchText,
+    index::{DatabaseTables, RowPlace, TableChanges, TableState},
+};
+use models_opensearch::database_row::DatabaseRowDocument;
+use rootcause::Report;
+use serde::Deserialize;
+use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
+
+use super::{
+    backfill_gate::BackfillGate,
+    jobs::JobProgress,
+    models::{BackfillError, BackfillReceipt},
+};
+
+#[cfg(test)]
+mod test;
+
+/// Rows read and written per batch; one shared-text read takes at most this.
+const ROWS_PER_BATCH: usize = database_row_search::MAX_ROWS_PER_READ;
+
+/// Above this many versions behind, a table is reindexed whole instead of
+/// replaying its journal.
+const MAX_JOURNAL_VERSIONS: i64 = 200;
+
+/// Postgres, as the indexer reads it.
+pub trait DatabaseRowSource: Send + Sync + 'static {
+    /// Held while one task sweeps stale documents; dropping it lets another.
+    type SweepLease: Send;
+
+    /// The right to run the stale sweep, or `None` while another task holds it.
+    fn lead_stale_sweep(
+        &self,
+    ) -> impl Future<Output = Result<Option<Self::SweepLease>, Report>> + Send;
+
+    /// Held for the length of one pass over a database's documents; dropping
+    /// it releases the lock.
+    type DatabaseLock: Send;
+
+    /// Wait, for a bounded time, for the database's index lock. Every pass
+    /// that reads rows and writes or deletes their documents, or moves a
+    /// watermark, holds it, so passes over one database never interleave: a
+    /// trash or restore does not bump the table version, so only their order
+    /// keeps an older observation from undoing a newer one.
+    fn lock_database(
+        &self,
+        database_id: Uuid,
+    ) -> impl Future<Output = Result<Self::DatabaseLock, Report>> + Send;
+
+    /// Show the server the lock is in use, so an idle-session limit never
+    /// ends it during a long pass.
+    fn keep_lock_alive(
+        &self,
+        lock: &mut Self::DatabaseLock,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Release the lock.
+    fn unlock_database(
+        &self,
+        lock: Self::DatabaseLock,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// The table, or `None` when it no longer exists.
+    fn table_state(
+        &self,
+        table_id: Uuid,
+    ) -> impl Future<Output = Result<Option<TableState>, Report>> + Send;
+
+    /// The database's tables, or `None` when its storage no longer exists.
+    fn database_tables(
+        &self,
+        database_id: Uuid,
+    ) -> impl Future<Output = Result<Option<DatabaseTables>, Report>> + Send;
+
+    /// The table's journal for versions in `(after, through]`.
+    fn table_changes(
+        &self,
+        table_id: Uuid,
+        after: i64,
+        through: i64,
+    ) -> impl Future<Output = Result<TableChanges, Report>> + Send;
+
+    /// One page of the table's rows in table order, after `after`.
+    fn table_rows(
+        &self,
+        table_id: Uuid,
+        after: Option<&RowPlace>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<RowPlace>, Report>> + Send;
+
+    /// The searchable text of the rows that exist in a searchable database.
+    fn row_texts(
+        &self,
+        row_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<RowSearchText>, Report>> + Send;
+
+    /// One page of searchable database ids in id order.
+    fn searchable_database_ids(
+        &self,
+        after: Option<Uuid>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+
+    /// Which of `row_ids` exist in a searchable database.
+    fn searchable_row_ids(
+        &self,
+        row_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+
+    /// The version up to which the index holds the table, if known.
+    fn watermark(&self, table_id: Uuid)
+    -> impl Future<Output = Result<Option<i64>, Report>> + Send;
+
+    /// Record that the index holds the table up to `version`.
+    /// A digest of the table's columns and their definitions' options, which
+    /// changes when they change outside the journal.
+    fn column_fingerprint(
+        &self,
+        table_id: Uuid,
+    ) -> impl Future<Output = Result<String, Report>> + Send;
+
+    /// Record that the index holds the table up to `version`, from a pass
+    /// that read the columns as `column_fingerprint`.
+    fn raise_watermark(
+        &self,
+        table_id: Uuid,
+        database_id: Uuid,
+        version: i64,
+        column_fingerprint: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Forget the table's watermark.
+    fn forget_table(&self, table_id: Uuid) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Forget every watermark of the database.
+    fn forget_database(&self, database_id: Uuid)
+    -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// One page, in id order, of searchable tables with no watermark or one
+    /// below their version.
+    fn lagging_tables(
+        &self,
+        after: Option<Uuid>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+
+    /// Tables whose column fingerprint changed since their last pass.
+    fn reshaped_tables(
+        &self,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+
+    /// Tables with a watermark that no longer exist, at most `limit`.
+    fn gone_tables(&self, limit: usize) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+}
+
+/// One change to the index.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RowIndexWrite {
+    /// Index the row, unless a newer version is indexed.
+    Upsert(DatabaseRowDocument),
+    /// Remove the row, unless a version newer than `table_version` is indexed.
+    Delete { row_id: Uuid, table_version: i64 },
+}
+
+/// Which documents a scoped delete removes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowIndexScope {
+    Database(Uuid),
+    Table(Uuid),
+    /// The table's documents indexed below `version`.
+    TableOlderThan {
+        table_id: Uuid,
+        version: i64,
+    },
+}
+
+/// A document as the index holds it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IndexedRow {
+    pub row_id: Uuid,
+    pub database_id: Uuid,
+    pub table_version: i64,
+}
+
+/// What a batch of writes did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RowWriteOutcome {
+    pub applied: usize,
+    /// Refused because the index holds a newer version.
+    pub superseded: usize,
+}
+
+/// The `database_rows` index.
+pub trait DatabaseRowIndex: Send + Sync + 'static {
+    fn write(
+        &self,
+        writes: Vec<RowIndexWrite>,
+    ) -> impl Future<Output = Result<RowWriteOutcome, Report>> + Send;
+
+    /// Remove what `scope` names, returning how many documents went;
+    /// `on_page` runs after each page of deletes lands.
+    fn delete(
+        &self,
+        scope: RowIndexScope,
+        on_page: &(dyn Fn() + Sync),
+    ) -> impl Future<Output = Result<u64, Report>> + Send;
+
+    /// One page of indexed rows in row id order.
+    fn page(
+        &self,
+        after: Option<Uuid>,
+        size: usize,
+    ) -> impl Future<Output = Result<Vec<IndexedRow>, Report>> + Send;
+}
+
+/// Which tables of a database a pass covers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TableSelection {
+    /// Every table the database has now.
+    All,
+    /// These tables, whether or not they still exist.
+    Tables(Vec<Uuid>),
+}
+
+/// How a pass treats a table's watermark.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PassKind {
+    /// Replay the journal from the watermark when it can.
+    CatchUp,
+    /// Reindex every table whole, as a backfill does.
+    Full,
+}
+
+/// What a pass did to one table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum TableOutcome {
+    /// The index already held the table's current version.
+    UpToDate,
+    /// The journal's changed rows were rewritten.
+    CaughtUp,
+    /// Every row was rewritten and stale documents removed.
+    Reindexed,
+    /// The table or its database is gone or not searchable; its documents
+    /// were removed.
+    Removed,
+}
+
+/// Repair or rebuild the index: selected databases, or every searchable one.
+/// Every table is reindexed whole. A run over every database also removes
+/// documents whose rows are gone (see [`DatabaseRowIndexService::remove_stale`]).
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DatabaseRowBackfillRequest {
+    pub database_ids: Vec<Uuid>,
+}
+
+/// What a stale-document sweep removed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StaleRemoval {
+    /// Documents checked.
+    pub checked: usize,
+    /// Documents of rows gone or no longer searchable, removed.
+    pub removed: usize,
+    /// Tables gone with a watermark, whose documents and mark were removed.
+    pub gone_tables: usize,
+}
+
+/// What a catch-up or reshape step did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CatchUp {
+    /// Tables passed over.
+    pub tables: usize,
+    /// Passes that failed, retried next round.
+    pub failed: usize,
+}
+
+const DATABASES_PER_PAGE: usize = 100;
+const LAGGING_TABLES_PER_PAGE: usize = 100;
+/// Tables a reshape check reindexes per six-hourly round. The lookup costs the
+/// same at any limit, so the cap only bounds a round's reindexing: a relabel in
+/// a tag set placed by 30k tables takes six rounds.
+const RESHAPED_TABLES_PER_ROUND: usize = 5_000;
+const GONE_TABLES_PER_ROUND: usize = 100;
+
+/// How often a held database lock is shown to the server as in use; far
+/// below the lock pool's idle-in-transaction limit.
+const LOCK_KEEPALIVE: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The longest a pass may hold a database's lock without writing a batch.
+/// A pass that stalls is stopped and its lock released, so a pass that hangs
+/// cannot hold every later event for its database; it is retried like any
+/// failed pass. A pass that keeps writing batches runs as long as it needs.
+const PROGRESS_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
+/// Told by a pass each time it lands a batch, which restarts its
+/// [`PROGRESS_DEADLINE`].
+pub struct Progress(tokio::sync::watch::Sender<()>);
+
+impl Progress {
+    fn made(&self) {
+        self.0.send_replace(());
+    }
+}
+
+pub struct DatabaseRowIndexService<S, I> {
+    source: S,
+    index: I,
+    lock_keepalive: std::time::Duration,
+    progress_deadline: std::time::Duration,
+}
+
+impl<S, I> DatabaseRowIndexService<S, I> {
+    pub fn new(source: S, index: I) -> Self {
+        Self {
+            source,
+            index,
+            lock_keepalive: LOCK_KEEPALIVE,
+            progress_deadline: PROGRESS_DEADLINE,
+        }
+    }
+
+    /// Stop a pass that writes no batch for `deadline` instead of
+    /// [`PROGRESS_DEADLINE`].
+    pub fn with_progress_deadline(self, deadline: std::time::Duration) -> Self {
+        Self {
+            progress_deadline: deadline,
+            ..self
+        }
+    }
+
+    /// Touch held locks every `interval` instead of every [`LOCK_KEEPALIVE`].
+    pub fn with_lock_keepalive(self, interval: std::time::Duration) -> Self {
+        Self {
+            lock_keepalive: interval,
+            ..self
+        }
+    }
+}
+
+impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
+    /// Bring the selected tables of a database up to date, or remove the
+    /// database's documents when it is gone, trashed, or has no database
+    /// entity. A backfill passes its `gate`, admitted once per table before
+    /// the table's lock; live events pass `None` and are never gated.
+    #[tracing::instrument(
+        err,
+        skip(self, selection, gate),
+        fields(
+            tables = tracing::field::Empty,
+            searchable = tracing::field::Empty,
+            lock_wait_ms = tracing::field::Empty,
+        )
+    )]
+    pub async fn reconcile_database(
+        &self,
+        database_id: Uuid,
+        selection: TableSelection,
+        kind: PassKind,
+        gate: Option<&BackfillGate>,
+    ) -> Result<(), Report> {
+        let span = tracing::Span::current();
+        let tables = self.source.database_tables(database_id).await?;
+        let searchable = tables.as_ref().is_some_and(|tables| tables.searchable);
+        span.record("searchable", searchable);
+
+        let Some(tables) = tables.filter(|tables| tables.searchable) else {
+            return self
+                .with_database_lock(database_id, async |progress| {
+                    // Restored since the read above: the restore's own pass
+                    // reindexes it, after this one.
+                    let still_gone = !self
+                        .source
+                        .database_tables(database_id)
+                        .await?
+                        .is_some_and(|tables| tables.searchable);
+                    if still_gone {
+                        self.remove_database(database_id, progress).await?;
+                    }
+                    Ok(())
+                })
+                .await;
+        };
+
+        let table_ids = match selection {
+            TableSelection::All => tables.table_ids,
+            TableSelection::Tables(table_ids) => table_ids,
+        };
+        span.record("tables", table_ids.len());
+
+        for table_id in table_ids {
+            let _permit = match gate {
+                Some(gate) => Some(gate.admit().await),
+                None => None,
+            };
+            self.reconcile_table(table_id, kind).await?;
+        }
+        Ok(())
+    }
+
+    /// Bring one table up to date, holding its database's lock, and raise
+    /// its watermark to the version read at the start once every write for
+    /// it succeeded.
+    #[tracing::instrument(
+        err,
+        skip(self),
+        fields(
+            database_id = tracing::field::Empty,
+            table_version = tracing::field::Empty,
+            watermark = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+            rows_written = tracing::field::Empty,
+            rows_deleted = tracing::field::Empty,
+            rows_superseded = tracing::field::Empty,
+            lock_wait_ms = tracing::field::Empty,
+        )
+    )]
+    pub async fn reconcile_table(
+        &self,
+        table_id: Uuid,
+        kind: PassKind,
+    ) -> Result<TableOutcome, Report> {
+        let span = tracing::Span::current();
+        let outcome = match self.source.table_state(table_id).await? {
+            // A table that is gone never comes back, so no lock is needed.
+            None => {
+                self.index
+                    .delete(RowIndexScope::Table(table_id), &|| ())
+                    .await?;
+                self.source.forget_table(table_id).await?;
+                TableOutcome::Removed
+            }
+            Some(state) => {
+                self.with_database_lock(state.database_id, async |progress| {
+                    self.reconcile_table_inner(table_id, kind, &span, progress)
+                        .await
+                })
+                .await?
+            }
+        };
+        span.record("outcome", <&'static str>::from(outcome));
+        Ok(outcome)
+    }
+
+    /// Run `pass` holding the database's lock, recording the wait as
+    /// `lock_wait_ms` on the current span. The lock is released whether the
+    /// pass succeeds or fails.
+    async fn with_database_lock<T>(
+        &self,
+        database_id: Uuid,
+        pass: impl AsyncFnOnce(&Progress) -> Result<T, Report>,
+    ) -> Result<T, Report> {
+        let waited = Instant::now();
+        let mut lock = self.source.lock_database(database_id).await?;
+        tracing::Span::current().record("lock_wait_ms", elapsed_ms(waited));
+
+        // The lock's own connection runs no statement during the pass (its
+        // reads use another pool), so touch it while the pass runs. A failed
+        // touch means the lock may be gone: the pass stops there.
+        // The keepalive would also keep a hung pass's lock forever, so a pass
+        // that makes no progress (writes no batch) for `progress_deadline` is
+        // dropped and fails. A long pass that keeps writing is never cut off.
+        let (progress, mut progressed) = tokio::sync::watch::channel(());
+        let progress = Progress(progress);
+        let pass = pass(&progress);
+        tokio::pin!(pass);
+        let mut keepalive = tokio::time::interval_at(
+            tokio::time::Instant::now() + self.lock_keepalive,
+            self.lock_keepalive,
+        );
+        let stalled = tokio::time::sleep(self.progress_deadline);
+        tokio::pin!(stalled);
+        let result = loop {
+            tokio::select! {
+                result = &mut pass => break result,
+                () = &mut stalled => {
+                    break Err(Report::new_sendsync(PassStalled).into_dynamic());
+                }
+                Ok(()) = progressed.changed() => {
+                    stalled
+                        .as_mut()
+                        .reset(tokio::time::Instant::now() + self.progress_deadline);
+                }
+                _ = keepalive.tick() => {
+                    if let Err(error) = self.source.keep_lock_alive(&mut lock).await {
+                        break Err(error);
+                    }
+                }
+            }
+        };
+
+        match result {
+            Ok(value) => {
+                self.source.unlock_database(lock).await?;
+                Ok(value)
+            }
+            // Dropping the lock releases it.
+            Err(error) => Err(error),
+        }
+    }
+
+    async fn reconcile_table_inner(
+        &self,
+        table_id: Uuid,
+        kind: PassKind,
+        span: &tracing::Span,
+        progress: &Progress,
+    ) -> Result<TableOutcome, Report> {
+        let Some(state) = self.source.table_state(table_id).await? else {
+            self.index
+                .delete(RowIndexScope::Table(table_id), &|| progress.made())
+                .await?;
+            self.source.forget_table(table_id).await?;
+            return Ok(TableOutcome::Removed);
+        };
+        span.record("database_id", tracing::field::display(state.database_id));
+        span.record("table_version", state.version);
+
+        if !state.searchable {
+            self.remove_database(state.database_id, progress).await?;
+            return Ok(TableOutcome::Removed);
+        }
+
+        // Read before any row, so a column or option change after this read
+        // shows as a different fingerprint and the sweep reindexes the table.
+        let column_fingerprint = self.source.column_fingerprint(table_id).await?;
+
+        let watermark = match kind {
+            PassKind::CatchUp => self.source.watermark(table_id).await?,
+            PassKind::Full => None,
+        };
+        if let Some(watermark) = watermark {
+            span.record("watermark", watermark);
+        }
+
+        let mut counts = RowCounts::default();
+        let outcome = match watermark {
+            Some(watermark) if watermark >= state.version => TableOutcome::UpToDate,
+            Some(watermark) if state.version - watermark <= MAX_JOURNAL_VERSIONS => {
+                let changes = self
+                    .source
+                    .table_changes(table_id, watermark, state.version)
+                    .await?;
+                if replayable(&changes, watermark, state.version) {
+                    for batch in changes.row_ids.chunks(ROWS_PER_BATCH) {
+                        counts += self.rewrite_rows(batch, state.version, progress).await?;
+                    }
+                    TableOutcome::CaughtUp
+                } else {
+                    counts = self.reindex_table(table_id, state, progress).await?;
+                    TableOutcome::Reindexed
+                }
+            }
+            _ => {
+                counts = self.reindex_table(table_id, state, progress).await?;
+                TableOutcome::Reindexed
+            }
+        };
+
+        span.record("rows_written", counts.written);
+        span.record("rows_deleted", counts.deleted);
+        span.record("rows_superseded", counts.superseded);
+
+        if outcome == TableOutcome::UpToDate {
+            return Ok(outcome);
+        }
+
+        // A trash, purge or table delete that committed while this pass
+        // wrote does not bump the table version, so its deletes and these
+        // writes can carry the same version and the writes can land last.
+        // Read the table again: if it went, remove what this pass wrote and
+        // leave the watermark forgotten.
+        if !self.still_searchable(table_id).await? {
+            self.remove_table(table_id, progress).await?;
+            return Ok(TableOutcome::Removed);
+        }
+        self.source
+            .raise_watermark(
+                table_id,
+                state.database_id,
+                state.version,
+                &column_fingerprint,
+            )
+            .await?;
+        Ok(outcome)
+    }
+
+    /// Whether the table still exists in a searchable database.
+    async fn still_searchable(&self, table_id: Uuid) -> Result<bool, Report> {
+        Ok(self
+            .source
+            .table_state(table_id)
+            .await?
+            .is_some_and(|state| state.searchable))
+    }
+
+    /// Remove the documents of a table that is gone or no longer searchable,
+    /// with its database's when the database itself went.
+    async fn remove_table(&self, table_id: Uuid, progress: &Progress) -> Result<(), Report> {
+        match self.source.table_state(table_id).await? {
+            Some(state) => self.remove_database(state.database_id, progress).await,
+            None => {
+                self.index
+                    .delete(RowIndexScope::Table(table_id), &|| progress.made())
+                    .await?;
+                self.source.forget_table(table_id).await
+            }
+        }
+    }
+
+    /// Rewrite every row of the table, then remove the documents left below
+    /// the version read at the start: rows that are gone. A row written
+    /// during the pass is at or above that version, so it stays.
+    async fn reindex_table(
+        &self,
+        table_id: Uuid,
+        state: TableState,
+        progress: &Progress,
+    ) -> Result<RowCounts, Report> {
+        let mut counts = RowCounts::default();
+        let mut after = None;
+        loop {
+            let rows = self
+                .source
+                .table_rows(table_id, after.as_ref(), ROWS_PER_BATCH)
+                .await?;
+            let row_ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
+            let Some(last) = rows.into_iter().last() else {
+                break;
+            };
+            counts += self.rewrite_rows(&row_ids, state.version, progress).await?;
+            after = Some(last);
+
+            // A long pass stops writing once its database is trashed or the
+            // table is gone; the caller removes what it wrote.
+            if !self.still_searchable(table_id).await? {
+                return Ok(counts);
+            }
+        }
+
+        let swept = self
+            .index
+            .delete(
+                RowIndexScope::TableOlderThan {
+                    table_id,
+                    version: state.version,
+                },
+                &|| progress.made(),
+            )
+            .await?;
+        counts.deleted += usize::try_from(swept).unwrap_or(usize::MAX);
+        Ok(counts)
+    }
+
+    /// Write the rows' current text, and delete the ones no longer found.
+    ///
+    /// A missing row is deleted at `missing_at`, a table version read before
+    /// the rows were: the row was already gone or is gone since, so no
+    /// document can hold it at a later version except one written by a pass
+    /// that will also see it go.
+    async fn rewrite_rows(
+        &self,
+        row_ids: &[Uuid],
+        missing_at: i64,
+        progress: &Progress,
+    ) -> Result<RowCounts, Report> {
+        let texts = self.source.row_texts(row_ids).await?;
+        let found: HashSet<Uuid> = texts.iter().map(|text| text.row_id).collect();
+
+        let mut writes: Vec<RowIndexWrite> = texts
+            .into_iter()
+            .map(|text| RowIndexWrite::Upsert(document(text)))
+            .collect();
+        let written = writes.len();
+        writes.extend(
+            row_ids
+                .iter()
+                .filter(|row_id| !found.contains(row_id))
+                .map(|row_id| RowIndexWrite::Delete {
+                    row_id: *row_id,
+                    table_version: missing_at,
+                }),
+        );
+        let deleted = writes.len() - written;
+
+        if writes.is_empty() {
+            return Ok(RowCounts::default());
+        }
+        let outcome = self.index.write(writes).await?;
+        progress.made();
+        Ok(RowCounts {
+            written,
+            deleted,
+            superseded: outcome.superseded,
+        })
+    }
+
+    /// Remove every document of the database and forget its watermarks, in
+    /// that order, so a failure leaves the marks for the retry to redo.
+    async fn remove_database(&self, database_id: Uuid, progress: &Progress) -> Result<(), Report> {
+        // Each page of deletes counts as progress: a large database's
+        // removal is long but not stalled.
+        self.index
+            .delete(RowIndexScope::Database(database_id), &|| progress.made())
+            .await?;
+        self.source.forget_database(database_id).await
+    }
+
+    /// Remove documents whose rows are gone or no longer searchable, and the
+    /// documents and watermarks of tables that are gone. Each delete carries
+    /// the version the document holds, so a row written again meanwhile
+    /// keeps its newer document.
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(checked, removed, gone_tables, pages, duration_ms, lock_wait_ms)
+    )]
+    pub async fn remove_stale(
+        &self,
+        gate: Option<&BackfillGate>,
+        cancel: &CancellationToken,
+    ) -> Result<StaleRemoval, Report> {
+        let started = Instant::now();
+        let mut removal = StaleRemoval::default();
+        let mut pages = 0_usize;
+        let mut after = None;
+        while !cancel.is_cancelled() {
+            let page = self.index.page(after, ROWS_PER_BATCH).await?;
+            let Some(last) = page.last() else {
+                break;
+            };
+            after = Some(last.row_id);
+            pages += 1;
+            removal.checked += page.len();
+
+            let row_ids: Vec<Uuid> = page.iter().map(|row| row.row_id).collect();
+            let live: HashSet<Uuid> = self
+                .source
+                .searchable_row_ids(&row_ids)
+                .await?
+                .into_iter()
+                .collect();
+            let mut stale: BTreeMap<Uuid, Vec<IndexedRow>> = BTreeMap::new();
+            for row in page.iter().filter(|row| !live.contains(&row.row_id)) {
+                stale.entry(row.database_id).or_default().push(*row);
+            }
+
+            // Check each database's stale rows again under its lock before
+            // deleting: a restore's pass may have rewritten them meanwhile, at
+            // the very version this page read.
+            if let Some(gate) = gate
+                && !stale.is_empty()
+            {
+                let _permit = gate.admit().await;
+            }
+            for (database_id, rows) in stale {
+                removal.removed += self
+                    .with_database_lock(database_id, async |_progress| {
+                        let row_ids: Vec<Uuid> = rows.iter().map(|row| row.row_id).collect();
+                        let live: HashSet<Uuid> = self
+                            .source
+                            .searchable_row_ids(&row_ids)
+                            .await?
+                            .into_iter()
+                            .collect();
+                        let deletes: Vec<RowIndexWrite> = rows
+                            .iter()
+                            .filter(|row| !live.contains(&row.row_id))
+                            .map(|row| RowIndexWrite::Delete {
+                                row_id: row.row_id,
+                                table_version: row.table_version,
+                            })
+                            .collect();
+                        if deletes.is_empty() {
+                            return Ok(0);
+                        }
+                        Ok(self.index.write(deletes).await?.applied)
+                    })
+                    .await?;
+            }
+        }
+
+        while !cancel.is_cancelled() {
+            let gone = self.source.gone_tables(GONE_TABLES_PER_ROUND).await?;
+            if gone.is_empty() {
+                break;
+            }
+            for table_id in gone {
+                if let Some(gate) = gate {
+                    let _permit = gate.admit().await;
+                }
+                self.index
+                    .delete(RowIndexScope::Table(table_id), &|| ())
+                    .await?;
+                self.source.forget_table(table_id).await?;
+                removal.gone_tables += 1;
+            }
+        }
+
+        let span = tracing::Span::current();
+        span.record("checked", removal.checked);
+        span.record("removed", removal.removed);
+        span.record("gone_tables", removal.gone_tables);
+        span.record("pages", pages);
+        span.record("duration_ms", elapsed_ms(started));
+        Ok(removal)
+    }
+
+    /// Catch up tables whose events were lost: a watermark missing or below
+    /// the table's version. One table failing does not stop the others; the
+    /// next round retries it.
+    #[tracing::instrument(err, skip_all, fields(lagging, failed, duration_ms))]
+    pub async fn catch_up(
+        &self,
+        gate: &BackfillGate,
+        cancel: &CancellationToken,
+    ) -> Result<CatchUp, Report> {
+        let started = Instant::now();
+        let mut catch_up = CatchUp::default();
+
+        let mut after = None;
+        while !cancel.is_cancelled() {
+            let tables = self
+                .source
+                .lagging_tables(after, LAGGING_TABLES_PER_PAGE)
+                .await?;
+            let Some(last) = tables.last().copied() else {
+                break;
+            };
+            after = Some(last);
+            for table_id in tables {
+                catch_up.tables += 1;
+                // The first round after a deploy finds every table without a
+                // watermark: it is a backfill, and waits on the same gate.
+                let _permit = gate.admit().await;
+                if self
+                    .reconcile_table(table_id, PassKind::CatchUp)
+                    .await
+                    .is_err()
+                {
+                    catch_up.failed += 1;
+                }
+            }
+        }
+
+        let span = tracing::Span::current();
+        span.record("lagging", catch_up.tables);
+        span.record("failed", catch_up.failed);
+        span.record("duration_ms", elapsed_ms(started));
+        Ok(catch_up)
+    }
+
+    /// Fully reindex tables whose columns or options changed outside the
+    /// journal (a definition deleted with its columns, a tag set relabelled,
+    /// pruned or merged through the properties service), found by their
+    /// column fingerprint. Finding them reads every column and option, so it
+    /// runs with the index scan, not every round; `lookup_ms` shows its growth.
+    #[tracing::instrument(err, skip_all, fields(reshaped, failed, lookup_ms, duration_ms))]
+    pub async fn reindex_reshaped(
+        &self,
+        gate: &BackfillGate,
+        cancel: &CancellationToken,
+    ) -> Result<CatchUp, Report> {
+        let started = Instant::now();
+        let mut reindexed = CatchUp::default();
+        let reshaped = self
+            .source
+            .reshaped_tables(RESHAPED_TABLES_PER_ROUND)
+            .await?;
+        let span = tracing::Span::current();
+        span.record("lookup_ms", elapsed_ms(started));
+
+        for table_id in reshaped {
+            if cancel.is_cancelled() {
+                break;
+            }
+            reindexed.tables += 1;
+            let _permit = gate.admit().await;
+            // The table's version did not move, so only a full pass rereads it.
+            if self
+                .reconcile_table(table_id, PassKind::Full)
+                .await
+                .is_err()
+            {
+                reindexed.failed += 1;
+            }
+        }
+
+        span.record("reshaped", reindexed.tables);
+        span.record("failed", reindexed.failed);
+        span.record("duration_ms", elapsed_ms(started));
+        Ok(reindexed)
+    }
+
+    /// One sweep round, unless another task is running one: [`Self::catch_up`]
+    /// every round; with `scan_index` (every six hours), also
+    /// [`Self::remove_stale`] and [`Self::reindex_reshaped`], which read
+    /// whole tables. Each step runs whether or not an earlier one failed, so
+    /// one that outgrows its timeout cannot starve the others; the round
+    /// reports the failed steps and tables. It fails only when it could not
+    /// ask to lead.
+    #[tracing::instrument(err, skip_all, fields(led, scan_index))]
+    pub async fn sweep_once(
+        &self,
+        scan_index: bool,
+        gate: &BackfillGate,
+        cancel: &CancellationToken,
+    ) -> Result<SweepRound, Report> {
+        let span = tracing::Span::current();
+        span.record("scan_index", scan_index);
+        let lease = self.source.lead_stale_sweep().await?;
+        span.record("led", lease.is_some());
+        if lease.is_none() {
+            return Ok(SweepRound::default());
+        }
+
+        let mut round = SweepRound::default();
+        match self.catch_up(gate, cancel).await {
+            Ok(caught_up) => round.failed_catch_up_tables = caught_up.failed,
+            Err(_) => round.failed_steps.push(SweepStep::CatchUp),
+        }
+        if scan_index {
+            if self.remove_stale(Some(gate), cancel).await.is_err() {
+                round.failed_steps.push(SweepStep::StaleScan);
+            }
+            match self.reindex_reshaped(gate, cancel).await {
+                Ok(reindexed) => round.failed_reshape_tables = reindexed.failed,
+                Err(_) => round.failed_steps.push(SweepStep::ReshapeCheck),
+            }
+        }
+        drop(lease);
+
+        // Each step's own span records its error; the round reports them.
+        Ok(round)
+    }
+
+    /// Reindex the requested databases, or every searchable one and then
+    /// remove stale documents. A database that fails is recorded and the
+    /// backfill goes on; the job fails at the end, naming how many failed
+    /// and the first of them, so a rerun of those ids finishes the work.
+    #[tracing::instrument(skip_all, fields(databases, failed_databases))]
+    pub async fn backfill(
+        &self,
+        req: DatabaseRowBackfillRequest,
+        gate: &BackfillGate,
+        progress: Arc<JobProgress>,
+        cancel: CancellationToken,
+    ) -> Result<BackfillReceipt, BackfillError> {
+        let mut enqueued = 0;
+        let mut failed: Vec<Uuid> = Vec::new();
+        let mut reindex = async |database_id: Uuid| {
+            let result = self
+                .reconcile_database(database_id, TableSelection::All, PassKind::Full, Some(gate))
+                .await;
+            if let Err(error) = result {
+                tracing::warn!(%database_id, error = %error, "database row backfill failed for a database");
+                failed.push(database_id);
+            }
+        };
+
+        if !req.database_ids.is_empty() {
+            let mut seen = HashSet::new();
+            for database_id in req.database_ids {
+                if cancel.is_cancelled() {
+                    break;
+                }
+                if !seen.insert(database_id) {
+                    continue;
+                }
+                reindex(database_id).await;
+                enqueued += 1;
+                progress.add(1).await;
+            }
+        } else {
+            let mut after = None;
+            'pages: while !cancel.is_cancelled() {
+                let database_ids = self
+                    .source
+                    .searchable_database_ids(after, DATABASES_PER_PAGE)
+                    .await
+                    .map_err(|error| BackfillError::Source(anyhow::anyhow!("{error:#}")))?;
+                if database_ids.is_empty() {
+                    break;
+                }
+                for database_id in database_ids {
+                    if cancel.is_cancelled() {
+                        break 'pages;
+                    }
+                    reindex(database_id).await;
+                    after = Some(database_id);
+                    enqueued += 1;
+                    progress.add(1).await;
+                }
+            }
+
+            if !cancel.is_cancelled() {
+                self.remove_stale(Some(gate), &cancel)
+                    .await
+                    .map_err(|error| BackfillError::Index(anyhow::anyhow!("{error:#}")))?;
+            }
+        }
+
+        let span = tracing::Span::current();
+        span.record("databases", enqueued);
+        span.record("failed_databases", failed.len());
+        if let Some(first) = failed.first() {
+            return Err(BackfillError::Index(anyhow::anyhow!(
+                "{} of {enqueued} databases failed to reindex; first: {first}",
+                failed.len()
+            )));
+        }
+        Ok(BackfillReceipt {
+            enqueued,
+            ..BackfillReceipt::default()
+        })
+    }
+}
+
+/// A step of a sweep round.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum SweepStep {
+    CatchUp,
+    StaleScan,
+    ReshapeCheck,
+}
+
+/// What went wrong in a sweep round. A failed step did not finish; a failed
+/// table was skipped by a step that went on, and the next round retries it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SweepRound {
+    pub failed_steps: Vec<SweepStep>,
+    pub failed_catch_up_tables: usize,
+    pub failed_reshape_tables: usize,
+}
+
+/// A pass held its database's lock without writing a batch for longer than
+/// the progress deadline, and was stopped.
+#[derive(Debug, thiserror::Error)]
+#[error("database row pass made no progress before its deadline and was stopped")]
+pub struct PassStalled;
+
+/// Whether the journal covers every version after the watermark, one by
+/// one, and names every row whose text could have changed.
+fn replayable(changes: &TableChanges, watermark: i64, version: i64) -> bool {
+    let contiguous = changes
+        .versions
+        .iter()
+        .copied()
+        .eq((watermark + 1)..=version);
+    contiguous && !changes.reshapes_text
+}
+
+fn elapsed_ms(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+fn document(text: RowSearchText) -> DatabaseRowDocument {
+    DatabaseRowDocument {
+        row_id: text.row_id,
+        database_id: text.database_id,
+        table_id: text.table_id,
+        title: text.title,
+        cell_text: text.cell_text,
+        table_version: text.table_version,
+        updated_at: text.updated_at.timestamp_millis(),
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct RowCounts {
+    written: usize,
+    deleted: usize,
+    superseded: usize,
+}
+
+impl std::ops::AddAssign for RowCounts {
+    fn add_assign(&mut self, other: Self) {
+        self.written += other.written;
+        self.deleted += other.deleted;
+        self.superseded += other.superseded;
+    }
+}

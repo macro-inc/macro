@@ -3,6 +3,8 @@
 //! This crate should never contain utoipa or any service-level models.
 //! This is purely a crate containing models used for opensearch directly.
 
+pub mod database_row;
+
 /// Enum for all the search indices in OpenSearch.
 ///
 /// Every variant resolves to a stable alias name. The underlying physical
@@ -27,6 +29,8 @@ pub enum SearchIndex {
     Projects,
     /// The calendar events alias
     CalendarEvents,
+    /// The database rows alias
+    DatabaseRows,
 }
 
 /// All searchable entity types — the tag on a unified `SearchHit`,
@@ -67,6 +71,8 @@ pub enum SearchEntityType {
     CrmCompanies,
     /// The calendar event entity type (has OpenSearch index)
     CalendarEvents,
+    /// Rows of Macro databases (has OpenSearch index)
+    DatabaseRows,
 }
 
 /// `SearchEntityType` variants that have an OpenSearch index.
@@ -103,6 +109,8 @@ pub enum OpenSearchEntityType {
     Projects,
     /// The calendar events index
     CalendarEvents,
+    /// The database rows index
+    DatabaseRows,
 }
 
 impl OpenSearchEntityType {
@@ -119,6 +127,7 @@ impl OpenSearchEntityType {
             Self::CallRecords => "call_records",
             Self::Projects => "projects",
             Self::CalendarEvents => "calendar_events",
+            Self::DatabaseRows => "database_rows",
         }
     }
 }
@@ -163,6 +172,7 @@ impl From<OpenSearchEntityType> for SearchEntityType {
             OpenSearchEntityType::CallRecords => SearchEntityType::CallRecords,
             OpenSearchEntityType::Projects => SearchEntityType::Projects,
             OpenSearchEntityType::CalendarEvents => SearchEntityType::CalendarEvents,
+            OpenSearchEntityType::DatabaseRows => SearchEntityType::DatabaseRows,
         }
     }
 }
@@ -178,6 +188,7 @@ impl From<OpenSearchEntityType> for SearchIndex {
             OpenSearchEntityType::CallRecords => SearchIndex::CallRecords,
             OpenSearchEntityType::Projects => SearchIndex::Projects,
             OpenSearchEntityType::CalendarEvents => SearchIndex::CalendarEvents,
+            OpenSearchEntityType::DatabaseRows => SearchIndex::DatabaseRows,
         }
     }
 }

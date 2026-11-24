@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT md5(COALESCE(string_agg(\n            c.id::TEXT || ':' || c.property_definition_id::TEXT || ':'\n                || COALESCE(s.options, ''),\n            ',' ORDER BY c.id\n        ), '')) AS \"fingerprint!\"\n        FROM database_columns c\n        CROSS JOIN LATERAL (\n            SELECT md5(string_agg(\n                po.id::TEXT || '=' || COALESCE(po.string_value, '') || '|'\n                    || COALESCE(po.number_value::TEXT, ''),\n                ',' ORDER BY po.id\n            )) AS options\n            FROM property_options po\n            WHERE po.property_definition_id = c.property_definition_id\n        ) s\n        WHERE c.table_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "fingerprint!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "636b74a0299b10a2d3e63af84f69090847164ecd1ad68518cc158d4ec1a813b8"
+}

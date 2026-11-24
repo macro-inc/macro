@@ -67,6 +67,15 @@
 //   and `search_failed`, and `fixture_missing` for a type whose fixture is
 //   not seeded yet, which probed nothing and no monitor counts).
 //
+// - `search.database_rows.sweep_failures`: steps of the database rows sweep
+//   that failed (counter), recorded by
+//   services/search_processing_service/src/inbound/database_row_sweep.rs,
+//   tagged `step`: `catch_up` (every 15 minutes), `stale_scan` and
+//   `reshape_check` (every six hours), or `lead` when a round could not ask
+//   to lead; and one per table a step skipped after its pass failed,
+//   `catch_up_table` or `reshape_table`. The sweep is the only repair for lost database events and for
+//   column or option changes outside a table's journal.
+//
 // All are exported every 60 s, and percentiles are not enabled on the
 // histograms, so they are graphed by max and count. The probe records one
 // round a minute per entity type and operation, so its max over a minute is
@@ -120,6 +129,7 @@ const DROPPED = `sum:search.index.dropped_events{${PROD}} by {entity_type}.as_co
 // recover the alert every 5 minutes.
 const FAILED_ITEMS = `default_zero(sum:search.index.failed_bulk_items{${PROD}} by {entity_type,failure}.as_rate().rollup(avg, 300)) * 300`;
 const OFFSET_RESETS = `sum:kafka.consumer.offset_resets{${PROD}} by {topic}.as_count()`;
+const DATABASE_ROWS_SWEEP_FAILURES = `sum:search.database_rows.sweep_failures{${PROD}} by {step}.as_count()`;
 // Per lane: each task reads email and the live topics on separate consumers,
 // and one that stops reporting must not hide behind the other's readings.
 const LIVE_READINGS = `max:search.index.oldest_pending_ms{${PROD},!${EMAIL}}.fill(null)`;
@@ -164,6 +174,7 @@ const TITLES = {
   probePrefixUnseen: 'Search content prefix search drops matches',
   probeFailing: 'Search freshness probe cannot write or search',
   probeSilent: 'Search freshness probe reports no rounds',
+  databaseRowsSweep: 'Search database rows sweep keeps failing',
 };
 
 const TARGETS: datadog.types.input.DashboardWidgetTimeseriesDefinitionMarker[] =
@@ -252,6 +263,11 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
           title: TITLES.offsetReset,
           query: `${OFFSET_RESETS}.rollup(sum, 600)`,
           critical: '0',
+        }),
+        thresholdGraph({
+          title: TITLES.databaseRowsSweep,
+          query: `${DATABASE_ROWS_SWEEP_FAILURES}.rollup(sum, 46800)`,
+          critical: '1',
         }),
         thresholdGraph({
           title: TITLES.silent,
@@ -441,6 +457,23 @@ prodMonitor('search-dropped-events', {
   runbook: `${RUNBOOK}#dropped-events`,
   alertDetail: '{{value}} events',
   recoveryDetail: '{{value}} events',
+});
+
+// Two failures in 13 hours: the six-hourly steps fail twice in a row, the
+// 15-minute catch-up fails twice, or two tables' passes fail. One failure
+// retries on its own next round.
+prodMonitor('search-database-rows-sweep-failing', {
+  title: TITLES.databaseRowsSweep,
+  service: SERVICE,
+  query: `sum(last_13h):${DATABASE_ROWS_SWEEP_FAILURES} > 1`,
+  monitorThresholds: { critical: '1' },
+  pages: false,
+  description:
+    'The database rows sweep step {{step.name}} failed more than once in 13 hours. While it fails, database rows changed outside their journal, or whose events were lost, keep stale text in the search index. Search rebuilds every hit from Postgres, so nothing stale is shown, but such rows can be missed.',
+  dashboard,
+  runbook: `${RUNBOOK}#database-rows-sweep`,
+  alertDetail: '{{value}} failures',
+  recoveryDetail: '{{value}} failures',
 });
 
 prodMonitor('search-offset-reset', {
