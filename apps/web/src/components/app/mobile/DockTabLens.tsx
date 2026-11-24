@@ -25,8 +25,8 @@ const SETTLE_DELAY_MS = 160;
  * a snap point, so a released lens glides to the nearest tab with native
  * momentum and rubber-bands past the ends.
  *
- * A tap is the button's own click. A drag that ends on another tab presses
- * that tab's button. The lens shows only while a finger is on the bar, so the
+ * A tap is the button's own click. A drag presses the tab under the finger
+ * when it lifts. The lens shows only while a finger is on the bar, so the
  * resting dock keeps its ink-only selection.
  */
 export function DockTabLens(props: {
@@ -81,6 +81,7 @@ export function DockTabLens(props: {
     let startOffset = 0;
     const settle = () => {
       if (touching) return;
+      // A drag whose release was cancelled settles where the snap took it.
       const index = lensIndexAt(centers(), element.scrollLeft);
       if (moved && index !== props.activeIndex) buttons()[index]?.click();
       moved = false;
@@ -117,15 +118,34 @@ export function DockTabLens(props: {
       },
       { passive: true, signal }
     );
-    for (const type of ['touchend', 'touchcancel'])
-      element.addEventListener(
-        type,
-        () => {
-          touching = false;
-          settleSoon();
-        },
-        { passive: true, signal }
-      );
+    // The tab under the finger at release is the choice: a quick release
+    // would otherwise fling the lens on to a neighbour. The lens glides there
+    // instead of coasting.
+    element.addEventListener(
+      'touchend',
+      () => {
+        touching = false;
+        if (moved) {
+          moved = false;
+          const index = lensIndexAt(centers(), element.scrollLeft);
+          element.scrollTo({
+            left: lensOffset(centers(), index),
+            behavior: 'smooth',
+          });
+          if (index !== props.activeIndex) buttons()[index]?.click();
+        }
+        settleSoon();
+      },
+      { passive: true, signal }
+    );
+    element.addEventListener(
+      'touchcancel',
+      () => {
+        touching = false;
+        settleSoon();
+      },
+      { passive: true, signal }
+    );
     element.addEventListener(
       'scrollend',
       () => {
