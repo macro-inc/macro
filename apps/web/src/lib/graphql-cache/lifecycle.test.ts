@@ -217,6 +217,83 @@ describe('clearRegisteredCaches', () => {
     vi.useRealTimers();
   });
 
+  it('lets go of a wipe that never ends, long after its logout', async () => {
+    vi.useFakeTimers();
+    const dispose = vi.fn();
+    const {
+      clearRegisteredCaches,
+      LOGOUT_CLEAR_TIMEOUT_MS,
+      recordSessionCacheWrite,
+      registerCacheHost,
+    } = await import('./lifecycle');
+    const { createRetirableCacheHost } = await import('./host/retirable-host');
+    const host = createRetirableCacheHost({
+      ...createNoopCacheHost(),
+      disabled: false,
+      clear: () => new Promise(() => undefined),
+      dispose,
+    });
+    const recover = vi.fn();
+    registerCacheHost(host, recover, LOGOUT_CLEAR_TIMEOUT_MS);
+    recordSessionCacheWrite(host, 'Contact:1');
+    const clearing = clearRegisteredCaches();
+    await vi.advanceTimersByTimeAsync(LOGOUT_CLEAR_TIMEOUT_MS);
+    await clearing;
+    host.dispose();
+    expect(dispose).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(recover).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
+  });
+
+  it('starts another host for a wipe that failed only while the first is not given up', async () => {
+    vi.useFakeTimers();
+    const {
+      clearRegisteredCaches,
+      LOGOUT_CLEAR_TIMEOUT_MS,
+      registerCacheHost,
+    } = await import('./lifecycle');
+    const { createRetirableCacheHost } = await import('./host/retirable-host');
+    const wipes: ((error: Error) => void)[] = [];
+    const failing = () => new Promise<never>((_, reject) => wipes.push(reject));
+    const recoveredDispose = vi.fn();
+    const recover = vi.fn(() =>
+      createRetirableCacheHost({
+        ...createNoopCacheHost(),
+        disabled: false,
+        clear: failing,
+        dispose: recoveredDispose,
+      })
+    );
+    registerCacheHost(
+      createRetirableCacheHost({
+        ...createNoopCacheHost(),
+        disabled: false,
+        clear: failing,
+      }),
+      recover,
+      LOGOUT_CLEAR_TIMEOUT_MS
+    );
+    const clearing = clearRegisteredCaches();
+    await vi.advanceTimersByTimeAsync(LOGOUT_CLEAR_TIMEOUT_MS);
+    await clearing;
+
+    // What the account left on the device is still to be wiped.
+    wipes[0]?.(new Error('owner lost'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(recover).toHaveBeenCalledOnce();
+    expect(wipes).toHaveLength(2);
+    expect(recoveredDispose).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(recoveredDispose).toHaveBeenCalledOnce();
+    // Nothing is left that could reject unseen.
+    wipes[1]?.(new Error('owner lost'));
+    await vi.advanceTimersByTimeAsync(0);
+    vi.useRealTimers();
+  });
+
   it('waits for a cache registered without a limit, and keeps its scope', async () => {
     vi.useFakeTimers();
     localStorage.setItem('graphql-cache:scope', 'current-scope');

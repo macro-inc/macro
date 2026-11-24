@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import {
   CacheReadAvailability,
   cacheRequestStamp,
@@ -39,6 +39,25 @@ it('gives up waiting writes too while nothing can open the database, but not a h
   await refused;
   initialized.resolve();
   await held;
+});
+
+it('ends an aborted wait as superseded, not as timed out', async () => {
+  const availability = new CacheReadAvailability();
+  const initialize = vi.fn(() => new Promise<void>(() => undefined));
+  const wait = (signal: AbortSignal) =>
+    availability.waitUntilReady(initialize, 'read', {
+      timeoutMs: 10,
+      error: () => new Error('timed out'),
+      signal,
+      superseded: () => new Error('superseded'),
+    });
+  const abort = new AbortController();
+  const waiting = expect(wait(abort.signal)).rejects.toThrow('superseded');
+  abort.abort();
+  await waiting;
+  initialize.mockClear();
+  await expect(wait(abort.signal)).rejects.toThrow('superseded');
+  expect(initialize).not.toHaveBeenCalled();
 });
 
 it.each([

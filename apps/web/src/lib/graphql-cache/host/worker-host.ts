@@ -1682,6 +1682,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
             timeoutMs: requestTimeoutMs,
             error: () => new CacheRequestTimeoutError(msg.kind),
             signal,
+            superseded: supersededError,
           });
     // Every other caller keeps its exact place in line: no extra hop.
     if (signal) await untilAborted(ready, signal);

@@ -9,6 +9,9 @@ import { beginCacheWriteSession, endCacheWriteSession } from './session-writes';
  */
 export const LOGOUT_CLEAR_TIMEOUT_MS = 10_000;
 
+/** How long a wipe its logout no longer waits for may go on. */
+const ABANDONED_WIPE_LIMIT_MS = 60_000;
+
 const hosts = new Set<CacheHost>();
 // Factories capture the original backend/scope and only accept typed safe-to-
 // reopen failures. A different current host is never a repair substitute.
@@ -75,12 +78,27 @@ function forgetAllSessionRecords() {
   for (const owner of sessionRecords.keys()) forgetSessionRecords(owner);
 }
 
-/** A wipe still running at the limit goes on, for storage nobody opens again. */
-async function settleWithin(
-  wiping: Promise<void>,
+/**
+ * A wipe still running at the limit goes on, for storage nobody opens again.
+ * One that never ends is given up, which frees its hosts.
+ */
+async function wipeWithin(
+  storage: ClearedStorage,
   timeoutMs: number | undefined
 ): Promise<void> {
-  if (timeoutMs === undefined) return await wiping;
+  if (timeoutMs === undefined) return await wipe(storage);
+  const limit = new AbortController();
+  const giveUp = setTimeout(
+    () => limit.abort(new Error('cache clear given up')),
+    timeoutMs + ABANDONED_WIPE_LIMIT_MS
+  );
+  const ending = async () => {
+    try {
+      await wipe(storage, limit.signal);
+    } finally {
+      clearTimeout(giveUp);
+    }
+  };
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(
@@ -89,7 +107,7 @@ async function settleWithin(
     );
   });
   try {
-    await Promise.race([wiping, timeout]);
+    await Promise.race([ending(), timeout]);
   } finally {
     clearTimeout(timer);
   }
@@ -101,22 +119,40 @@ type ClearedStorage = {
   recover: RecoverCacheHost | undefined;
 };
 
-async function wipe({ owner, host, recover }: ClearedStorage): Promise<void> {
+/** Clears a host, until the signal gives it up. */
+async function clearUntil(host: CacheHost, limit?: AbortSignal): Promise<void> {
+  limit?.throwIfAborted();
+  let stop = () => {};
+  const givenUp = new Promise<never>((_, reject) => {
+    stop = () => reject(limit?.reason);
+    limit?.addEventListener('abort', stop, { once: true });
+  });
+  try {
+    await Promise.race([host.clear(), givenUp]);
+  } finally {
+    limit?.removeEventListener('abort', stop);
+  }
+}
+
+async function wipe(
+  { owner, host, recover }: ClearedStorage,
+  limit?: AbortSignal
+): Promise<void> {
   // A preceding login may have recovered storage while this logout was
   // waiting. Pin that owner now; keep the original snapshot pinned too.
   const current = retainCacheHost(
     sessionRecords.get(owner)?.retained?.host ?? host
   );
   try {
-    await (current?.host ?? host).clear();
+    await clearUntil(current?.host ?? host, limit);
   } catch (error) {
-    const replacement = recover?.(error);
+    const replacement = limit?.aborted ? undefined : recover?.(error);
     if (!replacement) throw error;
     const recovered = retainCacheHost(replacement);
     replacement.dispose();
     if (!recovered) throw error;
     try {
-      await recovered.host.clear();
+      await clearUntil(recovered.host, limit);
     } finally {
       recovered.release();
     }
@@ -152,10 +188,7 @@ function prepareCacheClear() {
       }
       const results = await Promise.allSettled(
         storageHosts.map(async (storage) => {
-          await settleWithin(
-            wipe(storage),
-            clearTimeoutByHost.get(storage.owner)
-          );
+          await wipeWithin(storage, clearTimeoutByHost.get(storage.owner));
           forgetSessionRecords(storage.owner);
         })
       );
