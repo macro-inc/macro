@@ -156,8 +156,8 @@ impl Rollout {
 }
 
 #[async_trait::async_trait]
-impl TermMatchingRollout for Rollout {
-    async fn dynamic_enabled_for(&self, _caller: MacroUserIdStr<'_>) -> bool {
+impl SearchRollout for Rollout {
+    async fn enabled_for(&self, _caller: MacroUserIdStr<'_>) -> bool {
         self.reads.fetch_add(1, Ordering::SeqCst);
         self.enabled
     }

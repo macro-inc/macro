@@ -126,7 +126,7 @@ per-entity-type search plus a unified search across them — mounted into
   `term_matching: dynamic` on the unified request (see `opensearch_client`'s
   `DocumentTermMatching`). It applies only when the request asks for it and
   the `enable-dynamic-search-term-matching` flag is on for the caller
-  (`TermMatchingRollout`; local stacks have it on). The adapter never
+  (`SearchRollout` over `DYNAMIC_TERM_MATCHING_FLAG`; local stacks have it on). The adapter never
   makes a search wait on the flag provider: a search gets the caller's
   remembered answer, or off when there is none, and an answer that is missing
   or older than five minutes is re-read in the background, once per caller,
@@ -247,4 +247,4 @@ per-entity-type search plus a unified search across them — mounted into
 
 - Rules: `.agents/rules/rust/architecture.md`
 
-- CRM search authorization uses the primary pool (`crm_db`) so member revocation cannot be reversed by replica lag; denied viewers receive no CRM matches or enrichment.
+- CRM search authorization uses the primary pool (`primary_db`) so member revocation cannot be reversed by replica lag; denied viewers receive no CRM matches or enrichment.

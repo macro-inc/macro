@@ -37,6 +37,11 @@ pub enum UnifiedSearchIndex {
     CallRecords,
     #[serde(rename = "calendar_events")]
     CalendarEvents,
+    /// Rows of the caller's databases. They are searched only when the
+    /// request sets `include_database_rows`; naming them here leaves the
+    /// kinds not named out, as naming any kind does.
+    #[serde(rename = "database_rows")]
+    DatabaseRows,
 }
 
 const NIL_UUID: &str = "00000000-0000-0000-0000-000000000000";

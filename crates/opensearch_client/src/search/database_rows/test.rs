@@ -44,7 +44,10 @@ fn reads_positions_only_and_never_counts_matches() {
 
     assert_eq!(request["size"], 25);
     assert_eq!(request["track_total_hits"], false);
-    assert_eq!(request["_source"], serde_json::json!(["row_id", "updated_at"]));
+    assert_eq!(
+        request["_source"],
+        serde_json::json!(["row_id", "updated_at"])
+    );
     assert_eq!(
         request["sort"],
         serde_json::json!([{ "updated_at": "desc" }, { "row_id": "asc" }])
@@ -69,7 +72,10 @@ fn resumes_after_a_position() {
 
     assert_eq!(
         request["search_after"],
-        serde_json::json!([1_763_000_000_000_i64, "00000000-0000-0000-0000-000000000009"])
+        serde_json::json!([
+            1_763_000_000_000_i64,
+            "00000000-0000-0000-0000-000000000009"
+        ])
     );
 }
 

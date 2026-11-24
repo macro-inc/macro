@@ -23,8 +23,10 @@ pub type SearchAuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwt
 pub struct SearchHandlerState {
     /// Read-only database connection for search queries
     pub db: ReadOnlyPool,
-    /// Primary database for fresh CRM authorization.
-    pub crm_db: sqlx::PgPool,
+    /// The primary database, for the reads that decide what a search may
+    /// show (CRM membership, database row access and state): replica lag
+    /// must not reverse a revocation.
+    pub primary_db: sqlx::PgPool,
     /// OpenSearch client for full-text search
     pub opensearch_client: Arc<OpensearchClient>,
     /// Resolves the caller's team membership to mint CRM capability receipts.
@@ -43,7 +45,10 @@ pub struct SearchHandlerState {
     /// by the rule every calendar reader shares.
     pub calendar_event_labels: Arc<dyn CalendarEventLabelReader>,
     /// Which callers get dynamic multi-term matching on document content.
-    pub term_matching_rollout: Arc<dyn crate::TermMatchingRollout>,
+    pub term_matching_rollout: Arc<dyn crate::SearchRollout>,
+    /// Which callers' unified searches reach database rows.
+    #[from_ref(skip)]
+    pub database_row_rollout: Arc<dyn crate::SearchRollout>,
     /// How many unified searches each caller runs at once in this process.
     /// One instance per process, shared by every router that mounts search.
     pub search_lanes: Arc<crate::SearchLanes>,

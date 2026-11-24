@@ -105,8 +105,7 @@ impl RowQuery {
                     RowMatchType::Exact => last_word.lowercase == *last,
                 };
                 let first_word = window.first()?;
-                (leading_match && last_match)
-                    .then_some(first_word.chars.start..last_word.chars.end)
+                (leading_match && last_match).then_some(first_word.chars.start..last_word.chars.end)
             })
             .collect()
     }

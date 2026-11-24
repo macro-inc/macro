@@ -24,6 +24,7 @@ pub enum SearchEntityType {
     Projects,
     CallRecords,
     CalendarEvents,
+    DatabaseRows,
 }
 
 impl From<SearchEntityType> for models_search::unified::UnifiedSearchIndex {
@@ -36,8 +37,16 @@ impl From<SearchEntityType> for models_search::unified::UnifiedSearchIndex {
             SearchEntityType::Projects => Self::Projects,
             SearchEntityType::CallRecords => Self::CallRecords,
             SearchEntityType::CalendarEvents => Self::CalendarEvents,
+            SearchEntityType::DatabaseRows => Self::DatabaseRows,
         }
     }
+}
+
+/// Whether a search of `types` reaches database rows: every search that
+/// names no type, and one that names them. The search service still leaves
+/// them out unless database row search is on for the caller.
+pub(super) fn includes_database_rows(types: &[SearchEntityType]) -> bool {
+    types.is_empty() || types.contains(&SearchEntityType::DatabaseRows)
 }
 
 /// Explicitly exclude legacy chats even when no type filter was supplied.
@@ -66,6 +75,7 @@ pub enum SessionAwareSearchResult {
     Company(models_search::crm_company::CrmCompanySearchResponseItem),
     CalendarEvent(models_search::calendar_event::CalendarEventSearchResponseItemWithMetadata),
     AgentSession(models_search::agent_session::AgentSessionSearchResponseItem),
+    DatabaseRow(models_search::database_row::DatabaseRowSearchResponseItem),
 }
 
 impl SessionAwareSearchResult {
@@ -81,6 +91,7 @@ impl SessionAwareSearchResult {
             UnifiedSearchResponseItem::Company(item) => Self::Company(item),
             UnifiedSearchResponseItem::CalendarEvent(item) => Self::CalendarEvent(item),
             UnifiedSearchResponseItem::AgentSession(item) => Self::AgentSession(item),
+            UnifiedSearchResponseItem::DatabaseRow(item) => Self::DatabaseRow(item),
         })
     }
 }
@@ -266,7 +277,8 @@ fn item_properties(item: &UnifiedSearchResponseItem) -> Option<&Vec<SoupProperty
         UnifiedSearchResponseItem::Channel(_)
         | UnifiedSearchResponseItem::ChannelMessage(_)
         | UnifiedSearchResponseItem::AgentSession(_)
-        | UnifiedSearchResponseItem::Company(_) => None,
+        | UnifiedSearchResponseItem::Company(_)
+        | UnifiedSearchResponseItem::DatabaseRow(_) => None,
     }
 }
 
@@ -281,7 +293,8 @@ fn item_properties_mut(item: &mut UnifiedSearchResponseItem) -> Option<&mut Vec<
         UnifiedSearchResponseItem::Channel(_)
         | UnifiedSearchResponseItem::ChannelMessage(_)
         | UnifiedSearchResponseItem::AgentSession(_)
-        | UnifiedSearchResponseItem::Company(_) => None,
+        | UnifiedSearchResponseItem::Company(_)
+        | UnifiedSearchResponseItem::DatabaseRow(_) => None,
     }
 }
 

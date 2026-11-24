@@ -70,6 +70,7 @@ pub async fn handler(
         hits: results,
         next_cursor,
         crm_access,
+        mut database_rows,
         query_filters,
     } = perform_unified_search(&ctx, user, include_crm, query_params, req).await?;
 
@@ -84,9 +85,15 @@ pub async fn handler(
         call_record,
         crm_company,
         calendar_event,
-        // No unified query searches database rows yet.
-        database_row: _,
+        database_row,
     } = results.into_iter().split_search_response();
+
+    // Row hits are finished items already, checked in Postgres when found.
+    let row_results: Vec<UnifiedSearchResponseItem> = database_row
+        .into_iter()
+        .filter_map(|hit| database_rows.remove(&hit.entity_id))
+        .map(UnifiedSearchResponseItem::DatabaseRow)
+        .collect();
 
     let (
         enriched_agent_session_results,
@@ -171,6 +178,7 @@ pub async fn handler(
         results.extend(enriched_call_record_results);
         results.extend(enriched_crm_results);
         results.extend(enriched_calendar_event_results);
+        results.extend(row_results);
 
         sort_unified_search_results(results)
     };

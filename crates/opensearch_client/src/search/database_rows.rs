@@ -21,9 +21,6 @@ use crate::{OpensearchClient, Result};
 #[cfg(test)]
 mod test;
 
-/// The `database_rows` alias.
-const DATABASE_ROWS_INDEX: &str = "database_rows";
-
 /// The text fields a term matches; it may match either.
 const TEXT_FIELDS: [&str; 2] = ["title", "cell_text"];
 
@@ -91,7 +88,10 @@ fn build_request(args: &DatabaseRowSearchArgs) -> Result<SearchRequest<'static>>
     let mut request = SearchRequestBuilder::new();
     request.query(bool_query.build().into());
     request.size(args.limit);
-    request.add_sort(SortType::Field(FieldSort::new("updated_at", SortOrder::Desc)));
+    request.add_sort(SortType::Field(FieldSort::new(
+        "updated_at",
+        SortOrder::Desc,
+    )));
     request.add_sort(SortType::Field(FieldSort::new("row_id", SortOrder::Asc)));
     request.set_source_fields(["row_id", "updated_at"]);
     request.track_total_hits(false);
@@ -141,7 +141,10 @@ async fn search_database_rows(
     let response = client
         .send(
             opensearch::http::Method::Post,
-            &format!("/{DATABASE_ROWS_INDEX}/_search"),
+            &format!(
+                "/{}/_search",
+                models_opensearch::OpenSearchEntityType::DatabaseRows.index_name()
+            ),
             opensearch::http::headers::HeaderMap::new(),
             Some(&[("ignore_unavailable", "true")]),
             Some(opensearch::http::request::JsonBody::new(request)),

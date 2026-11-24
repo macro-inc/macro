@@ -137,7 +137,11 @@ async fn shows_a_viewable_matching_row_with_its_current_title_and_snippet() {
         viewable_databases: vec![DATABASE],
         index: vec![proposed(1)],
         viewable: HashSet::from([row_id(1)]),
-        current: vec![current(1, "Acme Corp", &["Acme Corp", "Renewal with Acme in May"])],
+        current: vec![current(
+            1,
+            "Acme Corp",
+            &["Acme Corp", "Renewal with Acme in May"],
+        )],
         ..Default::default()
     };
 

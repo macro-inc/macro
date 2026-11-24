@@ -1057,7 +1057,7 @@ fn unreachable_state(lanes: SearchLanes) -> SearchHandlerState {
         .unwrap();
     SearchHandlerState {
         db: readonly_pool::ReadOnlyPool(pool.clone()),
-        crm_db: pool.clone(),
+        primary_db: pool.clone(),
         opensearch_client: std::sync::Arc::new(
             opensearch_client::OpensearchClient::new(
                 "http://127.0.0.1:1".to_string(),
@@ -1087,7 +1087,8 @@ fn unreachable_state(lanes: SearchLanes) -> SearchHandlerState {
         agent_session_search_metadata: std::sync::Arc::new(NoSessions),
         calendar_search_enabled: false,
         calendar_event_labels: std::sync::Arc::new(NoLabels),
-        term_matching_rollout: std::sync::Arc::new(crate::LocalTermMatching),
+        term_matching_rollout: std::sync::Arc::new(crate::LocalRollout),
+        database_row_rollout: std::sync::Arc::new(crate::LocalRollout),
         search_lanes: std::sync::Arc::new(lanes),
         api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(Some(
             rate_limit::TokenBucketResult::Taken { remaining: 200 },
