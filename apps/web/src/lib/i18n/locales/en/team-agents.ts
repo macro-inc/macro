@@ -29,6 +29,7 @@ export default {
   computerHint: 'Its own computer, always on. Its seat is included.',
   sizesFailed: "Couldn't load computer sizes.",
   tryAgain: 'Try again',
+  nameRequired: 'Give your agent a name to continue.',
   add: 'Add {{name}}',
   addPriced: 'Add {{name}} · {{price}}',
   adding: 'Adding {{name}}…',

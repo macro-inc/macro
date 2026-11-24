@@ -18,9 +18,23 @@ it('keeps the first character whole, whatever script or emoji it is', () => {
   expect(agentInitial('🇫🇷 Agent')).toBe('🇫🇷');
 });
 
+it('skips invisible marks and punctuation before the first letter', () => {
+  expect(agentInitial('\u200Fعلي')).toBe('ع');
+  expect(agentInitial('\u200Eada')).toBe('A');
+  expect(agentInitial('\u200Bbo')).toBe('B');
+  expect(agentInitial('\uFEFFkim')).toBe('K');
+  expect(agentInitial('"Nova"')).toBe('N');
+  expect(agentInitial('שרה')).toBe('ש');
+});
+
+it('keeps a letter that would upper-case to two as written', () => {
+  expect(agentInitial('ßeta')).toBe('ß');
+});
+
 it('shows a question mark while there is no name', () => {
   expect(agentInitial('')).toBe('?');
   expect(agentInitial('   ')).toBe('?');
+  expect(agentInitial('\u200B...')).toBe('?');
 });
 
 it('leaves people with their two initials', () => {

@@ -15,6 +15,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  // jsdom has no scrollIntoView; a test that stubs it removes it here.
+  Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
 });
 
 it('shows the first letter of the name as the picture, and adds the agent with that name and size', () => {
@@ -133,6 +135,7 @@ it('marks the name instead of adding when it is empty', () => {
   );
   expect(onSubmit).not.toHaveBeenCalled();
   expect(name.getAttribute('aria-invalid')).toBe('true');
+  expect(screen.getByText('Give your agent a name to continue.')).toBeTruthy();
   expect(document.activeElement).toBe(name);
 });
 
@@ -186,5 +189,4 @@ it('says every size is sold out when Add is pressed with none for sale', () => {
   ).toBeTruthy();
   expect(scrolled).toHaveBeenCalled();
   expect(onSubmit).not.toHaveBeenCalled();
-  Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
 });

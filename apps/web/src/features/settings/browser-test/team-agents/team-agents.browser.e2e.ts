@@ -576,6 +576,7 @@ test('adding an agent waits in the dialog until it is online, then closes into i
   await add.click();
   await expect(nameField).toHaveAttribute('aria-invalid', 'true');
   await expect(nameField).toBeFocused();
+  await expect(dialog).toContainText('Give your agent a name to continue.');
   await screenshot(page, testInfo, 'add-agent-asked');
   expect(backend.created).toEqual([]);
   // The picture is the name's initial, redrawn as it is renamed.

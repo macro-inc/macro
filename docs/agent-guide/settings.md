@@ -255,21 +255,26 @@ the same viewers. Members, and everyone while a flag is off or still loading,
 see only the people invite. Each entry opens its own form: **Invite Human** and
 **Invite your team** the people invite, **Invite Agent** and **Invite agents**
 the agent form, and neither has a People/Agent switch. **Invite an agent**
-asks only for a name and the agent's computer size, with no explanatory text
-around them: the field headed **Name it**, with the agent's picture beside it,
-then **Give it a computer**. The picture is the name's initials as the app's
-avatars draw them (`getInitialsFromName`: the first letter of a one-word name,
-redrawn as it is typed), which is what the agent's avatar shows once it is
-added; agents have no picture editor. Voice and role come later, and the agent
-asks what to take on once it is online.
+asks only for a name and the agent's computer size: the field headed **Name
+it**, with the agent's avatar beside it, then **Give it a computer**. The
+avatar is the name's first character, upper-cased (`agentInitial`: one
+grapheme, after any invisible marks or punctuation, so "Ada Lovelace" is
+**A** and an emoji or CJK character stays whole; **?** while the name is
+empty), redrawn as it is typed. The agent's Members row draws the same letter;
+people keep their two initials. Agents have no picture editor. Under the sizes,
+two lines say what Add charges for: "Its own computer, always on. Its seat is
+included." and "Added to your team subscription, prorated for the rest of
+this billing period." (or "No charge is added to your team subscription." for
+an included size). Voice and role come later, and the agent asks what to take
+on once it is online.
 
 Sizes come from the same catalog and prices as Buy a computer
 (sold-out sizes are disabled and marked **Sold out**; Add with every size sold
 out says so under the sizes and sends nothing). The agent's seat is
 included, so the button reads **Add <name> · $X/month** (or **Add Agent ·
-$X/month** before a name). Add is always enabled: with no name (or one too
-long) it marks the name field invalid and moves the caret there, and sends
-nothing. Adding calls
+$X/month** before a name). Add is always enabled: with no name it marks the name field invalid, says
+"Give your agent a name to continue.", and moves the caret there; a name too
+long is marked the same way; either sends nothing. Adding calls
 `POST /team_agents` with `jobDescription` and `personality` empty, then waits
 in the dialog (**Adding <name>…**) reading
 `GET /team_agents` every 500 ms until the agent reports itself online, and

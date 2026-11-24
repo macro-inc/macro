@@ -191,6 +191,11 @@ export function InviteAgentForm(props: {
             {t('teamAgents.tooLong', { count: MAX_AGENT_NAME_CHARS })}
           </TextField.ErrorMessage>
         </Show>
+        <Show when={asked() && !trimmedName()}>
+          <TextField.ErrorMessage>
+            {t('teamAgents.nameRequired')}
+          </TextField.ErrorMessage>
+        </Show>
       </div>
     </TextField>
   );
@@ -231,7 +236,11 @@ export function InviteAgentForm(props: {
       </Show>
       {/* What Add charges for, before anything is bought. */}
       <p class="text-xs text-ink-muted">{t('teamAgents.computerHint')}</p>
-      <p class="text-xs text-ink-muted">{t('settingsBilling.proration')}</p>
+      <p class="text-xs text-ink-muted">
+        {offer()?.quote.amount === 0
+          ? t('settingsBilling.noCharge')
+          : t('settingsBilling.proration')}
+      </p>
     </div>
   );
 
@@ -307,6 +316,7 @@ export function InviteAgentForm(props: {
         <Button
           type="button"
           variant="primary"
+          class="min-w-0 max-w-full"
           // Always pressable: with no name it marks the field instead. While
           // adding it keeps focus, so a phone sheet's focus trap doesn't move
           // it to the name field when a refusal arrives; `submit` ignores
@@ -316,7 +326,11 @@ export function InviteAgentForm(props: {
           data-disabled={adding() ? '' : undefined}
           onClick={submit}
         >
-          <Show when={adding()} fallback={submitLabel()}>
+          <Show
+            when={adding()}
+            // A long name shortens; the price after it stays readable.
+            fallback={<span class="min-w-0 truncate">{submitLabel()}</span>}
+          >
             <SpinnerIcon class="size-4 animate-spin" />
             {t('teamAgents.adding', { name: trimmedName() })}
           </Show>
