@@ -79,6 +79,11 @@ function device() {
       for (const key of args.removedKeys ?? []) records.delete(key);
       if (args.seq?.kind === 'advance' && args.seq.from === seq)
         seq = args.seq.to;
+      if (
+        args.seq?.kind === 'lower' &&
+        (seq === null || BigInt(args.seq.seq) < BigInt(seq))
+      )
+        seq = args.seq.seq;
       return {
         kind: 'committed' as const,
         revision: await base.currentRevision(),
@@ -1450,6 +1455,147 @@ it('repairs a delayed frame at or below the cursor of the page out', async () =>
     await vi.advanceTimersByTimeAsync(600);
     expect(test.records.get(key)).toBe(latest.content);
   } finally {
+    test.stop();
+  }
+});
+
+it('keeps a channel with a repair left out of current after a server read', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  const original = graphqlMessage(6, { content: 'original' });
+  const latest = graphqlMessage(6, { content: 'edit at 406' });
+  const key = `GraphqlChannelMessage:${latest.id}`;
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.push('406', latest);
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[0].answer(
+      delta('205', { hasMore: true, messages: [original] })
+    );
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[1].answer(delta('405', { hasMore: true }));
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[2].fail();
+    await vi.advanceTimersByTimeAsync(20);
+    // A window read at 406 that does not hold the edited message.
+    test.runtime.noteServerRead(CHANNEL_ID, '406', test.runtime.epoch(), '406');
+    test.push('407', graphqlMessage(407));
+    await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MS + 600);
+    for (const request of test.requests.slice(3)) {
+      request.answer(
+        delta('407', {
+          messages:
+            Number(request.after) < 406
+              ? [latest, graphqlMessage(407)]
+              : [graphqlMessage(407)],
+        })
+      );
+      await vi.advanceTimersByTimeAsync(600);
+    }
+    expect(cursors(test)[3]).toBe('405');
+    expect(test.records.get(key)).toBe(latest.content);
+  } finally {
+    test.stop();
+  }
+});
+
+it('keeps the sequence a server read lowered while a page commit was unanswered', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  const original = graphqlMessage(6, { content: 'snapshot at 5' });
+  const latest = graphqlMessage(6, { content: 'edit at 6' });
+  const key = `GraphqlChannelMessage:${latest.id}`;
+  const commit = test.host.channelTimelineCommit;
+  const durable = Promise.withResolvers<void>();
+  const ack = Promise.withResolvers<void>();
+  test.host.channelTimelineCommit = async (args) => {
+    const result = await commit(args);
+    if (args.seq?.kind === 'advance' && args.seq.to === '6') {
+      durable.resolve();
+      await ack.promise;
+    }
+    return result;
+  };
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.push('6', latest);
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[0].answer(delta('6', { messages: [latest] }));
+    await durable.promise;
+    // An older window stores over the edit and lowers the device to 5.
+    test.records.set(key, original.content);
+    const lowered = await commit({
+      channelId: CHANNEL_ID,
+      seq: { kind: 'lower', seq: '5' },
+    });
+    test.runtime.noteServerRead(
+      CHANNEL_ID,
+      lowered.channelSeq,
+      test.runtime.epoch(),
+      '5'
+    );
+    ack.resolve();
+    await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MS + 600);
+    expect(cursors(test)).toEqual(['5', '5']);
+    test.requests[1].answer(delta('6', { messages: [latest] }));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.records.get(key)).toBe(latest.content);
+  } finally {
+    ack.resolve();
+    test.stop();
+  }
+});
+
+it('rereads a page whose commit a frame written before it was acknowledged during', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  const original = graphqlMessage(6, { content: 'original at 6' });
+  const latest = graphqlMessage(6, { content: 'edit at 7' });
+  const key = `GraphqlChannelMessage:${latest.id}`;
+  const frameStored = Promise.withResolvers<void>();
+  const frameAck = Promise.withResolvers<void>();
+  const pageStored = Promise.withResolvers<void>();
+  const pageAck = Promise.withResolvers<void>();
+  const write = test.host.writeQuery;
+  test.host.writeQuery = async (args) => {
+    const result = await write(args);
+    if (
+      (args.data as { channelTimelineUpdates?: unknown }).channelTimelineUpdates
+    ) {
+      frameStored.resolve();
+      await frameAck.promise;
+    }
+    return result;
+  };
+  const commit = test.host.channelTimelineCommit;
+  test.host.channelTimelineCommit = async (args) => {
+    const result = await commit(args);
+    if (args.seq?.kind === 'advance' && args.seq.to === '6') {
+      pageStored.resolve();
+      await pageAck.promise;
+    }
+    return result;
+  };
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.push('7', latest);
+    await frameStored.promise;
+    test.requests[0].answer(delta('6', { messages: [original] }));
+    await pageStored.promise;
+    frameAck.resolve();
+    await vi.advanceTimersByTimeAsync(20);
+    pageAck.resolve();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(cursors(test)).toEqual(['5', '6']);
+    test.requests[1].answer(delta('7', { messages: [latest] }));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.records.get(key)).toBe(latest.content);
+  } finally {
+    frameAck.resolve();
+    pageAck.resolve();
     test.stop();
   }
 });

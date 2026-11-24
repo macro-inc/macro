@@ -121,6 +121,11 @@ type ChannelState = {
   /** Counts forgets, so a row write acknowledged across one marks nothing. */
   forgets: number;
   /**
+   * Counts server reads noted, so a page commit acknowledged after one keeps
+   * the sequence the read left.
+   */
+  reads: number;
+  /**
    * The changes pages out for this channel, each with the newest frame that
    * stored records while it was out.
    */
@@ -255,6 +260,7 @@ export function createChannelSyncRuntime(
         seenSeq: undefined,
         sweepable: false,
         forgets: 0,
+        reads: 0,
         pagesOut: new Set(),
         covered: new Set(),
         opens: new Set(),
@@ -547,7 +553,10 @@ export function createChannelSyncRuntime(
       // The page carries the records changed after this cursor, as they are
       // when it is read.
       const asked = after;
+      // Watched until the page's commit is answered: a frame written before
+      // the page can be acknowledged after the fetch settles.
       const out: PageOut = { newestFrame: undefined, frames: [] };
+      const release = Effect.sync(() => state.pagesOut.delete(out));
       state.pagesOut.add(out);
       // Interrupted (replaced, the socket dropped, the runtime disposed), the
       // request ends with the span.
@@ -555,16 +564,20 @@ export function createChannelSyncRuntime(
         Effect.tryPromise((signal) =>
           span.run(() => deps.fetchChanges(channelId, after.toString(), signal))
         )
-      ).pipe(Effect.ensuring(Effect.sync(() => state.pagesOut.delete(out))));
-      if (delta.resetRequired) break;
+      ).pipe(Effect.onError(() => release));
+      const to = parseSeq(delta.seq);
+      if (delta.resetRequired || to === null) {
+        yield* release;
+        break;
+      }
       changes +=
         delta.messages.length +
         delta.activities.length +
         delta.removedIds.length;
-      const to = parseSeq(delta.seq);
-      if (to === null) break;
       const stored = state.seq ?? from;
-      if (to > stored || delta.removedIds.length > 0) {
+      const reads = state.reads;
+      if (to <= stored && delta.removedIds.length === 0) yield* release;
+      else {
         const committed = yield* commit(
           channelId,
           {
@@ -590,13 +603,17 @@ export function createChannelSyncRuntime(
                 return;
               leaveRepair(state, to);
             })
-          )
+          ),
+          Effect.ensuring(release)
         );
         if (committed.kind !== 'committed') break;
         progress.committed = true;
-        state.seq = parseSeq(committed.channelSeq);
-        // Gone meanwhile (evicted or reset): nothing to catch up.
-        if (state.seq === null) return 'not-held' as const;
+        // A server read noted while the commit was out may have lowered the
+        // device since: its sequence stands, and the replay starts there.
+        if (state.reads === reads) state.seq = parseSeq(committed.channelSeq);
+        // Gone meanwhile (evicted, reset or forgotten): nothing to catch up.
+        if (state.seq === null || state.seq === undefined)
+          return 'not-held' as const;
         // A read lowered the sequence meanwhile: replay from there.
         if (to > stored && state.seq !== to) {
           after = state.seq;
@@ -790,11 +807,7 @@ export function createChannelSyncRuntime(
     if (known === null) {
       if (stored) {
         yield* state.lock.withPermits(1)(
-          Effect.suspend(() => {
-            // A reset dropped the channel after a page covered this frame.
-            state.covered.delete(seq);
-            return markSweepable(channelId, state, generation);
-          })
+          markSweepable(channelId, state, generation)
         );
       }
       return 'not-held';
@@ -802,10 +815,7 @@ export function createChannelSyncRuntime(
     return yield* state.lock.withPermits(1)(
       Effect.gen(function* () {
         const current = state.seq;
-        if (current === null || current === undefined) {
-          state.covered.delete(seq);
-          return 'not-held';
-        }
+        if (current === null || current === undefined) return 'not-held';
         // Read again by its catch-up after it stored: nothing to repair.
         const covered = state.covered.delete(seq) && !late;
         if (stored && !covered && (late || seq <= current)) {
@@ -877,6 +887,13 @@ export function createChannelSyncRuntime(
                 notifyChanged(frame.channelId);
               }
             })
+          ),
+          // However the frame ended, a page that covered it has been heard.
+          Effect.ensuring(
+            Effect.sync(() => {
+              if (seq !== null)
+                channels.get(frame.channelId)?.covered.delete(seq);
+            })
           )
         )
       );
@@ -934,6 +951,7 @@ export function createChannelSyncRuntime(
     noteServerRead(channelId, seq, epoch, readSeq) {
       const state = stateOf(channelId);
       state.seq = parseSeq(seq);
+      state.reads += 1;
       const read = parseSeq(readSeq);
       if (state.seq === null || read === null || read > state.seq) {
         // Nothing stored, or the device kept rows the server has since
@@ -943,8 +961,12 @@ export function createChannelSyncRuntime(
       }
       if (!isConnected || epoch !== socketEpoch) return;
       // Read while frames were flowing: every later change arrives as one,
-      // unless one already went by while the device held nothing.
-      if (state.seenSeq === undefined || state.seenSeq <= state.seq) {
+      // unless one already went by while the device held nothing, or a
+      // repair is left for records outside what the read covered.
+      if (
+        state.repairFrom === undefined &&
+        (state.seenSeq === undefined || state.seenSeq <= state.seq)
+      ) {
         state.current = true;
         return;
       }
