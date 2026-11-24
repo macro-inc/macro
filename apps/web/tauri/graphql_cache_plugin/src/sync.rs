@@ -546,7 +546,7 @@ async fn read_stream(
 /// Decodes the body's content encoding as it streams.
 enum BodyDecoder {
     Identity,
-    Gzip(flate2::write::GzDecoder<Vec<u8>>),
+    Gzip(Box<flate2::write::GzDecoder<Vec<u8>>>),
 }
 
 impl BodyDecoder {
@@ -554,9 +554,9 @@ impl BodyDecoder {
         match content_encoding.map(str::trim) {
             None | Some("") => Ok(Self::Identity),
             Some(encoding) if encoding.eq_ignore_ascii_case("identity") => Ok(Self::Identity),
-            Some(encoding) if encoding.eq_ignore_ascii_case(GZIP) => {
-                Ok(Self::Gzip(flate2::write::GzDecoder::new(Vec::new())))
-            }
+            Some(encoding) if encoding.eq_ignore_ascii_case(GZIP) => Ok(Self::Gzip(Box::new(
+                flate2::write::GzDecoder::new(Vec::new()),
+            ))),
             Some(encoding) => Err(SyncFailure::Stream {
                 message: format!("unsupported content-encoding `{encoding}`"),
             }),
