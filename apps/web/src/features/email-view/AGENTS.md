@@ -37,13 +37,19 @@ the Soup-backed thread list, and saved email views.
 - `primitives/create-search-scroll-reset.ts`: a new search starts at the top
   once its own results replace the rows kept on screen.
 - `search/`: the `in:<view>` filter (`email-search-scope.ts`: parsing, the
-  operator runs the field draws and the views it names), recent searches (`recent-searches.ts`,
-  per person in browser storage) and the rows the search field lists, views
-  while `in:` is typed and recent searches otherwise
+  operator runs the field draws and the views it names), the operators the
+  search service reads (`email-search-operators.ts`: which typed terms are
+  operators, which are still being typed and left out of the search, and what
+  finishes one; its tests and the service's read
+  `crates/search_service/src/api/search/email_operators/typed_operators.json`),
+  recent searches (`recent-searches.ts`, per person in browser storage) and
+  the rows the search field lists: views while `in:` is typed, otherwise the
+  operators that finish the typed token and then recent searches
   (`create-email-search-suggestions.ts`, drawn by
   `components/EmailSearchSuggestionList.tsx`), behind
   `enable-email-wide-search`. Operators are drawn by the shared
-  `components/view-shell/search-operator-text.tsx`.
+  `components/view-shell/search-operator-text.tsx`, which keeps a quoted
+  value in its token.
 - `filters/email-saved-view.ts`: the `kind: "email"` definition codec: strict
   capture, permissive read with skipped-setting issues, materialization,
   canonical comparison, scope resolution, and each tab's own filters.
@@ -97,7 +103,7 @@ the Soup-backed thread list, and saved email views.
 - The Focus, Signal and Noise tabs read `showsInboxTabs`: they never show
   while the search field holds a query, an `in:` of the Inbox included, on
   desktop or phone.
-- Text with no words (`in:`, `in:se`, `in:sent `) runs no search of its own:
+- Text with no words (`in:`, `in:se`, `in:sent `, `is:un`) runs no search of its own:
   `parsedSearch` stays on the last search that had words, or empty (the open
   tab's list) when there was none. The list, the header, the sidebar and the
   empty state all read it, so they describe the rows on screen. What works on

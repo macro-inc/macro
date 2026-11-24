@@ -45,7 +45,8 @@ export function EmailMobileSearchField(props: {
   // Keeps the keyboard up for presses on the field's own controls.
   const keepFocus = (event: Event) => event.preventDefault();
   // A hardware keyboard walks the rows under the field and picks one; a
-  // picked view keeps the keyboard up for the words, as a tap does.
+  // picked view or operator keeps the keyboard up for the words, as a tap
+  // does.
   const moveInSuggestions = (event: KeyboardEvent) => {
     const suggestions = props.suggestions;
     const active = suggestions.active();
@@ -130,8 +131,8 @@ export function EmailMobileSearchField(props: {
 }
 
 /**
- * The views an `in:` being typed can name, or recent searches, below the
- * search field while it has focus.
+ * The views an `in:` being typed can name, the operators that finish what is
+ * typed, or recent searches, below the search field while it has focus.
  */
 export function EmailMobileSearchSuggestions(props: {
   suggestions: EmailSearchSuggestions;
@@ -146,7 +147,7 @@ export function EmailMobileSearchSuggestions(props: {
           onPick={(index) => {
             const editsQuery = props.suggestions.editsQuery?.(index) ?? false;
             props.suggestions.pick(index);
-            // A view picked keeps the keyboard up to type the words.
+            // A view or operator picked keeps the keyboard up to type the words.
             if (!editsQuery) props.onPicked();
           }}
         />
