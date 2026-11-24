@@ -1,5 +1,12 @@
-//! Applying streamed sync frames: each applied frame is at most one engine
-//! write, so hosts can queue every frame behind foreground reads.
+//! Applying streamed sync frames, one call per frame, so hosts can schedule
+//! foreground reads between frames. A frame is a bounded amount of work, not
+//! always a single write: a page that falls back to the general hydration
+//! write saves its lane state after it, and a membership lane's `laneDone`
+//! deletes unlisted members in chunks of `DELETE_CHUNK`.
+//!
+//! A run only applies frames to the cache it began against: `sync_begin`
+//! records the engine's reset epoch, and `sync_apply_next` fails with
+//! [`SyncStreamError::Superseded`] once a clear or reset renewed it.
 
 use super::{Engine, EngineError, HydrationWriteResult, IdentityState, WriteResult, live_query};
 use crate::calendar::{CalendarCommit, CalendarRangeStorage, CalendarWatermarkUpdate};
@@ -156,6 +163,7 @@ impl<S: SyncStorage + CalendarRangeStorage> Engine<S> {
         args: &SyncStartArgs,
         started_at_ms: f64,
     ) -> Result<SyncRun, SyncWriteError<S::Error, Infallible>> {
+        let reset_epoch = self.reset_epoch;
         let saved = self.sync_lane_states().await?;
         let coverage = match args.calendar {
             Some(_) => self
@@ -165,7 +173,9 @@ impl<S: SyncStorage + CalendarRangeStorage> Engine<S> {
                 .map_err(|error| SyncWriteError::Engine(EngineError::Storage(error)))?,
             None => Vec::new(),
         };
-        Ok(SyncRun::new(args, &saved, &coverage, started_at_ms)?)
+        let mut run = SyncRun::new(args, &saved, &coverage, started_at_ms)?;
+        run.reset_epoch = reset_epoch;
+        Ok(run)
     }
 }
 
@@ -195,11 +205,17 @@ where
     /// Membership pages only collect keys. `laneDone` completes the lane;
     /// a completed membership listing deletes unlisted members of its scopes,
     /// and a calendar lane commits its coverage with the lowest watermark.
+    ///
+    /// Fails with [`SyncStreamError::Superseded`], before touching the cache,
+    /// once the cache was cleared or reset after the run began.
     pub async fn sync_apply_next<H: SyncHooks<S>>(
         &mut self,
         run: &mut SyncRun,
         hooks: &H,
     ) -> Result<Option<SyncApplied>, SyncWriteError<S::Error, H::Error>> {
+        if run.reset_epoch != self.reset_epoch {
+            return Err(SyncWriteError::Stream(SyncStreamError::Superseded));
+        }
         let Some(frame) = run.pending.pop_front() else {
             return Ok(None);
         };
@@ -380,6 +396,11 @@ where
                     )
                     .await
                     .map_err(SyncWriteError::Engine)?;
+                // The page's own account switch reset a cache bound to another
+                // account: the run carries on in the cache it just rebound.
+                if result.write_result.reset {
+                    run.reset_epoch = self.reset_epoch;
+                }
                 let (row, members) = advance(self.stored_lane::<H::Error>(&lane).await?);
                 self.storage
                     .save_sync_lane(row, members)

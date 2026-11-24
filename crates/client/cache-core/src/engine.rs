@@ -498,6 +498,10 @@ pub struct Engine<S: Storage> {
     optimistic_hydrated: bool,
     /// What the last projection passes read, for the write that follows.
     kept_reads: Option<pass_reads::KeptReads>,
+    /// Renewed whenever the cache's contents stop being the ones a sync run
+    /// began against (`clear`, an account reset, `external_reset`); a run
+    /// begun under another epoch applies nothing more.
+    reset_epoch: Uuid,
 }
 
 impl<S: Storage> Engine<S> {
@@ -533,6 +537,7 @@ impl<S: Storage> Engine<S> {
             optimistic: Vec::new(),
             optimistic_hydrated: false,
             kept_reads: None,
+            reset_epoch: Uuid::now_v7(),
         }
     }
 
@@ -3536,6 +3541,7 @@ impl<S: Storage> Engine<S> {
         self.optimistic_hydrated = false;
         self.identity = IdentityState::NotHydrated;
         self.authority = std::sync::OnceLock::new();
+        self.reset_epoch = Uuid::now_v7();
         let affected = self.deps.all_ops();
         self.advance_revision()?;
         Ok(self.revisioned(affected))
@@ -3637,6 +3643,7 @@ impl<S: Storage> Engine<S> {
         // The wipe below removes the binding record too.
         self.identity = IdentityState::Missing;
         self.authority = std::sync::OnceLock::from(None);
+        self.reset_epoch = Uuid::now_v7();
         self.advance_revision()
     }
 

@@ -373,6 +373,12 @@ pub enum SyncStreamError {
     /// Saved lane state could not be decoded.
     #[error("invalid saved sync state: {0}")]
     State(String),
+    /// The cache was cleared or reset (a wipe, another account, a reset by
+    /// another engine) after the run began, so its frames would write into a
+    /// cache they were not planned for. The run applies nothing more; hosts
+    /// end it as aborted, and the next run plans from the new cache's state.
+    #[error("the cache was reset after the sync run began")]
+    Superseded,
 }
 
 #[derive(Debug, Default)]
@@ -407,6 +413,9 @@ pub struct SyncRun {
     pub(crate) end: Option<SyncEndReason>,
     /// The lane documents the request sent, by operation.
     queries: BTreeMap<String, String>,
+    /// The engine's reset epoch the run applies under, set by
+    /// [`crate::engine::Engine::sync_begin`].
+    pub(crate) reset_epoch: uuid::Uuid,
 }
 
 impl SyncRun {
@@ -445,6 +454,7 @@ impl SyncRun {
             started_at_ms,
             end: None,
             queries: args.queries.clone(),
+            reset_epoch: uuid::Uuid::nil(),
         })
     }
 

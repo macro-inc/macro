@@ -1,13 +1,14 @@
 //! Streamed cache sync. The worker opens the HTTP stream itself and feeds the
 //! response bytes here; each decoded frame is applied as its own engine call so
-//! the worker can queue it behind foreground reads.
+//! the worker can schedule foreground reads between frames.
 
 use super::{
     BrowserEngine, BrowserStorage, CacheEngine, JsWriteResult, err_js, js_write_result, to_js,
 };
 use cache_core::predicate::ProjectionMutation;
 use cache_core::sync::{
-    SyncApplied, SyncHooks, SyncPageWrite, SyncRunResult, SyncStartArgs, SyncWriteError,
+    SyncApplied, SyncHooks, SyncPageWrite, SyncRunResult, SyncStartArgs, SyncStreamError,
+    SyncWriteError,
 };
 use cache_core::value::EntityKey;
 use cache_turso::TursoStorageError;
@@ -165,7 +166,9 @@ impl CacheEngine {
         })
     }
 
-    /// Applies the oldest pending frame: at most one engine write.
+    /// Applies the oldest pending frame: one bounded step of engine writes
+    /// (see `cache_core::engine::sync`). Rejects with `cacheSyncFailure:
+    /// 'aborted'` once the cache was cleared or reset after the run began.
     #[wasm_bindgen(js_name = syncApplyNext)]
     pub fn sync_apply_next(&self) -> js_sys::Promise {
         let state = self.state.clone();
@@ -184,6 +187,9 @@ impl CacheEngine {
             state.sync_run = Some(run);
             let applied = match result {
                 Ok(applied) => applied,
+                Err(SyncWriteError::Stream(error @ SyncStreamError::Superseded)) => {
+                    return Err(sync_failure_js("aborted", error));
+                }
                 Err(SyncWriteError::Stream(error)) => return Err(sync_failure_js("stream", error)),
                 Err(SyncWriteError::Engine(error)) => return Err(state.engine_error(error)),
                 Err(SyncWriteError::Hooks(failure)) => {

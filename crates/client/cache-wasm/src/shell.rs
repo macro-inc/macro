@@ -2958,6 +2958,8 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.forget_prepared_projections();
+            // A run's saved state goes with the records it described.
+            state.sync_run = None;
             let result = state.engine_mut()?.clear().await;
             let revision = state.engine_result(result)?;
             to_js(&JsRevisionResult {

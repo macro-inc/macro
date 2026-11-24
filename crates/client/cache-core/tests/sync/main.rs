@@ -16,6 +16,8 @@ use serde_json::{Value as Json, json};
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+mod fence;
+
 const TASKS: &str = "query SoupBackfillSyncTasks($input: SoupInput!) { user { id soup(input: $input) { items { __typename id ... on GraphqlSoupDocument { name } } nextCursor } } }";
 const TASK_IDS: &str = "query SoupBackfillSyncTaskIds($input: SoupInput!) { user { id soup(input: $input) { items { __typename id } nextCursor } } }";
 const OCCURRENCES: &str = "query SyncCalendar($input: CalendarRangeInput!) { user { id calendarOccurrences(input: $input) { nodes { __typename id eventId linkId isCancelled time { __typename ... on GraphqlTimedEventTime { startsAt endsAt } } } hasNextPage endCursor watermark { linkId seq } } } }";
@@ -833,6 +835,18 @@ fn a_sync_page_for_another_viewer_resets_the_cache_and_keeps_its_lane_state() {
         let state = engine.sync_lane_states().await.unwrap();
         assert_eq!((state[0].pages, state[0].items), (1, 2));
         assert!(state[0].resume.is_some());
+
+        // The reset was the run's own: it carries on in the cache it rebound.
+        let stream = ndjson(&[
+            soup_page("tasks", 1, &[4], None),
+            lane_done("tasks", 2, 3),
+            end("complete"),
+        ]);
+        run_stream(&mut engine, &mut run, &stream).await.unwrap();
+        assert_eq!(run.finish(1.0).unwrap().reason, SyncRunReason::Complete);
+        let state = &engine.sync_lane_states().await.unwrap()[0];
+        assert_eq!((state.pages, state.items), (2, 3));
+        assert!(state.completed_at.is_some());
     });
 }
 
