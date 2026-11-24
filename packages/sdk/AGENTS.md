@@ -253,6 +253,11 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- `traceContext: true` (off by default) sends the active OpenTelemetry
+  context (`traceparent`, `tracestate`) with every request through the
+  process's registered propagator, so Macro's spans join the caller's trace.
+  It stays off for browsers, where the headers would need CORS allowance.
+
 - The SDK is a root Bun workspace member: its dependencies resolve from the
   root `bun.lock`, and there is no `bun.lock` here.
   Remove obsolete package-local `node_modules` before generation so they cannot

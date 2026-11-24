@@ -107,7 +107,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
         EmailSearchArgs {
             terms: args.email_search_args.terms,
             user_id: args.user_id,
-            user_ids: args.email_search_args.user_ids,
+            inbox_link_ids: args.email_search_args.inbox_link_ids,
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
@@ -257,11 +257,14 @@ pub struct UnifiedDocumentSearchArgs {
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedEmailSearchArgs {
     pub terms: Vec<String>,
-    pub user_ids: Vec<String>,
-    /// Threads reachable besides the `user_ids` mailboxes, or, with
+    /// The inboxes the caller reads, by link id: their own and those
+    /// delegated to them. Mail matches by the inbox holding it, not by its
+    /// owner, whose other inboxes may not be delegated.
+    pub inbox_link_ids: Vec<String>,
+    /// Threads reachable besides the `inbox_link_ids` inboxes, or, with
     /// `ids_only`, the only threads searched.
     pub thread_ids: Vec<String>,
-    /// Search only `thread_ids`, not the `user_ids` mailboxes.
+    /// Search only `thread_ids`, not the `inbox_link_ids` inboxes.
     pub ids_only: bool,
     /// When non-empty, every hit's thread must be one of these, on top of
     /// the access filter.
