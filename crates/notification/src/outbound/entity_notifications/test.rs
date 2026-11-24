@@ -764,61 +764,52 @@ impl Notification for Invite {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn top_level_filter_counts_an_unseen_invite(pool: PgPool) {
+async fn top_level_filter_leaves_out_invites(pool: PgPool) {
     let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
-    let channel = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
-    let invite = insert(
+    let invited = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
+    let messaged = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
+    let invite = || Invite {
+        invited_by: "macro|inviter@example.com".into(),
+        channel_name: "general".into(),
+    };
+    insert(&pool, &viewer, invited.clone(), None, invite()).await;
+    let message = insert(
         &pool,
         &viewer,
-        channel.clone(),
+        messaged.clone(),
         None,
-        Invite {
-            invited_by: "macro|inviter@example.com".into(),
-            channel_name: "general".into(),
+        Message {
+            message_id: "message".into(),
         },
     )
     .await;
-    insert(
-        &pool,
-        &viewer,
-        channel.clone(),
-        None,
-        Mention {
-            message_id: "reply".into(),
-            thread_id: Some("root".into()),
-        },
-    )
-    .await;
+    insert(&pool, &viewer, messaged.clone(), None, invite()).await;
     let query = EntityNotificationQuery {
         states: vec![NotificationState::Unseen],
         top_level_messages_only: true,
         limit: Some(1),
         ..Default::default()
     };
+
     let result = get_filtered_entity_notifications(
         &pool,
-        viewer.clone(),
-        vec![channel.clone()],
-        query.clone(),
+        viewer,
+        vec![invited.clone(), messaged.clone()],
+        query,
     )
     .await
     .unwrap();
+
+    assert!(
+        result[&invited].is_empty(),
+        "an invite alone leaves the channel read in Chat"
+    );
     assert_eq!(
-        result[&channel]
+        result[&messaged]
             .iter()
             .map(|row| row.notification_id)
             .collect::<Vec<_>>(),
-        [invite],
-        "the inbox lists an unseen invite on the channel's top-level row"
-    );
-    pool.mark_notifications_seen(&viewer, &[invite])
-        .await
-        .unwrap();
-    let result = get_filtered_entity_notifications(&pool, viewer, vec![channel.clone()], query)
-        .await
-        .unwrap();
-    assert!(
-        result[&channel].is_empty(),
-        "a seen invite no longer badges the channel"
+        [message],
+        "a newer invite does not take the message's place under the limit"
     );
 }
