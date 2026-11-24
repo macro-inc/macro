@@ -45,6 +45,9 @@ mod test;
 
 type Variables = serde_json::Map<String, serde_json::Value>;
 
+/// Mirrors `LOCAL_COMMIT_FAILED` in `graphql-cache/protocol.ts`.
+const LOCAL_COMMIT_FAILED: &str = "LOCAL_COMMIT_FAILED";
+
 // This is an opaque correlation field, not a trusted parent context. Never log
 // arbitrary IPC strings as trace metadata.
 fn people_trace_correlation(value: Option<&str>) -> Option<&str> {
@@ -1074,22 +1077,28 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
             generation_tag(generation).as_deref(),
         );
     }
+    let (status, error_code) =
+        commit_settlement(error.is_some(), replacement_transaction_id.is_some());
     emit_mutation_settled(
         &app,
         settlement_transaction_id,
         write_result.mutation_uuid.clone(),
-        if replacement_transaction_id.is_some() {
-            "superseded"
-        } else if error.is_some() {
-            "permanently-failed"
-        } else {
-            "committed"
-        },
+        status,
         error,
-        None,
+        error_code.map(str::to_owned),
         replacement_transaction_id,
     );
     Ok(result)
+}
+
+/// How a commit settles its mutation: the status and, when the server took the
+/// mutation and only this device could not store its answer, the code for that.
+fn commit_settlement(failed: bool, superseded: bool) -> (&'static str, Option<&'static str>) {
+    match (failed, superseded) {
+        (_, true) => ("superseded", None),
+        (true, false) => ("permanently-failed", Some(LOCAL_COMMIT_FAILED)),
+        (false, false) => ("committed", None),
+    }
 }
 
 /// Permanently fails a claimed mutation and drops its optimistic layer.

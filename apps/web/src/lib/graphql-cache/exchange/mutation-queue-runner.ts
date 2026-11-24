@@ -55,12 +55,13 @@ import { type DocumentNode, Kind, parse } from 'graphql';
 import { match } from 'ts-pattern';
 import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import type { CacheHost } from '../host/types';
-import type {
-  ClaimedMutation,
-  EnqueueOptimisticMutationResult,
-  MutationClaim,
-  MutationLease,
-  QueryRevalidationWire,
+import {
+  type ClaimedMutation,
+  type EnqueueOptimisticMutationResult,
+  LOCAL_COMMIT_FAILED,
+  type MutationClaim,
+  type MutationLease,
+  type QueryRevalidationWire,
 } from '../protocol';
 import { cacheSessionGeneration } from '../session-generation';
 import type { MutationQueueOwner } from './mutation-queue-owner';
@@ -1242,7 +1243,7 @@ export function createMutationQueueRunner(
             ? 'superseded'
             : 'permanently-failed';
           outcome = replacementTransactionId ? 'superseded' : 'rolled-back';
-          details = { failure: 'local', errorCode: 'LOCAL_COMMIT_FAILED' };
+          details = { failure: 'local', errorCode: LOCAL_COMMIT_FAILED };
           if (!replacementTransactionId) {
             fireAndForget(
               deps.revalidate(committed.revalidations ?? [], op),

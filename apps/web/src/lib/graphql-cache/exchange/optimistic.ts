@@ -130,7 +130,10 @@ export type OptimisticMutationOptions = {
   /** Opaque durable client correlation; never included in GraphQL variables. */
   clientMetadata?: Record<string, unknown>;
   identityBindings?: readonly IdentityBindingWire[];
-  /** Runs after durable layer installation, independently of HTTP settlement. */
+  /**
+   * Runs after durable layer installation, or as the mutation goes straight
+   * out without one, independently of HTTP settlement.
+   */
   onEnqueued?: () => void;
   /**
    * While the cache's database is away (`host.paused`), answers with a

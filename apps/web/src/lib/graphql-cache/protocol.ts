@@ -1027,6 +1027,9 @@ export type RollbackOptimisticWriteResult =
       replacementTransactionId: string;
     });
 
+/** A settlement's code when the server took the mutation and the cache could not store its answer. */
+export const LOCAL_COMMIT_FAILED = 'LOCAL_COMMIT_FAILED';
+
 /** Final settlement of a previously queued optimistic mutation. */
 export type MutationSettlement = { mutationUuid?: string } & (
   | { transactionId: string; status: 'committed' }

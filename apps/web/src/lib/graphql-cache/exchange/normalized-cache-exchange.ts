@@ -1305,6 +1305,7 @@ export function normalizedCacheExchange(
                 op,
                 new CachePausedError({ cause: error })
               );
+            notifyOptimisticMutationEnqueued(op);
             enqueueForward(op);
             return undefined;
           }
@@ -1319,6 +1320,7 @@ export function normalizedCacheExchange(
                 op,
                 new CachePausedError({ cause: error })
               );
+            notifyOptimisticMutationEnqueued(op);
             enqueueForward(op);
             return undefined;
           }
@@ -1374,6 +1376,7 @@ export function normalizedCacheExchange(
                 op,
                 new CachePausedError({ cause: fallbackError })
               );
+            notifyOptimisticMutationEnqueued(op);
             enqueueForward(op);
             return undefined;
           }

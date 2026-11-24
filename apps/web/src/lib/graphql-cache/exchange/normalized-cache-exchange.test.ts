@@ -5433,6 +5433,67 @@ describe('normalizedCacheExchange', () => {
       expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
     });
 
+    it.each([
+      { refusal: 'owner lock', errorCode: OWNER_LOCK_UNAVAILABLE_ERROR_CODE },
+      { refusal: 'plain', errorCode: undefined },
+      {
+        refusal: 'link patches and their fallback',
+        linkPatches: [
+          {
+            query:
+              'query Group { user { groupSoup { bins { items { id } } } } }',
+            operationName: 'Group',
+            variablesJson: '{}',
+            path: [
+              { field: 'user' },
+              { field: 'groupSoup' },
+              { field: 'bins' },
+            ],
+            operation: {
+              kind: 'remove' as const,
+              entityKey: 'GraphqlSoupItem:task-1',
+            },
+          },
+        ],
+      },
+    ])(
+      'acknowledges a mutation sent past a queue that refused it ($refusal)',
+      async ({ errorCode, linkPatches = [] }) => {
+        const acknowledge = vi.fn();
+        const warn = vi
+          .spyOn(console, 'warn')
+          .mockImplementation(() => undefined);
+        const base = makeMutationOp(1, optimistic);
+        host.enqueueOptimisticMutation = vi
+          .fn()
+          .mockRejectedValue(
+            Object.assign(new Error('refused'), errorCode && { errorCode })
+          );
+        const { ops, forwarded, results } = controlledQueryHarness(host);
+        ops.next(
+          makeOperation(base.kind, base, {
+            ...base.context,
+            normalizedCacheOptimistic: {
+              uuid: crypto.randomUUID(),
+              optimisticResponse: optimistic,
+              linkPatches,
+              revalidations: [],
+            },
+            normalizedCacheOptimisticEnqueued: acknowledge,
+          })
+        );
+        try {
+          await tick();
+          // Sent, and not yet answered.
+          expect(forwarded).toHaveLength(1);
+          expect(results).toEqual([]);
+          expect(acknowledge).toHaveBeenCalledOnce();
+        } finally {
+          warn.mockRestore();
+        }
+      }
+    );
+
     it('acknowledges cache installation independently of the network result', async () => {
       const acknowledge = vi.fn();
       const enqueue = host.enqueueOptimisticMutation.bind(host);

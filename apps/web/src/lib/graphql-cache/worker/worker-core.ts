@@ -34,6 +34,7 @@ import type {
 import {
   isTypedSearch,
   isTypedSearchRowRead,
+  LOCAL_COMMIT_FAILED,
   parseCacheRevision,
   parseStorageGeneration,
 } from '../protocol';
@@ -1314,6 +1315,9 @@ export class CacheWorkerCore {
                     mutationUuid: result.mutationUuid,
                     status: 'permanently-failed',
                     error: result.error,
+                    // The server took the mutation: only this device could
+                    // not store its answer.
+                    errorCode: LOCAL_COMMIT_FAILED,
                   }
                 : {
                     transactionId: request.transactionId,
