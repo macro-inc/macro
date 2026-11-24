@@ -144,7 +144,6 @@ export function QuickLengths(props: {
                 label={t('timeTracking.quickLength', {
                   length: formatLength(minutes),
                 })}
-                hint={t('timeTracking.today')}
                 onClick={() => props.onLog(minutes)}
                 disabled={props.disabled}
               />

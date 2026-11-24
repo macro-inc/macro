@@ -41,7 +41,6 @@ export default {
   deleteFailed: 'Could not delete the entry. Try again.',
   notAllowed: 'You need edit access to log time on this task',
   startTimer: 'Start timer',
-  startTimerHint: 'Now',
   stopTimer: 'Stop and log',
   stopTimerCount: 'Stop the timer at {{count}}',
   openTask: 'Open task',
