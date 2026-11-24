@@ -483,15 +483,28 @@ export function predictedRootWithout(
   // The server reads the latest live reply. It is known while the preview
   // holds every reply, or when the deleted one was not the latest; otherwise
   // it comes with the server's root, as does the reply after the preview in
-  // a longer thread.
+  // a longer thread. A queued send sits last in the preview whatever its
+  // time, so the latest is the newest time there, not the last reply's.
   let { latestReplyAt } = root.thread;
   if (replyCount === 0) latestReplyAt = null;
   else if (preview.length === replyCount)
-    latestReplyAt = preview[preview.length - 1]?.createdAt ?? latestReplyAt;
+    latestReplyAt = newestCreatedAt(preview) ?? latestReplyAt;
   return {
     ...root,
     thread: { ...root.thread, preview, replyCount, latestReplyAt },
   };
+}
+
+/** The newest creation time among `messages`. */
+function newestCreatedAt(
+  messages: readonly Pick<ChannelMessageFieldsFragment, 'createdAt'>[]
+): string | undefined {
+  let newest: string | undefined;
+  for (const { createdAt } of messages) {
+    if (newest === undefined || Date.parse(createdAt) > Date.parse(newest))
+      newest = createdAt;
+  }
+  return newest;
 }
 
 interface Write<TData, TVariables extends AnyVariables> {
@@ -570,12 +583,15 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   function rootWithoutReply(
     deletion: Pick<ChannelDelete, 'channelId' | 'id'>
   ): Promise<ChannelMessageFieldsFragment | undefined> {
-    const read = Effect.promise(async () => {
+    // Interrupted once the budget runs out: a reply read that answers later
+    // asks nothing more of the device.
+    const read = Effect.promise(async (signal) => {
       const reply = await readStoredMessage(
         deps.host,
         deletion.channelId,
         deletion.id
       );
+      if (signal.aborted) return undefined;
       if (!reply?.threadId || reply.deletedAt !== null) return undefined;
       const root = await readMessage(reply.threadId);
       return root && predictedRootWithout(root, reply);

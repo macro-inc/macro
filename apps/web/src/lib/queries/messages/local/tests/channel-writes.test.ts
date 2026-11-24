@@ -294,6 +294,69 @@ describe('createChannelWrites', () => {
     await removing;
   });
 
+  it('reads no root once a delete stopped waiting for its reply', async () => {
+    vi.useFakeTimers();
+    const rootId = graphqlMessage(2).id;
+    const reply = graphqlMessage(3, { threadId: rootId });
+    const { writes, calls, host } = setup(
+      () => ({ disposition: { kind: 'committed' } }),
+      [graphqlMessage(2), reply]
+    );
+    const read = host.readRecordsByKeys;
+    const late = Promise.withResolvers<void>();
+    const asked: unknown[] = [];
+    host.readRecordsByKeys = async (args) => {
+      asked.push(args.keys);
+      await late.promise;
+      return read(args);
+    };
+
+    const removing = writes
+      .remove({ channelId: CHANNEL_ID, id: reply.id, nonce: 'd' })
+      .catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(calls).toHaveLength(1);
+    // The reply's read answers after the delete was queued without a root.
+    late.resolve();
+    await removing;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(asked).toHaveLength(1);
+  });
+
+  it('gives the root its newest reply’s time when a queued reply sits last with an older one', async () => {
+    const rootId = graphqlMessage(2).id;
+    const replies = [3, 4].map((n) => graphqlMessage(n, { threadId: rootId }));
+    // Sent from a clock behind the server's: last in the preview, older in time.
+    const queued = graphqlMessage(9, {
+      threadId: rootId,
+      createdAt: replies[0]!.createdAt,
+    });
+    const root = graphqlMessage(2, {
+      thread: {
+        ...graphqlMessage(2).thread!,
+        replyCount: 3,
+        latestReplyAt: replies[1]!.createdAt,
+        preview: [...replies, queued],
+      },
+    });
+    const { writes, calls } = setup(
+      () => ({ disposition: { kind: 'committed' } }),
+      [root, ...replies, queued]
+    );
+    await writes
+      .remove({ channelId: CHANNEL_ID, id: replies[0]!.id, nonce: 'd' })
+      .catch(() => undefined);
+    expect(
+      (
+        calls[0]!.context.optimisticResponse as {
+          deleteChannelMessage: {
+            root?: { thread: { latestReplyAt: string | null } };
+          };
+        }
+      ).deleteChannelMessage.root?.thread.latestReplyAt
+    ).toBe(replies[1]!.createdAt);
+  });
+
   it('shows a waiting reply in its thread, not at the live end', async () => {
     const root = graphqlMessage(1);
     const reply = graphqlMessage(8, { threadId: root.id });
