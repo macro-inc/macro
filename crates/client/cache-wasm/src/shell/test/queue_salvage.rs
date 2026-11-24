@@ -246,6 +246,27 @@ async fn a_queue_that_keeps_ending_the_engine_is_given_up() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn a_queue_lost_behind_an_older_copy_is_never_called_kept() {
+    const SCOPE: &str = "cache-wasm-salvage-unreadable";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let mut older = read_side_file(SCOPE).await;
+    older.extend(SalvageFile::read_attempt().repeat(3));
+    for dies in [false, true] {
+        // This database's own queue is never read.
+        closed_with_queue(SCOPE).await;
+        write_side_file(SCOPE, &older).await;
+        if dies {
+            wipe_and_die(SCOPE).await;
+        }
+        let (engine, _, queue) = open(SCOPE, !dies).await;
+        assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+        assert_kept(&engine, SCOPE).await;
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
 async fn deliberate_wipes_take_the_copy_too() {
     const SCOPE: &str = "cache-wasm-salvage-deliberate";
     closed_with_queue(SCOPE).await;

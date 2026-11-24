@@ -133,6 +133,20 @@ struct ReadBeforeWipe {
     report: QueueReport,
 }
 
+impl ReadBeforeWipe {
+    /// Nothing of the database could be read. A queue the side file holds from
+    /// before is not all there was, and says so to whoever imports it.
+    fn unreadable(mut self, file: SalvageFile) -> Self {
+        self.report.outcome = QueueOutcome::Unreadable;
+        let pending = file.into_queue();
+        self.frame = pending
+            .clone()
+            .map(SalvagedQueue::after_loss)
+            .filter(|queue| Some(queue) != pending.as_ref());
+        self
+    }
+}
+
 async fn read_before_wipe(
     scope: &str,
     owner: OpfsOwner,
@@ -145,8 +159,7 @@ async fn read_before_wipe(
         report: QueueReport::default(),
     };
     if file.reads() >= MAX_ATTEMPTS {
-        read.report.outcome = QueueOutcome::Unreadable;
-        return Ok((owner, read));
+        return Ok((owner, read.unreadable(file)));
     }
     let attempt = SalvageFile::read_attempt();
     let start = file.end();
@@ -175,8 +188,7 @@ async fn read_before_wipe(
                 owner.release().await.map_err(err_js)?;
                 return Err(error);
             }
-            read.report.outcome = QueueOutcome::Unreadable;
-            return Ok((owner, read));
+            return Ok((owner, read.unreadable(file)));
         }
     };
     let connected = match session.connect() {
@@ -238,12 +250,18 @@ fn report_of(found: &QueueRead) -> QueueReport {
 }
 
 impl Crossing {
-    /// What a later wipe found, or what this one did when that is nothing.
-    pub(super) fn or(self, later: Self) -> Self {
-        if later.report == QueueReport::default() && later.unwritten.is_none() {
-            self
-        } else {
-            later
+    /// What this wipe and a later one found.
+    pub(super) fn then(self, later: Self) -> Self {
+        Self {
+            unwritten: later.unwritten.or(self.unwritten),
+            report: QueueReport {
+                outcome: match later.report.outcome {
+                    QueueOutcome::None => self.report.outcome,
+                    outcome => outcome,
+                },
+                kept: 0,
+                dropped: self.report.dropped + later.report.dropped,
+            },
         }
     }
 
@@ -285,7 +303,8 @@ impl Crossing {
             .map_err(storage_error)?;
         report.kept = imported.kept;
         report.dropped += imported.dropped;
-        report.outcome = match (imported.complete, imported.kept, imported.dropped) {
+        let whole = imported.complete && report.outcome == QueueOutcome::None;
+        report.outcome = match (whole, imported.kept, imported.dropped) {
             (true, 1.., _) => QueueOutcome::Kept,
             (false, 1.., _) => QueueOutcome::Partial,
             (_, 0, 1..) => QueueOutcome::Abandoned,

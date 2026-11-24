@@ -1110,7 +1110,7 @@ async fn open_or_wipe(
                     // Reading the queue opens the files again, so the recovered
                     // queue never depends on what this open already did.
                     let (owner, read) = wipe_keeping_queue(scope, owner).await?;
-                    (owner, recovery_outcome(reason), crossing.or(read))
+                    (owner, recovery_outcome(reason), crossing.then(read))
                 }
             }
         }

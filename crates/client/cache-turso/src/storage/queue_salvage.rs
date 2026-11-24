@@ -139,6 +139,14 @@ impl SalvagedQueue {
     }
 
     /// Moves every write to an ID above `sequence`, in the same order. A moved
+    /// This queue, once something queued after it was lost unread.
+    pub fn after_loss(self) -> Self {
+        Self {
+            complete: false,
+            ..self
+        }
+    }
+
     /// write is nobody's any more, so its lease goes.
     fn renumbered_above(mut self, sequence: i64) -> Result<Self, TursoStorageError> {
         let mut next = sequence.max(self.sequence);
