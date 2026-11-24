@@ -178,6 +178,7 @@ impl MailboxCommandRepository for PgMailboxSync {
         // New local edits may be queued while this organization call is in
         // flight. They inherit the same unchanged provider content baseline.
         sqlx::query!(r#"UPDATE email_mailbox_drafts SET base_version=$4,
+            base_content=CASE WHEN base_content->>'version'=$3 THEN jsonb_set(base_content,'{version}',to_jsonb($4::text)) ELSE base_content END,
             checkpoint=CASE WHEN checkpoint->'draft'->>'version'=$3 THEN jsonb_set(checkpoint,'{draft,version}',to_jsonb($4::text)) ELSE checkpoint END
             WHERE message_id=$1 AND link_id=$2 AND base_version=$3 AND NOT delete_requested
                 AND (lease_until IS NULL OR lease_until<now())"#,target.message_id,lease.mailbox.link_id,previous,current).execute(&mut *tx).await.map_err(db_error)?;

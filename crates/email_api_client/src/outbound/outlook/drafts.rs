@@ -83,6 +83,7 @@ pub(super) fn content_of(content: &serde_json::Map<String, Value>) -> Option<Dra
             .iter()
             .map(|(name, value)| ((*name).to_owned(), digest(value)))
             .collect(),
+        version: None,
     })
 }
 

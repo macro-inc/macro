@@ -121,9 +121,14 @@ impl DraftChange {
         if prior_version.is_some() && observed.version.as_deref() == prior_version {
             return None;
         }
-        let Some(prior) = prior else {
-            return Some(Self::Unknown);
-        };
+        match prior.filter(|prior| prior.version.as_deref() == prior_version) {
+            Some(prior) => Self::of_content(prior, observed),
+            None => Some(Self::Unknown),
+        }
+    }
+
+    /// What `observed` changed since `prior`, whatever its version.
+    pub fn of_content(prior: &DraftContent, observed: &ProviderDraft) -> Option<Self> {
         if observed.content_fingerprint.as_deref() == Some(prior.fingerprint.as_str()) {
             return None;
         }

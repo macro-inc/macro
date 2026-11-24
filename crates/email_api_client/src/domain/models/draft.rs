@@ -51,6 +51,10 @@ pub struct DraftContent {
     /// Digest of each of those fields.
     #[serde(default)]
     pub fields: BTreeMap<String, String>,
+    /// The version the draft had when it held this content. Content recorded
+    /// at another version than the one it is compared from is no baseline.
+    #[serde(default)]
+    pub version: Option<String>,
 }
 
 impl ProviderDraft {
@@ -60,6 +64,7 @@ impl ProviderDraft {
         Some(DraftContent {
             fingerprint: self.content_fingerprint.clone()?,
             fields: self.field_digests.clone(),
+            version: self.version.clone(),
         })
     }
 }

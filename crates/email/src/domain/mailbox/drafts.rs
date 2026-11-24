@@ -345,8 +345,11 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             return Ok(());
         }
         // Attachment writes move the version, so only the content counts here.
-        let written = draft.content();
-        if let Some(change) = DraftChange::between(None, written.as_ref(), &observed) {
+        let change = match draft.content() {
+            Some(written) => DraftChange::of_content(&written, &observed),
+            None => Some(DraftChange::Unknown),
+        };
+        if let Some(change) = change {
             return Err(MailboxError::DraftChanged(change));
         }
         if lease.delete_requested {

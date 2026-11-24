@@ -11,7 +11,7 @@ use super::{
     wire,
 };
 use crate::domain::models::{
-    AccessToken, Attention, EmailApiError, FolderRole, MailFolder, MailFolderCatalog,
+    AccessToken, Attention, DraftContent, EmailApiError, FolderRole, MailFolder, MailFolderCatalog,
     MailboxMessage, MailboxState, MessageAction, MessageWithCalendarParts, MessageWriteReceipt,
     ProviderId, StreamToken, SubmissionOutcome,
 };
@@ -214,7 +214,12 @@ impl MailboxContentReader for OutlookApiClientRepository {
         };
         let message: wire::Message = decode(body.as_ref())?;
         let draft_content = match message.is_draft {
-            Some(true) => super::drafts::content_of(&decode(body.as_ref())?),
+            Some(true) => {
+                super::drafts::content_of(&decode(body.as_ref())?).map(|content| DraftContent {
+                    version: message.etag.clone(),
+                    ..content
+                })
+            }
             _ => None,
         };
         let mut attachments = Vec::new();

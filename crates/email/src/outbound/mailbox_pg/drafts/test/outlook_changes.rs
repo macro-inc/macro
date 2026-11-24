@@ -440,11 +440,12 @@ async fn a_draft_stamped_before_every_read_still_sends(db: PgPool) {
 async fn a_draft_stamped_again_after_sync_read_the_first_stamp_still_sends(db: PgPool) {
     let mut world = World::new(db).await;
     world.work().await;
-    let content = world.base_content().await;
-    assert!(content.is_some());
+    let content = world.base_content().await.unwrap();
     world.stamp();
     world.read_back().await;
-    assert_eq!(world.base_content().await, content);
+    let adopted = world.base_content().await.unwrap();
+    assert_eq!(adopted["fingerprint"], content["fingerprint"]);
+    assert_ne!(adopted["version"], content["version"]);
     world.stamp();
     world.save("Ready to go", true).await;
     world.work().await;

@@ -858,9 +858,11 @@ async fn draft_organization_waits_for_binding_and_rebases_queued_edits(db: PgPoo
     sync.record_write_version(&command, &target, "v2", "v3")
         .await
         .unwrap();
-    let retained=sqlx::query!("SELECT base_version,checkpoint->'draft'->>'version' AS checkpoint_version FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
+    let retained=sqlx::query!("SELECT base_version,checkpoint->'draft'->>'version' AS checkpoint_version,base_content->>'version' AS content_version FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
     assert_eq!(retained.base_version.as_deref(), Some("v3"));
     assert_eq!(retained.checkpoint_version.as_deref(), Some("v3"));
+    // Macro's own move keeps the content, so its baseline moves with it.
+    assert_eq!(retained.content_version.as_deref(), Some("v3"));
     // A local content edit accepted during organization keeps the verified
     // provider baseline, even before the ordinary mailbox read catches up.
     let mut edited = input.clone();
@@ -886,8 +888,9 @@ async fn draft_organization_waits_for_binding_and_rebases_queued_edits(db: PgPoo
             .unwrap()
             .is_none()
     );
-    let retained=sqlx::query!("SELECT base_version,desired_content->>'subject' AS subject FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
+    let retained=sqlx::query!("SELECT base_version,desired_content->>'subject' AS subject,base_content->>'version' AS content_version FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
     assert_eq!(retained.base_version.as_deref(), Some("v4"));
+    assert_eq!(retained.content_version.as_deref(), Some("v4"));
     assert_eq!(retained.subject.as_deref(), Some("Edited while starring"));
     let snapshot = email_api_client::domain::models::MailboxOrganization {
         is_sent: false,

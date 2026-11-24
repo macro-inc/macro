@@ -96,6 +96,7 @@ fn harness(stage: Option<DraftStage>) -> Harness {
             base_content: Some(DraftContent {
                 fingerprint: "unchanged-body".into(),
                 fields: [("body".to_owned(), "unchanged-body".to_owned())].into(),
+                version: Some("v1".into()),
             }),
             delete_requested: false,
             checkpoint,
@@ -823,6 +824,7 @@ fn a_change_names_the_fields_that_differ_and_nothing_else() {
             ("body".to_owned(), "original".to_owned()),
         ]
         .into(),
+        version: Some("v1".into()),
     };
     let between = |fingerprint: Option<&str>, observed: &ProviderDraft| {
         DraftChange::between(Some("v1"), fingerprint.map(prior).as_ref(), observed)
@@ -833,6 +835,17 @@ fn a_change_names_the_fields_that_differ_and_nothing_else() {
     );
     assert_eq!(between(None, &observed), Some(DraftChange::Unknown));
     assert_eq!(between(Some("edited"), &observed), None);
+
+    // Content recorded at another version is no baseline, however it compares.
+    let older = DraftContent {
+        version: Some("v0".into()),
+        ..prior("edited")
+    };
+    assert_eq!(
+        DraftChange::between(Some("v1"), Some(&older), &observed),
+        Some(DraftChange::Unknown)
+    );
+
     observed.version = Some("v1".into());
     assert_eq!(between(None, &observed), None);
 }

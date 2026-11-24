@@ -533,9 +533,13 @@ tools — hexagonal, heavily feature-gated.
   is that earlier copy once a new revision clears the checkpoint, always the
   content of `base_version`: `settle_draft` writes it from the draft read,
   `ingest` from the sync read (`MailboxMessage::draft_content`, the same digests
-  of the same fields), and a resolution clears it. Without one, a moved version
-  conflicts. The fingerprint leaves attachments out, so a step that acts on a
-  moved version checks the approved files itself (`attached`). A refused PATCH
+  of the same fields), and a resolution clears it. It records the version it
+  was read at and counts only while that equals `base_version`, so a writer
+  that moves one without the other (a process from before it, during a deploy
+  or after a rollback) leaves no baseline; Macro's own move
+  (`record_write_version`) keeps the content and moves both. Without one, a
+  moved version conflicts. The fingerprint leaves attachments out, so a step
+  that acts on a moved version checks the approved files itself (`attached`). A refused PATCH
   (412) is written again at most `UPDATE_ATTEMPTS` times, after a read that
   shows no edit.
 - Every stopped draft logs `email_send.draft_failed` with its link, message,
