@@ -43,13 +43,14 @@ export function isCrmPolicy(value: unknown): value is string {
 /** Network-only sessions still retire their visible and persisted query results. */
 function memoryAuthority(
   account?: string,
-  generation: string = crypto.randomUUID()
+  from?: CacheAuthority
 ): CacheAuthorityHost {
   let state: CacheAuthority = {
     identity: 'network-only',
     account: account ?? null,
-    generation,
-    policy: null,
+    generation: from?.generation ?? crypto.randomUUID(),
+    // Still compared: another policy has to end the generation.
+    policy: from?.policy ?? null,
     ready: false,
   };
   const listeners = new Set<(state: CacheAuthority) => void>();
@@ -336,14 +337,14 @@ export function createCrmAccessAuthority(options: Options) {
       return initialization;
     },
     refresh,
-    /** Without a host, `generation` is the one a paused host still has, so that
+    /** Without a host, `paused` is what a paused host still has, so that
      * neither losing nor regaining it counts as a new session. */
-    setHost(next: CacheAuthorityHost | undefined, generation?: string) {
+    setHost(next: CacheAuthorityHost | undefined, paused?: CacheAuthority) {
       if (next === shared) return;
       shared = next;
       if (earlyAccess) setState('pending');
       earlyAccess = undefined;
-      owner = next ?? memoryAuthority(account, generation);
+      owner = next ?? memoryAuthority(account, paused);
       session = Symbol();
       pending = undefined;
       initialization = undefined;
@@ -386,7 +387,7 @@ export function createCrmAccessAuthority(options: Options) {
       if (!shared) {
         owner = memoryAuthority(
           account,
-          firstAccount ? owner.snapshot()?.generation : undefined
+          firstAccount ? owner.snapshot() : undefined
         );
         subscribe();
       }

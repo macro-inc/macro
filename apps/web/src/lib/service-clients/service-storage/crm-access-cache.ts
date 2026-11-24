@@ -264,7 +264,7 @@ export function installCrmCacheHost(next: CacheHost | undefined) {
   host = next;
   crmAccessAuthority.setHost(
     next?.disabled ? undefined : next?.authority,
-    next?.paused ? crmAccessAuthority.snapshot()?.generation : undefined
+    next?.paused ? crmAccessAuthority.snapshot() : undefined
   );
 }
 
