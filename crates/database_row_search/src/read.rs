@@ -22,7 +22,8 @@ pub struct RowSearchText {
     /// searchable type.
     pub title: String,
     /// Plain text of the row's other searchable cells: text (mentions as
-    /// their visible label), links, and select and tag option labels.
+    /// their visible label), links (without query string or fragment), and
+    /// select and tag option labels.
     pub cell_text: Vec<String>,
     /// The table's version when this was read.
     pub table_version: i64,

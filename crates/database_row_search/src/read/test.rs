@@ -46,6 +46,8 @@ async fn reads_only_searchable_text(pool: PgPool) {
                 table_id: uuid!("20000000-0000-7000-8000-000000000001"),
                 database_id: uuid!("10000000-0000-7000-8000-000000000001"),
                 title: String::new(),
+                // Its Stage cell picks the tag set's "urgent", an option of
+                // another definition, which reads as nothing here.
                 cell_text: Vec::new(),
                 table_version: 7,
                 updated_at: Utc.with_ymd_and_hms(2026, 11, 21, 10, 0, 0).unwrap(),

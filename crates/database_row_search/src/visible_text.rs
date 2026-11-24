@@ -15,7 +15,7 @@ use mention_utils::parse::{
 pub(crate) enum SearchableKind {
     /// Markdown text; mentions in it read as their visible label.
     Text,
-    /// Links, as written.
+    /// Links, without query string or fragment.
     Link,
     /// Select, number select and tag cells, as their options' labels.
     Options,
@@ -93,7 +93,7 @@ fn cell_strings(cell: &CellInput) -> Vec<String> {
                 links
                     .iter()
                     .filter_map(serde_json::Value::as_str)
-                    .map(str::to_owned)
+                    .map(searchable_link)
                     .collect()
             })
             .unwrap_or_default(),
@@ -105,6 +105,12 @@ fn cell_strings(cell: &CellInput) -> Vec<String> {
         .map(|string| string.trim().to_owned())
         .filter(|string| !string.is_empty())
         .collect()
+}
+
+/// A link without its query string or fragment, which can carry tokens and
+/// signatures that have no business in a second store.
+pub(crate) fn searchable_link(link: &str) -> String {
+    link.split(['?', '#']).next().unwrap_or_default().to_owned()
 }
 
 /// Text cell markdown as a reader sees it: every mention reduced to its

@@ -41,3 +41,12 @@ fn a_title_column_that_is_not_searchable_leaves_the_title_empty() {
         }
     );
 }
+
+#[test]
+fn links_lose_their_query_string_and_fragment() {
+    assert_eq!(
+        searchable_link("https://files.example.com/report.pdf?X-Amz-Signature=abc#page=2"),
+        "https://files.example.com/report.pdf"
+    );
+    assert_eq!(searchable_link("example.com/launch"), "example.com/launch");
+}
