@@ -303,6 +303,7 @@ where
                 action: action.clone(),
                 prompt: prompt.to_owned(),
                 context: None,
+                withhold_content: false,
             })
             .await
         {
@@ -914,34 +915,47 @@ where
     // non-billable (`SessionBilling::NonBillable`), so their usage is
     // recorded, never billed. Suggestions sessions write through `macro.suggestions.*`;
     // routines sessions through `macro.routines.suggest`, reading the newest
-    // mail through email_service, which reads it from the provider.
+    // mail through email_service, which reads it from the provider. With
+    // `routine-suggestions-find-work` on, onboarding first finds the work in
+    // the person's month of mail in one model call, recorded with the
+    // first drafting session's usage.
     let generations = Arc::new(PgGenerationRepo::new(db.clone()));
     let plans: Arc<dyn suggestion_generation::domain::ports::Plans> = Arc::new(EntitlementPlans(
         ai_billing::composition::pg_entitlement_source(db.clone()),
     ));
-    let suggestions = Arc::new(RoutineSuggestionService::new(
-        Arc::clone(&service),
-        suggestion_repo,
-        Arc::new(routine_suggestions::HarnessSuggestionSources {
-            email: Arc::new(EmailServiceClient::new(
-                config.internal_api_key.to_string(),
-                EmailServiceUrl::new()?.to_string(),
-            )),
-            apps: crate::routine_sessions::RoutineConnectedApps::new(connectors),
-            teams: entity_access::outbound::PgAccessRepository::new(db.clone()),
-            crm: crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
-        }),
-        suggestion_code,
-        request_sessions,
-        generations.clone(),
-        generations.clone(),
-        routine_flags.clone(),
-        RoutineBriefing {
-            guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
-            agent_model: chat::domain::models::FREE_MODEL.to_owned(),
-            conditions: conditions_enabled,
-        },
-    ));
+    let suggestions = Arc::new(
+        RoutineSuggestionService::new(
+            Arc::clone(&service),
+            suggestion_repo,
+            Arc::new(routine_suggestions::HarnessSuggestionSources {
+                email: Arc::new(EmailServiceClient::new(
+                    config.internal_api_key.to_string(),
+                    EmailServiceUrl::new()?.to_string(),
+                )),
+                apps: crate::routine_sessions::RoutineConnectedApps::new(connectors),
+                teams: entity_access::outbound::PgAccessRepository::new(db.clone()),
+                crm: crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
+            }),
+            suggestion_code,
+            request_sessions,
+            generations.clone(),
+            generations.clone(),
+            routine_flags.clone(),
+            RoutineBriefing {
+                guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+                agent_model: chat::domain::models::FREE_MODEL.to_owned(),
+                conditions: conditions_enabled,
+            },
+        )
+        .with_work_model(Arc::new(routine_suggestions::RouterWorkModel {
+            recorder: ai_billing::composition::pg_settling_recorder(
+                db.clone(),
+                config.enable_ai_usage_enforcement,
+                config.ai_pricing(),
+                config.settlement_route()?,
+            ),
+        })),
+    );
     let feed_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
     let suggestion_access = Arc::new(EntitySuggestionAccess {
         access: access.as_ref().clone(),

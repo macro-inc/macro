@@ -59,6 +59,15 @@ pub struct ThreadListPage {
     pub next_page_token: Option<String>,
 }
 
+/// One provider page of message identifiers.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MessageIdPage {
+    /// Message identifiers in this page, newest first.
+    pub ids: Vec<String>,
+    /// Opaque token for the next page, or `None` when this is the last page.
+    pub next_page_token: Option<String>,
+}
+
 /// One provider page of contacts.
 #[derive(Debug, Clone)]
 pub struct ContactPage {

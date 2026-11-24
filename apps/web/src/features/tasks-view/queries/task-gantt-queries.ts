@@ -28,7 +28,9 @@ export function createTaskGanttQueries(options: {
 }) {
   const grouping = () => {
     const group = options.grouping();
-    return group === 'none' || group === 'date' ? undefined : group;
+    return group === 'none' || group === 'date' || group === 'start_date'
+      ? undefined
+      : group;
   };
   const tasks = createMemo(() => {
     const result = new Map<string, TaskEntityWithProperties>();
@@ -79,8 +81,10 @@ export function createTaskGanttQueries(options: {
     const group = grouping();
     const property = groupProperty();
     const task = tasks().get(move.id);
+    // A deadline move needs a day picked for its column, which only the board offers.
     if (
       !group ||
+      group === 'due_date' ||
       !property ||
       !task ||
       !canDrag(move.id) ||

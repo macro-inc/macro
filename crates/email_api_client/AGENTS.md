@@ -102,6 +102,9 @@ Outlook (Microsoft Graph) outbound adapters.
   the link for reauthorization. Contact listings use `retry_with_fresh_token`
   to keep their WARN-level logging. Writes use `call_with_token` and do not
   retry.
+- Outlook's `recent_inbox_messages` reads the requested well-known folder,
+  `inbox` or `sentitems`, newest first: the inbox by `receivedDateTime`, sent
+  items by `sentDateTime`, which is also what a window read filters on.
 - `SendRequest::build_mime` (Gmail sends) turns an inline `text/calendar`
   attachment with no Content-ID into the message's calendar body, the last
   alternative after the text and HTML, which is how an answerable invitation

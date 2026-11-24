@@ -11,7 +11,9 @@ The main Tasks list (List layout, not project or CRM task lists) starts with the
 The single-row desktop header contains the title, `Filter`, a separate
 `Task layout` single-select icon group for `List`, `Board`, and enabled `Gantt`,
 `Sort`, `Group`, `New`, and an expandable Search icon
-(`Ctrl+F` opens it). The active-filter count sits beside the filter icon inside
+(`Ctrl+F` opens it). A pane too narrow for those actions hides the layout
+group, then Sort and Group, before New or Search would leave the pane; each
+comes back once there is room (`s` sorts only while Sort shows). The active-filter count sits beside the filter icon inside
 its button, without overlapping the icon or the group border;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 Project, and Tags submenus. They use the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
@@ -345,7 +347,7 @@ empty. Cancel leaves the previous filter unchanged. Status remains independent:
 select Completed or Canceled explicitly to include closed tasks in a date filter.
 The mobile controls use the same options and date-range dialog in the sliders drawer.
 
-**Group → Due date** puts No due date first, then uses non-overlapping viewer-local calendar buckets:
+**Group → Due date** uses non-overlapping viewer-local calendar buckets, with No due date last:
 Overdue is before today's midnight; Today and Tomorrow cover those entire days;
 Next 7 days covers D+2 through D+7; Later starts at D+8; No due date includes
 missing and cleared dates. Relative filters and groups refresh at local midnight,
@@ -364,6 +366,22 @@ Later dates, completed tasks, and canceled tasks have neutral due dates. Urgency
 refreshes at local midnight, on timezone changes, and app resume.
 Date selections persist with the navigation entry and round-trip through
 `tasks.dueDate`, `tasks.dueStart`, and `tasks.dueEnd` URL parameters.
+
+With `enable-task-start-date`, lists sort, filter, and group by Start date the
+same way: **Starts soonest** and **Starts furthest away** sort (missing starts
+last, never reversed); **Filter → Start date** offers Started, Today, Tomorrow,
+Next 7 days, Later, Has start date, No start date, and Custom range, and combines
+with the due-date filter; **Group → Start date** uses the same buckets, Started
+being before today's midnight and No start date last. Both No due date and No
+start date headers show the slashed calendar. The selections round-trip
+through `tasks.startDate`, `tasks.startFrom`, and `tasks.startTo`, the entry
+state, and saved task views (`startDate` in the definition). There is no Start
+date column: the Due date column shows the range. Boards show Status columns
+when grouped by Start date, as for the other list-only groupings, and the Gantt
+does not move bars between Start date groups. With the flag off, the Start date
+choices are hidden, and once the flag is known off (not while it loads) a stored
+start grouping runs as the tab's default grouping, a start sort as Updated, and
+a start filter not at all; the URL and saved view keep what they hold.
 
 ### Start dates
 
@@ -434,6 +452,34 @@ only an entry's author changes or deletes it. Time logged never shows as a
 generic property row or details row, and the Add property picker never offers
 it; with the flag off nothing about time shows. Typed entries save at once and wait offline in the durable
 queue; the entry id is the replay key.
+
+### Timer
+
+One timer per person, stored on the server. Start timer is in a desktop task's
+header (beside Dispatch Agent, for people who can edit), the first control of
+the Time popover and sheet, and a row in the phone title menu; while the task
+is timed each of them shows the live count and stops it. The running timer
+shows in the desktop rail (a card with Stop and log, Open task, Discard) and
+above the phone dock (`timer` float region; the name opens the task, the square
+stops it), on every screen, and its count shows beside the task on its row,
+board card and pill. Stopping saves an entry and toasts "Logged 42m on …" with
+Edit; starting on another task stops and saves the first and toasts what it
+saved with Undo (discard the new timer, restart the first from its original
+start, then delete the entry it saved; if that delete fails, the restarted
+timer is discarded so the entry stays the one record). A timer past eight
+hours is refused on stop:
+the dialog sets when you stopped, logs all of it (up to 24 hours) or discards
+it. Timer changes are refused offline, and one that gets no answer (the
+request failed, so it may still have landed) re-reads the running timer before
+the next press; the change is never resent. When the server shows it landed,
+the app says nothing (no failure, and no saved-entry toast or Undo, since the
+reply that held them is lost). Other sessions of the same person
+re-read on the gateway's `time_tracking_changed`, and every session re-reads
+when its live connection comes back.
+
+To test the over-limit dialog, start a timer through the API with `startedAt`
+nine hours back (the start accepts any time in the last 24 hours), then stop it
+in the app.
 
 Verify on a local stack at desktop 1440 and phone 390 with touch, as an editor
 and a view-only teammate (a task shared with the team at view level, its edit

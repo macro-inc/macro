@@ -7,12 +7,15 @@ import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { EntryForm } from '../components/entry-form';
 import { LogTimeInput, QuickLengths } from '../components/log-time-input';
 import { TimePill } from '../components/time-pill';
+import { TimerControl } from '../components/timer-control';
+import { useTimeTracking } from '../context/time-tracking-context';
 import { localDay } from '../core/entry-days';
 import type { TimeEntryValues } from '../core/entry-values';
 import { createTaskTime } from '../primitives/create-task-time';
 import { EntriesSection } from './shared/entries-section';
 import { reportWrite } from './shared/report-write';
 import type { TaskTimeViewProps } from './shared/task-time-props';
+import { createTimerActions } from './shared/timer-actions';
 
 type Mode =
   | { kind: 'list' }
@@ -28,6 +31,10 @@ export function TaskTimeDesktop(props: TaskTimeViewProps): JSX.Element {
   const [opened, setOpened] = createSignal(false);
   const time = createTaskTime(() => (opened() ? props.taskId : undefined));
   const today = () => localDay(new Date());
+  const capabilities = useTimeTracking();
+  const timer = capabilities.runningTimer;
+  const timerActions = createTimerActions(capabilities);
+  const timingThis = () => timer.timer()?.taskId === props.taskId;
   let anchor: HTMLButtonElement | undefined;
 
   const log = (values: TimeEntryValues) =>
@@ -139,6 +146,19 @@ export function TaskTimeDesktop(props: TaskTimeViewProps): JSX.Element {
                     today={today()}
                     onLog={logLength}
                     onCustom={(minutes) => setMode({ kind: 'new', minutes })}
+                  />
+                  <TimerControl
+                    variant="row"
+                    running={timingThis()}
+                    seconds={timer.seconds()}
+                    disabled={timer.busy() || timer.offline()}
+                    disabledReason={
+                      timer.offline()
+                        ? t('timeTracking.timerOffline')
+                        : undefined
+                    }
+                    onStart={() => timerActions.start(props.taskId)}
+                    onStop={timerActions.stop}
                   />
                   <QuickLengths
                     onLog={(minutes) => logLength(minutes, today())}

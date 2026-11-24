@@ -72,7 +72,13 @@ import {
   type SetStoreFunction,
   type Store,
 } from 'solid-js/store';
-import { DEFAULT_EMAIL_FOCUS_SORT, DEFAULT_EMAIL_TAB } from './constants';
+import {
+  canSearchEmailTab,
+  DEFAULT_EMAIL_FOCUS_SORT,
+  DEFAULT_EMAIL_TAB,
+  type EmailShownView,
+  isEmailInboxTab,
+} from './constants';
 import {
   emailDetailSearch,
   emailTabSearch,
@@ -104,6 +110,13 @@ import {
   type EmailDataSourceItem,
   useEmailDataSource,
 } from './queries/use-email-query';
+import {
+  emailSearchScopeForTab,
+  emailSearchScopeTab,
+  formatEmailSearch,
+  type ParsedEmailSearch,
+  parseEmailSearch,
+} from './search/email-search-scope';
 import { useEmailTabAvailability } from './tab-availability';
 import type {
   EmailFocusSort,
@@ -140,7 +153,25 @@ type EmailListController = ListController<
 export type EmailViewContext = {
   state: Store<EmailViewState>;
   setState: SetStoreFunction<EmailViewState>;
+  /**
+   * Opens a tab. During a search it narrows the search to that tab's view
+   * (`in:<view>`) and keeps the words; a tab with no view in the search index
+   * (Scheduled, Reminders, Spam, Trash), or a search with no words typed yet,
+   * ends the search.
+   */
   setTab: (tab: EmailTab) => void;
+  /** Opens the Inbox view last open (Focus, Signal or Noise), or `in:inbox`. */
+  selectInbox: () => void;
+  /**
+   * The view the navigation and the header show as selected: the open tab,
+   * or the view the search on screen runs in (`inbox` for the whole Inbox);
+   * `search` for a search of all mail, which selects none.
+   */
+  shownTab: Accessor<EmailShownView>;
+  /** The search field holds a query, whatever it says. */
+  searchOpen: Accessor<boolean>;
+  /** Focus, Signal and Noise show as tabs: in the Inbox, never in a search. */
+  showsInboxTabs: Accessor<boolean>;
   setInboxIds: (ids: string[] | undefined) => void;
   setAliasFilter: (alias: NonNullable<EmailViewState['aliasFilter']>) => void;
   setFacets: (facets: EmailViewState['facets']) => void;
@@ -160,6 +191,11 @@ export type EmailViewContext = {
   /** The selected tags' names on All, where they alone scope the list. */
   tagViewTitle: Accessor<string | undefined>;
   source: EmailDataSource;
+  /**
+   * The search on screen: its words and the view an `in:` filter narrows them
+   * to. Text with no words yet keeps the search before it.
+   */
+  parsedSearch: Accessor<ParsedEmailSearch>;
   list: EmailListController;
   registerListActivationHandler: (
     handler: (
@@ -423,6 +459,30 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       scope: conditions && resolveEmailSavedViewScope(conditions, new Date()),
     };
   });
+  const searchOpen = () =>
+    canSearchEmailTab(state.tab) && state.search.trim() !== '';
+  const typedSearch = createMemo(() => parseEmailSearch(state.search));
+  // A search covers all mail from any tab; only an `in:` filter narrows it.
+  // Text with no words (an `in:` still being typed, or a view alone) runs no
+  // search of its own, so the last one that had words stays on screen.
+  const parsedSearch = createMemo<ParsedEmailSearch>(
+    (onScreen) => {
+      const typed = typedSearch();
+      if (typed.query === '' && state.search.trim() !== '') return onScreen;
+      return typed;
+    },
+    { query: '' }
+  );
+  const shownTab = (): EmailShownView => {
+    const { query, scope } = parsedSearch();
+    // With no search to stay on, the list is still the open tab's.
+    if (!searchOpen() || query === '') return state.tab;
+
+    if (!scope) return 'search';
+    return emailSearchScopeTab(scope) ?? 'inbox';
+  };
+  const showsInboxTabs = () =>
+    !searchOpen() && !savedViewActive() && isEmailInboxTab(state.tab);
   const listInput: EmailDataSourceInput = {
     get tab() {
       return listFilters().tab;
@@ -431,7 +491,10 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       return listFilters().facets;
     },
     get search() {
-      return state.search;
+      return parsedSearch().query;
+    },
+    get searchScope() {
+      return parsedSearch().scope ?? 'all';
     },
     get inboxIds() {
       return state.inboxIds;
@@ -664,6 +727,34 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     }
   };
 
+  // During a search, a tab narrows it rather than leaving it: the navigation
+  // reads as the view searched, and the words stay.
+  const selectTab = (tab: EmailTab, scope = emailSearchScopeForTab(tab)) => {
+    if (savedViewActive() || !searchOpen()) {
+      setTabNow(tab);
+      return;
+    }
+
+    const { query } = typedSearch();
+    batch(() => {
+      setTabNow(tab);
+      // With no words typed there is nothing to narrow, so the tab just opens.
+      if (!scope || query === '') {
+        setState('search', '');
+        return;
+      }
+
+      setState(
+        'search',
+        formatEmailSearch(scope === 'all' ? undefined : scope, query)
+      );
+    });
+  };
+  const runTabSelection = (select: () => void) => {
+    if (savedViewCreation) savedViewCreation.run(select);
+    else select();
+  };
+
   // Opening a view replaces the current filters; its definition fills them in.
   const selectSavedViewNow = (id: string) => {
     if (!savedViewSource) return;
@@ -826,11 +917,19 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   return {
     state,
     setState,
-    setTab: (tab) => {
-      const select = () => setTabNow(tab);
-      if (savedViewCreation) savedViewCreation.run(select);
-      else select();
-    },
+    setTab: (tab) => runTabSelection(() => selectTab(tab)),
+    selectInbox: () =>
+      runTabSelection(() =>
+        selectTab(
+          !savedViewActive() && isEmailInboxTab(state.tab)
+            ? state.tab
+            : 'important',
+          'inbox'
+        )
+      ),
+    shownTab,
+    searchOpen,
+    showsInboxTabs,
     setInboxIds,
     setAliasFilter,
     setFacets,
@@ -842,6 +941,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     filterByTag,
     tagViewTitle,
     source,
+    parsedSearch,
     list,
     registerListActivationHandler,
     selectedThread,

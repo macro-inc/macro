@@ -32,8 +32,13 @@ while the user last pressed or focused something in that pane), so a field,
 an editor, a button, a detail beside the list or an open item without tabs
 keeps normal focus order, at every width and with the sidebar collapsed.
 Sidebar navigation (views, folders, scopes) is not tabs and takes no Tab or
-number keys; tabs atop a list that is the sidebar (Chat's rail, New Home) are
-that pane's top bar. Nothing else in a view binds `Tab`. Action groups use
+number keys; tabs atop a list that is the sidebar (Chat's rail) are
+that pane's top bar. A destination (`ViewSidebar.Item` in a `ViewSidebar.Nav`)
+or a view on the app rail chosen with the mouse leaves the keyboard on the pane
+even though the browser leaves focus on the button, so the next Tab switches
+the tabs; a right click, or a control there that opens a menu, dialog or
+picker or discloses a folder, chooses nothing, and a sidebar reached with the
+keyboard stays focus order. Nothing else in a view binds `Tab`. Action groups use
 `variant="secondary" finish="raised"`, fully rounded ends, and 8px gaps. Keep
 the right side of a bar at one height: detail headers use `sm`/`icon-sm` segments
 (28px controls); collection headers, beside New and Search, use `md`/`icon-md`
@@ -54,7 +59,9 @@ tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
 iconOnly`, then a menu). Decide those steps from whether the row fits with the
 shared mechanisms, `createLabelCollapse` (`@core/signal/create-label-collapse`;
 Reviews' list header, Email's list header, which hides its view options
-before Search would leave the pane, Email's phone reply buttons) or the split header's
+and then its inbox tabs' labels before Search would leave the pane, Tasks' list
+header, which hides its layout group and then its view options, Calendar's
+period controls, which show Today as its icon first, Email's phone reply buttons) or the split header's
 `PriorityCollapse`, never a new measurement. Preserve specialized editor toolbars. A touch header
 belongs to its view's mobile view, which lists every island it shows. A new one
 shows Back, the title (tap it for the title menu), and Info, with other actions

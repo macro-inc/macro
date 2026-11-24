@@ -236,7 +236,11 @@ header, `Tabs` and list controller, in a wide and a 700px split (stand-in
 panes, no `ViewShell`): Tab, Shift+Tab and the number keys move along a
 header's tabs from its list, are focus order on a header button, leave an
 open item that replaced the list open, and leave a thread beside the list
-open after a click on its text.
+open after a click on its text. Its `?sidebar` page adds a real `ViewSidebar`
+and a stand-in rail: a folder clicked there, a project whose tabs mount only
+once it opens, or the rail after it, leaves Tab to the header's tabs; the keyboard walks the sidebar in focus
+order, and a folder's disclosure caret or a control there that opens a menu
+or a dialog chooses nothing.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
@@ -845,6 +849,11 @@ same suite's `swipe-done.browser.e2e.ts` swipes a row in the real
 feed takes it, the row below slides up without a jump, Undo restores it, and
 reduced motion skips the fold.
 
+Its `display-options.browser.e2e.ts` checks that desktop Notifications has
+All and Unread and Display options in place of a settings gear, that
+Condensed turns rows into Home's one-line rows and back, and that phones have
+no Display options.
+
 Its `stacks.browser.e2e.ts` runs the same view with a pointer: an open stack's
 row keeps its toggle in place as Hide (beside the Hide under its last
 notification), hovering a row swaps its time for Mark done without moving
@@ -978,8 +987,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - `openExternalUrl` opens only a link scheme (`isAllowedLinkUrl` in `packages/lexical-core/utils/link-url.ts`), a relative URL, or a scheme in its `OPENABLE_PROTOCOLS` (`core/util/url.ts`); add a scheme there when a caller needs one. Renderers that draw an anchor from saved content check the URL the same way.
 - Keep ordinary hyperlinks on the theme's link colors (blue by default), including Markdown renderers/editors and calendar descriptions; preserve mention decorators' separate styling.
-- Keep contact address edits (add, remove, make primary) and company edits (personal-provider
-  link/switch, Remove company unless an address is on the company's domain) in shared CRM field views, using Tasks
+- Keep contact address edits (add, remove, make primary), company edits (personal-provider
+  link/switch, Remove company unless an address is on the company's domain) and company domain
+  edits (add, remove) in shared CRM field views, using Tasks
   property primitives and committed-response/session-fenced cache updates. Close
   direct cache-write admission on logout and login replacement, and drain admitted
   durable writes before clearing storage, while starting independent local/server
@@ -1041,6 +1051,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Match record metadata to the 24px property-control scale while reserving separate
   44px touch targets; see the CRM README for the visible-face and hit-area contract.
   Keep explanations on the chip and retain company-only Email sharing controls.
+  Order both information panels with `RECORD_PANEL_ORDER` (References last) and
+  lay Record details on `SidePanel.Grid`/`SidePanel.Row`, like Properties.
   Use the explicit Visible/Archived filter for People, Companies and company Team;
   reset its admin-only choice on account/team/role/list changes and preserve search.
   Apply confirmed visibility changes to detail, list and normalized search caches;
@@ -1260,7 +1272,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   no results), the keys stay in the field. `wide` lets the open field take the rest of
   the header (the view hides its other actions from `onOpenChange`), and
   `suggestions` lists rows under the field that the arrows walk before the
-  results; Email's wide search uses both. It registers the
+  results (a row that `editsQuery`, such as Email's `in:` views, keeps the
+  keyboard in the field); `operators` marks search operators (`in:sent`) in
+  the text, which `search-operator-text.tsx` draws as tokens behind the input
+  while the text stays ordinary editable text; future operators reuse it.
+  Email's wide search uses all of them. It registers the
   split's Escape that clears a search from the list; keep a view's own Escape
   steps (leaving a tab) conditional on no search, and selection clearing at
   `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.
@@ -1292,7 +1308,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Desktop native crashes (Rust panics, Chromium crash dumps on macOS) reach PostHog as `$exception` with `native_crash_*` properties from the next webview start; a dump never leaves the machine, only its signature. Keep panic messages scrubbed and send nothing else from a dump. See `tauri/src-tauri/README.md#native-crash-reports`.
 - Diagnose desktop native updates with `native_update_outcome` and the `native.update.*` spans (`observability/native-update.ts`), which the page sends from the host's reports; keep their schema closed (versions, code-defined kinds), never error text or paths. See [update telemetry](tauri/src-tauri/README.md#update-telemetry).
 - Pass `$APPLOCALDATA` (Application Support on Apple platforms) as the native HTTP cookie storage directory; the plugin owns the `.cookies` filename. Never use purgeable caches. The location change intentionally requires one new sign-in, without migration. See `tauri/src-tauri/README.md#native-authentication-cookies`.
-- Store iOS OTA bundles and markers in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup; ignore legacy cache contents rather than migrating them. Other platforms keep the updater's existing cache location. See `tauri/src-tauri/README.md#ota-bundle-storage`.
+- Store mobile OTA bundles and markers outside purgeable caches: iOS in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup, and Android in `<app data>/bundle-updates`; ignore legacy cache contents rather than migrating them. Desktop keeps the updater's existing cache location. Startup serves a saved bundle only when every file its completion record lists is present. See `tauri/src-tauri/README.md#ota-bundle-storage`.
 - Inline agent steps reuse the session code-execution query for live SDK operation
   names; completed step snapshots come from the shared fold of the tool receipt.
   Session `ExecuteCode` calls join their segment's tool group as their SDK
@@ -1327,7 +1343,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   host shell, so the split manager's entity reuse cannot see it; the router's
   claims decide who shows it. `openWithSplit` activates the source split before
   a replace, so a visit the router yields to the claiming pane leaves that pane
-  active (`tests/claimed-replace.test.ts`).
+  active, and `createNewSplit` activates the claiming pane the router hands a
+  Shift-click's new split to (`tests/claimed-replace.test.ts`).
 - Bound Discussion comment readiness waits to ten seconds; recover from initial layout interruptions until the message is visible, and release the target on user input (including scrollbar pointer-down), timeout, or successful arrival.
 - Keep early DOCX opens loading while exports return processing (409); retry only
   that response, with a bounded wait. See the Word editor walkthrough in
@@ -1997,7 +2014,9 @@ unbroken titles, and keyboard opening.
 Inline property fields stay `readOnly`, never `disabled`, while they save: a
 browser moves focus off a disabled field, so a failed save would strand it. Enter
 and Escape return focus to the value through `Property.Root`; tabbing or clicking
-away leaves focus where the user put it. The backend-free regression is
+away leaves focus where the user put it. A Link value's remove × takes its own
+space after the title, which truncates before it; desktop shows it on hover or
+focus, touch always. The backend-free regression for both is
 `bunx playwright test --config src/features/property/editors/inline/browser-test/playwright.config.ts`.
 
 ### Assignee people scope

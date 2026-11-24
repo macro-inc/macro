@@ -602,13 +602,10 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
         effects: &mut EffectCounts,
     ) -> Result<(), MailboxError> {
         self.effects
-            .publish(EmailMacroEvent::threads_reindex_requested(
-                ThreadsReindexRequestedMetadata {
-                    link_id: link.id,
-                    owner: link.macro_id.clone(),
-                    thread_ids: vec![thread],
-                    reason: ThreadsReindexReason::ProviderChanged,
-                },
+            .publish(EmailMacroEvent::thread_reindex_requested(
+                link.id,
+                link.macro_id.clone(),
+                thread,
             ))
             .await?;
         effects.reindex_events += 1;

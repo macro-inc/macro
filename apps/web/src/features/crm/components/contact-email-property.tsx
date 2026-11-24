@@ -1,68 +1,45 @@
 import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
+import { PropertyEmpty } from '@property/extractors/PropertyEmpty';
 import { propertyPillClasses } from '@property/extractors/property-pill-classes';
-import { useSearchInputFocus } from '@property/utils';
-import {
-  Badge,
-  Button,
-  buttonClasses,
-  Dialog,
-  Dropdown,
-  Input,
-  Tooltip,
-} from '@ui';
-import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
+import { badgeTriggerClasses, cn, Dialog, Dropdown, HoverCard } from '@ui';
+import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import type { ContactEmailChange } from '../core/contact';
 import {
-  contactPropertyIconTouchTarget,
-  contactPropertyTouchTarget,
-} from './contact-property-styles';
+  type ChangeContactEmail,
+  ContactEmailEditor,
+} from './contact-email-editor';
+import { ContactEmailRow } from './contact-email-row';
+import { contactPropertyTouchTarget } from './contact-property-styles';
+import { createValueChange, type ValueChange } from './value-change';
 
-type ChangeEmail = (email: string, change: ContactEmailChange) => Promise<void>;
+type ContactEmailProps = {
+  emails: string[];
+  primary: string | null | undefined;
+  /** Whether the server listed the addresses, so they can be managed. */
+  manageable: boolean;
+  /** The one address on the company's domain, while the contact is linked. */
+  companyEmail: string | undefined;
+  change: ChangeContactEmail;
+  errorMessage(error: unknown, change: ContactEmailChange): string;
+};
 
-/** One pending change at a time, with the rejection kept beside its control. */
-function createEmailChange(
-  change: ChangeEmail,
-  message: (e: unknown) => string
-) {
-  const [saving, setSaving] = createSignal(false);
-  const [error, setError] = createSignal<string>();
-  let active = true;
-  onCleanup(() => {
-    active = false;
-  });
-
-  return {
-    saving,
-    error,
-    clearError: () => setError(undefined),
-    /** Resolves to whether the server committed the change. */
-    async run(email: string, kind: ContactEmailChange) {
-      if (saving()) return false;
-      setSaving(true);
-      setError(undefined);
-      try {
-        await change(email, kind);
-        return true;
-      } catch (cause) {
-        if (active) setError(message(cause));
-        return false;
-      } finally {
-        if (active) setSaving(false);
-      }
-    },
-  };
-}
-
-/** The property popover on desktop and the shared dialog on touch. */
-function EmailEditor(props: {
+/**
+ * The property popover on desktop and the shared dialog (a drawer on phones),
+ * shared by the contact email and company domain fields.
+ */
+export function ValueEditor(props: {
   open: boolean;
   onOpenChange(open: boolean): void;
   title: string;
+  /** The desktop popover's width, when its content needs a fixed one. */
+  popoverClass?: string;
   anchor(): DOMRect | undefined;
   trigger: JSX.Element;
   children: JSX.Element;
@@ -80,7 +57,10 @@ function EmailEditor(props: {
         >
           {props.trigger}
           <Show when={props.open}>
-            <EditorPopover onClose={() => props.onOpenChange(false)}>
+            <EditorPopover
+              class={props.popoverClass}
+              onClose={() => props.onOpenChange(false)}
+            >
               {props.children}
             </EditorPopover>
           </Show>
@@ -107,331 +87,375 @@ function EmailEditor(props: {
   );
 }
 
-function EmailError(props: { message: string | undefined }) {
+/**
+ * Every value, the primary marked, for the header pill's hover card: a
+ * contact's addresses or a company's domains.
+ */
+function RecordValueHoverList(props: {
+  title: string;
+  values: string[];
+  primary: string;
+  primaryLabel: string;
+  private?: boolean;
+}) {
   return (
-    <Show when={props.message}>
-      {(message) => (
-        <p role="alert" class="text-sm text-failure">
-          {message()}
-        </p>
-      )}
+    <div class="flex min-w-0 max-w-80 flex-col gap-1 text-sm">
+      <span class="text-xs text-ink-muted">{props.title}</span>
+      <For each={props.values}>
+        {(value) => (
+          <span class="flex min-w-0 items-center gap-2">
+            <span
+              class={cn('min-w-0 truncate', props.private && 'ph-no-capture')}
+            >
+              {value}
+            </span>
+            <Show when={value === props.primary}>
+              <span class="shrink-0 text-xs text-ink-muted">
+                {props.primaryLabel}
+              </span>
+            </Show>
+          </span>
+        )}
+      </For>
+    </div>
+  );
+}
+
+/**
+ * A record's listed values as one header pill, like a task's Tags or
+ * Assignees: the primary value and how many others there are. Hovering lists
+ * every value; the pill opens the editor. A record with none shows the empty
+ * property. The first value swaps in a new button with its hover card;
+ * `trigger` follows it, so focus still returns to the pill.
+ */
+export function RecordValuePill<Kind extends string>(props: {
+  values: string[];
+  /** The value the pill shows; the first when none is marked. */
+  primary: string | null | undefined;
+  editable: boolean;
+  icon: Component<{ class?: string }>;
+  /** Keeps a person's addresses out of session capture. */
+  private?: boolean;
+  /** The property's name on the empty pill, and over the hover list. */
+  emptyLabel: string;
+  listTitle: string;
+  primaryLabel: string;
+  /** The pill's accessible name, given the primary and how many others. */
+  label(primary: string, others: number): string;
+  editorTitle: string;
+  change(value: string, kind: Kind): Promise<void>;
+  errorMessage(error: unknown, kind: Kind): string;
+  editor(request: ValueChange<Kind>, close: () => void): JSX.Element;
+}) {
+  const [open, setOpen] = createSignal(false);
+  const editing = createValueChange(props.change, props.errorMessage);
+  let trigger: HTMLButtonElement | undefined;
+  const primary = () => props.primary ?? props.values[0] ?? '';
+  const others = () => Math.max(props.values.length - 1, 0);
+  const blank = () => props.values.length === 0;
+  const editable = () => props.editable || blank();
+  const capture = () => (props.private ? 'ph-no-capture' : undefined);
+  // A change still saving keeps the editor open, so its outcome shows.
+  const changeOpen = (next: boolean) => {
+    if (editing.saving()) return;
+    if (next) editing.clearError();
+    setOpen(next);
+    if (!next && !isTouchDevice()) trigger?.focus();
+  };
+  const face = () => (
+    <Show when={!blank()} fallback={<PropertyEmpty label={props.emptyLabel} />}>
+      <Dynamic component={props.icon} class="size-3 shrink-0" />
+      <span class={cn('min-w-0 max-w-60 truncate', capture())}>
+        {primary()}
+      </span>
+      <Show when={others() > 0}>
+        <span class="shrink-0 text-ink-muted">+{others()}</span>
+      </Show>
+    </Show>
+  );
+  const hoverList = () => (
+    <RecordValueHoverList
+      title={props.listTitle}
+      values={props.values}
+      primary={primary()}
+      primaryLabel={props.primaryLabel}
+      private={props.private}
+    />
+  );
+  const pill = () => (
+    <button
+      ref={trigger}
+      type="button"
+      class={propertyPillClasses({
+        variant: 'secondary',
+        size: 'xs',
+        empty: blank(),
+        class: cn('min-w-0 shrink', capture(), contactPropertyTouchTarget),
+      })}
+      aria-label={props.label(primary(), others())}
+      aria-haspopup="dialog"
+      aria-expanded={open()}
+      onClick={() => changeOpen(true)}
+    >
+      {face()}
+      <CaretDownIcon class="size-3 shrink-0" />
+    </button>
+  );
+
+  return (
+    <Show
+      when={editable()}
+      fallback={
+        // Read-only values keep the card, reached by focus as well.
+        <HoverCard
+          triggerClass="min-w-0 max-w-full"
+          placement="bottom-start"
+          contentClass="menu-surface p-1.5 px-3"
+          content={hoverList()}
+        >
+          <span
+            class={propertyPillClasses({
+              variant: 'secondary',
+              size: 'xs',
+              readOnly: true,
+              class: cn('h-6 min-w-0', capture()),
+            })}
+            aria-label={props.label(primary(), others())}
+          >
+            {face()}
+          </span>
+        </HoverCard>
+      }
+    >
+      <ValueEditor
+        open={open()}
+        onOpenChange={changeOpen}
+        title={props.editorTitle}
+        popoverClass="w-80 max-w-80"
+        anchor={() => trigger?.getBoundingClientRect()}
+        trigger={
+          // A record with no values has nothing to list; a disabled hover card
+          // would also mark the pill disabled.
+          <Show when={!blank()} fallback={pill()}>
+            <HoverCard
+              triggerClass="min-w-0 max-w-full"
+              triggerTabIndex={-1}
+              placement="bottom-start"
+              contentClass="menu-surface p-1.5 px-3"
+              disabled={open()}
+              content={hoverList()}
+            >
+              {pill()}
+            </HoverCard>
+          </Show>
+        }
+      >
+        {props.editor(editing, () => changeOpen(false))}
+      </ValueEditor>
     </Show>
   );
 }
 
-/** One address: its pill opens Make primary and Remove. */
-function ContactEmailAddress(props: {
-  email: string;
-  primary: boolean;
-  /** The address that ties the contact to its company cannot be removed. */
-  linksCompany: boolean;
-  change: ChangeEmail;
-  errorMessage(error: unknown, change: ContactEmailChange): string;
-  /** Where focus goes once this address is gone. */
-  focusAfterRemoval(): void;
-}) {
-  const [open, setOpen] = createSignal(false);
-  // The kind of the change in flight, so its rejection reads correctly.
-  let requested: ContactEmailChange = 'remove';
-  const request = createEmailChange(props.change, (error) =>
-    props.errorMessage(error, requested)
-  );
-  let triggerElement: HTMLButtonElement | undefined;
-  // Focus starts on the first action so Enter and Tab work without a pointer.
-  const [firstAction, setFirstAction] = createSignal<HTMLButtonElement>();
-  useSearchInputFocus(firstAction, () => open() && !isTouchDevice());
-
-  const changeOpen = (next: boolean) => {
-    if (request.saving()) return;
-    if (next) request.clearError();
-    setOpen(next);
-    if (!next && !isTouchDevice()) triggerElement?.focus();
-  };
-  const run = async (kind: 'remove' | 'primary') => {
-    requested = kind;
-    if (!(await request.run(props.email, kind))) return;
-    setOpen(false);
-    if (isTouchDevice()) return;
-    if (kind === 'remove') props.focusAfterRemoval();
-    else triggerElement?.focus();
-  };
-  const label = () =>
-    props.primary
-      ? t('crm.primaryContactEmail', { email: props.email })
-      : props.email;
-
-  return (
-    <EmailEditor
-      open={open()}
-      onOpenChange={changeOpen}
-      title={t('crm.email')}
-      anchor={() => triggerElement?.getBoundingClientRect()}
-      trigger={
-        <Tooltip label={label()} class="min-w-0 max-w-full">
-          <button
-            ref={triggerElement}
-            type="button"
-            class={propertyPillClasses({
-              class: `ph-no-capture ${contactPropertyTouchTarget}`,
-            })}
-            aria-label={t('crm.manageContactEmail', { email: props.email })}
-            aria-expanded={open()}
-            aria-haspopup="dialog"
-            onClick={() => changeOpen(true)}
-          >
-            <EnvelopeIcon class="size-3 shrink-0" />
-            <span class="truncate">{props.email}</span>
-          </button>
-        </Tooltip>
-      }
-    >
-      <div
-        class="flex min-w-0 flex-col gap-3 p-3"
-        role="group"
-        aria-label={t('crm.manageContactEmail', { email: props.email })}
-        // The hosting menu would otherwise send Tab to its last control.
-        on:keydown={(event) => {
-          if (event.key === 'Tab') event.stopPropagation();
-        }}
-      >
-        <div class="flex min-w-0 items-center gap-2">
-          <span class="ph-no-capture min-w-0 flex-1 truncate text-sm">
-            {props.email}
-          </span>
-          <Show when={props.primary}>
-            <Badge variant="ghost" size="sm" class="shrink-0">
-              {t('crm.primaryEmail')}
-            </Badge>
-          </Show>
-        </div>
-        <Show when={props.linksCompany}>
-          <p class="text-xs text-ink-muted">
-            {t('crm.contactEmailLinksCompany')}
-          </p>
-        </Show>
-        <EmailError message={request.error()} />
-        <div class="flex flex-wrap items-center justify-end gap-2">
-          <Show when={request.saving()}>
-            <span role="status" class="mr-auto text-sm text-ink-muted">
-              {t('crm.savingContact')}
-            </span>
-          </Show>
-          <Show when={!props.primary}>
-            <Button
-              ref={setFirstAction}
-              variant="secondary"
-              size="sm"
-              disabled={request.saving()}
-              onClick={() => fireAndForget(run('primary'), 'crm')}
-            >
-              {t('crm.makePrimaryContactEmail')}
-            </Button>
-          </Show>
-          <Show when={!props.linksCompany}>
-            <Button
-              ref={props.primary ? setFirstAction : undefined}
-              variant="danger-ghost"
-              size="sm"
-              disabled={request.saving()}
-              onClick={() => fireAndForget(run('remove'), 'crm')}
-            >
-              {t('crm.removeContactEmail')}
-            </Button>
-          </Show>
-        </div>
-      </div>
-    </EmailEditor>
-  );
-}
-
-/**
- * The add control: a labelled pill while blank, then the property panel's
- * add-value button beside the addresses. One element serves both, so focus
- * returned after the first address is added stays on it.
- */
-function AddContactEmail(props: {
-  blank: boolean;
-  change: ChangeEmail;
-  errorMessage(error: unknown): string;
+/** What a Record details row needs from its list. */
+export type RecordValueListRow<Kind> = {
+  busy: boolean;
+  open(anchor: HTMLButtonElement): void;
   ref(element: HTMLButtonElement): void;
-}) {
-  const [open, setOpen] = createSignal(false);
-  const [draft, setDraft] = createSignal('');
-  const request = createEmailChange(props.change, props.errorMessage);
-  let triggerElement: HTMLButtonElement | undefined;
-  const [emailInput, setEmailInput] = createSignal<HTMLInputElement>();
-  useSearchInputFocus(emailInput, () => open() && !isTouchDevice());
-
-  const changeOpen = (next: boolean) => {
-    if (request.saving()) return;
-    if (next) {
-      setDraft('');
-      request.clearError();
-    }
-    setOpen(next);
-    if (!next && !isTouchDevice()) triggerElement?.focus();
-  };
-  const save = async () => {
-    if (!(await request.run(draft().trim(), 'add'))) return;
-    setOpen(false);
-    if (!isTouchDevice()) triggerElement?.focus();
-  };
-
-  return (
-    <EmailEditor
-      open={open()}
-      onOpenChange={changeOpen}
-      title={t('crm.addEmail')}
-      anchor={() => triggerElement?.getBoundingClientRect()}
-      trigger={
-        <Tooltip label={t('crm.addEmail')}>
-          <button
-            ref={(element) => {
-              triggerElement = element;
-              props.ref(element);
-            }}
-            type="button"
-            class={
-              props.blank
-                ? propertyPillClasses({
-                    empty: true,
-                    class: contactPropertyTouchTarget,
-                  })
-                : buttonClasses({
-                    variant: 'ghost',
-                    size: 'icon-xs',
-                    class: `text-ink-extra-muted not-data-disabled:focus-visible:text-ink focus-visible:ring-2 focus-visible:ring-accent/20 ${contactPropertyIconTouchTarget}`,
-                  })
-            }
-            aria-label={t('crm.addEmail')}
-            aria-expanded={open()}
-            aria-haspopup="dialog"
-            onClick={() => changeOpen(true)}
-          >
-            <Show
-              when={props.blank}
-              fallback={<PlusIcon class="size-3 shrink-0" />}
-            >
-              <EnvelopeIcon class="size-3 shrink-0" />
-              <span class="truncate">{t('crm.addEmail')}</span>
-            </Show>
-          </button>
-        </Tooltip>
-      }
-    >
-      <form
-        class="flex min-w-0 flex-col gap-3 p-3"
-        aria-label={t('crm.addEmail')}
-        on:keydown={(event) => {
-          if (event.key === 'Tab') event.stopPropagation();
-        }}
-        onSubmit={(event) => {
-          event.preventDefault();
-          fireAndForget(save(), 'crm');
-        }}
-      >
-        <Input
-          ref={setEmailInput}
-          type="email"
-          required
-          aria-label={t('crm.email')}
-          placeholder={t('crm.contactEmailPlaceholder')}
-          value={draft()}
-          readOnly={request.saving()}
-          autocomplete="off"
-          spellcheck={false}
-          data-1p-ignore
-          class="ph-no-capture"
-          onInput={(event) => {
-            setDraft(event.currentTarget.value);
-            request.clearError();
-          }}
-        />
-        <EmailError message={request.error()} />
-        <div class="flex flex-wrap items-center justify-end gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={request.saving()}
-            onClick={() => changeOpen(false)}
-          >
-            {t('crm.cancel')}
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            type="submit"
-            disabled={request.saving()}
-          >
-            {request.saving() ? t('crm.savingContact') : t('crm.saveContact')}
-          </Button>
-        </div>
-      </form>
-    </EmailEditor>
-  );
-}
+  expanded: boolean;
+  run(kind: Kind): void;
+};
 
 /**
- * Every address of a contact, primary first. Each address opens its own
- * actions and a trailing control adds another. Without the server's address
- * list the addresses stay read-only and only a blank contact can add one.
- * The addresses wrap among themselves, so the add control stays beside the
- * last one instead of wrapping onto a line of its own.
+ * A record's listed values in Record details: one line per value, in the
+ * value column the other rows use, then the side panel's add pill. A value
+ * opens the editor too. After an action, focus goes where the page left it:
+ * to the value itself, or to the add pill once the value is removed.
  */
-export function ContactEmailProperty(props: {
-  emails: string[];
-  primary: string | null | undefined;
-  /** Whether the server listed the addresses, so they can be managed. */
-  manageable: boolean;
-  /** The one address on the company's domain, while the contact is linked. */
-  companyEmail: string | undefined;
-  change: ChangeEmail;
-  errorMessage(error: unknown, change: ContactEmailChange): string;
+export function RecordValueList<Kind extends string>(props: {
+  values: string[];
+  canAdd: boolean;
+  label: string;
+  addLabel: string;
+  editorTitle: string;
+  change(value: string, kind: Kind): Promise<void>;
+  errorMessage(error: unknown, kind: Kind): string;
+  row(value: string, row: RecordValueListRow<Kind>): JSX.Element;
+  editor(request: ValueChange<Kind>, close: () => void): JSX.Element;
 }) {
-  let addElement: HTMLButtonElement | undefined;
+  const [open, setOpen] = createSignal(false);
+  const [anchor, setAnchor] = createSignal<HTMLElement>();
+  const request = createValueChange(props.change, props.errorMessage);
+  const editing = createValueChange(props.change, props.errorMessage);
+  let addControl: HTMLButtonElement | undefined;
+  const elements = new Map<string, HTMLButtonElement>();
+  // A value removed in the editor takes its button with it; the add pill
+  // stands in for it, as the editor's anchor and for focus.
+  const target = () => {
+    const element = anchor();
+    return element?.isConnected ? element : addControl;
+  };
+  const expandedFrom = (element: HTMLElement | undefined) =>
+    open() && !!element && anchor() === element;
+
+  // One change at a time: a row action still saving keeps the editor shut.
+  const openEditor = (element: HTMLElement) => {
+    if (editing.saving() || request.saving()) return;
+    request.clearError();
+    editing.clearError();
+    setAnchor(element);
+    setOpen(true);
+  };
+  // A change still saving keeps the editor open, so its outcome shows.
+  const changeOpen = (next: boolean) => {
+    if (editing.saving()) return;
+    setOpen(next);
+    if (next || isTouchDevice()) return;
+    target()?.focus();
+  };
+  const run = async (value: string, kind: Kind) => {
+    if (!(await request.run(value, kind)) || isTouchDevice()) return;
+    queueMicrotask(() =>
+      (kind === 'remove' ? addControl : elements.get(value))?.focus()
+    );
+  };
 
   return (
     <div
       role="group"
-      aria-label={t('crm.email')}
-      class="flex min-w-0 max-w-full items-end gap-1"
+      aria-label={props.label}
+      class="flex min-w-0 flex-col gap-1"
     >
-      <Show when={props.emails.length > 0}>
-        <div class="flex min-w-0 flex-wrap items-center gap-1">
-          <For each={props.emails}>
-            {(email) => (
-              <Show
-                when={props.manageable}
-                fallback={
-                  <Badge variant="ghost" size="sm" class="min-w-0 max-w-full">
-                    <EnvelopeIcon class="size-3 shrink-0" />
-                    <span class="ph-no-capture truncate">{email}</span>
-                  </Badge>
-                }
+      <ValueEditor
+        open={open()}
+        onOpenChange={changeOpen}
+        title={props.editorTitle}
+        popoverClass="w-80 max-w-80"
+        anchor={() => target()?.getBoundingClientRect()}
+        trigger={
+          <>
+            <For each={props.values}>
+              {(value) =>
+                props.row(value, {
+                  get busy() {
+                    return request.saving();
+                  },
+                  open: openEditor,
+                  ref: (element) => elements.set(value, element),
+                  get expanded() {
+                    return expandedFrom(elements.get(value));
+                  },
+                  run: (kind) => fireAndForget(run(value, kind), 'crm'),
+                })
+              }
+            </For>
+            <Show when={props.canAdd}>
+              <button
+                ref={addControl}
+                type="button"
+                class={badgeTriggerClasses({
+                  variant: 'outline',
+                  size: 'xs',
+                  class: 'w-fit gap-1.5',
+                })}
+                aria-label={props.addLabel}
+                aria-haspopup="dialog"
+                aria-expanded={expandedFrom(addControl)}
+                onClick={(event) => openEditor(event.currentTarget)}
               >
-                <ContactEmailAddress
-                  email={email}
-                  primary={email === props.primary}
-                  linksCompany={email === props.companyEmail}
-                  change={props.change}
-                  errorMessage={props.errorMessage}
-                  focusAfterRemoval={() => addElement?.focus()}
-                />
-              </Show>
-            )}
-          </For>
-        </div>
-      </Show>
-      <Show when={props.manageable || props.emails.length === 0}>
-        <AddContactEmail
-          blank={props.emails.length === 0}
-          change={props.change}
-          errorMessage={(error) => props.errorMessage(error, 'add')}
-          ref={(element) => {
-            addElement = element;
-          }}
-        />
+                <PlusIcon class="size-3 shrink-0" />
+                {props.addLabel}
+              </button>
+            </Show>
+          </>
+        }
+      >
+        {props.editor(editing, () => changeOpen(false))}
+      </ValueEditor>
+      <Show when={request.error()}>
+        {(message) => (
+          <p role="alert" class="px-2 text-xs text-failure">
+            {message()}
+          </p>
+        )}
       </Show>
     </div>
+  );
+}
+
+/** The email editor for a host that owns its request and its open state. */
+function editor(
+  props: ContactEmailProps,
+  request: ValueChange<ContactEmailChange>,
+  onClose: () => void
+) {
+  return (
+    <ContactEmailEditor
+      emails={props.emails}
+      primary={props.primary}
+      manageable={props.manageable}
+      companyEmail={props.companyEmail}
+      request={request}
+      onClose={onClose}
+    />
+  );
+}
+
+/** The header's Email property: the primary address, +N and the editor. */
+export function ContactEmailPill(props: ContactEmailProps) {
+  return (
+    <RecordValuePill
+      values={props.emails}
+      primary={props.primary}
+      editable={props.manageable}
+      icon={EnvelopeIcon}
+      private
+      emptyLabel={t('crm.email')}
+      listTitle={t('crm.email')}
+      primaryLabel={t('crm.primaryEmail')}
+      label={(primary, others) => {
+        if (props.emails.length === 0) return t('crm.addEmail');
+        if (others === 0) return t('crm.contactEmailLabel', { email: primary });
+        return t('crm.contactEmailSummary', { email: primary, count: others });
+      }}
+      editorTitle={t('crm.email')}
+      change={props.change}
+      errorMessage={props.errorMessage}
+      editor={(request, close) => editor(props, request, close)}
+    />
+  );
+}
+
+/**
+ * Record details' Email property: one line per address, in the value column
+ * the Company pill uses, then the side panel's add pill. Make primary keeps
+ * focus on the address; Remove moves it to Add email.
+ */
+export function ContactEmailList(props: ContactEmailProps) {
+  return (
+    <RecordValueList
+      values={props.emails}
+      canAdd={props.manageable || props.emails.length === 0}
+      label={t('crm.email')}
+      addLabel={t('crm.addEmail')}
+      editorTitle={t('crm.email')}
+      change={props.change}
+      errorMessage={props.errorMessage}
+      editor={(request, close) => editor(props, request, close)}
+      row={(email, row) => (
+        <ContactEmailRow
+          size="details"
+          email={email}
+          primary={email === props.primary}
+          linksCompany={email === props.companyEmail}
+          manageable={props.manageable}
+          busy={row.busy}
+          onOpen={row.open}
+          addressRef={row.ref}
+          expanded={row.expanded}
+          onMakePrimary={() => row.run('primary')}
+          onRemove={() => row.run('remove')}
+        />
+      )}
+    />
   );
 }

@@ -285,7 +285,7 @@ export function HomeList(props: HomeListProps) {
   );
 
   // The tutorial introduces Home; search results are not Home's list.
-  const showsTutorial = () => state.tab !== 'noise' && !state.search.trim();
+  const showsTutorial = () => state.tab === 'signal' && !state.search.trim();
 
   let scrollOffset = DEFAULT_HOME_LIST_STATE.scrollOffset;
   const readListState = (): HomeListStateSnapshot => ({
@@ -757,15 +757,14 @@ export function HomeList(props: HomeListProps) {
                                     when={isTouchDevice()}
                                     fallback={
                                       <HomeListEntity
-                                        itemTitle={state.tab === 'recent'}
                                         channelName={channelName(
                                           entityRow().entity
                                         )}
                                         timestamp={
-                                          state.tab === 'noise'
-                                            ? (entityRow().entity.notifiedAt ??
+                                          state.tab === 'signal'
+                                            ? entityRow().entity.sortTs
+                                            : (entityRow().entity.notifiedAt ??
                                               entityRow().entity.sortTs)
-                                            : entityRow().entity.sortTs
                                         }
                                         entity={entityRow().entity}
                                         occurrenceKey={entityRow().id}

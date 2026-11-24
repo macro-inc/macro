@@ -1,3 +1,4 @@
+use models_email::email::service::message::RecentMailFolder;
 use reqwest::Method;
 use serde_json::json;
 use uuid::Uuid;
@@ -785,7 +786,9 @@ async fn recent_inbox_messages_retry_a_rejected_token_and_read_one_newest_first_
                 sync_generation: 1,
                 grant_generation: 1,
             },
+            RecentMailFolder::Inbox,
             2,
+            None,
             &[inbox],
         )
         .await
@@ -1020,4 +1023,453 @@ async fn an_undecodable_response_names_where_it_failed_but_not_the_value() {
         missing,
         "permanent email provider failure: invalid Microsoft Graph response: missing field `conversationId` at ."
     );
+}
+
+#[tokio::test]
+async fn inbox_windows_read_arrival_and_sent_windows_read_send_time() {
+    let (server, api, token) = setup().await;
+    for (folder, folder_name, dated_by) in [
+        (RecentMailFolder::Inbox, "inbox", "receivedDateTime"),
+        (RecentMailFolder::Sent, "sentitems", "sentDateTime"),
+    ] {
+        Mock::given(method("GET"))
+            .and(path(format!("/v1.0/me/mailFolders/{folder_name}/messages")))
+            .and(query_param("$orderby", format!("{dated_by} desc")))
+            .and(query_param("$top", "500"))
+            .and(query_param(
+                "$filter",
+                format!("{dated_by} ge 2026-10-21T09:30:00Z"),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[{
+                "id":folder_name, "conversationId":"c1", "parentFolderId":folder_name,
+                "subject":"Invoice 42", "isRead":false, "isDraft":false, "flag":{},
+                "receivedDateTime":"2026-10-27T09:00:00Z", "sentDateTime":"2026-10-27T08:59:00Z"
+            }]})))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let messages = api
+            .recent_inbox_messages(
+                &token,
+                Uuid::now_v7(),
+                folder,
+                500,
+                Some("2026-10-21T09:30:00Z".parse().unwrap()),
+                &[],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(messages.len(), 1);
+        assert_eq!(
+            messages[0].content.message.provider_id.as_deref(),
+            Some(folder_name)
+        );
+    }
+}
+
+#[tokio::test]
+async fn recent_inbox_messages_follow_short_pages_and_leave_out_unreadable_messages() {
+    let (server, api, token) = setup().await;
+    let message = |id: &str| {
+        json!({
+            "id": id, "conversationId": "c1", "parentFolderId": "inbox",
+            "subject": "Invoice", "isRead": false, "isDraft": false, "flag": {},
+            "receivedDateTime": "2026-10-27T09:00:00Z"
+        })
+    };
+    let next = format!(
+        "{}/v1.0/me/mailFolders/inbox/messages?$skiptoken=page-2",
+        server.uri()
+    );
+    // A first page short of `$top`, with one message missing a field it needs.
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$top", "3"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [message("m1"), {"id": "m2", "parentFolderId": "inbox"}],
+            "@odata.nextLink": next
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$skiptoken", "page-2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [message("m3"), message("m4")],
+            "@odata.nextLink": format!("{}/v1.0/me/mailFolders/inbox/messages?$skiptoken=page-3", server.uri())
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let messages = api
+        .recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            RecentMailFolder::Inbox,
+            3,
+            Some("2026-10-21T09:30:00Z".parse().unwrap()),
+            &[],
+        )
+        .await
+        .unwrap();
+
+    // The limit is met after the second page, so the third is never asked for;
+    // the unreadable message is left out.
+    let ids: Vec<_> = messages
+        .iter()
+        .map(|message| message.content.message.provider_id.clone())
+        .collect();
+    assert_eq!(
+        ids,
+        vec![
+            Some("m1".to_owned()),
+            Some("m3".to_owned()),
+            Some("m4".to_owned())
+        ]
+    );
+}
+
+#[tokio::test]
+async fn each_page_of_a_window_read_passes_the_mailbox_gate_and_a_rate_limited_page_cools_it() {
+    use crate::domain::ports::{MailboxRequestGate, ScopedMailboxRepository};
+    use std::{
+        future::Future,
+        pin::Pin,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
+    struct Gate {
+        acquired: Mutex<u32>,
+        finished: Mutex<Vec<Option<Duration>>>,
+    }
+    impl MailboxRequestGate for Gate {
+        fn acquire(
+            &self,
+            _: MailboxAccess,
+        ) -> Pin<Box<dyn Future<Output = Result<Uuid, EmailApiError>> + Send + '_>> {
+            *self.acquired.lock().unwrap() += 1;
+            Box::pin(async { Ok(Uuid::now_v7()) })
+        }
+        fn finish(
+            &self,
+            _: MailboxAccess,
+            _: Uuid,
+            retry_after: Option<Duration>,
+        ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+            self.finished.lock().unwrap().push(retry_after);
+            Box::pin(async {})
+        }
+        fn admitted(
+            &self,
+            _: MailboxAccess,
+        ) -> Pin<Box<dyn Future<Output = Option<u64>> + Send + '_>> {
+            Box::pin(async { None })
+        }
+    }
+    let (server, mut api, token) = setup().await;
+    let mailbox = MailboxAccess {
+        sync_generation: 1,
+        link_id: Uuid::now_v7(),
+        grant_generation: 7,
+    };
+    let gate = Arc::new(Gate {
+        acquired: Mutex::new(0),
+        finished: Mutex::new(Vec::new()),
+    });
+    api.gate = Some(gate.clone());
+    let api = api.for_mailbox(mailbox);
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/sentitems/messages"))
+        .and(query_param("$top", "10"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [{
+                "id": "m1", "conversationId": "c1", "parentFolderId": "sentitems",
+                "subject": "Invoice", "isRead": true, "isDraft": false, "flag": {},
+                "receivedDateTime": "2026-10-27T09:00:00Z",
+                "sentDateTime": "2026-10-27T09:00:00Z"
+            }],
+            "@odata.nextLink": format!(
+                "{}/v1.0/me/mailFolders/sentitems/messages?$skiptoken=page-2",
+                server.uri()
+            )
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/sentitems/messages"))
+        .and(query_param("$skiptoken", "page-2"))
+        .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "90"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let messages = api
+        .recent_inbox_messages(
+            &token,
+            mailbox.link_id,
+            RecentMailFolder::Sent,
+            10,
+            None,
+            &[],
+        )
+        .await
+        .unwrap();
+
+    // The read keeps the first page, and the gate admitted both pages and
+    // took the provider's Retry-After from the second, so the mailbox cools
+    // down for every caller.
+    assert_eq!(
+        messages
+            .iter()
+            .map(|message| message.content.message.provider_id.clone())
+            .collect::<Vec<_>>(),
+        vec![Some("m1".to_owned())]
+    );
+    assert_eq!(*gate.acquired.lock().unwrap(), 2);
+    assert_eq!(
+        *gate.finished.lock().unwrap(),
+        vec![None, Some(Duration::from_secs(90))]
+    );
+}
+
+#[tokio::test]
+async fn recent_inbox_messages_stop_at_a_link_already_followed_and_keep_pages_before_a_failure() {
+    let (server, api, token) = setup().await;
+    let message = |id: &str| {
+        json!({
+            "id": id, "conversationId": "c1", "parentFolderId": "inbox",
+            "subject": "Invoice", "isRead": false, "isDraft": false, "flag": {},
+            "receivedDateTime": "2026-10-27T09:00:00Z"
+        })
+    };
+    let link = |page: &str| {
+        format!(
+            "{}/v1.0/me/mailFolders/inbox/messages?$skiptoken={page}",
+            server.uri()
+        )
+    };
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$top", "10"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [message("m1")],
+            "@odata.nextLink": link("page-2")
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    // Page 2 links to itself.
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$skiptoken", "page-2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [message("m2")],
+            "@odata.nextLink": link("page-2")
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let read = || async {
+        api.recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            RecentMailFolder::Inbox,
+            10,
+            None,
+            &[],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|message| message.content.message.provider_id.clone())
+        .collect::<Vec<_>>()
+    };
+
+    assert_eq!(
+        read().await,
+        vec![Some("m1".to_owned()), Some("m2".to_owned())]
+    );
+
+    server.verify().await;
+
+    // Now page 2 fails: the first page's message is still the answer.
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$top", "10"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [message("m1")],
+            "@odata.nextLink": link("page-2")
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$skiptoken", "page-2"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&server)
+        .await;
+
+    assert_eq!(read().await, vec![Some("m1".to_owned())]);
+}
+
+#[tokio::test]
+async fn recent_inbox_messages_read_past_an_empty_page_and_stop_at_page_one_or_a_foreign_link() {
+    let (server, api, token) = setup().await;
+    let message = |id: &str| {
+        json!({
+            "id": id, "conversationId": "c1", "parentFolderId": "inbox",
+            "subject": "Invoice", "isRead": false, "isDraft": false, "flag": {},
+            "receivedDateTime": "2026-10-27T09:00:00Z"
+        })
+    };
+    let inbox = format!("{}/v1.0/me/mailFolders/inbox/messages", server.uri());
+    // An empty first page with more to come.
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$top", "10"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [],
+            "@odata.nextLink": format!("{inbox}?$skiptoken=page-2")
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    // Page 2 links back to page one, spelled another way.
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$skiptoken", "page-2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [message("m1")],
+            "@odata.nextLink": format!(
+                "{inbox}?$top=10&$orderby=receivedDateTime%20desc&$select={}",
+                super::messages::RECENT_MESSAGE_FIELDS
+            )
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let read = || async {
+        api.recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            RecentMailFolder::Inbox,
+            10,
+            None,
+            &[],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|message| message.content.message.provider_id.clone())
+        .collect::<Vec<_>>()
+    };
+
+    assert_eq!(read().await, vec![Some("m1".to_owned())]);
+    server.verify().await;
+
+    // A link to another host is never followed, and what was read stays.
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$top", "10"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [message("m1")],
+            "@odata.nextLink": "https://elsewhere.example/v1.0/me/mailFolders/inbox/messages?$skiptoken=page-2"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    assert_eq!(read().await, vec![Some("m1".to_owned())]);
+}
+
+#[tokio::test]
+async fn recent_inbox_messages_read_at_most_ten_pages_and_fill_the_limit_past_a_bad_row() {
+    let (server, api, token) = setup().await;
+    let message = |id: &str| {
+        json!({
+            "id": id, "conversationId": "c1", "parentFolderId": "inbox",
+            "subject": "Invoice", "isRead": false, "isDraft": false, "flag": {},
+            "receivedDateTime": "2026-10-27T09:00:00Z"
+        })
+    };
+    let link = |page: u32| {
+        format!(
+            "{}/v1.0/me/mailFolders/inbox/messages?$skiptoken=page-{page}",
+            server.uri()
+        )
+    };
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$top", "50"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [message("m1")],
+            "@odata.nextLink": link(2)
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    for page in 2..=11 {
+        Mock::given(method("GET"))
+            .and(path("/v1.0/me/mailFolders/inbox/messages"))
+            .and(query_param("$skiptoken", format!("page-{page}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "value": [message(&format!("m{page}"))],
+                "@odata.nextLink": link(page + 1)
+            })))
+            .expect(u64::from(page <= 10))
+            .mount(&server)
+            .await;
+    }
+
+    let messages = api
+        .recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            RecentMailFolder::Inbox,
+            50,
+            None,
+            &[],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(messages.len(), 10);
+    server.verify().await;
+
+    // With two left to read, a bad row doesn't use up a place.
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$top", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [{"id": "bad", "parentFolderId": "inbox"}, message("a"), message("b")],
+            "@odata.nextLink": link(2)
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let ids: Vec<_> = api
+        .recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            RecentMailFolder::Inbox,
+            2,
+            None,
+            &[],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|message| message.content.message.provider_id.clone())
+        .collect();
+
+    assert_eq!(ids, vec![Some("a".to_owned()), Some("b".to_owned())]);
 }

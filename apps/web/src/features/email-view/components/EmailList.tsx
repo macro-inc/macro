@@ -90,6 +90,7 @@ import { createEmailRowActionState } from '../primitives/row-action-state';
 import { createScrollAnchor } from '../primitives/scroll-anchor';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
 import type { EmailListPane } from '../reader-pane';
+import { formatEmailSearch } from '../search/email-search-scope';
 import { EMAIL_TOUR } from '../tour';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
@@ -101,6 +102,7 @@ import {
   EmailFocusScore,
 } from './EmailFocusBadges';
 import { EmailRowActions, EmailStarAction } from './EmailRowActions';
+import { EmailSearchLocation } from './EmailSearchLocation';
 
 type EmailActionRow = {
   entity: WithNotification<EntityData>;
@@ -144,10 +146,24 @@ export function EmailList(props: EmailListProps) {
     openThread,
     selectedThread,
     filterByTag,
+    searchOpen,
+    parsedSearch,
   } = useEmailView();
   // Query loading can replace the empty state without ending the connect flow.
   const connectInbox = useAddInboxFlow();
   const analytics = useAnalytics();
+  // Results of a search that reaches beyond the inbox say which are archived.
+  const searchReachesArchived = () => {
+    const search = parsedSearch();
+    if (!canSearchEmailTab(state.tab) || !search.query) return false;
+
+    // The inbox views hold no archived mail, and in Archived it all is.
+    const scope = search.scope;
+    return (
+      scope === undefined ||
+      !['inbox', 'focus', 'signal', 'noise', 'archived'].includes(scope)
+    );
+  };
   usePending('email.list.items', () => source.isLoading());
   // The wait is still a wait when the previous rows stay on screen for it.
   const showsPreviousRows = () => source.showsPreviousRows?.() ?? false;
@@ -595,9 +611,7 @@ export function EmailList(props: EmailListProps) {
 
   const hasEmailRows = () => rows().some((row) => row.kind === 'entity');
   // The tutorial introduces the inbox; search results are not the inbox.
-  const showsTutorial = () =>
-    state.tab === 'important' &&
-    !(canSearchEmailTab(state.tab) && state.search.trim());
+  const showsTutorial = () => state.tab === 'important' && !searchOpen();
 
   function showsEmptyViewport() {
     return (
@@ -662,7 +676,7 @@ export function EmailList(props: EmailListProps) {
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
   createSearchScrollReset({
-    query: () => state.search,
+    query: () => formatEmailSearch(parsedSearch().scope, parsedSearch().query),
     showsPreviousRows,
     reset: () =>
       setPersistedListState((current) => ({ ...current, scrollOffset: 0 })),
@@ -909,9 +923,15 @@ export function EmailList(props: EmailListProps) {
                                       }
                                       onFilterByTag={filterByTag}
                                       meta={
-                                        <EmailFocusReason
-                                          entity={entityRow().entity}
-                                        />
+                                        <>
+                                          <EmailSearchLocation
+                                            entity={entityRow().entity}
+                                            reachesArchived={searchReachesArchived()}
+                                          />
+                                          <EmailFocusReason
+                                            entity={entityRow().entity}
+                                          />
+                                        </>
                                       }
                                       metaEnd={
                                         <EmailFocusScore

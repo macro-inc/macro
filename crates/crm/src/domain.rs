@@ -93,3 +93,7 @@ pub mod pipeline_commercial;
 /// Explicit contact field edits.
 #[cfg(feature = "ports")]
 pub mod contact_update;
+
+/// Adding and removing a company's domains.
+#[cfg(feature = "ports")]
+pub mod company_domains;

@@ -237,7 +237,31 @@ each run.
   person has `enable-event-routines` and the deployment evaluates conditions,
   and to add CRM companies only where the person may: in a team whose CRM is
   open to them) and
-  count what it suggested (`suggested`). A session hands back
+  count what it suggested (`suggested`). A brief is for a `BriefPart`:
+  `Whole` (today's session, which picks and drafts), or, at an onboarding
+  with `routine-suggestions-find-work` on, `Picks` (catalog picks only, no
+  guide) and `Drafts` (drafted routines only). A `Drafts` brief carries the
+  work streams `RoutineSuggestionApi::find_work` found (`suggestions/work.rs`:
+  one model call (`WORK_TRIES`: asked once more when its answer strays
+  from the list's shape), `WORK_MODEL` thinking little, over the person's last 30
+  days of mail, up to 500 messages, the text of the newest 100, read through
+  `SuggestionSources::inbox_window`, beside what they sent in those days, up
+  to `SENT_MESSAGES` with the text of the newest `SENT_TEXTS`, through
+  `SuggestionSources::sent_window`; the answer bounded by `WorkList::from_answer`
+  and passed inside `<untrusted>` tags in a fenced `json` block, which the
+  harness's Markdown round trip leaves as written: `WorkList::to_brief`
+  writes `&` and backticks as JSON escapes), and drafts one routine per stream
+  the catalog lacks, at most `MAX_DRAFTS`. The list and the month's mail are
+  stored nowhere: the finding call runs inside
+  `genai_telemetry::withhold_content`, so its spans carry none of what it
+  reads or answers, and the drafting sessions that carry the list are
+  prompted with `PromptRoutineSession::withhold_content`
+  (`BriefPart::carries_work_list`), so their turns record no content on
+  traces either. The list lives in those sessions' prompts (their control
+  queue and log) until the generation deletes them as it ends. Its
+  fields (senders, cadence, what each asks, what the person does with it and
+  to whom, who already handles it) are
+  meant to serve other setup suggestions later. A session hands back
   each suggestion through `macro.routines.suggest`
   (`POST /scheduled-actions/suggestions`), reads earlier ones through
   `macro.routines.review()` (`GET .../suggestions/review`) and retires open
@@ -278,13 +302,16 @@ each run.
   never generates: per surface, drafted routines, then catalog picks (each
   best first, a second with the same catalog title or name left out), then
   catalog routines marked `suggest` as Macro's templates (stable ids,
-  `template_id`) to `PER_SURFACE`, showing only open AI suggestions and
+  `template_id`) to `PER_SURFACE` (drafted routines to `DRAFTED_PER_SURFACE`
+  with `routine-suggestions-find-work` on), showing only open AI suggestions and
   skipping dismissed templates (permanent, `.../{id}/dismiss` for either
   kind) and templates saved from (`scheduled_action.suggestion_id`); its
   `status` is the person's latest
   generation's (`GenerationStatuses`). `onByDefault` marks at most two safe
   catalog picks AI rated likely kept, never one that affects others. Spans:
-  `routine.suggestions.brief`, `.suggest`, `.review`, `.retire`, `.texts`; log events
+  `routine.suggestions.brief` (with its `part`), `.find_work` (with
+  `.read_month`, `.read_sent` and `.list_work` under it), `.suggest`, `.review`,
+  `.retire`, `.texts`; log events
   `routine_suggestions.generated` and `.surface` (from `record`, after a
   generation's routines sessions), `.suggested`, `.retired`, `.dismissed`,
   `.saved`.

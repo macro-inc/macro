@@ -6,6 +6,7 @@ import {
   type ParentProps,
   useContext,
 } from 'solid-js';
+import type { RunningTimerState } from '../primitives/running-timer';
 import type { TimeLoggedHost } from '../queries/time-entries';
 
 /** What time tracking needs from the app: its GraphQL client, cache and viewer. */
@@ -15,6 +16,8 @@ export type TimeTrackingCapabilities = {
   cacheHost: Accessor<TimeLoggedHost | undefined>;
   /** The signed-in person, whose entries they may change. */
   viewerId: Accessor<string | undefined>;
+  /** The person's one running timer, shared across the app. */
+  runningTimer: RunningTimerState;
 };
 
 const TimeTrackingContext = createContext<TimeTrackingCapabilities>();

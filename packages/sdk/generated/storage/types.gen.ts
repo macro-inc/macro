@@ -4790,6 +4790,37 @@ export type CompanyContactsPageResponse = {
 };
 
 /**
+ * One of a company's domains. It travels in the body, as a contact's
+ * addresses do.
+ */
+export type CompanyDomainRequest = {
+    /**
+     * A bare domain such as "example.com": no scheme, path or email. An
+     * identical retry is accepted.
+     */
+    domain: string;
+};
+
+/**
+ * The 409 answer when another company of the team already tracks the domain.
+ */
+export type CompanyDomainTakenResponse = {
+    /**
+     * The company that tracks the domain. Absent when the caller cannot see
+     * it: an archived company, for a team member.
+     */
+    companyId?: string | null;
+    /**
+     * That company's display name, when the caller can see it.
+     */
+    companyName?: string | null;
+    /**
+     * What happened, naming the other company when the caller can see it.
+     */
+    message: string;
+};
+
+/**
  * What a companies import did.
  */
 export type CompanyImportResponse = {
@@ -9451,6 +9482,20 @@ export type EmailFilters = {
      */
     exclude_labels?: Array<string>;
     /**
+     * Leave out the threads in these mailbox views. Search only.
+     */
+    exclude_views?: Array<EmailSearchView>;
+    /**
+     * True for the caller's favorite threads only, false to leave them out.
+     * Search only.
+     */
+    favorite?: boolean | null;
+    /**
+     * True for threads with an attachment on any message, false for threads
+     * with none. Search only.
+     */
+    has_attachment?: boolean | null;
+    /**
      * Filter by email importance. None to not filter. True to show only important emails
      * (drafts, personal, sent, or uncategorized). False to show only unimportant emails
      * (those categorized as promotions, social, updates, or forums).
@@ -9465,6 +9510,14 @@ export type EmailFilters = {
      * Filter by the email thread's read flag, independently of notification state.
      */
     is_read?: boolean | null;
+    /**
+     * Tags or labels each thread must carry, or must not, by name, as typing
+     * `label:` or `in:<name>` into the search does. A name matches the
+     * caller's tags with that label and the labels with that name in the
+     * caller's inboxes, ignoring case; a name that is neither matches
+     * nothing. Search only.
+     */
+    label_names?: Array<EmailLabelMatch>;
     /**
      * Restrict to specific inboxes by email_links.id. Empty means "any inbox the
      * caller can access" (soup expands to the full set at the router edge).
@@ -9494,10 +9547,26 @@ export type EmailFilters = {
      */
     senders?: Array<string>;
     /**
+     * Only messages sent at or after this instant. Mail with no sent time
+     * never matches. Search only.
+     */
+    sent_after?: string | null;
+    /**
+     * Only messages sent before this instant. Mail with no sent time never
+     * matches. Search only.
+     */
+    sent_before?: string | null;
+    /**
      * Controls whether shared email threads are included in results.
      * Defaults to "exclude" (only the user's own threads).
      */
     shared?: SharedEmailFilter;
+    /**
+     * Words or phrases each message must contain, or must not, in one part
+     * of it, as typing `subject:`, `from:`, `to:`, `cc:`, `bcc:` or a minus
+     * into the search does. Search only.
+     */
+    text_matches?: Array<EmailTextMatch>;
     view?: null | EmailSearchView;
 };
 
@@ -9612,6 +9681,22 @@ export type EmailInclusionRule = {
      */
     company_id: string;
     kind: 'company';
+};
+
+/**
+ * A tag or provider label that an email thread must, or must not, carry,
+ * named by its label.
+ */
+export type EmailLabelMatch = {
+    /**
+     * Leave out the threads that carry it instead.
+     */
+    exclude?: boolean;
+    /**
+     * The label of one of the caller's tags, or the name of a label in one
+     * of the caller's inboxes, ignoring case.
+     */
+    name: string;
 };
 
 /**
@@ -10072,7 +10157,31 @@ export type EmailRuleValidation = {
 /**
  * A mailbox view the Email list scopes a search to, as its tabs do.
  */
-export type EmailSearchView = 'sent' | 'drafts';
+export type EmailSearchView = 'sent' | 'drafts' | 'calendar';
+
+/**
+ * A word or phrase that must, or must not, appear in one part of a message.
+ */
+export type EmailTextMatch = {
+    /**
+     * Leave out the messages that match instead.
+     */
+    exclude?: boolean;
+    /**
+     * The part of the message matched.
+     */
+    part: EmailTextPart;
+    /**
+     * One word, matched as a search word is (a prefix unless the search is
+     * exact), or several words, matched as an adjacent phrase.
+     */
+    text: string;
+};
+
+/**
+ * The part of an email message a search condition matches.
+ */
+export type EmailTextPart = 'any' | 'subject' | 'from' | 'to' | 'cc' | 'bcc';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -29132,6 +29241,63 @@ export type ListCompanyContactsPageResponses = {
 };
 
 export type ListCompanyContactsPageResponse = ListCompanyContactsPageResponses[keyof ListCompanyContactsPageResponses];
+
+export type RemoveCrmCompanyDomainData = {
+    body: CompanyDomainRequest;
+    path: {
+        /**
+         * The company to update
+         */
+        company_id: string;
+    };
+    query?: never;
+    url: '/crm/companies/{company_id}/domains';
+};
+
+export type RemoveCrmCompanyDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveCrmCompanyDomainError = RemoveCrmCompanyDomainErrors[keyof RemoveCrmCompanyDomainErrors];
+
+export type RemoveCrmCompanyDomainResponses = {
+    200: CrmCompanyResponse;
+};
+
+export type RemoveCrmCompanyDomainResponse = RemoveCrmCompanyDomainResponses[keyof RemoveCrmCompanyDomainResponses];
+
+export type AddCrmCompanyDomainData = {
+    body: CompanyDomainRequest;
+    path: {
+        /**
+         * The company to update
+         */
+        company_id: string;
+    };
+    query?: never;
+    url: '/crm/companies/{company_id}/domains';
+};
+
+export type AddCrmCompanyDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: CompanyDomainTakenResponse;
+    500: ErrorResponse;
+};
+
+export type AddCrmCompanyDomainError = AddCrmCompanyDomainErrors[keyof AddCrmCompanyDomainErrors];
+
+export type AddCrmCompanyDomainResponses = {
+    200: CrmCompanyResponse;
+};
+
+export type AddCrmCompanyDomainResponse = AddCrmCompanyDomainResponses[keyof AddCrmCompanyDomainResponses];
 
 export type SetEmailSyncData = {
     body: SetEmailSyncRequest;

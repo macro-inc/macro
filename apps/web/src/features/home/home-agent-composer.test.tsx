@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/features/block-agent/context/pending-session', () => ({
   startPendingSession: mocks.start,
 }));
+vi.mock('./home-view-context', () => ({
+  useHomeView: () => ({ openStartedSession: mocks.openStartedSession }),
+}));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'viewer-1',
 }));
@@ -56,7 +59,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 it('opens the new session inside Home', () => {
-  render(() => <HomeAgentComposer onStarted={mocks.openStartedSession} />);
+  render(() => <HomeAgentComposer />);
   const start = {
     prompt: 'Build it',
     botId: 'selected-agent',
@@ -77,28 +80,24 @@ it('opens the new session inside Home', () => {
 });
 
 it('restores Home text after visiting an agent session and returning', () => {
-  const first = render(() => (
-    <HomeAgentComposer onStarted={mocks.openStartedSession} />
-  ));
+  const first = render(() => <HomeAgentComposer />);
   fireEvent.input(screen.getByRole('textbox'), {
     target: { value: 'Unsent Home prompt' },
   });
   first.unmount();
-  render(() => <HomeAgentComposer onStarted={mocks.openStartedSession} />);
+  render(() => <HomeAgentComposer />);
   expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe(
     'Unsent Home prompt'
   );
 });
 
 it('keeps a cleared Home draft empty on the next visit', () => {
-  const first = render(() => (
-    <HomeAgentComposer onStarted={mocks.openStartedSession} />
-  ));
+  const first = render(() => <HomeAgentComposer />);
   fireEvent.input(screen.getByRole('textbox'), {
     target: { value: 'Clear me' },
   });
   fireEvent.input(screen.getByRole('textbox'), { target: { value: '' } });
   first.unmount();
-  render(() => <HomeAgentComposer onStarted={mocks.openStartedSession} />);
+  render(() => <HomeAgentComposer />);
   expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('');
 });
