@@ -36,10 +36,12 @@ import { Button } from '@ui';
 import { okAsync } from 'neverthrow';
 import {
   type Component,
+  createEffect,
   createMemo,
   createSignal,
   ErrorBoundary,
   For,
+  on,
   onCleanup,
   Show,
   Suspense,
@@ -330,8 +332,18 @@ const Block: Component = () => {
     setTableMenuFocus(tableId);
     setSelection((current) => ({ ...current, tableId }));
   }
+  // A request is for the switch that made it: whatever opens another table
+  // (a link, a related record, a header tab) drops one that was never met.
+  createEffect(
+    on(
+      activeTableId,
+      (tableId) => {
+        if (tableMenuFocus() !== tableId) setTableMenuFocus(undefined);
+      },
+      { defer: true }
+    )
+  );
   function selectTable(tableId: string) {
-    setTableMenuFocus(undefined);
     setSelection((current) => ({ ...current, tableId }));
   }
   function selectView(id?: string) {
@@ -558,6 +570,7 @@ const Block: Component = () => {
                                 onSelectTable={selectTableFromMenu}
                                 onCreateTable={createTable()}
                                 focusTableMenu={
+                                  tableMenuFocus() !== undefined &&
                                   tableMenuFocus() === activeTableId()
                                 }
                                 onTableMenuFocused={() =>

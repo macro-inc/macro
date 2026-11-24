@@ -797,8 +797,8 @@ The database page's toolbar (the real `DatabasePageToolbar` and
 table as the page does) has a phone/desktop regression in the same suite,
 `toolbar.browser.e2e.ts`: at 320, 390 and 430px every control stays on screen
 at 36px or taller, also with search open; the table menu switches tables and
-creates a named table (also one that was created but not loaded, and a
-database's first), with focus following to the redrawn menu button; the
+creates a named table, with focus following to the redrawn menu button (it
+also opens one that was created but not loaded, and a database's first); the
 selected view tab shows whole; and **View actions** creates, renames and
 deletes a view. Desktop keeps one row with **New view**. Both toolbars draw
 their view tabs from `createViewControls`;
