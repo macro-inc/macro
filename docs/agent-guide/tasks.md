@@ -487,6 +487,27 @@ link turned off): log each accepted form, a one-tap length and a custom entry
 on another day; edit and delete one's own; the teammate sees entries and no
 input; a log made offline lands once after reconnecting.
 
+### Time on a project
+
+With `enable-time-tracking` on, desktop and tablet projects get a **Time** tab
+after Overview and Tasks (`features/time-tracking/project-time.tsx`, mounted by
+`views/project-workspace.tsx`; route section `time`). Its row holds the period
+(This week, Last week, This month, Last month, This year; weeks start on the
+calendar's Week starts on preference), Person / Task / Day, and Export CSV.
+Below are three figures: the period's total ("Logged in November"), this
+week's total whatever the period, and Tasks with time out of the project's
+tasks the viewer can see. Rows open to what is underneath: a person to their
+tasks, a task to its people, a day to its tasks; a task row (or a task's
+Open task button) opens the task, beside the project or, with Shift, in a new
+split. Totals are summed on the server (`GraphqlUser.timeSummary`, which reads
+the primary) and read again after the viewer logs time anywhere. Export
+downloads the period's entries as the server's CSV (`GET /time/export`), and
+says so when it left entries out. A project past the report's task
+cap says its totals leave some tasks out. Phones keep the one-page project: a
+Time row under Discussion opens a sheet with the period, its total, people
+(each opening to their tasks) and the tasks with the most time; no export.
+With the flag off there is no tab or row, and a `time` link shows Overview.
+
 ## Import from Linear
 
 Use **Import from Linear** in the Tasks tour/actions menu, or open
@@ -1260,7 +1281,7 @@ controls on the right. Built-in scopes and saved views stay in the shared Tasks
 sidebar, without header tabs or a saved-view selector. In project detail, the phone title island shows the project appearance
 and name; its actions share, copy the link, or rename when editing is allowed.
 Phone detail stays one page rather than switching Overview and Tasks.
-On desktop, Tab, Shift+Tab, `1` and `2` switch Overview and Tasks while the
+On desktop, Tab, Shift+Tab, `1` and `2` (`3` for Time, with time tracking on) switch Overview and Tasks while the
 keyboard is on the project (its task list, or nothing focused); in a field,
 the description or on a button, Tab is focus order.
 Projects use the same list rows, property cells, selection, group headers, and
@@ -1363,7 +1384,7 @@ Closing the popover without submitting keeps the underlying view open.
 Opening a project from Tasks keeps the Tasks workspace and its navigation.
 Home rows instead preview it inline with a Home return breadcrumb; touch and
 explicit split activation still use this full Tasks workspace. Desktop and
-tablet keep Overview/Tasks tabs, with compact icons when space is limited.
+tablet keep Overview/Tasks tabs (and Time with time tracking on), with compact icons when space is limited.
 Phones keep the one-page project layout and caret-only Back, project-title,
 Share, and Details header islands. The project-title menu retains Change icon,
 Copy Link, Share, and permission-aware project actions. On desktop/tablet Overview, Cmd+K also
@@ -1466,7 +1487,7 @@ its Project set to this project (change or clear it like any property), and the
 create request carries it, so there is no separate assignment step. The new row
 appears once the task is created. Desktop and tablet section tabs stay unchanged. Phones show one page:
 title and property pills, a description of up to eight lines with Show more /
-Show less, a Discussion entry, then Tasks. The description uses the largest
+Show less, a Discussion entry, a Time row (with time tracking on), then Tasks. The description uses the largest
 five-to-eight-line preview that leaves the Tasks heading and the first row's top
 above the floating controls. Empty descriptions show the full placeholder without
 clamping or Show more. The property row contains only property pills; open the
