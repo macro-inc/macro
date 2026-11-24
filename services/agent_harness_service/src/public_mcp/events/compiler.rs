@@ -92,14 +92,17 @@ impl FilterCompiler for ModelFilterCompiler {
                 "The request as a Macro event filter, or why it cannot be one.".to_owned(),
             ),
         };
-        let value = dynamic_structured_completion(
+        // Withheld, so the query and the filter stay off spans and a failed
+        // call's error names only its kind: the error is logged, and a
+        // provider's text can quote the request or the answer.
+        let value = genai_telemetry::withhold_content(dynamic_structured_completion(
             PredefinedModel::Fast,
             SYSTEM_PROMPT.as_str(),
             vec![Message::user(query.to_owned())],
             schema,
             self.recorder.as_ref(),
             UsageContext::new(AiFeature::Automation, user.clone()),
-        )
+        ))
         .await
         .map_err(|error| CompileError::Internal(error.into_rootcause()))?;
         let outcome = parse_outcome(value);
@@ -117,9 +120,13 @@ impl FilterCompiler for ModelFilterCompiler {
 
 /// The model's answer as a filter delivery can evaluate, or a refusal.
 pub(crate) fn parse_outcome(value: serde_json::Value) -> Result<McpEventFilter, CompileError> {
-    match serde_json::from_value::<CompileOutcome>(value)
-        .map_err(|error| CompileError::Internal(rootcause::Report::new(error).into_dynamic()))?
-    {
+    // serde's message can quote the answer, so the error says only what was
+    // wanted.
+    match serde_json::from_value::<CompileOutcome>(value).map_err(|_| {
+        CompileError::Internal(rootcause::report!(
+            "the model's answer is not a compile outcome"
+        ))
+    })? {
         CompileOutcome::Filter { filter } => {
             filter
                 .validate()

@@ -1003,10 +1003,11 @@ fn the_model_answer_is_validated() {
         })),
         Err(CompileError::Refused(_))
     ));
-    assert!(matches!(
-        parse_outcome(json!({"outcome": "maybe"})),
-        Err(CompileError::Internal(_))
-    ));
+    // An unreadable answer is logged, so its error does not quote it.
+    let Err(CompileError::Internal(report)) = parse_outcome(json!({"outcome": "maybe"})) else {
+        panic!("an unreadable answer is an internal error");
+    };
+    assert!(!format!("{report:?}").contains("maybe"));
 }
 
 #[test]
