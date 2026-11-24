@@ -85,7 +85,9 @@ let
     ''(${expr}) and on () (vector($sort) == ${toString value}) and on (host) (node_memory_MemTotal_bytes{job="firecracker-host/host",host="$host"} @ end())'';
 
   noFleet = "No firecracker-host series in Mimir";
-  noHost = "No telemetry from this host";
+  # A reporting host with no running VM (or none matching the prefix) looks
+  # the same as a silent one here; the Hosts table tells them apart.
+  noHost = "No running VM, or no telemetry from this host: see Hosts";
 
   steps = colors: {
     mode = "absolute";
