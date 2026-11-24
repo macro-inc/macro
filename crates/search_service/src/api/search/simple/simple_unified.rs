@@ -1204,6 +1204,7 @@ async fn search_unified_sources(
                 project_name_cursor: SearchCursorOption::Done,
                 crm_company_cursor: new_crm_cursor,
                 channel_name_cursor: new_channel_cursor,
+                database_row_cursor: SearchCursorOption::Done,
                 document_term_matching: term_matching_for_cursor(
                     requested_term_matching,
                     search_terms.len(),

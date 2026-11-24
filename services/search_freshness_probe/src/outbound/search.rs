@@ -191,6 +191,7 @@ fn request_defaults() -> UnifiedSearchRequest {
         filters: EntityFilters::default(),
         search_on: SearchOn::default(),
         include_crm: false,
+        include_database_rows: false,
         calendar_event_scope: Default::default(),
         term_matching: Default::default(),
         collapse: None,

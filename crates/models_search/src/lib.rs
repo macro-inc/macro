@@ -12,6 +12,7 @@ pub mod call_record;
 pub mod channel;
 pub mod chat;
 pub mod crm_company;
+pub mod database_row;
 pub mod document;
 pub mod email;
 pub mod project;

@@ -118,6 +118,13 @@ pub struct UnifiedSearchRequest {
     #[serde(default)]
     pub include_crm: bool,
 
+    /// Opt in to searching the rows of the caller's databases: a row's title,
+    /// text and link cells, and the labels of its select and tag cells.
+    /// Searched only while database row search is on for the caller, under
+    /// `partial` or `exact` matching. Off by default.
+    #[serde(default)]
+    pub include_database_rows: bool,
+
     /// Which calendar events to search. Defaults to `own`: events on the
     /// caller's own and delegated calendars. `shared_with_you` searches only
     /// events shared with a channel the caller belongs to that are on none of
@@ -299,6 +306,7 @@ pub enum UnifiedSearchResponseItem {
     Company(crate::crm_company::CrmCompanySearchResponseItem),
     CalendarEvent(crate::calendar_event::CalendarEventSearchResponseItemWithMetadata),
     AgentSession(crate::agent_session::AgentSessionSearchResponseItem),
+    DatabaseRow(crate::database_row::DatabaseRowSearchResponseItem),
 }
 
 impl UnifiedSearchResponseItem {
@@ -314,6 +322,7 @@ impl UnifiedSearchResponseItem {
             Self::Call(item) => item.extra.id,
             Self::Company(item) => item.id,
             Self::CalendarEvent(item) => item.extra.id,
+            Self::DatabaseRow(item) => item.row_id,
         }
     }
     /// Get the updated_at timestamp for each item
@@ -329,6 +338,7 @@ impl UnifiedSearchResponseItem {
             Self::Call(item) => item.metadata.as_ref().map(|m| m.updated_at),
             Self::Company(item) => Some(item.updated_at),
             Self::CalendarEvent(item) => item.metadata.as_ref().map(|m| m.updated_at),
+            Self::DatabaseRow(item) => Some(item.updated_at),
         }
     }
 }
@@ -356,6 +366,7 @@ pub enum SimpleUnifiedSearchResponseBaseItem<T> {
     Project(SimpleProjectSearchResponseBaseItem<T>),
     Call(SimpleCallRecordSearchResponseBaseItem<T>),
     CalendarEvent(crate::calendar_event::SimpleCalendarEventSearchResponseBaseItem<T>),
+    DatabaseRow(crate::database_row::DatabaseRowSearchResponseItem),
 }
 
 pub type SimpleUnifiedSearchResponseItem =
