@@ -679,6 +679,10 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
                 MicrosoftAuthError::ReauthorizationRequired
                     | MicrosoftAuthError::MissingPermissions
             );
+            self.repo
+                .release_refresh(&grant, lease, revoke)
+                .instrument(span.clone())
+                .await?;
             span.record("microsoft.grant_revoked", revoke);
             if revoke {
                 tracing::warn!(
@@ -690,10 +694,6 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
                     "microsoft grant revoked after a refused refresh"
                 );
             }
-            self.repo
-                .release_refresh(&grant, lease, revoke)
-                .instrument(span)
-                .await?;
         }
         result
     }
