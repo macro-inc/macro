@@ -514,7 +514,9 @@ With `enable-time-tracking` on, the Tasks sidebar has a **Time** section under
 Projects with **My week** and **Team** (`tasks/time/week`, `tasks/time/team`;
 `features/time-tracking/tasks-time.tsx`). The week starts on the calendar's
 Week starts on preference, Saturday and Sunday hide with its Show weekends
-off, and ‹ › step a week at a time with **This week** to come back. With
+off, and ‹ › step a week at a time with **This week** to come back; a week
+outside this year is named with its year. Day columns read weekday first
+(`Mon 23`), as in the calendar's week view. With
 weekends hidden the week reads Monday to Friday, so every total, on desktop
 and phone, counts only the days shown.
 

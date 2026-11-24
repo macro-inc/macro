@@ -3,12 +3,13 @@ import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
-import type { DayRange } from '../core/time-period';
-import { weekName } from '../core/week';
+import { type DayRange, weekName } from '../core/time-period';
 
 /** ‹ Nov 23 – 29 ›, with a way back to this week from another one. */
 export function WeekStepper(props: {
   week: DayRange;
+  /** Today, to name a week in another year with its year. */
+  today: string;
   current: boolean;
   onPrevious(): void;
   onNext(): void;
@@ -26,7 +27,7 @@ export function WeekStepper(props: {
         <CaretLeftIcon class="size-4" />
       </Button>
       <span class="min-w-28 text-center text-sm font-medium tabular-nums">
-        {weekName(props.week, formatLocale())}
+        {weekName(props.week, props.today, formatLocale())}
       </span>
       <Button
         variant="ghost"

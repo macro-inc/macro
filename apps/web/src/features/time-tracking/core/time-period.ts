@@ -80,8 +80,27 @@ export function periodSpan(period: TimePeriod): PeriodSpan {
 }
 
 /**
- * How a period reads after "Logged in": the month (with its year when it is
- * not this year), the year, or a week's first and last days.
+ * A week's name, its first and last days (`Nov 23 – 29`), with the year when
+ * any of its days falls in another year than today's, as months are named.
+ */
+export function weekName(
+  week: DayRange,
+  today: string,
+  locale: string
+): string {
+  const year = today.slice(0, 4);
+  const otherYear =
+    week.from.slice(0, 4) !== year || week.to.slice(0, 4) !== year;
+  return new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+    ...(otherYear ? { year: 'numeric' as const } : {}),
+  }).formatRange(parseISO(week.from), parseISO(week.to));
+}
+
+/**
+ * How a period reads after "Logged in": the month or a week's first and last
+ * days (each with its year when it is not this year), or the year.
  */
 export function periodName(
   period: TimePeriod,
@@ -90,7 +109,6 @@ export function periodName(
   locale: string
 ): string {
   const from = parseISO(days.from);
-  const to = parseISO(days.to);
   return match(periodSpan(period))
     .with('year', () =>
       new Intl.DateTimeFormat(locale, { year: 'numeric' }).format(from)
@@ -103,11 +121,6 @@ export function periodName(
           : { year: 'numeric' as const }),
       }).format(from)
     )
-    .with('week', () =>
-      new Intl.DateTimeFormat(locale, {
-        month: 'short',
-        day: 'numeric',
-      }).formatRange(from, to)
-    )
+    .with('week', () => weekName(days, today, locale))
     .exhaustive();
 }

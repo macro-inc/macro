@@ -41,6 +41,7 @@ export function createWeekTime(options: {
   refreshOnChanges(read.refetch);
   return {
     days,
+    today: options.clock.today,
     /** Weeks from the current one: 0 is this week. */
     offset,
     previousWeek: () => setOffset((weeks) => weeks - 1),
