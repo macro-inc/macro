@@ -437,10 +437,10 @@ The compact sidebar uses the shared workspace width.
 
 When a newer version is ready, an **Update available** button (a download icon
 in a subtle accent circle that a glowing comet periodically circles) appears in
-the sidebar rail above the Downloads (in a browser) and settings icons. Its popover (a title,
-a short description, and one action) opens by itself once per update until
-dismissed (click outside or Escape); the button stays until the update is
-applied. Its wording and action depend on the update: **New version available**
+the sidebar rail above the Downloads (in a browser) and settings icons. Its
+popover (a title, a short description, and one action) opens by itself once
+per update until dismissed (click outside or Escape); the button stays until
+the update is applied. Its wording and action depend on the update: **New version available**
 / **Reload** for a newer web build, **Update ready** / **Update** for a
 downloaded bundle in the desktop app, and **Desktop app update ready** /
 **Restart and update** for a native desktop update. When part of the app fails

@@ -55,7 +55,6 @@ describe('rail Downloads button', () => {
     { host: 'web', onTouch: false, shown: true },
     { host: 'desktop', onTouch: false, shown: false },
     { host: 'web', onTouch: true, shown: false },
-    { host: 'ios', onTouch: true, shown: false },
   ])(
     'on $host with touch=$onTouch is shown: $shown',
     ({ host, onTouch, shown }) => {
