@@ -256,11 +256,9 @@ uses a fenced navigation-departure message: the page terminates its dedicated
 worker, but the next owner opens the existing OPFS database. A page that leaves
 without saying so (a killed tab, a departure message that arrives after its
 liveness lock is released) or disposes its cache stops its worker the same way
-and is treated the same; a wipe already due stays due. The coordinator reads what the
-engine of a page that left had sent for one more heartbeat interval: its port is
-not ordered with the page's. Opening a database doesn't look for damage, so a
-`storage-reset-required` that arrives this late still makes the next open wipe, and
-replaces a successor that opened the database meanwhile. Only an engine failure
+and is treated the same; a wipe already due stays due. The engine's
+port is not ordered with its page's, so a report it sent just before can be read
+too late and is then ignored. Only an engine failure
 reported by a page or seen by the coordinator **after the database open grant**
 selects `wipe-before-open`. A missed heartbeat alone is not owner loss: background tabs and their dedicated workers may be suspended while the
 SharedWorker still runs. The coordinator probes the physical owner Web Lock

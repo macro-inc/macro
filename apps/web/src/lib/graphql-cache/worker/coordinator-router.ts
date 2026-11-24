@@ -1787,7 +1787,7 @@ export class CoordinatorRouter {
     probes = 1
   ): Promise<void> {
     const core = this.coreValue;
-    if (!core) return;
+    if (!core || !silent()) return;
     let pageGone: boolean;
     try {
       pageGone = !(await this.verifyTabLockHeld(
@@ -1798,7 +1798,6 @@ export class CoordinatorRouter {
       // this for an engine that failed.
       if (probes < MAX_PAGE_PROBES) {
         this.setTimeoutFn(() => {
-          if (!silent()) return;
           this.endSilentOwner(
             tabId,
             ownerEpoch,

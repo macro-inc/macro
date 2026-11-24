@@ -2304,6 +2304,7 @@ describe('CoordinatorRouter', () => {
       await attach(router, tabA, 'tab-a', 1, engine);
       ready(engine, 'tab-a', 1, 'opened-existing');
       await vi.advanceTimersByTimeAsync(12);
+      expect(messagesOfKind(tabB, 'become-owner')).toEqual([]);
 
       if (event === 'a late answer')
         engine.receive({
