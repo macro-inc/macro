@@ -263,6 +263,8 @@ class Model {
   readonly settled = new Set<string>();
   /** Asked for when the engine was killed: queued or not, settled or not. */
   readonly uncertain = new Set<string>();
+  /** Commits refused though nothing took their lease. */
+  readonly refused: string[] = [];
   lease: (Lease & { uuid: string }) | undefined;
 
   describe(): string {
@@ -282,6 +284,8 @@ class Model {
     const found: string[] = [];
     const at = (what: string, uuid: string) => `${when}: ${what} ${uuid}`;
     const queued = new Map(queue.map((row) => [row.uuid, row]));
+    for (const refusal of this.refused.splice(0))
+      found.push(at('commit refused', refusal));
     if (queued.size !== queue.length) found.push(`${when}: a write came twice`);
     for (const { uuid, transactionId } of this.accepted) {
       const row = queued.get(uuid);
@@ -372,13 +376,20 @@ async function commit(
   if (!model.lease) await claim(engine, model, now);
   const { lease } = model;
   if (!lease) return;
-  const result = (await engine.request(commitRequest(lease, lease.uuid))) as {
-    kind: string;
-  };
-  if (result.kind !== 'committed')
-    throw new Error(`commit under a kept lease: ${result.kind}`);
-  model.settled.add(lease.uuid);
   model.lease = undefined;
+  const result = await outcomeOf(
+    engine.request(commitRequest(lease, lease.uuid))
+  );
+  if (result === 'committed') model.settled.add(lease.uuid);
+  else model.refused.push(`${lease.uuid} ${result}`);
+}
+
+async function outcomeOf(result: Promise<unknown>): Promise<string> {
+  try {
+    return ((await result) as { kind: string }).kind;
+  } catch (error) {
+    return String(error);
+  }
 }
 
 /** Asks for a write nobody waits for: the engine dies with it. */
