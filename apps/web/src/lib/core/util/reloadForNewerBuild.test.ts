@@ -24,6 +24,7 @@ import {
   type ReloadPage,
   recoverFromFailedLoad,
   reloadForNewerBuild,
+  reloadForSupersededCache,
   resetReloadForNewerBuildForTests,
   syncNativeReloadHold,
 } from './reloadForNewerBuild';
@@ -249,6 +250,37 @@ describe('reloadForNewerBuild', () => {
     expect(first.prompts).toHaveLength(1);
     expect(second.prompts).toHaveLength(0);
     expect(second.page.reload).not.toHaveBeenCalled();
+  });
+});
+
+describe('reloadForSupersededCache', () => {
+  beforeEach(() => {
+    resetReloadForNewerBuildForTests();
+  });
+
+  it('reloads by itself once per build, and offers it again whenever asked', () => {
+    const claimed = new Set<string>();
+    const once: ReloadOnce = {
+      claim: (build) => !claimed.has(build) && !!claimed.add(build),
+    };
+    const first = fakePage({ hidden: true, offline: false });
+    reloadForSupersededCache(first.page, once, 'build-a');
+    expect(first.page.reload).toHaveBeenCalledOnce();
+
+    // The server still serves this build: the tab is back where it was.
+    resetReloadForNewerBuildForTests();
+    const back = fakePage({ hidden: true, offline: false });
+    reloadForSupersededCache(back.page, once, 'build-a');
+    back.hide();
+    expect(back.page.reload).not.toHaveBeenCalled();
+    expect(back.prompts).toHaveLength(1);
+    back.prompts[0]?.();
+    expect(back.page.reload).toHaveBeenCalledOnce();
+
+    resetReloadForNewerBuildForTests();
+    const next = fakePage({ hidden: true, offline: false });
+    reloadForSupersededCache(next.page, once, 'build-b');
+    expect(next.page.reload).toHaveBeenCalledOnce();
   });
 });
 
