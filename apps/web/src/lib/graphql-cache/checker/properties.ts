@@ -10,9 +10,10 @@
  * S1 one engine has a database open at a time.
  * S2 a live page never drops its host, short of a newer build taking over, and
  *    never asks to reload without one.
- * S3 a write that reached the durable queue stays in it, and the database is
- *    wiped only after an engine died in a page that went on, failed to open it
- *    or stopped answering.
+ * S3 a write that reached the durable queue stays in it, unless the database
+ *    could not be read: then the page that queued it is told. No page is told
+ *    otherwise, and the database is wiped only after an engine died in a page
+ *    that went on, failed to open it or stopped answering.
  * S4 no older build opens the database after a newer one.
  * S5 a refused request says why, with an error code.
  * S6 nothing throws out of an event handler or a timer.
@@ -131,7 +132,7 @@ function lostWrites(world: World): Violation[] {
       detail: page,
     }));
   const lost = [...world.storage.admitted]
-    .filter(([uuid]) => !queue.has(uuid))
+    .filter(([uuid]) => !queue.has(uuid) && !world.storage.unreadable.has(uuid))
     .map(([uuid, admittedTo]) => ({
       symptom: `S3:queued write lost (${lostBecause(world, admittedTo, scope)})`,
       detail: uuid,
@@ -139,8 +140,46 @@ function lostWrites(world: World): Violation[] {
   return [...neverStored, ...lost];
 }
 
+/** Pages whose queued write could not be read, and which were not told. */
+function untold(world: World): Violation[] {
+  return world.calls
+    .filter(({ page, uuid, issuedAt, moot }) => {
+      if (moot || !uuid || !world.storage.unreadable.has(uuid)) return false;
+      const asked = pageOf(world, page);
+      return (
+        asked !== undefined &&
+        !exempt(asked) &&
+        !asked.queueResets.some((at) => at >= issuedAt)
+      );
+    })
+    .map(({ page }) => ({
+      symptom: 'S3:queued write lost and its page not told',
+      detail: page,
+    }));
+}
+
+/** Faults after which a page joins a coordinator anew. It cannot know what
+ * became of the queue meanwhile, so it says that some may be gone. */
+const REJOINS = /^(bfcache|crash-process|late-message|restart-coordinator)/;
+
+function needlesslyTold(world: World): Violation[] {
+  const excused = (fault: string) =>
+    fault === 'corrupt-database' || REJOINS.test(fault);
+  if (world.injected.some(excused)) return [];
+  return world.calls
+    .filter(({ page, uuid, result, settledAt }) => {
+      if (!uuid || result !== 'ok' || settledAt === undefined) return false;
+      return pageOf(world, page)?.queueResets.some((at) => at > settledAt);
+    })
+    .map(({ page }) => ({
+      symptom: 'S3:told the queue was lost, which was kept',
+      detail: page,
+    }));
+}
+
 /** The faults a coordinator answers by wiping the database. */
-const WIPE_CAUSES = /^(crash-engine|fail-open|late-message)/;
+const WIPE_CAUSES =
+  /^(crash-engine|fail-open|corrupt-database|require-reset|late-message)/;
 
 function needlessWipes(world: World): Violation[] {
   if (world.injected.some((fault) => WIPE_CAUSES.test(fault))) return [];
@@ -246,6 +285,8 @@ export function check(world: World): Violation[] {
     ...retirements(world),
     ...needlessReloads(world),
     ...lostWrites(world),
+    ...untold(world),
+    ...needlesslyTold(world),
     ...needlessWipes(world),
     ...olderOpens(world),
     ...uncodedRefusals(world),

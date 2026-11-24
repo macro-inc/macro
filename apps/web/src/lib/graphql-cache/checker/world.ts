@@ -271,6 +271,8 @@ export class Page {
   stops: string[] = [];
   /** Goes up each time the page's session ends. */
   session = 0;
+  /** When its host said that some of the queue may be gone. */
+  readonly queueResets: number[] = [];
 
   constructor(
     private readonly world: World,
@@ -312,6 +314,9 @@ export class Page {
         },
       })
     );
+    host.onCacheGenerationChanged(({ queue }) => {
+      if (queue === 'reset') this.queueResets.push(this.world.sim.now);
+    });
     return host;
   }
 
@@ -503,6 +508,7 @@ export class Page {
  * database's lock for 5 s, `hold-files` has one keep its files open for 15 s
  * without the lock (as a terminated worker does while the browser closes
  * them), and `fail-open` makes the next open of the database fail.
+ * `corrupt-database` leaves the database unreadable until it is wiped.
  * `require-reset` has a page's engine find its open database broken, and
  * `fail-assets` and `stall-assets` fail the next engine's load or leave it
  * hanging.
@@ -526,6 +532,7 @@ export type FaultKind =
   | 'bfcache'
   | 'restore'
   | 'fail-open'
+  | 'corrupt-database'
   | 'require-reset'
   | 'fail-assets'
   | 'stall-assets';
@@ -818,6 +825,10 @@ export class World {
         if (this.storage.failNextOpens === 0) faults.push({ kind });
         continue;
       }
+      if (kind === 'corrupt-database') {
+        if (!this.database().unreadable) faults.push({ kind });
+        continue;
+      }
       if (kind === 'fail-assets' || kind === 'stall-assets') {
         if (this.storage.nextAssets === 'load') faults.push({ kind });
         continue;
@@ -868,6 +879,7 @@ export class World {
           'hold-files',
           'open-newer',
           'fail-open',
+          'corrupt-database',
           'fail-assets',
           'stall-assets',
           () => false
@@ -880,6 +892,11 @@ export class World {
     return this.engines.filter(
       (engine) => engine.context.parent === page.context && engine.context.alive
     );
+  }
+
+  /** The database pages open today. */
+  private database() {
+    return this.storage.database(getOrCreateCacheScope());
   }
 
   /** Those with a database open, and running. */
@@ -922,6 +939,9 @@ export class World {
       .with('open-newer', () => this.openNewer())
       .with('fail-open', () => {
         this.storage.failNextOpens += 1;
+      })
+      .with('corrupt-database', () => {
+        this.database().unreadable = true;
       })
       .with('fail-assets', () => {
         this.storage.nextAssets = 'fail';
@@ -1111,8 +1131,8 @@ export class World {
         `${context.id}:${context.history}${context.alive ? '' : 'x'}${context.frozen ? 'f' : ''}`
     );
     const storage = [...this.storage.databases].map(
-      ([scope, { queue, salvaged, wipes, openBy }]) =>
-        `${scope}:${queue.size}.${salvaged.size}.${wipes}.${openBy ?? ''}`
+      ([scope, { queue, salvaged, wipes, openBy, ...is }]) =>
+        `${scope}:${queue.size}.${salvaged.size}.${wipes}.${openBy ?? ''}${is.incomplete}${is.unreadable}`
     );
     const state = [
       contexts.join(),

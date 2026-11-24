@@ -26,10 +26,10 @@ afterEach(() => usePlant(undefined));
 /** The violations found that no known one accounts for. */
 async function newViolations(
   faults: FaultKind[],
-  { pages = [1, 1], maxFaults = 1 } = {}
+  { pages = [1, 1], maxFaults = 1, horizonMs = 60_000 } = {}
 ): Promise<string[]> {
   const { findings, truncated, cutShort } = await explore(
-    { name: 'plant', pages, faults, horizonMs: 60_000 },
+    { name: 'plant', pages, faults, horizonMs },
     { maxFaults, maxDelays: 0, maxRuns: 5_000 }
   );
   expect({ truncated, cutShort }).toEqual({ truncated: false, cutShort: 0 });
@@ -103,6 +103,61 @@ describe('handover checker, on broken code', { timeout: 120_000 }, () => {
     });
     expect(await newViolations(['crash-engine'])).toContain(
       'S3:queued write lost (database wiped) [crash-engine owner]'
+    );
+  });
+
+  it('catches a queue that could not be read and is called whole', async () => {
+    usePlant(() => {
+      const restore = DurableStorage.prototype.restore;
+      vi.spyOn(DurableStorage.prototype, 'restore').mockImplementation(
+        function (this: DurableStorage, scope, wiped) {
+          restore.call(this, scope, wiped);
+          return 'preserved';
+        }
+      );
+    });
+    expect(
+      await newViolations(['corrupt-database', 'crash-engine'], {
+        pages: [1],
+        maxFaults: 2,
+        horizonMs: 15_000,
+      })
+    ).toContain(
+      'S3:queued write lost and its page not told [corrupt-database+crash-engine owner]'
+    );
+  });
+
+  it('catches a page that is not told its queue was lost', async () => {
+    usePlant(() => {
+      const ready = CoordinatorCore.prototype.engineReady;
+      vi.spyOn(CoordinatorCore.prototype, 'engineReady').mockImplementation(
+        function (this: CoordinatorCore, proof) {
+          return ready.call(this, { ...proof, queue: 'preserved' });
+        }
+      );
+    });
+    expect(
+      await newViolations(['corrupt-database', 'crash-engine'], {
+        pages: [1],
+        maxFaults: 2,
+        horizonMs: 15_000,
+      })
+    ).toContain(
+      'S3:queued write lost and its page not told [corrupt-database+crash-engine owner]'
+    );
+  });
+
+  it('catches pages told of a loss there was not', async () => {
+    usePlant(() => {
+      const ready = CoordinatorCore.prototype.engineReady;
+      vi.spyOn(CoordinatorCore.prototype, 'engineReady').mockImplementation(
+        function (this: CoordinatorCore, proof) {
+          return ready.call(this, { ...proof, queue: 'reset' });
+        }
+      );
+    });
+    expect(await newViolations(['crash-engine'])).toContain(
+      'S3:told the queue was lost, which was kept [crash-engine owner]'
     );
   });
 

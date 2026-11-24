@@ -1,13 +1,14 @@
 /**
  * Stands in for the WASM engine (`CacheWorkerCore` over turso-opfs) inside the
  * real engine runtime. It keeps the parts of the engine the handover depends
- * on, and nothing else: it takes the database owner lock without queueing,
- * reports a busy lock, waits for the coordinator's storage grant and then for
- * database files another context still has open, wipes the database on a
- * recovery open and carries its mutation queue across (as `wipe_keeping_queue`
- * and `Crossing::finish` do, each step a task the engine may die before),
- * refuses requests once draining, and waits for an in-flight open before a drain
- * closes storage. The runtime lets neither engine see a request after its drain.
+ * on, and nothing else: it loads its assets in a task of their own, takes the
+ * database owner lock without queueing, reports a busy lock, waits for the
+ * coordinator's storage grant and then for database files another context still
+ * has open, wipes the database on a recovery open and carries its mutation queue
+ * across (as `wipe_keeping_queue` and `Crossing::finish` do, each step a task
+ * the engine may die before) unless it cannot be read, asks for a reset when its storage breaks, refuses
+ * requests once draining, and waits for an in-flight open before a drain closes
+ * storage. The runtime lets neither engine see a request after its drain.
  *
  * `DurableStorage` is the origin's OPFS: one database per scope that outlives
  * every page and worker.
@@ -17,7 +18,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { match } from 'ts-pattern';
 import { TEST_AUTHORITY_GENERATION, testAuthority } from '../authority-fixture';
 import type { CacheRequest, CacheResponse } from '../protocol';
-import { databaseOwnerLockName } from '../worker/coordinator-protocol';
+import {
+  type CacheQueueState,
+  databaseOwnerLockName,
+} from '../worker/coordinator-protocol';
 import type { CacheWorkerCoreOptions } from '../worker/worker-core';
 import type { Sim, SimContext } from './sim';
 
@@ -35,6 +39,10 @@ type Database = {
   queue: Map<string, StoredMutation>;
   /** The side file: a queue on its way from a wiped database to the next. */
   salvaged: Map<string, StoredMutation>;
+  /** Noted in the side file: a queue that could not be read was wiped. */
+  incomplete: boolean;
+  /** Nothing in it can be read, or opened, until it is wiped. */
+  unreadable: boolean;
   wipes: number;
   openBy: string | undefined;
 };
@@ -45,6 +53,8 @@ export class DurableStorage {
   readonly openConflicts: string[] = [];
   /** Every mutation that reached a durable queue, with where it went. */
   readonly admitted = new Map<string, string>();
+  /** Mutations in a queue that could not be read when it was wiped. */
+  readonly unreadable = new Set<string>();
   /** By scope: settles when the context that has its files open lets go. */
   readonly filesFreed = new Map<string, Promise<void>>();
   /** How many of the next opens fail with a storage error. */
@@ -60,6 +70,8 @@ export class DurableStorage {
       database = {
         queue: new Map(),
         salvaged: new Map(),
+        incomplete: false,
+        unreadable: false,
         wipes: 0,
         openBy: undefined,
       };
@@ -80,21 +92,35 @@ export class DurableStorage {
 
   /** Copies the queue to the side file, where a wipe leaves it alone. */
   salvage(scope: string): void {
-    const { queue, salvaged } = this.database(scope);
-    for (const [uuid, mutation] of queue) salvaged.set(uuid, mutation);
+    const database = this.database(scope);
+    if (database.unreadable) {
+      database.incomplete = true;
+      return;
+    }
+    for (const [uuid, mutation] of database.queue)
+      database.salvaged.set(uuid, mutation);
   }
 
-  /** Queues what is in the side file, which is then gone. */
-  restore(scope: string): void {
-    const { queue, salvaged } = this.database(scope);
-    for (const [uuid, mutation] of salvaged) queue.set(uuid, mutation);
-    salvaged.clear();
+  /** Queues what is in the side file, which is then gone, and says whether
+   * that is the whole queue. As `queueAfterOpen` has it, a wiped database that
+   * had no queue counts as a reset one. */
+  restore(scope: string, wiped: boolean): CacheQueueState {
+    const database = this.database(scope);
+    const lost = database.incomplete || (wiped && database.salvaged.size === 0);
+    for (const [uuid, mutation] of database.salvaged)
+      database.queue.set(uuid, mutation);
+    database.salvaged.clear();
+    database.incomplete = false;
+    return lost ? 'reset' : 'preserved';
   }
 
   wipe(scope: string): void {
     const database = this.database(scope);
+    for (const uuid of database.unreadable ? database.queue.keys() : [])
+      if (!database.salvaged.has(uuid)) this.unreadable.add(uuid);
     database.queue.clear();
     database.wipes += 1;
+    database.unreadable = false;
   }
 
   close(scope: string, engine: string): void {
@@ -266,21 +292,27 @@ export class FakeEngineCore {
     await this.filesFree(scope);
     if (this.options.recoveryOpen) {
       this.storage.salvage(scope);
-      await this.laterTask();
+      await this.laterTask('engine-task');
       this.storage.wipe(scope);
-      await this.laterTask();
+      await this.laterTask('engine-task');
     }
-    if (this.storage.failNextOpens > 0) {
-      this.storage.failNextOpens -= 1;
+    if (
+      this.storage.failNextOpens > 0 ||
+      this.storage.database(scope).unreadable
+    ) {
+      this.storage.failNextOpens = Math.max(this.storage.failNextOpens - 1, 0);
       this.releaseLock?.();
       throw new Error('storage error: unable to open database file');
     }
     this.storage.open(scope, this.context.id, this.context.buildTime);
-    this.storage.restore(scope);
+    const queue = this.storage.restore(
+      scope,
+      this.options.recoveryOpen === true
+    );
     this.openedScope = scope;
     this.options.onInitializationOutcome?.(
       this.options.recoveryOpen ? 'reset-storage-uncertain' : 'opened-existing',
-      'preserved'
+      queue
     );
   }
 
