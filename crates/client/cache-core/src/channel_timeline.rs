@@ -25,6 +25,18 @@ use thiserror::Error;
 pub const MESSAGE_TYPENAME: &str = "GraphqlChannelMessage";
 /// Normalized typename of one system row in a channel timeline.
 pub const ACTIVITY_TYPENAME: &str = "GraphqlChannelTimelineActivity";
+/// Type of a root's embedded thread summary.
+pub const THREAD_TYPENAME: &str = "GraphqlChannelThread";
+
+/// The fields [`project_channel_timeline`] reads, besides identity markers, of
+/// a message, of the thread embedded in a root, and of a system row. A schema
+/// change that removes one drops the stored entries: the incoming build would
+/// never refresh the value a row came from (`schema_change`).
+pub const MESSAGE_INPUTS: &[&str] = &["channelId", "sortKey", "threadId", "deletedAt", "thread"];
+/// See [`MESSAGE_INPUTS`].
+pub const THREAD_INPUTS: &[&str] = &["deletedAt", "replyCount"];
+/// See [`MESSAGE_INPUTS`].
+pub const ACTIVITY_INPUTS: &[&str] = &["channelId", "sortKey"];
 
 /// Coverage bound below every sort key: the first entry of a timeline.
 pub const TIMELINE_START: &str = "";

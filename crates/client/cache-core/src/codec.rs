@@ -8,6 +8,12 @@
 //! browser reopen with matching versions preserves records, queued mutations,
 //! and optimistic layers. A compatibility/format mismatch or abrupt/uncertain
 //! browser owner loss physically resets the database and discards all three.
+//! Native files keep one path, so there an older storage version with
+//! registered upgrade steps is upgraded in place instead (`cache-turso`'s
+//! `storage/migration.rs`), a format in
+//! [`MIGRATABLE_CACHE_FORMAT_VERSIONS`] is carried forward, and a file of
+//! another compatibility epoch ([`namespace_versions`]) drops its records and
+//! keeps its queued writes.
 
 use crate::normalize::RecordUpdates;
 use crate::queue::{PersistedOptimisticLayer, StoredMutation};
@@ -136,6 +142,18 @@ fn deflate_with(deflater: &mut Deflater, raw: &[u8]) -> Option<Vec<u8>> {
 /// reads back instead of failing as corrupt.
 fn may_deflate(len: usize) -> bool {
     (RECORD_COMPRESSION_MIN_BYTES..=RECORD_MAX_INFLATED_BYTES).contains(&len)
+}
+
+/// Decodes a record as cache format 3 stored it: [`encode_record`]'s raw
+/// payload, without the encoding tag format 4 added. Bytes that are not one
+/// whole format 3 record are read as this format's, which a file another
+/// build wrote into may hold: a raw record's tag would otherwise read as an
+/// empty record.
+pub fn decode_format_3_record(bytes: &[u8]) -> Result<Record, CodecError> {
+    match postcard::take_from_bytes::<Record>(bytes) {
+        Ok((record, [])) => Ok(record),
+        _ => decode_record(bytes),
+    }
 }
 
 /// Decodes a normalized record written by [`encode_record`].
@@ -268,6 +286,18 @@ pub fn cache_namespace_at(scope: &str, format_version: u32) -> String {
     format!("graphql-cache:{scope}:s{CACHE_SCHEMA_COMPATIBILITY_EPOCH}:v{format_version}")
 }
 
+/// The schema compatibility epoch and cache format `namespace` names, when
+/// it is `scope`'s namespace under any of them. A native file of another
+/// epoch keeps its queued writes and drops its records.
+pub fn namespace_versions(scope: &str, namespace: &str) -> Option<(u32, u32)> {
+    let (epoch, format) = namespace
+        .strip_prefix("graphql-cache:")?
+        .strip_prefix(scope)?
+        .strip_prefix(":s")?
+        .split_once(":v")?;
+    Some((epoch.parse().ok()?, format.parse().ok()?))
+}
+
 /// Storage versions `(schema compatibility epoch, cache format, storage
 /// schema)` in use when database names began to embed versions. A build at
 /// exactly these versions keeps the unversioned name, so that change moved no
@@ -339,6 +369,21 @@ mod tests {
         let bytes = encode_record(&record);
         let decoded = decode_record(&bytes).unwrap();
         assert_eq!(decoded, record);
+    }
+
+    #[test]
+    fn a_format_3_read_takes_this_formats_records_too() {
+        for body in [
+            "short body".to_owned(),
+            "review comment line\n".repeat(2_000),
+        ] {
+            let record = record_with_body(&body);
+            assert_eq!(decode_format_3_record(&encode(&record)).unwrap(), record);
+            assert_eq!(
+                decode_format_3_record(&encode_record(&record)).unwrap(),
+                record
+            );
+        }
     }
 
     #[test]
@@ -578,6 +623,29 @@ mod tests {
             "graphql-cache:client-token-1:s4:v3"
         );
         assert!(!MIGRATABLE_CACHE_FORMAT_VERSIONS.contains(&CACHE_FORMAT_VERSION));
+    }
+
+    #[test]
+    fn namespace_versions_reads_only_this_scope() {
+        let scope = "client-token-1";
+        assert_eq!(
+            namespace_versions(scope, &cache_namespace(scope)),
+            Some((CACHE_SCHEMA_COMPATIBILITY_EPOCH, CACHE_FORMAT_VERSION))
+        );
+        assert_eq!(
+            namespace_versions(scope, &format!("graphql-cache:{scope}:s3:v2")),
+            Some((3, 2))
+        );
+        for other in [
+            cache_namespace("client-token-2"),
+            format!("graphql-cache:{scope}:sx:v{CACHE_FORMAT_VERSION}"),
+            format!("graphql-cache:{scope}:s:v{CACHE_FORMAT_VERSION}"),
+            format!("graphql-cache:{scope}:s3:v"),
+            format!("graphql-cache:{scope}:s3"),
+            "wrong".to_owned(),
+        ] {
+            assert_eq!(namespace_versions(scope, &other), None, "{other}");
+        }
     }
 
     #[test]

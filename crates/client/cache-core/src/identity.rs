@@ -114,7 +114,34 @@ pub fn resolve(bindings: &[IdentityBinding], data: &Value) -> Result<IdentityMap
     Ok(result)
 }
 
+/// [`resolve`] for a response that doesn't normalize, which a server on
+/// another schema may have sent, so the schema can't say how its objects are
+/// typed: a binding resolves only from an object that states its type under a
+/// literal `__typename` key. One that states none, or states it under an
+/// alias, fails rather than taking the binding's type.
+pub fn resolve_stated(bindings: &[IdentityBinding], data: &Value) -> Result<IdentityMap, String> {
+    for binding in bindings {
+        if binding.response_path.is_empty() {
+            continue;
+        }
+        let object = binding
+            .response_path
+            .iter()
+            .try_fold(data, |value, field| {
+                value.get(field).ok_or("missing identity response object")
+            })?;
+        if !object.get("__typename").is_some_and(Value::is_string) {
+            return Err("identity response type is not stated".into());
+        }
+    }
+    resolve(bindings, data)
+}
+
 /// Some normalized read models share the identity of the entity they preview.
+/// No key a binding reads from the response is inferred: that binding's own
+/// response object decides it, and nothing does when that failed. A
+/// reference-only binding, with no response path, is inferred unless it
+/// already has an identity, such as one an earlier write's alias gave it.
 pub fn expand_reference_identities(bindings: &[IdentityBinding], identities: &mut IdentityMap) {
     for binding in bindings {
         let Some(target) = identities.get(&binding.local_key).cloned() else {
@@ -125,10 +152,15 @@ pub fn expand_reference_identities(bindings: &[IdentityBinding], identities: &mu
         };
         for field in &binding.reference_fields {
             if let Some(typename) = field.strip_suffix(".id") {
-                identities.insert(
-                    EntityKey::entity(typename, &[old_id]),
-                    EntityKey::entity(typename, &[new_id]),
-                );
+                let local = EntityKey::entity(typename, &[old_id]);
+                if !bindings
+                    .iter()
+                    .any(|bound| !bound.response_path.is_empty() && bound.local_key == local)
+                {
+                    identities
+                        .entry(local)
+                        .or_insert_with(|| EntityKey::entity(typename, &[new_id]));
+                }
             }
         }
     }
@@ -147,6 +179,26 @@ pub fn alias_target(record: &Record) -> Option<&EntityKey<'static>> {
         Some(CacheValue::Ref(target)) => Some(target),
         _ => None,
     }
+}
+
+/// The fields of a record that later settlement and replay of queued writes
+/// read: an alias, a coalescing UUID and a deletion tombstone.
+const IDENTITY_METADATA_FIELDS: [&str; 3] = [ALIAS_FIELD, MUTATION_UUID_FIELD, DELETED_FIELD];
+
+/// `record` with only its identity metadata, its `id` and its `__typename`,
+/// or `None` when it holds no identity metadata: what a record whose copied
+/// content is retired keeps.
+pub fn identity_metadata(mut record: Record) -> Option<Record> {
+    if !IDENTITY_METADATA_FIELDS
+        .iter()
+        .any(|field| record.fields.contains_key(*field))
+    {
+        return None;
+    }
+    record.fields.retain(|field, _| {
+        IDENTITY_METADATA_FIELDS.contains(&field.as_str()) || field == "id" || field == "__typename"
+    });
+    Some(record)
 }
 
 /// Rebase normalized records and their links; arbitrary text is never rewritten.
@@ -445,6 +497,116 @@ mod tests {
                 &json!({ "save": { "id": "server" } })
             ),
             Err("invalid local identity".into())
+        );
+    }
+
+    #[test]
+    fn resolve_stated_needs_the_object_to_state_its_type() {
+        let bindings = [binding("Draft:local", &["save", "draft"])];
+        let stated = json!({ "save": { "draft": { "__typename": "Draft", "id": "server" } } });
+        assert_eq!(
+            resolve_stated(&bindings, &stated),
+            resolve(&bindings, &stated)
+        );
+        let not_stated = "identity response type is not stated".to_owned();
+        for draft in [
+            json!({ "id": "server" }),
+            json!({ "kind": "Draft", "id": "server" }),
+            json!({ "__typename": null, "id": "server" }),
+        ] {
+            let data = json!({ "save": { "draft": draft } });
+            assert_eq!(resolve_stated(&bindings, &data), Err(not_stated.clone()));
+        }
+        assert_eq!(
+            resolve_stated(
+                &bindings,
+                &json!({ "save": { "draft": { "__typename": "Message", "id": "server" } } })
+            ),
+            Err("identity response changed entity type".into())
+        );
+        assert_eq!(
+            resolve_stated(&bindings, &json!({ "save": {} })),
+            Err("missing identity response object".into())
+        );
+        assert!(
+            resolve_stated(&[binding("Draft:local", &[])], &json!({}))
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn reference_fields_infer_no_key_a_binding_reads_from_the_response() {
+        let mut draft = binding("Draft:local", &["save", "draft"]);
+        draft.reference_fields = vec!["Message.id".into()];
+        let message = binding("Message:local", &["save", "message"]);
+        let data = json!({ "save": {
+            "draft": { "__typename": "Draft", "id": "1" },
+            "message": { "__typename": "Message", "id": "2" }
+        } });
+        let expected = IdentityMap::from([
+            (
+                EntityKey::entity("Draft", &["local"]),
+                EntityKey::entity("Draft", &["1"]),
+            ),
+            (
+                EntityKey::entity("Message", &["local"]),
+                EntityKey::entity("Message", &["2"]),
+            ),
+        ]);
+        assert_eq!(
+            resolve(&[draft.clone(), message.clone()], &data),
+            Ok(expected.clone())
+        );
+        assert_eq!(
+            resolve(&[message.clone(), draft.clone()], &data),
+            Ok(expected)
+        );
+        // A binding that failed is not inferred either.
+        let mut identities = IdentityMap::from([(
+            EntityKey::entity("Draft", &["local"]),
+            EntityKey::entity("Draft", &["1"]),
+        )]);
+        expand_reference_identities(&[draft.clone(), message], &mut identities);
+        assert_eq!(
+            identities,
+            IdentityMap::from([(
+                EntityKey::entity("Draft", &["local"]),
+                EntityKey::entity("Draft", &["1"]),
+            )])
+        );
+        // A reference-only binding reads nothing from the response, but keeps
+        // an identity it already has.
+        let mut aliased = IdentityMap::from([
+            (
+                EntityKey::entity("Draft", &["local"]),
+                EntityKey::entity("Draft", &["1"]),
+            ),
+            (
+                EntityKey::entity("Message", &["local"]),
+                EntityKey::entity("Message", &["2"]),
+            ),
+        ]);
+        expand_reference_identities(
+            &[draft.clone(), binding("Message:local", &[])],
+            &mut aliased,
+        );
+        assert_eq!(
+            aliased.get(&EntityKey::entity("Message", &["local"])),
+            Some(&EntityKey::entity("Message", &["2"]))
+        );
+        assert_eq!(
+            resolve(&[draft, binding("Message:local", &[])], &data),
+            Ok(IdentityMap::from([
+                (
+                    EntityKey::entity("Draft", &["local"]),
+                    EntityKey::entity("Draft", &["1"]),
+                ),
+                (
+                    EntityKey::entity("Message", &["local"]),
+                    EntityKey::entity("Message", &["1"]),
+                ),
+            ]))
         );
     }
 }

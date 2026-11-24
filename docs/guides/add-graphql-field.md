@@ -36,7 +36,8 @@ Read first: [`crates/complete_graph/AGENTS.md`](../../crates/complete_graph/AGEN
 - **A field every Soup entity has** goes on the `GraphqlSoupEntity` interface and
   its SDL contract test (`complete_graph/AGENTS.md` §3).
 - **Additive only.** Deployed web bundles and native apps keep sending their
-  existing documents, and the native cache rejects conflicting field shapes. New
+  existing documents, and a retyped field drops its type's cached records on
+  every client (step 8). New
   arguments and input fields are nullable or defaulted (`Option<T>`). Don't rename,
   remove, retype, or change the nullability of a field a shipped client selects.
   Add the replacement, move clients, deprecate the old field with a removal
@@ -236,11 +237,25 @@ new fields needs the regenerated SDL in the same change.
   and wait.
 - Deploy the schema before a frontend that selects it. A DSS without the field
   rejects the whole document.
-- Additive fields keep existing client caches. An incompatible change to identity
-  or field shape needs a bump of `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in
-  `crates/client/cache-schema/src/lib.rs` and a native release, because the
-  native cache retains old definitions and rejects conflicting ones (see
-  [`crates/client/README.md`](../../crates/client/README.md)). Prefer a new field.
+- Client caches keep their records across a schema change they can read
+  ([schema changes](../../crates/client/README.md#schema-changes)). Additions,
+  and removals of fields no local projection reads, keep every record: the
+  next open only rewrites the stored schema, in tens of milliseconds. A narrowed
+  or retyped field, a changed identity, or a removed field a projection reads
+  drops that type's cached records on each client's next open, and they
+  refetch, at a cost that grows with the records dropped (seconds for a large
+  type); a renamed operation root drops every record. A queued write whose
+  response no longer fits settles without the response's content, keeping the
+  IDs the server gave it, and the queries it affects refetch. Native apps built
+  before clients stored their schema refuse such a change and run without the
+  cache until they update. A rollback adopts the older build's schema the same
+  way, unless it goes past a storage step: a native build older than its cache
+  file's storage version replaces the file, queued writes included. Bump
+  `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in
+  `crates/client/cache-schema/src/lib.rs`, which also drops every record, only
+  for a change the schema cannot show, such as a removed enum value cached
+  records may hold; browsers then start a new cache file, losing writes still
+  queued. Prefer a new field.
 
 ## Verify locally
 

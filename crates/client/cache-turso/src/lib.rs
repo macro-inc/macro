@@ -2,9 +2,10 @@
 //!
 //! The adapter implements every [`cache_core::store::Storage`] operation with
 //! the frozen compound-key schema, checked postcard payloads, strict-head
-//! mutation leasing, and immediate write transactions. Incompatible or
-//! uncertain disposable state is classified for physical reset; it is never
-//! migrated, copied, logged, or redirected to a fallback backend.
+//! mutation leasing, and immediate write transactions. A database written at an
+//! older storage version with registered upgrade steps is upgraded in place;
+//! other incompatible or uncertain disposable state is classified for physical
+//! reset, never copied, logged, or redirected to a fallback backend.
 
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
@@ -18,9 +19,12 @@ mod storage;
 pub use driver::{WalCheckpoint, WalPosition};
 pub use error::{PhysicalResetReason, TursoStorageError};
 pub use storage::{
-    QueuedMutationCount, STORAGE_SCHEMA_VERSION, TursoStorage, TursoStorageCloseOutcome,
-    TursoStorageOpenOutcome,
+    QueuedMutationCount, STORAGE_SCHEMA_VERSION, SchemaAdoption, TursoStorage,
+    TursoStorageCloseOutcome, TursoStorageOpenOutcome, Unrecorded,
 };
+
+#[cfg(feature = "migration-test-hooks")]
+pub use storage::migration_test_hooks;
 
 #[cfg(target_arch = "wasm32")]
 pub use storage::{

@@ -337,12 +337,16 @@ fn check_version(artifact: &SchemaArtifact) -> Result<(), SchemaError> {
     }
     Ok(())
 }
-/// Bump when a GraphQL schema change makes existing normalized records unsafe.
+/// Bump when existing normalized records become unsafe in a way the schema
+/// does not show: a change to how the cache derives records from the schema,
+/// or a removed enum value records may hold. A bump makes every stored cache
+/// schema unreadable, so every cache drops its records on its next open. A
+/// native file keeps its queued writes; a browser database's name holds the
+/// epoch, so the browser opens a new file.
 ///
-/// Additive fields do not require a bump: fragment reads only project selected
-/// fields, so older records remain usable until a newly selected field is
-/// fetched. Bump this epoch for incompatible changes to normalized identity,
-/// field storage shape, or other schema-derived cache semantics.
+/// A GraphQL field or type change needs no bump: opening a cache with another
+/// schema drops only the records of the types whose stored values changed
+/// meaning (`cache_core::schema_change`).
 // File-type facts now preserve raw server text instead of enum-normalizing it.
 // Calendar range tables index cached occurrences, so older caches lack rows.
 pub const CACHE_SCHEMA_COMPATIBILITY_EPOCH: u32 = 4;

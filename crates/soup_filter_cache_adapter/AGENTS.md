@@ -29,6 +29,7 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   thread the page left out, but an archive whose Undo is queued keeps its row.
   At most 500 local matches are checked per write; later full snapshots
   restore completeness.
+- `src/projection_inputs.rs`: every stored field the projections read, by type (each kind module's `INPUTS`), which both hosts pass to `TursoStorage::adopt_schema`, so removing a field changes only the record types whose documents read it (`cache_core::schema_change`). The `a_field_no_input_names_never_changes_*` tests fail when a projection reads a field its list leaves out.
 - `src/mail/retention.rs`: retain same-query server rows while local facts are
   incomplete, reject proven nonmembers, and preserve the indexed cursor.
 
@@ -51,11 +52,13 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 
 - Add a filterable/projectable field: `item_filter_index`/`predicate_index`
   (if the vocabulary is new) → `soup_filter_projection` (wire encoding) →
-  the matching `src/<kind>.rs` here (projection + optimistic patch).
+  the matching `src/<kind>.rs` here (projection + optimistic patch), and the
+  field in that kind's `INPUTS` (`src/projection_inputs.rs`).
 
 ## Checks
 
 - `cargo test -p soup-filter-cache-adapter` (`SQLX_OFFLINE` unset).
+- `CACHE_SCHEMA_DB=<storage-12 or 13 bench database> cargo test --release -p soup-filter-cache-adapter --lib schema_change_cost_on_a_retained_cache -- --ignored --nocapture`: time each schema change tier, with CPU and run-queue wait, against a physical reset, on copies of the database (`CACHE_SCHEMA_CASE` filters cases, `CACHE_SCHEMA_RUNS` sets runs, `CACHE_SCHEMA_OUT` keeps the storage-13 copy for the browser test in `cache-wasm`).
 
 ## Gotchas
 

@@ -504,6 +504,66 @@ fn property_optimism_only_patches_the_modified_definition() {
     });
 }
 
+#[test]
+fn a_field_no_input_names_never_changes_a_property_fact() {
+    use cache_core::value::{CacheValue, Record};
+    // A parent's property facts are the same whatever an unread field of the
+    // property record holds, so a schema change that removes one keeps them.
+    let key = cache_core::value::EntityKey::entity("GraphqlProperty", &[&id(1001)]);
+    let mut record = Record::default();
+    record
+        .fields
+        .insert("propertyDefinitionId".into(), CacheValue::String(id(1)));
+    let option = CacheValue::Object(
+        [
+            (
+                "__typename".to_owned(),
+                CacheValue::String("GraphqlSelectOptionPropertyValue".into()),
+            ),
+            (
+                "optionIds".to_owned(),
+                CacheValue::List(vec![CacheValue::String(id(11))]),
+            ),
+        ]
+        .into(),
+    );
+    record.fields.insert("value".into(), option);
+    let facts = prepare::row_facts(&key, &record).unwrap();
+    assert_eq!(facts.1.len(), 2, "the row and its option");
+    let read = crate::projection_inputs()
+        .fields()
+        .filter(|(owner, _)| *owner == "GraphqlProperty")
+        .map(|(_, field)| field.to_owned())
+        .collect::<std::collections::BTreeSet<_>>();
+    let unread = cache_core::meta::bundled_schema_ref()
+        .type_meta("GraphqlProperty")
+        .unwrap()
+        .fields
+        .iter()
+        .filter(|field| !read.contains(&field.name))
+        .map(|field| field.name.clone())
+        .collect::<Vec<_>>();
+    assert!(unread.len() > 5, "{unread:?}");
+    for field in unread {
+        for value in [
+            CacheValue::Null,
+            CacheValue::Bool(true),
+            CacheValue::String("x".into()),
+            CacheValue::List(Vec::new()),
+            CacheValue::Object(std::collections::BTreeMap::new()),
+            CacheValue::Opaque("\"x\"".into()),
+        ] {
+            let mut changed = record.clone();
+            changed.fields.insert(field.clone(), value.clone());
+            assert_eq!(
+                prepare::row_facts(&key, &changed),
+                Ok(facts.clone()),
+                "GraphqlProperty.{field} = {value:?}"
+            );
+        }
+    }
+}
+
 /// Storage derives the Inbox view sort fact in place only for the profiles the
 /// rule names, so it must name every profile a Mail document is stored under:
 /// the projection's own and the property-aware one this module relabels it to.

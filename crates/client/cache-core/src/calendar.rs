@@ -134,6 +134,12 @@ impl CalendarRangeRow {
     }
 }
 
+/// The occurrence fields [`project_calendar_range`] reads besides identity
+/// markers. A schema change that removes one of them, or changes a type
+/// embedded in `time`, drops the stored occurrences: the incoming build would
+/// never refresh the value a range came from (`schema_change`).
+pub const RANGE_INPUTS: &[&str] = &["isCancelled", "eventId", "linkId", "time"];
+
 /// Projects a fully merged occurrence record into its range row.
 ///
 /// `None` means the record is not a visible occurrence (another type, deleted,

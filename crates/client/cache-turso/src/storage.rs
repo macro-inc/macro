@@ -2,8 +2,9 @@ use crate::driver::{self, Db, WalCheckpoint, WalPosition};
 use crate::key::RecordKey;
 use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
-    MIGRATABLE_CACHE_FORMAT_VERSIONS, cache_namespace, cache_namespace_at, decode_record,
-    decode_record_updates, encode_record, encode_record_updates,
+    CACHE_FORMAT_VERSION, MIGRATABLE_CACHE_FORMAT_VERSIONS, cache_namespace,
+    decode_format_3_record, decode_record, decode_record_updates, encode_record,
+    encode_record_updates, namespace_versions,
 };
 use cache_core::predicate::reconciliation::{
     PredicateBaselineEntry, PredicateReconciliation, predicate_membership,
@@ -32,7 +33,6 @@ use predicate_index::{
     ValidatedIndexQuery,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 use turso_core::{Numeric, Value};
@@ -57,7 +57,7 @@ use turso_opfs::{
 };
 
 /// Frozen storage schema version, independent of cache postcard versions.
-pub const STORAGE_SCHEMA_VERSION: u32 = 13;
+pub const STORAGE_SCHEMA_VERSION: u32 = 14;
 
 const QUICK_ACCESS_PROJECTION_VERSION_KEY: &str = "quick_access_projection_version";
 const SEARCH_REBUILD_BATCH_SIZE: i64 = 256;
@@ -65,6 +65,10 @@ const SEARCH_REBUILD_RECORDS: &str =
     "SELECT id, value FROM records WHERE __typename = ?1 ORDER BY id LIMIT ?2";
 const SEARCH_REBUILD_RECORDS_AFTER: &str =
     "SELECT id, value FROM records WHERE __typename = ?1 AND id > ?2 ORDER BY id LIMIT ?3";
+
+#[cfg(feature = "migration-test-hooks")]
+pub use migration::test_hooks as migration_test_hooks;
+pub use schema_store::{SchemaAdoption, Unrecorded};
 
 /// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -210,6 +214,9 @@ pub struct TursoStorage {
     /// The session's connection with its prepared statements. Its statements
     /// hold connection references, so closing releases them first.
     connection: Db,
+    /// The storage version this open upgraded the file from.
+    #[cfg(not(target_arch = "wasm32"))]
+    storage_upgraded_from: Option<u32>,
     #[cfg(all(test, not(target_arch = "wasm32")))]
     fault: Mutex<Option<TestFault>>,
 }
@@ -243,7 +250,7 @@ impl TursoStorage {
     ) -> Result<(Self, TursoStorageOpenOutcome), TursoStorageOpenFailure> {
         let fresh = session.disposition() == OpenDisposition::Fresh;
         let connection = Db::uncached(session.connection());
-        let result = initialize(&connection, scope, fresh);
+        let result = initialize(&connection, scope, fresh, OlderStorage::Reset);
         drop(connection);
         match result {
             Ok(_) => Ok((
@@ -653,6 +660,7 @@ impl TursoFileDatabase {
     /// A database carried forward from a migratable format is compacted first, so
     /// the upgrade also releases the space its dropped records occupied.
     pub fn open(&self, scope: &str) -> Result<TursoStorage, TursoStorageError> {
+        self.recover_interrupted_swap()?;
         let fresh = !self.path.exists();
         let (storage, migrated) = self.open_with_outcome(scope, fresh)?;
         if !migrated {
@@ -700,13 +708,35 @@ impl TursoFileDatabase {
             let _ = remove_native_file(&compact_path);
             return Ok(storage);
         }
+        // The open after the swap finds nothing left to upgrade, so it
+        // reports what this open's upgrade did.
+        let storage_upgraded_from = storage.storage_upgraded_from;
         // The compacted file is complete; a close failure cannot invalidate it.
         let _ = storage.try_close();
         if self.install_compacted(&compact_path).is_err() {
             let _ = remove_native_file(&compact_path);
-            return Ok(self.open_with_outcome(scope, false)?.0);
         }
-        Ok(self.open_with_outcome(scope, false)?.0)
+        let mut reopened = self.open_with_outcome(scope, false)?.0;
+        reopened.storage_upgraded_from = storage_upgraded_from;
+        Ok(reopened)
+    }
+
+    /// Finishes a swap [`Self::install_compacted`] left when a crash stopped
+    /// it. Before the compacted file was in place, it puts back the original:
+    /// the migrated database, without which the open would start an empty
+    /// cache and lose the queued writes the migration kept. After, it deletes
+    /// the original, which a later physical reset would otherwise reopen,
+    /// with writes that have settled since queued again.
+    fn recover_interrupted_swap(&self) -> Result<(), TursoStorageError> {
+        let backup_path = self.path.with_extension("backup");
+        if !backup_path.is_file() {
+            return Ok(());
+        }
+        if self.path.exists() {
+            return remove_native_file(&backup_path);
+        }
+        std::fs::rename(&backup_path, &self.path)
+            .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Io))
     }
 
     /// Move the compacted database into place while keeping the original
@@ -763,8 +793,11 @@ impl TursoFileDatabase {
         }
     }
 
-    /// Deletes the native main and WAL files after all connections are closed.
+    /// Deletes the native main and WAL files after all connections are
+    /// closed, and any original a compaction swap left aside, so the next
+    /// open starts empty.
     pub fn physical_reset(&self) -> Result<(), TursoStorageError> {
+        remove_native_file(&self.path.with_extension("backup"))?;
         remove_native_file(&self.path)?;
         let wal_path = PathBuf::from(format!("{}-wal", self.turso_path));
         remove_native_file(&wal_path)
@@ -832,8 +865,13 @@ fn open_native_database(
         let error = TursoStorageError::turso(error);
         return Err(if fresh { error } else { error.initialization() });
     }
-    let migrated = match initialize(&Db::uncached(connection.clone()), scope, fresh) {
-        Ok(migrated) => migrated,
+    let initialized = match initialize(
+        &Db::uncached(connection.clone()),
+        scope,
+        fresh,
+        OlderStorage::Upgrade,
+    ) {
+        Ok(initialized) => initialized,
         Err(error) => {
             if connection.close().is_err() {
                 return Err(TursoStorageError::reset(
@@ -848,10 +886,11 @@ fn open_native_database(
             health: AtomicU8::new(0),
             database,
             connection: Db::cached(connection),
+            storage_upgraded_from: initialized.storage_upgraded_from,
             #[cfg(all(test, not(target_arch = "wasm32")))]
             fault: Mutex::new(None),
         },
-        migrated,
+        initialized.format_migrated,
     ))
 }
 
@@ -945,6 +984,48 @@ impl TursoStorage {
 
     fn connection(&self) -> Db {
         self.connection.clone()
+    }
+
+    /// The storage version this open upgraded the file from, when an older
+    /// build wrote it (`storage/migration.rs`); `None` when it was already
+    /// current or new.
+    #[must_use]
+    pub fn upgraded_from_storage_version(&self) -> Option<u32> {
+        self.storage_upgraded_from
+    }
+}
+
+impl TursoStorage {
+    /// Brings the stored records and queued writes to `incoming`, this
+    /// build's GraphQL schema, whose index projections read `inputs`, and
+    /// returns the schema an engine over this storage runs with
+    /// (`storage/schema_store.rs`). Run it once after opening, before the
+    /// engine. `unrecorded` says what wrote a cache that stores no schema.
+    pub fn adopt_schema(
+        &self,
+        incoming: &Arc<cache_core::meta::Schema>,
+        inputs: &cache_core::schema_change::ProjectionInputs,
+        unrecorded: Unrecorded,
+    ) -> Result<SchemaAdoption, TursoStorageError> {
+        self.require_healthy()?;
+        self.latch_result(schema_store::adopt(
+            &self.connection,
+            incoming,
+            inputs,
+            &unrecorded,
+        ))
+    }
+
+    /// Records that the engine over this storage now runs with `merged`: the
+    /// schema [`Self::adopt_schema`] returned with what `incoming`, another
+    /// webview's build, added to it.
+    pub fn record_schema(
+        &self,
+        merged: &cache_core::meta::Schema,
+        incoming: &cache_core::meta::Schema,
+    ) -> Result<(), TursoStorageError> {
+        self.require_healthy()?;
+        self.latch_result(schema_store::record(&self.connection, merged, incoming))
     }
 }
 
@@ -2329,73 +2410,94 @@ fn write_projection_mutations(
         facts.insert(connection)?;
         states
     };
-    if !keys.is_empty() {
-        // Network snapshots and realtime writes must rebase pending member edits
-        // in the same transaction, not leave a shadow based on older authority.
-        let sources = driver::query(connection, QUEUE_SELECT, Vec::new())?
-            .into_iter()
-            .map(|row| {
-                let row = parse_queue_row(&row)?;
-                let source = cache_core::queue::decode_optimistic_source(
-                    &row.optimistic.ok_or_else(invariant)?.optimistic_data_json,
-                )
-                .map_err(|_| invariant())?;
-                Ok((row.id, source))
-            })
-            .collect::<Result<Vec<_>, TursoStorageError>>()?;
-        // With no queued mutation there is no layer to compose and, unless an
-        // older file kept one, no shadow to delete.
-        if sources.is_empty()
-            && driver::query(connection, OPTIMISTIC_INDEX_DOCUMENT_ANY, Vec::new())?.is_empty()
-        {
-            return Ok(());
-        }
-        // Index each pending contribution once per batch. A large retirement
-        // page must not scan the whole queue again for each deleted key.
-        let mut by_key: HashMap<_, BTreeMap<_, Vec<_>>> = HashMap::new();
-        for (owner, source) in sources {
-            for mutation in source.projection_mutations {
-                if keys.binary_search(mutation.record_key()).is_ok() {
-                    by_key
-                        .entry(mutation.record_key().clone())
-                        .or_default()
-                        .entry(owner)
-                        .or_default()
-                        .push(mutation);
-                }
-            }
-        }
-        let mut delete = driver::prepare(connection, OPTIMISTIC_INDEX_DOCUMENT_DELETE)?;
-        for key in keys {
-            let changed = driver::execute_prepared(&mut delete, vec![text(key.as_str())])?;
-            if !(0..=1).contains(&changed) {
-                return Err(invariant());
-            }
-            let layers = by_key
-                .get(&key)
-                .into_iter()
-                .flat_map(|owners| owners.iter())
-                .map(
-                    |(owner, mutations)| cache_core::predicate::ProjectionMutationLayer {
-                        owner: *owner,
-                        mutations,
-                    },
-                )
-                .collect::<Vec<_>>();
-            if let Some(shadow) = cache_core::predicate::compose_effective_optimistic_projection(
-                &key,
-                states.get(&key),
-                &layers,
+    // Network snapshots and realtime writes must rebase pending member edits
+    // in the same transaction, not leave a shadow based on older authority.
+    recompose_shadows(
+        connection,
+        &keys,
+        &states,
+        &cache_core::identity::IdentityMap::new(),
+    )
+}
+
+/// Composes the shadow of each of `keys`, which are sorted, again: the queued
+/// writes' projection mutations of the key over `states`, the stored
+/// projections they rebase onto (a key missing from it has none). A queued
+/// projection is moved through `identities` first: the server keys that
+/// settled creates gave the local keys a queued write names.
+fn recompose_shadows(
+    connection: &Db,
+    keys: &[PredicateRecordKey],
+    states: &HashMap<PredicateRecordKey, ProjectionState>,
+    identities: &cache_core::identity::IdentityMap,
+) -> Result<(), TursoStorageError> {
+    if keys.is_empty() {
+        return Ok(());
+    }
+    let sources = driver::query(connection, QUEUE_SELECT, Vec::new())?
+        .into_iter()
+        .map(|row| {
+            let row = parse_queue_row(&row)?;
+            let source = cache_core::queue::decode_optimistic_source(
+                &row.optimistic.ok_or_else(invariant)?.optimistic_data_json,
             )
-            .map_err(|_| invariant())?
-            {
-                insert_optimistic_projection(
-                    connection,
-                    mutation_id_to_sql(shadow.owner)?,
-                    shadow.state,
-                    shadow.uncertainty,
-                )?;
+            .map_err(|_| invariant())?;
+            Ok((row.id, source))
+        })
+        .collect::<Result<Vec<_>, TursoStorageError>>()?;
+    // With no queued mutation there is no layer to compose and, unless an
+    // older file kept one, no shadow to delete.
+    if sources.is_empty()
+        && driver::query(connection, OPTIMISTIC_INDEX_DOCUMENT_ANY, Vec::new())?.is_empty()
+    {
+        return Ok(());
+    }
+    // Index each pending contribution once per batch. A large retirement
+    // page must not scan the whole queue again for each deleted key.
+    let mut by_key: HashMap<_, BTreeMap<_, Vec<_>>> = HashMap::new();
+    for (owner, source) in sources {
+        for mut mutation in source.projection_mutations {
+            cache_core::identity::remap_projection(&mut mutation, identities);
+            if keys.binary_search(mutation.record_key()).is_ok() {
+                by_key
+                    .entry(mutation.record_key().clone())
+                    .or_default()
+                    .entry(owner)
+                    .or_default()
+                    .push(mutation);
             }
+        }
+    }
+    let mut delete = driver::prepare(connection, OPTIMISTIC_INDEX_DOCUMENT_DELETE)?;
+    for key in keys {
+        let changed = driver::execute_prepared(&mut delete, vec![text(key.as_str())])?;
+        if !(0..=1).contains(&changed) {
+            return Err(invariant());
+        }
+        let layers = by_key
+            .get(key)
+            .into_iter()
+            .flat_map(|owners| owners.iter())
+            .map(
+                |(owner, mutations)| cache_core::predicate::ProjectionMutationLayer {
+                    owner: *owner,
+                    mutations,
+                },
+            )
+            .collect::<Vec<_>>();
+        if let Some(shadow) = cache_core::predicate::compose_effective_optimistic_projection(
+            key,
+            states.get(key),
+            &layers,
+        )
+        .map_err(|_| invariant())?
+        {
+            insert_optimistic_projection(
+                connection,
+                mutation_id_to_sql(shadow.owner)?,
+                shadow.state,
+                shadow.uncertainty,
+            )?;
         }
     }
     Ok(())
@@ -3519,29 +3621,34 @@ fn sql_bound(bound: RangeBound, lower: bool) -> (&'static str, i64) {
 
 /// Carry a cache written by a migratable older format forward.
 ///
-/// Records and the derived rows they feed are refetchable, so they are dropped.
-/// Queued mutations, optimistic layers, and their projections are kept, which is
-/// why this is not a physical reset. The namespace moves to this build inside the
-/// same transaction, so an interrupted migration leaves the previous state intact
-/// and is retried on the next open.
+/// Records and the derived rows they feed are refetchable, so they are dropped
+/// as a reset drops them, table by table, except what a reset keeps: the
+/// identity and authority records and the identity metadata of the records
+/// queued writes name, read in that format and rewritten in this one. Queued mutations and their optimistic layers are kept,
+/// which is why this is not a physical reset. The stored schema is made
+/// unreadable, so the adoption after the open resets the cache in place and
+/// takes the projections the previous format composed. The namespace moves to
+/// this build inside the same transaction, so an interrupted migration leaves the
+/// previous state intact and is retried on the next open.
 fn migrate_previous_format(
     connection: &Db,
     scope: &str,
     previous_namespace: &str,
 ) -> Result<(), TursoStorageError> {
-    let migratable = MIGRATABLE_CACHE_FORMAT_VERSIONS
-        .iter()
-        .any(|version| cache_namespace_at(scope, *version) == previous_namespace);
-    if !migratable {
+    let Some(format) = migratable_format(scope, previous_namespace) else {
         return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
-    }
+    };
+    let decode = match format {
+        3 => decode_format_3_record,
+        _ => return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility)),
+    };
     driver::write_transaction(connection, || {
-        driver::execute(connection, "DELETE FROM search_documents", Vec::new())?;
-        // Facts cascade from their index documents.
-        driver::execute(connection, "DELETE FROM index_documents", Vec::new())?;
-        driver::execute(connection, "DELETE FROM records", Vec::new())?;
-        calendar::clear(connection)?;
-        channel_timeline::clear(connection)?;
+        // The adoption after the open resets the cache in place, which takes
+        // the shadows and overlays the previous format composed too.
+        schema_store::mark_unreadable(connection)?;
+        let identity = schema_store::keep_identity(connection, decode)?;
+        schema_store::clear_records(connection)?;
+        schema_store::restore_kept_identity(connection, &identity)?;
         driver::execute(
             connection,
             "UPDATE meta SET value = ?1 WHERE key = 'namespace'",
@@ -3552,17 +3659,88 @@ fn migrate_previous_format(
     .map_err(TursoStorageError::initialization)
 }
 
-/// Validates or initializes a database. Returns whether a previous format was
-/// carried forward, which native owners compact after opening.
-fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoStorageError> {
+/// The previous cache format `namespace` names, when it is `scope`'s under
+/// any schema compatibility epoch and opening carries it forward.
+fn migratable_format(scope: &str, namespace: &str) -> Option<u32> {
+    namespace_versions(scope, namespace)
+        .map(|(_, format)| format)
+        .filter(|format| MIGRATABLE_CACHE_FORMAT_VERSIONS.contains(format))
+}
+
+/// Rejects a file that another scope wrote, or a cache format this build
+/// cannot carry forward, before any upgrade step commits to it: such a file
+/// resets as written.
+fn check_owner(connection: &Db, scope: &str) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        "SELECT key, value FROM meta WHERE key IN ('namespace', 'scope') ORDER BY key ASC",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let [namespace, stored_scope] = rows.as_slice() else {
+        return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
+    };
+    let namespace = meta_value(namespace, "namespace")?;
+    let owned = meta_value(stored_scope, "scope")? == scope
+        && namespace_versions(scope, &namespace).is_some_and(|(_, format)| {
+            format == CACHE_FORMAT_VERSION || MIGRATABLE_CACHE_FORMAT_VERSIONS.contains(&format)
+        });
+    owned
+        .then_some(())
+        .ok_or_else(|| TursoStorageError::reset(PhysicalResetReason::Compatibility))
+}
+
+/// The value of a `meta` row read as `key, value`, which must be `key`'s.
+fn meta_value(row: &[Value], key: &str) -> Result<String, TursoStorageError> {
+    match (required_text(row, 0), required_text(row, 1)) {
+        (Ok(found), Ok(value)) if found == key => Ok(value),
+        _ => Err(TursoStorageError::reset(PhysicalResetReason::Compatibility)),
+    }
+}
+
+/// What opening an existing or fresh database changed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Initialized {
+    /// A previous cache format was carried forward; native owners compact
+    /// after opening.
+    format_migrated: bool,
+    /// The storage version an older database was upgraded from.
+    storage_upgraded_from: Option<u32>,
+}
+
+/// What opening does with a file written at an older storage version.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OlderStorage {
+    /// Runs the registered upgrade steps: a native file keeps its path
+    /// across builds.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "only native opens upgrade")
+    )]
+    Upgrade,
+    /// Resets it as incompatible. A browser database's name embeds the
+    /// storage version (`cache_core::codec::cache_database_name`), so an older
+    /// version under the current name was not written by the build that named
+    /// it.
+    #[cfg_attr(
+        all(not(target_arch = "wasm32"), not(test)),
+        expect(dead_code, reason = "only the browser open resets older versions")
+    )]
+    Reset,
+}
+
+/// Validates or initializes a database, first upgrading one written at an
+/// older storage version in place when `older` allows it.
+fn initialize(
+    connection: &Db,
+    scope: &str,
+    fresh: bool,
+    older: OlderStorage,
+) -> Result<Initialized, TursoStorageError> {
     enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
     if fresh {
         driver::write_transaction(connection, || {
-            for sql in CREATE_SCHEMA
-                .into_iter()
-                .chain(calendar::CREATE_SCHEMA)
-                .chain(channel_timeline::CREATE_SCHEMA)
-            {
+            for sql in fresh_schema_statements() {
                 driver::execute(connection, sql, Vec::new())?;
             }
             driver::execute(
@@ -3592,14 +3770,23 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
         if !has_fresh_schema(connection)? {
             validate_frozen_schema(connection)?;
         }
-        return Ok(false);
+        return Ok(Initialized::default());
     }
 
     // Ordinary reopen only validates compatibility and pending writes. A changed
     // derived projection performs one bounded rebuild before serving queries.
-    // A schema identical to the one this build creates passed the structural
-    // and statement checks in this build's tests, so only a different schema
-    // pays for them again.
+    // An older storage version is upgraded first, so the checks below hold the
+    // upgraded file to exactly what a fresh file has; one this scope does not
+    // own is never upgraded. A schema identical to the one this build creates
+    // passed the structural and statement checks in this build's tests, so
+    // only a different schema pays for them again.
+    let storage_upgraded_from = match older {
+        OlderStorage::Upgrade => {
+            check_owner(connection, scope)?;
+            migration::upgrade(connection)?
+        }
+        OlderStorage::Reset => None,
+    };
     let fresh_schema = has_fresh_schema(connection)?;
     if !fresh_schema {
         validate_frozen_schema(connection)?;
@@ -3628,14 +3815,22 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
             return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
         }
         if value != expected_value {
-            // Only the namespace may differ, and only for a migratable format.
+            // Only the namespace may differ: by its epoch, or for a
+            // migratable format.
             if key != "namespace" {
                 return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
             }
             previous_namespace = Some(value.to_owned());
         }
     }
-    let migrated = match previous_namespace {
+    let format_migrated = match previous_namespace {
+        Some(previous_namespace)
+            if namespace_versions(scope, &previous_namespace)
+                .is_some_and(|(_, format)| format == CACHE_FORMAT_VERSION) =>
+        {
+            schema_store::leave_epoch(connection, &cache_namespace(scope))?;
+            false
+        }
         Some(previous_namespace) => {
             migrate_previous_format(connection, scope, &previous_namespace)?;
             true
@@ -3653,15 +3848,27 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
     calendar::ensure_projection_version(connection)?;
     channel_timeline::ensure_projection_version(connection)?;
     people_sql::open(connection)?;
-    Ok(migrated)
+    Ok(Initialized {
+        format_migrated,
+        storage_upgraded_from,
+    })
 }
 
 /// The digest of `sqlite_schema` in a database this build creates; see
 /// [`schema_digest`]. `fresh_database_has_the_pinned_schema_digest` fails with
 /// the new value whenever the schema or how turso records it changes.
-const FRESH_SCHEMA_DIGEST: u128 = 0x9730502cc3ac3e19dce075b3bd90a034;
+const FRESH_SCHEMA_DIGEST: u128 = 0x14051d207312396d9a1c9bcae771a4c5;
 
 /// Whether the database holds exactly the schema this build creates.
+/// Every statement that creates a fresh file's schema, in order.
+fn fresh_schema_statements() -> impl Iterator<Item = &'static str> {
+    CREATE_SCHEMA
+        .into_iter()
+        .chain(calendar::CREATE_SCHEMA)
+        .chain(channel_timeline::CREATE_SCHEMA)
+        .chain([schema_store::CREATE_TABLE])
+}
+
 fn has_fresh_schema(connection: &Db) -> Result<bool, TursoStorageError> {
     Ok(schema_digest(connection)? == Some(FRESH_SCHEMA_DIGEST))
 }
@@ -4278,6 +4485,7 @@ fn validate_frozen_schema(connection: &Db) -> Result<(), TursoStorageError> {
     validate_table_indexes(connection, "optimistic_layers", &[])?;
     validate_predicate_indexes(connection)?;
     validate_optimistic_predicate_indexes(connection)?;
+    schema_store::validate_schema(connection)?;
     validate_table_indexes(
         connection,
         "optimistic_uncertain_attributes",
@@ -4379,6 +4587,7 @@ fn validate_allowed_schema_objects(connection: &Db) -> Result<(), TursoStorageEr
         .into_iter()
         .chain(calendar::TABLES)
         .chain(channel_timeline::TABLES)
+        .chain([schema_store::TABLE])
         .collect::<Vec<_>>();
     let named_indexes = named_indexes
         .into_iter()
@@ -5933,11 +6142,13 @@ mod conjunction;
 mod contact_search;
 mod derived_sorts;
 mod integrity;
+mod migration;
 mod mutation_retry;
 mod name_search;
 mod page_retention;
 mod people_sql;
 mod record_batch;
+mod schema_store;
 mod search;
 
 #[cfg(all(test, target_arch = "wasm32"))]

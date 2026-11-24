@@ -114,19 +114,33 @@ fn parent_key(kind: &str, id: &str) -> Option<RecordKey> {
     };
     RecordKey::new(format!("{kind}:{id}")).ok()
 }
+/// The record types whose documents hold favorite and property facts.
+pub(crate) const PARENTS: &[&str] = &[
+    "GraphqlSoupDocument",
+    "GraphqlSoupProject",
+    "GraphqlSoupChat",
+    "GraphqlSoupEmailThread",
+    "GraphqlSoupChannel",
+    "GraphqlSoupDatabaseRow",
+];
+
+/// The fields of a parent record its favorite and property facts read.
+pub(crate) const PARENT_INPUTS: &[&str] = &["isFavorited", "properties"];
+
+/// The fields of a property record its parents' facts read.
+pub(crate) const PROPERTY_INPUTS: &[&str] = &["id", "propertyDefinitionId", "value"];
+
 fn is_parent(key: &EntityKey<'_>) -> bool {
-    [
-        "GraphqlSoupDocument:",
-        "GraphqlSoupProject:",
-        "GraphqlSoupChat:",
-        "GraphqlSoupEmailThread:",
-        "GraphqlSoupChannel:",
-        "GraphqlSoupDatabaseRow:",
-    ]
-    .iter()
-    .any(|prefix| key.as_ref().starts_with(prefix))
+    PARENTS.iter().any(|typename| {
+        key.as_ref()
+            .strip_prefix(typename)
+            .is_some_and(|rest| rest.starts_with(':'))
+    })
 }
-fn row_facts(key: &EntityKey<'_>, record: &Record) -> Result<(Uuid, Vec<ExactFact>), ()> {
+pub(super) fn row_facts(
+    key: &EntityKey<'_>,
+    record: &Record,
+) -> Result<(Uuid, Vec<ExactFact>), ()> {
     let definition = definition(record).ok_or(())?;
     let mut result = vec![ExactFact {
         attribute: facts::row_attribute(definition),

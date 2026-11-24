@@ -47,7 +47,7 @@ const SYNC_COUNT: &str = "SELECT COUNT(*) FROM channel_sync";
 const ROW_COUNT: &str = "SELECT COUNT(*) FROM channel_timeline";
 const META_SELECT: &str = "SELECT value FROM meta WHERE key = ?1";
 const META_UPSERT: &str = "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value";
-const PROJECTION_VERSION_KEY: &str = "channel_timeline_projection_version";
+pub(super) const PROJECTION_VERSION_KEY: &str = "channel_timeline_projection_version";
 
 pub(super) const VALIDATED_SQL: [&str; 19] = [
     ROW_UPSERT,

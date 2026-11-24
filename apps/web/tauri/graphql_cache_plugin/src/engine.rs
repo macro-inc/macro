@@ -76,9 +76,13 @@ pub struct WriteResultWire {
     /// Effective scalar patches; absent when a query reread is required.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
-    /// Bindings omitted while preserving a normalizable server response.
+    /// Bindings omitted while preserving a server response.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub identity_errors: Vec<String>,
+    /// Why a confirmed response's content was not written; nothing is
+    /// applied from that response.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unwritable_response: Option<String>,
     /// Effective-view revision installed by this logical mutation.
     pub revision: String,
     /// Whether this write advanced `revision`.
@@ -453,6 +457,7 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
         unchanged_views: None,
         field_changes: result.field_changes,
         identity_errors: result.identity_errors,
+        unwritable_response: result.unwritable_response,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
         search_changed_buckets: result.search_changed_buckets,
@@ -556,19 +561,22 @@ impl EngineHandle {
             .map_err(|error| error.to_string())
     }
 
-    /// Validates and persists compatible metadata before publishing it to native operations.
-    pub async fn install_schema(
-        &self,
-        schema: &cache_core::meta::Schema,
-        path: &std::path::Path,
-    ) -> Result<(), String> {
+    /// Merges `schema`, a webview's build, into the engine's and records the
+    /// result in storage before native operations use it. A build that
+    /// changes the shape of a type the engine knows is refused, and nothing
+    /// changes.
+    pub async fn install_schema(&self, schema: &cache_core::meta::Schema) -> Result<(), String> {
         let mut state = self.inner.lock().await;
         let merged = state
             .engine
             .schema()
             .merge(schema)
             .map_err(|e| e.to_string())?;
-        persist_schema(path, &merged)?;
+        state
+            .engine
+            .storage()
+            .record_schema(&merged, schema)
+            .map_err(|e| e.to_string())?;
         state
             .engine
             .install_schema(&merged)
@@ -1202,7 +1210,7 @@ impl EngineHandle {
             .await
             .map_err(|error| error.to_string())?;
         let projections = if admitted {
-            soup::write_projections(
+            match soup::write_projections(
                 engine,
                 &query,
                 operation_name.as_deref(),
@@ -1211,7 +1219,27 @@ impl EngineHandle {
                 None,
                 None,
             )
-            .await?
+            .await
+            {
+                Ok(projections) => projections,
+                // The engine settles a response that does not normalize
+                // without its content, so nothing is projected from it.
+                Err(error) => {
+                    let schema = engine.schema_snapshot();
+                    let response = soup::write_response(
+                        &schema,
+                        &query,
+                        operation_name.as_deref(),
+                        &variables,
+                        &data,
+                        None,
+                    );
+                    if response.normalizes() {
+                        return Err(error);
+                    }
+                    Vec::new()
+                }
+            }
         } else {
             Vec::new()
         };
@@ -1349,25 +1377,3 @@ impl EngineHandle {
 
 #[cfg(test)]
 mod test;
-
-/// Atomically persists metadata separately from user records; no database reset occurs.
-pub(crate) fn persist_schema(
-    path: &std::path::Path,
-    schema: &cache_core::meta::Schema,
-) -> Result<(), String> {
-    let bytes = serde_json::to_vec(schema.artifact()).map_err(|e| e.to_string())?;
-    let temporary = path.with_extension("json.tmp");
-    use std::io::Write;
-    let mut file = std::fs::File::create(&temporary).map_err(|e| e.to_string())?;
-    file.write_all(&bytes).map_err(|e| e.to_string())?;
-    file.sync_all().map_err(|e| e.to_string())?;
-    drop(file);
-    std::fs::rename(&temporary, path).map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    if let Some(parent) = path.parent() {
-        std::fs::File::open(parent)
-            .and_then(|dir| dir.sync_all())
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}

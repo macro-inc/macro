@@ -1,6 +1,27 @@
 import { Telemetry } from '@macro-inc/observability';
 import type { CacheTelemetryEnvelope, CacheTelemetrySink } from './telemetry';
 
+type CacheSpan = ReturnType<typeof Telemetry.anonymousSpan>;
+
+/** What bringing the opened records to the build's schema did, when set. */
+function setSchemaAttributes(
+  span: CacheSpan,
+  event: CacheTelemetryEnvelope
+): void {
+  const attributes = {
+    'cache.schema.change': event.schemaChange,
+    'cache.schema.reset_reason': event.schemaResetReason,
+    'cache.schema.changed_types': event.schemaChangedTypes,
+    'cache.schema.dropped_records': event.schemaDroppedRecords,
+    'cache.schema.incomplete_documents': event.schemaIncompleteDocuments,
+    'cache.schema.retired_overlays': event.schemaRetiredOverlays,
+    'cache.schema.adopt_ms': event.schemaAdoptMs,
+  };
+  for (const [key, value] of Object.entries(attributes)) {
+    if (value !== undefined) span.setAttr(key, value);
+  }
+}
+
 /**
  * Privacy-safe OpenTelemetry adapter. It uses the anonymous span API so the
  * browser provider cannot enrich cache metrics with `usr.id`.
@@ -46,6 +67,7 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
         if (event.openOutcome !== undefined) {
           span.setAttr('cache.open_outcome', event.openOutcome);
         }
+        setSchemaAttributes(span, event);
         if (event.queueDiagnosticsAvailability !== undefined) {
           span.setAttr(
             'cache.queue_diagnostics_availability',

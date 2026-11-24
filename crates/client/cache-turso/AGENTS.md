@@ -16,6 +16,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 - `src/storage/contact_search.rs` / `.sql`: validate the partial `records_contacts_cover_idx` on `records(__typename, id, value)` and explicitly select it after the bound text prefilter. The pinned planner otherwise chooses the extra table lookup. Decode one row at a time for before-limit policy; never add a final SQL limit or collect the corpus. Ordinary search retains its existing covering-only path.
 - `src/storage/people_sql.rs`: local relational reads over contact facts in the existing predicate index, not another database or Rust catalog. Derive facts in record transactions, delete them with records, and rebuild in bounded batches only when the profile/account stamp changes. Generic caller projections cannot override these cache-owned facts. SQL reads only needed attributes and limits final results before decoding; enforce both row and byte budgets. Pin fact joins to document/attribute primary-key seeks: the unhinted Turso plan can choose quadratic attribute scans at 100k. The owned profile's layout version 3 also derives bounded name words, epoch-scoped ranking facts, and per-list membership and list-scoped rank facts. Delta updates change only differing facts; activity updates must not rewrite name-word postings. Rebuild older derived profiles in bounded batches while preserving authority, queue and generation. The indexed reader serves menu policy 7; there is no remote or old-scoring fallback.
 - `src/storage/name_search.rs`: indexed name-policy reader over existing owned facts, in one read transaction. Probe at most 129 posting IDs; broad reads bound ordered work to 4096 rank keys per default/current-epoch stream, then use a complete matching stream if needed. The address stage reads the `email_lower` fact with the same LIKE terms as contains. Eligibility and current-window DM dedup precede stopping; prior DM aliases use bounded target lookups. Overflow/incomplete records remain explicit streaming paths. Missing/stale projection stamps reject, never empty success. Core and both host families use this path for policy 7. With a list order, each group walks its lists' scoped rank streams in recency order (so a group smaller than the window still stops early), then people in no group walk the plain streams excluding every requested list; `NameSearchRead::scan_start`/`can_stop_at` take the scan's group. The exact-name seed is a range on the full-name fact from the query (inclusive) to the query followed by `!`, the byte after a space (exclusive), so it holds the full name and every `query <rest>` name and first names stay index seeks; the core recheck drops the rest. Within a stage, messaged rows (positive time) sort before unmessaged ones in rank-key order, so early stopping bounds the rest of a stage by the time in the current key. `tests/common/name_search.rs` checks native/OPFS parity with the complete bounded-memory reference.
+- `src/storage/schema_store.rs`: the stored GraphQL schema (`cache_schema`) and `adopt_schema`, which applies a schema change's tier in one write transaction: a Types change drops its types' facts before their documents (explicit deletes, or keeping the other documents' facts and recreating the tables when the type holds more than half of the documents, never the per-document cascade), then their records, Quick Access rows and `DERIVED_STORES`; a Reset clears every refetchable row. Both keep identity, authority and the queue, with the identity metadata (alias, coalescing UUID, tombstone) of the records the queue names, and retire overlays that no longer fit, with their queued projections; shadows are composed again through the aliases settled creates left. A tier whose statement fails or that runs out of space rolls back and resets instead (`ResetReason::Failed`); a corrupt file or an uncertain write still needs a physical reset. A new table of rows derived from records goes in `DERIVED_STORES` ([schema changes](../README.md#schema-changes)).
 - `src/storage/search.rs`: bucket scans over the covering browse index with a Rust byte-subsequence prefilter (not SQL LIKE, which Turso runs several times slower) and checked borrowed-row decoding; reuse the key buffer and let core copy only winners, never collect or limit text results first.
 - `src/storage/channel_timeline.rs`: channel timeline rows (written through with every `GraphqlChannelMessage` / `GraphqlChannelTimelineActivity` record), fetched-stretch coverage and the per-channel applied change sequence. Page reads stay on `channel_timeline_scan_idx` and stop at the limit; a test pins VM steps so a page costs the same in a 200-row and a 20,000-row channel. Projection changes rebuild rows from records on reopen and keep coverage and sequences.
 - `src/key.rs`: the compound key schema (frozen — see Gotchas).
@@ -50,6 +51,8 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 - `cargo test -p cache-turso --test wal_checkpoint`: the idle call, the log restart after it and Turso's own checkpoint without it; `--lib wal_checkpoint` adds sync failures inside the copy, then a crash or close and a reopen, and the page cache across a skipped call.
 - The `web` wasm test target checks streamed search over real OPFS; use the [browser runner](../turso-opfs/README.md#repeatable-verification).
 - `cargo test --release -p cache-turso --lib compare_search_scan_options -- --ignored --nocapture`: isolate prepared-statement, covering-index, and borrowed-row costs on a temporary database, without changing production schema.
+- `cargo test --release -p cache-turso --lib generated_chains_long_run -- --ignored`: 1,000 generated storage upgrade chains with interruptions, each checked against a fresh file at the target version.
+- `CACHE_MIGRATION_DB=<bench database> cargo test --release -p cache-turso --lib upgrade_cost_on_a_retained_cache -- --ignored --nocapture`: time the 11 to 12 upgrade, and each of its statements, against an ordinary reopen of the same database: any closed cache file of this build written under the `cache-bench` scope, such as the production-size p50 and p90 files the separate `cache-bench` generator writes. Linux only: its I/O, CPU and memory counters read `/proc`.
 
 ## Gotchas
 
@@ -58,26 +61,43 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 - Permission retirement pages raw and projection-only keys through covering keys, retaining the distinction between an initial cursor and an empty ID. Whole-projection deletion skips old fact reconstruction but still rebases ordered pending contributions; preserve queue rows, retry metadata, and identity bindings.
 
-- The contact payload index is part of this branch's unpublished schema-12 cutover (tracked `origin/main` baseline: schema 11), not a second migration/version. Older local schema-12 shapes missing the index reject as incompatible; do not silently upgrade or reuse those test files. Fresh/current shape reopen preserves records, queued writes and generation. Benchmark only with fresh synthetic profiles, not user caches.
+- Storage 12 added the covering browse index and the partial contact payload index; the registered 11 to 12 step builds both in place. A pre-release local 12 shape missing the contact index still rejects as incompatible: it already says 12, so no step runs. Fresh/current shape reopen preserves records, queued writes and generation. Benchmark only with fresh synthetic profiles, not user caches.
 - Derived sort rules (`item_filter_index::SORT_FACT_DERIVATIONS`) are backfilled in place on open, not by a storage step: meta `sort_fact_derivations` lists the fingerprints of the rules applied, and only the missing ones run, so adding a rule leaves the others' facts (and their stale copies) alone.
 - Projection 6 includes the visible local-part fallback in contact matching; storage schema remains 12. It is independent of the context-aware person-policy API.
 - Contact verification keyset-scans `records` through the existing typename/id key, visits at most 500 rows plus one undecoded lookahead, and returns only scoped IDs and scalar progress. Deletion maintains the existing search/predicate projections transactionally; do not add a contacts table or whole-directory ID set. `tests/people_sql.rs` covers bounded verification/deletion at 1k and optionally 100k; `tests/web.rs` exercises the same contract over OPFS.
 - Projection 5 adds viewer-scoped contacts and removes public-profile membership; retention version 2 shares the bounded viewer-page budget with contact search/lookup snapshots. Neither changes storage schema 12 or clears durable data.
-- Quick Access projection version upgrades rebuild derived rows from retained normalized records; preserve the mutation queue and storage generation (covered by `src/storage/test/search_projection.rs`). Storage schema 12 is a separate, intentionally incompatible covering-index cutover: native reset drops queued writes; browser versioning opens a fresh file. See `../README.md#streaming-text-search`.
-
-- Storage schema 13 adds the three channel timeline tables as another incompatible cutover from schema 12 (native reset drops queued writes; browsers open a fresh file).
+- Quick Access projection version upgrades rebuild derived rows from retained normalized records; preserve the mutation queue and storage generation (covered by `src/storage/test/search_projection.rs`). Storage versions are separate: see the upgrade steps below and `../README.md#storage-upgrades`.
 
 - `#![forbid(unsafe_code)]` and `#![deny(missing_docs)]` — this crate is held to
   a stricter bar than most because it's the single physical-disk commit point.
 - The compound-key schema and payload encoding are frozen; an incompatible or
   uncertain on-disk state is classified for physical reset, never silently
   migrated, copied, or redirected to a fallback backend.
-- The one exception is a cache format version listed in
+- One exception is a storage version with a registered chain of steps in
+  `storage/migration.rs`, which is upgraded in place, never silently: one write
+  transaction per step, which also advances `meta.storage_schema_version`, so an
+  interrupted upgrade resumes. The last step's transaction runs the frozen-schema
+  checks (later opens skip them on finding a fresh file's schema digest), so a
+  rejected chain leaves the version before its last step. Only native files
+  reach a step: browser database names embed the storage version, so a browser
+  build opens a new database instead, and its open (`OlderStorage::Reset`)
+  resets an older version found under its own name. Bumping
+  `STORAGE_SCHEMA_VERSION` without a step fails to compile; clearing `STEPS`
+  declares that older files reset. Freeze a step's SQL when registering it:
+  never use the current schema constants, which a later version changes. Each
+  step gets a test beside the 11 to 12 one in `test/migration.rs`. A missing
+  chain, a newer version, or a failing step still resets.
+- Storage 13 adds `cache_schema`; its step creates the table empty, and the first `adopt_schema` stores a schema, reading an unrecorded cache as `cache_core::schema_change::unrecorded_schema`. Dropping rows for a schema change is logical, not a physical reset: `schema_store.rs` may recreate `records` and the tables derived from it, but must put the identity and authority records back, and never touches `mutation_queue` or `meta`. A native file of another schema compatibility epoch is moved to this build's namespace with its stored schema marked unreadable (`leave_epoch`), so adoption resets it and keeps the queue; `migrate_previous_format` marks one at a previous cache format the same way, in its own transaction.
+- The other exception is a cache format version listed in
   `MIGRATABLE_CACHE_FORMAT_VERSIONS`: `migrate_previous_format` drops the
-  refetchable records, search projections, index facts, calendar ranges, and
-  channel timeline state in
-  one transaction, keeps queued mutations, optimistic layers, and their
-  projections, and rewrites the namespace. Everything else still resets.
+  refetchable records and every table derived from them in one transaction,
+  recreating the tables as a schema Reset does (`clear_records`), keeps queued mutations and optimistic layers, reads the
+  identity and authority records and the queue's identity metadata in the
+  previous format and writes them back in this one, marks the stored schema
+  unreadable so adoption resets the queued projections, and rewrites the
+  namespace. Everything else still resets. The compaction swap after it moves
+  the migrated file to `.backup` first; `open` moves a lone backup back, so a
+  crash between the two renames keeps the queue.
 
 ## Related
 

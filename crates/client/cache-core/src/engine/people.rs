@@ -167,6 +167,7 @@ impl<S: Storage> Engine<S> {
         Ok(WriteResult {
             field_changes: Some(changed.field_changes),
             identity_errors: vec![],
+            unwritable_response: None,
             revision: changed.revision,
             revision_advanced: changed.revision_advanced,
             search_changed_buckets: Some(BTreeSet::from(["person".into()])),

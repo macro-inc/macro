@@ -225,8 +225,12 @@ pub struct QueryRegistration<'a> {
 pub struct WriteResult {
     /// Effective scalar changes; absent when consumers must re-read queries.
     pub field_changes: Option<Vec<crate::field_changes::RecordFieldChange>>,
-    /// Identity bindings omitted while committing otherwise normalizable server data.
+    /// Identity bindings omitted while committing server data.
     pub identity_errors: Vec<String>,
+    /// Why a confirmed response's content was not written: it did not
+    /// normalize, so its write settled with only the identities it resolved.
+    /// Hosts apply nothing from that response and revalidate instead.
+    pub unwritable_response: Option<String>,
     /// Revision installed after this logical cache mutation.
     pub revision: CacheRevision,
     /// Whether this write advanced [`Self::revision`].
@@ -249,6 +253,21 @@ pub struct WriteResult {
     pub revalidations: Vec<QueryRevalidation>,
     /// Stable caller identity of a settled mutation.
     pub mutation_uuid: Option<String>,
+}
+
+/// The `id` and `__typename` of a server-assigned key, the content a settled
+/// outcome keeps of the record it names.
+fn identity_record(key: &EntityKey<'static>) -> Record {
+    let mut record = Record::default();
+    for (field, value) in [("__typename", key.typename()), ("id", key.id())] {
+        if let Some(value) = value {
+            record.fields.insert(
+                field.into(),
+                crate::value::CacheValue::String(value.to_owned()),
+            );
+        }
+    }
+    record
 }
 
 /// Internal durable deltas; viewer field proof is never sent across host boundaries.
@@ -352,7 +371,7 @@ pub enum DeferOptimisticWriteResult {
     /// The current mutation retained its optimistic layer and retry state.
     Deferred,
     /// The attempt was superseded, so it was discarded instead of retried.
-    DiscardedSuperseded(SupersededMutationResult),
+    DiscardedSuperseded(Box<SupersededMutationResult>),
 }
 
 /// Tagged rollback result used by transport adapters for settlement fanout.
@@ -696,6 +715,7 @@ impl<S: Storage> Engine<S> {
         Ok(WriteResult {
             field_changes: Some(crate::field_changes::between(&before_all, &after)),
             identity_errors: Vec::new(),
+            unwritable_response: None,
             revision,
             revision_advanced: true,
             search_changed_buckets: None,
@@ -766,14 +786,18 @@ impl<S: Storage> Engine<S> {
             for projection in &mut source.projection_mutations {
                 identity::remap_projection(projection, &identities);
             }
-            let document = Self::document(&mut self.docs, &queued.mutation.request.query)?;
-            let operation =
-                document.operation(queued.mutation.request.operation_name.as_deref())?;
-            let mut updates = identity::remap_updates(
-                normalize(&self.schema, operation, &variables, &source.mutation_data)?,
-                &source.identity_bindings,
-                &identities,
-            );
+            // A retired overlay adds no records. Its document is not
+            // normalized: it may select a field a later schema removed.
+            let normalized = if crate::schema_change::is_retired(&source) {
+                RecordUpdates::new()
+            } else {
+                let document = Self::document(&mut self.docs, &queued.mutation.request.query)?;
+                let operation =
+                    document.operation(queued.mutation.request.operation_name.as_deref())?;
+                normalize(&self.schema, operation, &variables, &source.mutation_data)?
+            };
+            let mut updates =
+                identity::remap_updates(normalized, &source.identity_bindings, &identities);
             identity::apply_record_lifecycle(&mut updates, &source.identity_bindings, &identities);
             if updates
                 .keys()
@@ -1735,6 +1759,7 @@ impl<S: Storage> Engine<S> {
                         WriteResult {
                             field_changes: None,
                             identity_errors: Vec::new(),
+                            unwritable_response: None,
                             mutation_uuid: None,
                             revision: self.revision,
                             revision_advanced: true,
@@ -1845,6 +1870,7 @@ impl<S: Storage> Engine<S> {
             WriteResult {
                 field_changes: Some(field_changes),
                 identity_errors: Vec::new(),
+                unwritable_response: None,
                 mutation_uuid: None,
                 revision,
                 revision_advanced,
@@ -2560,6 +2586,7 @@ impl<S: Storage> Engine<S> {
             write_result: WriteResult {
                 field_changes: Some(crate::field_changes::between(&before, &after)),
                 identity_errors: Vec::new(),
+                unwritable_response: None,
                 revision,
                 revision_advanced: true,
                 search_changed_buckets: None,
@@ -2690,12 +2717,12 @@ impl<S: Storage> Engine<S> {
                 .map(|candidate| candidate.id)
                 .ok_or(EngineError::UnknownTransaction(transaction))?;
             let write_result = self.rollback_optimistic_write(transaction, claim).await?;
-            return Ok(DeferOptimisticWriteResult::DiscardedSuperseded(
+            return Ok(DeferOptimisticWriteResult::DiscardedSuperseded(Box::new(
                 SupersededMutationResult {
                     write_result,
                     replacement_transaction_id,
                 },
-            ));
+            )));
         }
         if !self
             .storage
@@ -2882,8 +2909,11 @@ impl<S: Storage> Engine<S> {
     /// network response without flickering through the pre-mutation value.
     /// Real records and queue deletion commit in one storage transaction.
     /// Invalid response identities are reported in [`WriteResult::identity_errors`].
-    /// If that response also cannot normalize, the attempt is discarded and
-    /// [`EngineError::IdentityResolutionFailed`] carries the rollback changes.
+    /// A response that cannot normalize settles without its content, keeping
+    /// the identities that resolved, and [`WriteResult::unwritable_response`]
+    /// says why. If it has identities and none resolved, the attempt is
+    /// discarded instead, and [`EngineError::IdentityResolutionFailed`]
+    /// carries the rollback changes.
     pub async fn commit_optimistic_write(
         &mut self,
         transaction: OptimisticTransactionId,
@@ -3066,35 +3096,75 @@ impl<S: Storage> Engine<S> {
             .ok_or(EngineError::UnknownTransaction(transaction))?;
         let mutation_uuid = Some(self.optimistic[index].uuid.to_string());
         let mut bindings = self.optimistic[index].identity_bindings.clone();
+        let doc = Self::document(&mut self.docs, query)?;
+        let op = doc.operation(operation_name)?;
+        let normalized = normalize(&self.schema, op, variables, data);
+        // A response that doesn't normalize may come from a server on another
+        // schema, so only an object stating its type identifies anything.
+        let resolve: fn(&[IdentityBinding], &serde_json::Value) -> Result<IdentityMap, String> =
+            if normalized.is_ok() {
+                identity::resolve
+            } else {
+                identity::resolve_stated
+            };
         let mut identity_errors = Vec::new();
-        let identities = match identity::resolve(&bindings, data) {
+        let identities = match resolve(&bindings, data) {
             Ok(identities) => identities,
             Err(_) => {
-                // Salvage valid bindings without guessing targets for failed ones.
+                // Salvage valid bindings without guessing targets for failed
+                // ones: each keeps only its own identity, and reference fields
+                // infer from those left, never a key any binding names.
                 let mut identities = IdentityMap::new();
-                bindings.retain(|binding| {
-                    match identity::resolve(std::slice::from_ref(binding), data) {
+                bindings.retain(
+                    |binding| match resolve(std::slice::from_ref(binding), data) {
                         Ok(resolved) => {
-                            identities.extend(resolved);
+                            identities.extend(
+                                resolved
+                                    .into_iter()
+                                    .filter(|(local, _)| *local == binding.local_key),
+                            );
                             true
                         }
                         Err(error) => {
                             identity_errors.push(error);
                             false
                         }
-                    }
-                });
+                    },
+                );
+                identity::expand_reference_identities(
+                    &self.optimistic[index].identity_bindings,
+                    &mut identities,
+                );
                 identities
             }
         };
-        let doc = Self::document(&mut self.docs, query)?;
-        let op = doc.operation(operation_name)?;
-        let mut updates = match normalize(&self.schema, op, variables, data) {
+        // The bindings left are those that resolved, an ID the server kept
+        // included; one with no response path reads nothing from it.
+        let resolved = bindings
+            .iter()
+            .any(|binding| !binding.response_path.is_empty());
+        let mut unwritable = None;
+        let mut updates = match normalized {
             Ok(updates) => updates,
-            Err(error) if identity_errors.is_empty() => return Err(error.into()),
+            Err(error) if identity_errors.is_empty() || resolved => {
+                // The server accepted the write, but no retry of this response
+                // normalizes: the schema dropped a field a write queued under
+                // an older one selects, or the response is malformed. Settle it
+                // as a stale outcome is settled, keeping the IDs it resolved
+                // without its content, rather than holding the queue head or
+                // losing an ID a later queued write names. Bindings that did
+                // not resolve are reported, as for a response that normalizes.
+                unwritable = Some(error.to_string());
+                projections.clear();
+                identities
+                    .values()
+                    .map(|target| (target.clone(), identity_record(target)))
+                    .collect()
+            }
             Err(error) => {
-                // No safe authoritative write is possible. Retire this attempt
-                // rather than replaying an already successful server mutation.
+                // Neither the content nor any identity can be written. Retire
+                // this attempt rather than replaying an already successful
+                // server mutation.
                 let error = format!("{}; {error}", identity_errors.join("; "));
                 let rollback = self
                     .rollback_optimistic_write_with_outcome(transaction, claim)
@@ -3114,6 +3184,7 @@ impl<S: Storage> Engine<S> {
                 )));
             }
         };
+        let publish_snapshot = publish_snapshot && unwritable.is_none();
         if publish_snapshot && let Some(records) = self.response_records {
             updates.extend(records(&self.schema, op, variables, data, &updates)?);
         }
@@ -3258,6 +3329,7 @@ impl<S: Storage> Engine<S> {
         Ok(WriteResult {
             field_changes: Some(crate::field_changes::between(&before, &after)),
             identity_errors,
+            unwritable_response: unwritable,
             revision,
             revision_advanced: true,
             search_changed_buckets: None,
@@ -3366,6 +3438,7 @@ impl<S: Storage> Engine<S> {
         Ok(WriteResult {
             field_changes: Some(crate::field_changes::between(&before, &after)),
             identity_errors: Vec::new(),
+            unwritable_response: None,
             revision,
             revision_advanced: true,
             search_changed_buckets: None,
@@ -3710,6 +3783,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
         Ok(WriteResult {
             field_changes: self.optimistic.is_empty().then_some(field_changes),
             identity_errors: Vec::new(),
+            unwritable_response: None,
             revision,
             revision_advanced,
             search_changed_buckets: None,

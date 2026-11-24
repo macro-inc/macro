@@ -19,6 +19,27 @@ mod test;
 /// for the Soup partitions this adapter projects.
 const NOTIFICATION_TYPE_FIELDS: [&str; 2] = ["targetEntityType", "entityType"];
 
+/// The record types whose documents hold their active notifications.
+pub(super) const PARENTS: &[&str] = &[
+    "GraphqlSoupDocument",
+    "GraphqlSoupProject",
+    "GraphqlSoupChat",
+    "GraphqlSoupChannel",
+    "GraphqlSoupDatabaseRow",
+];
+
+/// The field of a parent record that lists its notifications.
+pub(super) const PARENT_INPUTS: &[&str] = &["notifications"];
+
+/// The fields of a notification record its parent's facts read.
+pub(super) const NOTIFICATION_INPUTS: &[&str] = &[
+    "id",
+    "entityId",
+    NOTIFICATION_TYPE_FIELDS[0],
+    NOTIFICATION_TYPE_FIELDS[1],
+    "state",
+];
+
 /// Resolve edge and child aliases from the actual selection, not arbitrary payload fields.
 pub(super) fn selected_snapshot(
     schema: &cache_core::meta::Schema,
