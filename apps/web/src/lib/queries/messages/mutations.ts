@@ -603,7 +603,7 @@ const deleteNonce = createMutationNonce<DeleteMessageParams>(
  */
 export function useDeleteMessageMutation(
   callbacks?: MutationCallbacks<
-    EntityMessage,
+    EntityMessage | undefined,
     Error,
     DeleteMessageParams,
     DeleteMutationContext
@@ -629,7 +629,7 @@ export function useDeleteMessageMutation(
       );
     },
     ...withCallbacks<
-      EntityMessage,
+      EntityMessage | undefined,
       Error,
       DeleteMessageParams,
       DeleteMutationContext
@@ -647,7 +647,7 @@ export function useDeleteMessageMutation(
           });
         },
         onSuccess(data, _vars, context) {
-          applyRootDeletion(data, context?.threadState);
+          if (data) applyRootDeletion(data, context?.threadState);
           // The deleted message may have referenced a CRM record.
           fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
         },
@@ -696,7 +696,7 @@ const patchNonce = createMutationNonce<PatchMessageParams>(
  */
 export function usePatchMessageMutation(
   callbacks?: MutationCallbacks<
-    EntityMessage,
+    EntityMessage | undefined,
     Error,
     PatchMessageParams,
     PatchMutationContext
@@ -733,7 +733,7 @@ export function usePatchMessageMutation(
       });
     },
     ...withCallbacks<
-      EntityMessage,
+      EntityMessage | undefined,
       Error,
       PatchMessageParams,
       PatchMutationContext
@@ -753,7 +753,7 @@ export function usePatchMessageMutation(
           });
         },
         onSuccess(data) {
-          applyMessage(data, 'edited');
+          if (data) applyMessage(data, 'edited');
           // An edit can add or remove a CRM record reference.
           fireAndForget(refreshCrmAssociatedSoupQueries(), 'messages');
         },

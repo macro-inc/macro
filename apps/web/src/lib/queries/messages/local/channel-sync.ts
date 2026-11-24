@@ -1,13 +1,15 @@
 import type { CacheHost } from '@graphql-cache/index';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
-import { queryAccountSession } from '@queries/auth/account-session';
+import {
+  maySignedInUserWrite,
+  queryAccountSession,
+} from '@queries/auth/account-session';
 import { ChannelChangesDocument } from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlSoupClient,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
-import { untrack } from 'solid-js';
 import { channelCacheHost } from './channel-flag';
 import { queryChannelNetwork } from './channel-network';
 import { type ChannelTouches, createChannelTouches } from './channel-pages';
@@ -107,7 +109,8 @@ export function channelWrites(host: CacheHost): ChannelWrites {
     runtime: channelSyncRuntime(host),
     client: getGraphqlSoupClient,
     serving: graphqlCacheEnabled,
-    signIn: () => untrack(queryAccountSession),
+    signIn: queryAccountSession,
+    mayWrite: maySignedInUserWrite,
   });
   writes.set(host, created);
   return created;

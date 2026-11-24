@@ -85,7 +85,11 @@ TanStack path in `../` runs untouched. A host whose database is away for now
   writes still waiting, `CACHE_RETIRED`, and the one being handed over, after
   `RETIRED_ANSWER_BUDGET_MS` once it was acknowledged. A write goes out only
   under the sign-in it was asked for under (`signIn`): one still waiting its
-  turn as another replaces it on the same host ends `CACHE_RETIRED`. When the
+  turn as another replaces it on the same host ends `CACHE_RETIRED`, as
+  does one asked for before a sign-in said who it is, or for someone else
+  (`mayWrite`: a composer can still act for the person before). The rows of
+  pending writes (`unstoredRoots`, `unstoredReplies`) are the current
+  sign-in's alone. When the
   cache session changes (the
   engine returned from the back/forward cache, or reset), a waiting write asks
   the queue whether it still holds the write: if not, an
@@ -123,7 +127,7 @@ TanStack path in `../` runs untouched. A host whose database is away for now
   way, from the device copy first; an edit, delete or reaction it could not
   store is on the server and resolves with the server's copy
   (`LocalCommitFailedError.confirmed`, else asked for), never the device's older
-  one. A write the queue settled before its host retired keeps that answer. One
+  one, and with none when neither can be read: what is confirmed never rejects. A write the queue settled before its host retired keeps that answer. One
   that never reached the queue (`write-not-admitted`) is a refusal, and so is
   one the queue did not take (`MutationNotQueuedError`, `NOT_QUEUED`).
   A write whose enqueue lost its

@@ -23,6 +23,7 @@ import {
 } from '../email/link';
 import { useUpdateEmailSettingsMutation } from '../email/settings';
 import { currentQueryAccount, resetQueryAccountSession } from './account-scope';
+import { maySignedInUserWrite, setAccountSession } from './account-session';
 import { authKeys } from './keys';
 
 const api = vi.hoisted(() => ({
@@ -338,6 +339,23 @@ it('keeps retained identity for the shell but gates source reads until fresh log
   expect(
     client.getQueryData(emailKeys.links(viewer()).queryKey)
   ).toBeUndefined();
+});
+
+it('lets nobody write before a sign-in says who it is, and then only them', async () => {
+  setAccountSession({ epoch: 0, pending: false });
+  const before = viewer();
+  expect(maySignedInUserWrite(before)).toBe(true);
+  await resetQueryAccountSession();
+  expect(maySignedInUserWrite(before)).toBe(false);
+  expect(maySignedInUserWrite(undefined)).toBe(false);
+  await client.fetchQuery({
+    queryKey: authKeys.userInfo.queryKey,
+    queryFn: async () => ({ id: 'macro|two@example.com', authenticated: true }),
+    staleTime: 0,
+  });
+  expect(maySignedInUserWrite(before)).toBe(false);
+  expect(maySignedInUserWrite('macro|two@example.com')).toBe(true);
+  expect(maySignedInUserWrite(undefined)).toBe(true);
 });
 
 it('forgets the previous account’s routine drafts', async () => {

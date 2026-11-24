@@ -18,6 +18,7 @@ import { vi } from 'vitest';
 import {
   type ChannelSend,
   type ChannelWriteHost,
+  type ChannelWritesDeps,
   createChannelWrites,
 } from '../channel-writes';
 import { CHANNEL_ID, fakeHost } from './fixtures';
@@ -149,7 +150,7 @@ export function setup(
   answer: (variables: unknown) => Answer | Promise<Answer>,
   records: ChannelMessageFieldsFragment[] = [],
   server: ChannelMessageFieldsFragment[] = [],
-  signIn?: () => number
+  session: Pick<ChannelWritesDeps, 'signIn' | 'mayWrite'> = {}
 ) {
   const device = writeHost(records);
   const { client, calls } = fakeClient(
@@ -167,7 +168,7 @@ export function setup(
     client: () => client,
     now: () => NOW,
     serving: () => device.availability.serving,
-    signIn,
+    ...session,
     async fetchMessage(_channelId, messageId) {
       fetched.push(messageId);
       return server.find((message) => message.id === messageId) ?? null;

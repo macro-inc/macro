@@ -1,9 +1,11 @@
 import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { CombinedError } from '@urql/core';
+import { createMemo, createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { channelMessageKey } from '../channel-map';
 import { CHANNEL_ID, graphqlMessage } from './fixtures';
-import { type Answer, send, setup, written } from './write-fixtures';
+import { type Answer, SENDER, send, setup, written } from './write-fixtures';
 
 /** What a write failed with, or undefined when it did not fail. */
 const failure = async (write: Promise<unknown>): Promise<unknown> => {
@@ -47,7 +49,9 @@ afterEach(() => vi.useRealTimers());
 describe('a sign-in that replaces the session', () => {
   it('keeps a write waiting its turn from going out under it', async () => {
     let signIn = 1;
-    const fixture = setup(answering([first, second]), [], [], () => signIn);
+    const fixture = setup(answering([first, second]), [], [], {
+      signIn: () => signIn,
+    });
     const installing = Promise.withResolvers<void>();
     fixture.queue.installing = installing.promise;
     const sending = fixture.writes.send(send(first.id));
@@ -57,16 +61,122 @@ describe('a sign-in that replaces the session', () => {
 
     signIn = 2;
     installing.resolve();
-    expect((await sending).id).toBe(first.id);
+    expect((await sending)?.id).toBe(first.id);
     expect(thrownResultErrorHasCode(await waiting, 'CACHE_RETIRED')).toBe(true);
     expect(sentIds(fixture.calls)).toEqual([first.id]);
   });
 
+  it('shows none of what the one before it was sending', async () => {
+    const [signIn, setSignIn] = createSignal(1);
+    const fixture = setup(() => new Promise<Answer>(() => {}), [], [], {
+      signIn,
+    });
+    const { writes } = fixture;
+    const reply = send(second.id, { content: 'hi', thread_id: first.id });
+    const ended = [writes.send(send(first.id)), writes.send(reply)].map(
+      failure
+    );
+    const shown = () => ({
+      count: writes.pendingCount(CHANNEL_ID),
+      roots: writes.unstoredRoots(CHANNEL_ID).map(({ key }) => key),
+      replies: writes.unstoredReplies(CHANNEL_ID, first.id).map(({ id }) => id),
+    });
+    await createRoot(async (dispose) => {
+      const seen = createMemo(shown);
+      const mine = {
+        count: 2,
+        roots: [channelMessageKey(first.id)],
+        replies: [second.id],
+      };
+      expect(seen()).toEqual(mine);
+      setSignIn(2);
+      expect(seen()).toEqual({ count: 0, roots: [], replies: [] });
+      // Asked for again under the new one, with the id it had.
+      const again = failure(writes.send(send(first.id)));
+      expect(seen()).toEqual({
+        count: 1,
+        roots: [channelMessageKey(first.id)],
+        replies: [],
+      });
+      fixture.writes.retire();
+      await Promise.all([...ended, again]);
+      dispose();
+    });
+  });
+
+  it('keeps showing its own send of an id the one before it was sending', async () => {
+    let signIn = 1;
+    const answers = [
+      Promise.withResolvers<Answer>(),
+      Promise.withResolvers<Answer>(),
+    ];
+    const { writes } = setup(
+      () => {
+        const answer = answers[signIn - 1];
+        return answer ? answer.promise : {};
+      },
+      [],
+      [],
+      { signIn: () => signIn }
+    );
+    const before = writes.send(send(first.id));
+    await settleMicrotasks();
+    signIn = 2;
+    const own = writes.send(send(first.id));
+    await settleMicrotasks();
+
+    answers[0]?.resolve({ data: written('sendChannelMessage', first) });
+    await before;
+    expect(writes.pendingCount(CHANNEL_ID)).toBe(1);
+
+    answers[1]?.resolve({ data: written('sendChannelMessage', first) });
+    await own;
+    expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
+  });
+
+  it('sends nothing of a user it is not', async () => {
+    const fixture = setup(answering([first, second]), [], [], {
+      mayWrite: (userId) => userId !== SENDER,
+    });
+    const sending = failure(fixture.writes.send(send(first.id)));
+    expect(thrownResultErrorHasCode(await sending, 'CACHE_RETIRED')).toBe(true);
+    const reacting = failure(
+      fixture.writes.react({
+        channelId: CHANNEL_ID,
+        id: second.id,
+        emoji: 'up',
+        add: true,
+        userId: SENDER,
+        nonce: 'r',
+      })
+    );
+    expect(thrownResultErrorHasCode(await reacting, 'CACHE_RETIRED')).toBe(
+      true
+    );
+    expect(fixture.calls).toEqual([]);
+    expect(fixture.writes.pendingCount(CHANNEL_ID)).toBe(0);
+  });
+
+  it('sends nothing before it says who it is', async () => {
+    let named = false;
+    const fixture = setup(answering([first]), [first], [], {
+      mayWrite: () => named,
+    });
+    const editing = failure(fixture.writes.edit(edit(first)));
+    expect(thrownResultErrorHasCode(await editing, 'CACHE_RETIRED')).toBe(true);
+    expect(fixture.calls).toEqual([]);
+
+    named = true;
+    expect((await fixture.writes.send(send(first.id)))?.id).toBe(first.id);
+  });
+
   it('leaves the writes asked for after it alone', async () => {
     let signIn = 1;
-    const fixture = setup(answering([first]), [], [], () => signIn);
+    const fixture = setup(answering([first]), [], [], {
+      signIn: () => signIn,
+    });
     signIn = 2;
-    expect((await fixture.writes.send(send(first.id))).id).toBe(first.id);
+    expect((await fixture.writes.send(send(first.id)))?.id).toBe(first.id);
   });
 });
 
@@ -113,7 +223,7 @@ describe('a host that retires', () => {
     fixture.writes.retire();
     await vi.advanceTimersByTimeAsync(5_000);
     answered.resolve({ data: written('sendChannelMessage', first) });
-    expect((await sending).id).toBe(first.id);
+    expect((await sending)?.id).toBe(first.id);
   });
 
   it('does not wait forever for the answer', async () => {
@@ -166,7 +276,7 @@ describe('a write the server took and the device could not store', () => {
     const sending = fixture.writes.send(send(first.id));
     await settleMicrotasks();
     fixture.settle(uncommitted(first.id));
-    expect((await sending).id).toBe(first.id);
+    expect((await sending)?.id).toBe(first.id);
     expect(fixture.fetched).toEqual([first.id]);
   });
 
@@ -188,14 +298,30 @@ describe('a write the server took and the device could not store', () => {
     const editing = fixture.writes.edit(edit(first));
     await settleMicrotasks();
     fixture.settle(uncommitted(fixture.queue.lastUuid));
-    expect((await editing).content).toBe('edited');
+    expect((await editing)?.content).toBe('edited');
   });
 
-  it('does not fail an edit whose copy it cannot read', async () => {
+  it('answers an edit whose copy it cannot read with none', async () => {
+    // The device still shows the message from before.
     const fixture = setup(queuedAnswer, [first]);
     const editing = fixture.writes.edit(edit(first));
     await settleMicrotasks();
     fixture.settle(uncommitted(fixture.queue.lastUuid));
-    expect((await editing).id).toBe(first.id);
+    expect(await editing).toBeUndefined();
+  });
+
+  it('answers an edit the queue confirmed with none when the device cannot be read', async () => {
+    const fixture = setup(queuedAnswer, [first]);
+    const editing = fixture.writes.edit(edit(first));
+    await settleMicrotasks();
+    vi.spyOn(fixture.host, 'readRecordsByKeys').mockRejectedValue(
+      new Error('device unreadable')
+    );
+    fixture.settle({
+      mutationUuid: fixture.queue.lastUuid,
+      transactionId: '4',
+      status: 'committed',
+    });
+    expect(await editing).toBeUndefined();
   });
 });

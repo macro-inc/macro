@@ -211,7 +211,7 @@ const removeReactionNonce = createMutationNonce<ReactionParams>(
  */
 export function useAddReactionMutation(
   callbacks?: MutationCallbacks<
-    EntityMessage,
+    EntityMessage | undefined,
     Error,
     ReactionParams,
     ReactionMutationContext
@@ -246,7 +246,7 @@ export function useAddReactionMutation(
       );
     },
     ...withCallbacks<
-      EntityMessage,
+      EntityMessage | undefined,
       Error,
       ReactionParams,
       ReactionMutationContext
@@ -267,7 +267,7 @@ export function useAddReactionMutation(
           });
         },
         onSuccess(data) {
-          applyMessage(data, 'reaction_changed');
+          if (data) applyMessage(data, 'reaction_changed');
         },
         onError(error, vars, context) {
           console.error('failed to add reaction', error);
@@ -298,7 +298,7 @@ export function useAddReactionMutation(
  */
 export function useRemoveReactionMutation(
   callbacks?: MutationCallbacks<
-    EntityMessage,
+    EntityMessage | undefined,
     Error,
     ReactionParams,
     ReactionMutationContext
@@ -333,7 +333,7 @@ export function useRemoveReactionMutation(
       );
     },
     ...withCallbacks<
-      EntityMessage,
+      EntityMessage | undefined,
       Error,
       ReactionParams,
       ReactionMutationContext
@@ -354,7 +354,7 @@ export function useRemoveReactionMutation(
           });
         },
         onSuccess(data) {
-          applyMessage(data, 'reaction_changed');
+          if (data) applyMessage(data, 'reaction_changed');
         },
         onError(error, vars, context) {
           console.error('failed to remove reaction', error);

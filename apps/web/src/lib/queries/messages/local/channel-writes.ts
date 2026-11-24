@@ -39,6 +39,7 @@ import type {
 } from '@urql/core';
 import * as Deferred from 'effect/Deferred';
 import * as Effect from 'effect/Effect';
+import { untrack } from 'solid-js';
 import { createStore, produce, unwrap } from 'solid-js/store';
 import {
   CHANNEL_MESSAGE_TYPENAME,
@@ -248,7 +249,7 @@ export interface ChannelReaction {
   id: string;
   emoji: string;
   add: boolean;
-  /** The person reacting, to tell whether the device shows the change. */
+  /** The person reacting, to tell whose write it is and whether the device shows it. */
   userId: string;
   /** The message's reactions with this change applied, when the caller knows them. */
   reactions?: readonly Reaction[];
@@ -270,16 +271,27 @@ export interface ChannelWritesDeps {
   serving?: () => boolean;
   /**
    * The sign-in the page is under: it changes when a sign-in replaces the
-   * session on the same host, which must not send what the old one asked for.
+   * session on the same host, which must not send, or show, what the old one
+   * asked for. Read reactively by the views of pending writes.
    */
   signIn?: () => number;
+  /**
+   * Whether a write asked for now is the signed-in person's, as far as the
+   * page knows: a composer can still act for the person before while a sign-in
+   * has not said who it is. `userId` is whose write it is, when it says.
+   */
+  mayWrite?: (userId: string | undefined) => boolean;
 }
 
 /** A reply this page sent, under its thread root. */
 type UnstoredReply = { rootId: string; message: Message };
 
 type PendingWrite = {
+  /** This write's alone: one asked for again after a sign-in has its uuid. */
+  key: number;
   uuid: string;
+  /** The sign-in it was asked for under. */
+  signIn: number | undefined;
   /** The row a send predicts, its replies not counted. */
   predicted?: ChannelMessageFieldsFragment;
   /** A root this device sent that the device does not show yet. */
@@ -290,11 +302,17 @@ type PendingWrite = {
   deletes?: string;
 };
 
+/**
+ * A write on the server answers with the message as it reads with the write;
+ * undefined when nothing here can read that. One that is not there rejects.
+ */
+type Written = Promise<Message | undefined>;
+
 export interface ChannelWrites {
   send(send: ChannelSend): Promise<Message>;
-  edit(edit: ChannelEdit): Promise<Message>;
-  remove(deletion: ChannelDelete): Promise<Message>;
-  react(reaction: ChannelReaction): Promise<Message>;
+  edit(edit: ChannelEdit): Written;
+  remove(deletion: ChannelDelete): Written;
+  react(reaction: ChannelReaction): Written;
   /** Writes this page made to the channel that have not reached the server. */
   pendingCount(channelId: string): number;
   /**
@@ -692,6 +710,8 @@ interface HandOver {
 
 /** One write's hand-off: the context it runs in and who hears of it. */
 interface HandOff {
+  /** The write among those pending (`PendingWrite`). */
+  key: number;
   trace: TraceContext;
   /** Whether the host and the sign-in it was asked for under still stand. */
   stands: () => boolean;
@@ -705,11 +725,13 @@ interface Write<TData, TVariables extends AnyVariables> {
   channelId: string;
   messageId: string;
   uuid: string;
+  /** Whose write it is, when the caller says. */
+  userId?: string;
   /**
    * The thread root as it reads with this write, from the device and the
-   * writes asked for before it.
+   * writes asked for before it (`key`).
    */
-  root?: () => Promise<ChannelMessageFieldsFragment | undefined>;
+  root?: (key: number) => Promise<ChannelMessageFieldsFragment | undefined>;
   /** Hands the write to the queue. */
   run: (
     client: Pick<Client, 'mutation'>,
@@ -718,7 +740,7 @@ interface Write<TData, TVariables extends AnyVariables> {
   ) => Promise<OperationResult<TData, TVariables>>;
   /** The write's answer in a response the server answered directly. */
   written: (data: TData) => ChannelMessageWriteFieldsFragment;
-  /** The row to answer with when a delivered write cannot be read back. */
+  /** The row a delivered send answers with when it cannot be read back. */
   predicted?: ChannelMessageFieldsFragment;
   /**
    * Whether the device's copy shows this write, for one that left the queue
@@ -750,6 +772,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
    * its hand-off holds none of this one's back.
    */
   const turns = new Map<string, Deferred.Deferred<void>>();
+  let lastKey = 0;
 
   const until = (done: Deferred.Deferred<void>): Promise<void> =>
     Effect.runPromise(
@@ -776,11 +799,21 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     };
   }
 
-  /** The writes of a channel asked for before one. */
-  function pendingBefore(channelId: string, uuid: string): PendingWrite[] {
+  /** The pending writes of a channel asked for under the current sign-in. */
+  function pendingIn(channelId: string): PendingWrite[] {
+    const signIn = deps.signIn?.();
+    return (pending[channelId] ?? []).filter(
+      (write) => write.signIn === signIn
+    );
+  }
+
+  /** The writes of a channel asked for before one, under its sign-in. */
+  function pendingBefore(channelId: string, key: number): PendingWrite[] {
     const writes = unwrap(pending)[channelId] ?? [];
-    const own = writes.findIndex((write) => write.uuid === uuid);
-    return own === -1 ? writes : writes.slice(0, own);
+    const own = writes.find((write) => write.key === key);
+    return writes.filter(
+      (write) => write.key < key && write.signIn === own?.signIn
+    );
   }
 
   const addPending = (channelId: string, write: PendingWrite) =>
@@ -789,10 +822,10 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         state[channelId] = [...(state[channelId] ?? []), write];
       })
     );
-  const removePending = (channelId: string, uuid: string) =>
+  const removePending = (channelId: string, key: number) =>
     setPending(
       produce((state) => {
-        const writes = state[channelId]?.filter((entry) => entry.uuid !== uuid);
+        const writes = state[channelId]?.filter((entry) => entry.key !== key);
         if (writes?.length) state[channelId] = writes;
         else delete state[channelId];
       })
@@ -857,22 +890,22 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
    */
   async function rootWithReply(
     send: ChannelSend,
+    key: number,
     rootId: string,
     reply: ChannelMessageFieldsFragment
   ): Promise<ChannelMessageFieldsFragment | undefined> {
     const root =
       (await readRoot(() => readMessage(rootId))) ??
-      pendingRoot(pendingBefore(send.channelId, send.id), rootId);
+      pendingRoot(pendingBefore(send.channelId, key), rootId);
     return root && predictedRoot(root, reply);
   }
 
+  /** A write the queue settled, as the device shows it. */
   async function stored(
     write: Pick<Write<unknown, AnyVariables>, 'messageId' | 'predicted'>
-  ): Promise<Message> {
+  ): Written {
     const message = (await readMessage(write.messageId)) ?? write.predicted;
-    // The write is on the server; failing here would roll back a sent message.
-    if (!message) throw refusal('NOT_FOUND', 'message not found');
-    return mapChannelMessage(message);
+    return message && mapChannelMessage(message);
   }
 
   /**
@@ -1019,7 +1052,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
    * send's answer; without either the send is unknown, so the composer sends
    * it again under its own id. Another write whose answer the device could not
    * store is on the server too, whose copy is its answer: the device's is
-   * still the one from before.
+   * still the one from before. Undefined for a write that is not there.
    */
   async function deliveredAfterAll(
     write: Pick<
@@ -1028,20 +1061,20 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     >,
     error: unknown,
     trace: TraceContext
-  ): Promise<Message | undefined> {
+  ): Promise<{ message: Message | undefined } | undefined> {
     const uncommitted = thrownResultErrorHasCode(error, LOCAL_COMMIT_FAILED);
     if (write.operation !== SEND_OPERATION) {
       if (!uncommitted) return undefined;
-      return (await boundedServerCopy(write)) || stored(write);
+      return { message: (await boundedServerCopy(write)) ?? undefined };
     }
     if (!uncommitted && !thrownResultErrorHasCode(error, RETRY_EXHAUSTED))
       return undefined;
     // The queue rolled its optimistic record back before it settled: a copy
     // here is the server's.
     const copy = await readMessage(write.messageId);
-    if (copy) return mapChannelMessage(copy);
-    const delivered = await askServer(write, trace);
-    if (delivered) return delivered;
+    if (copy) return { message: mapChannelMessage(copy) };
+    const message = await askServer(write, trace);
+    if (message) return { message };
     throw unknownDelivery();
   }
 
@@ -1073,8 +1106,8 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     >,
     error: CombinedError,
     trace: TraceContext,
-    settled: (transactionId: string) => Promise<Message>
-  ): Promise<Message | undefined> {
+    settled: (transactionId: string) => Written
+  ): Promise<{ message: Message | undefined } | undefined> {
     if (isAdmittedEnqueueUncertainError(error.networkError)) {
       let transactionId: string | undefined;
       try {
@@ -1088,17 +1121,18 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         if (write.operation === SEND_OPERATION) throw unknownDelivery();
         return undefined;
       }
-      if (transactionId) return settled(transactionId);
-      return trace.run(() =>
+      if (transactionId) return { message: await settled(transactionId) };
+      const message = await trace.run(() =>
         recovered(write, 'missed', (recovery) => missedOutcome(write, recovery))
       );
+      return { message };
     }
     if (write.operation !== SEND_OPERATION || !mayHaveArrived(error))
       return undefined;
-    const delivered = await trace.run(() =>
+    const message = await trace.run(() =>
       recovered(write, 'answer_lost', (recovery) => askServer(write, recovery))
     );
-    if (delivered) return delivered;
+    if (message) return { message };
     throw unknownDelivery();
   }
 
@@ -1183,7 +1217,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     const { trace } = handOff;
     for (;;) {
       await trace.run(() => untilServed(write));
-      const root = await trace.run(() => write.root?.());
+      const root = await trace.run(() => write.root?.(handOff.key));
       if (!handOff.stands()) throw cacheRetired();
       if (away()) continue;
       // The span covers the hand-off and a direct answer; a queued write can
@@ -1210,14 +1244,22 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
 
   async function queuedWrite<TData, TVariables extends AnyVariables>(
     write: Write<TData, TVariables>
-  ): Promise<Message> {
+  ): Written {
+    // A sign-in that names someone else changes `signIn`, so this holds for
+    // as long as the write stands.
+    const mayWrite = deps.mayWrite ?? (() => true);
+    if (!untrack(() => mayWrite(write.userId))) throw cacheRetired();
     // Taken before any await: recovery after a long wait joins the write's trace.
     const trace = Telemetry.captureContext();
-    const signIn = deps.signIn?.();
+    const signIn = untrack(() => deps.signIn?.());
+    lastKey += 1;
+    const key = lastKey;
     const turn = takeTurn(`${signIn}:${write.channelId}`);
     const settlements = watchSettlements(deps.host, retired, write.uuid);
     addPending(write.channelId, {
+      key,
       uuid: write.uuid,
+      signIn,
       predicted: write.predicted,
       unstored: write.unstored,
       reply: write.reply,
@@ -1225,8 +1267,9 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     });
     deps.runtime.notifyChanged(write.channelId);
     const handOff: HandOff = {
+      key,
       trace,
-      stands: () => !isRetired && deps.signIn?.() === signIn,
+      stands: () => !isRetired && untrack(() => deps.signIn?.()) === signIn,
       settled: () => settlements.heard() !== undefined,
       // The optimistic record is on the device: windows read it from here, in
       // every tab.
@@ -1237,7 +1280,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       },
     };
     try {
-      const settled = async (transactionId: string): Promise<Message> => {
+      const settled = async (transactionId: string): Written => {
         let outcome: 'committed' | 'missed';
         try {
           outcome = await settlements.committed(transactionId);
@@ -1261,7 +1304,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
               (recovery) => deliveredAfterAll(write, error, recovery)
             )
           );
-          if (delivered) return delivered;
+          if (delivered) return delivered.message;
           throw error;
         }
         if (outcome === 'missed')
@@ -1295,7 +1338,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       }
       if (error) {
         const answer = await lostAnswer(write, error, trace, settled);
-        if (answer) return answer;
+        if (answer) return answer.message;
         throw refusalOf(error);
       }
       if (!result.data) throw refusal(undefined, 'empty response');
@@ -1303,7 +1346,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     } finally {
       turn.pass();
       settlements.stop();
-      removePending(write.channelId, write.uuid);
+      removePending(write.channelId, key);
       // Committed or rolled back, the device's copy changed.
       deps.runtime.notifyChanged(write.channelId);
       announceWritten(write.channelId);
@@ -1313,16 +1356,17 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   const now = () => (deps.now?.() ?? new Date()).toISOString();
 
   return {
-    send(send) {
+    async send(send) {
       const createdAt = now();
       const predicted = predictedMessage(send, createdAt);
       const rootId = send.message.thread_id;
       const entry = predicted && mapChannelTimelineEntry(predicted);
-      return queuedWrite({
+      const sent = await queuedWrite({
         operation: SEND_OPERATION,
         channelId: send.channelId,
         messageId: send.id,
         uuid: send.id,
+        userId: send.senderId,
         predicted,
         unstored:
           predicted && entry && !rootId
@@ -1339,7 +1383,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         // A reply also moves its root's count; the queue applies both at once.
         root:
           predicted && rootId
-            ? () => rootWithReply(send, rootId, predicted)
+            ? (key) => rootWithReply(send, key, rootId, predicted)
             : undefined,
         run: (client, options, root) =>
           executeOptimisticMutation(
@@ -1371,6 +1415,9 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
           ).toPromise(),
         written: (data) => data.sendChannelMessage,
       });
+      // Only one whose row could not be predicted answers with none.
+      if (!sent) throw unknownDelivery();
+      return sent;
     },
 
     edit(edit) {
@@ -1480,6 +1527,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         channelId: reaction.channelId,
         messageId: reaction.id,
         uuid: crypto.randomUUID(),
+        userId: reaction.userId,
         applied: (message) =>
           message.reactions.some(
             (entry) =>
@@ -1520,11 +1568,11 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       });
     },
 
-    pendingCount: (channelId) => pending[channelId]?.length ?? 0,
+    pendingCount: (channelId) => pendingIn(channelId).length,
     // A message deleted while its send waits stays hidden: the device hides
     // a deleted root and a deleted reply, and this row would bring it back.
     unstoredRoots: (channelId) => {
-      const writes = pending[channelId] ?? [];
+      const writes = pendingIn(channelId);
       const deleted = deletedIds(writes);
       return writes
         .flatMap((write) => {
@@ -1538,7 +1586,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         .reverse();
     },
     unstoredReplies: (channelId, rootId) => {
-      const writes = pending[channelId] ?? [];
+      const writes = pendingIn(channelId);
       const deleted = deletedIds(writes);
       return writes.flatMap((write) =>
         write.reply?.rootId === rootId && !deleted.has(write.reply.message.id)

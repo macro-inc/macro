@@ -56,13 +56,16 @@ export function currentQueryAccount(): QueryAccount | undefined {
     )
   )
     return;
+  return captureQueryAccount(knownUserId());
+}
+
+/** Who the identity read last said is signed in. */
+function knownUserId(): string | undefined {
   const identity = queryClient.getQueryData<{
     id?: string;
     authenticated?: boolean;
   }>(authKeys.userInfo.queryKey);
-  return captureQueryAccount(
-    identity?.authenticated === true ? identity.id : undefined
-  );
+  return identity?.authenticated === true ? identity.id : undefined;
 }
 
 export function isCurrentQueryAccount(
@@ -159,6 +162,6 @@ export async function resetQueryAccountSession(): Promise<void> {
       return;
     stopWaitingForIdentity?.();
     stopWaitingForIdentity = undefined;
-    setAccountSession({ epoch, pending: false });
+    setAccountSession({ epoch, pending: false, userId: knownUserId() });
   });
 }

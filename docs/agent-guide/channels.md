@@ -2113,8 +2113,11 @@ A new draft typed during delivery stays intact if the earlier send fails. A
 reply composer that closed as it sent puts a failed reply back in the thread's
 stored draft, so reopening the thread shows it, and a newer draft typed in
 another view of the thread is kept. A send that fails after a sign-out, or after
-a sign-in replaced the session it was sent under, restores nothing. Verify this with both the Send button on a
-phone and the desktop composer, and for a reply by closing and reopening the
+a sign-in replaced the session it was sent under, restores nothing. A channel kept
+on the device sends through the device's queue only: a message the queue does not
+take fails as not sent, and one whose outcome is unknown goes out under the same id
+when its draft is sent again, so it never posts twice. Verify this with both the
+Send button on a phone and the desktop composer, and for a reply by closing and reopening the
 thread while the reply is pending.
 
 For tab performance QA, switch Attachments → Calls → Participants → Messages

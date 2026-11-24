@@ -166,7 +166,7 @@ describe('a write the queue refuses', () => {
     expect(fixture.writes.pendingCount(CHANNEL_ID)).toBe(1);
     fixture.requests[0].answer(json(written('sendChannelMessage', other)));
     await settle();
-    expect((await sending).id).toBe(other.id);
+    expect((await sending)?.id).toBe(other.id);
   });
 
   it('is handed over again when the database was away', async () => {
@@ -191,7 +191,7 @@ describe('a write the queue refuses', () => {
     expect(fixture.sent()).toEqual([root.id]);
     fixture.requests[0].answer(json(written('sendChannelMessage', root)));
     await settle();
-    expect((await sending).id).toBe(root.id);
+    expect((await sending)?.id).toBe(root.id);
   });
 
   it('does not go out under a later sign-in', async () => {
@@ -223,7 +223,7 @@ it('does not hold a write behind one of an earlier sign-in', async () => {
   expect(fixture.sent()).toEqual([root.id]);
   fixture.requests[0].answer(json(written('sendChannelMessage', root)));
   await settle();
-  expect((await sending).id).toBe(root.id);
+  expect((await sending)?.id).toBe(root.id);
   fixture.writes.retire();
   expect(await stalled).toBe('DELIVERY_UNKNOWN');
 });
@@ -270,6 +270,6 @@ describe('a write the queue took', () => {
     await settle();
     fixture.writes.retire();
     await settle();
-    expect((await sending).id).toBe(root.id);
+    expect((await sending)?.id).toBe(root.id);
   });
 });
