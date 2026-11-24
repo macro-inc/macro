@@ -263,6 +263,40 @@ describe('createRetirableCacheHost', () => {
 
     expect(inner.dispose).toHaveBeenCalledOnce();
   });
+
+  it('reports an engine still opening as never ready once retired', async () => {
+    let opened = false;
+    const inner: CacheHost = {
+      ...disposedLikeHost(),
+      isReady: () => opened,
+      // Still opening; a retained lease keeps the inner host alive.
+      whenReady: () => new Promise<void>(() => {}),
+    };
+    const host = createRetirableCacheHost(inner);
+    const lease = retainCacheHost(host);
+    expect(host.isReady?.()).toBe(false);
+    const waiting = host.whenReady?.();
+
+    host.dispose();
+    opened = true;
+
+    await expect(waiting).resolves.toBeUndefined();
+    await expect(host.whenReady?.()).resolves.toBeUndefined();
+    expect(host.isReady?.()).toBe(false);
+    lease?.release();
+  });
+
+  it('passes readiness through while it is current', () => {
+    let opened = false;
+    const host = createRetirableCacheHost({
+      ...disposedLikeHost(),
+      isReady: () => opened,
+    });
+    expect(host.isReady?.()).toBe(false);
+    opened = true;
+    expect(host.isReady?.()).toBe(true);
+    expect(createRetirableCacheHost(disposedLikeHost()).isReady?.()).toBe(true);
+  });
 });
 
 it('keeps the physical host alive until every idempotent lease is released', async () => {
