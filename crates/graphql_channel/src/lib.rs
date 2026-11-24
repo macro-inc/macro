@@ -228,9 +228,14 @@ where
 
 /// GraphQL error codes this adapter answers with, shared with REST's categories.
 mod code {
+    /// The request is malformed or invalid.
     pub(crate) const BAD_USER_INPUT: &str = "BAD_USER_INPUT";
+    /// The viewer may not read or change this.
     pub(crate) const FORBIDDEN: &str = "FORBIDDEN";
+    /// The service failed; nothing says the request took effect.
     pub(crate) const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
+    /// Retry the same request: the conversation was busy, or a write
+    /// committed but could not be read back.
     pub(crate) const SERVICE_UNAVAILABLE: &str = "SERVICE_UNAVAILABLE";
 }
 
