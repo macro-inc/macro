@@ -341,7 +341,8 @@ async fn main() -> anyhow::Result<()> {
         ));
     }
     let api_result = calendar_service::api::setup_and_serve(ApiContext {
-        correlation: agent_correlation::inbound::CorrelationState::new(db.clone(), jwt_args),
+        correlation: agent_correlation::inbound::CorrelationState::new(db.clone(), jwt_args)
+            .serving(&["calendar"]),
         config: Arc::new(config),
         authorization_state,
         calendar_service,

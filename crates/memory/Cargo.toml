@@ -6,6 +6,7 @@ version = "0.1.0"
 
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation" }
 scheduled_action = { path = "../scheduled_action" }
 async-trait = { workspace = true }
 schemars = { workspace = true }

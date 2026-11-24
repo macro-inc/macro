@@ -34,6 +34,7 @@ outbound = [
 ports = []
 
 [dependencies]
+agent_correlation = { path = "../agent_correlation" }
 activity = { path = "../activity", default-features = false }
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }

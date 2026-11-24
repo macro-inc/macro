@@ -101,6 +101,27 @@ fn reply_delivery(row: &AgentSession) -> ReplyDelivery {
     }
 }
 
+/// Who an in-process session's turns read its owner's memory as: the
+/// person only in a session they opened and work in (listed, requested by
+/// them, not a thread's reply). A routine's run, a suggestion's session, a
+/// hidden background run or a mention's reply reads as a program, which
+/// enrolls no one in daily memory refresh.
+fn memory_reader(row: &AgentSession) -> memory::domain::MemoryReader {
+    let owner_requested = matches!(
+        &row.origin,
+        trigger_context::TriggerOrigin::Requested { by } if row.owner_id.as_user() == Some(by)
+    );
+    if owner_requested
+        && row.source == agent_session::domain::model::SessionSource::User
+        && row.visibility == agent_session::domain::model::SessionVisibility::Listed
+        && row.thread_id.is_none()
+    {
+        memory::domain::MemoryReader::Person
+    } else {
+        memory::domain::MemoryReader::Program
+    }
+}
+
 #[derive(Debug)]
 enum Route {
     Sandbox,
@@ -154,11 +175,13 @@ where
                 .await
                 .map_err(HarnessError::Session)?;
             let delivery = reply_delivery(&row);
+            let memory_reader = memory_reader(&row);
             return Ok(Route::InMem(Box::new(SessionFacts {
                 id: session,
                 owner: row.owner_id,
                 billing,
                 delivery,
+                memory_reader,
                 model: row.model,
                 identity: Some(AgentIdentity {
                     bot: row.bot_id,

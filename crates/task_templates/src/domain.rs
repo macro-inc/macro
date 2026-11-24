@@ -1,4 +1,8 @@
 //! Task-template content, authorization, and persistence ports.
+
+#[cfg(test)]
+mod test;
+
 use chrono::{DateTime, Utc};
 use models_properties::api::SetPropertyValue;
 use serde::{Deserialize, Serialize};
@@ -41,6 +45,17 @@ pub struct TaskTemplateConfiguration {
 }
 
 impl TaskTemplateConfiguration {
+    /// Whether a default names an agent or bot (`bot|…`).
+    fn assigns_an_agent(&self) -> bool {
+        self.defaults.iter().any(|default| match &default.value {
+            SetPropertyValue::EntityReference { reference } => is_agent(&reference.entity_id),
+            SetPropertyValue::MultiEntityReference { references } => references
+                .iter()
+                .any(|reference| is_agent(&reference.entity_id)),
+            _ => false,
+        })
+    }
+
     fn validate(&mut self) -> Result<(), Error> {
         if self.property_ids.len() > MAX_PROPERTIES
             || self.defaults.len() > MAX_PROPERTIES
@@ -223,7 +238,13 @@ impl<R: Repository, M: Membership> Service<R, M> {
         if name.is_empty() || name.chars().count() > MAX_NAME_CHARACTERS {
             return Err(Error::Invalid);
         }
-        configuration.validate()
+        configuration.validate()?;
+        // Applying the template assigns its default agents for whoever uses
+        // it: a scoped request sets no agent to work, later either.
+        if !agent_correlation::context::may_assign_agents() && configuration.assigns_an_agent() {
+            return Err(Error::Forbidden);
+        }
+        Ok(())
     }
 
     /// List personal templates and templates for one currently joined team.
@@ -380,4 +401,9 @@ impl<R: Repository, M: Membership> Service<R, M> {
         }
         Ok(())
     }
+}
+
+/// Whether an entity reference names an agent or bot.
+fn is_agent(entity_id: &str) -> bool {
+    bot_id::BotIdStr::parse_from_str(entity_id).is_ok()
 }

@@ -59,6 +59,7 @@ fn request(mcp_tools: Option<RemoteMcpToolSet>) -> TurnRequest {
     TurnRequest {
         feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
+        memory_reader: memory::domain::MemoryReader::Person,
         purpose: TurnPurpose::Conversation,
         session_id: AgentSessionId::new(),
         awaiting: Arc::new(AwaitingUser::default()),

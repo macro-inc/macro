@@ -39,6 +39,10 @@ pub struct TurnRequest {
     pub purpose: TurnPurpose,
     /// How the session's reader receives the reply.
     pub delivery: ReplyDelivery,
+    /// Who the turn reads the owner's memory as; only
+    /// [`memory::domain::MemoryReader::Person`] enrolls them in daily memory
+    /// refresh.
+    pub memory_reader: memory::domain::MemoryReader,
     /// The session the turn belongs to.
     pub session_id: agent_session::domain::model::AgentSessionId,
     /// Counts what the turn is waiting on a person for - a question, or a

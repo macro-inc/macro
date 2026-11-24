@@ -1,0 +1,70 @@
+# Spec GETs a background job's credential may not make, by spec, each with
+# its reason. A job is refused everything outside its lists anyway; this
+# file keeps every spec GET classified, so a new one must be placed.
+
+
+[agent-harness]
+GET /agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps  # connected apps: a job uses none
+GET /agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/tools  # connected apps: a job uses none
+GET /agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/{kind}/{key}/tools  # connected apps: a job uses none
+GET /voices/{model}/sample  # plays a voice sample billed to the team
+GET /agent-repositories/branches  # fetches a caller-chosen git remote from Macro's servers
+
+[auth]
+GET /team/invites  # invite ids are join tokens
+GET /team/user/invites  # invite ids are join tokens
+GET /email/fusionauth/verify/{verification_id}  # verifies an email address
+GET /email/verify/{verification_id}  # verifies an email address
+GET /merge/verify/{code}  # merges accounts
+GET /team/join/{team_invite_id}  # joins a team
+GET /codex/login/{attempt_id}  # credential sign-in flow
+GET /gtm-invite/links  # invite links others redeem
+GET /gtm-invite/public/{token}  # invite tokens
+GET /jwt/macro_api_token  # mints a credential
+GET /link/email/providers  # account linking flow
+GET /login/sso  # sign-in and OAuth flows
+GET /oauth/passwordless/{code}  # sign-in and OAuth flows
+GET /oauth/redirect  # sign-in and OAuth flows
+GET /oauth2/{provider}/callback  # sign-in and OAuth flows
+GET /session/login/{session_code}  # sign-in and OAuth flows
+GET /team/invite-link  # an invite link others redeem
+
+[cognition]
+GET /mcp/servers/auth/callback  # sign-in and OAuth flows
+GET /memory  # enrolls the person in daily memory refresh
+GET /memory/explicit  # enrolls the person in daily memory refresh
+
+[email]
+GET /email/attachments/{id}/document_id  # uploads the attachment as a document when it has none
+GET /opens/{token}  # an open-tracking pixel: records an open
+
+[storage]
+GET /webhook/events/stream  # streams the account's broker events, unbounded
+GET /webhook/webhooks  # an outbound endpoint's auth headers
+GET /webhook/webhooks/{webhook_id}  # an outbound endpoint's auth headers
+GET /whatsapp/pairing/{id}  # a WhatsApp pairing QR code
+GET /harness-pairings/{code}  # a pairing code for connecting a computer
+GET /foreign_entity/by_source/{source}/{foreign_entity_id}  # its id is a wildcard path (owner/repo/pull/12) no typed placeholder can bound
+GET /github/install-sync  # syncs a GitHub installation
+GET /call/{channel_id}  # creates a call
+GET /bots/{bot_id}/tokens  # bot credentials
+GET /call/join/{token}  # a meeting join token
+GET /call/join/{token}/participants  # call join tokens
+GET /call/meetings/invite/{token}  # meeting invite tokens
+GET /call/meetings/join/{token}/participants  # meeting join tokens
+GET /channels/{channel_id}/join-link  # a join link others redeem
+GET /passwords/agent/teams/{team}/items  # password-vault secrets
+GET /passwords/agent/teams/{team}/items/{item}/access-requests/mine  # password-vault secrets
+GET /passwords/teams  # password-vault secrets
+GET /passwords/teams/{team}/agent-access-requests  # password-vault secrets
+GET /passwords/teams/{team}/folders  # password-vault secrets
+GET /passwords/teams/{team}/items  # password-vault secrets
+GET /passwords/teams/{team}/items/{item}  # password-vault secrets
+GET /passwords/teams/{team}/items/{item}/activity  # password-vault secrets
+GET /passwords/teams/{team}/items/{item}/history  # password-vault secrets
+GET /passwords/teams/{team}/items/{item}/share  # password-vault secrets
+GET /passwords/teams/{team}/items/{item}/username  # password-vault secrets
+
+[unfurl]
+GET /proxy  # fetches a caller-chosen URL from Macro's servers
+GET /unfurl  # fetches a caller-chosen URL from Macro's servers
