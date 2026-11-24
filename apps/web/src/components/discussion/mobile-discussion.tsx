@@ -180,18 +180,13 @@ export function MobileDiscussion(props: {
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay />
           <MobileDrawer.FixedContent targetHeight={100} fitSnapPoint>
-            <MobileDrawer.Handle class="touch-none" />
-            <MobileDrawer.Title class="shrink-0 touch-none select-none px-5 pb-3 text-lg font-semibold">
+            <MobileDrawer.Handle />
+            <MobileDrawer.Title class="shrink-0 select-none px-5 pb-3 text-lg font-semibold">
               {t('common.discussion')}
             </MobileDrawer.Title>
+            {/* The thread hands a swipe to the sheet only from its top, so
+                paging through messages never resizes the sheet. */}
             <MobileDrawer.ScrollBody
-              onPointerDown={(
-                event: PointerEvent & { currentTarget: HTMLDivElement }
-              ) => {
-                // Corvu also hands off at the bottom; this thread hands off only
-                // at its top so paging through messages never resizes the sheet.
-                if (event.currentTarget.scrollTop > 0) event.stopPropagation();
-              }}
               ref={(element: HTMLDivElement) => {
                 setThread(element);
                 queueMicrotask(scrollToEnd);
@@ -219,11 +214,7 @@ export function MobileDiscussion(props: {
               {props.conversation.content()}
             </MobileDrawer.ScrollBody>
             <Show when={props.canWrite && !props.conversation.unavailable()}>
-              <MobileDrawer.KeyboardFooter
-                ref={setFooter}
-                class="px-3"
-                data-corvu-no-drag
-              >
+              <MobileDrawer.KeyboardFooter ref={setFooter} class="px-3">
                 <StaticMarkdownContext>
                   <EntityConversationComposer
                     parent={props.parent}

@@ -71,13 +71,15 @@ read their code, and follow that pattern rather than inventing a new one.
   acts on click so held or cancelled touches do nothing. `glass` and `island`
   controls and channel inputs get iOS-app-only press animation from
   `installGlassPress`; reuse it and keep Android and web free of the effect.
-
 ## Sheets, menus, and dialogs
 
 - Use `@ui` `Dialog` and `ConfirmDialog`; they become drawers on phones.
   Build other sheets from `MobileDrawer` (`components/app/mobile`), never raw
   `@corvu/drawer`, with content in `MobileDrawer.ScrollBody` and height from
-  `maxHeight` / `targetHeight`, never hand-set.
+  `maxHeight` / `targetHeight`, never hand-set. Bottom sheets are native
+  scroll-snap containers (swipe, momentum and detents are scrolling), so keep
+  `touch-action` off sheet chrome, and pass `swipeable={false}` to a sheet
+  only its own controls close. Sheets are opaque and their scrim has no blur.
 - Phone drawers have a handle and no X; drag, backdrop, or Escape dismiss,
   and focus returns to the opener. No submenus at phone width: drill in
   place with a back row.

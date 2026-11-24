@@ -31,7 +31,7 @@ export function DocumentPreviewSheet(
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
-        <MobileDrawer.Content aria-label="Preview" opaque>
+        <MobileDrawer.Content aria-label="Preview">
           <MobileDrawer.Handle />
           <MobileDrawer.ScrollBody class="px-3 text-ink">
             <Suspense fallback={<DocumentPreviewSkeleton />}>

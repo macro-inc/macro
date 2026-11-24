@@ -6,9 +6,16 @@ async function tap(page: Page, target: Locator) {
   await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
 }
 
-/** Corvu starts the opening slide a frame after mount, so wait for it to end. */
+/** A bottom sheet's panel inside its full-screen scroll container. */
+const panelOf = (sheet: Locator) =>
+  sheet
+    .locator('[data-sheet-panel]')
+    .or(sheet.locator(':scope:not([data-side="bottom"])'));
+
+/** The sheet slides up a frame after mount, so wait for it to come to rest. */
 async function settled(sheet: Locator) {
-  await expect(sheet).toBeInViewport({ ratio: 1 });
+  await expect(panelOf(sheet).first()).toBeInViewport({ ratio: 1 });
+  await expect(sheet).not.toHaveAttribute('data-opening');
   await expect(sheet).not.toHaveAttribute('data-transitioning');
 }
 
@@ -16,7 +23,7 @@ const pressed = (page: Page) => page.getByRole('status', { name: 'Pressed' });
 
 /** A finger dragging the sheet down by its top edge, past the break point. */
 async function dragDown(page: Page, sheet: Locator) {
-  const box = await sheet.boundingBox();
+  const box = await panelOf(sheet).first().boundingBox();
   if (!box) throw new Error('The sheet is not rendered');
   const x = box.x + box.width / 2;
   const y = box.y + 12;

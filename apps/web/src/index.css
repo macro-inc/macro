@@ -1093,6 +1093,35 @@ html:not([data-touch-device='true']) {
   backdrop-filter: blur(2px) saturate(1.05);
 }
 
+/* Phone sheet scrim: a plain dim, no backdrop blur. It fades in as a sheet
+   opens; a bottom sheet's scrim instead follows the sheet's scroll position
+   (see MobileDrawer), so it dims and clears with the swipe on the compositor. */
+@utility mobile-sheet-scrim {
+  background-color: oklch(0 0 0 / 0.2);
+  animation: mobile-sheet-scrim-in 250ms ease-out both;
+
+  @supports (animation-timeline: scroll()) {
+    :where(.mobile-sheet-scroller) > & {
+      animation: mobile-sheet-scrim-in linear both;
+      animation-timeline: --mobile-sheet;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes mobile-sheet-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* A bottom sheet's scroll container: offset 0 is closed, the end is open. */
+@utility mobile-sheet-scroller {
+  scroll-timeline: --mobile-sheet block;
+}
+
 /* Shared phone sheet geometry: match the screen curve with an even outer
    gutter. Consumers put home-indicator clearance inside their scroll area. */
 @utility mobile-sheet {

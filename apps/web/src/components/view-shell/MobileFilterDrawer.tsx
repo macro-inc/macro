@@ -68,7 +68,6 @@ function Root(props: MobileFilterDrawerProps) {
       onContentPresentChange={props.onContentPresentChange}
       preventScroll={false}
       preventScrollbarShift={false}
-      breakPoints={[0.85]}
       restoreFocus
       finalFocusEl={trigger()}
     >
