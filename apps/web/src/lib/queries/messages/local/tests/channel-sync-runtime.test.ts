@@ -97,7 +97,7 @@ function setup(
   );
   const runtime = createChannelSyncRuntime({
     host,
-    fetchChanges: fetch,
+    fetchChanges: (channelId, after) => fetch(channelId, after),
     generation: () => 'generation-1',
     random: () => 0,
   });
@@ -341,6 +341,28 @@ describe('createChannelSyncRuntime', () => {
     await waitFor(() => fetch.mock.calls.length > 0);
     expect(fetch).toHaveBeenCalledWith(CHANNEL_ID, '5');
     release();
+  });
+
+  it('ends the request of a catch-up when the runtime is disposed', async () => {
+    const signals: AbortSignal[] = [];
+    const runtime = createChannelSyncRuntime({
+      host: syncHost(5n),
+      fetchChanges: (_channelId, _after, signal) => {
+        signals.push(signal);
+        return new Promise<never>(() => {});
+      },
+      generation: () => 'generation-1',
+      random: () => 0,
+    });
+    runtime.onConnected();
+    runtime.noteStoredSeq(CHANNEL_ID, '5');
+    runtime.open(CHANNEL_ID);
+    runtime.onDisconnected();
+    runtime.onConnected();
+    await waitFor(() => signals.length > 0);
+    expect(signals[0]?.aborted).toBe(false);
+    runtime.dispose();
+    await waitFor(() => signals[0]?.aborted === true);
   });
 
   it('drops the channel when it is too far behind to replay', async () => {

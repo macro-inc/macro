@@ -46,8 +46,15 @@ export type ChannelSyncHost = Pick<
 
 export interface ChannelSyncDeps {
   host: ChannelSyncHost;
-  /** One page of changes after `after`, resolved once its records are cached. */
-  fetchChanges(channelId: string, after: string): Promise<ChannelChangesPage>;
+  /**
+   * One page of changes after `after`, resolved once its records are cached.
+   * `signal` ends the request when the catch-up is interrupted.
+   */
+  fetchChanges(
+    channelId: string,
+    after: string,
+    signal: AbortSignal
+  ): Promise<ChannelChangesPage>;
   /** The cache session a write belongs to; a later session refuses it. */
   generation(): string;
   random?: () => number;
@@ -376,8 +383,9 @@ export function createChannelSyncRuntime(
     let after = repair !== undefined && repair < from ? repair : from;
     let changes = 0;
     for (let page = 0; page < MAX_CHANGE_PAGES; page += 1) {
-      const delta = yield* Effect.tryPromise(() =>
-        span.run(() => deps.fetchChanges(channelId, after.toString()))
+      // Interrupted (the runtime disposed), the request ends with the span.
+      const delta = yield* Effect.tryPromise((signal) =>
+        span.run(() => deps.fetchChanges(channelId, after.toString(), signal))
       );
       if (delta.resetRequired) break;
       changes +=

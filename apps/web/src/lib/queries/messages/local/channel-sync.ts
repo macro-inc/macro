@@ -23,11 +23,14 @@ const windows = new WeakMap<CacheHost, ChannelWindows>();
 /** Reads a page of changes and resolves once its records are cached. */
 async function fetchChannelChanges(
   channelId: string,
-  after: string
+  after: string,
+  signal: AbortSignal
 ): Promise<ChannelChangesPage> {
-  const { data, cached } = await queryChannelNetwork(ChannelChangesDocument, {
-    input: { channelId, after },
-  });
+  const { data, cached } = await queryChannelNetwork(
+    ChannelChangesDocument,
+    { input: { channelId, after } },
+    signal
+  );
   await cached;
   return data.user.channelChanges;
 }
