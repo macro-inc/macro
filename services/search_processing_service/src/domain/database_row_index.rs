@@ -67,6 +67,13 @@ pub trait DatabaseRowSource: Send + Sync + 'static {
         database_id: Uuid,
     ) -> impl Future<Output = Result<Self::DatabaseLock, Report>> + Send;
 
+    /// Show the server the lock is in use, so an idle-session limit never
+    /// ends it during a long pass.
+    fn keep_lock_alive(
+        &self,
+        lock: &mut Self::DatabaseLock,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
     /// Release the lock.
     fn unlock_database(
         &self,
@@ -125,11 +132,14 @@ pub trait DatabaseRowSource: Send + Sync + 'static {
     -> impl Future<Output = Result<Option<i64>, Report>> + Send;
 
     /// Record that the index holds the table up to `version`.
+    /// Record that the index holds the table up to `version`, from a pass
+    /// that started reading at `read_at` (the database's clock).
     fn raise_watermark(
         &self,
         table_id: Uuid,
         database_id: Uuid,
         version: i64,
+        read_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Forget the table's watermark.
@@ -283,14 +293,31 @@ const LAGGING_TABLES_PER_PAGE: usize = 100;
 const RELABELLED_TABLES_PER_ROUND: usize = 500;
 const GONE_TABLES_PER_ROUND: usize = 100;
 
+/// How often a held database lock is shown to the server as in use; far
+/// below the lock pool's idle-in-transaction limit.
+const LOCK_KEEPALIVE: std::time::Duration = std::time::Duration::from_secs(60);
+
 pub struct DatabaseRowIndexService<S, I> {
     source: S,
     index: I,
+    lock_keepalive: std::time::Duration,
 }
 
 impl<S, I> DatabaseRowIndexService<S, I> {
     pub fn new(source: S, index: I) -> Self {
-        Self { source, index }
+        Self {
+            source,
+            index,
+            lock_keepalive: LOCK_KEEPALIVE,
+        }
+    }
+
+    /// Touch held locks every `interval` instead of every [`LOCK_KEEPALIVE`].
+    pub fn with_lock_keepalive(self, interval: std::time::Duration) -> Self {
+        Self {
+            lock_keepalive: interval,
+            ..self
+        }
     }
 }
 
@@ -404,10 +431,29 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         pass: impl AsyncFnOnce() -> Result<T, Report>,
     ) -> Result<T, Report> {
         let waited = Instant::now();
-        let lock = self.source.lock_database(database_id).await?;
+        let mut lock = self.source.lock_database(database_id).await?;
         tracing::Span::current().record("lock_wait_ms", elapsed_ms(waited));
 
-        let result = pass().await;
+        // The lock's own connection runs no statement during the pass (its
+        // reads use another pool), so touch it while the pass runs. A failed
+        // touch means the lock may be gone: the pass stops there.
+        let pass = pass();
+        tokio::pin!(pass);
+        let mut keepalive = tokio::time::interval_at(
+            tokio::time::Instant::now() + self.lock_keepalive,
+            self.lock_keepalive,
+        );
+        let result = loop {
+            tokio::select! {
+                result = &mut pass => break result,
+                _ = keepalive.tick() => {
+                    if let Err(error) = self.source.keep_lock_alive(&mut lock).await {
+                        break Err(error);
+                    }
+                }
+            }
+        };
+
         match result {
             Ok(value) => {
                 self.source.unlock_database(lock).await?;
@@ -487,7 +533,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
             return Ok(TableOutcome::Removed);
         }
         self.source
-            .raise_watermark(table_id, state.database_id, state.version)
+            .raise_watermark(table_id, state.database_id, state.version, state.read_at)
             .await?;
         Ok(outcome)
     }
@@ -702,6 +748,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
     pub async fn catch_up(
         &self,
         relabelled_since: DateTime<Utc>,
+        gate: &BackfillGate,
         cancel: &CancellationToken,
     ) -> Result<CatchUp, Report> {
         let started = Instant::now();
@@ -719,6 +766,9 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
             after = Some(last);
             for table_id in tables {
                 catch_up.lagging += 1;
+                // The first round after a deploy finds every table without a
+                // watermark: it is a backfill, and waits on the same gate.
+                let _permit = gate.admit().await;
                 if self
                     .reconcile_table(table_id, PassKind::CatchUp)
                     .await
@@ -736,6 +786,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
                 .await?;
             for table_id in relabelled {
                 catch_up.relabelled += 1;
+                let _permit = gate.admit().await;
                 // The table's version did not move, so only a full pass
                 // rereads it.
                 if self
@@ -764,6 +815,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         &self,
         relabelled_since: DateTime<Utc>,
         scan_index: bool,
+        gate: &BackfillGate,
         cancel: &CancellationToken,
     ) -> Result<(), Report> {
         let span = tracing::Span::current();
@@ -771,9 +823,9 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         let lease = self.source.lead_stale_sweep().await?;
         span.record("led", lease.is_some());
         if lease.is_some() {
-            self.catch_up(relabelled_since, cancel).await?;
+            self.catch_up(relabelled_since, gate, cancel).await?;
             if scan_index {
-                self.remove_stale(None, cancel).await?;
+                self.remove_stale(Some(gate), cancel).await?;
             }
         }
         drop(lease);
@@ -781,7 +833,10 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
     }
 
     /// Reindex the requested databases, or every searchable one and then
-    /// remove stale documents.
+    /// remove stale documents. A database that fails is recorded and the
+    /// backfill goes on; the job fails at the end, naming how many failed
+    /// and the first of them, so a rerun of those ids finishes the work.
+    #[tracing::instrument(skip_all, fields(databases, failed_databases))]
     pub async fn backfill(
         &self,
         req: DatabaseRowBackfillRequest,
@@ -790,10 +845,15 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
         let mut enqueued = 0;
-        let reindex = |database_id: Uuid| async move {
-            self.reconcile_database(database_id, TableSelection::All, PassKind::Full, Some(gate))
-                .await
-                .map_err(|error| BackfillError::Index(anyhow::anyhow!("{error:#}")))
+        let mut failed: Vec<Uuid> = Vec::new();
+        let mut reindex = async |database_id: Uuid| {
+            let result = self
+                .reconcile_database(database_id, TableSelection::All, PassKind::Full, Some(gate))
+                .await;
+            if let Err(error) = result {
+                tracing::warn!(%database_id, error = %error, "database row backfill failed for a database");
+                failed.push(database_id);
+            }
         };
 
         if !req.database_ids.is_empty() {
@@ -805,41 +865,47 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
                 if !seen.insert(database_id) {
                     continue;
                 }
-                reindex(database_id).await?;
+                reindex(database_id).await;
                 enqueued += 1;
                 progress.add(1).await;
             }
-            return Ok(BackfillReceipt {
-                enqueued,
-                ..BackfillReceipt::default()
-            });
-        }
-
-        let mut after = None;
-        'pages: while !cancel.is_cancelled() {
-            let database_ids = self
-                .source
-                .searchable_database_ids(after, DATABASES_PER_PAGE)
-                .await
-                .map_err(|error| BackfillError::Source(anyhow::anyhow!("{error:#}")))?;
-            if database_ids.is_empty() {
-                break;
-            }
-            for database_id in database_ids {
-                if cancel.is_cancelled() {
-                    break 'pages;
+        } else {
+            let mut after = None;
+            'pages: while !cancel.is_cancelled() {
+                let database_ids = self
+                    .source
+                    .searchable_database_ids(after, DATABASES_PER_PAGE)
+                    .await
+                    .map_err(|error| BackfillError::Source(anyhow::anyhow!("{error:#}")))?;
+                if database_ids.is_empty() {
+                    break;
                 }
-                reindex(database_id).await?;
-                after = Some(database_id);
-                enqueued += 1;
-                progress.add(1).await;
+                for database_id in database_ids {
+                    if cancel.is_cancelled() {
+                        break 'pages;
+                    }
+                    reindex(database_id).await;
+                    after = Some(database_id);
+                    enqueued += 1;
+                    progress.add(1).await;
+                }
+            }
+
+            if !cancel.is_cancelled() {
+                self.remove_stale(Some(gate), &cancel)
+                    .await
+                    .map_err(|error| BackfillError::Index(anyhow::anyhow!("{error:#}")))?;
             }
         }
 
-        if !cancel.is_cancelled() {
-            self.remove_stale(Some(gate), &cancel)
-                .await
-                .map_err(|error| BackfillError::Index(anyhow::anyhow!("{error:#}")))?;
+        let span = tracing::Span::current();
+        span.record("databases", enqueued);
+        span.record("failed_databases", failed.len());
+        if let Some(first) = failed.first() {
+            return Err(BackfillError::Index(anyhow::anyhow!(
+                "{} of {enqueued} databases failed to reindex; first: {first}",
+                failed.len()
+            )));
         }
         Ok(BackfillReceipt {
             enqueued,

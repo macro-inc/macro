@@ -20,29 +20,21 @@ const STORAGE_ONLY_ROW: Uuid = uuid!("60000000-0000-7000-8000-000000000004");
     fixtures(path = "../../fixtures", scripts("rows"))
 )]
 async fn a_table_is_searchable_only_in_a_live_database_entity(pool: PgPool) {
+    // `(database, version, searchable)`; `read_at` is the server's clock.
+    let state = async |table_id| {
+        read_table_state(&pool, table_id)
+            .await
+            .unwrap()
+            .map(|state| (state.database_id, state.version, state.searchable))
+    };
+    assert_eq!(state(TABLE).await, Some((DATABASE, 7, true)));
     assert_eq!(
-        read_table_state(&pool, TABLE).await.unwrap(),
-        Some(TableState {
-            database_id: DATABASE,
-            version: 7,
-            searchable: true,
-        })
+        state(TRASHED_TABLE).await,
+        Some((TRASHED_DATABASE, 1, false))
     );
     assert_eq!(
-        read_table_state(&pool, TRASHED_TABLE).await.unwrap(),
-        Some(TableState {
-            database_id: TRASHED_DATABASE,
-            version: 1,
-            searchable: false,
-        })
-    );
-    assert_eq!(
-        read_table_state(&pool, STORAGE_ONLY_TABLE).await.unwrap(),
-        Some(TableState {
-            database_id: STORAGE_ONLY_DATABASE,
-            version: 1,
-            searchable: false,
-        })
+        state(STORAGE_ONLY_TABLE).await,
+        Some((STORAGE_ONLY_DATABASE, 1, false))
     );
     assert_eq!(read_table_state(&pool, Uuid::nil()).await.unwrap(), None);
 
@@ -125,8 +117,12 @@ async fn pages_a_tables_rows_in_position_order(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_watermark_never_moves_back(pool: PgPool) {
-    raise_watermark(&pool, TABLE, DATABASE, 7).await.unwrap();
-    raise_watermark(&pool, TABLE, DATABASE, 5).await.unwrap();
+    raise_watermark(&pool, TABLE, DATABASE, 7, chrono::Utc::now())
+        .await
+        .unwrap();
+    raise_watermark(&pool, TABLE, DATABASE, 5, chrono::Utc::now())
+        .await
+        .unwrap();
     assert_eq!(read_watermark(&pool, TABLE).await.unwrap(), Some(7));
 
     // The table does not exist in this database, so its mark is a gone table's.
@@ -184,7 +180,9 @@ async fn a_searchable_table_behind_its_watermark_is_lagging(pool: PgPool) {
         vec![TABLE]
     );
 
-    raise_watermark(&pool, TABLE, DATABASE, 7).await.unwrap();
+    raise_watermark(&pool, TABLE, DATABASE, 7, chrono::Utc::now())
+        .await
+        .unwrap();
     assert_eq!(
         read_lagging_tables(&pool, None, 10).await.unwrap(),
         Vec::<Uuid>::new()
@@ -208,7 +206,9 @@ async fn a_searchable_table_behind_its_watermark_is_lagging(pool: PgPool) {
     fixtures(path = "../../fixtures", scripts("rows"))
 )]
 async fn a_tag_relabelled_after_the_watermark_marks_its_tables(pool: PgPool) {
-    raise_watermark(&pool, TABLE, DATABASE, 7).await.unwrap();
+    raise_watermark(&pool, TABLE, DATABASE, 7, chrono::Utc::now())
+        .await
+        .unwrap();
     sqlx::query(
         "UPDATE database_row_search_watermarks SET updated_at = now() - INTERVAL '1 hour' WHERE table_id = $1",
     )
@@ -219,10 +219,13 @@ async fn a_tag_relabelled_after_the_watermark_marks_its_tables(pool: PgPool) {
     let a_day_ago = chrono::Utc::now() - chrono::Duration::days(1);
 
     // Nothing changed since the watermark moved.
-    sqlx::query("UPDATE property_options SET updated_at = now() - INTERVAL '2 hours'")
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::raw_sql(
+        "UPDATE property_options SET updated_at = now() - INTERVAL '2 hours';
+         UPDATE property_definitions SET updated_at = now() - INTERVAL '2 hours';",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     assert_eq!(
         read_relabelled_tables(&pool, a_day_ago, 10).await.unwrap(),
         Vec::<Uuid>::new()
@@ -241,15 +244,30 @@ async fn a_tag_relabelled_after_the_watermark_marks_its_tables(pool: PgPool) {
     );
 
     // A pass that reads the table afterwards moves the watermark past it.
-    sqlx::query(
-        "UPDATE database_row_search_watermarks SET updated_at = now() + INTERVAL '2 minutes' WHERE table_id = $1",
+    raise_watermark(
+        &pool,
+        TABLE,
+        DATABASE,
+        7,
+        chrono::Utc::now() + chrono::Duration::minutes(2),
     )
-    .bind(TABLE)
-    .execute(&pool)
     .await
     .unwrap();
     assert_eq!(
         read_relabelled_tables(&pool, a_day_ago, 10).await.unwrap(),
         Vec::<Uuid>::new()
+    );
+
+    // An option deleted from the tag set leaves no option row; the
+    // properties service touches its definition instead.
+    sqlx::query(
+        "UPDATE property_definitions SET updated_at = now() + INTERVAL '3 minutes' WHERE id = '30000000-0000-7000-8000-000000000006'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        read_relabelled_tables(&pool, a_day_ago, 10).await.unwrap(),
+        vec![TABLE]
     );
 }

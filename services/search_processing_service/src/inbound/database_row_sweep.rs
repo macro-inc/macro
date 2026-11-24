@@ -5,7 +5,9 @@
 //! sets were relabelled outside any database; every
 //! [`ROUNDS_PER_INDEX_SCAN`]th round also walks the whole index for documents
 //! whose rows or tables are gone. Every task runs the loop, and one at a time
-//! leads each round (`DatabaseRowIndexService::sweep_once`).
+//! leads each round (`DatabaseRowIndexService::sweep_once`). Its passes wait
+//! on the backfill gate: the first round after a deploy reindexes every
+//! table, which is a backfill in all but name.
 
 use std::{sync::Arc, time::Duration};
 
@@ -26,6 +28,7 @@ const RELABEL_LOOKBACK: chrono::TimeDelta = chrono::TimeDelta::days(1);
 /// a deploy's tasks do not all sweep as they start.
 pub(crate) async fn run_sweeps(
     indexer: Arc<crate::DatabaseRowIndexer>,
+    gate: crate::domain::backfill_gate::BackfillGate,
     interval: Duration,
     cancel: CancellationToken,
 ) {
@@ -45,7 +48,7 @@ pub(crate) async fn run_sweeps(
         let span = tracing::info_span!("database_rows.sweep");
         // The error is recorded on the round's span; the next round retries.
         let _ = indexer
-            .sweep_once(relabelled_since, scan_index, &cancel)
+            .sweep_once(relabelled_since, scan_index, &gate, &cancel)
             .instrument(span)
             .await;
     }

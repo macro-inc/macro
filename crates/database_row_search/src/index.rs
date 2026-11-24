@@ -14,6 +14,9 @@ pub struct TableState {
     /// Whether its rows belong in the index: the database has a database
     /// entity and it is not in the Trash.
     pub searchable: bool,
+    /// The database's clock when this was read: a pass that starts here
+    /// reads every option change committed before it.
+    pub read_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// The table's state, or `None` when the table no longer exists.
@@ -31,7 +34,8 @@ where
         SELECT
             t.database_id AS "database_id!",
             t.version AS "version!",
-            (de.database_id IS NOT NULL AND de.trashed_at IS NULL) AS "searchable!"
+            (de.database_id IS NOT NULL AND de.trashed_at IS NULL) AS "searchable!",
+            now() AS "read_at!"
         FROM database_tables t
         LEFT JOIN database_entities de ON de.database_id = t.database_id
         WHERE t.id = $1
@@ -319,11 +323,13 @@ where
     }
 }
 
-/// Tables with a watermark that place a definition one of whose options
-/// changed after `since` and after the table's watermark last moved: a tag
-/// set relabelled outside any database leaves no trace in the table's
-/// journal or version. A minute of slack covers a relabel that committed
-/// just after a pass read the old label.
+/// Tables with a watermark that place a definition whose options changed
+/// after `since` and after the table's pass last started: a tag set
+/// relabelled outside any database leaves no trace in the table's journal
+/// or version. An option's `updated_at` records a relabel; its definition's
+/// records a deletion or a merge, whose option row is gone. A minute of
+/// slack covers a change whose transaction began before a pass read and
+/// committed after.
 #[tracing::instrument(skip(executor), err)]
 pub async fn read_relabelled_tables<'e, Executor>(
     executor: Executor,
@@ -333,16 +339,24 @@ pub async fn read_relabelled_tables<'e, Executor>(
 where
     Executor: sqlx::PgExecutor<'e>,
 {
-    // Starts from the options changed since `since`, through
-    // `idx_property_options_updated_at`, one line per definition; the
+    // Starts from what changed since `since`, through
+    // `idx_property_options_updated_at` and
+    // `idx_property_definitions_updated_at`, one line per definition; the
     // watermark of each table placing one is a primary key probe. Joined
     // plainly, the planner walks every column in table order instead.
     sqlx::query_scalar!(
         r#"
         WITH changed AS MATERIALIZED (
-            SELECT property_definition_id, max(updated_at) AS changed_at
-            FROM property_options
-            WHERE updated_at > $1
+            SELECT property_definition_id, max(changed_at) AS changed_at
+            FROM (
+                SELECT property_definition_id, updated_at AS changed_at
+                FROM property_options
+                WHERE updated_at > $1
+                UNION ALL
+                SELECT id, updated_at
+                FROM property_definitions
+                WHERE updated_at > $1
+            ) changes
             GROUP BY property_definition_id
         )
         SELECT DISTINCT c.table_id AS "table_id!"
@@ -406,33 +420,39 @@ where
     .await
 }
 
-/// Record that the index holds the table up to `version`. A mark never moves
-/// back, so a slower pass that finishes later cannot undo a faster one; its
-/// `updated_at` always moves, recording when the table's text was last read.
+/// Record that the index holds the table up to `version`, as read from
+/// `read_at`, the database clock when its pass started. Neither moves back,
+/// so a slower pass that finishes later cannot undo a faster one.
 #[tracing::instrument(skip(executor), err)]
 pub async fn raise_watermark<'e, Executor>(
     executor: Executor,
     table_id: Uuid,
     database_id: Uuid,
     version: i64,
+    read_at: chrono::DateTime<chrono::Utc>,
 ) -> sqlx::Result<()>
 where
     Executor: sqlx::PgExecutor<'e>,
 {
     sqlx::query!(
         r#"
-        INSERT INTO database_row_search_watermarks (table_id, database_id, indexed_version)
-        VALUES ($1, $2, $3)
+        INSERT INTO database_row_search_watermarks
+            (table_id, database_id, indexed_version, updated_at)
+        VALUES ($1, $2, $3, $4)
         ON CONFLICT (table_id) DO UPDATE SET
             indexed_version = GREATEST(
                 database_row_search_watermarks.indexed_version,
                 EXCLUDED.indexed_version
             ),
-            updated_at = now()
+            updated_at = GREATEST(
+                database_row_search_watermarks.updated_at,
+                EXCLUDED.updated_at
+            )
         "#,
         table_id,
         database_id,
         version,
+        read_at,
     )
     .execute(executor)
     .await?;

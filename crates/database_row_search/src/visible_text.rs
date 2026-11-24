@@ -15,7 +15,7 @@ use mention_utils::parse::{
 pub(crate) enum SearchableKind {
     /// Markdown text; mentions in it read as their visible label.
     Text,
-    /// Links, without query string or fragment.
+    /// Links, without userinfo, query string or fragment.
     Link,
     /// Select, number select and tag cells, as their options' labels.
     Options,
@@ -107,10 +107,32 @@ fn cell_strings(cell: &CellInput) -> Vec<String> {
         .collect()
 }
 
-/// A link without its query string or fragment, which can carry tokens and
-/// signatures that have no business in a second store.
+/// A link without the parts that can carry secrets: its userinfo
+/// (`user:password@`), query string and fragment, which have no business in
+/// a second store. A link written without a scheme is read as `https`.
 pub(crate) fn searchable_link(link: &str) -> String {
-    link.split(['?', '#']).next().unwrap_or_default().to_owned()
+    let with_scheme = format!("https://{link}");
+    let (parsed, scheme_added) = match url::Url::parse(link) {
+        Ok(url) if url.has_host() => (Some(url), false),
+        _ => (url::Url::parse(&with_scheme).ok(), true),
+    };
+    let Some(mut url) = parsed else {
+        // Not a URL at all: keep the text before anything query-like.
+        return link.split(['?', '#']).next().unwrap_or_default().to_owned();
+    };
+
+    // Clearing userinfo only fails for URLs that cannot have a host, which
+    // `has_host` above or the added scheme rules out.
+    let _ = url.set_username("");
+    let _ = url.set_password(None);
+    url.set_query(None);
+    url.set_fragment(None);
+
+    let cleaned = url.to_string();
+    match cleaned.strip_prefix("https://") {
+        Some(rest) if scheme_added => rest.to_owned(),
+        _ => cleaned,
+    }
 }
 
 /// Text cell markdown as a reader sees it: every mention reduced to its

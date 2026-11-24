@@ -18,7 +18,7 @@ database before exposing a hit.
 ## Scope
 
 - Owns: the searchable-text rules (title = first column; text, links without
-  query string or fragment, select, number select and tag labels of the
+  userinfo, query string or fragment, select, number select and tag labels of the
   column's own definition; nothing else) and the reads behind them.
 - Not here: the index document and mapping → `crates/models_opensearch`,
   `infra/stacks/opensearch/helpers`; writing the index →

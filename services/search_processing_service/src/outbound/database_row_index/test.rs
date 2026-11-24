@@ -173,3 +173,96 @@ async fn indexes_relabels_and_removes_a_database(pool: PgPool) {
         .await
         .unwrap();
 }
+
+/// The index as a slow OpenSearch: every write takes longer than the lock
+/// pool's idle-in-transaction limit in the keepalive test.
+struct SlowIndex(std::time::Duration);
+
+impl crate::domain::database_row_index::DatabaseRowIndex for SlowIndex {
+    async fn write(
+        &self,
+        writes: Vec<crate::domain::database_row_index::RowIndexWrite>,
+    ) -> Result<crate::domain::database_row_index::RowWriteOutcome, rootcause::Report> {
+        // A real wait: the limit it outlasts is the server's clock.
+        tokio::time::sleep(self.0).await;
+        Ok(crate::domain::database_row_index::RowWriteOutcome {
+            applied: writes.len(),
+            superseded: 0,
+        })
+    }
+
+    async fn delete(
+        &self,
+        _scope: crate::domain::database_row_index::RowIndexScope,
+    ) -> Result<u64, rootcause::Report> {
+        Ok(0)
+    }
+
+    async fn page(
+        &self,
+        _after: Option<Uuid>,
+        _size: usize,
+    ) -> Result<Vec<crate::domain::database_row_index::IndexedRow>, rootcause::Report> {
+        Ok(Vec::new())
+    }
+}
+
+/// A lock pool on the test database whose idle-in-transaction limit is one
+/// second, so a pass that writes for longer must keep its lock alive.
+async fn short_idle_lock_pool(pool: &PgPool) -> PgPool {
+    let options = (*pool.connect_options())
+        .clone()
+        .options([("idle_in_transaction_session_timeout", "1s")]);
+    sqlx::postgres::PgPoolOptions::new()
+        .max_connections(2)
+        .connect_with(options)
+        .await
+        .unwrap()
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(
+        path = "../../../../../crates/database_row_search/fixtures",
+        scripts("rows")
+    )
+)]
+async fn a_pass_longer_than_the_idle_limit_keeps_its_lock(pool: PgPool) {
+    let locks = short_idle_lock_pool(&pool).await;
+    let service = DatabaseRowIndexService::new(
+        PgDatabaseRows::new(pool.clone(), locks),
+        SlowIndex(std::time::Duration::from_millis(2500)),
+    )
+    .with_lock_keepalive(std::time::Duration::from_millis(300));
+
+    let outcome = service
+        .reconcile_table(TABLE, PassKind::Full)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, TableOutcome::Reindexed);
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(
+        path = "../../../../../crates/database_row_search/fixtures",
+        scripts("rows")
+    )
+)]
+async fn without_the_keepalive_the_server_ends_a_long_pass(pool: PgPool) {
+    // The control for the test above: the limit really ends an idle lock.
+    let locks = short_idle_lock_pool(&pool).await;
+    let service = DatabaseRowIndexService::new(
+        PgDatabaseRows::new(pool.clone(), locks),
+        SlowIndex(std::time::Duration::from_millis(2500)),
+    )
+    .with_lock_keepalive(std::time::Duration::from_secs(600));
+
+    assert!(
+        service
+            .reconcile_table(TABLE, PassKind::Full)
+            .await
+            .is_err()
+    );
+}

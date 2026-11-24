@@ -50,3 +50,15 @@ fn links_lose_their_query_string_and_fragment() {
     );
     assert_eq!(searchable_link("example.com/launch"), "example.com/launch");
 }
+
+#[test]
+fn links_lose_their_userinfo() {
+    assert_eq!(
+        searchable_link("https://deploy:hunter2@git.example.com/repo.git"),
+        "https://git.example.com/repo.git"
+    );
+    assert_eq!(
+        searchable_link("deploy:hunter2@git.example.com/repo"),
+        "git.example.com/repo"
+    );
+}

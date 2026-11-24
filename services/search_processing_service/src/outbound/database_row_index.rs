@@ -49,8 +49,9 @@ const LOCK_IDLE_TIMEOUT: &str = "15min";
 
 /// Connect options for the lock pool: `lock_timeout` bounds the wait for an
 /// advisory lock, and `idle_in_transaction_session_timeout` is set here
-/// rather than inherited, so a server default cannot end a pass whose lock
-/// transaction sits idle during OpenSearch writes.
+/// rather than inherited. A pass touches its lock far more often than that
+/// (`DatabaseRowIndexService`'s keepalive), so only a lock its task stopped
+/// touching (a hung or crashed pass) is ended by the server.
 pub fn lock_pool_options(
     database_url: &str,
 ) -> Result<sqlx::postgres::PgConnectOptions, sqlx::Error> {
@@ -98,6 +99,13 @@ impl DatabaseRowSource for PgDatabaseRows {
         .execute(&mut *transaction)
         .await?;
         Ok(transaction)
+    }
+
+    async fn keep_lock_alive(&self, lock: &mut Self::DatabaseLock) -> Result<(), Report> {
+        sqlx::query_scalar!(r#"SELECT 1 AS "alive!""#)
+            .fetch_one(&mut **lock)
+            .await?;
+        Ok(())
     }
 
     async fn unlock_database(&self, lock: Self::DatabaseLock) -> Result<(), Report> {
@@ -166,8 +174,9 @@ impl DatabaseRowSource for PgDatabaseRows {
         table_id: Uuid,
         database_id: Uuid,
         version: i64,
+        read_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<(), Report> {
-        Ok(index::raise_watermark(&self.db, table_id, database_id, version).await?)
+        Ok(index::raise_watermark(&self.db, table_id, database_id, version, read_at).await?)
     }
 
     async fn forget_table(&self, table_id: Uuid) -> Result<(), Report> {

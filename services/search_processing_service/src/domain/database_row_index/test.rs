@@ -40,6 +40,8 @@ struct SourceState {
     relabelled: Vec<Uuid>,
     /// Trash the database once this many more table reads have happened.
     trash_after_reads: Option<usize>,
+    /// A database whose reads fail.
+    failing_database: Option<Uuid>,
 }
 
 impl FakeSource {
@@ -50,6 +52,7 @@ impl FakeSource {
                     database_id: DATABASE,
                     version,
                     searchable: true,
+                    read_at: Utc.with_ymd_and_hms(2026, 11, 24, 12, 0, 0).unwrap(),
                 }),
                 database_searchable: Some(true),
                 rows: rows
@@ -93,6 +96,10 @@ impl DatabaseRowSource for FakeSource {
         Ok(self.lock.clone().lock_owned().await)
     }
 
+    async fn keep_lock_alive(&self, _lock: &mut Self::DatabaseLock) -> Result<(), Report> {
+        Ok(())
+    }
+
     async fn unlock_database(&self, lock: Self::DatabaseLock) -> Result<(), Report> {
         drop(lock);
         Ok(())
@@ -120,8 +127,13 @@ impl DatabaseRowSource for FakeSource {
             }))
     }
 
-    async fn database_tables(&self, _database_id: Uuid) -> Result<Option<DatabaseTables>, Report> {
+    async fn database_tables(&self, database_id: Uuid) -> Result<Option<DatabaseTables>, Report> {
         let state = self.state.lock().unwrap();
+        if state.failing_database == Some(database_id) {
+            return Err(
+                Report::new_sendsync(std::io::Error::other("connection reset")).into_dynamic(),
+            );
+        }
         Ok(state.database_searchable.map(|searchable| DatabaseTables {
             searchable,
             table_ids: state.table.map(|_| TABLE).into_iter().collect(),
@@ -224,6 +236,7 @@ impl DatabaseRowSource for FakeSource {
         table_id: Uuid,
         database_id: Uuid,
         version: i64,
+        _read_at: DateTime<Utc>,
     ) -> Result<(), Report> {
         let mut state = self.state.lock().unwrap();
         let mark = state
@@ -706,7 +719,11 @@ async fn a_sweep_catches_up_a_table_whose_event_was_lost() {
     let service = DatabaseRowIndexService::new(source, index);
 
     let catch_up = service
-        .catch_up(Utc::now(), &CancellationToken::new())
+        .catch_up(
+            Utc::now(),
+            &BackfillGate::open(4),
+            &CancellationToken::new(),
+        )
         .await
         .unwrap();
 
@@ -738,7 +755,11 @@ async fn a_sweep_reindexes_a_table_whose_tag_was_relabelled_elsewhere() {
     let service = DatabaseRowIndexService::new(source, index);
 
     let catch_up = service
-        .catch_up(Utc::now(), &CancellationToken::new())
+        .catch_up(
+            Utc::now(),
+            &BackfillGate::open(4),
+            &CancellationToken::new(),
+        )
         .await
         .unwrap();
 
@@ -822,4 +843,36 @@ async fn a_restore_overlapping_a_trash_pass_keeps_its_rows() {
         ]
     );
     assert_eq!(service.source.watermark_of(TABLE), Some(6));
+}
+
+#[tokio::test]
+async fn a_backfill_goes_on_past_a_database_that_fails() {
+    let failing = uuid!("10000000-0000-7000-8000-0000000000ff");
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    source.edit(|state| state.failing_database = Some(failing));
+    let service = DatabaseRowIndexService::new(source, FakeIndex::default());
+
+    let result = service
+        .backfill(
+            DatabaseRowBackfillRequest {
+                database_ids: vec![failing, DATABASE],
+            },
+            &BackfillGate::open(4),
+            Arc::new(JobProgress::detached()),
+            CancellationToken::new(),
+        )
+        .await;
+
+    // The database after the failing one is still indexed, and the job
+    // reports the failure instead of completing.
+    assert_eq!(
+        service.index.contents(),
+        vec![(ROW_A, "A at 6".to_owned(), 6)]
+    );
+    let error = result.unwrap_err();
+    let cause = std::error::Error::source(&error).unwrap().to_string();
+    assert!(
+        cause.starts_with("1 of 2 databases failed to reindex"),
+        "{cause}"
+    );
 }
