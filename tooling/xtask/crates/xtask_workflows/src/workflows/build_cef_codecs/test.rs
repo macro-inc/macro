@@ -27,10 +27,17 @@ fn builds_with_proprietary_codecs() {
 #[test]
 fn builds_each_mac_architecture_in_its_own_job() {
     let yaml = rendered();
-    assert!(yaml.contains("  build-cef:\n"), "{yaml}");
-    assert!(yaml.contains("  build-cef-x86_64:\n"), "{yaml}");
-    assert!(yaml.contains("CEF_ARCH: aarch64"), "{yaml}");
-    assert!(yaml.contains("CEF_ARCH: x86_64"), "{yaml}");
+    let workflow: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("workflow YAML");
+    for (job, arch) in [("build-cef", "aarch64"), ("build-cef-x86_64", "x86_64")] {
+        let steps = workflow["jobs"][job]["steps"]
+            .as_sequence()
+            .unwrap_or_else(|| panic!("{job} steps in:\n{yaml}"));
+        let archs: Vec<&str> = steps
+            .iter()
+            .filter_map(|step| step["env"]["CEF_ARCH"].as_str())
+            .collect();
+        assert_eq!(archs, [arch], "{job}");
+    }
     // Chromium cross-compiles x64 on the Apple silicon runner; without
     // CEF_ENABLE_AMD64 CEF's gn_args.py writes no x64 configuration there.
     assert!(yaml.contains("--x64-build"), "{yaml}");
@@ -51,6 +58,15 @@ fn codecs_manifest() -> serde_json::Value {
 /// to report `published` as the release's only asset. Every path these tests
 /// take exits before anything is checked out or built.
 fn run_script(arch: &str, published: &str) -> (std::process::Output, String) {
+    run_script_in(&repository(), arch, published)
+}
+
+/// [`run_script`] in `root`, which holds the manifest the script reads.
+fn run_script_in(
+    root: &std::path::Path,
+    arch: &str,
+    published: &str,
+) -> (std::process::Output, String) {
     use std::os::unix::fs::PermissionsExt;
     let temp = tempfile::tempdir().expect("script fixture directory");
     let bin = temp.path().join("bin");
@@ -67,7 +83,7 @@ fn run_script(arch: &str, published: &str) -> (std::process::Output, String) {
             "-c",
             "export PATH=\"$STUB_BIN:$PATH\"\nexec bash \"$STUB_SCRIPT\"",
         ])
-        .current_dir(repository())
+        .current_dir(root)
         .env("STUB_BIN", &bin)
         .env(
             "STUB_SCRIPT",
@@ -116,4 +132,44 @@ fn a_published_asset_builds_nothing() {
         calls.lines().all(|line| line.starts_with("release view ")),
         "only the asset lookup may reach GitHub: {calls}"
     );
+}
+
+#[test]
+fn only_a_completed_upload_counts_as_published() {
+    let manifest = codecs_manifest();
+    let asset = manifest["assets"]["aarch64"]["asset"]
+        .as_str()
+        .expect("the Apple silicon asset");
+    let (_, calls) = run_script("aarch64", asset);
+    assert!(
+        calls.contains(r#"select(.state == "uploaded")"#),
+        "an asset left in the starter state must not skip the build: {calls}"
+    );
+    let script = include_str!("../scripts/build_cef_codecs.sh");
+    assert!(
+        script.contains("--clobber"),
+        "the retry replaces a starter asset"
+    );
+}
+
+#[test]
+fn architectures_sharing_an_asset_name_fail() {
+    let root = tempfile::tempdir().expect("manifest fixture directory");
+    let dir = root.path().join("apps/web/tauri/desktop-cef");
+    std::fs::create_dir_all(&dir).expect("manifest directory");
+    let mut manifest = codecs_manifest();
+    let asset = manifest["assets"]["aarch64"]["asset"].clone();
+    manifest["assets"]["x86_64"] = serde_json::json!({ "asset": asset, "sha256": "" });
+    std::fs::write(
+        dir.join("cef-codecs.json"),
+        serde_json::to_string(&manifest).expect("manifest JSON"),
+    )
+    .expect("manifest");
+    let (output, calls) = run_script_in(root.path(), "x86_64", "");
+    assert!(!output.status.success(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("for more than one architecture"),
+        "{output:?}"
+    );
+    assert_eq!(calls, "", "nothing may reach GitHub: {calls}");
 }

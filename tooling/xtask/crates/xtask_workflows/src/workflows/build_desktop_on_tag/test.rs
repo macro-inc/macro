@@ -482,6 +482,19 @@ impl IntelDecision {
         Self { temp }
     }
 
+    /// `gh api` that answers nothing until long after the read's deadline.
+    fn stalled() -> Self {
+        let temp = tempfile::tempdir().expect("decision fixture directory");
+        let bin = temp.path().join("bin");
+        fs::create_dir(&bin).expect("mock command directory");
+        write_command(
+            &bin,
+            "gh",
+            "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"$STUB_GH_LOG\"\nexec sleep 60\n",
+        );
+        Self { temp }
+    }
+
     fn decide(&self, build_ref: &str) -> String {
         let root = self.temp.path();
         let output_file = root.join("output");
@@ -503,6 +516,7 @@ impl IntelDecision {
             .env("GITHUB_REPOSITORY", "macro-inc/macro")
             .env("BUILD_REF", build_ref)
             .env("READ_RETRY_SECONDS", "0")
+            .env("READ_TIMEOUT_SECONDS", "1")
             .output()
             .expect("run the Intel decision script");
         assert_publish_success(&output);
@@ -555,6 +569,22 @@ fn an_unreadable_manifest_skips_intel_instead_of_failing_the_release() {
     assert_eq!(
         IntelDecision::new(Some("not json")).decide("refs/tags/v2026.11.24.0"),
         "intel=false\n"
+    );
+}
+
+#[test]
+fn a_stalled_manifest_read_times_out_and_skips_intel() {
+    let stalled = IntelDecision::stalled();
+    let started = std::time::Instant::now();
+    assert_eq!(stalled.decide("refs/tags/v2026.11.24.0"), "intel=false\n");
+    assert_eq!(
+        stalled.gh_calls().lines().count(),
+        3,
+        "each attempt times out"
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(30),
+        "the reads must not wait for the stalled response"
     );
 }
 

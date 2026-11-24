@@ -13,8 +13,10 @@ case "$BUILD_REF" in
 esac
 
 manifest_path=apps/web/tauri/desktop-cef/cef-codecs.json
+# Each read has a deadline: the Apple silicon and Linux builds wait for this
+# step, and gh api has none of its own.
 read_manifest() {
-  gh api -H 'Accept: application/vnd.github.raw+json' \
+  timeout "${READ_TIMEOUT_SECONDS:-60}" gh api -H 'Accept: application/vnd.github.raw+json' \
     "repos/$GITHUB_REPOSITORY/contents/$manifest_path?ref=$BUILD_REF"
 }
 # An unreadable manifest skips Intel rather than failing the release: the Apple

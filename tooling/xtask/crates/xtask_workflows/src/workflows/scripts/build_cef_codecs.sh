@@ -31,10 +31,19 @@ if [ "$listed" != true ]; then
   exit 0
 fi
 asset=$(jq -er --arg arch "$CEF_ARCH" '.assets[$arch].asset' "$manifest")
+# Every architecture publishes to one release, so a shared name would find the
+# other architecture's asset below and never build this one.
+shared=$(jq -r '[.assets[].asset] | group_by(.) | map(select(length > 1)[0]) | .[]' "$manifest")
+if [ -n "$shared" ]; then
+  echo "$manifest names $shared for more than one architecture" >&2
+  exit 1
+fi
 
-# Read the list before matching: under pipefail, `grep -q` exiting early can
-# fail the pipe and send a published asset to a day-long rebuild.
-published=$(gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || true)
+# Only a completed upload counts: a failed one can leave an empty asset in the
+# starter state, which the upload below replaces. Read the list before
+# matching: under pipefail, `grep -q` exiting early can fail the pipe and send
+# a published asset to a day-long rebuild.
+published=$(gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | select(.state == "uploaded") | .name' 2>/dev/null || true)
 if grep -qxF "$asset" <<< "$published"; then
   echo "$release_tag already has $asset; nothing to build."
   exit 0
@@ -116,7 +125,7 @@ if ! gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1;
     --notes "Minimal CEF distributions for the macOS desktop app, built with proprietary_codecs=true and ffmpeg_branding=Chrome. Each asset's sha256 is pinned in apps/web/tauri/desktop-cef/cef-codecs.json." ||
     gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null
 fi
-gh release upload "$release_tag" "$RUNNER_TEMP/out/$asset" --repo "$GITHUB_REPOSITORY"
+gh release upload "$release_tag" "$RUNNER_TEMP/out/$asset" --repo "$GITHUB_REPOSITORY" --clobber
 
 {
   echo "### CEF with proprietary codecs ($CEF_ARCH)"

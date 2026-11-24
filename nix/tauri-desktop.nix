@@ -1163,13 +1163,14 @@
       cefCodecsAsset =
         darwinTarget:
         let
-          asset = cefCodecs.assets.${darwinTarget.cefArch} or { sha256 = ""; };
+          asset = cefCodecs.assets.${darwinTarget.cefArch} or { };
+          pending = (asset.sha256 or "") == "";
         in
         assert lib.assertMsg (cefCodecsVersion == cefCrateVersion)
           "desktop-cef loads CEF ${cefCrateVersion} but cef-codecs.json pins ${cefCodecsVersion}; update the manifest and rebuild";
-        lib.warnIf (asset.sha256 == "")
+        lib.warnIf pending
           "apps/web/tauri/desktop-cef/cef-codecs.json has no ${darwinTarget.cefArch} sha256; building with the CDN CEF, which cannot play H.264, HEVC, or AAC"
-          (if asset.sha256 == "" then null else asset);
+          (if pending then null else asset);
       cefCodecsDistribution =
         darwinTarget: asset:
         let
