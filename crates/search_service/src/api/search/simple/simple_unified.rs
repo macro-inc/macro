@@ -8,6 +8,9 @@ use crate::domain::search_lanes::{LaneTurn, SearchCaller, SearchLanes};
 
 use crate::api::search::caller::{caller_label, draws_api_key_allowance, search_caller};
 use crate::api::search::crm_company;
+use crate::api::search::email_operators::{
+    EmailQuery, QueryClock, apply_email_operators, reported_filters, time_zone,
+};
 use crate::api::search::simple::{simple_channel, simple_chat};
 use crate::api::{
     context::{SearchAuthorizationService, SearchHandlerState},
@@ -177,7 +180,9 @@ use crate::api::search::terms::{
 /// Per-request cap on whitespace-delimited search terms. Each term expands
 /// into its own `has_child` clause and is embedded in every clause's highlight
 /// query, so query-build cost is quadratic in the term count across the
-/// join-shape indices — an unbounded paste can OOM the service.
+/// join-shape indices — an unbounded paste can OOM the service. It also keeps
+/// an email search under the clauses OpenSearch accepts, so it counts the
+/// email text conditions the request sends with the ones typed.
 const MAX_SEARCH_TERMS: usize = 50;
 
 /// Per-term character cap. Body size also scales with summed term length; real
@@ -191,13 +196,50 @@ fn enforce_term_limits(terms: Vec<String>) -> Result<Vec<String>, SearchError> {
     if terms.len() > MAX_SEARCH_TERMS {
         return Err(SearchError::TooManyTerms);
     }
-    Ok(terms
-        .into_iter()
-        .map(|term| match term.char_indices().nth(MAX_TERM_CHARS) {
-            Some((byte_idx, _)) => term[..byte_idx].to_string(),
-            None => term,
-        })
-        .collect())
+    Ok(terms.into_iter().map(truncate_term).collect())
+}
+
+/// A search's terms with its email operators read out of them, then held to
+/// [`MAX_SEARCH_TERMS`] and [`MAX_TERM_CHARS`]. Operators are read before
+/// anything is cut to length, so a long label name is matched whole; the
+/// words left and every text condition the search applies are cut as terms
+/// are, and the typed conditions reported back are cut the same way.
+fn limited_terms(
+    filters: &mut SearchEntityFilters,
+    include_crm: bool,
+    terms: Vec<String>,
+    match_type: MatchType,
+    clock: QueryClock,
+) -> Result<(Vec<String>, Option<EmailQuery>), SearchError> {
+    if terms.len() > MAX_SEARCH_TERMS {
+        return Err(SearchError::TooManyTerms);
+    }
+    let (terms, mut email_query) =
+        apply_email_operators(filters, include_crm, terms, match_type, clock);
+    if terms.len() + filters.email_filters.text_matches.len() > MAX_SEARCH_TERMS {
+        return Err(SearchError::TooManyTerms);
+    }
+    let terms = enforce_term_limits(terms)?;
+    truncate_text_matches(&mut filters.email_filters);
+    if let Some(query) = &mut email_query {
+        truncate_text_matches(&mut query.filters);
+    }
+    Ok((terms, email_query))
+}
+
+/// Each text condition in `filters` cut to [`MAX_TERM_CHARS`].
+fn truncate_text_matches(filters: &mut item_filters::EmailFilters) {
+    for text_match in &mut filters.text_matches {
+        text_match.text = truncate_term(std::mem::take(&mut text_match.text));
+    }
+}
+
+/// `term` cut to [`MAX_TERM_CHARS`].
+fn truncate_term(term: String) -> String {
+    match term.char_indices().nth(MAX_TERM_CHARS) {
+        Some((byte_idx, _)) => term[..byte_idx].to_string(),
+        None => term,
+    }
 }
 
 /// Convert request property filters into OpenSearch property-filter args.
@@ -376,6 +418,7 @@ fn unified_search_span(
         search.entity_types = tracing::field::Empty,
         search.terms = tracing::field::Empty,
         search.dropped_terms = tracing::field::Empty,
+        search.email_operators = tracing::field::Empty,
         search.term_matching = tracing::field::Empty,
         search.term_matching_from_cursor = tracing::field::Empty,
         search.email_shared_capped = tracing::field::Empty,
@@ -421,6 +464,8 @@ pub(in crate::api::search) struct UnifiedSearchPage {
     pub(in crate::api::search) hits: Vec<SearchHit>,
     pub(in crate::api::search) next_cursor: Option<String>,
     pub(in crate::api::search) crm_access: Option<CrmTeamReceipt<MemberTeamRole>>,
+    /// The email filters the query's typed operators became, if it typed any.
+    pub(in crate::api::search) query_filters: Option<item_filters::EmailFilters>,
 }
 
 /// Creates a unified search request and performs the search
@@ -556,13 +601,19 @@ async fn search_unified_sources(
     let match_type = req.match_type;
     let split_terms = split_search_terms(&terms);
     let split_count = split_terms.len();
-    let search_terms = enforce_term_limits(drop_wordless_terms(split_terms, match_type))?;
-    record_term_counts(
-        &tracing::Span::current(),
-        search_terms.len(),
-        split_count - search_terms.len(),
-    );
+    let search_terms = drop_wordless_terms(split_terms, match_type);
     let requested_term_matching = req.term_matching;
+
+    // Typed dates are read in the caller's zone, and a later page reads
+    // relative ones against the first page's moment.
+    let clock = QueryClock {
+        now: cursor
+            .as_ref()
+            .and_then(|cursor| cursor.query_time_millis)
+            .and_then(chrono::DateTime::from_timestamp_millis)
+            .unwrap_or_else(chrono::Utc::now),
+        zone: time_zone(req.time_zone.as_deref()).ok_or(SearchError::InvalidTimeZone)?,
+    };
 
     // Property filters live at the top level of the request and only apply to
     // the OpenSearch documents index, so capture them before the conversion
@@ -583,7 +634,25 @@ async fn search_unified_sources(
     let crm_company_filters = req.filters.crm_company_filters.clone();
 
     let calendar_event_scope = req.calendar_event_scope;
-    let search_filters = SearchEntityFilters::from(req.filters);
+    let mut search_filters = SearchEntityFilters::from(req.filters);
+    let (search_terms, email_query) = limited_terms(
+        &mut search_filters,
+        include_crm,
+        search_terms,
+        match_type,
+        clock,
+    )?;
+    record_term_counts(
+        &tracing::Span::current(),
+        search_terms.len(),
+        split_count - search_terms.len(),
+    );
+    tracing::Span::current().record(
+        "search.email_operators",
+        email_query.as_ref().map_or(0, |query| query.operators),
+    );
+    // CRM companies cannot meet an email operator either.
+    let include_crm = include_crm && email_query.is_none();
     let requested_sessions = search_filters
         .agent_session_filters
         .ids
@@ -1140,6 +1209,10 @@ async fn search_unified_sources(
                     search_terms.len(),
                     document_term_matching,
                 ),
+                query_time_millis: email_query
+                    .as_ref()
+                    .filter(|query| query.reads_now)
+                    .map(|_| clock.now.timestamp_millis()),
             };
             cursor.encode()
         } else {
@@ -1154,6 +1227,7 @@ async fn search_unified_sources(
         hits: final_results,
         next_cursor,
         crm_access,
+        query_filters: email_query.as_ref().map(reported_filters),
     })
 }
 

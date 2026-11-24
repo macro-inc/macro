@@ -2,7 +2,9 @@
 //! This is used in simple_unified.rs
 
 use comms_db_client::model::SimpleMention;
+use item_filters::{EmailTextMatch, EmailTextPart};
 use models_search::calendar_event::CalendarEventSearchScope;
+use opensearch_client::search::emails::{EmailLabelCondition, EmailTextCondition, EmailTextFields};
 use opensearch_client::search::unified::{
     UnifiedCalendarEventSearchArgs, UnifiedCallRecordSearchArgs, UnifiedChannelMessageSearchArgs,
     UnifiedChatSearchArgs, UnifiedDocumentSearchArgs, UnifiedEmailSearchArgs,
@@ -181,6 +183,21 @@ pub(super) fn reject_unsupported_email_filters(
     Ok(())
 }
 
+fn text_condition(text_match: &EmailTextMatch) -> EmailTextCondition {
+    EmailTextCondition {
+        fields: match text_match.part {
+            EmailTextPart::Any => EmailTextFields::Any,
+            EmailTextPart::Subject => EmailTextFields::Subject,
+            EmailTextPart::From => EmailTextFields::From,
+            EmailTextPart::To => EmailTextFields::To,
+            EmailTextPart::Cc => EmailTextFields::Cc,
+            EmailTextPart::Bcc => EmailTextFields::Bcc,
+        },
+        text: text_match.text.clone(),
+        exclude: text_match.exclude,
+    }
+}
+
 /// Resolves the email threads `filters` reach for the caller, or `None` when
 /// emails are left out or no thread can match.
 pub(super) async fn email_search(
@@ -223,6 +240,7 @@ pub(super) async fn email_search(
     let EmailScope::Threads(threads) = scope else {
         return Ok(None);
     };
+    let threads = *threads;
 
     Ok(Some(EmailSearch {
         args: UnifiedEmailSearchArgs {
@@ -240,9 +258,31 @@ pub(super) async fn email_search(
             recipients: filters.recipients.clone(),
             link_ids: filters.link_ids.clone(),
             exclude_link_ids: disconnecting,
+            label_link_ids: links.iter().map(|link| link.id.to_string()).collect(),
             include_labels: filters.include_labels.clone(),
             exclude_labels: filters.exclude_labels.clone(),
             importance: filters.importance,
+            text_conditions: filters.text_matches.iter().map(text_condition).collect(),
+            label_conditions: threads
+                .label_conditions
+                .into_iter()
+                .map(|condition| EmailLabelCondition {
+                    labels: condition.labels,
+                    tag_option_ids: condition
+                        .tag_option_ids
+                        .iter()
+                        .map(Uuid::to_string)
+                        .collect(),
+                    exclude: condition.exclude,
+                })
+                .collect(),
+            exclude_thread_ids: threads
+                .excluded_thread_ids
+                .iter()
+                .map(Uuid::to_string)
+                .collect(),
+            sent_after_millis: filters.sent_after.map(|after| after.timestamp_millis()),
+            sent_before_millis: filters.sent_before.map(|before| before.timestamp_millis()),
             ..Default::default()
         },
         hit_states: threads.hit_states,

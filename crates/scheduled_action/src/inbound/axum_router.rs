@@ -233,6 +233,10 @@ where
             post(execute_action::<S, Svc, Auth>),
         )
         .route(
+            "/scheduled-actions/{id}/stop",
+            post(stop_run::<S, Svc, Auth>),
+        )
+        .route(
             "/scheduled-actions/{id}/history",
             get(list_history::<S, Svc, Auth>),
         )
@@ -759,6 +763,36 @@ where
 }
 
 #[utoipa::path(
+    post,
+    path = "/scheduled-actions/{id}/stop",
+    tag = "scheduled actions",
+    operation_id = "stop_scheduled_action_run",
+    description = "Stop the routine's run in progress. It ends as stopped shortly after; with no run in progress, nothing changes.",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    responses(
+        (status = 204, description = "The stop was sent, or nothing was running"),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn stop_run<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<OwnerAccessLevel, Svc, Auth>,
+) -> Result<StatusCode, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state.service.stop_run(entity_access_receipt).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
     get,
     path = "/scheduled-actions/{id}/history",
     tag = "scheduled actions",
@@ -935,6 +969,7 @@ impl IntoResponse for ScheduledActionApiError {
                 | ActionPolicyError::ConditionsDisabled
                 | ActionPolicyError::InvalidAppearance(_)
                 | ActionPolicyError::GithubNotLinked
+                | ActionPolicyError::UnknownInboxes
                 | ActionPolicyError::DescriptionTooLong
                 | ActionPolicyError::KeyOutsideRun
                 | ActionPolicyError::InvalidKey

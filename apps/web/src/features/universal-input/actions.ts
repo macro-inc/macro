@@ -36,7 +36,10 @@ import {
 } from '@queries/auth/account-scope';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useCreateCalendarEventMutation } from '@queries/calendar/mutations';
-import { toChannelListItem } from '@queries/channel/directory-core';
+import {
+  isMessageDestinationChannel,
+  toChannelListItem,
+} from '@queries/channel/directory-core';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
@@ -100,14 +103,10 @@ export function createInputActions(
   const sendMessage = useSendMessageMutation();
   const history = useUpsertToHistoryMutation();
   const directory = useChannelDirectory();
-  // Bots count as members, as they did in the REST channel list.
   const messageChannels = createMemo(() =>
     directory
       .channels()
-      .filter(
-        (channel) =>
-          channel.participants.length + channel.botParticipants.length > 2
-      )
+      .filter(isMessageDestinationChannel)
       .map((channel) =>
         recipientEntityMapper('channel')(toChannelListItem(channel))
       )

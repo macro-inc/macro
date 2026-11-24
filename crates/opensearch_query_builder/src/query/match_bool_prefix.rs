@@ -19,6 +19,10 @@ pub struct MatchBoolPrefixQuery<'a> {
     /// The query text
     #[serde(borrow)]
     pub query: Cow<'a, str>,
+    /// Whether every token must match (`and`) or any (`or`, the default)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(borrow)]
+    pub operator: Option<Cow<'a, str>>,
 }
 
 impl<'a> MatchBoolPrefixQuery<'a> {
@@ -27,7 +31,14 @@ impl<'a> MatchBoolPrefixQuery<'a> {
         Self {
             field: field.into(),
             query: query.into(),
+            operator: None,
         }
+    }
+
+    /// Set whether every token must match or any
+    pub fn operator(mut self, operator: impl Into<Cow<'a, str>>) -> Self {
+        self.operator = Some(operator.into());
+        self
     }
 
     /// Convert to an owned version with 'static lifetime
@@ -35,6 +46,7 @@ impl<'a> MatchBoolPrefixQuery<'a> {
         MatchBoolPrefixQuery {
             field: Cow::Owned(self.field.to_string()),
             query: Cow::Owned(self.query.to_string()),
+            operator: self.operator.as_ref().map(|o| Cow::Owned(o.to_string())),
         }
     }
 }
@@ -49,6 +61,9 @@ impl<'a> ToOpenSearchJson for MatchBoolPrefixQuery<'a> {
     fn to_json(&self) -> Value {
         let mut field_obj = Map::new();
         field_obj.insert("query".to_string(), Value::String(self.query.to_string()));
+        if let Some(ref operator) = self.operator {
+            field_obj.insert("operator".to_string(), Value::String(operator.to_string()));
+        }
 
         let mut match_bool_prefix_obj = Map::new();
         match_bool_prefix_obj.insert(self.field.to_string(), Value::Object(field_obj));

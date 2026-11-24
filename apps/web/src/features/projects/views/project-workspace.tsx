@@ -1,3 +1,4 @@
+import { ProjectTimeTab } from '@app/features/time-tracking/project-time';
 import { Match, Show, Switch } from 'solid-js';
 import type { ProjectWorkspaceProps } from '../context/project-workspace';
 import { canEditProject } from '../core/project';
@@ -37,6 +38,12 @@ export function ProjectWorkspace(props: ProjectWorkspaceProps) {
                 onCreateTask={
                   canEditProject(props.project) ? props.onCreateTask : undefined
                 }
+              />
+            </Match>
+            <Match when={props.section === 'time'}>
+              <ProjectTimeTab
+                project={props.project}
+                onOpenTask={props.onOpenTask}
               />
             </Match>
           </Switch>

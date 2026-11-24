@@ -1,4 +1,5 @@
 import type { FacetSelection } from '@app/features/soup';
+import { TZDate } from '@date-fns/tz';
 import type { TaskEntityWithProperties } from '@entity/types/entity';
 import {
   getTaskDueDate,
@@ -11,6 +12,7 @@ import {
 } from '@entity/utils/task-properties';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { PropertyApiValues } from '@property/types';
+import type { DateField } from '@property/utils/start-due';
 import {
   moveTaskAssignees,
   type TaskBoardColumn,
@@ -237,20 +239,73 @@ export function taskBoardColumns(
   }));
 }
 
+/** One property a drop on a due date column saves. */
+export type TaskDeadlineWrite = {
+  field: DateField;
+  apiValues: PropertyApiValues;
+};
+
+function taskDateValue(entity: TaskEntityWithProperties, definitionId: string) {
+  const value = entity.properties?.find(
+    (property) => property.definition.id === definitionId
+  )?.value;
+  return value?.type === 'Date' && value.value
+    ? { at: Date.parse(value.value), hasTime: value.has_time === true }
+    : undefined;
+}
+
+/** The date of `day` at the time of day of `time`, both read in `timeZone`. */
+function atTimeOfDay(day: string, time: number, timeZone: string): Date {
+  const clock = new TZDate(time, timeZone);
+  const at = new TZDate(Date.parse(day), timeZone);
+  at.setHours(
+    clock.getHours(),
+    clock.getMinutes(),
+    clock.getSeconds(),
+    clock.getMilliseconds()
+  );
+  return new Date(at.getTime());
+}
+
+/**
+ * What a drop on a due date column saves, in order. The due date moves to
+ * the column's day (`dueDate`, its midnight in the calendar's time zone),
+ * keeping its time of day there, or stays a whole day. A start left after
+ * it moves to the same moment, as a start time picked past the due date
+ * does. That start is saved first: it is earlier than the saved due date,
+ * so neither write makes the server pull the start back.
+ */
+export function taskDeadlineMoveWrites(
+  entity: TaskEntityWithProperties,
+  dueDate: string | null,
+  timeZone: string
+): TaskDeadlineWrite[] {
+  if (dueDate === null)
+    return [{ field: 'due', apiValues: { valueType: 'DATE', value: null } }];
+  const due = taskDateValue(entity, SYSTEM_PROPERTY_IDS.DUE_DATE);
+  const value = due?.hasTime
+    ? atTimeOfDay(dueDate, due.at, timeZone)
+    : new Date(dueDate);
+  const apiValues: PropertyApiValues = {
+    valueType: 'DATE',
+    value,
+    ...(due?.hasTime ? { hasTime: true } : {}),
+  };
+  const start = taskDateValue(entity, SYSTEM_PROPERTY_IDS.START_DATE);
+  if (start && start.at > value.getTime())
+    return [
+      { field: 'start', apiValues },
+      { field: 'due', apiValues },
+    ];
+  return [{ field: 'due', apiValues }];
+}
+
 /** Preserve untouched assignees and their wire reference types. */
 export function taskBoardMoveValue(
   entity: TaskEntityWithProperties,
-  grouping: TaskBoardGrouping,
+  grouping: Exclude<TaskBoardGrouping, 'due_date'>,
   move: TaskBoardMove
 ): PropertyApiValues {
-  if (grouping === 'due_date') {
-    if (move.dueDate === undefined)
-      throw new Error('Deadline move requires a resolved date');
-    return {
-      valueType: 'DATE',
-      value: move.dueDate === null ? null : new Date(move.dueDate),
-    };
-  }
   if (grouping === 'status' || grouping === 'priority') {
     return {
       valueType: 'SELECT_STRING',

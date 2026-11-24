@@ -529,6 +529,70 @@ async fn a_cancelled_run_is_recorded_as_cancelled_not_failed() {
     );
 }
 
+/// A session built outside `withhold_content`, with capture on, records no
+/// content for a run driven inside the scope: the agent span's input and
+/// output, each chat and the tool call read the scope when they record.
+#[tokio::test]
+async fn a_session_built_before_withhold_content_records_no_content_for_a_run_inside_it() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let model = MockCompletionModel::from_stream_turns([
+        vec![
+            MockStreamEvent::tool_call("call-1", "echo_tool", json!({ "value": "private value" })),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::text("private answer"),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+    ]);
+    let toolset = util::single_tool_set::<EchoTool, ()>();
+    let mut session = util::test_loop()
+        .test_session(
+            toolset,
+            Arc::new(()),
+            "private preamble",
+            util::usage_ctx(),
+            model,
+        )
+        .await;
+
+    let result =
+        genai_telemetry::withhold_content(util::drive(&mut session, "a private prompt")).await;
+    assert_eq!(result.content(), "private answer");
+    drop(session);
+
+    let spans = finished(&exporter, &provider);
+    assert_eq!(
+        spans_with_operation(&spans, attr::operation::INVOKE_AGENT).len(),
+        1,
+        "{:?}",
+        names(&spans)
+    );
+    assert_eq!(
+        spans_with_operation(&spans, attr::operation::CHAT).len(),
+        2,
+        "{:?}",
+        names(&spans)
+    );
+    assert_eq!(
+        spans_with_operation(&spans, attr::operation::EXECUTE_TOOL).len(),
+        1,
+        "{:?}",
+        names(&spans)
+    );
+    for span in &spans {
+        for kv in &span.attributes {
+            let value = kv.value.to_string();
+            assert!(
+                !value.contains("private"),
+                "{}: {} carries {value}",
+                span.name,
+                kv.key
+            );
+        }
+    }
+}
+
 /// With GenAI telemetry off - a loop whose turns another layer reports - the
 /// run records nothing GenAI onto any span, tool calls included; the runtime's
 /// structural spans still nest under a plain `agent.turn`.

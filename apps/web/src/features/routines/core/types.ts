@@ -1,3 +1,4 @@
+import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 import type { WorkChip } from './routine-summary';
 import type { TriggerKind } from './routine-triggers';
 import type { RunOutcome } from './step-history';
@@ -5,6 +6,8 @@ import type { RunOutcome } from './step-history';
 export type RoutineRow = {
   id: string;
   name: string;
+  /** The icon and colour chosen for it; absent when none was. */
+  appearance?: EntityAppearance | null;
   /** What it is for, in the owner's words; absent when unset. */
   description?: string;
   createdAt: string;
@@ -19,7 +22,13 @@ export type RoutineRow = {
   /** Activity routines run on events; the rest on a schedule. */
   group: 'activity' | 'schedule';
   /** Its latest run in a line, when it has run. */
-  lastRun?: { at: string; outcome: RunOutcome; summary: string };
+  lastRun?: {
+    at: string;
+    outcome: RunOutcome;
+    summary: string;
+    /** Why a failed run failed, in its own words. */
+    reason?: string;
+  };
   status: 'Active' | 'Paused' | 'Running' | 'Completed';
   editable: boolean;
   enabled: boolean;

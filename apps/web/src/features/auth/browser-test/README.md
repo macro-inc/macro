@@ -1,6 +1,6 @@
 # Sign-in and sign-up browser tests
 
-The fixture mounts the real `AuthView` and `MobileWebSignupView` under
+The fixture mounts the real `AuthView` under
 `AuthProvider` with the fake backend from `tests/fake-auth-context.ts`. New users
 continue into the real onboarding views over onboarding's own fake. No module is
 aliased or mocked, and nothing touches the network.
@@ -23,10 +23,9 @@ To click through by hand, run
 
 - `/?page=login` is sign-in. Use `returning@acme.com` with code `424242`; any
   other address signs up as a first-time user.
-- `/?page=signup` is the desktop sign-up through onboarding's opening slides.
+- `/?page=signup` is the web sign-up through onboarding's opening slides.
   Add `&sso_error=admin_consent_required` (or `cancelled`, `failed`) for the
   email fallback after a Google or Microsoft sign-in comes back without a code.
-- `/?page=mobile-signup` is the mobile-web email capture.
 - Add `&verifyLatency=300` to make code checks take a network round trip.
 - Add `&microsoft=off` for `enable-microsoft-signup` off (no Microsoft button).
 - Add `&cleanupFailure=once` to keep the verified session gated through a failed

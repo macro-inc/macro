@@ -47,19 +47,6 @@ export type AppEvents = {
     reason: AccountDeletionReason | 'not_provided';
     feedback?: string;
   };
-  login_from_onboarding: Record<string, unknown>;
-  mobile_web_welcome_viewed: Record<string, unknown>;
-  mobile_web_signup_sent_viewed: Record<string, unknown>;
-
-  // --- Interactive tutorial (optional; decoupled from acquisition) ---------
-  tutorial_started: { isFirstTime: boolean };
-  tutorial_step: {
-    id: string;
-    index: number;
-    state: 'viewed' | 'completed' | 'skipped';
-  };
-  tutorial_completed: { isFirstTime: boolean };
-  tutorial_skipped: Record<string, unknown>;
 
   // --- Onboarding v4 (the full-screen /onboarding stepper) -----------------
   /** A GTM invite welcome page resolved its link (`/invite?token=`). */
