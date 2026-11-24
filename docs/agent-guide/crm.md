@@ -736,9 +736,12 @@ access is denied; no CRM record data is required. Restoring access returns
 Stages and Email sync.
 
 CRM access does not require contributing email. The banner **Your emails aren’t
-contributing to CRM** opens **Review and opt in**. The dialog shows the exact
-connected primary mailbox, **Team blacklist**, and **My blacklist** before
-**Share my emails with CRM**. Opt-in shares full content from all available
+contributing to CRM** opens **Review and opt in**. The dialog's **Your email
+contribution** row shows the exact connected primary mailbox and its status,
+with **Share my emails with CRM** (or **Stop sharing my emails**) beside it; on
+phones the button wraps under the status. The line above the row says what
+opting in shares and asks the member to review **Team blacklist** and **My
+blacklist**, below it, first. Opt-in shares full content from all available
 historical and future messages, excluding blocked threads. The same controls
 are in CRM settings and **Email contribution settings** on a company. A
 changed or reconnecting mailbox requires a fresh review; a disconnected mailbox
