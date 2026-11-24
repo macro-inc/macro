@@ -381,6 +381,30 @@ it('moves a timed due date to a first start time picked past it, showing what it
   expect(screen.queryByText('1 day')).toBeNull();
 });
 
+it("puts a first start time on the due date's day, leaving an overdue due date", async () => {
+  const noStart = { ...start, value: null };
+  const overdue = { ...due, value: new Date(2026, 10, 18, 15), hasTime: true };
+  const onSave = vi.fn(async () => {});
+  const saveOther = vi
+    .fn<StartDueEditorProps['saveOther']>()
+    .mockResolvedValue(undefined);
+  setup(onSave, saveOther, { start: noStart, due: overdue });
+  fireEvent.click(screen.getByRole('button', { name: /^Start/ }));
+
+  fireEvent.click(screen.getByRole('option', { name: '9:00 AM' }));
+
+  await waitFor(() =>
+    expect(saveOther).toHaveBeenCalledWith(noStart, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 18, 9),
+      hasTime: true,
+    })
+  );
+  expect(onSave).not.toHaveBeenCalled();
+  expect(field('Start')).toBe('StartWed, Nov 189:00 AM');
+  expect(field('Due')).toBe('DueWed, Nov 183:00 PM');
+});
+
 it('keeps a newer start time on screen when an older due save fails', async () => {
   const timedDue = { ...due, value: new Date(2026, 10, 27, 15), hasTime: true };
   const dueSave = Promise.withResolvers<void>();

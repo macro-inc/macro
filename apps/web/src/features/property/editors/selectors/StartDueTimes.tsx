@@ -44,9 +44,10 @@ type StartDueTimesProps = {
  * The dates picker once its dates have times: the clock times for the
  * active end, typed or picked, and a calendar to move that end to another
  * day. Due times on the start's day count on from the start with the length
- * they give, as a calendar event's end times do. A start time moves on to
- * the due date and a due time closes the picker. Mount it once per active
- * end, so each starts on that end's time with nothing typed.
+ * they give, as a calendar event's end times do, and a first start time falls
+ * on the due date's day. A start time moves on to the due date and a due time
+ * closes the picker. Mount it once per active end, so each starts on that
+ * end's time with nothing typed.
  */
 export function StartDueTimes(props: StartDueTimesProps) {
   const [query, setQuery] = createSignal('');
@@ -59,13 +60,15 @@ export function StartDueTimes(props: StartDueTimesProps) {
 
   const value = () => props.dates[props.field];
 
-  // The day the listed times fall on, before an option's day offset.
+  // The day the listed times fall on, before an option's day offset. An end
+  // not set yet takes the other end's day.
   const anchorDay = () => {
     const { start, due } = props.dates;
     if (props.field === 'due' && start && (!due || isSameDay(start, due))) {
       return startOfDay(start);
     }
-    return startOfDay(value() ?? props.dates.start ?? new Date());
+    const other = props.field === 'start' ? due : start;
+    return startOfDay(value() ?? other ?? new Date());
   };
 
   const options = createMemo<TimeOption[]>(() => {
