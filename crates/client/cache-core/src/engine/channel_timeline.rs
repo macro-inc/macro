@@ -45,12 +45,12 @@ impl<S: ChannelTimelineStorage> Engine<S> {
     ) -> Result<Revisioned<ChannelTimelineResult>, EngineError<S::Error>> {
         request.validate()?;
         self.hydrate_optimistic().await?;
+        let overlay = self.optimistic_channel_overlay().await?;
         let snapshot = self
             .storage
-            .query_channel_timeline(request)
+            .query_channel_timeline(request, overlay.len())
             .await
             .map_err(EngineError::Storage)?;
-        let overlay = self.optimistic_channel_overlay().await?;
         Ok(self.revisioned(compose_channel_window(request, snapshot, &overlay)))
     }
 

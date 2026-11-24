@@ -290,7 +290,7 @@ fn the_applied_sequence_never_skips_a_change() {
 #[test]
 fn windows_plan_against_the_span_holding_their_anchor() {
     let spans = [span("10", "20"), span("30", TIMELINE_HEAD)];
-    let latest = plan_window(&request(2), None, &spans).unwrap();
+    let latest = plan_window(&request(2), None, &spans, 0).unwrap();
     assert_eq!(
         (latest.span.clone(), latest.position.as_str()),
         (spans[1].clone(), TIMELINE_HEAD)
@@ -302,29 +302,32 @@ fn windows_plan_against_the_span_holding_their_anchor() {
 
     let mut before = request(2);
     before.before = Some("15".into());
-    assert_eq!(plan_window(&before, None, &spans).unwrap().span, spans[0]);
+    assert_eq!(
+        plan_window(&before, None, &spans, 0).unwrap().span,
+        spans[0]
+    );
     before.before = Some("25".into());
-    assert_eq!(plan_window(&before, None, &spans), None);
+    assert_eq!(plan_window(&before, None, &spans, 0), None);
 
     let mut around = request(2);
     around.around = Some(key("m1"));
-    assert_eq!(plan_window(&around, None, &spans), None);
+    assert_eq!(plan_window(&around, None, &spans, 0), None);
     let anchor = row("m1", "12");
-    let plan = plan_window(&around, Some(&anchor), &spans).unwrap();
+    let plan = plan_window(&around, Some(&anchor), &spans, 0).unwrap();
     assert!(plan.read_older && plan.read_newer);
     let hidden = ChannelTimelineRow {
         hidden: true,
         ..anchor.clone()
     };
-    assert_eq!(plan_window(&around, Some(&hidden), &spans), None);
+    assert_eq!(plan_window(&around, Some(&hidden), &spans, 0), None);
     let elsewhere = ChannelTimelineRow {
         scope: TimelineScope::Thread("m0".into()),
         ..anchor
     };
-    assert_eq!(plan_window(&around, Some(&elsewhere), &spans), None);
+    assert_eq!(plan_window(&around, Some(&elsewhere), &spans, 0), None);
     assert_eq!(anchor_root_key(&around, &elsewhere), Some(key("m0")));
 
-    assert_eq!(plan_window(&request(2), None, &[span("10", "20")]), None);
+    assert_eq!(plan_window(&request(2), None, &[span("10", "20")], 0), None);
 }
 
 fn snapshot(

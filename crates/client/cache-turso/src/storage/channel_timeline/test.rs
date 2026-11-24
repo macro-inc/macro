@@ -136,7 +136,7 @@ fn pages_read_inside_the_stretch_holding_their_anchor() {
         let mut storage = TursoStorage::open_in_memory("channel-pages").unwrap();
         storage.put_batch(seed()).await.unwrap();
         let none = storage
-            .query_channel_timeline(&latest("c1", 2))
+            .query_channel_timeline(&latest("c1", 2), 0)
             .await
             .unwrap();
         assert_eq!(none, ChannelTimelineSnapshot::default());
@@ -157,7 +157,7 @@ fn pages_read_inside_the_stretch_holding_their_anchor() {
         assert_eq!((outcome.seq, outcome.deleted_keys.len()), (Some(7), 0));
 
         let page = storage
-            .query_channel_timeline(&latest("c1", 2))
+            .query_channel_timeline(&latest("c1", 2), 0)
             .await
             .unwrap();
         assert_eq!(page.span, Some(span("20", TIMELINE_HEAD)));
@@ -167,19 +167,19 @@ fn pages_read_inside_the_stretch_holding_their_anchor() {
 
         let mut before = latest("c1", 2);
         before.before = Some("40".into());
-        let page = storage.query_channel_timeline(&before).await.unwrap();
+        let page = storage.query_channel_timeline(&before, 0).await.unwrap();
         assert_eq!(ids(&page.older), ["m3", "m2"]);
         assert!(page.newer.is_empty());
 
         let mut after = latest("c1", 2);
         after.after = Some("20".into());
-        let page = storage.query_channel_timeline(&after).await.unwrap();
+        let page = storage.query_channel_timeline(&after, 0).await.unwrap();
         assert_eq!(ids(&page.newer), ["m3", "m4", "m5"]);
 
         // A reply anchors the channel read on its root.
         let mut around = latest("c1", 4);
         around.around = Some(key("r2"));
-        let page = storage.query_channel_timeline(&around).await.unwrap();
+        let page = storage.query_channel_timeline(&around, 0).await.unwrap();
         assert_eq!(
             page.anchor.as_ref().and_then(|row| row.record_key.id()),
             Some("m3")
@@ -189,17 +189,17 @@ fn pages_read_inside_the_stretch_holding_their_anchor() {
 
         // m1 is cached but below every fetched stretch.
         around.around = Some(key("m1"));
-        let page = storage.query_channel_timeline(&around).await.unwrap();
+        let page = storage.query_channel_timeline(&around, 0).await.unwrap();
         assert_eq!((page.span, page.seq), (None, Some(7)));
 
         let mut thread = latest("c1", 5);
         thread.thread_root_id = Some("m3".into());
-        let page = storage.query_channel_timeline(&thread).await.unwrap();
+        let page = storage.query_channel_timeline(&thread, 0).await.unwrap();
         assert_eq!(ids(&page.older), ["r2", "r1"]);
 
         assert_eq!(
             storage
-                .query_channel_timeline(&latest("c2", 2))
+                .query_channel_timeline(&latest("c2", 2), 0)
                 .await
                 .unwrap()
                 .span,
@@ -232,7 +232,7 @@ fn commits_persist_across_reopen_and_delete_what_they_name() {
 
         let mut storage = database.open("scope").unwrap();
         let page = storage
-            .query_channel_timeline(&latest("c1", 10))
+            .query_channel_timeline(&latest("c1", 10), 0)
             .await
             .unwrap();
         assert_eq!(page.span, Some(span(TIMELINE_START, TIMELINE_HEAD)));
@@ -267,7 +267,11 @@ fn commits_persist_across_reopen_and_delete_what_they_name() {
         let mut thread = latest("c1", 5);
         thread.thread_root_id = Some("m3".into());
         assert_eq!(
-            storage.query_channel_timeline(&thread).await.unwrap().span,
+            storage
+                .query_channel_timeline(&thread, 0)
+                .await
+                .unwrap()
+                .span,
             None
         );
         // A push that skips a change leaves the sequence where it was.
@@ -297,7 +301,7 @@ fn commits_persist_across_reopen_and_delete_what_they_name() {
         assert!(!evicted.has_more);
         assert_eq!(
             storage
-                .query_channel_timeline(&latest("c1", 10))
+                .query_channel_timeline(&latest("c1", 10), 0)
                 .await
                 .unwrap(),
             ChannelTimelineSnapshot::default()
@@ -313,7 +317,7 @@ fn commits_persist_across_reopen_and_delete_what_they_name() {
             .unwrap();
         assert_eq!((reset.seq, reset.deleted_keys.len()), (Some(30), 1));
         let page = storage
-            .query_channel_timeline(&latest("c2", 10))
+            .query_channel_timeline(&latest("c2", 10), 0)
             .await
             .unwrap();
         assert_eq!((page.span, page.seq), (None, Some(30)));
@@ -424,7 +428,7 @@ fn reopen_rebuilds_timeline_rows_after_a_projection_change() {
         let storage = database.open("scope").unwrap();
         assert_eq!(scalar(&storage, ROW_COUNT), 9);
         let page = storage
-            .query_channel_timeline(&latest("c1", 2))
+            .query_channel_timeline(&latest("c1", 2), 0)
             .await
             .unwrap();
         assert_eq!(page.span, Some(span("30", TIMELINE_HEAD)));
@@ -480,5 +484,23 @@ fn invalid_commits_never_open_a_transaction() {
             .unwrap_err();
         assert!(!error.requires_physical_reset());
         assert_eq!(scalar(&storage, SYNC_COUNT), 0);
+    });
+}
+
+#[test]
+fn a_dropped_thread_takes_only_its_own_channels_rows() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("channel-thread-drop").unwrap();
+        storage.put_batch(seed()).await.unwrap();
+        // A root id of another channel: nothing in this one answers to it.
+        let outcome = storage
+            .channel_timeline_commit(&ChannelTimelineCommit {
+                dropped_thread_root_ids: vec!["m3".into()],
+                ..commit("c2")
+            })
+            .await
+            .unwrap();
+        assert_eq!(outcome.deleted_keys, []);
+        assert_eq!(scalar(&storage, ROW_COUNT), 9);
     });
 }

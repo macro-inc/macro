@@ -2,13 +2,16 @@ use cache_core::channel_timeline::{
     ChannelCoverage, ChannelEviction, ChannelSeqUpdate, ChannelTimelineCommit,
     ChannelTimelineRequest, MESSAGE_TYPENAME, TIMELINE_HEAD, TIMELINE_START, TimelineSpan,
 };
-use cache_core::engine::{BeginOptimisticWrite, Engine, InitialClaimOutcome};
+use cache_core::engine::{
+    BeginOptimisticWrite, Engine, EngineError, EnqueueOptimisticMutationResult, InitialClaimOutcome,
+};
 use cache_core::identity::IdentityBinding;
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::store::InMemoryStorage;
 use cache_core::value::{CacheValue, EntityKey, Record};
 use pollster::block_on;
 use serde_json::json;
+use std::convert::Infallible;
 
 const MUTATION: &str = "mutation Save { setEntityProperty { __typename id displayName } }";
 const UUID: &str = "22222222-2222-4222-8222-222222222222";
@@ -346,16 +349,39 @@ fn eviction_removes_the_channels_touched_longest_ago() {
     });
 }
 
+async fn queue_delete(engine: &mut Engine<InMemoryStorage>, message_key: &EntityKey<'static>) {
+    let uuid = uuid::Uuid::now_v7().to_string();
+    enqueue(engine, message_key, &uuid).await;
+}
+
 async fn enqueue_delete(
     engine: &mut Engine<InMemoryStorage>,
     message_key: &EntityKey<'static>,
 ) -> (u64, MutationClaimToken) {
-    let result = engine
+    let result = enqueue(engine, message_key, UUID).await;
+    let InitialClaimOutcome::Claimed(claimed) = result.initial_claim else {
+        panic!("the only queued mutation is claimable");
+    };
+    (
+        result.transaction_id,
+        MutationClaimToken {
+            owner: "runner".into(),
+            generation: claimed.lease_generation,
+        },
+    )
+}
+
+async fn enqueue(
+    engine: &mut Engine<InMemoryStorage>,
+    message_key: &EntityKey<'static>,
+    uuid: &str,
+) -> EnqueueOptimisticMutationResult<EngineError<Infallible>> {
+    engine
         .enqueue_optimistic_mutation(
             None,
             BeginOptimisticWrite {
                 client_metadata: None,
-                uuid: UUID,
+                uuid,
                 query: MUTATION,
                 operation_name: None,
                 variables: &Default::default(),
@@ -378,17 +404,7 @@ async fn enqueue_delete(
             },
         )
         .await
-        .unwrap();
-    let InitialClaimOutcome::Claimed(claimed) = result.initial_claim else {
-        panic!("the only queued mutation is claimable");
-    };
-    (
-        result.transaction_id,
-        MutationClaimToken {
-            owner: "runner".into(),
-            generation: claimed.lease_generation,
-        },
-    )
+        .unwrap()
 }
 
 #[test]
@@ -415,5 +431,54 @@ fn a_pending_delete_leaves_the_page_until_it_rolls_back() {
         let page = engine.channel_timeline(&latest("c1", 3)).await.unwrap();
         assert!(!page.optimistic);
         assert_eq!(ids(&page.keys), ["m6", "m5", "m4"]);
+    });
+}
+
+#[test]
+fn a_page_stays_full_when_pending_deletes_take_more_rows_than_its_lookahead() {
+    block_on(async {
+        let mut engine = seeded().await;
+        engine
+            .channel_timeline_commit(&ChannelTimelineCommit {
+                coverage: vec![coverage(None, TIMELINE_START, TIMELINE_HEAD)],
+                seq: lower("7"),
+                ..commit("c1")
+            })
+            .await
+            .unwrap();
+        for id in ["m6", "m5", "m4"] {
+            queue_delete(&mut engine, &key(id)).await;
+        }
+        // The page and its lookahead row are all pending deletes: the three
+        // entries below them are held and make the page.
+        let page = engine.channel_timeline(&latest("c1", 2)).await.unwrap();
+        assert!(page.covered && page.optimistic);
+        assert_eq!(ids(&page.keys), ["m3", "m2"]);
+        assert_eq!(page.older_cursor.as_deref(), Some("20"));
+
+        let mut older = latest("c1", 2);
+        older.before = Some("40".into());
+        queue_delete(&mut engine, &key("m1")).await;
+        let page = engine.channel_timeline(&older).await.unwrap();
+        // m1 is a pending delete, so nothing older follows.
+        assert_eq!(ids(&page.keys), ["m3", "m2"]);
+        assert_eq!(page.older_cursor, None);
+    });
+}
+
+#[test]
+fn a_dropped_thread_takes_only_its_own_channels_rows() {
+    block_on(async {
+        let mut engine = seeded().await;
+        // A root id of another channel: nothing in this one answers to it.
+        let dropped = engine
+            .channel_timeline_commit(&ChannelTimelineCommit {
+                dropped_thread_root_ids: vec!["m3".into()],
+                ..commit("c2")
+            })
+            .await
+            .unwrap();
+        assert!(dropped.write.changed.is_empty());
+        assert_eq!(engine.storage().len(), 9);
     });
 }

@@ -29,8 +29,7 @@ const ROW_BY_KEY: &str = "SELECT record_key, channel_id, scope, sort_key, hidden
 // channel.
 const ROWS_OLDER: &str = "SELECT record_key, sort_key FROM channel_timeline INDEXED BY channel_timeline_scan_idx WHERE scope = ?1 AND hidden = 0 AND sort_key >= ?2 AND sort_key < ?3 ORDER BY sort_key DESC LIMIT ?4";
 const ROWS_NEWER: &str = "SELECT record_key, sort_key FROM channel_timeline INDEXED BY channel_timeline_scan_idx WHERE scope = ?1 AND hidden = 0 AND sort_key > ?2 AND sort_key <= ?3 ORDER BY sort_key ASC LIMIT ?4";
-const KEYS_BY_SCOPE: &str =
-    "SELECT record_key FROM channel_timeline INDEXED BY channel_timeline_scan_idx WHERE scope = ?1";
+const KEYS_BY_SCOPE: &str = "SELECT record_key FROM channel_timeline INDEXED BY channel_timeline_scan_idx WHERE scope = ?1 AND channel_id = ?2";
 const KEYS_BY_CHANNEL: &str = "SELECT record_key FROM channel_timeline INDEXED BY channel_timeline_channel_idx WHERE channel_id = ?1";
 const COVERAGE_SELECT: &str =
     "SELECT start, end FROM channel_coverage WHERE channel_id = ?1 AND scope = ?2";
@@ -299,6 +298,7 @@ fn load_sync(connection: &Db, channel_id: &str) -> Result<Option<SyncRow>, Turso
 fn query_snapshot(
     connection: &Db,
     request: &ChannelTimelineRequest,
+    pending: usize,
 ) -> Result<ChannelTimelineSnapshot, TursoStorageError> {
     let seq = load_sync(connection, &request.channel_id)?.and_then(|sync| sync.seq);
     let scope = request.scope();
@@ -313,7 +313,7 @@ fn query_snapshot(
         anchor = row_by_key(connection, &root_key)?;
     }
     let spans = load_coverage(connection, &request.channel_id, &scope)?;
-    let Some(plan) = plan_window(request, anchor.as_ref(), &spans) else {
+    let Some(plan) = plan_window(request, anchor.as_ref(), &spans, pending) else {
         return Ok(ChannelTimelineSnapshot {
             seq,
             ..ChannelTimelineSnapshot::default()
@@ -354,8 +354,12 @@ fn query_snapshot(
     })
 }
 
-fn record_keys(connection: &Db, sql: &str, value: &str) -> Result<Vec<String>, TursoStorageError> {
-    driver::query(connection, sql, vec![text(value)])?
+fn record_keys(
+    connection: &Db,
+    sql: &str,
+    values: &[&str],
+) -> Result<Vec<String>, TursoStorageError> {
+    driver::query(connection, sql, values.iter().copied().map(text).collect())?
         .iter()
         .map(|row| required_text(row, 0))
         .collect()
@@ -396,7 +400,7 @@ fn apply_commit(
     let channel_id = commit.channel_id.as_str();
     let mut doomed = BTreeSet::new();
     if commit.reset {
-        doomed.extend(record_keys(connection, KEYS_BY_CHANNEL, channel_id)?);
+        doomed.extend(record_keys(connection, KEYS_BY_CHANNEL, &[channel_id])?);
         driver::execute(connection, COVERAGE_DELETE_CHANNEL, vec![text(channel_id)])?;
     }
     doomed.extend(
@@ -407,7 +411,11 @@ fn apply_commit(
     );
     for root_id in &commit.dropped_thread_root_ids {
         let scope = TimelineScope::Thread(root_id.clone()).storage_key();
-        doomed.extend(record_keys(connection, KEYS_BY_SCOPE, &scope)?);
+        doomed.extend(record_keys(
+            connection,
+            KEYS_BY_SCOPE,
+            &[&scope, channel_id],
+        )?);
         driver::execute(
             connection,
             COVERAGE_DELETE_SCOPE,
@@ -482,7 +490,7 @@ fn apply_eviction(
     channel_ids.truncate(max_channels);
     let mut doomed = BTreeSet::new();
     for channel_id in &channel_ids {
-        doomed.extend(record_keys(connection, KEYS_BY_CHANNEL, channel_id)?);
+        doomed.extend(record_keys(connection, KEYS_BY_CHANNEL, &[channel_id])?);
         driver::execute(connection, COVERAGE_DELETE_CHANNEL, vec![text(channel_id)])?;
         driver::execute(connection, SYNC_DELETE, vec![text(channel_id)])?;
     }
@@ -504,10 +512,13 @@ impl ChannelTimelineStorage for TursoStorage {
     async fn query_channel_timeline(
         &self,
         request: &ChannelTimelineRequest,
+        pending: usize,
     ) -> Result<ChannelTimelineSnapshot, Self::Error> {
         self.require_healthy()?;
         let connection = self.connection();
-        let result = driver::read_transaction(&connection, || query_snapshot(&connection, request));
+        let result = driver::read_transaction(&connection, || {
+            query_snapshot(&connection, request, pending)
+        });
         self.latch_result(result)
     }
 

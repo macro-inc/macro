@@ -53,6 +53,7 @@ impl ChannelTimelineStorage for InMemoryStorage {
     async fn query_channel_timeline(
         &self,
         request: &ChannelTimelineRequest,
+        pending: usize,
     ) -> Result<ChannelTimelineSnapshot, Self::Error> {
         let state = self.channel_state.get(&request.channel_id);
         let seq = state.and_then(|state| state.seq);
@@ -68,7 +69,7 @@ impl ChannelTimelineStorage for InMemoryStorage {
         let spans = state
             .and_then(|state| state.coverage.get(&scope))
             .map_or(&[][..], Vec::as_slice);
-        let Some(plan) = plan_window(request, anchor, spans) else {
+        let Some(plan) = plan_window(request, anchor, spans, pending) else {
             return Ok(ChannelTimelineSnapshot {
                 seq,
                 ..ChannelTimelineSnapshot::default()
@@ -123,7 +124,7 @@ impl ChannelTimelineStorage for InMemoryStorage {
             deleted.extend(
                 self.channel_rows
                     .values()
-                    .filter(|row| row.scope == scope)
+                    .filter(|row| row.scope == scope && row.channel_id == commit.channel_id)
                     .map(|row| row.record_key.clone()),
             );
             state.coverage.remove(&scope);

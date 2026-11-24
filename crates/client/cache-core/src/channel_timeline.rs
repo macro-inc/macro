@@ -11,7 +11,7 @@ mod coverage;
 mod window;
 
 pub use coverage::{covering_span, merge_spans};
-pub use window::{WindowPlan, anchor_root_key, compose_channel_window, plan_window};
+pub use window::{WindowPlan, anchor_root_key, compose_channel_window, plan_window, read_limit};
 
 use crate::identity::{ALIAS_FIELD, DELETED_FIELD};
 use crate::store::Storage;
@@ -509,10 +509,12 @@ pub fn commit_coverage_by_scope(
 /// normalized record write and delete, exactly like calendar ranges.
 pub trait ChannelTimelineStorage: Storage {
     /// Reads the window's rows, its covering span and the channel's applied
-    /// sequence in one read transaction.
+    /// sequence in one read transaction, with `pending` spare rows on each
+    /// side (see [`read_limit`]).
     fn query_channel_timeline(
         &self,
         request: &ChannelTimelineRequest,
+        pending: usize,
     ) -> impl Future<Output = Result<ChannelTimelineSnapshot, Self::Error>> + MaybeSend;
 
     /// Applies a validated commit in one write transaction.
