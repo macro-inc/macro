@@ -31,7 +31,8 @@ separately from Soup's thread-root projection.
   requests only, and a personal session: agents, bots and API tokens post
   through REST, where their attribution is decided.
 - DSS inserts `ChannelTimelineSubscriptions` over its process-local
-  `ChannelTimelineFanout`; the subscription resolver reads no database.
+  `ChannelTimelineFanout`; the subscription resolver reads no database. It
+  answers `SERVICE_UNAVAILABLE` while the process is not receiving updates.
 
 ## Checks
 

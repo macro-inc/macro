@@ -319,7 +319,10 @@ mod fanout {
     use tokio::sync::mpsc;
 
     use super::*;
-    use crate::domain::timeline_updates::{ChannelTimelineFanout, ChannelTimelineUpdateSource};
+    use crate::domain::timeline_updates::{
+        ChannelTimelineFanout, ChannelTimelineFanoutError, ChannelTimelineNotReceiving,
+        ChannelTimelineUpdateSource, ChannelTimelineUpdates,
+    };
 
     /// Updates handed in by the test.
     struct Source(tokio::sync::Mutex<mpsc::UnboundedReceiver<AddressedChannelTimelineUpdate>>);
@@ -334,6 +337,33 @@ mod fanout {
         }
     }
 
+    /// Opens what each attempt is given; like a topic that does not exist yet
+    /// while it is given nothing.
+    struct Topic(tokio::sync::Mutex<mpsc::UnboundedReceiver<Source>>);
+    impl ChannelTimelineUpdates for Topic {
+        type Source = Source;
+        type Err = std::io::Error;
+
+        async fn open(&self) -> Result<Source, Self::Err> {
+            let opened = self.0.lock().await.try_recv();
+            opened.map_err(|_| std::io::Error::other("unknown topic"))
+        }
+    }
+
+    type Updates = mpsc::UnboundedSender<AddressedChannelTimelineUpdate>;
+
+    /// A source and the sender of its updates.
+    fn source() -> (Updates, Source) {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        (sender, Source(tokio::sync::Mutex::new(receiver)))
+    }
+
+    /// A topic and the sender of the sources it opens.
+    fn topic() -> (mpsc::UnboundedSender<Source>, Topic) {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        (sender, Topic(tokio::sync::Mutex::new(receiver)))
+    }
+
     static PROJECTIONS: AtomicUsize = AtomicUsize::new(0);
 
     fn project(update: ChannelTimelineUpdate) -> Arc<i64> {
@@ -343,15 +373,16 @@ mod fanout {
 
     #[tokio::test]
     async fn one_projection_is_shared_by_every_subscribed_recipient_and_nobody_else() {
-        let (sender, receiver) = mpsc::unbounded_channel();
-        let fanout = Arc::new(ChannelTimelineFanout::new(
-            Source(tokio::sync::Mutex::new(receiver)),
-            project,
-        ));
-        let (mut a1, _) = fanout.subscribe(user("macro|a@example.com")).into_parts();
-        let (mut a2, _) = fanout.subscribe(user("macro|a@example.com")).into_parts();
-        let (mut b, _) = fanout.subscribe(user("macro|b@example.com")).into_parts();
-        let (mut outsider, _) = fanout.subscribe(user("macro|c@example.com")).into_parts();
+        let (sender, source) = source();
+        let (create, topic) = topic();
+        create.send(source).unwrap();
+        let fanout = Arc::new(ChannelTimelineFanout::new(topic, project));
+        fanout.open().await.unwrap();
+        let subscribe = |id: &'static str| fanout.subscribe(user(id)).unwrap().into_parts();
+        let (mut a1, _) = subscribe("macro|a@example.com");
+        let (mut a2, _) = subscribe("macro|a@example.com");
+        let (mut b, _) = subscribe("macro|b@example.com");
+        let (mut outsider, _) = subscribe("macro|c@example.com");
         let run = tokio::spawn({
             let fanout = Arc::clone(&fanout);
             async move { fanout.run().await }
@@ -384,9 +415,56 @@ mod fanout {
 
         drop(sender);
         assert!(
-            run.await.unwrap().is_err(),
+            matches!(
+                run.await.unwrap(),
+                Err(ChannelTimelineFanoutError::Receive(_))
+            ),
             "run ends when its source fails"
         );
+    }
+
+    #[tokio::test]
+    async fn nobody_subscribes_until_the_topic_exists_and_the_source_outlives_its_failures() {
+        let (create, topic) = topic();
+        let fanout = ChannelTimelineFanout::new(topic, |update| Arc::new(update.seq));
+
+        // The topic does not exist: the process keeps going without it, and a
+        // subscriber is told rather than left waiting.
+        for _ in 0..2 {
+            assert!(matches!(
+                fanout.run().await,
+                Err(ChannelTimelineFanoutError::Open(_))
+            ));
+            assert!(matches!(
+                fanout.subscribe(user("macro|a@example.com")),
+                Err(ChannelTimelineNotReceiving)
+            ));
+        }
+
+        // Once it exists, the next run opens it and subscribers are served.
+        let (updates, source) = source();
+        create.send(source).unwrap();
+        fanout.open().await.unwrap();
+        let (mut subscriber, _) = fanout
+            .subscribe(user("macro|a@example.com"))
+            .unwrap()
+            .into_parts();
+        updates
+            .send(AddressedChannelTimelineUpdate {
+                recipients: vec![user("macro|a@example.com")],
+                update: ChannelTimelineUpdate::activity(CHANNEL, 5, activity(5)),
+            })
+            .unwrap();
+        drop(updates);
+        assert!(fanout.run().await.is_err());
+        assert_eq!(*subscriber.recv().await.unwrap(), 5);
+
+        // A failed receive keeps the source, whose position another would skip.
+        assert!(matches!(
+            fanout.run().await,
+            Err(ChannelTimelineFanoutError::Receive(_))
+        ));
+        assert!(fanout.subscribe(user("macro|a@example.com")).is_ok());
     }
 }
 

@@ -24,10 +24,15 @@ they need.
   `load_message_changes` and publishes it to the participants delivery read;
   `ChannelActivityUpdates` publishes sequenced activity the same way;
   `ChannelTimelineFanout` (feature `realtime`) hands each update to the
-  process's subscribers from memory, mapped once and shared.
+  process's subscribers from memory, mapped once and shared. It opens its topic
+  when it runs and refuses subscribers until then, so a missing topic neither
+  stops the process nor leaves a subscriber waiting in silence.
 - `src/outbound/channel_timeline.rs`: the `macro.channel_timeline` event, keyed
   by channel, its broker publisher, and the ungrouped consumer every serving
-  process reads it with (feature `consumer`).
+  process reads it with (feature `consumer`). The publisher sizes records
+  for Kafka's default limit: an update too large, or over the broker's own limit,
+  goes out `truncated`, as a hint to read the changes page, and a large audience
+  is split across records. Any other failed publish is lost: clients catch up.
 - `src/domain/api.rs`: `MessageServiceApi`, the boundary HTTP/agents/channel
   adapters call through; `thread_page` adds bounded reply windows while
   `get_thread` preserves the complete REST thread read.
@@ -149,8 +154,9 @@ channel message tools change a message as their bot only when
   `Cargo.toml`'s `[features]` table before adding a dependency edge.
 - Every composition root of `ChannelMessageDelivery` wraps its realtime in
   `ChannelTimelineRealtime`; a writer that doesn't publishes nothing to
-  `channelTimelineUpdates`, and subscribers only catch up on reconnect. Call
-  end/delete and historical-import resets advance the sequence with no update.
+  `channelTimelineUpdates`. Call end/delete, the call cleanup trigger for a
+  removed user and historical-import resets also advance the sequence with no
+  update. Subscribers catch up at the gap the next update shows, or on reconnect.
 
 - Thread summaries count live replies on each page. With stale statistics after a
   very large import, an ordinary-reply page can also scan that thread's imported
