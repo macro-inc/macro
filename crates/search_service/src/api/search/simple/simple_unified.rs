@@ -9,7 +9,7 @@ use crate::domain::search_lanes::{LaneTurn, SearchCaller, SearchLanes};
 use crate::api::search::caller::{caller_label, draws_api_key_allowance, search_caller};
 use crate::api::search::crm_company;
 use crate::api::search::email_operators::{
-    QueryClock, apply_email_operators, reported_filters, time_zone,
+    EmailQuery, QueryClock, apply_email_operators, reported_filters, time_zone,
 };
 use crate::api::search::simple::{simple_channel, simple_chat};
 use crate::api::{
@@ -194,13 +194,38 @@ fn enforce_term_limits(terms: Vec<String>) -> Result<Vec<String>, SearchError> {
     if terms.len() > MAX_SEARCH_TERMS {
         return Err(SearchError::TooManyTerms);
     }
-    Ok(terms
-        .into_iter()
-        .map(|term| match term.char_indices().nth(MAX_TERM_CHARS) {
-            Some((byte_idx, _)) => term[..byte_idx].to_string(),
-            None => term,
-        })
-        .collect())
+    Ok(terms.into_iter().map(truncate_term).collect())
+}
+
+/// A search's terms with its email operators read out of them, then held to
+/// [`MAX_SEARCH_TERMS`] and [`MAX_TERM_CHARS`]. Operators are read before
+/// anything is cut to length, so a long label name is matched whole; the
+/// words left and the text the operators match are cut as terms are.
+fn limited_terms(
+    filters: &mut SearchEntityFilters,
+    include_crm: bool,
+    terms: Vec<String>,
+    match_type: MatchType,
+    clock: QueryClock,
+) -> Result<(Vec<String>, Option<EmailQuery>), SearchError> {
+    if terms.len() > MAX_SEARCH_TERMS {
+        return Err(SearchError::TooManyTerms);
+    }
+    let (terms, email_query) =
+        apply_email_operators(filters, include_crm, terms, match_type, clock);
+    let terms = enforce_term_limits(terms)?;
+    for text_match in &mut filters.email_filters.text_matches {
+        text_match.text = truncate_term(std::mem::take(&mut text_match.text));
+    }
+    Ok((terms, email_query))
+}
+
+/// `term` cut to [`MAX_TERM_CHARS`].
+fn truncate_term(term: String) -> String {
+    match term.char_indices().nth(MAX_TERM_CHARS) {
+        Some((byte_idx, _)) => term[..byte_idx].to_string(),
+        None => term,
+    }
 }
 
 /// Convert request property filters into OpenSearch property-filter args.
@@ -562,7 +587,7 @@ async fn search_unified_sources(
     let match_type = req.match_type;
     let split_terms = split_search_terms(&terms);
     let split_count = split_terms.len();
-    let search_terms = enforce_term_limits(drop_wordless_terms(split_terms, match_type))?;
+    let search_terms = drop_wordless_terms(split_terms, match_type);
     let requested_term_matching = req.term_matching;
 
     // Typed dates are read in the caller's zone, and a later page reads
@@ -596,13 +621,13 @@ async fn search_unified_sources(
 
     let calendar_event_scope = req.calendar_event_scope;
     let mut search_filters = SearchEntityFilters::from(req.filters);
-    let (search_terms, email_query) = apply_email_operators(
+    let (search_terms, email_query) = limited_terms(
         &mut search_filters,
         include_crm,
         search_terms,
         match_type,
         clock,
-    );
+    )?;
     record_term_counts(
         &tracing::Span::current(),
         search_terms.len(),

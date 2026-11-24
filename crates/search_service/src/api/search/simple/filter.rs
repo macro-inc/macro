@@ -240,6 +240,7 @@ pub(super) async fn email_search(
     let EmailScope::Threads(threads) = scope else {
         return Ok(None);
     };
+    let threads = *threads;
 
     Ok(Some(EmailSearch {
         args: UnifiedEmailSearchArgs {

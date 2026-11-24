@@ -182,7 +182,7 @@ impl ThreadStates {
 pub(crate) enum EmailScope {
     /// No thread can match, so emails stay out of the search.
     Nothing,
-    Threads(EmailThreads),
+    Threads(Box<EmailThreads>),
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -495,7 +495,7 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
         if threads.ids_only && threads.thread_ids.is_empty() {
             return Ok(EmailScope::Nothing);
         }
-        Ok(EmailScope::Threads(threads))
+        Ok(EmailScope::Threads(Box::new(threads)))
     }
 
     /// The threads a search scoped to Drive folders reaches: the folders'
@@ -527,13 +527,13 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
         if thread_ids.is_empty() {
             return Ok(EmailScope::Nothing);
         }
-        Ok(EmailScope::Threads(EmailThreads {
+        Ok(EmailScope::Threads(Box::new(EmailThreads {
             thread_ids,
             ids_only: true,
             hit_states: ThreadStates::from_filters(filters),
             project_capped,
             ..Default::default()
-        }))
+        })))
     }
 
     /// The threads of `set` the search reaches, or `None` when the caller's

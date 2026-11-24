@@ -307,6 +307,18 @@ mod test {
     }
 
     #[test]
+    fn query_time_round_trips() {
+        let cursor = SearchCursor {
+            query_time_millis: Some(1_763_000_000_000),
+            ..Default::default()
+        };
+
+        let decoded = SearchCursor::decode(&cursor.encode().expect("encode")).expect("decode");
+
+        assert_eq!(decoded.query_time_millis, Some(1_763_000_000_000));
+    }
+
+    #[test]
     fn crm_cursor_round_trips() {
         let cursor = SearchCursor {
             crm_company_cursor: SearchCursorOption::Done,
@@ -325,6 +337,7 @@ mod test {
             crm_company_cursor: SearchCursorOption::Done,
             channel_name_cursor: SearchCursorOption::Done,
             document_term_matching: None,
+            query_time_millis: None,
         };
         assert!(cursor.is_exhausted());
 

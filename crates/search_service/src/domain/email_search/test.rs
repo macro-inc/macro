@@ -172,7 +172,7 @@ fn shared(id: u128) -> SharedThread {
 
 fn threads(scope: EmailScope) -> EmailThreads {
     match scope {
-        EmailScope::Threads(threads) => threads,
+        EmailScope::Threads(threads) => *threads,
         EmailScope::Nothing => panic!("expected threads to search"),
     }
 }

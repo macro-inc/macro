@@ -10,7 +10,7 @@
 //! Every operator becomes an [`EmailFilters`] field, so the same typed text
 //! searches the same way from every caller of the search service.
 
-use chrono::{DateTime, Days, Months, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, Days, Months, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
 use item_filters::{
     EmailFilters, EmailLabelMatch, EmailSearchView, EmailTextMatch, EmailTextPart,
@@ -200,30 +200,40 @@ fn operator(term: &str) -> Option<Operator> {
     }
 }
 
-/// The start of `day` in `zone`. On a day whose midnight a daylight-saving
-/// change skips, the first moment that exists.
-fn start_of_day(day: NaiveDate, zone: Tz) -> Option<DateTime<Utc>> {
-    let mut moment = day.and_hms_opt(0, 0, 0)?;
-    for _ in 0..4 {
-        if let Some(start) = zone.from_local_datetime(&moment).earliest() {
-            return Some(start.with_timezone(&Utc));
-        }
-        moment += chrono::Duration::minutes(30);
+/// Longest a daylight-saving change skips, in minutes.
+const LONGEST_SKIPPED_MINUTES: i64 = 180;
+
+/// The instant `local` names in `zone`. A time a daylight-saving change
+/// repeats is its earlier instant; a time the change skips is the first
+/// moment after the skip, since every skip starts and ends on a whole minute.
+fn local_instant(local: NaiveDateTime, zone: Tz) -> Option<DateTime<Utc>> {
+    if let Some(instant) = zone.from_local_datetime(&local).earliest() {
+        return Some(instant.with_timezone(&Utc));
     }
-    None
+    let minute = local.with_second(0)?.with_nanosecond(0)?;
+    (1..=LONGEST_SKIPPED_MINUTES).find_map(|minutes| {
+        zone.from_local_datetime(&(minute + chrono::Duration::minutes(minutes)))
+            .earliest()
+            .map(|instant| instant.with_timezone(&Utc))
+    })
+}
+
+/// The start of `day` in `zone`.
+fn start_of_day(day: NaiveDate, zone: Tz) -> Option<DateTime<Utc>> {
+    local_instant(day.and_hms_opt(0, 0, 0)?, zone)
 }
 
 /// `span` before the clock's moment, counted on the viewer's calendar, so a
 /// day is a calendar day whatever a daylight-saving change does to its hours.
 fn span_before_now(span: CalendarSpan, clock: QueryClock) -> Option<DateTime<Utc>> {
-    let local = clock.now.with_timezone(&clock.zone);
+    let local = clock.now.with_timezone(&clock.zone).naive_local();
     let earlier = match span.unit {
         SpanUnit::Day => local.checked_sub_days(Days::new(span.count.into())),
         SpanUnit::Week => local.checked_sub_days(Days::new(u64::from(span.count) * 7)),
         SpanUnit::Month => local.checked_sub_months(Months::new(span.count)),
         SpanUnit::Year => local.checked_sub_months(Months::new(span.count.checked_mul(12)?)),
     }?;
-    Some(earlier.with_timezone(&Utc))
+    local_instant(earlier, clock.zone)
 }
 
 /// Reads the conditions in as they come, noting when one contradicts another.

@@ -569,3 +569,38 @@ fn a_search_with_crm_companies_is_not_an_email_search() {
     assert_eq!(left, ["budget", "-lunch"]);
     assert_eq!(read, None);
 }
+
+fn read_at(query: &str, now: DateTime<Utc>, zone: Tz) -> EmailQuery {
+    read_email_operators(terms(query), QueryClock { now, zone })
+}
+
+#[test]
+fn a_relative_date_on_a_skipped_hour_starts_after_the_skip() {
+    // 06:30 UTC on 9 March 2026 is 02:30 in New York; a day earlier, 02:30 on
+    // 8 March, is skipped by the spring change (02:00 to 03:00 EDT).
+    let query = read_at(
+        "newer_than:1d",
+        Utc.with_ymd_and_hms(2026, 3, 9, 6, 30, 0).unwrap(),
+        chrono_tz::America::New_York,
+    );
+
+    assert!(query.terms.is_empty());
+    assert_eq!(query.filters.sent_after, Some(utc(2026, 3, 8, 7)));
+}
+
+#[test]
+fn a_relative_date_on_a_repeated_hour_takes_its_earlier_instant() {
+    // 06:30 UTC on 2 November 2026 is 01:30 EST in New York; 01:30 on
+    // 1 November happens twice, at 05:30 UTC (EDT) and 06:30 UTC (EST).
+    let query = read_at(
+        "older_than:1d",
+        Utc.with_ymd_and_hms(2026, 11, 2, 6, 30, 0).unwrap(),
+        chrono_tz::America::New_York,
+    );
+
+    assert!(query.terms.is_empty());
+    assert_eq!(
+        query.filters.sent_before,
+        Some(Utc.with_ymd_and_hms(2026, 11, 1, 5, 30, 0).unwrap())
+    );
+}

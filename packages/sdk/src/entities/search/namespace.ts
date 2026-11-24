@@ -95,7 +95,10 @@ export class SearchNamespace {
 
   /**
    * One bounded page of matches across every kind of item, most relevant
-   * first; resume with `nextCursor` and the same options.
+   * first; resume with `nextCursor` and the same options. A query with an
+   * email operator (`subject:`, `from:`, `in:sent`, `is:unread`,
+   * `after:2025/01/31`) returns email only; in code mode pass the user's
+   * `timeZone` when it has dates.
    *
    * @readonly
    */
@@ -114,7 +117,10 @@ export class SearchNamespace {
 
   /**
    * Every match across every kind of item, most relevant first, auto-paginated; `maxItems` caps the total.
-   * Break a `for await` loop to stop; no further page is fetched.
+   * Break a `for await` loop to stop; no further page is fetched. A query
+   * with an email operator (`subject:`, `from:`, `in:sent`, `is:unread`,
+   * `after:2025/01/31`) returns email only; in code mode pass the user's
+   * `timeZone` when it has dates.
    *
    * @readonly
    */

@@ -1528,3 +1528,50 @@ fn a_limited_search_is_answered_too_many_requests_with_its_retry_after() {
     assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(response.headers()[axum::http::header::RETRY_AFTER], "3");
 }
+
+fn clock() -> QueryClock {
+    QueryClock {
+        now: chrono::DateTime::UNIX_EPOCH,
+        zone: chrono_tz::Tz::UTC,
+    }
+}
+
+fn every_kind() -> SearchEntityFilters {
+    SearchEntityFilters::from(item_filters::EntityFilters::default())
+}
+
+#[test]
+fn a_long_label_name_is_matched_whole_while_words_are_cut() {
+    let name = "n".repeat(MAX_TERM_CHARS + 15);
+    let word = "w".repeat(MAX_TERM_CHARS + 15);
+    let subject = "s".repeat(MAX_TERM_CHARS + 15);
+    let mut filters = every_kind();
+
+    let (terms, _) = limited_terms(
+        &mut filters,
+        false,
+        vec![format!("label:{name}"), word, format!("subject:{subject}")],
+        MatchType::Partial,
+        clock(),
+    )
+    .expect("three terms are under the count cap");
+
+    assert_eq!(filters.email_filters.label_names[0].name, name);
+    assert_eq!(terms[0].chars().count(), MAX_TERM_CHARS);
+    assert_eq!(
+        filters.email_filters.text_matches[0].text.chars().count(),
+        MAX_TERM_CHARS
+    );
+}
+
+#[test]
+fn operators_count_toward_the_term_cap() {
+    let terms: Vec<String> = (0..=MAX_SEARCH_TERMS)
+        .map(|i| format!("subject:t{i}"))
+        .collect();
+
+    assert!(matches!(
+        limited_terms(&mut every_kind(), false, terms, MatchType::Partial, clock()),
+        Err(SearchError::TooManyTerms)
+    ));
+}
