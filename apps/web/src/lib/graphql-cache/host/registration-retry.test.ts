@@ -10,7 +10,7 @@ import type {
   CacheCoordinatorPageAdapterOptions,
   PageAdapterDisposeOptions,
 } from '../worker/coordinator-page-adapter';
-import { CacheBootstrapExhaustedError } from '../worker/startup';
+import { CacheHostFailedError } from './errors';
 import { CacheNavigationError } from './navigation-error';
 
 const adapterFactory = vi.hoisted(() => vi.fn());
@@ -170,13 +170,12 @@ describe('coordinator registration retry', () => {
     expect(adapters).toHaveLength(2);
     await vi.advanceTimersByTimeAsync(1);
     expect(adapters).toHaveLength(3);
-    await expect(outcomes).resolves.toEqual([loadFailure, loadFailure]);
-    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(loadFailure);
-    expect(onInitializationError.mock.calls[0][0]).not.toBeInstanceOf(
-      CacheBootstrapExhaustedError
-    );
+    // Typed, so that the page builds another host later.
+    const failure = new CacheHostFailedError(loadFailure);
+    await expect(outcomes).resolves.toEqual([failure, failure]);
+    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(failure);
     expect(adapters.flatMap((adapter) => adapter.requests)).toEqual([]);
-    await expect(host.currentRevision()).rejects.toBe(loadFailure);
+    await expect(host.currentRevision()).rejects.toEqual(failure);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(adapters).toHaveLength(3);
     expect(localStorage.getItem('graphql-cache:scope')).toBe(scope);

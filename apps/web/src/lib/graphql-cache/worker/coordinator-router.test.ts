@@ -380,7 +380,7 @@ describe('CoordinatorRouter', () => {
     }
   );
 
-  it('backs off repeated recovery attempts and terminal-fails at the retry limit', async () => {
+  it('backs off repeated recovery attempts without end, telling tabs to run uncached meanwhile', async () => {
     vi.useFakeTimers();
     const router = new CoordinatorRouter({
       verifyTabLockHeld: async () => true,
@@ -415,8 +415,8 @@ describe('CoordinatorRouter', () => {
     });
     await vi.advanceTimersByTimeAsync(0);
 
-    const backoffDelays = [100, 200, 400, 800];
-    for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const backoffDelays = [100, 200, 400, 800, 1_600];
+    const recover = async (attempt: number, outcome: 'fail' | 'open') => {
       const state = router.snapshot()?.state;
       expect(state).toMatchObject({
         kind: 'activating',
@@ -442,6 +442,10 @@ describe('CoordinatorRouter', () => {
         tabId,
         ownerEpoch: state.ownerEpoch,
       });
+      if (outcome === 'open') {
+        ready(engine, tabId, state.ownerEpoch, 'wiped-before-open');
+        return;
+      }
       engine.receive({
         ...version,
         kind: 'activation-failed',
@@ -450,32 +454,46 @@ describe('CoordinatorRouter', () => {
         reason: 'OPFS path remove failed (NoModificationAllowedError)',
         failureCode: 'recovery-open-failed',
       });
-
-      if (attempt === 5) break;
       expect(router.snapshot()?.state).toMatchObject({
         kind: 'resetting-after-loss',
         nextEpoch: attempt + 2,
       });
-      const delay = backoffDelays[attempt - 1] ?? 0;
-      await vi.advanceTimersByTimeAsync(delay - 1);
+      const delay = backoffDelays[attempt - 1] ?? 30_000;
+      await vi.advanceTimersByTimeAsync(
+        Math.min(delay, 100 * 2 ** (attempt - 1)) - 1
+      );
       expect(router.snapshot()?.state.kind).toBe('resetting-after-loss');
       await vi.advanceTimersByTimeAsync(1);
+    };
+
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      await recover(attempt, 'fail');
+      for (const tab of [tabA, tabB])
+        expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([]);
+    }
+    for (let attempt = 5; attempt <= 20; attempt += 1) {
+      await recover(attempt, 'fail');
+      for (const tab of [tabA, tabB])
+        expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([
+          expect.objectContaining({
+            reason: expect.stringContaining(
+              'OPFS path remove failed (NoModificationAllowedError)'
+            ),
+            unavailableReason: 'recovery-failed',
+          }),
+        ]);
     }
 
-    expect(router.snapshot()?.state).toEqual({
-      kind: 'failed',
-      reason: expect.stringContaining('cache recovery failed after 5 attempts'),
+    await recover(21, 'open');
+
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'active',
+      ownerEpoch: 22,
     });
-    expect(messagesOfKind(tabA, 'terminal-error')).toEqual([
-      expect.objectContaining({
-        error: expect.stringContaining(
-          'OPFS path remove failed (NoModificationAllowedError)'
-        ),
-      }),
-    ]);
-    expect(messagesOfKind(tabB, 'terminal-error')).toHaveLength(1);
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(router.snapshot()?.state.kind).toBe('failed');
+    // The outage is over: a page that comes now hears of none.
+    const late = new FakePort();
+    await register(router, late, 'tab-late');
+    expect(messagesOfKind(late, 'cache-unavailable')).toEqual([]);
   });
 
   it('registers only after independent liveness-lock contention succeeds', async () => {
@@ -978,7 +996,7 @@ describe('CoordinatorRouter', () => {
     return { router, channel, observations, tabA, tabB, engine };
   };
 
-  const expectFailedClosed = (
+  const expectUncached = (
     tabA: FakePort,
     tabB: FakePort,
     reason: string,
@@ -990,36 +1008,38 @@ describe('CoordinatorRouter', () => {
         reason: expect.stringContaining(reason),
       }),
     ]);
-    for (const [tab, requestId] of [
-      [tabA, 1],
-      [tabB, 2],
-    ] as const) {
-      expect(messagesOfKind(tab, 'cache-message')).toEqual([
-        expect.objectContaining({
-          message: expect.objectContaining({
-            id: requestId,
-            ok: false,
-            errorCode: 'owner-lock-unavailable',
-          }),
-        }),
-      ]);
+    for (const tab of [tabA, tabB]) {
       expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([
         expect.objectContaining({ unavailableReason }),
       ]);
-      // A page retires on the first of the two, and only this one says why.
-      const kinds = tab.messages.map(
-        (message) => (effectPayload(message) as { kind?: unknown }).kind
-      );
-      expect(kinds.indexOf('cache-unavailable')).toBeLessThan(
-        kinds.indexOf('cache-message')
-      );
     }
+    // The handshake waits for an engine, which then serves the page.
+    expect(messagesOfKind(tabA, 'cache-message')).toEqual([]);
+    expect(messagesOfKind(tabB, 'cache-message')).toEqual([
+      expect.objectContaining({
+        message: expect.objectContaining({
+          id: 2,
+          ok: false,
+          errorCode: 'owner-lock-unavailable',
+        }),
+      }),
+    ]);
+    // A page stops using the cache on the first of the two, and only this one
+    // says why.
+    const kinds = tabB.messages.map(
+      (message) => (effectPayload(message) as { kind?: unknown }).kind
+    );
+    expect(kinds.indexOf('cache-unavailable')).toBeLessThan(
+      kinds.indexOf('cache-message')
+    );
   };
 
   it('asks another build for its database and keeps asking while nobody answers', async () => {
     vi.useFakeTimers();
-    const { router, channel, observations, tabA, tabB, engine } =
+    const { channel, observations, tabA, tabB, engine } =
       await askForAnotherBuildsDatabase();
+    const elected = () =>
+      [tabA, tabB].flatMap((tab) => messagesOfKind(tab, 'become-owner'));
 
     // The request carries the newest build among this coordinator's tabs.
     expect(channel.posted).toEqual([
@@ -1053,7 +1073,7 @@ describe('CoordinatorRouter', () => {
       tabId: 'tab-a',
       ownerEpoch: 1,
     });
-    expectFailedClosed(
+    expectUncached(
       tabA,
       tabB,
       'the engine stopped retrying',
@@ -1069,19 +1089,14 @@ describe('CoordinatorRouter', () => {
         unavailableReason: 'owner-lock-timeout',
       }),
     ]);
-    expect(router.snapshot()?.state.kind).toBe('waiting-for-tab');
 
-    // Nothing waits in line for the lock; a new tab starts a fresh attempt.
-    await vi.advanceTimersByTimeAsync(10 * 60_000);
-    expect(channel.posted).toHaveLength(5);
-    const tabC = new FakePort();
-    await register(router, tabC, 'tab-c', 2_000);
-    expect(messagesOfKind(tabC, 'become-owner')).toEqual([
-      expect.objectContaining({
-        ownerEpoch: 2,
-        databaseAction: 'open-existing',
-      }),
-    ]);
+    // The tabs run uncached while the open is tried again.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(elected()).toHaveLength(2);
+    expect(elected().at(-1)).toMatchObject({
+      ownerEpoch: 2,
+      databaseAction: 'open-existing',
+    });
   });
 
   it('keeps waiting when the unknown lock was a tab of this build still registering', async () => {
@@ -1124,9 +1139,9 @@ describe('CoordinatorRouter', () => {
     expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([]);
   });
 
-  it('fails closed at once when the holding build keeps its database', async () => {
+  it('runs uncached and tries on when a build that is not newer keeps its database', async () => {
     vi.useFakeTimers();
-    const { channel, tabA, tabB } = await askForAnotherBuildsDatabase();
+    const { router, channel, tabA, tabB } = await askForAnotherBuildsDatabase();
     const [request] = channel.posted;
     if (request?.kind !== 'request') throw new Error('missing request');
 
@@ -1136,23 +1151,63 @@ describe('CoordinatorRouter', () => {
       scope: 'scope',
       requestId: request.requestId,
       decision: 'keep',
+      buildTime: 2_000,
     });
 
-    expectFailedClosed(
+    expectUncached(
       tabA,
       tabB,
       'another build keeps the database',
       'holder-kept'
     );
+    expect(router.snapshot()?.state.kind).toBe('resetting-after-loss');
+    for (const tab of [tabA, tabB])
+      expect(messagesOfKind(tab, 'cache-superseded')).toEqual([]);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      ownerEpoch: 2,
+      databaseAction: 'open-existing',
+    });
   });
 
-  it('fails closed, saying why, when it cannot ask the other build', async () => {
+  it.each([
+    ['a newer build', { buildTime: 3_000 }],
+    ['a build that does not say how old it is', {}],
+  ])('sends every tab on when %s keeps its database', async (_, reply) => {
+    vi.useFakeTimers();
+    const { router, channel, tabA, tabB } = await askForAnotherBuildsDatabase();
+    const [request] = channel.posted;
+    if (request?.kind !== 'request') throw new Error('missing request');
+
+    channel.deliver({
+      takeover: 1,
+      kind: 'reply',
+      scope: 'scope',
+      requestId: request.requestId,
+      decision: 'keep',
+      ...reply,
+    });
+
+    for (const tab of [tabA, tabB]) {
+      expect(messagesOfKind(tab, 'cache-superseded')).toHaveLength(1);
+      expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([]);
+    }
+    expect(messagesOfKind(tabA, 'terminate-engine')).not.toEqual([]);
+    // Nothing of this build opens the database again.
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(messagesOfKind(tabA, 'become-owner')).toHaveLength(1);
+    expect(messagesOfKind(tabB, 'become-owner')).toEqual([]);
+    expect(router.snapshot()?.state.kind).toBe('waiting-for-tab');
+  });
+
+  it('runs uncached, saying why, when it cannot ask the other build', async () => {
     vi.useFakeTimers();
     const { observations, tabA, tabB } = await askForAnotherBuildsDatabase({
       takeoverChannel: false,
     });
 
-    expectFailedClosed(
+    expectUncached(
       tabA,
       tabB,
       'another build has live tabs',
@@ -1381,14 +1436,23 @@ describe('CoordinatorRouter', () => {
         scope: 'scope',
         requestId: 'request-1',
         decision: 'yield',
+        buildTime: 1_000,
       },
     ]);
+    // The engine settles what it was given before any tab moves on.
+    expect(messagesOfKind(engine, 'drain-engine')).toHaveLength(1);
+    for (const tab of [tabA, tabB]) {
+      expect(messagesOfKind(tab, 'cache-superseded')).toEqual([]);
+    }
+    engine.receive({
+      ...version,
+      kind: 'engine-drained',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
     for (const tab of [tabA, tabB]) {
       expect(messagesOfKind(tab, 'cache-superseded')).toHaveLength(1);
     }
-    // The owner's page stops its engine itself when it leaves.
-    expect(messagesOfKind(engine, 'drain-engine')).toEqual([]);
-    expect(messagesOfKind(tabA, 'terminate-engine')).toEqual([]);
     expect(
       observations.filter(
         (observation) => observation.ownerEvent === 'superseded'
@@ -1411,13 +1475,6 @@ describe('CoordinatorRouter', () => {
       }),
     ]);
 
-    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
-      ...version,
-      kind: 'navigation-departure',
-      tabId: 'tab-a',
-      ownerEpoch: 1,
-      reason: 'page navigation',
-    });
     expect(router.snapshot()?.state.kind).toBe('waiting-for-tab');
     expect(
       observations.filter(
@@ -1425,9 +1482,8 @@ describe('CoordinatorRouter', () => {
       )
     ).toEqual([]);
 
-    // Nothing is elected again. A late tab of this build runs uncached rather
-    // than reloading, which could land on this build again, and a second
-    // request finds nothing left to hand over.
+    // Nothing is elected again. A late tab of this build is sent on too, and a
+    // second request finds nothing left to hand over.
     await vi.advanceTimersByTimeAsync(10 * 60_000);
     const tabC = new FakePort();
     await register(router, tabC, 'tab-c', 1_000);
@@ -1436,8 +1492,8 @@ describe('CoordinatorRouter', () => {
         tab === tabA ? 1 : 0
       );
     }
-    expect(messagesOfKind(tabC, 'cache-superseded')).toEqual([]);
-    expect(messagesOfKind(tabC, 'cache-unavailable')).toHaveLength(1);
+    expect(messagesOfKind(tabC, 'cache-superseded')).toHaveLength(1);
+    expect(messagesOfKind(tabC, 'cache-unavailable')).toEqual([]);
     ask(3_000);
     expect(channel.posted).toHaveLength(1);
   });
@@ -1467,6 +1523,7 @@ describe('CoordinatorRouter', () => {
         scope: 'scope',
         requestId: 'request-1',
         decision: 'yield',
+        buildTime: 1_000,
       },
     ]);
     // Tabs keep their cache until the engine has closed the files.
@@ -1517,7 +1574,7 @@ describe('CoordinatorRouter', () => {
       tabId: 'tab-a',
       ownerEpoch: 1,
     });
-    expect(router.snapshot()?.state.kind).toBe('waiting-for-tab');
+    expect(router.snapshot()?.state.kind).toBe('resetting-after-loss');
 
     channel.deliver({
       takeover: 1,
@@ -1529,6 +1586,9 @@ describe('CoordinatorRouter', () => {
 
     expect(channel.posted).toEqual([]);
     expect(messagesOfKind(tab, 'cache-superseded')).toHaveLength(1);
+    // The attempt that was due does not come.
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(messagesOfKind(tab, 'become-owner')).toHaveLength(1);
   });
 
   it('retries a busy lock within one build until the engine gives up', async () => {
@@ -1570,7 +1630,7 @@ describe('CoordinatorRouter', () => {
     ]);
   });
 
-  it('fails closed without a wipe when an open finds the files still busy', async () => {
+  it('tries again without a wipe when an open finds the files still busy', async () => {
     vi.useFakeTimers();
     const observations: Array<{ name: string; ownerEvent?: string }> = [];
     const router = new CoordinatorRouter({
@@ -1632,7 +1692,6 @@ describe('CoordinatorRouter', () => {
           unavailableReason: 'files-busy',
         }),
       ]);
-      expect(messagesOfKind(tab, 'terminal-error')).toEqual([]);
     }
     expect(
       observations.filter(
@@ -1652,18 +1711,19 @@ describe('CoordinatorRouter', () => {
       )
     ).toEqual([]);
 
-    // Nothing retries in the background. A tab that registers later opens
-    // the existing database instead of wiping it.
-    await vi.advanceTimersByTimeAsync(10 * 60_000);
-    expect(messagesOfKind(tabB, 'become-owner')).toEqual([]);
+    // The next attempt opens the existing database instead of wiping it, and a
+    // tab that registers meanwhile does not wait for the backoff.
     const tabC = new FakePort();
     await register(router, tabC, 'tab-c');
-    expect(messagesOfKind(tabC, 'become-owner')).toEqual([
-      expect.objectContaining({
-        ownerEpoch: 2,
-        databaseAction: 'open-existing',
-      }),
-    ]);
+    expect(messagesOfKind(tabC, 'cache-unavailable')).toHaveLength(1);
+    const elected = () =>
+      [tabA, tabB, tabC].flatMap((tab) => messagesOfKind(tab, 'become-owner'));
+    expect(elected().at(-1)).toMatchObject({
+      ownerEpoch: 2,
+      databaseAction: 'open-existing',
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(elected()).toHaveLength(2);
   });
 
   it('lets the owner delete stale databases only when no other build has tabs', async () => {
@@ -1829,7 +1889,7 @@ describe('CoordinatorRouter', () => {
     expect(messagesOfKind(engine, 'engine-request')).toHaveLength(1);
   });
 
-  it('bounds repeated asset failures without ever requesting a wipe', async () => {
+  it('bounds the rate of repeated asset failures without ever requesting a wipe', async () => {
     vi.useFakeTimers();
     const router = new CoordinatorRouter({
       assetLoadTimeoutMs: 10,
@@ -1838,35 +1898,19 @@ describe('CoordinatorRouter', () => {
     });
     const tab = new FakePort();
     await register(router, tab, 'tab-a');
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(router.snapshot()?.state.kind).toBe('failed');
+    await vi.advanceTimersByTimeAsync(2_000);
     expect(messagesOfKind(tab, 'become-owner')).toHaveLength(6);
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    const attempts = messagesOfKind(tab, 'become-owner');
+    // 100 ms doubling to 30 s, then one every 30 s.
+    expect(attempts.length).toBeGreaterThan(25);
+    expect(attempts.length).toBeLessThan(35);
     expect(
-      messagesOfKind(tab, 'become-owner').every(
-        (message) => message.databaseAction === 'open-existing'
-      )
+      attempts.every((message) => message.databaseAction === 'open-existing')
     ).toBe(true);
-    expect(messagesOfKind(tab, 'terminal-error')).toEqual([
-      expect.objectContaining({ storageUntouched: true }),
+    expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([
+      expect.objectContaining({ unavailableReason: 'recovery-failed' }),
     ]);
-    const late = new FakePort();
-    await register(router, late, 'tab-b');
-    expect(messagesOfKind(late, 'terminal-error')).toEqual([]);
-    expect(router.snapshot()?.state).toMatchObject({
-      kind: 'activating',
-      tabId: 'tab-b',
-      ownerEpoch: 7,
-      databaseAction: 'open-existing',
-    });
-    // A fresh registration gets a fresh bounded budget, not another immediate
-    // terminal error from the previous host's exhausted cycle.
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(messagesOfKind(late, 'become-owner')).toHaveLength(6);
-    expect(messagesOfKind(tab, 'become-owner')).toHaveLength(6);
-    expect(router.snapshot()?.state).toMatchObject({
-      kind: 'failed',
-      storageUntouched: true,
-    });
   });
 
   it('pauses a hidden storage-open watchdog without treating suspension as a failure', async () => {
@@ -1997,7 +2041,7 @@ describe('CoordinatorRouter', () => {
       ownerEpoch: 1,
     });
     expect(messagesOfKind(tab, 'terminate-engine')).toHaveLength(0);
-    expect(messagesOfKind(tab, 'terminal-error')).toHaveLength(0);
+    expect(messagesOfKind(tab, 'cache-unavailable')).toHaveLength(0);
     expect(messagesOfKind(tab, 'cache-message')).toHaveLength(0);
     expect(verifyLockHeld).toHaveBeenCalledWith(databaseOwnerLockName('scope'));
     expect(messagesOfKind(engine, 'heartbeat').length).toBeGreaterThan(5);
@@ -3093,6 +3137,14 @@ describe('CoordinatorRouter', () => {
     expect(tabA.events.indexOf('post:terminate-engine')).toBeLessThan(
       tabA.events.indexOf('close')
     );
+    // The tab hears that this connection ended, and makes another.
+    expect(messagesOfKind(tabA, 'connection-closed')).toEqual([
+      expect.objectContaining({ reason: 'tab MessagePort messageerror' }),
+    ]);
+    expect(tabA.events.indexOf('post:connection-closed')).toBeLessThan(
+      tabA.events.indexOf('close')
+    );
+    expect(messagesOfKind(tabB, 'connection-closed')).toEqual([]);
     expect(router.snapshot()?.state).toMatchObject({
       kind: 'activating',
       ownerEpoch: 2,
@@ -3127,14 +3179,6 @@ describe('CoordinatorRouter', () => {
         reason: 'engine envelope owner tuple does not match its direct route',
       })
     );
-    // The tab hears that this connection ended, and makes another.
-    expect(messagesOfKind(tabA, 'connection-closed')).toEqual([
-      expect.objectContaining({ reason: 'tab MessagePort messageerror' }),
-    ]);
-    expect(tabA.events.indexOf('post:connection-closed')).toBeLessThan(
-      tabA.events.indexOf('close')
-    );
-    expect(messagesOfKind(tabB, 'connection-closed')).toEqual([]);
     expect(router.snapshot()?.state).toMatchObject({
       kind: 'activating',
       ownerEpoch: 2,

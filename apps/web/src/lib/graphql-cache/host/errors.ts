@@ -1,7 +1,7 @@
 import type { CacheRequest } from '../protocol';
 
 /** Why a host refused a request itself; a cache response's code is on the wire. */
-type CacheHostErrorCode = 'host-disposed' | 'request-timeout';
+type CacheHostErrorCode = 'host-disposed' | 'host-failed' | 'request-timeout';
 
 /**
  * The page dropped this host before it answered. The database is kept, so a
@@ -13,6 +13,17 @@ export class CacheHostDisposedError extends Error {
   constructor() {
     super('cache worker host was disposed');
     this.name = 'CacheHostDisposedError';
+  }
+}
+
+/** The host's workers or their connection failed. The database is kept, so
+ * another host may open it. */
+export class CacheHostFailedError extends Error {
+  readonly errorCode: CacheHostErrorCode = 'host-failed';
+
+  constructor(cause: Error) {
+    super(cause.message, { cause });
+    this.name = 'CacheHostFailedError';
   }
 }
 

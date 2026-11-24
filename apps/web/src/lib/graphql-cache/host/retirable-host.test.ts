@@ -284,6 +284,26 @@ describe('createRetirableCacheHost', () => {
   });
 });
 
+it('keeps a paused host retainable, unlike a retired one', () => {
+  let paused = true;
+  const inner: CacheHost = Object.defineProperties(
+    { ...disposedLikeHost() },
+    { disabled: { get: () => paused }, paused: { get: () => paused } }
+  );
+  const host = createRetirableCacheHost(inner);
+  expect(host).toMatchObject({ disabled: true, paused: true });
+  expect(retainCacheHost(host)?.host).toBe(inner);
+  paused = false;
+  expect(host).toMatchObject({ disabled: false, paused: false });
+  expect(retainCacheHost(host)?.host).toBe(inner);
+
+  host.dispose();
+  paused = true;
+  expect(host.disabled).toBe(true);
+  expect(host.paused).toBeFalsy();
+  expect(retainCacheHost(host)).toBeUndefined();
+});
+
 it('keeps the physical host alive until every idempotent lease is released', async () => {
   const inner = disposedLikeHost();
   const host = createRetirableCacheHost(inner);

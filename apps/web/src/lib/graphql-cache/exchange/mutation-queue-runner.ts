@@ -777,8 +777,8 @@ export function createMutationQueueRunner(
   }
 
   async function drainQueue(): Promise<void> {
-    // A retired host stays disabled for good: stop polling instead of failing
-    // every 30 seconds against the no-op host.
+    // A retired host stays disabled for good, and a paused one wakes the queue:
+    // stop polling instead of failing every 30 seconds.
     if (host.disabled) {
       telemetry.skipped('host-disabled');
       resolveLiveOperationsAsQueued();

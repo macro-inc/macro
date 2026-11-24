@@ -59,7 +59,6 @@ import {
   validateRecordSelectionKeys,
   type WriteResult,
 } from '../protocol';
-import { quarantineCacheScope } from '../scope';
 import {
   type CacheRolloutCohort,
   type CacheTelemetryRecorderLike,
@@ -79,14 +78,17 @@ import type { EngineOpenOutcome } from '../worker/coordinator-protocol';
 import { WorkerRestartedError } from '../worker/effect-worker-transport';
 import { isUnambiguousCacheScope } from '../worker/stale-databases';
 import {
-  CacheBootstrapExhaustedError,
   COORDINATOR_CONNECT_ATTEMPTS,
   COORDINATOR_CONNECT_RETRY_DELAYS_MS,
   COORDINATOR_CONNECT_TIMEOUT_MS,
   STARTUP_RESPONSE_GRACE_MS,
 } from '../worker/startup';
 import { unsupportedBrowserReason } from './browser-support';
-import { CacheHostDisposedError, CacheRequestTimeoutError } from './errors';
+import {
+  CacheHostDisposedError,
+  CacheHostFailedError,
+  CacheRequestTimeoutError,
+} from './errors';
 import { CacheNavigationError } from './navigation-error';
 import { createNoopCacheHost } from './noop-host';
 import {
@@ -126,6 +128,25 @@ type Pending = {
   keptForOwner: boolean;
   stopTimeout?: () => void;
 };
+
+/** The outcome of a mutation the server already decided waits for an engine. */
+function isMutationSettlement(kind: CacheRequest['kind']): boolean {
+  return (
+    kind === 'commit-optimistic-write' ||
+    kind === 'rollback-optimistic-write' ||
+    kind === 'defer-optimistic-write'
+  );
+}
+
+/** What the coordinator keeps for a later engine while none can open. */
+function isHeldThroughOutage(kind: CacheRequest['kind']): boolean {
+  return isInitializationRequest(kind) || isMutationSettlement(kind);
+}
+
+function admissionOf(kind: CacheRequest['kind']): 'read' | 'write' | 'held' {
+  if (isReadOnlyCacheRequest(kind)) return 'read';
+  return isMutationSettlement(kind) ? 'held' : 'write';
+}
 
 function isInitializationRequest(kind: CacheRequest['kind']): boolean {
   return kind === 'init' || kind === 'current-authority';
@@ -167,6 +188,10 @@ export interface WorkerHostOptions {
   /** A newer app build took the local cache over. The host has already
    * retired to the network; the app should reload the page into that build. */
   onSuperseded?: () => void;
+  /** Nothing can open the database: the host is `paused`. */
+  onUnavailable?: (error: CacheUnavailableError) => void;
+  /** A paused host serves again. */
+  onAvailable?: () => void;
   /** Allowlisted rollout cohort attached to browser-cache telemetry. */
   rolloutCohort?: CacheRolloutCohort;
   /** Injectable recorder for deterministic tests or alternate exporters. */
@@ -180,6 +205,8 @@ export interface WorkerHostOptions {
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
+/** How long a coordinator may take to answer whether it is still there. */
+export const PING_TIMEOUT_MS = 5_000;
 /** How often a ready owner may leave an authority read unanswered before the
  * read fails and its page can start over on a new host. */
 export const UNANSWERED_AUTHORITY_READS = 3;
@@ -205,8 +232,8 @@ class CacheResponseError extends Error {
  * The coordinator SharedWorker restarted under this page (Safari can reconnect
  * a port to an empty worker global). It rejects the requests the restart cut
  * off, and ends the host once restarts used up the connect attempts before a
- * handshake completed. Either way the database is preserved and its scope is
- * not quarantined, so the page may build a new host later.
+ * handshake completed. Either way the database is preserved, so the page may
+ * build a new host later.
  */
 export class CoordinatorRestartedError extends CacheResponseError {
   constructor(options?: ErrorOptions) {
@@ -220,10 +247,10 @@ export class CoordinatorRestartedError extends CacheResponseError {
 }
 
 /**
- * The cache failed closed: another context holds the database, or a newer
- * build took it over. The page stays on the network; `unavailableReason`
- * says why when the coordinator told it, and `phase` whether the host had
- * finished starting.
+ * Nothing can open the database, for now or, when a newer build took it over,
+ * for this page. The page runs on the network; `unavailableReason` says why
+ * when the coordinator told it, and `phase` whether the host had finished
+ * starting.
  */
 export class CacheUnavailableError extends CacheResponseError {
   constructor(
@@ -246,10 +273,16 @@ const isOwnerEpochLoss = (error: unknown): error is CacheResponseError =>
   error instanceof CacheResponseError &&
   error.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
 
-const isOwnerLockUnavailable = (error: unknown): error is CacheResponseError =>
+const isSuperseded = (error: unknown): error is CacheResponseError =>
   error instanceof CacheResponseError &&
-  (error.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
-    error.errorCode === CACHE_SUPERSEDED_ERROR_CODE);
+  error.errorCode === CACHE_SUPERSEDED_ERROR_CODE;
+
+/** What ended a host decides whether another follows it, by its code. */
+const asHostFailure = (error: Error): Error =>
+  error instanceof CacheNavigationError ||
+  typeof (error as { errorCode?: unknown }).errorCode === 'string'
+    ? error
+    : new CacheHostFailedError(error);
 
 export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const authorityObserver = createAuthorityObserver(options.scope);
@@ -318,7 +351,12 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let latestReplacementEpoch = 0;
   let failureReported = false;
   let terminalFailureHandled = false;
-  let superseded = false;
+  /** Set while nothing can open the database; a handshake clears it. */
+  let outage: CacheUnavailableError | undefined;
+  let lastHeardAt = 0;
+  let stopPing: (() => void) | undefined;
+  /** An engine opened during the outage, which the host has yet to reach. */
+  let outageChange: CacheGenerationChange | undefined;
   let adapter: CacheCoordinatorPageAdapter | undefined;
   let registeredAdapter: CacheCoordinatorPageAdapter | undefined;
   let adapterDisposePromise: Promise<void> | undefined;
@@ -438,10 +476,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       entry.stopTimeout?.();
       recordRequestOutcome(entry, 'error', error);
       entry.reject(cacheAuthorityError(error));
-      if (isOwnerLockUnavailable(error))
-        retireUnavailable(msg.error, {
-          superseded: error.errorCode === CACHE_SUPERSEDED_ERROR_CODE,
-        });
+      if (isSuperseded(error)) retireSuperseded(msg.error);
       finishGracefulDisposeIfDrained();
       return;
     }
@@ -532,7 +567,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const change: CacheGenerationChange = {
       storage: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
     };
-    emitGenerationChange(change);
+    // Nobody can read again before the handshake ends the outage.
+    if (!outage) emitGenerationChange(change);
+    else if (outageChange?.storage !== 'reset') outageChange = change;
     if (state === 'ready') {
       beginRecoveryGeneration();
       // No old response put this host into recovery. Requests still pending at
@@ -558,13 +595,19 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   /** A replaced engine is announced by the handshake with it instead. */
   function onOwnerAvailable(): void {
+    if (outage) return;
     const heldReads = readAvailability.timeoutsPaused;
     resumeCacheReads();
     if (heldReads) emitOwnerReady();
   }
 
   function waitForCacheReads(): void {
-    if (state === 'failed' || state === 'suspended' || state === 'disposed')
+    if (
+      outage ||
+      state === 'failed' ||
+      state === 'suspended' ||
+      state === 'disposed'
+    )
       return;
     readAvailability.wait();
     // Keep read/write/teardown admission ordered at the coordinator. Pausing
@@ -584,7 +627,12 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   }
 
   function onOwnerHandoffBlocked(): void {
-    if (state === 'failed' || state === 'suspended' || state === 'disposed')
+    if (
+      outage ||
+      state === 'failed' ||
+      state === 'suspended' ||
+      state === 'disposed'
+    )
       return;
     const error = new CacheResponseError(
       'cache reads unavailable after owner handoff timeout',
@@ -700,31 +748,26 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       },
       onTerminalError: (error) => {
         // start() also rejects; let the bounded registration loop retry before
-        // reporting a terminal failure or quarantining any cache scope.
+        // reporting a terminal failure.
         if (adapter !== created || registrationInProgress || suspension) return;
         if (error instanceof WorkerRestartedError) reconnectCoordinator(error);
         else failTransport(error);
       },
-      onCacheUnavailable: (reason, supersededBuild, unavailableReason) => {
-        if (adapter === created)
-          retireUnavailable(reason, {
-            superseded: supersededBuild,
-            unavailableReason,
-          });
+      onPong: () => {
+        if (adapter === created) heardFromCoordinator();
+      },
+      onCacheUnavailable: (reason, unavailableReason) => {
+        if (adapter === created) pause(reason, unavailableReason);
       },
       onCacheSuperseded: (reason) => {
-        if (adapter !== created || superseded) return;
-        superseded = true;
-        retireUnavailable(reason, {
-          superseded: true,
-          leaveForNewerBuild: true,
-        });
-        options.onSuperseded?.();
+        if (adapter === created) retireSuperseded(reason);
       },
       telemetry,
     });
     created.onmessage = (event) => {
-      if (adapter === created && state !== 'suspended') onMessage(event);
+      if (adapter !== created || state === 'suspended') return;
+      heardFromCoordinator();
+      onMessage(event);
     };
     adapter = created;
     registerPagehide();
@@ -894,7 +937,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   function failInitialization(
     error: Error,
-    stop: { uncertain?: boolean; preserveDatabase?: boolean } = {}
+    stop: { uncertain?: boolean } = {}
   ): void {
     if (
       state === 'failed' ||
@@ -919,13 +962,12 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   /**
    * Fails this host for the rest of the page session: pending requests reject
    * (an admitted enqueue as uncertain when `uncertain`), subscribers are
-   * dropped, and the coordinator connection closes.
+   * dropped, and the page leaves the coordinator with the database kept.
    */
-  function stopForSession(
-    error: Error,
-    { uncertain = false, preserveDatabase = false } = {}
-  ): void {
+  function stopForSession(error: Error, { uncertain = false } = {}): void {
     state = 'failed';
+    outage = undefined;
+    stopPing?.();
     releaseTransportWaiters();
     readAvailability.resume();
     initialization = undefined;
@@ -934,34 +976,72 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     clearSubscribers();
     unregisterPagehide();
     fireAndForget(
-      disposeAdapter(false, preserveDatabase).then(finishTelemetry),
+      disposeAdapter(false, true).then(finishTelemetry),
       'graphql-cache-host'
     );
   }
 
-  /**
-   * Another context, usually a tab on another deployed build, holds the
-   * database, and the coordinator touched no storage. Nothing is quarantined:
-   * this page stops using the cache until it reloads, and a later page load
-   * tries again. A page handing the database to a newer build leaves like a
-   * navigating page: its engine stops without counting as a lost owner, and
-   * an enqueue already sent may have reached the durable queue, so it is
-   * reported uncertain rather than sent again. Once a newer build took the
-   * database over (`superseded`), this build never gets it back, so the error
-   * says so and recovery does not retry it.
-   */
-  function retireUnavailable(
-    reason: string,
-    {
-      superseded = false,
-      leaveForNewerBuild = false,
-      unavailableReason = superseded ? 'superseded' : undefined,
-    }: {
-      superseded?: boolean;
-      leaveForNewerBuild?: boolean;
-      unavailableReason?: CacheUnavailableReason;
-    } = {}
+  function recordUnavailable(
+    unavailableReason: CacheUnavailableReason,
+    errorCode: 'superseded' | 'lock'
   ): void {
+    if (state !== 'initializing') return;
+    telemetry?.record({
+      name: 'graphql_cache.host_ready',
+      operationCategory: 'initialization',
+      outcome: 'error',
+      errorCode,
+      unavailableReason,
+      durationMs:
+        initializationStartedAt > 0 ? now() - initializationStartedAt : 0,
+    });
+  }
+
+  /**
+   * Nothing can open the database for now: another context holds it, or every
+   * attempt to open it failed. Reads and writes are refused at once, for the
+   * page to use the network, until a handshake with a later engine. The
+   * coordinator keeps the handshake and mutation outcomes for that engine.
+   */
+  function pause(
+    reason: string,
+    unavailableReason: CacheUnavailableReason
+  ): void {
+    if (
+      state === 'failed' ||
+      state === 'suspended' ||
+      state === 'disposing' ||
+      state === 'disposed'
+    )
+      return;
+    const started = outage === undefined;
+    if (started) recordUnavailable(unavailableReason, 'lock');
+    const error = new CacheUnavailableError(
+      reason,
+      false,
+      unavailableReason,
+      state === 'initializing' ? 'initialization' : 'operation'
+    );
+    outage = error;
+    beginRecoveryGeneration();
+    for (const key of activeOpKeys) lostRegisteredOpKeys.add(key);
+    replacementReadOpKeys.clear();
+    readAvailability.blockAll(error);
+    for (const entry of pending.values()) {
+      if (!isInitializationRequest(entry.kind)) continue;
+      entry.stopTimeout?.();
+      entry.stopTimeout = undefined;
+    }
+    if (started) options.onUnavailable?.(error);
+  }
+
+  /**
+   * A newer build took the database over, so this build never gets it back.
+   * The page leaves like a navigating page: its engine stops without counting
+   * as a lost owner, and an enqueue already sent may have reached the durable
+   * queue, so it is reported uncertain rather than sent again.
+   */
+  function retireSuperseded(reason: string): void {
     if (
       terminalFailureHandled ||
       state === 'failed' ||
@@ -973,32 +1053,20 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     terminalFailureHandled = true;
     const error = new CacheUnavailableError(
       reason,
-      superseded,
-      unavailableReason,
+      true,
+      'superseded',
       state === 'initializing' ? 'initialization' : 'operation'
     );
-    if (state === 'initializing') {
-      telemetry?.record({
-        name: 'graphql_cache.host_ready',
-        operationCategory: 'initialization',
-        outcome: 'error',
-        errorCode: superseded ? 'superseded' : 'lock',
-        ...(unavailableReason === undefined ? {} : { unavailableReason }),
-        durationMs:
-          initializationStartedAt > 0 ? now() - initializationStartedAt : 0,
-      });
-    }
+    recordUnavailable('superseded', 'superseded');
     stopStorageHealthSampling();
-    stopForSession(error, {
-      uncertain: leaveForNewerBuild,
-      preserveDatabase: leaveForNewerBuild,
-    });
+    stopForSession(error, { uncertain: true });
     reportFailure(error);
+    options.onSuperseded?.();
   }
 
-  function failTransport(error: Error): void {
+  function failTransport(cause: Error): void {
     if (terminalFailureHandled || state === 'suspended') return;
-    const storageWasUntouched = error instanceof CacheBootstrapExhaustedError;
+    const error = asHostFailure(cause);
     stopStorageHealthSampling();
     const admittedWorkIsUncertain = [...pending.values()].some(
       (entry) => entry.admitted
@@ -1006,21 +1074,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     if (state === 'disposed' && !admittedWorkIsUncertain) return;
     terminalFailureHandled = true;
     stopForSession(error, { uncertain: true });
-    // Product failure handling may immediately construct another host. Make
-    // the matching old scope unreachable before invoking that callback.
-    const quarantine = storageWasUntouched
-      ? Promise.resolve()
-      : quarantineCacheScope(options.scope);
-    fireAndForget(
-      quarantine.then(() => {
-        try {
-          reportFailure(error);
-        } catch {
-          // Failure reporting cannot reopen or invalidate completed quarantine.
-        }
-      }),
-      'graphql-cache-host'
-    );
+    reportFailure(error);
   }
 
   function stopStorageHealthSampling(): void {
@@ -1134,6 +1188,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   function suspendTransport(error: Error): void {
     state = 'suspended';
+    stopPing?.();
     readAvailability.resume();
     transportGeneration += 1;
     transportInterruption = error;
@@ -1150,6 +1205,30 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     finishTelemetry();
   }
 
+  function heardFromCoordinator(): void {
+    lastHeardAt = now();
+    stopPing?.();
+  }
+
+  /** A connection that brought nothing for a while may be gone, which nothing
+   * else tells: ask. */
+  function checkConnection(quietSince: number): void {
+    if (stopPing || lastHeardAt >= quietSince) return;
+    const asked = adapter;
+    if (!asked?.ping()) return;
+    const cancel = visibleTimeout(() => {
+      stopPing = undefined;
+      if (adapter !== asked || !isServing()) return;
+      reconnectCoordinator(
+        new WorkerRestartedError('cache coordinator connection lost')
+      );
+    }, PING_TIMEOUT_MS);
+    stopPing = () => {
+      stopPing = undefined;
+      cancel();
+    };
+  }
+
   function reconnectCoordinator(cause: WorkerRestartedError): void {
     if (state === 'failed' || state === 'suspended') return;
     // Typed, so that whoever was waiting on the cut-off startup may build a
@@ -1163,14 +1242,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       errorCode: 'transport',
     });
     if (state === 'disposing' || state === 'disposed') {
-      stopForSession(error, { uncertain: true, preserveDatabase: true });
+      stopForSession(error, { uncertain: true });
       return;
     }
     // Bound restarts during startup just like registration retries. A completed
     // handshake resets this budget; separate later restarts can recover again.
     if (++reconnects >= COORDINATOR_CONNECT_ATTEMPTS) {
       stopStorageHealthSampling();
-      stopForSession(error, { uncertain: true, preserveDatabase: true });
+      stopForSession(error, { uncertain: true });
       reportFailure(error);
       return;
     }
@@ -1192,7 +1271,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       errorCode: 'timeout',
     });
     if (++reconnects >= COORDINATOR_CONNECT_ATTEMPTS) {
-      failInitialization(error, { uncertain: true, preserveDatabase: true });
+      failInitialization(error, { uncertain: true });
       return;
     }
     suspendTransport(error);
@@ -1269,6 +1348,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       recordRequestOutcome(entry, 'error', error);
       entry.reject(error);
       if (isInitializationRequest(entry.kind)) reconnectUnanswered(error);
+      else checkConnection(entry.startedAt);
       finishGracefulDisposeIfDrained();
     };
     if (waiting) {
@@ -1305,6 +1385,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return Promise.reject(new CacheHostDisposedError());
     }
 
+    // A handshake and the outcome of a mutation wait at the coordinator.
+    const refused = outage !== undefined && !isHeldThroughOutage(msg.kind);
+    if (refused) return Promise.reject(outage);
     if (isReadOnlyCacheRequest(msg.kind) && readAvailability.error) {
       return Promise.reject(readAvailability.error);
     }
@@ -1476,6 +1559,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         state = 'ready';
         initialization = undefined;
         reconnects = 0;
+        endOutage();
         if (suspended) {
           // A surviving coordinator need not send engine-replaced to a late
           // joiner. Resets while frozen are unknowable, so conservatively
@@ -1503,28 +1587,33 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         emitOwnerReady();
       },
       (error: unknown) => {
-        const initializationFailure = asError(error);
-        if (attempt !== initializationAttempt) throw initializationFailure;
+        if (attempt !== initializationAttempt) throw asError(error);
         initialization = undefined;
-        if (initializationFailure instanceof WorkerRestartedError) {
+        const initializationFailure = asHostFailure(asError(error));
+        if (error instanceof WorkerRestartedError) {
           // Every registration attempt met a restarted coordinator. No tab
           // registered, so nothing touched storage: end like a restart that
           // ran out of attempts after registering.
-          const restarted = new CoordinatorRestartedError({
-            cause: initializationFailure,
-          });
-          failInitialization(restarted, { preserveDatabase: true });
+          const restarted = new CoordinatorRestartedError({ cause: error });
+          failInitialization(restarted);
           throw restarted;
         }
-        failInitialization(initializationFailure, {
-          preserveDatabase:
-            initializationFailure instanceof CacheRequestTimeoutError,
-        });
+        failInitialization(initializationFailure);
         throw initializationFailure;
       }
     );
     initialization = handshake;
     return handshake;
+  }
+
+  function endOutage(): void {
+    if (!outage) return;
+    outage = undefined;
+    readAvailability.resume();
+    options.onAvailable?.();
+    const change = outageChange;
+    outageChange = undefined;
+    if (change) emitGenerationChange(change);
   }
 
   /** Whether this host still has, or will have, an owner to ask. */
@@ -1582,18 +1671,18 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         UNKNOWN_CACHE_GENERATION,
     };
     const generation = transportGeneration;
+    const admission = admissionOf(msg.kind);
+    if (outage || state === 'awaiting-replacement')
+      checkConnection(now() - requestTimeoutMs);
+    if (outage && admission !== 'held') throw outage;
     const ready =
       state === 'ready'
         ? ensureInitialized()
-        : readAvailability.waitUntilReady(
-            ensureInitialized,
-            isReadOnlyCacheRequest(msg.kind),
-            {
-              timeoutMs: requestTimeoutMs,
-              error: () => new CacheRequestTimeoutError(msg.kind),
-              signal,
-            }
-          );
+        : readAvailability.waitUntilReady(ensureInitialized, admission, {
+            timeoutMs: requestTimeoutMs,
+            error: () => new CacheRequestTimeoutError(msg.kind),
+            signal,
+          });
     // Every other caller keeps its exact place in line: no extra hop.
     if (signal) await untilAborted(ready, signal);
     else await ready;
@@ -1647,13 +1736,21 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   return {
     clientId,
+    get disabled() {
+      return outage !== undefined;
+    },
+    get paused() {
+      return outage !== undefined;
+    },
     authority: {
       current: currentAuthority,
       snapshot: authorityObserver.snapshot,
       onChanged: authorityObserver.onChanged,
       transition(expected, policy) {
         return Telemetry.span('crm.access.owner.request', async (span) => {
-          await ensureInitialized();
+          if (outage) throw outage;
+          if (state !== 'ready')
+            await readAvailability.waitUntilReady(ensureInitialized, 'write');
           const version = authorityObserver.version();
           const result = (await initializedRequest({
             kind: 'transition-authority',
@@ -1980,10 +2077,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       // urql emits teardown while initialization-failure fallback is
       // unsubscribing operations. Local registration cleanup is sufficient
       // when no usable engine generation remains.
-      if (state !== 'ready' && state !== 'initializing') return;
+      if (outage || (state !== 'ready' && state !== 'initializing')) return;
       if (state === 'initializing') {
         try {
-          await readAvailability.waitUntilReady(ensureInitialized, false);
+          await readAvailability.waitUntilReady(ensureInitialized, 'write');
         } catch {
           return;
         }
@@ -1993,7 +2090,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         await ensureInitialized();
       }
       // Disposal or owner loss can win while an initialization await yields.
-      if (state !== 'ready') return;
+      if (outage || state !== 'ready') return;
       await request({ kind: 'teardown', opId: opId(opKey) });
     },
 

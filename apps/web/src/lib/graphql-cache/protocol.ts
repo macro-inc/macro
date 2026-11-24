@@ -1130,6 +1130,11 @@ export const isOwnerEpochLostError = (
   'errorCode' in value &&
   value.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
 
+/** Identifies a request no engine got or answered. A later engine serves the
+ * same host. */
+export const isEngineAbsentError = (value: unknown): boolean =>
+  isOwnerEpochLostError(value) || isCacheOutageError(value);
+
 /** Identifies a request refused because another context holds the database,
  * including a newer build that took it over. */
 export const isOwnerLockUnavailableError = (
@@ -1141,6 +1146,15 @@ export const isOwnerLockUnavailableError = (
   'errorCode' in value &&
   (value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
     value.errorCode === CACHE_SUPERSEDED_ERROR_CODE);
+
+/** Identifies a request refused because nothing can open the database for now.
+ * The host that refused it serves again once something can. */
+export const isCacheOutageError = (
+  value: unknown
+): value is Error & { errorCode: 'owner-lock-unavailable' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
 
 /** Identifies a request refused because a newer build took the database over;
  * this page session never gets the cache back. */

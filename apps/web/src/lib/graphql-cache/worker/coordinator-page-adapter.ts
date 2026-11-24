@@ -40,7 +40,6 @@ import {
   listOpfsRootNames,
   staleCacheDatabaseIdentities,
 } from './stale-databases';
-import { CacheBootstrapExhaustedError } from './startup';
 import { compileCacheWasm } from './wasm-compile';
 
 export interface SharedWorkerLike {
@@ -773,7 +772,6 @@ export class CacheCoordinatorPageAdapter {
       case 'cache-unavailable':
         this.options.onCacheUnavailable?.(
           message.reason,
-          message.superseded === true,
           message.unavailableReason
         );
         break;

@@ -1,6 +1,4 @@
-import * as Duration from 'effect/Duration';
 import * as Effect from 'effect/Effect';
-import * as Schedule from 'effect/Schedule';
 import { match } from 'ts-pattern';
 import type { CacheResponse } from '../protocol';
 import {
@@ -150,21 +148,15 @@ const DEFAULT_HIDE_GRACE_MS = 1_000;
 const MAX_DRAIN_CHECKS = 3;
 /** How many departed tab ids a long-lived coordinator remembers. */
 const DEPARTED_TAB_MEMORY = 256;
-const RECOVERY_RETRY_LIMIT = 5;
+/** Failed attempts after which pages are told to run uncached meanwhile. */
+const OUTAGE_AFTER_FAILED_ATTEMPTS = 5;
 const RECOVERY_RETRY_BASE_DELAY_MS = 100;
+const RECOVERY_RETRY_MAX_DELAY_MS = 30_000;
 
 const recoveryRetryDelayMs = (failureCount: number): number =>
-  Effect.runSync(
-    Effect.gen(function* () {
-      const step = yield* Schedule.toStep(
-        Schedule.exponential(Duration.millis(RECOVERY_RETRY_BASE_DELAY_MS))
-      );
-      let delay = Duration.zero;
-      for (let index = 0; index < failureCount; index += 1) {
-        [, delay] = yield* step(index, undefined);
-      }
-      return Duration.toMillis(delay);
-    })
+  Math.min(
+    RECOVERY_RETRY_BASE_DELAY_MS * 2 ** (failureCount - 1),
+    RECOVERY_RETRY_MAX_DELAY_MS
   );
 
 const errorMessage = (error: unknown): string =>
@@ -629,12 +621,6 @@ export class CoordinatorRouter {
         ...(coordinatorLockName === undefined ? {} : { coordinatorLockName }),
       })
     );
-    if (
-      this.coreValue.state.kind === 'failed' &&
-      this.coreValue.state.storageUntouched
-    ) {
-      this.resetRecoveryRetries();
-    }
     const actions = this.coreValue.registerTab(message.tabId, message.visible);
     const previousReadState = this.handoff.readState;
     this.applyActions(actions);
@@ -960,6 +946,7 @@ export class CoordinatorRouter {
       switch (action.kind) {
         case 'elect-owner':
           this.clearEngineWatchdogs();
+          this.clearRecoveryRetryTimer();
           this.activationStarted.set(action.ownerEpoch, this.now());
           this.telemetry.record({
             name: 'graphql_cache.owner',
@@ -1144,7 +1131,16 @@ export class CoordinatorRouter {
             envelope<CoordinatorToTabEnvelope>({
               kind: 'cache-unavailable',
               reason: action.reason,
-              ...(action.superseded ? { superseded: true as const } : {}),
+              unavailableReason: action.unavailableReason,
+            })
+          );
+          break;
+        case 'notify-cache-superseded':
+          this.postToTab(
+            action.tabId,
+            envelope<CoordinatorToTabEnvelope>({
+              kind: 'cache-superseded',
+              reason: action.reason,
             })
           );
           break;
@@ -1203,16 +1199,6 @@ export class CoordinatorRouter {
             })
           );
           break;
-        case 'terminal-failure':
-          this.handoff.cancel();
-          this.broadcast(
-            envelope<CoordinatorToTabEnvelope>({
-              kind: 'terminal-error',
-              error: action.error,
-              ...(action.storageUntouched ? { storageUntouched: true } : {}),
-            })
-          );
-          break;
       }
     }
     this.syncReadAvailability();
@@ -1245,15 +1231,12 @@ export class CoordinatorRouter {
         this.drainOnceHiddenLongEnough(ownerEpoch);
         this.handoff.ready(ownerEpoch);
       })
-      .with(
-        { kind: 'waiting-for-tab' },
-        { kind: 'resetting-after-loss' },
-        { kind: 'failed' },
-        () => this.handoff.cancel()
+      .with({ kind: 'waiting-for-tab' }, { kind: 'resetting-after-loss' }, () =>
+        this.handoff.cancel()
       )
       .exhaustive(() =>
-        this.applyActions(
-          core.terminalFailure('unrecognized coordinator ownership state')
+        reportCoordinatorTaskFailure(
+          new Error('unrecognized coordinator ownership state')
         )
       );
   }
@@ -1350,21 +1333,24 @@ export class CoordinatorRouter {
     this.requestTakeover(route);
   }
 
-  /** Fails closed without touching storage again: the owner lock stayed with
-   * another context, or it kept the database files open (`storage-busy`). */
+  /** Ends this attempt without touching storage again: the owner lock stayed
+   * with another context, or it kept the database files open. */
   private closeUnavailable(
     tabId: string,
     ownerEpoch: number,
-    reason: OwnerLockUnavailableReason | 'files-busy',
+    reason: OwnerLockUnavailableReason | 'files-busy' | 'superseded',
     detail: string
   ): void {
     const core = this.coreValue;
     if (!core) return;
     const state = core.state;
     const filesBusy = reason === 'files-busy';
-    const actions = filesBusy
-      ? core.storageBusy(tabId, ownerEpoch)
-      : core.ownerLockUnavailable(tabId, ownerEpoch, reason);
+    const actions = match(reason)
+      .with('files-busy', () => core.storageBusy(tabId, ownerEpoch))
+      .with('superseded', () => core.heldByNewerBuild(tabId, ownerEpoch))
+      .otherwise((lockReason) =>
+        core.ownerLockUnavailable(tabId, ownerEpoch, lockReason)
+      );
     if (actions.length === 0) return;
     this.handoff.cancel();
     this.activationStarted.delete(ownerEpoch);
@@ -1398,7 +1384,6 @@ export class CoordinatorRouter {
         : `cache database owner lock is unavailable: ${detail}`
     );
     this.clearEngineWatchdogs();
-    this.resetRecoveryRetries();
     this.applyActions(actions);
   }
 
@@ -1429,14 +1414,15 @@ export class CoordinatorRouter {
   private scheduleResetActivation(): void {
     const core = this.coreValue;
     if (!core || core.state.kind !== 'resetting-after-loss') return;
-    if (this.recoveryAttemptCount >= RECOVERY_RETRY_LIMIT) {
-      const reason = `cache recovery failed after ${RECOVERY_RETRY_LIMIT} attempts: ${core.state.reason}`;
-      this.clearRecoveryRetryTimer();
-      this.applyActions(core.terminalFailure(reason));
-      return;
-    }
-
     this.recoveryAttemptCount += 1;
+    if (this.recoveryAttemptCount > OUTAGE_AFTER_FAILED_ATTEMPTS) {
+      this.applyActions(
+        core.beginOutage(
+          `cache recovery failed after ${OUTAGE_AFTER_FAILED_ATTEMPTS} attempts: ${core.state.reason}`,
+          'recovery-failed'
+        )
+      );
+    }
     const activate = () => {
       this.recoveryRetryTimer = undefined;
       if (this.coreValue) {
@@ -1448,6 +1434,7 @@ export class CoordinatorRouter {
       return;
     }
     const delayMs = recoveryRetryDelayMs(this.recoveryAttemptCount - 1);
+    this.clearRecoveryRetryTimer();
     this.recoveryRetryTimer = this.setTimeoutFn(activate, delayMs);
   }
 
@@ -1550,7 +1537,6 @@ export class CoordinatorRouter {
       state.kind !== 'waiting-for-tab' &&
       state.kind !== 'parked' &&
       state.kind !== 'resetting-after-loss' &&
-      state.kind !== 'failed' &&
       state.tabId === tabId &&
       state.ownerEpoch === ownerEpoch;
     if (!isCurrentOwner) {
@@ -1574,7 +1560,6 @@ export class CoordinatorRouter {
       state.kind !== 'waiting-for-tab' &&
       state.kind !== 'parked' &&
       state.kind !== 'resetting-after-loss' &&
-      state.kind !== 'failed' &&
       state.tabId === tabId
     ) {
       this.recordOwnerLeft(state.ownerEpoch, {
@@ -1699,7 +1684,6 @@ export class CoordinatorRouter {
         state.kind !== 'waiting-for-tab' &&
         state.kind !== 'parked' &&
         state.kind !== 'resetting-after-loss' &&
-        state.kind !== 'failed' &&
         state.tabId === tabId &&
         state.ownerEpoch === ownerEpoch
     );
@@ -2185,7 +2169,10 @@ export class CoordinatorRouter {
     this.closeUnavailable(
       takeover.tabId,
       takeover.ownerEpoch,
-      'holder-kept',
+      // Another coordinator of this same build keeps it only until it closes.
+      message.buildTime !== undefined && message.buildTime <= this.buildTime
+        ? 'holder-kept'
+        : 'superseded',
       'another build keeps the database'
     );
   }
@@ -2214,6 +2201,7 @@ export class CoordinatorRouter {
         scope: core.scope,
         requestId: request.requestId,
         decision: newer ? 'yield' : 'keep',
+        buildTime: this.buildTime,
       });
     }
     if (!newer) return;

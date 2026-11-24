@@ -448,14 +448,13 @@ describe('CacheCoordinatorPageAdapter', () => {
 
     expect(onCacheUnavailable).toHaveBeenCalledExactlyOnceWith(
       'another app version holds the database',
-      false,
       'holder-kept'
     );
   });
 
-  it('relays that a newer build took the database over', async () => {
-    const onCacheUnavailable = vi.fn();
-    const port = await registeredAdapter({ onCacheUnavailable });
+  it('ends the connection as a restart when the coordinator dropped the page', async () => {
+    const onTerminalError = vi.fn();
+    const port = await registeredAdapter({ onTerminalError });
 
     port.receive({
       ...version,
@@ -913,34 +912,6 @@ describe('CacheCoordinatorPageAdapter', () => {
     expect(terminalErrors).toEqual([]);
     expect(coordinatorPort.closed).toBe(false);
     await adapter.dispose();
-  });
-
-  it('treats retry exhaustion from the coordinator as terminal', async () => {
-    const coordinatorPort = new FakeCoordinatorPort();
-    const terminalErrors: string[] = [];
-    const adapter = createCacheCoordinatorPageAdapter({
-      scope: 'scope',
-      tabId: 'tab-a',
-      lockManager: heldLockManager(),
-      createSharedWorker: () => ({
-        port: coordinatorPort as unknown as MessagePort,
-      }),
-      createDedicatedWorker: () => new FakeWorker(),
-      onTerminalError: (error) => terminalErrors.push(error.message),
-    });
-    const started = adapter.start();
-    await vi.waitFor(() => expect(coordinatorPort.messages).toHaveLength(1));
-    coordinatorPort.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
-    await started;
-
-    coordinatorPort.receive({
-      ...version,
-      kind: 'terminal-error',
-      error: 'cache recovery failed after 5 attempts',
-    });
-
-    expect(terminalErrors).toEqual(['cache recovery failed after 5 attempts']);
-    expect(coordinatorPort.closed).toBe(true);
   });
 
   it('terminates an owned engine before closing a failed SharedWorker transport', async () => {

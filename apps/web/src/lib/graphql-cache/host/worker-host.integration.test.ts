@@ -1069,7 +1069,7 @@ describe('worker CacheHost coordinator integration', () => {
     });
     await vi.waitFor(() => {
       expect(localStorage.getItem('graphql-cache:scope')).toBe(
-        'quarantine:integration-scope'
+        'integration-scope'
       );
       expect(initializationErrors).toEqual([
         'standby SharedWorker failed during retirement',

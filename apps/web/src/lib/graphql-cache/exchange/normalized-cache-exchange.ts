@@ -83,7 +83,7 @@ import {
   type EnqueueOptimisticMutationResult,
   isAdmittedEnqueueUncertainError,
   isCacheRevision,
-  isOwnerEpochLostError,
+  isEngineAbsentError,
   isOwnerLockUnavailableError,
   isWriteNotAdmittedError,
   type QueryRevalidationWire,
@@ -1167,7 +1167,7 @@ export function normalizedCacheExchange(
         } catch (error) {
           reportReadError(error, op);
           if (
-            isOwnerEpochLostError(error) &&
+            isEngineAbsentError(error) &&
             queryStates.get(op.key) === readState &&
             (readVersion.isCurrent() || readState.networkBoundQueries > 0)
           ) {
@@ -1570,7 +1570,7 @@ export function normalizedCacheExchange(
               retained &&
               isActive() &&
               state.networkResultVersion === resultVersion &&
-              (state.replacementFallback || isOwnerEpochLostError(error))
+              (state.replacementFallback || isEngineAbsentError(error))
             ) {
               state.replacementFallback = true;
               state.retainedReplacementFallback = retained;
@@ -1943,6 +1943,9 @@ export function normalizedCacheExchange(
             mutationQueue.wake();
           })
         );
+        // A host that was paused let the queue's poll lapse.
+        if (host.onOwnerReady)
+          cleanups.push(host.onOwnerReady(mutationQueue.wake));
         if (typeof addEventListener === 'function') {
           addEventListener('online', mutationQueue.wake);
           cleanups.push(() =>

@@ -1260,20 +1260,6 @@ export function validateCoordinatorToTabEnvelope(
         return pass(value as CoordinatorToTabEnvelope);
       }
       break;
-    case 'terminal-error':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'error',
-          'storageUntouched',
-        ]) &&
-        isNonEmptyString(value.error) &&
-        (value.storageUntouched === undefined ||
-          value.storageUntouched === true)
-      )
-        return pass(value as CoordinatorToTabEnvelope);
-      break;
     case 'protocol-error':
       if (
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'error']) &&
@@ -1289,14 +1275,11 @@ export function validateCoordinatorToTabEnvelope(
           'kind',
           'reason',
           'unavailableReason',
-          'superseded',
         ]) &&
         isNonEmptyString(value.reason) &&
-        (value.unavailableReason === undefined ||
-          CACHE_UNAVAILABLE_REASONS.includes(
-            value.unavailableReason as CacheUnavailableReason
-          )) &&
-        (value.superseded === undefined || value.superseded === true)
+        CACHE_UNAVAILABLE_REASONS.includes(
+          value.unavailableReason as CacheUnavailableReason
+        )
       ) {
         return pass(value as CoordinatorToTabEnvelope);
       }

@@ -172,6 +172,7 @@ export const CACHE_UNAVAILABLE_REASONS = [
   'no-takeover-channel',
   'holder-kept',
   'files-busy',
+  'recovery-failed',
   'superseded',
 ] as const;
 export type CacheUnavailableReason = (typeof CACHE_UNAVAILABLE_REASONS)[number];

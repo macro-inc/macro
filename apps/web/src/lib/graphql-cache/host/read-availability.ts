@@ -60,6 +60,7 @@ export class CacheReadAvailability {
   private unavailable: Error | undefined;
   private paused = false;
   private readonly waiting = new Set<(error: Error) => void>();
+  private readonly waitingWrites = new Set<(error: Error) => void>();
 
   get error(): Error | undefined {
     return this.unavailable;
@@ -81,31 +82,40 @@ export class CacheReadAvailability {
     this.waiting.clear();
   }
 
+  /** Like `block`, for writes that wait for a handshake too. */
+  blockAll(error: Error): void {
+    this.block(error);
+    for (const reject of this.waitingWrites) reject(error);
+    this.waitingWrites.clear();
+  }
+
   resume(): void {
     this.paused = false;
     this.unavailable = undefined;
   }
 
   /** `expiresAfter` bounds a read's wait; a write has none. An aborted read
-   * leaves nothing behind. */
+   * leaves nothing behind. A `held` write is not given up by `blockAll`. */
   async waitUntilReady(
     initialize: () => Promise<void>,
-    readOnly: boolean,
+    admission: 'read' | 'write' | 'held',
     expiresAfter?: {
       timeoutMs: number;
       error: () => Error;
       signal?: AbortSignal;
     }
   ): Promise<void> {
+    const readOnly = admission === 'read';
     if (readOnly && this.unavailable) throw this.unavailable;
-    let rejectRead: ((error: Error) => void) | undefined;
+    let rejectWait: ((error: Error) => void) | undefined;
     const blocked = new Promise<never>((_resolve, reject) => {
-      rejectRead = reject;
+      rejectWait = reject;
       if (readOnly) this.waiting.add(reject);
+      if (admission === 'write') this.waitingWrites.add(reject);
     });
     const bound = readOnly ? expiresAfter : undefined;
     const end = () => {
-      if (bound) rejectRead?.(bound.error());
+      if (bound) rejectWait?.(bound.error());
     };
     const stopTimeout = bound && visibleTimeout(end, bound.timeoutMs);
     bound?.signal?.addEventListener('abort', end, { once: true });
@@ -117,7 +127,10 @@ export class CacheReadAvailability {
     } finally {
       stopTimeout?.();
       bound?.signal?.removeEventListener('abort', end);
-      if (rejectRead) this.waiting.delete(rejectRead);
+      if (rejectWait) {
+        this.waiting.delete(rejectWait);
+        this.waitingWrites.delete(rejectWait);
+      }
     }
   }
 }

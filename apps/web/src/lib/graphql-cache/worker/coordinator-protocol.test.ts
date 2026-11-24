@@ -204,6 +204,7 @@ describe('coordinator runtime protocol', () => {
       ...version,
       kind: 'cache-unavailable',
       reason: 'another app version holds the database',
+      unavailableReason: 'files-busy',
     };
     const superseded = {
       ...version,

@@ -7,7 +7,7 @@ export const ENGINE_DATABASE_OPEN_TIMEOUT_MS = 20_000;
 /** Delays between attempts to take a busy database owner lock. The engine
  * never queues for it: a handoff between owners of one build frees it within
  * milliseconds, and after these ~10s the engine gives up without touching
- * storage, so pages use the network until they reload.
+ * storage, so pages use the network while the coordinator tries again.
  */
 export const OWNER_LOCK_RETRY_DELAYS_MS: readonly number[] = [
   25, 50, 100, 200, 400, 800, 1_600, 3_200, 3_200,
@@ -29,8 +29,3 @@ export const COORDINATOR_CONNECT_RETRY_DELAYS_MS: readonly number[] = [
 ];
 export const COORDINATOR_CONNECT_ATTEMPTS =
   COORDINATOR_CONNECT_RETRY_DELAYS_MS.length + 1;
-
-/** Only the live coordinator can prove that every failed attempt stayed before
- * the open grant. A missing progress message is not proof of untouched storage.
- */
-export class CacheBootstrapExhaustedError extends Error {}

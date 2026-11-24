@@ -144,8 +144,12 @@ export interface CacheHost {
   readonly liveQueries?: boolean;
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
-  /** True for the storage-free fallback when browser cache APIs are unsupported. */
+  /** True for the storage-free fallback when browser cache APIs are unsupported,
+   * and while `paused`. */
   readonly disabled?: boolean;
+  /** Nothing can open the database for now. The host keeps its subscriptions
+   * and serves again, without being replaced, once something can. */
+  readonly paused?: boolean;
 
   /** Returns the current revision of the active cache-engine generation. */
   currentRevision(): Promise<CacheRevision>;

@@ -2854,9 +2854,14 @@ describe('normalizedCacheExchange', () => {
     });
   });
 
-  it.each(['read', 'write'] as const)(
-    'recovers owner loss reported by a concurrent %s without another API request',
-    async (failureSource) => {
+  it.each([
+    ['read', 'owner-epoch-lost'],
+    ['write', 'owner-epoch-lost'],
+    ['read', 'owner-lock-unavailable'],
+    ['write', 'owner-lock-unavailable'],
+  ] as const)(
+    'recovers an engine lost to a concurrent %s (%s) without another API request',
+    async (failureSource, errorCode) => {
       const read = deferred<ReadResult>();
       const write = deferred<WriteResult>();
       host.readQuery = vi.fn(() => read.promise);
@@ -2871,7 +2876,7 @@ describe('normalizedCacheExchange', () => {
       expect(host.writeQuery).toHaveBeenCalledOnce();
 
       const ownerLost = Object.assign(new Error('old owner lost'), {
-        errorCode: 'owner-epoch-lost',
+        errorCode,
       });
       if (failureSource === 'read') {
         read.reject(ownerLost);
@@ -4488,6 +4493,39 @@ describe('normalizedCacheExchange', () => {
         expect(host.rollbacks).toHaveLength(0);
         expect(forwarded).toHaveLength(1);
         expect(host.commits).toMatchObject([{ transactionId: '1' }]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('drains again as soon as a paused host has an engine', async () => {
+      vi.useFakeTimers();
+      try {
+        let paused = false;
+        let ownerReady = () => {};
+        const pausing: CacheHost = Object.assign(
+          createRetirableCacheHost(host),
+          {
+            onOwnerReady(callback: () => void) {
+              ownerReady = callback;
+              return () => {};
+            },
+          }
+        );
+        Object.defineProperty(pausing, 'disabled', { get: () => paused });
+        const drained = vi.spyOn(pausing, 'currentRevision');
+        harness(pausing);
+        await vi.advanceTimersByTimeAsync(10);
+        expect(drained).toHaveBeenCalledOnce();
+
+        paused = true;
+        await vi.advanceTimersByTimeAsync(120_000);
+        expect(drained).toHaveBeenCalledOnce();
+
+        paused = false;
+        ownerReady();
+        await vi.advanceTimersByTimeAsync(10);
+        expect(drained).toHaveBeenCalledTimes(2);
       } finally {
         vi.useRealTimers();
       }

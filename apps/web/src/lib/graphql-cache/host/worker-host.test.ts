@@ -30,11 +30,10 @@ import {
 } from '../worker/coordinator-protocol';
 import { WorkerRestartedError } from '../worker/effect-worker-transport';
 import {
-  CacheBootstrapExhaustedError,
   COORDINATOR_CONNECT_ATTEMPTS,
   COORDINATOR_CONNECT_TIMEOUT_MS,
 } from '../worker/startup';
-import { CacheRequestTimeoutError } from './errors';
+import { CacheHostFailedError, CacheRequestTimeoutError } from './errors';
 import { CacheNavigationError } from './navigation-error';
 import {
   createWorkerCacheHost,
@@ -181,10 +180,9 @@ class FakePageAdapter {
 
   unavailable(
     reason: string,
-    superseded = false,
-    unavailableReason?: CacheUnavailableReason
+    unavailableReason: CacheUnavailableReason = 'owner-lock-timeout'
   ): void {
-    this.options.onCacheUnavailable?.(reason, superseded, unavailableReason);
+    this.options.onCacheUnavailable?.(reason, unavailableReason);
   }
 
   superseded(reason: string): void {
@@ -777,47 +775,25 @@ describe('createWorkerCacheHost', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it.each([
-    ['open-existing', true],
-    ['open-existing', false],
-    ['wipe-before-open', false],
-  ] as const)(
-    'requires coordinator proof to preserve a failed startup scope (%s, proof: %s)',
-    async (databaseAction, provenUntouched) => {
-      configureAdapter = (fake) => fake.ignoredKinds.add('init');
-      localStorage.setItem('graphql-cache:scope', 'scope-1');
-      const onInitializationError = vi.fn();
-      const host = createWorkerCacheHost({
-        scope: 'scope-1',
-        onInitializationError,
-      });
-      const rejected = expect(host.currentRevision()).rejects.toThrow(
-        'bootstrap attempts exhausted'
-      );
-      const adapter = requireAdapter();
-      await vi.waitFor(() => expect(adapter.requests).toHaveLength(1));
-      adapter.options.onStartupProgress?.({
-        coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
-        kind: 'engine-startup',
-        ownerEpoch: 1,
-        phase: 'loading-assets',
-        databaseAction,
-        timeoutMs: 60_000,
-      });
-      adapter.terminalError(
-        provenUntouched
-          ? new CacheBootstrapExhaustedError('bootstrap attempts exhausted')
-          : new Error('bootstrap attempts exhausted')
-      );
-      await rejected;
-      await vi.waitFor(() =>
-        expect(onInitializationError).toHaveBeenCalledOnce()
-      );
-      expect(localStorage.getItem('graphql-cache:scope')).toBe(
-        provenUntouched ? 'scope-1' : 'quarantine:scope-1'
-      );
-    }
-  );
+  it('keeps the scope, and says another host may follow, when startup fails', async () => {
+    configureAdapter = (fake) => fake.ignoredKinds.add('init');
+    localStorage.setItem('graphql-cache:scope', 'scope-1');
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    const failure = new CacheHostFailedError(new Error('worker script failed'));
+    const rejected = expect(host.currentRevision()).rejects.toEqual(failure);
+    const adapter = requireAdapter();
+    await vi.waitFor(() => expect(adapter.requests).toHaveLength(1));
+
+    adapter.terminalError(new Error('worker script failed'));
+
+    await rejected;
+    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(failure);
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
+  });
 
   it.each([false, true])(
     'pauses initialization during a blocked handoff without failing writes (replacement: %s)',
@@ -1927,13 +1903,16 @@ describe('createWorkerCacheHost', () => {
       expect.objectContaining({ message: 'OPFS initialization failed' })
     );
     expect(adapter.dispose).toHaveBeenCalledOnce();
-    expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
+    expect(adapter.dispose).toHaveBeenCalledWith({
+      graceful: false,
+      preserveDatabase: true,
+    });
     expect(vi.getTimerCount()).toBe(0);
     host.dispose();
     expect(adapter.dispose).toHaveBeenCalledOnce();
   });
 
-  it('terminal transport failure quarantines scope and rejects admitted mutations once', async () => {
+  it('a lost connection keeps the database and rejects admitted mutations once', async () => {
     configureAdapter = (fake) => {
       fake.ignoredKinds.add('enqueue-optimistic-mutation');
     };
@@ -1960,7 +1939,7 @@ describe('createWorkerCacheHost', () => {
     const mutationRejected = expect(mutation).rejects.toMatchObject({
       message: expect.stringContaining('coordinator MessagePort messageerror'),
       errorCode: 'admitted-enqueue-uncertain',
-      cause: transportError,
+      cause: new CacheHostFailedError(transportError),
     });
     await vi.waitFor(() =>
       expect(
@@ -1977,10 +1956,11 @@ describe('createWorkerCacheHost', () => {
 
     expect(onInitializationError).toHaveBeenCalledOnce();
     expect(adapter.dispose).toHaveBeenCalledOnce();
-    expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
-    expect(localStorage.getItem('graphql-cache:scope')).toBe(
-      'quarantine:scope-1'
-    );
+    expect(adapter.dispose).toHaveBeenCalledWith({
+      graceful: false,
+      preserveDatabase: true,
+    });
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
     expect(affected).not.toHaveBeenCalled();
     expect(
       adapter.requests.filter(
@@ -1992,20 +1972,36 @@ describe('createWorkerCacheHost', () => {
     );
   });
 
-  it('stops using the cache without quarantine when another context holds the database', async () => {
+  it('pauses while another context holds the database and serves again from a later engine', async () => {
     configureAdapter = (fake) => {
       fake.ignoredKinds.add('init');
     };
     localStorage.setItem('graphql-cache:scope', 'scope-1');
     const onInitializationError = vi.fn();
+    const onUnavailable = vi.fn();
+    const onAvailable = vi.fn();
     const host = createWorkerCacheHost({
       scope: 'scope-1',
       onInitializationError,
+      onUnavailable,
+      onAvailable,
     });
-    const read = host.readQuery({ query: 'query Q { q }' });
-    const unavailable = expect(read).rejects.toMatchObject({
-      errorCode: 'owner-lock-unavailable',
-    });
+    const generations = vi.fn();
+    host.onCacheGenerationChanged(generations);
+    const refused = Promise.all(
+      [
+        host.readQuery({ query: 'query Q { q }' }),
+        host.writeQuery({
+          generation: TEST_AUTHORITY_GENERATION,
+          query: 'query Q { q }',
+          data: { q: 1 },
+        }),
+      ].map((request) =>
+        expect(request).rejects.toMatchObject({
+          errorCode: 'owner-lock-unavailable',
+        })
+      )
+    );
     await vi.waitFor(() =>
       expect(requireAdapter().requests.map(({ kind }) => kind)).toContain(
         'init'
@@ -2015,13 +2011,13 @@ describe('createWorkerCacheHost', () => {
 
     adapter.unavailable(
       'cache database owner lock is held by another context',
-      false,
       'holder-kept'
     );
 
-    await unavailable;
+    await refused;
+    expect(host).toMatchObject({ disabled: true, paused: true });
     // The coordinator's reason reaches the page, to be logged.
-    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
+    expect(onUnavailable).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         name: 'CacheUnavailableError',
         errorCode: 'owner-lock-unavailable',
@@ -2029,18 +2025,106 @@ describe('createWorkerCacheHost', () => {
         phase: 'initialization',
       })
     );
-    expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
-    // Storage was never touched, so the scope stays reusable next load.
-    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
-    await expect(
-      host.readQuery({ query: 'query Q { q }' })
-    ).rejects.toMatchObject({ errorCode: 'owner-lock-unavailable' });
+    expect(adapter.dispose).not.toHaveBeenCalled();
+    expect(onInitializationError).not.toHaveBeenCalled();
+    const before = adapter.requests.length;
+    for (const request of [
+      () => host.readQuery({ query: 'query Q { q }' }),
+      () => host.clear(),
+      () => host.currentRevision(),
+    ])
+      await expect(request()).rejects.toMatchObject({
+        errorCode: 'owner-lock-unavailable',
+      });
+    expect(adapter.requests).toHaveLength(before);
     adapter.unavailable('duplicate notice');
-    expect(onInitializationError).toHaveBeenCalledOnce();
+    expect(onUnavailable).toHaveBeenCalledOnce();
+
+    // The engine that opens later answers the handshake the coordinator kept.
+    adapter.ignoredKinds.clear();
+    adapter.respond(
+      adapter.requests.find(({ kind }) => kind === 'init')?.id ?? -1,
+      null
+    );
+
+    await vi.waitFor(() => expect(onAvailable).toHaveBeenCalledOnce());
+    expect(host).toMatchObject({ disabled: false, paused: false });
+    await expect(host.readQuery({ query: 'query Q { q }' })).resolves.toEqual({
+      kind: 'miss',
+    });
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
+    host.dispose();
   });
 
-  it('retires a ready host once a request is refused because the database is unavailable', async () => {
-    localStorage.setItem('graphql-cache:scope', 'scope-1');
+  it('tells what an engine that opens after an outage did to the database only once it serves', async () => {
+    const onUnavailable = vi.fn();
+    const onAvailable = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onUnavailable,
+      onAvailable,
+    });
+    const order: string[] = [];
+    onAvailable.mockImplementation(() => order.push('available'));
+    host.onCacheGenerationChanged(({ storage }) => order.push(storage));
+    const affected = vi.fn();
+    host.onOpsAffected(affected);
+    await host.readQuery({ opKey: 7, query: 'query Seven { seven }' });
+    const adapter = requireAdapter();
+
+    adapter.unavailable('recovery fails', 'recovery-failed');
+    expect(onUnavailable).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        unavailableReason: 'recovery-failed',
+        phase: 'operation',
+      })
+    );
+    adapter.ignoredKinds.add('init');
+    adapter.replace(2, 'reset-corrupt');
+    await vi.waitFor(() => expect(adapter.requests.at(-1)?.kind).toBe('init'));
+    expect(order).toEqual([]);
+    expect(affected).not.toHaveBeenCalled();
+
+    adapter.respond(adapter.requests.at(-1)?.id ?? -1, null);
+
+    await vi.waitFor(() => expect(affected).toHaveBeenCalledWith([7]));
+    expect(order).toEqual(['available', 'reset']);
+    host.dispose();
+  });
+
+  it('holds the outcome of a mutation through an outage', async () => {
+    configureAdapter = (fake) => fake.ignoredKinds.add('init');
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const read = expect(
+      host.readQuery({ query: 'query Q { q }' })
+    ).rejects.toMatchObject({ errorCode: 'owner-lock-unavailable' });
+    await vi.waitFor(() => expect(requireAdapter().requests).toHaveLength(1));
+    const adapter = requireAdapter();
+    adapter.unavailable('another app version holds the database');
+    await read;
+
+    const settled = vi.fn();
+    const outcome = host
+      .rollbackOptimisticWrite(
+        '1',
+        { owner: 'runner', generation: '1' },
+        'refused by the server'
+      )
+      .then(settled, settled);
+    await Promise.resolve();
+    expect(settled).not.toHaveBeenCalled();
+    adapter.ignoredKinds.clear();
+    adapter.respond(adapter.requests[0]?.id ?? -1, null);
+
+    await outcome;
+    expect(adapter.requests.map(({ kind }) => kind)).toContain(
+      'rollback-optimistic-write'
+    );
+    expect(settled).toHaveBeenCalledWith(EMPTY_WRITE);
+    host.dispose();
+  });
+
+  it('keeps serving when one request is refused because the database is unavailable', async () => {
     const onInitializationError = vi.fn();
     const host = createWorkerCacheHost({
       scope: 'scope-1',
@@ -2155,36 +2239,33 @@ describe('createWorkerCacheHost', () => {
     ).rejects.toMatchObject({ errorCode: 'cache-superseded' });
   });
 
-  it('marks a host that registers after a newer build took over as superseded', async () => {
-    configureAdapter = (fake) => {
-      fake.ignoredKinds.add('init');
-    };
-    localStorage.setItem('graphql-cache:scope', 'scope-1');
+  it('asks the app to reload when its first handshake is refused for a newer build', async () => {
+    configureAdapter = (fake) => fake.ignoredKinds.add('init');
     const onInitializationError = vi.fn();
+    const onSuperseded = vi.fn();
     const host = createWorkerCacheHost({
       scope: 'scope-1',
       onInitializationError,
+      onSuperseded,
     });
-    const read = host.readQuery({ query: 'query Q { q }' });
-    const refused = expect(read).rejects.toMatchObject({
-      errorCode: 'cache-superseded',
-    });
-    await vi.waitFor(() =>
-      expect(requireAdapter().requests.map(({ kind }) => kind)).toContain(
-        'init'
-      )
-    );
+    const refused = expect(
+      host.readQuery({ query: 'query Q { q }' })
+    ).rejects.toMatchObject({ errorCode: 'cache-superseded' });
+    await vi.waitFor(() => expect(requireAdapter().requests).toHaveLength(1));
+    const adapter = requireAdapter();
+    const reason = 'a newer version of the app took over the local cache';
 
-    requireAdapter().unavailable(
-      'a newer version of the app took over the local cache',
-      true
-    );
+    adapter.reject(adapter.requests[0]?.id ?? -1, reason, 'cache-superseded');
+    adapter.superseded(reason);
 
     await refused;
+    expect(onSuperseded).toHaveBeenCalledOnce();
     expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ errorCode: 'cache-superseded' })
+      expect.objectContaining({
+        errorCode: 'cache-superseded',
+        phase: 'initialization',
+      })
     );
-    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
   });
 
   it('retires as superseded when a request is refused for a newer build', async () => {
@@ -2248,114 +2329,6 @@ describe('createWorkerCacheHost', () => {
     await mutationRejected;
     await readRejected;
     expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
-  });
-
-  it('quarantines transport scope before invoking the product failure callback', async () => {
-    let runLock!: () => Promise<void>;
-    vi.stubGlobal('navigator', {
-      locks: {
-        request: vi.fn(
-          <T>(
-            _name: string,
-            _options: LockOptions,
-            callback: (lock: Lock | null) => T | PromiseLike<T>
-          ) =>
-            new Promise<T>((resolve, reject) => {
-              runLock = async () => {
-                try {
-                  resolve(
-                    await callback({
-                      name: 'graphql-cache:scope-storage',
-                      mode: 'exclusive',
-                    } as Lock)
-                  );
-                } catch (error) {
-                  reject(error);
-                }
-              };
-            })
-        ),
-      },
-      storage: { getDirectory: vi.fn() },
-    });
-    localStorage.setItem('graphql-cache:scope', 'scope-1');
-    const callbackScopes: Array<string | null> = [];
-    const host = createWorkerCacheHost({
-      scope: 'scope-1',
-      onInitializationError: () => {
-        callbackScopes.push(localStorage.getItem('graphql-cache:scope'));
-      },
-    });
-    await host.clear();
-
-    requireAdapter().terminalError(new Error('transport failed'));
-    expect(callbackScopes).toEqual([]);
-    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
-    await runLock();
-    await vi.waitFor(() =>
-      expect(callbackScopes).toEqual(['quarantine:scope-1'])
-    );
-  });
-
-  it('converges same-scope failures and ignores stale or disposed host quarantine', async () => {
-    const adapters: FakePageAdapter[] = [];
-    adapterFactory.mockImplementation(
-      (adapterOptions: CacheCoordinatorPageAdapterOptions) => {
-        const fake = new FakePageAdapter(adapterOptions);
-        adapters.push(fake);
-        return fake as unknown as CacheCoordinatorPageAdapter;
-      }
-    );
-    localStorage.setItem('graphql-cache:scope', 'shared-old');
-    const firstError = vi.fn();
-    const secondError = vi.fn();
-    const first = createWorkerCacheHost({
-      scope: 'shared-old',
-      onInitializationError: firstError,
-    });
-    const second = createWorkerCacheHost({
-      scope: 'shared-old',
-      onInitializationError: secondError,
-    });
-    await Promise.all([first.clear(), second.clear()]);
-
-    adapters[0]?.terminalError(new Error('first tab transport failed'));
-    expect(localStorage.getItem('graphql-cache:scope')).toBe(
-      'quarantine:shared-old'
-    );
-    adapters[1]?.terminalError(new Error('second tab transport failed'));
-    expect(localStorage.getItem('graphql-cache:scope')).toBe(
-      'quarantine:shared-old'
-    );
-    await vi.waitFor(() => {
-      expect(firstError).toHaveBeenCalledOnce();
-      expect(secondError).toHaveBeenCalledOnce();
-    });
-
-    const staleError = vi.fn();
-    const stale = createWorkerCacheHost({
-      scope: 'shared-old',
-      onInitializationError: staleError,
-    });
-    await stale.clear();
-    localStorage.setItem('graphql-cache:scope', 'new-healthy-scope');
-    adapters[2]?.terminalError(new Error('late stale transport failed'));
-    expect(localStorage.getItem('graphql-cache:scope')).toBe(
-      'new-healthy-scope'
-    );
-
-    const disposedError = vi.fn();
-    const disposed = createWorkerCacheHost({
-      scope: 'shared-old',
-      onInitializationError: disposedError,
-    });
-    await disposed.clear();
-    disposed.dispose();
-    adapters[3]?.terminalError(new Error('late disposed callback'));
-    expect(localStorage.getItem('graphql-cache:scope')).toBe(
-      'new-healthy-scope'
-    );
-    expect(disposedError).not.toHaveBeenCalled();
   });
 
   it('reports a lazy adapter-construction failure without leaking a transport', async () => {
@@ -2509,7 +2482,7 @@ describe('createWorkerCacheHost', () => {
     );
   });
 
-  it('quarantines and reports transport failure during adapter retirement', async () => {
+  it('reports transport failure during adapter retirement and keeps the database', async () => {
     localStorage.setItem('graphql-cache:scope', 'scope-1');
     const onInitializationError = vi.fn();
     const host = createWorkerCacheHost({
@@ -2527,11 +2500,12 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
     adapter.terminalError(new Error('SharedWorker failed during retirement'));
 
-    expect(adapter.dispose).toHaveBeenNthCalledWith(2, { graceful: false });
+    expect(adapter.dispose).toHaveBeenNthCalledWith(2, {
+      graceful: false,
+      preserveDatabase: true,
+    });
     await vi.waitFor(() => {
-      expect(localStorage.getItem('graphql-cache:scope')).toBe(
-        'quarantine:scope-1'
-      );
+      expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
       expect(onInitializationError).toHaveBeenCalledOnce();
     });
     finishRetirement();
@@ -2608,9 +2582,7 @@ describe('createWorkerCacheHost', () => {
       errorCode: 'admitted-enqueue-uncertain',
     });
 
-    expect(localStorage.getItem('graphql-cache:scope')).toBe(
-      'quarantine:scope-1'
-    );
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
     expect(onInitializationError).toHaveBeenCalledOnce();
     finishDrain();
     await draining;

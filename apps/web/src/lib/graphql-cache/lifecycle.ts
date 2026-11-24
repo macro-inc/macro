@@ -195,7 +195,7 @@ export function replaceCacheWriteSession() {
       let host = records.retained?.host;
       // Only the retained physical owner can prove cleanup. Never substitute
       // another scope or treat a retired wrapper's no-op as a successful delete.
-      if (!host || host.disabled)
+      if (!host || (host.disabled && !host.paused))
         throw new Error('Contact cache repair unavailable');
       try {
         await host.deleteRecords([...records.keys]);
@@ -212,7 +212,8 @@ export function replaceCacheWriteSession() {
         // and its new physical owner for a later explicit retry.
         await host.deleteRecords([...records.keys]);
       }
-      if (host.disabled) throw new Error('Contact cache repair unavailable');
+      if (host.disabled && !host.paused)
+        throw new Error('Contact cache repair unavailable');
       forgetSessionRecords(owner);
     }
   });
