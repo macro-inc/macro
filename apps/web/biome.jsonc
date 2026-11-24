@@ -21,6 +21,7 @@
       "!src/lib/service-clients/service-storage/graphql/generated",
       // Specta output; native diagnostic_wire_types tests check exact drift.
       "!src/observability/generated",
+      "!src/lib/tauri/generated",
       "!src/lib/filesystem",
       "!packages/_app-mobile",
       "**/generated/tools",
