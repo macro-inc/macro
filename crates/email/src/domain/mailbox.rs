@@ -2,8 +2,8 @@
 
 use crate::domain::backfill_jobs::worker::is_unstorable_sqlstate;
 use email_api_client::domain::models::{
-    EmailApiError, MailFolder, MailFolderCatalog, MailboxChangePage, MailboxMessage, ProviderId,
-    RoundStart, StreamPosition, StreamToken,
+    EmailApiError, FolderRole, MailFolder, MailFolderCatalog, MailboxChangePage, MailboxMessage,
+    ProviderId, RoundStart, StreamPosition, StreamToken,
 };
 use live_pass::{FolderPass, LiveImportPass, StreamKind};
 use progress::{ImportCompleted, ImportTally};
@@ -971,6 +971,20 @@ const IMPORT_QUEUED_AHEAD: u32 = 200;
 /// How long such a folder waits before it checks again. A mailbox imports at
 /// most about 12 messages a second, so its two pages outlast the wait.
 const IMPORT_PACE_SECONDS: u32 = 10;
+
+/// How many seconds before the discovery that creates it a folder's first
+/// import round is due: Inbox first, then Sent, then every other folder, as
+/// the re-import's phases go. Graph lists folders alphabetically, and the
+/// rounds that read the import's first two pages stay ahead of the ones
+/// `IMPORT_QUEUED_AHEAD` paced behind them on every later trip, so without
+/// this an Archive or Deleted Items folder imports before the Inbox.
+pub(crate) fn import_round_lead_seconds(role: FolderRole) -> u32 {
+    match role {
+        FolderRole::Inbox => 2,
+        FolderRole::Sent => 1,
+        _ => 0,
+    }
+}
 
 /// How soon discovery looks again for a mailbox it found missing, and the
 /// longest it waits: the 12 h a working subscription waits for renewal.
