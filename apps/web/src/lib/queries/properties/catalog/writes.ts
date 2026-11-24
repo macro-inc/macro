@@ -151,28 +151,60 @@ const accountChanged = (when: string) =>
     'ACCOUNT_CHANGED'
   );
 
+/** What a write's wait depends on: its login, and the cache holding it. */
+type WaitScope = {
+  session: number;
+  /** The cache the write is queued on; omitted when none holds it. */
+  host?: CacheHost;
+  when: string;
+};
+
 /**
- * Waits for a queued write's commit, or rejects with `ACCOUNT_CHANGED` once
- * another login takes over from `session`: logout may retire the cache
- * before it reports the write, and the write is no longer this page's.
+ * Why a write's wait ended before its work did, if it did: another login took
+ * over, or the cache holding the write stopped (signed out, retired or
+ * replaced), which may never report it.
  */
-async function commitUnderLogin(
-  settlements: Settlements,
-  transactionId: string,
-  session: number
-): Promise<void> {
+function waitEnded({
+  session,
+  host,
+  when,
+}: WaitScope): CatalogMutationError | undefined {
+  if (queryAccountSession() !== session) return accountChanged(when);
+  if (host && getGraphqlSoupCacheHost() !== host)
+    return new CatalogMutationError(
+      `The cache stopped ${when}`,
+      'CACHE_STOPPED'
+    );
+  return undefined;
+}
+
+/**
+ * Waits for `work`, or rejects once the wait ended (`waitEnded`). Work
+ * that finished as the wait ended counts as ended too: its outcome belongs to
+ * the login or cache that is gone.
+ */
+async function whileWaitHolds<T>(
+  scope: WaitScope,
+  work: () => Promise<T>
+): Promise<T> {
+  const ended = () => waitEnded(scope);
   let stop = () => {};
-  const changed = new Promise<never>((_, reject) => {
+  const stopped = new Promise<never>((_, reject) => {
     createRoot((dispose) => {
       stop = dispose;
       createEffect(() => {
-        if (queryAccountSession() !== session)
-          reject(accountChanged('before the write was saved'));
+        const reason = ended();
+        if (reason) reject(reason);
       });
     });
   });
   try {
-    await Promise.race([settlements.waitForCommit(transactionId), changed]);
+    const value = await Promise.race([work(), stopped]);
+    const reason = ended();
+    if (reason) throw reason;
+    return value;
+  } catch (error: unknown) {
+    throw ended() ?? error;
   } finally {
     stop();
   }
@@ -182,11 +214,11 @@ async function commitUnderLogin(
 async function observeCommit(
   settlements: Settlements,
   transactionId: string,
-  session: number,
+  scope: WaitScope,
   options: SettleOptions
 ): Promise<void> {
   try {
-    await commitUnderLogin(settlements, transactionId, session);
+    await whileWaitHolds(scope, () => settlements.waitForCommit(transactionId));
     options.onCommit?.();
   } catch (error: unknown) {
     // The old login's write is not this page's to report.
@@ -226,28 +258,38 @@ async function settle<TData, TVariables extends AnyVariables>(
     ? { [TRACE_PARENT_CONTEXT_KEY]: trace }
     : {};
   const session = options.session ?? queryAccountSession();
-  if (options.serverAnswered && !onlineManager.isOnline()) await whenOnline();
+  if (options.serverAnswered && !onlineManager.isOnline())
+    await whileWaitHolds(
+      { session, when: 'before the write was sent' },
+      whenOnline
+    );
   if (queryAccountSession() !== session)
     throw new CatalogMutationError(
       'Another login took over before the write was sent',
       'ACCOUNT_CHANGED'
     );
-  const settlements = observePropertyMutationSettlements(
-    getGraphqlSoupCacheHost()
-  );
+  const host = getGraphqlSoupCacheHost();
+  const settlements = observePropertyMutationSettlements(host);
+  const saving: WaitScope = {
+    session,
+    host,
+    when: 'before the write was saved',
+  };
   let observing = false;
   try {
     const result = await trace.run(() => send(context));
     const disposition = optimisticMutationDispositionOf(result);
     if (disposition?.kind === 'queued') {
       if (options.waitForCommit) {
-        await commitUnderLogin(settlements, disposition.transactionId, session);
+        await whileWaitHolds(saving, () =>
+          settlements.waitForCommit(disposition.transactionId)
+        );
         options.onCommit?.();
         return { kind: 'committed', data: undefined, waited: true };
       }
       observing = true;
       fireAndForget(
-        observeCommit(settlements, disposition.transactionId, session, options),
+        observeCommit(settlements, disposition.transactionId, saving, options),
         'property-catalog'
       );
       return { kind: 'queued' };
