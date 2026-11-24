@@ -55,6 +55,24 @@ fn subject_matches_a_word_or_a_quoted_phrase() {
 }
 
 #[test]
+fn an_operator_takes_a_phrase_in_curly_quotes() {
+    let query = read("subject:“team lunch” -“weekly plan” from:„ana lopez“");
+
+    assert_eq!(
+        query,
+        read(r#"subject:"team lunch" -"weekly plan" from:"ana lopez""#)
+    );
+    assert_eq!(
+        query.filters.text_matches,
+        [
+            text(EmailTextPart::Subject, "team lunch", false),
+            text(EmailTextPart::From, "ana lopez", false),
+        ]
+    );
+    assert_eq!(query.excluded_words, ["weekly plan"]);
+}
+
+#[test]
 fn people_operators_name_their_part_of_the_message() {
     let query = read("from:ana to:bo cc:cy bcc:di@example.com");
 
