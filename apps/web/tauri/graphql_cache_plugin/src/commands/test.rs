@@ -504,6 +504,26 @@ fn a_native_open_reports_what_it_did_to_the_cache() {
 }
 
 #[test]
+fn a_file_replaced_as_it_opens_reports_its_replacement() {
+    pollster::block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let written = labelled("String");
+        let (storage, _, _) = super::open_cache(dir.path(), "scope-1", &written).unwrap();
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, written.clone());
+        write_label(&handle).await;
+        handle.shutdown().unwrap();
+
+        // Another scope's file cannot be opened, so the open replaces it.
+        let (storage, adoption, report) =
+            super::open_cache(dir.path(), "scope-2", &written).unwrap();
+        assert!(report.physical_reset);
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, adoption.schema);
+        assert!(!label_hits(&handle).await);
+        handle.shutdown().unwrap();
+    });
+}
+
+#[test]
 fn a_cache_that_cannot_adopt_the_schema_in_place_reports_its_replacement() {
     pollster::block_on(async {
         let dir = tempfile::tempdir().unwrap();

@@ -209,7 +209,7 @@ Natively, `open_cache` adopts the bundle's schema on every open. A tier that
 finds the file corrupt or leaves a write's outcome uncertain, or a cache that
 cannot even reset, is replaced and opened empty; `graphql_cache.native.adopt_schema`
 records the tier, counts and duration on the device, and the init command
-returns them, with whether the file was replaced, for the webview to record as
+returns them, with whether the open or the adoption replaced the file, for the webview to record as
 `graphql_cache.schema_init` (`cache.backend: turso-native`). The browser worker
 adopts its built-in schema on open and records the same as `cache.schema.*`
 attributes on its `graphql_cache.schema_init` event. Types deletes the changed types' rows, so it costs about in proportion

@@ -203,7 +203,8 @@ pub struct SchemaInit {
     pub retired_overlays: u64,
     /// How long adopting the schema took.
     pub adopt_ms: u64,
-    /// The file was replaced because the schema could not be adopted in it.
+    /// The file was replaced: it could not be opened, or the schema could
+    /// not be adopted in it.
     pub physical_reset: bool,
     /// The storage version an older build left the file at, when it was
     /// upgraded in place.
@@ -235,25 +236,26 @@ pub(crate) fn open_cache(
         Err(_) => Unrecorded::Unreadable,
     };
     let database = TursoFileDatabase::new(dir.join("cache.turso")).map_err(|e| e.to_string())?;
-    let storage = open_storage(&database, scope)?;
+    let (storage, replaced) = open_storage(&database, scope)?;
     let upgraded_from = storage.upgraded_from_storage_version();
     let opened = match adopt_schema(&storage, incoming, unrecorded) {
         Ok((adoption, report)) => (
             storage,
             adoption,
             SchemaInit {
+                physical_reset: replaced,
                 storage_upgraded_from: upgraded_from,
                 ..report
             },
         ),
         Err(error) if error.requires_physical_reset() => {
+            storage.try_close().map_err(|e| e.to_string())?;
+            database.physical_reset().map_err(|e| e.to_string())?;
             tracing::warn!(
                 graphql_cache.physical_reset_reason = ?error.physical_reset_reason(),
                 "graphql cache replaced its file: the schema could not be adopted in it"
             );
-            storage.try_close().map_err(|e| e.to_string())?;
-            database.physical_reset().map_err(|e| e.to_string())?;
-            let storage = open_storage(&database, scope)?;
+            let (storage, _) = open_storage(&database, scope)?;
             let (adoption, report) =
                 adopt_schema(&storage, incoming, Unrecorded::Guess).map_err(|e| e.to_string())?;
             (
@@ -278,7 +280,8 @@ pub(crate) fn open_cache(
 }
 
 /// Opens the cache file for `scope`, replacing it when it is incompatible or
-/// uncertain. A file an older build wrote at an earlier storage version is
+/// uncertain, and says whether it did; a replacement logs why. A file an
+/// older build wrote at an earlier storage version is
 /// upgraded in place first; the span records the version it came from, and an
 /// event reports it with the open's duration, since the native subscriber
 /// prints events, not span fields recorded late.
@@ -288,9 +291,20 @@ pub(crate) fn open_cache(
     fields(graphql_cache.storage.upgraded_from = tracing::field::Empty),
     err
 )]
-fn open_storage(database: &TursoFileDatabase, scope: &str) -> Result<TursoStorage, String> {
+fn open_storage(database: &TursoFileDatabase, scope: &str) -> Result<(TursoStorage, bool), String> {
     let started = std::time::Instant::now();
-    let storage = database.open_or_reset(scope).map_err(|e| e.to_string())?;
+    let (storage, replaced) = match database.open(scope) {
+        Ok(storage) => (storage, false),
+        Err(error) if error.requires_physical_reset() => {
+            database.physical_reset().map_err(|e| e.to_string())?;
+            tracing::warn!(
+                graphql_cache.physical_reset_reason = ?error.physical_reset_reason(),
+                "graphql cache replaced a file it could not open"
+            );
+            (database.open(scope).map_err(|e| e.to_string())?, true)
+        }
+        Err(error) => return Err(error.to_string()),
+    };
     if let Some(version) = storage.upgraded_from_storage_version() {
         tracing::Span::current().record("graphql_cache.storage.upgraded_from", version);
         tracing::info!(
@@ -300,7 +314,7 @@ fn open_storage(database: &TursoFileDatabase, scope: &str) -> Result<TursoStorag
             "graphql cache storage upgraded in place"
         );
     }
-    Ok(storage)
+    Ok((storage, replaced))
 }
 
 /// Brings an opened cache to `incoming` (`TursoStorage::adopt_schema`),
