@@ -1,3 +1,4 @@
+import { composerStorageGeneration } from '@core/auth/clear-composer-storage';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -16,26 +17,16 @@ import {
 import type { InputHandle, InputSnapshot } from '../Input';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import { buildPostMessageSendPayload } from '../Input/message-payload';
-import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { createUncertainSends } from '../Input/utils/uncertain-sends';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import type { FocusRequest } from './focus-request';
-import {
-  registerReplyInput,
-  replyDraftKeys,
-  restoreFailedReply,
-} from './reply-drafts';
+import { replyDraftKeys, restoreFailedReply } from './reply-drafts';
 
 type ThreadReplyChannelInputProps = {
   parent: MessageParent;
   threadId: string;
   replyInputState: Accessor<InputSnapshot | undefined>;
   setReplyInputState: Setter<InputSnapshot | undefined>;
-  /**
-   * Shared handle slot from `ThreadState`; used to restore a failed send's
-   * draft into whichever reply input is mounted by then.
-   */
-  replyInputHandle?: Accessor<InputHandle | undefined>;
   setReplyInputHandle?: Setter<InputHandle | undefined>;
   focusRequest?: FocusRequest;
   /** Exit reply mode. Called on close and (immediately) on send. */
@@ -118,12 +109,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
     focusIfRequested();
   });
 
-  let unregister: (() => void) | undefined;
-  onCleanup(() => unregister?.());
-
   const onReady = (handle: InputHandle) => {
-    unregister?.();
-    unregister = registerReplyInput(draftKeys(), handle);
     setLocalReplyInputHandle(handle);
     props.setReplyInputHandle?.(handle);
     props.onReady?.(handle);
@@ -156,13 +142,6 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
       onChange={(snapshot) => {
         REPORTED_SNAPSHOTS.add(snapshot);
         props.setReplyInputState(snapshot);
-        const senderId = userId();
-        if (!senderId || !hasSendableInputContent(snapshot)) return;
-        const { message } = buildPostMessageSendPayload({
-          snapshot,
-          threadId: props.threadId,
-        });
-        UNCERTAIN_REPLIES.drafted({ senderId, parent: props.parent, message });
       }}
       onStartTyping={() =>
         typingMutation.mutate({
@@ -198,10 +177,12 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         const uncertainKey = {
           senderId,
           parent: props.parent,
+          threadId: props.threadId,
           message: payload.message,
         };
         const optimisticId = UNCERTAIN_REPLIES.idFor(uncertainKey);
         const keys = draftKeys();
+        const generation = composerStorageGeneration();
         // Awaited, not `mutate`'s per-call `onError`: the input unmounts as
         // it sends, and TanStack drops a call's callbacks once its observer
         // is gone, which would lose the draft.
@@ -217,7 +198,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
             (error) => {
               // Through the thread's stored draft, not this view's state: the
               // view may be gone, and another may hold a newer draft.
-              if (!restoreFailedReply(keys, snapshot)) return;
+              if (!restoreFailedReply(keys, snapshot, generation)) return;
               // Sent again unchanged, a reply that may have arrived keeps its id.
               UNCERTAIN_REPLIES.restored(uncertainKey, optimisticId, error);
             }

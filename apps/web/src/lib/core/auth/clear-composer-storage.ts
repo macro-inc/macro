@@ -1,7 +1,18 @@
 export const COMPOSER_STORAGE_CLEARED = 'macro:composer-storage-cleared';
 
+let generation = 0;
+
+/**
+ * Changes each time composer storage is cleared: work that will write a
+ * draft later reads it first, and writes only while it is unchanged.
+ */
+export function composerStorageGeneration(): number {
+  return generation;
+}
+
 /** Remove saved composer text and attachment references on explicit logout. */
 export function clearComposerStorage(): void {
+  generation += 1;
   // Retire mounted autosavers before removing data; auth teardown can await I/O.
   window.dispatchEvent(new Event(COMPOSER_STORAGE_CLEARED));
   for (let index = localStorage.length - 1; index >= 0; index--) {

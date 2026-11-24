@@ -8,12 +8,18 @@ const unknown = new ThrownResultError([
 const refused = new ThrownResultError([
   { code: 'NOT_SENT', message: 'not sent' },
 ]);
-const send = (content: string, to = 'a', from = 'ada') => ({
+type Mention = { entity_type: string; entity_id: string };
+const send = (
+  content: string,
+  to = 'a',
+  from = 'ada',
+  mentions: Mention[] = []
+) => ({
   senderId: from,
   channelId: to,
   message: {
     content,
-    mentions: [],
+    mentions,
     attachments: [{ entity_type: 'document', entity_id: 'doc-1' }],
   },
 });
@@ -53,33 +59,40 @@ describe('createUncertainSends', () => {
     expect(sends.idFor(send('hello'))).not.toBe(first);
   });
 
-  it('keeps each restored draft’s id when another uncertain send follows', () => {
+  it('gives the same words a new id once another message went to that place', () => {
+    const sends = ids();
+    const first = sends.idFor(send('Thanks'));
+    sends.restored(send('Thanks'), first, unknown);
+    sends.idFor(send('Something else'));
+    expect(sends.idFor(send('Thanks'))).not.toBe(first);
+  });
+
+  it('keeps the id of whichever restored draft is sent first, and only that one', () => {
     const sends = ids();
     const a = sends.idFor(send('first'));
     const b = sends.idFor(send('second'));
     sends.restored(send('first'), a, unknown);
     sends.restored(send('second'), b, unknown);
-    expect(sends.idFor(send('first'))).toBe(a);
     expect(sends.idFor(send('second'))).toBe(b);
+    expect(sends.idFor(send('first'))).not.toBe(a);
   });
 
-  it('gives a new id once the restored draft was edited, even back to the same words', () => {
+  it('keeps a restored draft’s id while messages go to other places', () => {
     const sends = ids();
     const first = sends.idFor(send('Thanks'));
     sends.restored(send('Thanks'), first, unknown);
-    sends.drafted(send('Thanks'));
-    sends.drafted(send('T'));
-    sends.drafted(send('Thanks'));
-    expect(sends.idFor(send('Thanks'))).not.toBe(first);
-  });
-
-  it('keeps a restored draft’s id while another place’s composer changes', () => {
-    const sends = ids();
-    const first = sends.idFor(send('Thanks'));
-    sends.restored(send('Thanks'), first, unknown);
-    sends.drafted(send('something else', 'b'));
-    sends.drafted(send('something else', 'a', 'ben'));
+    sends.idFor(send('something else', 'b'));
+    sends.idFor(send('something else', 'a', 'ben'));
     expect(sends.idFor(send('Thanks'))).toBe(first);
+  });
+
+  it('keeps the id of a draft whose mentions came back in another order', () => {
+    const sends = ids();
+    const ada = { entity_type: 'user', entity_id: 'ada' };
+    const ben = { entity_type: 'user', entity_id: 'ben' };
+    const first = sends.idFor(send('@ada @ben', 'a', 'ada', [ada, ben]));
+    sends.restored(send('@ada @ben', 'a', 'ada', [ada, ben]), first, unknown);
+    expect(sends.idFor(send('@ada @ben', 'a', 'ada', [ben, ada]))).toBe(first);
   });
 
   it('reuses an uncertain id once', () => {

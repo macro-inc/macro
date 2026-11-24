@@ -120,6 +120,7 @@ import {
 } from '../queries/system-activity';
 import { SystemActivity } from '../SystemActivity';
 import { ChannelThread } from '../Thread';
+import { readReplyDraft, replyDraftKeys } from '../Thread/reply-drafts';
 import { ThreadRow } from '../Thread/ThreadRow';
 import { ThreadTypingIndicator } from '../Thread/ThreadTypingIndicator';
 import { buildReplyTargetValue } from '../Thread/utils/message-actions';
@@ -551,7 +552,12 @@ export function Channel(props: ChannelProps) {
   ) => {
     const threadId = message.thread_id ?? message.id;
     const state = threadManager.getOrCreateThreadState(threadId);
-    const beforeSnapshot = state.replyInputState();
+    // A closed composer leaves its draft in storage only.
+    const beforeSnapshot =
+      state.replyInputState() ??
+      readReplyDraft(
+        replyDraftKeys({ type: 'channel', id: props.channelId }, threadId)
+      );
     const nextSnapshot: InputSnapshot = {
       value: buildReplyTargetValue({
         channelId: props.channelId,
@@ -790,14 +796,6 @@ export function Channel(props: ChannelProps) {
   });
 
   const uncertainSends = createUncertainSends(() => newMessageId());
-
-  const onDraftChange = (snapshot: InputSnapshot) => {
-    setChannelInputSnapshot(snapshot);
-    const senderId = userId();
-    if (!senderId || !hasSendableInputContent(snapshot)) return;
-    const { message } = buildPostMessageSendPayload({ snapshot });
-    uncertainSends.drafted({ senderId, channelId: props.channelId, message });
-  };
 
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const channelId = props.channelId;
@@ -1154,9 +1152,6 @@ export function Channel(props: ChannelProps) {
                                               setReplyInputEl={
                                                 state.setReplyInputEl
                                               }
-                                              replyInputHandle={
-                                                state.replyInputHandle
-                                              }
                                               setReplyInputHandle={
                                                 state.setReplyInputHandle
                                               }
@@ -1376,7 +1371,9 @@ export function Channel(props: ChannelProps) {
                                   );
                                   setChannelInputHandle(handle);
                                 }}
-                                onChange={onDraftChange}
+                                onChange={(snapshot) => {
+                                  setChannelInputSnapshot(snapshot);
+                                }}
                                 onSend={onSend}
                                 onStartCall={
                                   ENABLE_CALLS && !channelCall.isInThisChannel()

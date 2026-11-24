@@ -75,7 +75,6 @@ export function UnifiedReplyInput(props: {
         threadId={props.threadId}
         replyInputState={props.state.replyInputState}
         setReplyInputState={props.state.setReplyInputState}
-        replyInputHandle={props.state.replyInputHandle}
         setReplyInputHandle={props.state.setReplyInputHandle}
         focusRequest={props.state.replyInputFocusRequest}
         host="unified"

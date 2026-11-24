@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { clearComposerStorage } from '@core/auth/clear-composer-storage';
 import type { MentionsOptions } from '@core/component/LexicalMarkdown/builder/types';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
@@ -379,7 +380,9 @@ vi.mock('@queries/messages/typing', () => ({
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import type { MessageParent } from '@service-storage/messages';
 import { codexMentionUser, cursorMentionUser } from '../../macroAi';
+import { readReplyDraft, replyDraftKeys } from '../../Thread/reply-drafts';
 import { ThreadReplyChannelInput } from '../../Thread/ThreadReplyChannelInput';
+import { buildReplyTargetValue } from '../../Thread/utils/message-actions';
 import { createInputAttachmentTracker } from '../attachment-tracker';
 import { ChannelInput } from '../ChannelInput';
 import { DropOverlay } from '../DropOverlay';
@@ -975,6 +978,8 @@ describe('Thread reply sends', () => {
       handle: undefined as InputHandle | undefined,
       open,
       setOpen,
+      state,
+      setState,
     };
     const view = () => (
       <Show when={open()}>
@@ -1074,29 +1079,135 @@ describe('Thread reply sends', () => {
 
     expect(latest?.reply.handle?.snapshot().value).toBe('reply before leaving');
   });
+  /** Sends `text` on `reply`, fails it as of unknown delivery, and reopens. */
+  async function failAndReopen(
+    reply: ReturnType<typeof mountReply>['reply'],
+    text: string
+  ) {
+    const fail = holdNextSend();
+    editorMocks.emitChange?.(text);
+    expect(await reply.handle?.send()).toBe(true);
+    fail(unknown);
+    await nextFrame();
+    reply.setOpen(true);
+    await nextFrame();
+  }
 
-  it('sends a fresh reply under a new id after the restored draft was edited', async () => {
+  it('sends the same words under a new id once another reply went to the thread', async () => {
     const { reply, view } = mountReply(
       { type: 'channel', id: 'channel-5' },
       'root-5'
     );
     render(view);
     await nextFrame();
-    const fail = holdNextSend();
-    editorMocks.emitChange?.('Thanks');
-    await reply.handle?.send();
-    fail(unknown);
-    await nextFrame();
-    reply.setOpen(true);
-    await nextFrame();
+    await failAndReopen(reply, 'Thanks');
     expect(reply.handle?.snapshot().value).toBe('Thanks');
 
-    // Discarded by typing over it, then the same words written again.
-    editorMocks.emitChange?.('T');
+    editorMocks.emitChange?.('Something else');
+    await reply.handle?.send();
+    reply.setOpen(true);
+    await nextFrame();
     editorMocks.emitChange?.('Thanks');
     await reply.handle?.send();
 
-    expect(sentIds()).toHaveLength(2);
-    expect(sentIds()[1]).not.toBe(sentIds()[0]);
+    expect(sentIds()).toHaveLength(3);
+    expect(new Set(sentIds()).size).toBe(3);
+  });
+
+  it('keeps a reply’s id while a draft is typed in another thread of the channel', async () => {
+    const parent = { type: 'channel', id: 'channel-6' } as const;
+    const first = mountReply(parent, 'root-6a');
+    const other = mountReply(parent, 'root-6b');
+    other.reply.setOpen(false);
+    render(() => (
+      <>
+        {first.view()}
+        {other.view()}
+      </>
+    ));
+    await nextFrame();
+    const fail = holdNextSend();
+    editorMocks.emitChange?.('first reply');
+    expect(await first.reply.handle?.send()).toBe(true);
+    fail(unknown);
+    await nextFrame();
+
+    other.reply.setOpen(true);
+    await nextFrame();
+    editorMocks.emitChange?.('draft in another thread');
+    first.reply.setOpen(true);
+    await nextFrame();
+
+    expect(first.reply.handle?.snapshot().value).toBe('first reply');
+    expect(await first.reply.handle?.send()).toBe(true);
+    expect(sentIds()[1]).toBe(sentIds()[0]);
+  });
+
+  it('keeps an unchanged reply’s id with its attachment', async () => {
+    const parent = { type: 'channel', id: 'channel-7' } as const;
+    localStorage.setItem(
+      replyDraftKeys(parent, 'root-7').attachments,
+      JSON.stringify([
+        { id: 'attachment-a', kind: 'document', name: 'notes.md' },
+      ])
+    );
+    const { reply, view } = mountReply(parent, 'root-7');
+    render(view);
+    await nextFrame();
+    await failAndReopen(reply, 'See attachment');
+
+    expect(reply.handle?.snapshot()).toMatchObject({
+      value: 'See attachment',
+      attachments: [{ id: 'attachment-a' }],
+    });
+    expect(await reply.handle?.send()).toBe(true);
+    expect(sentIds()[1]).toBe(sentIds()[0]);
+  });
+
+  it('writes no draft back once composer storage was cleared at sign-out', async () => {
+    const parent = { type: 'channel', id: 'channel-8' } as const;
+    const { reply, view } = mountReply(parent, 'root-8');
+    render(view);
+    await nextFrame();
+    const fail = holdNextSend();
+    editorMocks.emitChange?.('private reply');
+    expect(await reply.handle?.send()).toBe(true);
+    clearComposerStorage();
+    fail(unknown);
+    await nextFrame();
+
+    expect(
+      Object.keys(localStorage).filter((key) => key.includes('channel-8'))
+    ).toEqual([]);
+  });
+
+  it('quotes into a restored reply whose composer is closed', async () => {
+    const parent = { type: 'channel', id: 'channel-9' } as const;
+    const { reply, view } = mountReply(parent, 'root-9');
+    render(view);
+    await nextFrame();
+    const fail = holdNextSend();
+    editorMocks.emitChange?.('The reply that failed');
+    expect(await reply.handle?.send()).toBe(true);
+    fail(unknown);
+    await nextFrame();
+
+    // As the channel's quote action builds it, before the composer opens.
+    const before =
+      reply.state() ?? readReplyDraft(replyDraftKeys(parent, 'root-9'));
+    expect(before?.value).toBe('The reply that failed');
+    const value = buildReplyTargetValue({
+      channelId: parent.id,
+      message: {
+        id: 'reply-to-quote',
+        thread_id: 'root-9',
+        sender_id: 'macro|someone@example.test',
+        content: 'Quoted text',
+      },
+      renderedText: 'Quoted text',
+      existingValue: before?.value,
+    });
+    expect(value).toContain('reply-to-quote');
+    expect(value).toContain('The reply that failed');
   });
 });
