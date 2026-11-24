@@ -3719,6 +3719,118 @@ export type Granularity = 'day' | 'week' | 'month' | 'summary';
 /**
  * What the tool is asked to do.
  */
+export type FusionAction = 'browse' | 'import' | 'sync';
+/**
+ * The tool's answer.
+ */
+export type ImportFromFusionResponse =
+  | {
+      /**
+       * What is there.
+       */
+      entries: BrowseEntry[];
+      /**
+       * The `cursor` of the folder's next page, when there is one.
+       */
+      nextCursor?: string | null;
+      /**
+       * What to do next.
+       */
+      message: string;
+      action: 'browse';
+    }
+  | {
+      report: SyncReport;
+      /**
+       * What to do next.
+       */
+      message: string;
+      action: 'report';
+    };
+/**
+ * One thing a browse shows.
+ */
+export type BrowseEntry =
+  | {
+      hubId: HubId;
+      /**
+       * Its name.
+       */
+      name: string;
+      kind: 'hub';
+    }
+  | {
+      projectId: ApsProjectId;
+      /**
+       * Its name.
+       */
+      name: string;
+      kind: 'project';
+    }
+  | {
+      folderId: ApsFolderId;
+      /**
+       * Its name.
+       */
+      name: string;
+      kind: 'folder';
+    }
+  | {
+      itemId: ItemId;
+      /**
+       * Its name.
+       */
+      name: string;
+      /**
+       * Its latest version number.
+       */
+      latestVersion?: number | null;
+      /**
+       * Where it already is in Macro, when the user imported it.
+       */
+      tracked?: TrackedView | null;
+      kind: 'item';
+    };
+/**
+ * An APS hub (a Fusion team or personal hub), e.g. `a.ZXhhbXBsZTp3aXAx`.
+ */
+export type HubId = string;
+/**
+ * An APS project, e.g. `a.ZXhhbXBsZTp3aXAx...` or `b.c2960674-...`.
+ */
+export type ApsProjectId = string;
+/**
+ * An APS folder URN, e.g. `urn:adsk.wipprod:fs.folder:co.0J4p...`.
+ */
+export type ApsFolderId = string;
+/**
+ * An APS item: the lineage URN every version of one design or file shares,
+ * e.g. `urn:adsk.wipprod:dm.lineage:hC6k4hndRWaeIVhIjvHu8w`.
+ */
+export type ItemId = string;
+/**
+ * What an import or sync did to one item.
+ */
+export type ItemStatus =
+  | 'synced'
+  | 'busy'
+  | 'document_gone'
+  | 'not_reached'
+  | 'not_found'
+  | 'not_tracked'
+  | 'rate_limited'
+  | 'failed';
+/**
+ * What became of one APS version.
+ */
+export type VersionOutcome =
+  | 'imported'
+  | 'unavailable'
+  | 'too_large'
+  | 'unsupported_format';
+/**
+ * What the tool is asked to do.
+ */
 export type NotionImportAction = 'plan' | 'status' | 'cancel';
 /**
  * Who a Notion workspace import shares what it writes with.
@@ -11187,6 +11299,106 @@ export interface ToolAddedOptions {
    * The labels added.
    */
   labels: string[];
+}
+/**
+ * Import the user's Autodesk Fusion designs into Macro, with every version. Each Autodesk item (a design or file) becomes one Macro file document, and each of its Autodesk versions one version of that document, oldest first. It only reads Autodesk; it never changes anything there. `browse` walks the user's Autodesk data: with no ids it lists hubs; with `hubId` that hub's projects; with `hubId` and `projectId` the project's top folders; with `projectId` and `folderId` (and `cursor` for the next page) a folder's subfolders and items. Items already imported show their `documentId`. Show the user what is there and ask which designs to import. `import` takes `projectId` and 1 to 20 `itemIds` of that project. `sync` imports only versions not yet in Macro, for the `itemIds` given or for all the user's imported items. Each call downloads at most 10 versions and covers at most 50 items: while a report has a `nextCursor`, call `sync` again with it as `cursor`; while it has `remaining` or `notReached` above 0 for named items, call `sync` again with them. Never recreate these files with other tools.
+ */
+export interface ImportFromFusion {
+  action: FusionAction;
+  /**
+   * For `browse`: the hub to list projects of, or the hub of `projectId`.
+   */
+  hubId?: string | null;
+  /**
+   * For `browse` and `import`: the project.
+   */
+  projectId?: string | null;
+  /**
+   * For `browse`: the folder to list.
+   */
+  folderId?: string | null;
+  /**
+   * For `browse` of a folder, or `sync` of all imported items: where to
+   * continue, the previous answer's `nextCursor`.
+   */
+  cursor?: string | null;
+  /**
+   * For `import`: 1 to 20 items of `projectId`. For `sync`: the items to
+   * sync, or none for all imported items.
+   */
+  itemIds?: string[];
+}
+/**
+ * An item the user already imported, as a browse shows it.
+ */
+export interface TrackedView {
+  /**
+   * The Macro document, once it exists.
+   */
+  documentId?: string | null;
+  /**
+   * How many of its versions are in Macro.
+   */
+  importedVersions: number;
+}
+/**
+ * What an import or sync did.
+ */
+export interface SyncReport {
+  /**
+   * Each item, in the order asked.
+   */
+  items: ItemReport[];
+  /**
+   * Versions still to import across the items reached.
+   */
+  remaining: number;
+  /**
+   * Items the budget ran out before; `sync` reaches them next.
+   */
+  notReached: number;
+  /**
+   * For a sync of all items: where the next sync starts, while some
+   * items still have work or were not listed yet.
+   */
+  nextCursor?: ItemId | null;
+}
+/**
+ * What an import or sync did to one item.
+ */
+export interface ItemReport {
+  itemId: ItemId;
+  status: ItemStatus;
+  /**
+   * Its Macro document, once it exists.
+   */
+  documentId?: string | null;
+  /**
+   * Versions imported by this call.
+   */
+  importedNow: number;
+  /**
+   * Versions imported by earlier calls.
+   */
+  alreadyImported: number;
+  /**
+   * Versions that were not imported, and why.
+   */
+  skipped: SkippedVersion[];
+  /**
+   * Versions still to import; call `sync` again for them.
+   */
+  remaining: number;
+}
+/**
+ * A version that was not imported, and why.
+ */
+export interface SkippedVersion {
+  /**
+   * Its number.
+   */
+  versionNumber: number;
+  outcome: VersionOutcome;
 }
 /**
  * Import Jira Cloud into Macro: issues become tasks, and projects and epics become Macro projects. Plan reads all sites visible through the user's connected Jira account; no source writes are possible. First plan without sharing unless the user already chose. If sharing is required, ask team, personal, or AI; users without a team get a personal import. Present the plan immediately with PresentReview kind import, drafts [{source: jira}], even while it is running. Do not poll status or recreate plan items with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps completed copies.

@@ -243,6 +243,10 @@ type ToolParserMap = {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
   };
+  ImportFromFusion: {
+    call: types.ImportFromFusion;
+    response: types.ImportFromFusionResponse;
+  };
   ImportFromJira: {
     call: types.ImportFromJira;
     response: types.TrackerImportResponse;
@@ -822,6 +826,10 @@ const toolParserMap = {
   ImportCompaniesCsv: {
     call: schemas.ImportCompaniesCsv,
     response: schemas.ImportCompaniesCsvResponse,
+  },
+  ImportFromFusion: {
+    call: schemas.ImportFromFusion,
+    response: schemas.ImportFromFusionResponse,
   },
   ImportFromJira: {
     call: schemas.ImportFromJira,
@@ -1446,6 +1454,10 @@ type ToolDataMap = {
   ImportCompaniesCsv: {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
+  };
+  ImportFromFusion: {
+    call: types.ImportFromFusion;
+    response: types.ImportFromFusionResponse;
   };
   ImportFromJira: {
     call: types.ImportFromJira;
