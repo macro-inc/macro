@@ -290,6 +290,71 @@ function UncontrolledScenario() {
   );
 }
 
+/** Shaped like the discussion sheet: it opens at half height. */
+function DetentsScenario() {
+  const [open, setOpen] = createSignal(false);
+  const [point, setPoint] = createSignal(0.5);
+  return (
+    <>
+      <Button class="fixed top-20 left-4" onClick={() => setOpen(true)}>
+        Open discussion
+      </Button>
+      <output aria-label="Snap point" class="fixed top-2 right-4 text-xs">
+        {open() ? point() : 'closed'}
+      </output>
+      <MobileDrawer
+        open={open()}
+        onOpenChange={setOpen}
+        snapPoints={[0, 0.5, 1]}
+        defaultSnapPoint={0.5}
+        activeSnapPoint={point()}
+        onActiveSnapPointChange={setPoint}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay />
+          <MobileDrawer.FixedContent
+            aria-label="Discussion"
+            targetHeight={100}
+            fitSnapPoint
+          >
+            <MobileDrawer.Handle />
+            <MobileDrawer.ScrollBody class="px-6">
+              <div class="h-[200dvh]">Messages</div>
+            </MobileDrawer.ScrollBody>
+          </MobileDrawer.FixedContent>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+    </>
+  );
+}
+
+/** Shaped like the call chat: mounted while closed, hidden until opened. */
+function ForcedScenario() {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <>
+      <Button class="fixed top-20 left-4" onClick={() => setOpen(true)}>
+        Open chat
+      </Button>
+      <MobileDrawer open={open()} onOpenChange={setOpen}>
+        <MobileDrawer.Portal forceMount>
+          <MobileDrawer.Overlay />
+          <MobileDrawer.Content forceMount aria-label="Chat" targetHeight={65}>
+            <MobileDrawer.Handle />
+            <MobileDrawer.Close
+              as={Button}
+              aria-label="Close chat"
+              class="mx-6"
+            >
+              Close chat
+            </MobileDrawer.Close>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+    </>
+  );
+}
+
 /** Shaped like the Android share sheet: closing it asks to discard first. */
 function DiscardScenario() {
   const [open, setOpen] = createSignal(true);
@@ -533,6 +598,12 @@ function Fixture() {
         </Match>
         <Match when={scenario === 'search'}>
           <SearchScenario />
+        </Match>
+        <Match when={scenario === 'detents'}>
+          <DetentsScenario />
+        </Match>
+        <Match when={scenario === 'forced'}>
+          <ForcedScenario />
         </Match>
         <Match when={scenario === 'share'}>
           <ShareScenario />

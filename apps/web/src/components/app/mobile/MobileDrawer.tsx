@@ -80,10 +80,10 @@ const SETTLE_DELAY_MS = 180;
 const CLOSE_FALLBACK_MS = 650;
 
 type ScrollSheetControls = {
+  /** The owner opened the sheet while it was mounted (closing, or forced). */
+  open: () => void;
   /** Slide the sheet off screen, then call `done`. */
   close: (done: () => void) => void;
-  /** The owner opened the sheet again while it was closing. */
-  reopen: () => void;
 };
 
 /**
@@ -91,7 +91,8 @@ type ScrollSheetControls = {
  * need" sheet): the swipe, its momentum, rubber-banding and detents are the
  * browser's own scrolling and scroll snapping, which iOS runs off the main
  * thread at the display's full refresh rate. Corvu's dialog keeps the open
- * state, focus trap, Escape and outside-pointer handling.
+ * state, focus trap, Escape and outside-pointer handling; it closes at once,
+ * and the sheet stays mounted only for its closing slide.
  */
 type ScrollSheetContextValue = {
   open: Accessor<boolean>;
@@ -105,6 +106,9 @@ type ScrollSheetContextValue = {
   /** The scrim's extra classes while an Overlay is mounted. */
   scrim: Accessor<Accessor<string | undefined> | undefined>;
   setScrim: (scrim: Accessor<string | undefined> | undefined) => void;
+  /** Keeps the portal and content mounted through the closing slide. */
+  keepMounted: Accessor<boolean>;
+  setKeepMounted: (keep: boolean) => void;
   requestClose: () => void;
   backdropTap: (event: PointerEvent) => void;
   register: (controls: ScrollSheetControls) => () => void;
@@ -125,14 +129,16 @@ type SheetContentProps = ComponentProps<typeof Dialog.Content> & {
    * it opens and closes with the same slide, but a swipe doesn't move it.
    */
   swipeable?: boolean;
-  /** Called once the opening slide has come to rest. */
+  /** Called each time the opening slide comes to rest. */
   onOpened?: () => void;
 };
+
+type SheetPhase = 'opening' | 'open' | 'closing' | 'closed';
 
 /**
  * The scroll container and the sheet panel inside it. The container covers
  * the screen: a spacer the screen's height sits above the panel, so scroll
- * offset 0 is closed and the end of the range is open. Snap markers inside
+ * offset 0 is closed and the end of the range is open. Snap markers beside
  * the panel give the detents; the scrim fades with the scroll position
  * through a scroll-driven animation.
  */
@@ -155,14 +161,23 @@ function ScrollSheetFrame(
     'swipeable',
     'onOpened',
     'onFocusIn',
+    'forceMount',
   ]);
   const sheet = useScrollSheet();
+  const dialog = Dialog.useContext();
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
   let panel: HTMLDivElement | undefined;
-  const [phase, setPhase] = createSignal<'opening' | 'open' | 'closing'>(
-    'opening'
+  let gutter: HTMLDivElement | undefined;
+  // A forced-mounted sheet (`forceMount`) mounts closed, and hides.
+  const [phase, setPhase] = createSignal<SheetPhase>(
+    dialog.open() ? 'opening' : 'closed'
   );
   let onClosed: (() => void) | undefined;
+  // Only a finger may dismiss: a rest at closed reached by a programmatic
+  // slide, a re-snap after layout or a focus scroll is put back instead.
+  let gesture = false;
+  let touching = false;
+  let retargets = 0;
 
   const metrics = (): SheetMetrics | undefined => {
     const element = scroller();
@@ -187,18 +202,57 @@ function ScrollSheetFrame(
   const finishClosing = () => {
     const done = onClosed;
     onClosed = undefined;
-    done?.();
+    if (!done) return;
+    setPhase('closed');
+    done();
+  };
+  const closeFallback = debounce(finishClosing, CLOSE_FALLBACK_MS);
+
+  /** Slide up to the owner's rest; from closed, start at offset 0. */
+  const slideOpen = (fromClosed: boolean) => {
+    // Measure once the phase change has reached the DOM: a closed
+    // forced-mounted sheet is `display: none` until then.
+    queueMicrotask(() => {
+      if (phase() !== 'opening') return;
+      if (!metrics()) {
+        finishOpening();
+        return;
+      }
+      if (fromClosed) scrollTo(0, false);
+      requestAnimationFrame(() => {
+        const current = metrics();
+        if (phase() !== 'opening' || !current) return;
+        scrollTo(sheetOffset(current, sheet.activeSnapPoint()), true);
+        if (reducedMotion()) settle();
+      });
+    });
   };
 
-  /** A swipe or a programmatic slide has come to rest. */
+  /** A swipe, a slide or a re-snap has come to rest. */
   const settle = () => {
     const current = metrics();
-    if (!current) return;
+    if (!current || touching) return;
     const point = nearestSnapPoint(current, offset(), sheet.snapPoints());
     if (phase() === 'closing') {
       if (point === 0) finishClosing();
       return;
     }
+    if (phase() === 'closed') return;
+    const swiped = gesture;
+    gesture = false;
+    if (!swiped) {
+      const target = sheetOffset(current, sheet.activeSnapPoint());
+      if (Math.abs(offset() - target) > 1 && retargets < 2) {
+        retargets += 1;
+        scrollTo(target, true);
+        return;
+      }
+      retargets = 0;
+      finishOpening();
+      sheet.setTranslate(sheetHiddenSize(current, offset()));
+      return;
+    }
+    retargets = 0;
     if (point === 0) {
       sheet.requestClose();
       // An owner that keeps the sheet open (to confirm a discard, or while an
@@ -218,7 +272,19 @@ function ScrollSheetFrame(
 
   onCleanup(
     sheet.register({
+      open: () => {
+        const fromClosed = phase() === 'closed';
+        if (!fromClosed && phase() !== 'closing') return;
+        onClosed = undefined;
+        closeFallback.clear();
+        setPhase('opening');
+        slideOpen(fromClosed);
+      },
       close: (done) => {
+        if (phase() === 'closed') {
+          done();
+          return;
+        }
         setPhase('closing');
         onClosed = done;
         const current = metrics();
@@ -228,15 +294,8 @@ function ScrollSheetFrame(
         }
         scrollTo(sheetOffset(current, 0), true);
         // A slide interrupted by the finger, or an engine that never reports
-        // its end, still unmounts. Closing twice is a no-op.
-        setTimeout(finishClosing, CLOSE_FALLBACK_MS);
-      },
-      reopen: () => {
-        setPhase('open');
-        onClosed = undefined;
-        const current = metrics();
-        if (current)
-          scrollTo(sheetOffset(current, sheet.activeSnapPoint()), true);
+        // its end, still finishes.
+        closeFallback();
       },
     })
   );
@@ -244,25 +303,21 @@ function ScrollSheetFrame(
   onMount(() => {
     const element = scroller();
     if (!element) return;
+    if (dialog.open()) sheet.setKeepMounted(true);
     const listening = new AbortController();
     onCleanup(() => listening.abort());
     const { signal } = listening;
     // iOS reports scroll positions sparsely during momentum, so a swipe only
     // settles once the finger is up and the position has stopped changing.
-    let touching = false;
     let downOutside = false;
     let downOffset = 0;
-    element.addEventListener(
-      'scroll',
-      () => {
-        if (!touching) settleSoon();
-      },
-      { passive: true, signal }
-    );
+    element.addEventListener('scroll', () => settleSoon(), {
+      passive: true,
+      signal,
+    });
     element.addEventListener(
       'scrollend',
       () => {
-        if (touching) return;
         settleSoon.clear();
         settle();
       },
@@ -272,6 +327,7 @@ function ScrollSheetFrame(
       'touchstart',
       () => {
         touching = true;
+        gesture = true;
         settleSoon.clear();
       },
       { passive: true, signal }
@@ -301,39 +357,33 @@ function ScrollSheetFrame(
       (event) => {
         const outside =
           event.target instanceof Node && !panel?.contains(event.target);
-        if (!downOutside || !outside || phase() === 'closing') return;
+        if (!downOutside || !outside || phase() !== 'open') return;
         if (Math.abs(offset() - downOffset) > 2) return;
         sheet.backdropTap(event);
       },
       { signal }
     );
-
-    const current = metrics();
-    if (!current) {
-      finishOpening();
-      return;
-    }
-    // Scroll offset 0 is closed; slide up to the opening detent. Smooth
-    // scrolling runs on the compositor, at 120 Hz on ProMotion screens.
-    scrollTo(0, false);
-    requestAnimationFrame(() => {
-      const laidOut = metrics();
-      if (!laidOut || phase() === 'closing') return;
-      scrollTo(sheetOffset(laidOut, sheet.activeSnapPoint()), true);
-      if (reducedMotion()) settle();
+    // Content that loads, a keyboard (the gutter) or a rotation changes the
+    // scroll range; hold the sheet at its rest rather than trusting a re-snap.
+    const resizes = new ResizeObserver(() => {
+      if (phase() === 'open' || phase() === 'opening') settleSoon();
     });
+    for (const target of [element, panel, gutter])
+      if (target) resizes.observe(target);
+    onCleanup(() => resizes.disconnect());
+
+    if (phase() === 'opening') slideOpen(false);
   });
 
   // An owner that moves the sheet (to full height while the keyboard is up)
-  // slides it there.
+  // slides it there, also mid-slide.
   createEffect(
     on(
       sheet.activeSnapPoint,
       (point) => {
         const current = metrics();
-        if (phase() !== 'open' || !current) return;
-        if (nearestSnapPoint(current, offset(), sheet.snapPoints()) === point)
-          return;
+        if (!current || (phase() !== 'open' && phase() !== 'opening')) return;
+        retargets = 0;
         scrollTo(sheetOffset(current, point), true);
       },
       { defer: true }
@@ -342,6 +392,7 @@ function ScrollSheetFrame(
 
   const swipeable = () => local.swipeable !== false;
   const partial = () => sheet.activeSnapPoint() < 1;
+  const sliding = () => phase() === 'opening' || phase() === 'closing';
 
   return (
     <Layer depth={0}>
@@ -350,7 +401,9 @@ function ScrollSheetFrame(
         data-side="bottom"
         data-opening={phase() === 'opening' ? '' : undefined}
         data-closing={phase() === 'closing' ? '' : undefined}
+        data-transitioning={sliding() ? '' : undefined}
         {...rest}
+        forceMount={local.forceMount || sheet.keepMounted()}
         ref={(element: HTMLDivElement) => {
           setScroller(element);
           if (typeof local.ref === 'function') local.ref(element);
@@ -374,9 +427,14 @@ function ScrollSheetFrame(
           if (typeof local.onFocusIn === 'function') local.onFocusIn(event);
         }}
         class={cn(
-          // Block layout, not flex: the panel keeps its margins and width.
-          'portal-scope mobile-sheet-scroller fixed inset-0 z-modal block snap-y snap-mandatory overflow-x-hidden overscroll-contain outline-none',
-          swipeable() ? 'overflow-y-auto' : 'overflow-y-hidden'
+          // Block layout, not flex: the panel keeps its width. The padding
+          // keeps the sheet inside the horizontal safe area.
+          'portal-scope mobile-sheet-scroller fixed inset-0 z-modal block snap-y snap-mandatory overflow-x-hidden overscroll-contain pl-[calc(var(--safe-left,0px)+8px)] pr-[calc(var(--safe-right,0px)+8px)] outline-none',
+          swipeable() ? 'overflow-y-auto' : 'overflow-y-hidden',
+          // Closing hands taps to the page; a closed forced-mounted sheet
+          // takes no room at all.
+          phase() === 'closing' && 'pointer-events-none',
+          phase() === 'closed' && 'hidden'
         )}
       >
         <Show when={sheet.scrim()}>
@@ -392,14 +450,10 @@ function ScrollSheetFrame(
           )}
         </Show>
         {/* Closed rest: the screen-tall space above the sheet. */}
-        <div data-sheet-backdrop class="h-full w-full shrink-0 snap-start" />
-        <div
-          ref={panel}
-          data-sheet-panel
-          data-sheet-partial={partial() ? '' : undefined}
-          style={local.panelStyle}
-          class={cn(local.panelClass, local.class)}
-        >
+        <div data-sheet-backdrop class="h-full w-full snap-start" />
+        {/* The detent markers sit beside the panel, not in it: a panel that
+            clips its content is a scroll container, and would take them. */}
+        <div class="relative">
           <For each={sheet.snapPoints().filter((point) => point < 1)}>
             {(point) => (
               <div
@@ -412,13 +466,25 @@ function ScrollSheetFrame(
               />
             )}
           </For>
-          {local.children}
+          <div
+            ref={panel}
+            data-sheet-panel
+            data-sheet-partial={partial() ? '' : undefined}
+            style={{
+              ...local.panelStyle,
+              ...(typeof local.style === 'object' ? local.style : {}),
+            }}
+            class={cn(local.panelClass, local.class)}
+          >
+            {local.children}
+          </div>
         </div>
         {/* Open rest: the end of the scroll range. */}
         <div
+          ref={gutter}
           aria-hidden="true"
           class={cn(
-            'w-full shrink-0 snap-end',
+            'w-full snap-end',
             !sheet.allowSkippingSnapPoints() && 'snap-always',
             local.gutterClass
           )}
@@ -481,8 +547,8 @@ function BottomSheetContent(props: ContentProps) {
           : {}),
       }}
       panelClass={cn(
-        'mobile-sheet glass bg-menu [--color-dialog:var(--color-menu)] [backdrop-filter:none]! flex shrink-0 flex-col',
-        'ml-[calc(var(--safe-left,0px)+8px)] mr-[calc(var(--safe-right,0px)+8px)] max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-var(--virtual-keyboard-height,0px)-16px))]',
+        'mobile-sheet glass bg-menu [--color-dialog:var(--color-menu)] [backdrop-filter:none]! flex flex-col',
+        'max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-var(--virtual-keyboard-height,0px)-16px))]',
         targetHeight() != null ? 'h-(--drawer-h)' : 'h-fit',
         virtualKeyboardVisible()
           ? 'pb-4 has-[[data-drawer-scroll-body]]:pb-0'
@@ -579,7 +645,7 @@ function MobileDrawerFixedContent(
           : '0px',
       }}
       panelClass={cn(
-        'mobile-sheet glass bg-menu [--color-dialog:var(--color-menu)] [backdrop-filter:none]! mx-2 flex shrink-0 flex-col h-(--drawer-h) max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-16px))] min-h-0 overflow-hidden',
+        'mobile-sheet glass bg-menu [--color-dialog:var(--color-menu)] [backdrop-filter:none]! flex flex-col h-(--drawer-h) max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-16px))] min-h-0 overflow-hidden',
         local.fitSnapPoint &&
           'transition-[padding-bottom] duration-200 ease-out motion-reduce:transition-none',
         virtualKeyboardVisible()
@@ -908,8 +974,8 @@ function BottomSheetRoot(props: MobileDrawerProps) {
   });
   const open = () => local.open ?? uncontrolledOpen();
   const closed = () => disposed || !open();
-  // Mounted while open and while sliding away after a close.
-  const [shown, setShown] = createSignal(open());
+  // Keeps the content mounted while it slides away after a close.
+  const [keepMounted, setKeepMounted] = createSignal(false);
   let controls: ScrollSheetControls | undefined;
 
   const snapPoints = () => sheetSnapPoints(local.snapPoints);
@@ -932,24 +998,22 @@ function BottomSheetRoot(props: MobileDrawerProps) {
     open: () => !local.keepOpenOnNavigation && open(),
     close: () => changeOpen(false),
   });
-  // The sheet's slide is a scroll animation the sheet runs; the dialog
-  // unmounts once it ends.
+  // The dialog closes at once (its focus trap, dismiss layer and Escape go
+  // with it); the sheet slides away, then unmounts.
   createEffect(
     on(
       open,
       (isOpen) => {
         if (isOpen) {
-          if (shown()) controls?.reopen();
-          setShown(true);
+          controls?.open();
           return;
         }
-        if (!shown()) return;
         if (!controls) {
-          setShown(false);
+          setKeepMounted(false);
           return;
         }
         controls.close(() => {
-          if (!open()) setShown(false);
+          if (!open()) setKeepMounted(false);
         });
       },
       { defer: true }
@@ -969,6 +1033,8 @@ function BottomSheetRoot(props: MobileDrawerProps) {
     setTranslate,
     scrim,
     setScrim: (next) => setScrim(() => next),
+    keepMounted,
+    setKeepMounted,
     requestClose: () => changeOpen(false),
     backdropTap: (event) => {
       local.onOutsidePointer?.(event);
@@ -996,7 +1062,7 @@ function BottomSheetRoot(props: MobileDrawerProps) {
         noOutsidePointerEvents={false}
         restoreFocus={false}
         {...rest}
-        open={shown()}
+        open={open()}
         onOpenChange={changeOpen}
         onInitialFocus={(event) => {
           local.onInitialFocus?.(event);
@@ -1059,32 +1125,46 @@ function SideSheetRoot(props: MobileDrawerProps) {
     close: () => changeOpen(false),
   });
   return (
-    <Drawer
-      breakPoints={[0.8]}
-      closeOnOutsideFocus={false}
-      noOutsidePointerEvents={false}
-      restoreFocus={false}
-      {...rest}
-      open={open()}
-      onOpenChange={changeOpen}
-      onInitialFocus={(event) => {
-        local.onInitialFocus?.(event);
-        if (event.defaultPrevented || props.initialFocusEl) return;
-        focusSheetOverItsFirstRow(event);
-      }}
-      onOutsidePointer={(event) => {
-        if (!dismissesDrawer(event)) event.preventDefault();
-        local.onOutsidePointer?.(event);
-        if (event.defaultPrevented) return;
-        // Corvu asks to close next, but the owner may keep the drawer open:
-        // a sheet stacked from another dismiss stack (an imperative
-        // dialog's host) is outside it, and the tap belongs to that sheet.
-        // The microtask runs after the close request and before the tap's
-        // mouse events.
-        queueMicrotask(() => {
-          if (closed()) swallowRestOfTap();
-        });
-      }}
+    // A side sheet inside a bottom sheet's tree is still a side sheet.
+    <ScrollSheetContext.Provider value={undefined}>
+      <Drawer
+        breakPoints={[0.8]}
+        closeOnOutsideFocus={false}
+        noOutsidePointerEvents={false}
+        restoreFocus={false}
+        {...rest}
+        open={open()}
+        onOpenChange={changeOpen}
+        onInitialFocus={(event) => {
+          local.onInitialFocus?.(event);
+          if (event.defaultPrevented || props.initialFocusEl) return;
+          focusSheetOverItsFirstRow(event);
+        }}
+        onOutsidePointer={(event) => {
+          if (!dismissesDrawer(event)) event.preventDefault();
+          local.onOutsidePointer?.(event);
+          if (event.defaultPrevented) return;
+          // Corvu asks to close next, but the owner may keep the drawer open:
+          // a sheet stacked from another dismiss stack (an imperative
+          // dialog's host) is outside it, and the tap belongs to that sheet.
+          // The microtask runs after the close request and before the tap's
+          // mouse events.
+          queueMicrotask(() => {
+            if (closed()) swallowRestOfTap();
+          });
+        }}
+      />
+    </ScrollSheetContext.Provider>
+  );
+}
+
+/** A bottom sheet's portal stays mounted through the closing slide. */
+function MobileDrawerPortal(props: ComponentProps<typeof Drawer.Portal>) {
+  const sheet = useContext(ScrollSheetContext);
+  return (
+    <Drawer.Portal
+      {...props}
+      forceMount={props.forceMount || (sheet?.keepMounted() ?? false)}
     />
   );
 }
@@ -1124,7 +1204,7 @@ export const MobileDrawer = Object.assign(
   {
     useContext: useMobileDrawer,
     Trigger: Drawer.Trigger,
-    Portal: Drawer.Portal,
+    Portal: MobileDrawerPortal,
     Overlay: MobileDrawerOverlay,
     Content: MobileDrawerContent,
     FixedContent: MobileDrawerFixedContent,
