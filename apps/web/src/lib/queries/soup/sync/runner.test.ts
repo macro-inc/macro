@@ -170,6 +170,18 @@ describe('runStreamedSync', () => {
     expect(host.syncStop).not.toHaveBeenCalled();
   });
 
+  it('aborts the stream it interrupts, so a run not yet started never starts', async () => {
+    runSyncPass.mockReturnValue(new Promise(() => {}));
+    const host = fakeHost();
+    const fiber = Effect.runFork(runStreamedSync(asHost(host)));
+    await vi.advanceTimersByTimeAsync(0);
+    const signal: AbortSignal = runSyncPass.mock.calls[0]?.[4];
+    expect(signal.aborted).toBe(false);
+    await Effect.runPromise(Fiber.interrupt(fiber));
+    expect(signal.aborted).toBe(true);
+    expect(host.syncStop).toHaveBeenCalledOnce();
+  });
+
   it('sizes each second-pass stream from the previous one and stops overruns', async () => {
     const paced: SyncRunOutcome = {
       ok: true,

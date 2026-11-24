@@ -110,11 +110,13 @@ const runSyncStream = (
   stopAfterMs?: number
 ) =>
   Effect.tryPromise({
-    try: () =>
+    // `signal` aborts on interrupt: `syncStop` then finds no run if the
+    // stream has not started one yet, so `runSyncPass` must not start it.
+    try: (signal) =>
       trace.stream(async (traceHeaders) => {
         // Loaded on use, off the startup path.
         const { runSyncPass } = await import('./run');
-        return runSyncPass(host, pass, options, traceHeaders);
+        return runSyncPass(host, pass, options, traceHeaders, signal);
       }),
     catch: (error): SyncFailure => ({
       kind: 'stream',

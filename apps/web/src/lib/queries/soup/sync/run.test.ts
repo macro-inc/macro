@@ -3,11 +3,14 @@ import type {
   SyncRunOutcome,
   SyncStartArgs,
 } from '@graphql-cache/sync-protocol';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runSyncPass } from './run';
 
+const mailProfile = vi.hoisted(() => ({
+  read: async () => ({ profile: 'v5' }),
+}));
 vi.mock('@service-storage/mail-cache-profile', () => ({
-  mailCacheProfile: async () => ({ profile: 'v5' }),
+  mailCacheProfile: () => mailProfile.read(),
 }));
 
 const COMPLETE: SyncRunOutcome = {
@@ -22,6 +25,10 @@ function host() {
     syncState: vi.fn(async () => []),
   } satisfies SyncHost;
 }
+
+afterEach(() => {
+  mailProfile.read = async () => ({ profile: 'v5' });
+});
 
 describe('runSyncPass', () => {
   it('names the pass and leaves planning the lanes to the server', async () => {
@@ -66,5 +73,29 @@ describe('runSyncPass', () => {
     expect(args).not.toHaveProperty('calendar');
     expect(args).not.toHaveProperty('skipLanes');
     expect(args).not.toHaveProperty('maxPages');
+  });
+
+  it('starts no run once aborted, even while it reads the request headers', async () => {
+    const cache = host();
+    const aborted = new AbortController();
+    aborted.abort();
+    await expect(
+      runSyncPass(cache, 'first', {}, {}, aborted.signal)
+    ).resolves.toEqual({ ok: false, failure: { kind: 'aborted' } });
+
+    let answerProfile: (profile: { profile: string }) => void = () => {};
+    mailProfile.read = () =>
+      new Promise((resolve) => {
+        answerProfile = resolve;
+      });
+    const abortedLater = new AbortController();
+    const outcome = runSyncPass(cache, 'first', {}, {}, abortedLater.signal);
+    abortedLater.abort();
+    answerProfile({ profile: 'v5' });
+    await expect(outcome).resolves.toEqual({
+      ok: false,
+      failure: { kind: 'aborted' },
+    });
+    expect(cache.syncStart).not.toHaveBeenCalled();
   });
 });

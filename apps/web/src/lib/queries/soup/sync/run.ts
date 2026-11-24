@@ -55,19 +55,28 @@ function appTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
+const ABORTED: SyncRunOutcome = { ok: false, failure: { kind: 'aborted' } };
+
 /**
  * Runs one stream of `pass`, sending `traceHeaders` (the caller's trace
  * context) with the request. A pass with nothing left to sync ends complete.
+ * Once `signal` aborts it starts no run: the caller's `syncStop` has already
+ * found none to stop, so a run started after it would have no owner.
  */
 export async function runSyncPass(
   host: SyncHost,
   pass: SyncPass,
   options: SyncPassOptions = {},
-  traceHeaders: Record<string, string> = {}
+  traceHeaders: Record<string, string> = {},
+  signal?: AbortSignal
 ): Promise<SyncRunOutcome> {
+  if (signal?.aborted) return ABORTED;
+  const requestHeaders = await syncRequestHeaders();
+  if (signal?.aborted) return ABORTED;
+
   return host.syncStart({
     url: syncStreamUrl(),
-    headers: { ...(await syncRequestHeaders()), ...traceHeaders },
+    headers: { ...requestHeaders, ...traceHeaders },
     pass,
     queries: syncLaneQueries(),
     ...(options.calendar === false
