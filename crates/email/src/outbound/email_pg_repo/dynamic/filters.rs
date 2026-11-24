@@ -51,6 +51,7 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Attachment(_)
+            | EmailLiteral::Label(_)
             | EmailLiteral::Importance(_)
             | EmailLiteral::Read(_)
             | EmailLiteral::InboxVisible(_)
@@ -76,6 +77,7 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::Shared(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Attachment(_)
+            | EmailLiteral::Label(_)
             | EmailLiteral::Importance(_)
             | EmailLiteral::Read(_)
             | EmailLiteral::InboxVisible(_)
@@ -369,6 +371,27 @@ fn build_thread_literal_predicate(
                 AttachmentKind::Document => "has_document_attachment",
             }
         )),
+        // A message of the thread carries the label, read through the effective
+        // view so a label changed in Macro counts before the provider confirms
+        // it. A label lives in one inbox, so requiring the thread's inbox to be
+        // the viewer's own or managed one keeps the inbox a thread was shared
+        // from from matching.
+        EmailLiteral::Label(id) => {
+            let mut f = SqlFragment::raw(format!(
+                "(EXISTS (SELECT 1 FROM email_messages lm JOIN email_effective_message_labels ml ON ml.message_id = lm.id WHERE lm.thread_id = {thread_alias}.id AND ml.label_id = "
+            ));
+            f.extend(SqlFragment::bind_uuid(*id));
+            f.push_raw(format!(
+                ") AND {thread_alias}.link_id IN (SELECT el.id FROM email_links el WHERE el.macro_id = "
+            ));
+            f.extend(SqlFragment::bind_viewer());
+            f.push_raw(
+                " UNION ALL SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = ",
+            );
+            f.extend(SqlFragment::bind_viewer());
+            f.push_raw("))");
+            f
+        }
         // Denormalized importance flag maintained by update_thread_metadata
         // (sync_thread_signal_flag) and the email_filters resync fan-out.
         EmailLiteral::Importance(true) => SqlFragment::raw(format!("{thread_alias}.is_signal")),

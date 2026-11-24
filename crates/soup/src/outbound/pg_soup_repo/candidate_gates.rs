@@ -300,6 +300,11 @@ pub(super) fn email_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> Stri
             EmailLiteral::Read(false) => Some("NOT et.is_read".to_string()),
             EmailLiteral::InboxVisible(true) => Some("et.inbox_visible".to_string()),
             EmailLiteral::InboxVisible(false) => Some("NOT et.inbox_visible".to_string()),
+            // The email fold's label EXISTS; `$5` already holds the gate to the
+            // caller's own and delegated inboxes.
+            EmailLiteral::Label(id) => Some(format!(
+                "EXISTS (SELECT 1 FROM email_messages lm JOIN email_effective_message_labels ml ON ml.message_id = lm.id WHERE lm.thread_id = et.id AND ml.label_id = '{id}'::uuid)"
+            )),
             _ => None,
         },
     );
