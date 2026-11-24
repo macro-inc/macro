@@ -134,6 +134,18 @@ type SheetContentProps = ComponentProps<typeof Dialog.Content> & {
 
 type SheetPhase = 'opening' | 'open' | 'closing' | 'closed';
 
+/** The sheet's own sizing variables, plus a caller's style in either form. */
+function panelStyle(
+  own: JSX.CSSProperties | undefined,
+  caller: JSX.CSSProperties | string | undefined
+): JSX.CSSProperties | string {
+  if (typeof caller !== 'string') return { ...own, ...caller };
+  const ownText = Object.entries(own ?? {})
+    .map(([name, value]) => `${name}: ${value}`)
+    .join('; ');
+  return ownText ? `${ownText}; ${caller}` : caller;
+}
+
 /**
  * The scroll container and the sheet panel inside it. The container covers
  * the screen: a spacer the screen's height sits above the panel, so scroll
@@ -488,10 +500,7 @@ function ScrollSheetFrame(
             ref={panel}
             data-sheet-panel
             data-sheet-partial={partial() ? '' : undefined}
-            style={{
-              ...local.panelStyle,
-              ...(typeof local.style === 'object' ? local.style : {}),
-            }}
+            style={panelStyle(local.panelStyle, local.style)}
             class={cn(local.panelClass, local.class)}
           >
             {local.children}

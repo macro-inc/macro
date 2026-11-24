@@ -139,6 +139,9 @@ export function DockTabLens(props: {
             behavior: 'smooth',
           });
           if (index !== props.activeIndex) buttons()[index]?.click();
+          // The glide that follows is ours: it must not count as a drag
+          // and press the tab again (More would close what it opened).
+          gesture = false;
         }
         settleSoon();
       },

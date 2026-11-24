@@ -5,6 +5,7 @@ import '../../../../index.css';
 import BellIcon from '@icon/system/regular/bell.svg';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import CheckIcon from '@icon/system/regular/check-square.svg';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
 import FileIcon from '@icon/system/regular/file.svg';
 import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -40,6 +41,12 @@ function Dock() {
               />
             )}
           </For>
+          {/* Like the dock's More: opens a sheet, selects nothing. */}
+          <MobileDockButton
+            icon={DotsIcon}
+            ariaLabel="More"
+            onClick={() => setPresses((all) => [...all, 'More'])}
+          />
         </DockTabLens>
       </MobileDockIsland>
     </div>

@@ -389,6 +389,39 @@ test.describe('a persistent prompt', () => {
     await expect(pressed(page)).toHaveText('Enable, Due date, Enable');
   });
 
+  test('a picker reopened as it closes still shows its list', async ({
+    page,
+  }) => {
+    await page.goto('/?scenario=prompt');
+    const properties = await openProperties(page);
+    const picker = page.getByRole('dialog', { name: 'Assignee' });
+    const search = picker.getByRole('textbox', { name: 'Search people' });
+    const assignee = properties.getByRole('button', { name: 'Assignee' });
+    await tap(page, assignee);
+    await settled(picker);
+
+    // Reopened before the closing slide has moved at all…
+    await picker
+      .getByRole('button', { name: 'Cancel' })
+      .evaluate((cancel: HTMLButtonElement) => {
+        cancel.click();
+        document
+          .querySelectorAll<HTMLButtonElement>('button')
+          .forEach((button) => {
+            if (button.textContent === 'Assignee') button.click();
+          });
+      });
+    await settled(picker);
+    await expect(search).toBeVisible();
+
+    // …and partway through it.
+    await tap(page, picker.getByRole('button', { name: 'Cancel' }));
+    await page.waitForTimeout(80);
+    await assignee.evaluate((button: HTMLButtonElement) => button.click());
+    await settled(picker);
+    await expect(search).toBeVisible();
+  });
+
   test('moves up to clear a notice, and back when it goes', async ({
     page,
   }) => {

@@ -66,3 +66,22 @@ test('a tap presses its tab once', async ({ page }) => {
   await page.waitForTimeout(400);
   await expect(presses(page)).toHaveText('Chat');
 });
+
+test('a drag onto a tab that selects nothing presses it once', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  const home = await center(page, 'Home');
+  const more = await center(page, 'More');
+  await touch(cdp, 'touchStart', home);
+  for (let step = 1; step <= 12; step += 1)
+    await touch(cdp, 'touchMove', {
+      x: home.x + ((more.x - home.x) * step) / 12,
+      y: home.y,
+    });
+  await touch(cdp, 'touchEnd');
+  await expect(presses(page)).toHaveText('More');
+  await expect(lens(page)).not.toHaveAttribute('data-shown');
+  await page.waitForTimeout(400);
+  await expect(presses(page)).toHaveText('More');
+});
