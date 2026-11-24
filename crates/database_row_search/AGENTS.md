@@ -10,6 +10,8 @@ database before exposing a hit.
 ## Start here
 
 - `src/read.rs`: `read_row_search_text`, one statement over any executor.
+- `src/index.rs`: the indexer's journal reads and its per-table watermark
+  (`database_row_search_watermarks`, which this crate alone reads and writes).
 - `src/visible_text.rs`: which column types are searchable and how a cell
   becomes text (mentions reduced to their visible label).
 

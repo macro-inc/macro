@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            (de.database_id IS NOT NULL AND de.trashed_at IS NULL) AS \"searchable!\",\n            ARRAY(\n                SELECT t.id FROM database_tables t WHERE t.database_id = d.id ORDER BY t.id\n            ) AS \"table_ids!\"\n        FROM databases d\n        LEFT JOIN database_entities de ON de.database_id = d.id\n        WHERE d.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "searchable!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "table_ids!",
+        "type_info": "UuidArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "a93ec93b9ea5f23f4d1453103ab43a92d322aef006acb7dd09ecf11f8223bd34"
+}
