@@ -278,22 +278,7 @@ async fn forward(
         gateway.tasks.spawn(
             pump(
                 Box::pin(upstream.bytes_stream()),
-                move |chunk| {
-                    match chunk {
-                        Ok(bytes) => {
-                            parser.observe(bytes);
-                            meter.observed = parser.observed().clone();
-                        }
-                    Err(error) => {
-                        tracing::warn!(parent: &meter.span, error = ?error, "fireworks stream broke");
-                        meter.broken = true;
-                        meter.span.record("brain_fireworks.outcome", "stream_error");
-                        meter.span.record("otel.status_code", "ERROR");
-                    }
-                    }
-                    // Fireworks answers carry no screen notices to settle.
-                    false
-                },
+                move |chunk| observe(&mut meter, &mut parser, chunk),
                 None,
                 caller,
             )
@@ -429,6 +414,28 @@ async fn read_limited(upstream: reqwest::Response) -> Result<Bytes, Rejection> {
         body.extend_from_slice(&chunk);
     }
     Ok(body.into())
+}
+
+/// Meters one streamed `chunk`. Fireworks answers carry no screen notices,
+/// so whether the answer stopped never matters: always `false`.
+fn observe(
+    meter: &mut UsageMeter,
+    parser: &mut SseUsage,
+    chunk: &reqwest::Result<axum::body::Bytes>,
+) -> bool {
+    match chunk {
+        Ok(bytes) => {
+            parser.observe(bytes);
+            meter.observed = parser.observed().clone();
+        }
+        Err(error) => {
+            tracing::warn!(parent: &meter.span, error = ?error, "fireworks stream broke");
+            meter.broken = true;
+            meter.span.record("brain_fireworks.outcome", "stream_error");
+            meter.span.record("otel.status_code", "ERROR");
+        }
+    }
+    false
 }
 
 /// Records a response's usage once it is finished: when a stream ends or its

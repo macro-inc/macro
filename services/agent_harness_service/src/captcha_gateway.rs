@@ -235,7 +235,6 @@ async fn solve<Solver: CaptchaSolver>(
     }
 }
 
-/// A refusal as `{"error": message, "code"?: code}`, recorded on `span`.
 /// The brain check's refusal; a held agent (a person drives its computer)
 /// is told when to retry.
 fn brain_refused(span: &tracing::Span, refused: BrainRefusal) -> Response {
@@ -249,6 +248,7 @@ fn brain_refused(span: &tracing::Span, refused: BrainRefusal) -> Response {
     refused.with_retry_after(refusal(span, refused.status(), outcome, None, message))
 }
 
+/// A refusal as `{"error": message, "code"?: code}`, recorded on `span`.
 fn refusal(
     span: &tracing::Span,
     status: StatusCode,
