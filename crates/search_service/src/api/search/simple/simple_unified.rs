@@ -588,7 +588,10 @@ async fn search_unified_sources(
         .lowercase();
 
     let search_on = req.search_on;
-    let include_database_rows = req.include_database_rows;
+    // Rows carry none of the conditions other filters set (owner, folder,
+    // dates, favorites, properties), so a search that sets one leaves them out.
+    let include_database_rows =
+        req.include_database_rows && !models_search::unified::narrows_items(&req.filters);
     let user_organization_id = user_context.organization_id;
     let collapse = req.collapse.unwrap_or(false);
 
@@ -696,8 +699,8 @@ async fn search_unified_sources(
     let should_include_crm = crm_access.is_some() && !tags_active;
 
     // Rows are opt-in, on only while the rollout is on for the caller, and
-    // left out by what they cannot meet: a tag filter (rows carry no tags), an
-    // email operator, or regexp and query-string matching. The rollout is read
+    // left out by what they cannot meet: a narrowing filter (above), a tag
+    // filter, an email operator, or regexp and query-string matching. The rollout is read
     // after the caller's turn like every other read of the search.
     let row_match_type = database_row::row_match_type(match_type);
     let should_include_database_rows = match row_match_type {

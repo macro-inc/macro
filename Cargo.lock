@@ -14265,6 +14265,7 @@ dependencies = [
  "item_filters",
  "model_file_type",
  "models_soup",
+ "non_empty",
  "opensearch_client",
  "schemars 1.2.1",
  "serde",

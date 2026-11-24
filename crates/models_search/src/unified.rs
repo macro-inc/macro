@@ -155,6 +155,30 @@ pub struct UnifiedSearchRequest {
     pub time_zone: Option<String>,
 }
 
+/// Whether `filters` narrow the items a search reaches beyond leaving whole
+/// kinds out. Leaving a kind out is a nil id in its primary id list; the email
+/// filters scope mail alone (an inbox, important mail). Database rows carry
+/// none of the other conditions (owner, folder, dates, favorites, properties,
+/// tags), so a search that sets any of them leaves rows out rather than
+/// showing rows those conditions never applied to.
+pub fn narrows_items(filters: &EntityFilters) -> bool {
+    let mut scope = filters.clone();
+    strip_nil_uuids(&mut scope.agent_session_filters.ids);
+    scope.agent_session_filters.include = false;
+    strip_nil_uuids(&mut scope.calendar_event_filters.calendar_event_ids);
+    strip_nil_uuids(&mut scope.project_filters.project_ids);
+    strip_nil_uuids(&mut scope.document_filters.document_ids);
+    strip_nil_uuids(&mut scope.chat_filters.chat_ids);
+    strip_nil_uuids(&mut scope.channel_filters.channel_ids);
+    strip_nil_uuids(&mut scope.channel_thread_filters.thread_ids);
+    strip_nil_uuids(&mut scope.call_filters.call_ids);
+    strip_nil_uuids(&mut scope.call_filters.channel_ids);
+    strip_nil_uuids(&mut scope.crm_company_filters.company_ids);
+    strip_nil_uuids(&mut scope.foreign_entity_filters.ids);
+    scope.email_filters = EmailFilters::default();
+    !non_empty::IsEmpty::is_empty(&scope)
+}
+
 /// Whether a [FileAssociation] is indexed by the search processing service.
 pub fn is_searchable_association(assoc: &FileAssociation) -> bool {
     matches!(
