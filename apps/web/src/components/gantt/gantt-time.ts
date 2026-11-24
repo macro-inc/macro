@@ -145,20 +145,19 @@ function exactlyRescheduled(
       end: new Date(next.getTime() + end.getTime() - start.getTime()),
     };
   }
-  if (edge === 'start')
+  if (edge === 'start') {
+    // On the grid even when the end is held at the end of its day, unless
+    // the grid lands past the end, as it can in the hour clocks repeat.
+    const exactCap = end.getTime() - step;
+    const snappedCap = snapGanttInstant(new Date(exactCap), snap).getTime();
+    const cap = snappedCap < end.getTime() ? snappedCap : exactCap;
     return {
       start: new Date(
-        Math.min(
-          moved(start).getTime(),
-          // On the grid even when the end is held at the end of its day.
-          Math.max(
-            snapGanttInstant(new Date(end.getTime() - step), snap).getTime(),
-            start.getTime()
-          )
-        )
+        Math.min(moved(start).getTime(), Math.max(cap, start.getTime()))
       ),
       end,
     };
+  }
   return {
     start,
     end: new Date(
