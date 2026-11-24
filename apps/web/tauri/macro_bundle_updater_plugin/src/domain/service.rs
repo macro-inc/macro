@@ -653,6 +653,13 @@ impl<Fs: FsRepo> Service<Fs> {
         let mut rejection = saved.rejection;
         let mut read_error = saved.read_error;
         let mut bundle_dirs_removed = 0;
+        // A download that finished but was never applied, such as the one the
+        // desktop app fetches just before restarting into a native update.
+        let pending = self.usable_pending_download(cache_dir, native_build).await;
+        let pending_dir = pending
+            .as_ref()
+            .and_then(|download| download.entrypoint.parent())
+            .map(Path::to_path_buf);
 
         let check_started = Instant::now();
         let check = self.check_current_bundle(native_build).await;
@@ -666,21 +673,45 @@ impl<Fs: FsRepo> Service<Fs> {
                 error_kind = ?unusable_read_error,
                 "Clearing unusable persisted bundle root"
             );
-            let _ = self.clear_bundle_root(cache_dir).await;
-            bundle_dirs_removed += self.cleanup_old_bundles(cache_dir, None).await;
+            // Keep the pending download: after a native update the saved
+            // bundle is usually older than the new embedded one, while the
+            // download is the bundle deployed now.
+            let _ = self.select_embedded(cache_dir).await;
+            bundle_dirs_removed += self
+                .cleanup_old_bundles(cache_dir, pending_dir.as_deref())
+                .await;
             rejection = Some(unusable);
             read_error = unusable_read_error;
         }
 
-        let selection = if self.restore_saved_ota(cache_dir).await {
+        // Start on a pending download newer than the saved bundle. Serving the
+        // saved one instead would have this launch's check find the download
+        // again and ask for a reload into it.
+        let saved_bundle_build = self
+            .bundle_root
+            .manifest(&self.fs_repo)
+            .await
+            .map(|manifest| manifest.bundle_build);
+        let pending_is_newer = pending.as_ref().is_some_and(|download| {
+            saved_bundle_build.is_none_or(|saved| download.bundle_build > saved)
+        });
+
+        let selection = if !pending_is_newer && self.restore_saved_ota(cache_dir).await {
             StartupSelection::SavedOta
         } else {
-            self.bundle_routes
-                .restore(BundleSource::embedded(self.embedded_bundle_build))
-                .await;
-            let restored_pending = self
-                .restore_pending_completed_update(cache_dir, native_build)
-                .await;
+            // Serve the saved bundle, if any, until a pending download is applied.
+            if !self.serve_saved_ota().await {
+                self.bundle_routes
+                    .restore(BundleSource::embedded(self.embedded_bundle_build))
+                    .await;
+            }
+            let restored_pending = match pending {
+                Some(download) => self.restore_completed(download),
+                None => {
+                    self.restore_pending_completed_update(cache_dir, native_build)
+                        .await
+                }
+            };
             if matches!(self.bundle_root, BundleRoot::Embedded) && !restored_pending {
                 // No previous document is running at startup. Retired files from a
                 // rollback interrupted before acknowledgement can now be removed.
@@ -706,8 +737,20 @@ impl<Fs: FsRepo> Service<Fs> {
         startup
     }
 
-    /// Serve the saved OTA bundle, returning whether there was one to serve.
+    /// Serve the saved OTA bundle and drop any pending download, returning
+    /// whether there was one to serve.
     async fn restore_saved_ota(&self, cache_dir: &Path) -> bool {
+        if !self.serve_saved_ota().await {
+            return false;
+        }
+        if let Err(e) = self.clear_pending_bundle(cache_dir).await {
+            tracing::warn!(error=?e, "Failed to clear stale pending bundle marker");
+        }
+        true
+    }
+
+    /// Route requests to the saved OTA bundle, returning whether there was one.
+    async fn serve_saved_ota(&self) -> bool {
         let Some(path) = self.bundle_root.path() else {
             return false;
         };
@@ -718,9 +761,6 @@ impl<Fs: FsRepo> Service<Fs> {
         self.bundle_routes
             .restore(BundleSource::ota(manifest.bundle_build, path.to_path_buf()))
             .await;
-        if let Err(e) = self.clear_pending_bundle(cache_dir).await {
-            tracing::warn!(error=?e, "Failed to clear stale pending bundle marker");
-        }
         true
     }
 
@@ -949,31 +989,54 @@ impl<Fs: FsRepo> Service<Fs> {
         native_build: u64,
         bundle_dir: PathBuf,
     ) -> bool {
-        let Some(manifest) =
-            BundleManifest::read(&bundle_dir.join("bundle-manifest.json"), &self.fs_repo).await
-        else {
+        let Some(download) = self.usable_download(&bundle_dir, native_build).await else {
             let _ = self.clear_pending_bundle(cache_dir).await;
             return false;
         };
+        self.restore_completed(download)
+    }
 
-        let entrypoint = bundle_dir.join(ENTRYPOINT_NAME);
-        let usable = extraction_is_complete(&self.fs_repo, &bundle_dir, manifest.bundle_build)
+    /// The download the pending marker names, when this launch can serve it.
+    async fn usable_pending_download(
+        &self,
+        cache_dir: &Path,
+        native_build: u64,
+    ) -> Option<CompletedStatus> {
+        let marker = self
+            .fs_repo
+            .read_to_string(&cache_dir.join(PENDING_BUNDLE_ROOT_FILE))
             .await
+            .ok()?;
+        self.usable_download(Path::new(marker.trim()), native_build)
+            .await
+    }
+
+    /// The completed download in `bundle_dir`, when it is fully extracted, at
+    /// least as new as the embedded bundle, and fits this native build.
+    async fn usable_download(
+        &self,
+        bundle_dir: &Path,
+        native_build: u64,
+    ) -> Option<CompletedStatus> {
+        let manifest =
+            BundleManifest::read(&bundle_dir.join("bundle-manifest.json"), &self.fs_repo).await?;
+        let entrypoint = bundle_dir.join(ENTRYPOINT_NAME);
+        let usable = extraction_is_complete(&self.fs_repo, bundle_dir, manifest.bundle_build).await
             && manifest.bundle_build >= self.embedded_bundle_build
             && manifest.min_native_build <= native_build
             && self.fs_repo.read_to_string(&entrypoint).await.is_ok();
-        if !usable {
-            let _ = self.clear_pending_bundle(cache_dir).await;
-            return false;
-        }
+        usable.then_some(CompletedStatus {
+            bundle_build: manifest.bundle_build,
+            entrypoint,
+        })
+    }
 
+    /// Offer a completed download as this launch's pending update.
+    fn restore_completed(&self, download: CompletedStatus) -> bool {
         if let Err(e) = self
             .handle
             .status_tx
-            .send(Ok(UpdateStatus::Completed(CompletedStatus {
-                bundle_build: manifest.bundle_build,
-                entrypoint,
-            })))
+            .send(Ok(UpdateStatus::Completed(download)))
         {
             tracing::warn!(error=?e, "[bundle-update] failed to restore pending bundle status");
             return false;
@@ -1004,6 +1067,11 @@ impl<Fs: FsRepo> Service<Fs> {
     /// currently loaded document until reload acknowledgement.
     async fn clear_bundle_root(&mut self, cache_dir: &Path) -> Result<(), std::io::Error> {
         self.clear_pending_bundle(cache_dir).await?;
+        self.select_embedded(cache_dir).await
+    }
+
+    /// Persist and serve the embedded bundle, leaving any pending download.
+    async fn select_embedded(&mut self, cache_dir: &Path) -> Result<(), std::io::Error> {
         // Persist an explicit embedded selection. Deleting the marker makes
         // retained OTA files indistinguishable from an uncommitted download
         // after a crash, so startup recovery could resurrect a revoked bundle.
@@ -1166,6 +1234,8 @@ mod persistence_test;
 mod reload_test;
 #[cfg(test)]
 mod rollback_test;
+#[cfg(test)]
+mod staged_download_test;
 #[cfg(test)]
 mod tests {
     use super::*;
