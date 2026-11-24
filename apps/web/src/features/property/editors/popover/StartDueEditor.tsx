@@ -20,6 +20,27 @@ function hasTimeAt(dates: StartDue, end: DateField): boolean {
   return !!dates.timed && dates[end] != null && dates.wholeDay !== end;
 }
 
+/**
+ * The ends of `from` (each taken from its own source) with the precision each
+ * of them has there: timed when either has a time, and then the other one,
+ * when set, a whole day.
+ */
+function endsFrom(from: Record<DateField, StartDue>): StartDue {
+  const ends = { start: from.start.start, due: from.due.due };
+  const withTime = {
+    start: hasTimeAt(from.start, 'start'),
+    due: hasTimeAt(from.due, 'due'),
+  };
+  const timed = withTime.start || withTime.due;
+  return {
+    ...ends,
+    timed,
+    wholeDay: timed
+      ? ENDS.find((end) => ends[end] && !withTime[end])
+      : undefined,
+  };
+}
+
 export type StartDueEditorProps = {
   /** Which end the pill or row that opens the picker shows. */
   field: DateField;
@@ -97,21 +118,11 @@ function StartDueEditorBody(
   // moving past that due date waits until the new due date is saved.
   // What the server holds once `field` of `next` is saved: each end keeps
   // the precision it was last saved with.
-  const savedWith = (field: DateField, next: StartDue): StartDue => {
-    const ends = { start: saved.start, due: saved.due, [field]: next[field] };
-    const withTime = {
-      start: hasTimeAt(field === 'start' ? next : saved, 'start'),
-      due: hasTimeAt(field === 'due' ? next : saved, 'due'),
-    };
-    const timed = withTime.start || withTime.due;
-    return {
-      ...ends,
-      timed,
-      wholeDay: timed
-        ? ENDS.find((end) => ends[end] && !withTime[end])
-        : undefined,
-    };
-  };
+  const savedWith = (field: DateField, next: StartDue): StartDue =>
+    endsFrom({
+      start: field === 'start' ? next : saved,
+      due: field === 'due' ? next : saved,
+    });
 
   const saveOrder = (next: StartDue, changed: DateField[]): DateField[] =>
     changed.includes('due') && next.start && saved.due && next.start > saved.due
@@ -137,18 +148,14 @@ function StartDueEditorBody(
       const restore = changed
         .slice(index)
         .filter((end) => edits[end] === made[end]);
-      setDates((shown) => ({
-        start: restore.includes('start') ? saved.start : shown.start,
-        due: restore.includes('due') ? saved.due : shown.due,
-        timed: restore.length > 0 ? saved.timed : shown.timed,
-        // Only a restored end takes back its saved precision; a newer edit
-        // of the other end keeps its own.
-        wholeDay: ENDS.find((end) =>
-          restore.includes(end)
-            ? saved.wholeDay === end
-            : shown.wholeDay === end
-        ),
-      }));
+      // Only a restored end takes back its saved value and precision; the
+      // other end keeps what is shown, with the precision it has there.
+      setDates((shown) =>
+        endsFrom({
+          start: restore.includes('start') ? saved : shown,
+          due: restore.includes('due') ? saved : shown,
+        })
+      );
       return;
     }
   };

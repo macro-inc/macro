@@ -553,3 +553,42 @@ it('shows a due date without a time again after a half-failed Add time', async (
   await waitFor(() => expect(field('Due')).toBe('DueFri, Nov 27'));
   expect(field('Start')).toBe('StartMon, Nov 2311:00 AM');
 });
+
+it('keeps a start made a whole day by Remove time a whole day when the due save fails', async () => {
+  const timedStart = {
+    ...start,
+    value: new Date(2026, 10, 23, 9),
+    hasTime: true,
+  };
+  const timedDue = { ...due, value: new Date(2026, 10, 27, 15), hasTime: true };
+  const dueSave = Promise.withResolvers<void>();
+  const saveOther = vi
+    .fn<StartDueEditorProps['saveOther']>()
+    .mockResolvedValue(undefined);
+  setup(
+    vi.fn(() => dueSave.promise),
+    saveOther,
+    { start: timedStart, due: timedDue }
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove time' }));
+  await waitFor(() =>
+    expect(saveOther).toHaveBeenCalledWith(timedStart, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 23),
+    })
+  );
+  dueSave.reject(new Error());
+
+  await waitFor(() => expect(field('Due')).toBe('DueFri, Nov 273:00 PM'));
+  expect(field('Start')).toBe('StartMon, Nov 23');
+  fireEvent.click(screen.getByRole('button', { name: /^Start/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Change day' }));
+  fireEvent.click(screen.getByRole('button', { name: '24' }));
+  await waitFor(() =>
+    expect(saveOther).toHaveBeenLastCalledWith(timedStart, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 24),
+    })
+  );
+});
