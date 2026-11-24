@@ -382,6 +382,75 @@ describe('createLocalChannelTimeline', () => {
     dispose();
   });
 
+  it('pages from the new window, not the old one, once a window is read again', async () => {
+    const rows = messages(71);
+    const firstStore = Promise.withResolvers<void>();
+    const oldPageStarted = Promise.withResolvers<void>();
+    const reloadStarted = Promise.withResolvers<void>();
+    const reload =
+      Promise.withResolvers<Awaited<ReturnType<FetchChannelServerPage>>>();
+    const secondPage = Promise.withResolvers<void>();
+    const page = (
+      entries: Row[],
+      olderCursor: string | null,
+      cached: Promise<void>
+    ) => ({
+      page: {
+        __typename: 'GraphqlChannelTimelinePage',
+        entries: [...entries].reverse(),
+        olderCursor,
+        newerCursor: null,
+        seq: '9',
+      } as never,
+      cached,
+    });
+    let olderReads = 0;
+    let windowReads = 0;
+    const fetchPage = vi.fn<FetchChannelServerPage>(async (input, signal) => {
+      if (input.before) {
+        olderReads++;
+        if (olderReads === 1) {
+          oldPageStarted.resolve();
+          return new Promise((_resolve, reject) =>
+            signal?.addEventListener('abort', () => reject(signal.reason), {
+              once: true,
+            })
+          );
+        }
+        const older = rows.filter((row) => row.sortKey < input.before!);
+        await secondPage.promise;
+        return page(older, null, Promise.resolve());
+      }
+      windowReads++;
+      if (windowReads === 1) {
+        return page(rows.slice(20, 70), rows[20]!.sortKey, firstStore.promise);
+      }
+      reloadStarted.resolve();
+      return reload.promise;
+    });
+    const { timeline, dispose } = mount({ rows, held: false, fetchPage });
+    try {
+      await waitFor(() => timeline.hasOlder());
+      const oldLoad = timeline.loadOlder();
+      await oldPageStarted.promise;
+      firstStore.reject(new StaleCacheAuthorityError());
+      await reloadStarted.promise;
+      await oldLoad;
+      const newLoad = timeline.loadOlder();
+      reload.resolve(
+        page(rows.slice(21), rows[21]!.sortKey, Promise.resolve())
+      );
+      await waitFor(() => ids(timeline)[0] === rows[70]!.id);
+      secondPage.resolve();
+      await newLoad;
+      expect(timeline.hasOlder() || ids(timeline).includes(rows[20]!.id)).toBe(
+        true
+      );
+    } finally {
+      dispose();
+    }
+  });
+
   it('keeps every paged entry through a reread', async () => {
     const { timeline, runtime, addRow, dispose } = mount({
       rows: messages(70),

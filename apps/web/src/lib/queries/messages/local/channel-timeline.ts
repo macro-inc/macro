@@ -356,9 +356,10 @@ export function createLocalChannelTimeline(
         loadingOlder: false,
         loadingNewer: false,
       });
-    // A page loading meanwhile was aborted above and, its token stale, can no
-    // longer clear its flag.
-    else setState({ loadingOlder: false, loadingNewer: false });
+    // No page while the window is read again: its cursors are the old
+    // window's, and a page from them could leave a gap beside the new one.
+    // The page loading meanwhile was aborted above, its token now stale.
+    else setState({ loadingOlder: true, loadingNewer: true });
     const epoch = deps.runtime.epoch();
     let loaded: LoadedChannelPage | 'unsupported';
     try {
@@ -373,8 +374,9 @@ export function createLocalChannelTimeline(
       );
     } catch (error) {
       if (token !== loadToken) return;
-      // A reload keeps the window it already shows.
+      // A reload keeps the window it already shows, and pages from it again.
       if (reloads === 0) setState({ phase: 'failed', error });
+      else setState({ loadingOlder: false, loadingNewer: false });
       return;
     }
     if (token !== loadToken) return;
@@ -387,6 +389,8 @@ export function createLocalChannelTimeline(
       entries: loaded.page.entries,
       olderCursor: loaded.page.olderCursor,
       newerCursor: loaded.page.newerCursor,
+      loadingOlder: false,
+      loadingNewer: false,
     });
     const settled = await settle(loaded, epoch, token);
     if (token !== loadToken) return;
