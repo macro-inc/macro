@@ -807,6 +807,15 @@ pub async fn run() -> anyhow::Result<()> {
             suggestions::outbound::pg_suggestion_repo::PgSuggestionRepo::new(pool.clone()),
         ),
     });
+    // Pixels of the PNGs code-mode programs return, for session and user runs alike.
+    let model_images: Arc<dyn agent_code_mode::domain::ModelImages> =
+        Arc::new(code_mode::images::StaticFileModelImages(
+            static_file_service_client::StaticFileServiceClient::with_timeout(
+                config.internal_api_key.clone(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+                std::time::Duration::from_secs(10),
+            ),
+        ));
     let public_code_mode = match &code_runner {
         Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
@@ -824,6 +833,7 @@ pub async fn run() -> anyhow::Result<()> {
                     endpoints: code_mode::sdk_endpoints()?,
                     scopes: Arc::clone(&session_scopes),
                 }),
+                Arc::clone(&model_images),
             )),
         }),
         None => None,
@@ -936,13 +946,7 @@ pub async fn run() -> anyhow::Result<()> {
             }),
             execution_store,
             execution_turns,
-            Arc::new(code_mode::images::StaticFileModelImages(
-                static_file_service_client::StaticFileServiceClient::with_timeout(
-                    config.internal_api_key.clone(),
-                    macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
-                    std::time::Duration::from_secs(10),
-                ),
-            )),
+            Arc::clone(&model_images),
         ));
     let session_metadata_realtime = WorkRegistrationRealtime::new(
         ConnectionGatewayAgentSessionRealtime::new(

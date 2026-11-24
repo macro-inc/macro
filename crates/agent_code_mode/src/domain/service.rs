@@ -74,29 +74,15 @@ impl CodeModeService {
         acting_user: Option<&MacroUserIdStr<'static>>,
         receipt: &mut ExecutionReceipt,
     ) {
-        let images = returned_images(receipt);
-        tracing::Span::current().record("images", images.len());
-        for image in images {
-            let loaded = match acting_user {
-                Some(owner) => self.0.images.load_png(&image.id, owner).await,
-                None => Err(anyhow::anyhow!(
-                    "no acting account to check the image owner against"
-                )),
-            };
-            match loaded {
-                Ok(pixels) => receipt.model_media.push(pixels),
-                Err(error) => {
-                    tracing::Span::current().record("failed_image", image.id.as_ref());
-                    tracing::warn!(?error, "could not load a returned image");
-                    receipt.model_media.clear();
-                    receipt.error = Some(format!(
-                        "main succeeded, but image {} could not be shown: return a PNG from the SDK, such as await canvas.render().",
-                        image.id.as_ref()
-                    ));
-                    return;
-                }
-            }
-        }
+        attach_returned_images(
+            self.0.images.as_ref(),
+            acting_user,
+            receipt.status,
+            receipt.result.as_ref(),
+            &mut receipt.model_media,
+            &mut receipt.error,
+        )
+        .await;
     }
 
     async fn run(
@@ -613,19 +599,22 @@ pub(super) fn settle(
                 {
                     object.remove("reviews");
                 }
-                let valid = value
-                    .as_object()
-                    .is_some_and(|object| object.len() == 1 && object.contains_key("data"));
+                let valid = value.as_object().is_some_and(|object| {
+                    object.contains_key("data")
+                        && object.get("images").is_none_or(valid_images)
+                        && object
+                            .keys()
+                            .all(|key| matches!(key.as_str(), "data" | "images"))
+                });
                 return if valid {
                     (ExecutionStatus::Succeeded, Some(value), None)
                 } else {
                     (
                         ExecutionStatus::Failed,
                         Some(value),
-                        Some(
-                            "main must return exactly {data: JSON}; reviews are unavailable here."
-                                .into(),
-                        ),
+                        Some(format!(
+                            "main must return {{data: JSON}}; optional images must be an array of at most {MAX_RESULT_IMAGES} SDK images, such as await canvas.render(); reviews are unavailable here."
+                        )),
                     )
                 };
             }
@@ -637,10 +626,7 @@ pub(super) fn settle(
                         serde_json::from_value::<Vec<reviews::ReviewReference>>(references.clone())
                             .is_ok()
                     })
-                    && object.get("images").is_none_or(|images| {
-                        serde_json::from_value::<Vec<ReturnedImage>>(images.clone())
-                            .is_ok_and(|images| images.len() <= MAX_RESULT_IMAGES)
-                    })
+                    && object.get("images").is_none_or(valid_images)
                     && object
                         .keys()
                         .all(|key| matches!(key.as_str(), "data" | "reviews" | "images"))
@@ -674,6 +660,12 @@ pub(super) fn settle(
             Some("Execution timed out. Unfinished calls may have taken effect.".into()),
         ),
     }
+}
+
+/// At most [`MAX_RESULT_IMAGES`] SDK images, each naming a static file.
+fn valid_images(images: &serde_json::Value) -> bool {
+    serde_json::from_value::<Vec<ReturnedImage>>(images.clone())
+        .is_ok_and(|images| images.len() <= MAX_RESULT_IMAGES)
 }
 
 /// What a session program's `main` receives: the session and this execution.
@@ -726,16 +718,54 @@ fn receipt(record: &ExecutionRecord) -> ExecutionReceipt {
 }
 
 /// The images a succeeded result returned; `settle` already checked them.
-fn returned_images(receipt: &ExecutionReceipt) -> Vec<ReturnedImage> {
-    if receipt.status != ExecutionStatus::Succeeded {
+fn returned_images(
+    status: ExecutionStatus,
+    result: Option<&serde_json::Value>,
+) -> Vec<ReturnedImage> {
+    if status != ExecutionStatus::Succeeded {
         return Vec::new();
     }
-    receipt
-        .result
-        .as_ref()
+    result
         .and_then(|result| result.get("images"))
         .and_then(|images| serde_json::from_value(images.clone()).ok())
         .unwrap_or_default()
+}
+
+/// Load the images a successful result returned, so the model sees them. One
+/// that cannot be shown drops them all and says which one failed; only files
+/// `owner`, the account the execution acted as, owns are read. Records the
+/// counts on the current span's `images` and `failed_image` fields.
+pub(super) async fn attach_returned_images(
+    loader: &dyn ModelImages,
+    owner: Option<&MacroUserIdStr<'_>>,
+    status: ExecutionStatus,
+    result: Option<&serde_json::Value>,
+    media: &mut Vec<ModelImage>,
+    error: &mut Option<String>,
+) {
+    let images = returned_images(status, result);
+    tracing::Span::current().record("images", images.len());
+    for image in images {
+        let loaded = match owner {
+            Some(owner) => loader.load_png(&image.id, owner).await,
+            None => Err(anyhow::anyhow!(
+                "no acting account to check the image owner against"
+            )),
+        };
+        match loaded {
+            Ok(pixels) => media.push(pixels),
+            Err(failure) => {
+                tracing::Span::current().record("failed_image", image.id.as_ref());
+                tracing::warn!(error = ?failure, "could not load a returned image");
+                media.clear();
+                *error = Some(format!(
+                    "main succeeded, but image {} could not be shown: return a PNG from the SDK, such as await canvas.render().",
+                    image.id.as_ref()
+                ));
+                return;
+            }
+        }
+    }
 }
 
 fn execution_error(record: &ExecutionRecord) -> Option<String> {

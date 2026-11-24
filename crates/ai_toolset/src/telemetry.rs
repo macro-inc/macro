@@ -154,10 +154,48 @@ impl ToolCallSpan {
     }
 
     fn record_result(&self, value: &serde_json::Value) {
-        let (result, truncated) = bounded_json_string(value, &self.policy.limits);
+        let value = without_image_pixels(value);
+        let (result, truncated) = bounded_json_string(&value, &self.policy.limits);
         self.span.set_str(attr::TOOL_CALL_RESULT, result);
         if truncated {
             self.span.set_bool(attr::MACRO_CONTENT_TRUNCATED, true);
         }
+    }
+}
+
+/// The result with the base64 `data` of every `modelMedia` image, at any
+/// depth (a tool may wrap another tool's result), replaced by the decoded size
+/// in `dataBytes`: pixels are not content a trace can use.
+fn without_image_pixels(value: &serde_json::Value) -> serde_json::Value {
+    let mut value = value.clone();
+    redact_image_pixels(&mut value);
+    value
+}
+
+fn redact_image_pixels(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(fields) => {
+            for (key, field) in fields.iter_mut() {
+                match (key.as_str(), field) {
+                    ("modelMedia", serde_json::Value::Array(images)) => {
+                        images.iter_mut().for_each(redact_image_data);
+                    }
+                    (_, field) => redact_image_pixels(field),
+                }
+            }
+        }
+        serde_json::Value::Array(items) => items.iter_mut().for_each(redact_image_pixels),
+        _ => {}
+    }
+}
+
+fn redact_image_data(image: &mut serde_json::Value) {
+    let Some(fields) = image.as_object_mut() else {
+        return;
+    };
+    if let Some(serde_json::Value::String(data)) = fields.remove("data") {
+        let padding = data.bytes().rev().take_while(|byte| *byte == b'=').count();
+        let decoded = (data.len() / 4 * 3).saturating_sub(padding);
+        fields.insert("dataBytes".to_owned(), serde_json::Value::from(decoded));
     }
 }

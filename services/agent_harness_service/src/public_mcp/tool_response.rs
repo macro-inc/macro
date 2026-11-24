@@ -113,6 +113,27 @@ pub(crate) async fn tool_result_with_media<R: MarkdownImageResolver>(
     result
 }
 
+/// A code-mode receipt for MCP clients: its pixels become image blocks, so a
+/// client sees them as images rather than base64 text, and stay out of the
+/// structured JSON, which clients keep in their context and histories.
+pub(crate) fn code_mode_result(mut value: Value) -> CallToolResult {
+    let media = value
+        .as_object_mut()
+        .and_then(|object| object.remove("modelMedia"));
+    let mut result = CallToolResult::structured(value);
+    for image in media
+        .as_ref()
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        if let Some(data) = image.get("data").and_then(Value::as_str) {
+            result.content.push(ContentBlock::image(data, "image/png"));
+        }
+    }
+    result
+}
+
 /// Canvas pixels have an explicit, bounded contract; scene text cannot promote media.
 fn canvas_render_result(mut value: Value) -> CallToolResult {
     let media = value

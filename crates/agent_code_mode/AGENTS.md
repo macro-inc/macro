@@ -35,7 +35,9 @@ stacks. Process isolation belongs to
   blocks as it does for `RenderCanvas`. The harness adapter is
   `agent_harness_service/src/code_mode/images.rs`.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
-  session, journal or reviews; shares outcome validation with the session path.
+  session, journal or reviews; shares outcome validation and image loading
+  with the session path, so its receipt carries the same `modelMedia`, for
+  the PNGs the authenticated user owns.
 - `src/domain/reviews.rs`: review revisions, claims and outcomes.
   `src/domain/reviews/drafts.rs` holds the typed drafts and results: items
   keyed by kind, reusing `SendEmail`, `CreateCalendarEvent` and their

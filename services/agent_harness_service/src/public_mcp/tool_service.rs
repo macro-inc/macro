@@ -2,7 +2,7 @@ use crate::public_mcp::analytics::{
     McpAnalytics, McpAnalyticsEvent, McpClientSignals, SERVER_NAME, ToolCallOutcome,
 };
 use crate::public_mcp::markdown_images::MarkdownImageResolver;
-use crate::public_mcp::tool_response::tool_result_with_media;
+use crate::public_mcp::tool_response::{code_mode_result, tool_result_with_media};
 use agent_code_mode::{domain::UserCodeMode, inbound::toolset::UserCodeModeToolContext};
 use agent_inmem::domain::tool_mode::ToolMode;
 use ai_toolset::ToolCaller;
@@ -502,10 +502,7 @@ where
                 }
             };
             return match result {
-                Ok(value) => (
-                    ToolCallOutcome::Success,
-                    Ok(CallToolResult::structured(value)),
-                ),
+                Ok(value) => (ToolCallOutcome::Success, Ok(code_mode_result(value))),
                 // A failed program is a completed execution with a receipt.
                 Err(error) => (
                     ToolCallOutcome::ToolError,

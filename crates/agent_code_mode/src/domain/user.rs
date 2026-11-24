@@ -1,7 +1,7 @@
 //! Authenticated MCP code execution, optionally attributed to a managed session.
 use super::{
-    CodeModeError, ExecutionActivity, ExecutionStatus,
-    service::{Reviews, settle, settle_unrun, validate_request},
+    CodeModeError, ExecutionActivity, ExecutionStatus, ModelImage, ModelImages,
+    service::{Reviews, attach_returned_images, settle, settle_unrun, validate_request},
 };
 use ai_toolset::ToolCaller;
 use async_trait::async_trait;
@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 
 /// Mint a short-lived credential for the user a run acts as.
 #[async_trait]
@@ -40,6 +41,9 @@ pub struct UserExecutionReceipt {
     pub result: Option<Value>,
     /// Safe failure text, when execution did not succeed.
     pub error: Option<String>,
+    /// Pixels of the images `main` returned in `images`, for the model.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub model_media: Vec<ModelImage>,
 }
 
 /// Run a program as the authenticated user, with optional session attribution
@@ -62,17 +66,20 @@ pub trait UserCodeMode: Send + Sync + 'static {
 pub struct UserCodeModeService {
     executor: Arc<dyn ProgramExecutor>,
     credentials: Arc<dyn UserExecutionCredentials>,
+    images: Arc<dyn ModelImages>,
 }
 
 impl UserCodeModeService {
-    /// Bind the executor and credential issuer once at startup.
+    /// Bind the executor, credential issuer and image reader once at startup.
     pub fn new(
         executor: Arc<dyn ProgramExecutor>,
         credentials: Arc<dyn UserExecutionCredentials>,
+        images: Arc<dyn ModelImages>,
     ) -> Self {
         Self {
             executor,
             credentials,
+            images,
         }
     }
 }
@@ -114,6 +121,7 @@ impl UserCodeMode for UserCodeModeService {
                 activity_truncated: false,
                 result,
                 error,
+                model_media: Vec::new(),
             });
         }
         let environment = self.credentials.issue(user, caller, session).await?;
@@ -141,16 +149,33 @@ impl UserCodeMode for UserCodeModeService {
             super::activity::observe(&mut activity, &mut truncated, value);
         }
         super::activity::finish(&mut activity);
-        let (status, result, error) = settle(outcome, Reviews::Rejected);
+        let (status, result, mut error) = settle(outcome, Reviews::Rejected);
         let span = tracing::Span::current();
         span.record("status", tracing::field::debug(status));
         span.record("activity", activity.len());
+        let mut model_media = Vec::new();
+        attach_returned_images(
+            self.images.as_ref(),
+            Some(user),
+            status,
+            result.as_ref(),
+            &mut model_media,
+            &mut error,
+        )
+        .instrument(tracing::info_span!(
+            "code_mode.result_images",
+            agent_session_id = session.map(tracing::field::display),
+            images = tracing::field::Empty,
+            failed_image = tracing::field::Empty,
+        ))
+        .await;
         Ok(UserExecutionReceipt {
             status,
             activity,
             activity_truncated: truncated,
             result,
             error,
+            model_media,
         })
     }
 }

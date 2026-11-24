@@ -500,3 +500,25 @@ async fn a_request_that_opted_out_records_no_tool_span() {
     let spans = finished(&exporter, &provider);
     assert!(tool_spans(&spans).is_empty(), "{spans:#?}");
 }
+
+#[test]
+fn image_pixels_are_recorded_as_a_decoded_byte_count_at_any_depth() {
+    let result = json!({
+        "status": "succeeded",
+        "modelMedia": [{"type": "image", "mediaType": "image/png", "data": "iVBORw0KGgo="}],
+        "nested": [{"inner": {"modelMedia": [{"type": "image", "mediaType": "image/png", "data": "iVBORw0K"}]}}],
+    });
+
+    assert_eq!(
+        without_image_pixels(&result),
+        json!({
+            "status": "succeeded",
+            "modelMedia": [{"type": "image", "mediaType": "image/png", "dataBytes": 8}],
+            "nested": [{"inner": {"modelMedia": [{"type": "image", "mediaType": "image/png", "dataBytes": 6}]}}],
+        })
+    );
+    assert_eq!(
+        without_image_pixels(&json!({"echo": "a"})),
+        json!({"echo": "a"})
+    );
+}

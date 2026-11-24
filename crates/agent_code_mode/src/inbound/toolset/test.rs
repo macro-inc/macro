@@ -202,6 +202,7 @@ fn both_execute_code_descriptions_share_one_runtime_contract() {
         assert!(session.contains(shared.trim()));
         assert!(user.contains(shared.trim()));
     }
+    assert!(user.contains("images: [await canvas.render()]"));
     assert!(session.contains("execution.reviews.create"));
     assert!(!user.contains("execution.reviews.create"));
     assert!(user.contains("DescribeCodeTools with task"));

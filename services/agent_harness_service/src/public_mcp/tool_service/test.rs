@@ -326,6 +326,7 @@ mod code_mode {
                 activity_truncated: false,
                 result: Some(serde_json::json!({"data": request.source.len()})),
                 error: None,
+                model_media: vec![],
             })
         }
     }
@@ -991,6 +992,65 @@ mod code_mode {
         assert_eq!(*runs.2.lock().unwrap(), [Some(session), None]);
     }
 
+    /// Returns one rendered image, as a program returning `await canvas.render()`.
+    struct Renders;
+    #[async_trait::async_trait]
+    impl UserCodeMode for Renders {
+        async fn execute(
+            &self,
+            _: &MacroUserIdStr<'static>,
+            _: &ToolCaller,
+            _: Option<uuid::Uuid>,
+            _: ExecuteRequest,
+            _: CancellationToken,
+        ) -> Result<UserExecutionReceipt, CodeModeError> {
+            Ok(UserExecutionReceipt {
+                status: ExecutionStatus::Succeeded,
+                activity: vec![],
+                activity_truncated: false,
+                result: Some(serde_json::json!({"data": 1, "images": [{"id": "render-1"}]})),
+                error: None,
+                model_media: vec![agent_code_mode::domain::ModelImage {
+                    r#type: agent_code_mode::domain::ModelMediaType::Image,
+                    media_type: agent_code_mode::domain::ModelImageMediaType::Png,
+                    data: "iVBORw0KGgopixels".into(),
+                }],
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn returned_images_reach_mcp_clients_as_image_blocks() {
+        let called = rpc(
+            app(Arc::new(Renders)),
+            USER,
+            "tools/call",
+            serde_json::json!({
+                "name": "ExecuteCode",
+                "arguments": {"source": "export async function main() {}"},
+            }),
+        )
+        .await;
+
+        let result = &called["result"];
+        let receipt = serde_json::json!({
+            "status": "succeeded",
+            "activity": [],
+            "activityTruncated": false,
+            "result": {"data": 1, "images": [{"id": "render-1"}]},
+            "error": null,
+        });
+        assert_eq!(result["structuredContent"], receipt, "{called}");
+        assert_eq!(
+            result["content"],
+            serde_json::json!([
+                {"type": "text", "text": receipt.to_string()},
+                {"type": "image", "data": "iVBORw0KGgopixels", "mimeType": "image/png"},
+            ]),
+            "{called}"
+        );
+    }
+
     /// A request the middleware left without a caller runs nothing.
     #[tokio::test]
     async fn execute_code_without_a_caller_runs_nothing() {
@@ -1085,6 +1145,18 @@ mod code_mode {
         }
     }
 
+    struct NoImages;
+    #[async_trait::async_trait]
+    impl agent_code_mode::domain::ModelImages for NoImages {
+        async fn load_png(
+            &self,
+            _: &agent_code_mode::domain::StaticFileId,
+            _: &MacroUserIdStr<'_>,
+        ) -> anyhow::Result<agent_code_mode::domain::ModelImage> {
+            anyhow::bail!("this test returns no images")
+        }
+    }
+
     struct NoCredentials;
     #[async_trait::async_trait]
     impl agent_code_mode::domain::UserExecutionCredentials for NoCredentials {
@@ -1134,6 +1206,7 @@ mod code_mode {
         let app = app(Arc::new(agent_code_mode::domain::UserCodeModeService::new(
             Arc::new(runner),
             Arc::new(NoCredentials),
+            Arc::new(NoImages),
         )));
 
         let succeeded = rpc(

@@ -67,6 +67,29 @@ impl ProgramExecutor for Returns {
     }
 }
 
+/// PNG pixels named after their file, owned by the fixture user; the file
+/// `missing` cannot be read.
+struct Pixels;
+#[async_trait]
+impl ModelImages for Pixels {
+    async fn load_png(
+        &self,
+        file: &super::super::StaticFileId,
+        owner: &MacroUserIdStr<'_>,
+    ) -> anyhow::Result<ModelImage> {
+        anyhow::ensure!(file.as_ref() != "missing", "no such file");
+        anyhow::ensure!(
+            owner.as_ref() == "macro|fixture@example.com",
+            "the file belongs to someone else"
+        );
+        Ok(ModelImage {
+            r#type: super::super::ModelMediaType::Image,
+            media_type: super::super::ModelImageMediaType::Png,
+            data: format!("iVBORw0KGgo{}", file.as_ref()),
+        })
+    }
+}
+
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|fixture@example.com").unwrap()
 }
@@ -81,8 +104,11 @@ fn request() -> ExecuteRequest {
 #[tokio::test]
 async fn runs_as_the_authenticated_user_and_returns_data_with_activity() {
     let credentials = Arc::new(Credentials::default());
-    let service =
-        UserCodeModeService::new(Arc::new(Returns(json!({"data": 42}))), credentials.clone());
+    let service = UserCodeModeService::new(
+        Arc::new(Returns(json!({"data": 42}))),
+        credentials.clone(),
+        Arc::new(Pixels),
+    );
 
     let caller = ToolCaller::Agent(bot_id::BotId::new_from_uuid(macro_uuid::Uuid::from_u128(
         0xA1,
@@ -114,6 +140,7 @@ async fn review_references_fail_outside_a_session() {
             json!({"data": 1, "reviews": [{"kind": "email", "id": "x"}]}),
         )),
         Arc::new(Credentials::default()),
+        Arc::new(Pixels),
     );
 
     let receipt = service
@@ -134,8 +161,11 @@ async fn review_references_fail_outside_a_session() {
 #[tokio::test]
 async fn invalid_requests_are_rejected_before_minting_a_credential() {
     let credentials = Arc::new(Credentials::default());
-    let service =
-        UserCodeModeService::new(Arc::new(Returns(json!({"data": 1}))), credentials.clone());
+    let service = UserCodeModeService::new(
+        Arc::new(Returns(json!({"data": 1}))),
+        credentials.clone(),
+        Arc::new(Pixels),
+    );
 
     for request in [
         ExecuteRequest {
@@ -168,6 +198,7 @@ async fn an_empty_reviews_list_is_dropped() {
     let service = UserCodeModeService::new(
         Arc::new(Returns(json!({"data": 1, "reviews": []}))),
         Arc::new(Credentials::default()),
+        Arc::new(Pixels),
     );
 
     let receipt = service
@@ -183,6 +214,136 @@ async fn an_empty_reviews_list_is_dropped() {
 
     assert_eq!(receipt.status, ExecutionStatus::Succeeded);
     assert_eq!(receipt.result, Some(json!({"data": 1})));
+}
+
+#[tokio::test]
+async fn a_channel_bot_sees_the_images_its_program_returned() {
+    let service = UserCodeModeService::new(
+        Arc::new(Returns(json!({
+            "data": {"rendered": true},
+            "images": [{"id": "render-1", "url": "https://static/file/render-1", "width": 10}],
+        }))),
+        Arc::new(Credentials::default()),
+        Arc::new(Pixels),
+    );
+    let bot = ToolCaller::Agent(bot_id::BotId::new_from_uuid(macro_uuid::Uuid::from_u128(
+        0xB0,
+    )));
+
+    let receipt = service
+        .execute(
+            &user(),
+            &bot,
+            Some(uuid::Uuid::from_u128(0x5E)),
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(receipt.status, ExecutionStatus::Succeeded);
+    assert_eq!(receipt.error, None);
+    let json = serde_json::to_value(&receipt).unwrap();
+    assert_eq!(
+        json["modelMedia"],
+        json!([{"type": "image", "mediaType": "image/png", "data": "iVBORw0KGgorender-1"}])
+    );
+    assert_eq!(json["result"]["images"][0]["id"], "render-1");
+}
+
+#[tokio::test]
+async fn an_image_that_cannot_be_shown_drops_them_all_and_says_which() {
+    let service = UserCodeModeService::new(
+        Arc::new(Returns(json!({
+            "data": 1,
+            "images": [{"id": "render-1"}, {"id": "missing"}],
+        }))),
+        Arc::new(Credentials::default()),
+        Arc::new(Pixels),
+    );
+
+    let receipt = service
+        .execute(
+            &user(),
+            &ToolCaller::ApiKey,
+            None,
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+
+    assert!(receipt.model_media.is_empty());
+    assert!(
+        receipt
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("image missing could not be shown")
+    );
+    assert!(
+        serde_json::to_value(&receipt)
+            .unwrap()
+            .get("modelMedia")
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn more_than_two_images_fail_the_result() {
+    let service = UserCodeModeService::new(
+        Arc::new(Returns(json!({
+            "data": 1,
+            "images": [{"id": "a"}, {"id": "b"}, {"id": "c"}],
+        }))),
+        Arc::new(Credentials::default()),
+        Arc::new(Pixels),
+    );
+
+    let receipt = service
+        .execute(
+            &user(),
+            &ToolCaller::ApiKey,
+            None,
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(receipt.status, ExecutionStatus::Failed);
+    assert!(receipt.model_media.is_empty());
+    assert!(receipt.error.unwrap().contains("at most 2 SDK images"));
+}
+
+#[tokio::test]
+async fn an_image_someone_else_owns_is_not_shown() {
+    let service = UserCodeModeService::new(
+        Arc::new(Returns(json!({"data": 1, "images": [{"id": "render-1"}]}))),
+        Arc::new(Credentials::default()),
+        Arc::new(Pixels),
+    );
+    let someone_else = MacroUserIdStr::parse_from_str("macro|someone-else@example.com").unwrap();
+
+    let receipt = service
+        .execute(
+            &someone_else,
+            &ToolCaller::ApiKey,
+            None,
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+
+    assert!(receipt.model_media.is_empty());
+    assert!(
+        receipt
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("image render-1 could not be shown")
+    );
 }
 
 /// Fails every program at its check, as the checker fails one with type
@@ -216,7 +377,11 @@ impl ProgramExecutor for RejectsTypes {
 #[tokio::test]
 async fn a_program_with_type_errors_fails_before_minting_a_credential() {
     let credentials = Arc::new(Credentials::default());
-    let service = UserCodeModeService::new(Arc::new(RejectsTypes), credentials.clone());
+    let service = UserCodeModeService::new(
+        Arc::new(RejectsTypes),
+        credentials.clone(),
+        Arc::new(Pixels),
+    );
 
     let receipt = service
         .execute(

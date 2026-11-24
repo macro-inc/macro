@@ -399,6 +399,7 @@ produce events, independently of public session control.
 
 ## Canvas media
 
+- Public `ExecuteCode` turns its receipt's `modelMedia` (the PNGs a program returned in `images`) into MCP image blocks and drops it from text and structured JSON (`tool_response::code_mode_result`). Session and user code mode read those PNGs through one `code_mode::images::StaticFileModelImages` with a 10 s timeout.
 - `RenderCanvas` promotes only its explicit top-level `modelMedia` contract to at most two bounded native PNG blocks; pixels are removed from text and structured JSON, nested scene media is never promoted, and this adapter never fetches image URLs.
 
 ## Checks
