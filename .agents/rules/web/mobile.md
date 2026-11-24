@@ -74,6 +74,11 @@ read their code, and follow that pattern rather than inventing a new one.
   the effect (`GLASS_EFFECTS_EVERYWHERE` turns it on in iOS Safari in dev and
   on web previews). Holding the dock's Search runs it into the navigation
   island through a goo filter (`DockGoo`).
+- Touch `glass` is one material: a toned 10px backdrop blur under the
+  `bg-glass` veil, a 1px gleam and faint sheen, and no cast shadow. Tune it
+  through the `--glass-*` theme tokens in `index.css`; never give an `island`
+  its own fill (`bg-chrome`, a surface), which hides the backdrop. A component
+  whose base class sets a fill (`Surface`) adds `touch:bg-glass`.
 - Move touch chrome only with scrolling or `transform`/`scale`/`opacity`
   transitions: iOS runs those on the compositor at 120 Hz, while touch events,
   `requestAnimationFrame`, layout and custom-property transitions are capped

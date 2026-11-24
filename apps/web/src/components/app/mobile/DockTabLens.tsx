@@ -26,8 +26,9 @@ const SETTLE_DELAY_MS = 160;
  * momentum and rubber-bands past the ends.
  *
  * A tap is the button's own click. A drag presses the tab under the finger
- * when it lifts. The lens shows only while a finger is on the bar, so the
- * resting dock keeps its ink-only selection.
+ * when it lifts. At rest a pill marks the selected tab, as in rida.dev's tab
+ * bar; while a finger is on the bar the pill gives way to the lens, which
+ * swells slightly as it lifts.
  */
 export function DockTabLens(props: {
   /** The selected button's index among the bar's buttons, or -1. */
@@ -194,16 +195,27 @@ export function DockTabLens(props: {
           data-dock-lens
           data-shown={lensShown() ? '' : undefined}
           class={cn(
-            'pointer-events-none absolute top-0 size-(--mobile-chrome-button-size) -translate-x-1/2 rounded-full bg-ink/10 transition-[opacity,scale] duration-200 ease-out motion-reduce:transition-none',
-            lensShown() ? 'scale-100 opacity-100' : 'scale-75 opacity-0'
+            'pointer-events-none absolute top-1 size-[calc(var(--mobile-chrome-button-size)-8px)] -translate-x-1/2 rounded-full bg-glass-pill transition-[opacity,scale] duration-200 ease-out motion-reduce:transition-none',
+            lensShown() ? 'scale-110 opacity-100' : 'scale-100 opacity-0'
           )}
           style={{ left: `${span() + (centers()[0] ?? 0)}px` }}
         />
         <div
           ref={setRow}
-          class="sticky left-0 flex h-full items-center justify-between"
+          class="sticky left-0 isolate flex h-full items-center justify-between"
           style={{ width: `calc(100% - ${span()}px)` }}
         >
+          <div
+            aria-hidden="true"
+            data-dock-selection
+            class={cn(
+              'pointer-events-none absolute top-1 -z-10 size-[calc(var(--mobile-chrome-button-size)-8px)] -translate-x-1/2 rounded-full bg-glass-pill transition-[left,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+              lensShown() || props.activeIndex < 0 || !centers().length
+                ? 'opacity-0'
+                : 'opacity-100'
+            )}
+            style={{ left: `${centers()[props.activeIndex] ?? 0}px` }}
+          />
           {props.children}
         </div>
       </div>

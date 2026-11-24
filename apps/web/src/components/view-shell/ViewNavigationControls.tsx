@@ -72,7 +72,7 @@ export function ViewSidebarToggle(props: {
           'shrink-0',
           // The same island as the touch filter button beside it.
           props.presentation === 'pill' &&
-            'island bg-chrome pointer-events-auto relative size-10 rounded-full',
+            'island pointer-events-auto relative size-10 rounded-full',
           props.action === 'collapse' && 'ml-auto',
           props.action === 'collapse' &&
             ws?.aside.isOverlay() &&

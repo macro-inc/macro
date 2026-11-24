@@ -460,6 +460,11 @@ body.tauri-ios {
   --color-task-status-completed: var(--color-accent);
   --color-task-status-canceled: var(--color-content-1);
   --color-chrome: color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0));
+  /* Touch glass (see `glass`): the veil over the toned backdrop, the solid
+     tone where nothing shows through, and the selected-tab pill. */
+  --color-glass: var(--glass-veil);
+  --color-glass-solid: var(--glass-solid);
+  --color-glass-pill: var(--glass-pill);
 
   /* Generated compatibility tokens. */
   --color-accent-bg: color-mix(in oklch, var(--color-accent) 8%, transparent);
@@ -766,9 +771,17 @@ body.tauri-ios {
     /* Dark desktop glass separates by its outline; light adds a cast shadow. */
     --glass-desktop-cast-alpha: 0;
     --elevated-control-scale: 0.4;
-    /* Mobile chrome has two diagonal reflections with quiet opposing corners. */
-    --island-rim-strong: 28%;
-    --island-rim-soft: 12%;
+    /* Touch glass, matched to rida.dev's Liquid Glass tab bar: the backdrop
+       shows through blurred and toned (darkened, compressed and saturated)
+       under a thin white veil; a 1px gleam and glint, a faint sheen, and
+       almost no cast shadow. */
+    --glass-veil: oklch(1 0 0 / 0.13);
+    --glass-solid: rgb(42 41 40);
+    --glass-pill: oklch(0 0 0 / 0.69);
+    --glass-tone: brightness(0.5) saturate(2.2);
+    --glass-gleam: 0.17;
+    --glass-sheen: 0.055;
+    --glass-hairline: 0;
   }
 
   /* Preserve the darker thread rail only on an explicitly dark document. */
@@ -832,8 +845,15 @@ body.tauri-ios {
        shadow, and give controls a full 1px edge like a bordered input. */
     --glass-desktop-cast-alpha: var(--glass-shadow-alpha);
     --elevated-control-scale: 1;
-    --island-rim-strong: 75%;
-    --island-rim-soft: 40%;
+    /* Light touch glass lifts the backdrop toward white and outlines its
+       flanks with a fine dark hairline. */
+    --glass-veil: oklch(1 0 0 / 0.59);
+    --glass-solid: rgb(253 253 253);
+    --glass-pill: oklch(0 0 0 / 0.075);
+    --glass-tone: saturate(2.2);
+    --glass-gleam: 0.125;
+    --glass-sheen: 0.075;
+    --glass-hairline: 0.34;
 
     &:not([data-touch-device='true']) {
       --color-control-raised: color-mix(in oklch, var(--color-surface-2) 98%, var(--color-content-0));
@@ -946,29 +966,8 @@ html:not([data-touch-device='true']) {
    utility so it composes with variants — `mobile:island` — instead of
    hand-prefixing each part. */
 @utility island {
-  /* Both themes share the diagonal rim; light mode keeps a soft cast shadow. */
-  @apply min-h-[40px] min-w-[40px] bg-chrome text-ink glass light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
-
-  --glass-blur: 18px;
-  --glass-saturate: 1.5;
-
-  @variant light-mode {
-    --glass-backdrop: none;
-    --glass-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow),
-      var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
-  /* Keep a bright rim around most of the shape, with short soft gaps at the
-     top-right and bottom-left, including wide pills. Glass owns the mask. */
-  --glass-rim-background: linear-gradient(
-    to bottom right,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 0%,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 42%,
-    color-mix(in oklch, var(--glass-tint) calc(var(--island-rim-soft) * var(--glass-rim-gap-ratio)), transparent) 49%,
-    color-mix(in oklch, var(--glass-tint) calc(var(--island-rim-soft) * var(--glass-rim-gap-ratio)), transparent) 51%,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 58%,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 100%
-  );
+  /* The touch glass material over a thin veil, with no fill of its own. */
+  @apply min-h-[40px] min-w-[40px] bg-glass text-ink glass;
 }
 
 /* Glass chrome: backdrop blur, a soft cast shadow, and a specular rim drawn as a 1px
@@ -1005,10 +1004,25 @@ html:not([data-touch-device='true']) {
     inset 0 -1px 0 color-mix(in oklch, var(--glass-shade-color) calc(var(--glass-shade-base) * var(--glass-scale)), transparent),
     0 var(--glass-shadow-y) var(--glass-shadow-blur) var(--glass-shadow-spread)
       oklch(0 0 0 / calc(var(--glass-shadow-alpha) * var(--glass-shadow-scale, var(--glass-scale))));
+  /* Touch: rida.dev's glass. A 10px blur of the toned backdrop, a 1px gleam
+     on the top edge and glint on the bottom, a 6px sheen inside both, and a
+     barely-there cast shadow. The rim is a hairline weighted to the flanks. */
   @variant touch {
+    --glass-backdrop: blur(10px) var(--glass-tone);
     --glass-shadow:
-      0 var(--glass-shadow-y) var(--glass-shadow-blur) var(--glass-shadow-spread)
-        oklch(0 0 0 / calc(var(--glass-shadow-alpha) * var(--glass-shadow-scale, var(--glass-scale))));
+      inset 0 1px 0 oklch(1 0 0 / var(--glass-gleam)),
+      inset 0 -1px 0 oklch(1 0 0 / var(--glass-gleam)),
+      inset 0 6px 6px -6px oklch(1 0 0 / var(--glass-sheen)),
+      inset 0 -6px 6px -6px oklch(1 0 0 / var(--glass-sheen)),
+      0 7px 4px oklch(0 0 0 / 0.012);
+    --glass-rim-background: linear-gradient(
+      to right,
+      oklch(0 0 0 / var(--glass-hairline)),
+      oklch(0 0 0 / calc(var(--glass-hairline) * 0.3)) 30%,
+      oklch(0 0 0 / calc(var(--glass-hairline) * 0.3)) 70%,
+      oklch(0 0 0 / var(--glass-hairline))
+    );
+    --glass-rim-shade-base: 0%;
   }
   backdrop-filter: var(--glass-backdrop);
   box-shadow: var(--glass-shadow);
