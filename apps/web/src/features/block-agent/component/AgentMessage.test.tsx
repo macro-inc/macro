@@ -744,7 +744,8 @@ describe('Message tool runs', () => {
     // No saved record yet: the fold's receipt rows stand for each program.
     expect(view.getAllByTestId('group')).toHaveLength(1);
     const group = view.getByTestId('group');
-    expect(group.dataset.count).toBe('4');
+    // The failed program named no step, so it adds none.
+    expect(group.dataset.count).toBe('3');
     expect(group.dataset.failureTally).toBe('false');
     expect(
       view.getAllByTestId('thought').every((row) => group.contains(row))
@@ -796,6 +797,60 @@ describe('Message tool runs', () => {
     const group = view.getByTestId('group');
     expect(group.dataset.count).toBe('5');
     expect(group.dataset.failureTally).toBe('false');
+  });
+
+  it('opens no group for a settled run whose only program named no step', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [program('failed'), text('That did not work.')],
+          { kind: 'end_turn' },
+          [row('failed', 'A step failed', 'failed')]
+        )}
+        inFlight={false}
+      />
+    ));
+    expect(view.queryByTestId('group')).toBeNull();
+    expect(view.container.textContent).not.toMatch(/A step failed|1 tool/);
+  });
+
+  it("leaves a program that named no step out of its run's count", () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            program('failed'),
+            tool('a'),
+            program('stopped'),
+            program('found'),
+            text('Done.'),
+          ],
+          { kind: 'end_turn' },
+          [
+            row('failed', 'A step failed', 'failed'),
+            row('a', 'Read', 'completed', 'a.rs'),
+            row('stopped', 'Step interrupted', 'interrupted'),
+            row('found', 'Finished a step'),
+          ]
+        )}
+        inFlight={false}
+      />
+    ));
+    expect(view.getByTestId('group').dataset.count).toBe('1');
+  });
+
+  it('counts a running program before it names a step', () => {
+    const view = render(() => (
+      <Message
+        message={message([program('starting', 'running')], null, [
+          row('starting', 'Working on it', 'running'),
+        ])}
+        inFlight
+      />
+    ));
+    const group = view.getByTestId('group');
+    expect(group.dataset.count).toBe('1');
+    expect(group.dataset.liveLine).toBe('true');
   });
 
   it('opens a live run before its first call names itself', () => {

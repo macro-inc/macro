@@ -4,46 +4,31 @@ import type {
   RecordedToolCall,
 } from '@service-agent-harness/generated/schemas';
 import { For, Show } from 'solid-js';
-import { programEnded } from '../../state/code-execution';
 import { isToolActive, ToolCard, type ToolStatus } from '../../ui';
 import { MacroToolCall } from './MacroToolCall';
 import type { ToolCallCommon, ToolCallContext } from './shared';
 
 /**
  * A program's steps, as rows of the tool group it belongs to: each observed
- * operation, historical calls with their registered Macro result components,
- * or one failed row when it ended without any. The program itself is never
- * shown.
+ * operation and historical calls with their registered Macro result
+ * components. The program itself is never shown, so one that ended without a
+ * step shows nothing: the agent explains a failure in its reply.
  */
 export function CodeExecutionToolCall(props: {
   common: ToolCallCommon;
   context: ToolCallContext;
   record?: ExecutionRecord;
-  error?: string | null;
   loading: boolean;
   unavailable: boolean;
 }) {
   const calls = () => props.record?.calls ?? [];
   const activity = () => props.record?.activity ?? [];
-  const ended = () =>
-    programEnded({
-      error: props.error,
-      recordRunning: props.record?.status === 'running',
-      active: isToolActive(props.common.status),
-    });
 
   return (
     <div
       class="flex min-w-0 flex-col"
       data-code-execution={props.record?.executionId}
     >
-      <Show when={activity().length === 0 && calls().length === 0 && ended()}>
-        <ToolCard
-          title="Workspace activity"
-          status={props.common.status}
-          trailing={props.common.trailing}
-        />
-      </Show>
       <For each={activity()}>
         {(item) => (
           <div class="min-h-8 shrink-0">

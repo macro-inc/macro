@@ -206,17 +206,20 @@ function ToolGroupPart(props: {
       id: part.id,
       ...useCodeExecutionRecord(
         () => part,
-        () => props.message.agentSessionId,
-        () => props.inFlight
+        () => props.message.agentSessionId
       ),
     })
   );
   const rows = () => props.message.segments.flatMap((segment) => segment.rows);
   // Until a program's saved record loads (or when it can't), the fold's rows
   // from its receipt stand for its steps, so the run folds the same either way.
+  // The program's own row names no step: it counts only while the program
+  // runs, since once it settles the transcript shows nothing for it.
   const receiptRows = (callId: string) =>
     rows().filter(
-      (row) => row.id === callId || row.id.startsWith(`${callId}:`)
+      (row) =>
+        row.id.startsWith(`${callId}:`) ||
+        (row.id === callId && row.status === 'running')
     );
   const programSteps = (program: ReturnType<typeof programs>[number]) =>
     program.steps() || receiptRows(program.id).length;
