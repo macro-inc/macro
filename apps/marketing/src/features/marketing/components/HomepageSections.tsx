@@ -24,11 +24,13 @@ import pullRequestScreen from '../../../assets/homepage/pull-request.webp';
 import tasksScreen from '../../../assets/homepage/tasks-board.webp';
 import type { TutorialVideoId } from '../core/tutorial-videos';
 import { FeaturePageSection } from './FeaturePage';
+import { HomepageBlog } from './HomepageBlog';
 import { HomepageClosing } from './HomepageClosing';
 import {
   HomepageFeatureDetails,
   type ProductPagePath,
 } from './HomepageFeatureDetails';
+import { HomepageTestimonials } from './HomepageTestimonials';
 import { HomepageScreen } from './homepage/HomepageScreen';
 import { ProductCopy } from './ProductMention';
 import './homepage/homepage-sections.css';
@@ -45,17 +47,17 @@ type Section = {
   page?: { title: string; path: ProductPagePath };
 };
 
-// Use the product pages' hero copy above each capture. The captions explain
-// why we built each block and how it fits with the others.
+// Keep each section to 1-2 short sentences above the graphic and 1-2 below:
+// what the Block does above, and why we built it or how we use it below.
 const SECTIONS: readonly Section[] = [
   {
     id: 'home',
     title: 'One inbox for your work.',
     description:
-      'Home puts the work that needs your attention in one place. Catch up on your email, team chat, tasks, and replies from an agent in the same list.',
+      'Catch up on email, chat, tasks, docs, and agent replies in one prioritized feed.',
     caption: [
-      'When our last startup grew to twenty people, engineering, sales, and marketing each had their own tools.',
-      'We wanted one place to catch up on a customer email, a doc we’d been editing, or a pull request waiting for review.',
+      'At our last startup, every team lived in different apps.',
+      'We built Home so nothing gets lost between email, docs, and pull requests.',
     ],
     tutorial: 'home',
     screen: inboxScreen,
@@ -65,10 +67,10 @@ const SECTIONS: readonly Section[] = [
     id: 'email',
     title: 'Organized and prioritized email.',
     description:
-      'Macro Mail brings all your accounts into one inbox. Use the same keys you use in Superhuman and share a live email thread with your team in chat.',
+      'Macro Mail brings every account into one inbox. Triage with Superhuman shortcuts and share live threads in chat.',
     caption: [
-      'We wanted the speed of Superhuman, the multitasking of Outlook, and a single inbox for all our accounts.',
-      'When we share a customer’s email in chat, the next reply shows up there too.',
+      'We wanted Superhuman’s speed and Outlook’s multi-account workflow in one place.',
+      'Every shared thread stays live in chat as customers reply.',
     ],
     tutorial: 'mail',
     screen: mailScreen,
@@ -79,10 +81,10 @@ const SECTIONS: readonly Section[] = [
     id: 'chat',
     title: 'Chat for people and agents.',
     description:
-      'Macro Chat puts your team and its agents in the same channels. Tag an agent in a thread and it can read what led up to the task before it gets to work.',
+      'Macro Chat puts teammates and agents in the same channels. Tag an agent in any thread and it reads the full history.',
     caption: [
-      'Slack was where we talked about the work we did in other apps.',
-      'We wanted to share a customer email in a channel, talk it through, and turn the message into a task right there.',
+      'Unlike Slack, your chat isn’t isolated from your work.',
+      'Share a customer email, talk it through, and turn the message into a task right there.',
     ],
     tutorial: 'chat',
     screen: chatScreen,
@@ -93,10 +95,10 @@ const SECTIONS: readonly Section[] = [
     id: 'tasks',
     title: 'Turn conversations into tasks.',
     description:
-      'Create a task from a team chat or a customer email. Pass the task to a teammate or an agent. The linked pull request keeps the task up to date.',
+      'Turn any chat message or email into a task. Assign it to a teammate or an agent.',
     caption: [
-      'We used Linear and really tried to keep it up to date, but the conversation that moved the work forward was happening in chat.',
-      'Now we make the task from the message so whoever picks it up can read the original discussion.',
+      'We struggled to keep Linear synced with chat.',
+      'Here every task links back to the original thread and updates with its pull request.',
     ],
     tutorial: 'tasks',
     screen: tasksScreen,
@@ -107,10 +109,9 @@ const SECTIONS: readonly Section[] = [
     id: 'docs',
     title: 'High speed agentic documents.',
     description:
-      'Docs keep a version history of your markdown and link back to the work you mention. Edit alongside an agent and see its cursor move as you work.',
+      'Collaborative markdown with full version history and live agent cursors. Mention any task, email, or call inline.',
     caption: [
-      'We liked the simplicity of Obsidian, the mentions in Notion, and being able to edit a plain markdown file with our own agents.',
-      'We wanted all of that in the same editor with live collaboration.',
+      'We combined Obsidian’s plain markdown, Notion’s mentions, and real-time CRDT editing for humans and agents alike.',
     ],
     tutorial: 'docs',
     screen: docsScreen,
@@ -122,10 +123,9 @@ const SECTIONS: readonly Section[] = [
     id: 'calendar',
     title: 'A really fast calendar, with agents that do the scheduling.',
     description:
-      'See your calendars from Google and Microsoft together in one place. Ask an agent to find a time that works for your team and put it on the calendar.',
+      'View Google and Microsoft calendars together. Ask an agent to find an open slot and send the invite.',
     caption: [
-      'We liked being able to send someone a Calendly link.',
-      'We wanted to see what they wrote on the booking form alongside their company record and the emails leading up to the call.',
+      'Built-in booking links replace Calendly and show each guest’s form answers beside their company record and past emails.',
     ],
     tutorial: 'calendar',
     screen: calendarScreen,
@@ -136,10 +136,10 @@ const SECTIONS: readonly Section[] = [
     id: 'calls',
     title: 'Calls that feed into team memory.',
     description:
-      'You can start a call in any channel or DM. Save both the recording and the transcript so you and your agents can find a detail that came up on the call.',
+      'Start a call in any channel or invite guests with a link. Every recording and transcript is searchable.',
     caption: [
-      'We wanted the ease of a Slack huddle and the option to send a guest a link, like Google Meet.',
-      'We run standups in our engineering channel so an agent can read the transcript afterward and write up the tasks we agreed on.',
+      'It feels like a Slack huddle with Google Meet guest links.',
+      'After standup, an agent reads the transcript and writes up the tasks.',
     ],
     tutorial: 'calls',
     screen: callsScreen,
@@ -150,10 +150,10 @@ const SECTIONS: readonly Section[] = [
     id: 'crm',
     title: 'CRM that keeps itself up to date.',
     description:
-      'Macro CRM keeps up with the work your team does in email and chat. Open a company record to see who spoke to the customer last and what they said.',
+      'Macro CRM builds company and contact records straight from your team’s email, chat, and calls.',
     caption: [
-      'We could open a deal in HubSpot or Salesforce and still have to ask the person working on it what was actually going on.',
-      'In Macro we can open the company record and read the emails and call notes ourselves.',
+      'No more chasing teammates for updates like in HubSpot or Salesforce.',
+      'Open any company record to read the latest emails and call notes.',
     ],
     tutorial: 'crm',
     screen: crmScreen,
@@ -164,10 +164,9 @@ const SECTIONS: readonly Section[] = [
     id: 'agents',
     title: 'Agents with omniscient context.',
     description:
-      'Agents share one memory of your team’s email, chat, docs, and CRM. Start a chat with an agent, tag one in a thread, or ask it to take on a task.',
+      'Agents share one memory across your email, chat, docs, and CRM. Message one directly or tag it in a channel.',
     caption: [
-      'We wanted to ask an agent about a customer and have it remember the conversations our teammates had with them, too.',
-      'It can read the earlier emails and call notes before it drafts a reply.',
+      'Ask about any customer and an agent remembers your teammates’ emails and calls before drafting a reply.',
     ],
     tutorial: 'agents',
     screen: agentsScreen,
@@ -178,10 +177,9 @@ const SECTIONS: readonly Section[] = [
     id: 'coding',
     title: 'From bug report to merged pull request.',
     description:
-      'Review the code beside the task and the thread that started it. Read the diff and merge the fix in the same thread. GitHub comments go to your inbox.',
+      'Review diffs and merge pull requests right beside the task and thread. GitHub comments land straight in your inbox.',
     caption: [
-      'We wanted to review a GitHub fix in the channel where someone reported the bug.',
-      'You can open the diff beside the original discussion and merge the pull request from there.',
+      'We built this so engineers can go from a bug report in chat to a merged fix without switching tabs.',
     ],
     tutorial: 'github',
     screen: pullRequestScreen,
@@ -287,10 +285,12 @@ export function HomepageSections() {
         <SectionCaption
           sentences={[
             'At our last startup we paid for Slack, Linear, Notion, HubSpot, and Superhuman.',
-            'We liked those tools, but each new subscription came with another place for work to get stuck.',
+            'Macro brings them together under one subscription.',
           ]}
         />
       </FeaturePageSection>
+      <HomepageTestimonials />
+      <HomepageBlog />
       <HomepageClosing />
     </>
   );

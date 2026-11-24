@@ -31,12 +31,12 @@ and GitHub badges. The GitHub badge links to the repository and refreshes its
 star count on mount above the August trending caption. `HomepageSections`
 then gives each product one
 `FeaturePageSection` in the feature pages' 640px reading column with a centered
-graphic up to 720px wide and 16:9 on desktop. Use the product page's hero heading and two or three sentences above
+graphic up to 720px wide and 16:9 on desktop. Use the product page's hero heading and one or two short sentences above
 the capture, with a “Learn about [feature] →” link where the product has a page.
-Let the heading wrap at its normal size. Follow each capture with two short
+Let the heading wrap at its normal size. Follow each capture with one or two short
 sentences in the same type as the introduction. Draw on the founder's letter,
 the repository README, and the competitor notes for the reason we built the
-Block or an example of how we use it. Use `ProductCopy` for linked Block names. Below 768px, pricing lists the included modules with an icon and a link to each page. The captures
+Block or an example of how we use it. Use `ProductCopy` for linked Block names. Below 768px, pricing lists the included modules with an icon and a link to each page. Follow the feature sections with `HomepageTestimonials`, `HomepageBlog` (a horizontal strip on desktop and a vertical post list on phones), and `HomepageClosing`. The captures
 in `src/assets/homepage/`
 come from the in-app tutorial videos and show demo data. Mount shared UI styles
 scoped to `.macro-homepage` for direct loads and client-side navigation. Keep the
