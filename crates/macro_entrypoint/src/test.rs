@@ -506,12 +506,16 @@ fn quiet_dependencies_keep_info_and_drop_debug() {
         tracing::warn!(target: "rmcp::service", "rejected peer request");
         tracing::debug!(target: "rmcp::transport", "transport detail");
         tracing::debug!(target: "agent_harness_service", "service debug");
+        // Quiet targets lose their debug events, not their spans.
+        tracing::debug_span!(target: "rmcp::service", "quiet_debug_span")
+            .in_scope(|| tracing::info!(target: "rmcp::service", "inside the span"));
     });
     let text = output.contents();
     assert!(!text.contains("whsec_test-only"), "{text}");
     assert!(text.contains("rejected peer request"), "{text}");
     assert!(text.contains("transport detail"), "{text}");
     assert!(text.contains("service debug"), "{text}");
+    assert!(text.contains("quiet_debug_span"), "{text}");
     let entrypoint = MacroEntrypoint::default()
         .quiet_dependency_debug_logs(&["rmcp"])
         .local()

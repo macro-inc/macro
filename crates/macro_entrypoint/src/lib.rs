@@ -627,7 +627,9 @@ fn dependency_logs_allowed(
 ) -> bool {
     let target = metadata.target();
     !matches_target(suppressed, target)
-        && (*metadata.level() <= tracing::Level::INFO || !matches_target(quiet, target))
+        && (*metadata.level() <= tracing::Level::INFO
+            || !metadata.is_event()
+            || !matches_target(quiet, target))
 }
 
 fn matches_target(prefixes: &[&str], target: &str) -> bool {
