@@ -400,6 +400,8 @@ export type MutationQueueRunner = {
   wake: () => void;
   /** Retires every attempt token and returns the head to idle. */
   resetStorage: () => void;
+  /** The caller of an operation gave it up, which cancels its request. */
+  abandon: (operationKey: number) => void;
   /**
    * Stops sending, and lets the queue's owner go once no request it sent is
    * unanswered: another page sends what a departed owner had claimed.
@@ -416,8 +418,9 @@ export function createMutationQueueRunner(
   const liveQueuedOps = new Map<string, LiveQueuedOperation>();
   let storageGeneration = 0;
   let activeAttempt: AttemptToken | undefined;
-  // Requests on their way. Unlike the active attempt, they survive a reset.
-  const unanswered = new Set<AttemptToken>();
+  // Requests on their way, with the key of the operation a caller still holds.
+  // Unlike the active attempt, they survive a reset.
+  const unanswered = new Map<AttemptToken, number | undefined>();
   let disposed = false;
   // Queue IDs advance in order; retries advance their lease.
   // Keep the watermark after settlement so a late claim cannot revive an old head.
@@ -483,6 +486,8 @@ export function createMutationQueueRunner(
 
   function scheduleDrain(delayMs = 0): void {
     if (drainTimer !== undefined) clearTimeout(drainTimer);
+    drainTimer = undefined;
+    if (disposed) return;
     drainTimer = setTimeout(
       () => {
         drainTimer = undefined;
@@ -647,8 +652,8 @@ export function createMutationQueueRunner(
       scheduleDrain();
       return;
     }
-    unanswered.add(attempt);
     const live = liveQueuedOps.get(claimed.transactionId);
+    unanswered.set(attempt, live?.operation.key);
     if (live) {
       liveQueuedOps.delete(claimed.transactionId);
       live.resolveRoute(undefined);
@@ -1380,8 +1385,13 @@ export function createMutationQueueRunner(
     },
     wake: wakeDrain,
     resetStorage,
+    abandon: (operationKey) => {
+      for (const [attempt, key] of unanswered)
+        if (key === operationKey) answered(attempt);
+    },
     dispose: () => {
       disposed = true;
+      clearTimeout(drainTimer);
       letOwnerGo();
     },
   };

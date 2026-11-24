@@ -758,6 +758,16 @@ it('keeps its owner while a request it sent is unanswered', async () => {
   expect(letGo).toHaveBeenCalledOnce();
 });
 
+it('leaves no drain behind', async () => {
+  const { runner } = fixture();
+  runner.start();
+  expect(vi.getTimerCount()).toBe(1);
+  runner.dispose();
+  expect(vi.getTimerCount()).toBe(0);
+  runner.wake();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
 it('lets its owner go at once, and sends nothing more, with no request unanswered', async () => {
   const letGo = vi.fn();
   let admit = (_: true) => {};

@@ -2994,6 +2994,30 @@ describe('normalizedCacheExchange', () => {
     }
   );
 
+  it('lets its queue owner go when a sent request was given up by its caller', async () => {
+    const letGo = vi.fn();
+    const mutationQueueLocks = {
+      request: async (_name: string, callback: () => Promise<void>) => {
+        await callback();
+        letGo();
+      },
+    } as unknown as LockManager;
+    const lifetime = new AbortController();
+    const { ops, forwarded } = controlledQueryHarness(host, {
+      signal: lifetime.signal,
+      mutationQueueLocks,
+    });
+    const mutation = makeMutationOp(51, { saved: true });
+    ops.next(mutation);
+    await vi.waitFor(() =>
+      expect(forwarded.map(({ key }) => key)).toContain(51)
+    );
+    // Unsubscribing cancels the request: nobody answers it.
+    ops.next(teardownOf(mutation));
+    lifetime.abort();
+    await vi.waitFor(() => expect(letGo).toHaveBeenCalledOnce());
+  });
+
   it('registers a slow fallback write without a replacement reread', async () => {
     let readCount = 0;
     host.readQuery = async (args) => {

@@ -1931,6 +1931,7 @@ export function normalizedCacheExchange(
             liveQueries.delete(op.key);
             documentReader.forget(op.key);
             queryStates.delete(op.key);
+            mutationQueue.abandon(op.key);
             affectedRereads.forget(op.key);
             host.teardown(op.key).catch(() => undefined);
           }
