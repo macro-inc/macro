@@ -71,6 +71,7 @@ export type EmailSearchSuggestions = ListSearchSuggestions & {
    * typed (`sub` gives `subject:`, `is:` its values), then recent searches.
    */
   listed: Accessor<EmailSearchSuggestion[]>;
+  focused: Accessor<boolean>;
   setFocused: (focused: boolean) => void;
   /**
    * A picked search has no results yet when the keyboard moves to the list,
@@ -133,8 +134,15 @@ export function createEmailSearchSuggestions(options: {
     };
   };
 
+  // After `in:`, a label named like the start of a view (Archive, Draft)
+  // would stay a view still being typed, so it searches nothing; those are
+  // reached with `label:`.
   const labelRows = (key: 'label' | 'in', exclude: boolean, typed: string) =>
     matchEmailSearchLabels(options.labels?.() ?? [], typed)
+      .filter(
+        (label) =>
+          key !== 'in' || emailSearchScopesStartingWith(label.name).length === 0
+      )
       .slice(0, MAX_LISTED)
       .map((label) => ({ kind: 'label' as const, key, exclude, label }));
 
@@ -174,16 +182,8 @@ export function createEmailSearchSuggestions(options: {
           exclude: typing.exclude,
         })
       );
-      // Labels follow the views once a name is started; a label named like
-      // a view is that view to `in:`.
-      const labels = prefix
-        ? labelRows('in', typing.exclude, prefix).filter(
-            (row) =>
-              !emailSearchScopesStartingWith(row.label.name).some(
-                (scope) => scope === row.label.name.toLowerCase()
-              )
-          )
-        : [];
+      // Labels follow the views once a name is started.
+      const labels = prefix ? labelRows('in', typing.exclude, prefix) : [];
       return [...views, ...labels];
     }
 
@@ -201,6 +201,7 @@ export function createEmailSearchSuggestions(options: {
     open,
     setOpen,
     listed,
+    focused,
     setFocused: (next) => {
       if (next) setAwaitsPickedResults(false);
       // Remembered as it searched, without an `in:` still being typed.

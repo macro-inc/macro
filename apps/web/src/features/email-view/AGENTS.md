@@ -48,8 +48,9 @@ the Soup-backed thread list, and saved email views.
   otherwise the operators that finish the typed token, then recent searches
   (`create-email-search-suggestions.ts`, drawn by
   `components/EmailSearchSuggestionList.tsx`, fed people and labels by
-  `queries/use-email-search-values.ts`, which reads them only while such an
-  operator is typed), behind `enable-email-wide-search`. Operators are drawn by the shared
+  `queries/use-email-search-values.ts`, which reads them only while the
+  field has focus and such an operator is typed), behind
+  `enable-email-wide-search`. Operators are drawn by the shared
   `components/view-shell/search-operator-text.tsx`, which keeps a quoted
   value in its token.
 - `filters/email-saved-view.ts`: the `kind: "email"` definition codec: strict

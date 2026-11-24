@@ -36,6 +36,8 @@ const LABELS = [
   { name: 'Travel', kind: 'label' as const },
   { name: 'Team offsite', kind: 'tag' as const },
   { name: 'Sent', kind: 'label' as const },
+  { name: 'Archive', kind: 'label' as const },
+  { name: 'Arch review', kind: 'tag' as const },
 ];
 
 function setup(initialSearch = '') {
@@ -339,6 +341,31 @@ it('lists labels and tags after label:, and after the views once in: names one',
     ]);
     setSearch('invoice in:tr');
     expect(recentListed(suggestions)).toEqual(['in:Travel ']);
+    dispose();
+  });
+});
+
+it('leaves out after in: the labels that read as a view, which label: still offers', () => {
+  createRoot((dispose) => {
+    const { search, setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+
+    // `in:Archive` would read as the Archived view still being typed.
+    setSearch('in:arch');
+    expect(recentListed(suggestions)).toEqual([
+      'view:archived',
+      'in:"Arch review" ',
+    ]);
+    setSearch('-in:tr');
+    expect(recentListed(suggestions)).toEqual(['-in:Travel ']);
+    suggestions.pick(0);
+    expect(search()).toBe('-in:Travel ');
+
+    setSearch('label:arch');
+    expect(recentListed(suggestions)).toEqual([
+      'label:"Arch review" ',
+      'label:Archive ',
+    ]);
     dispose();
   });
 });

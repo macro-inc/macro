@@ -335,7 +335,7 @@ export function completeEmailSearchOperator(
 
 /** A value as the search reads it whole: quoted when it holds a space. */
 const searchValue = (value: string) =>
-  /\s/.test(value) ? `"${value.replaceAll('"', '')}"` : value;
+  /\s/.test(value) ? `"${value}"` : value;
 
 /** The text a picked completion puts in place of the token it finishes. */
 export function emailSearchCompletionText(
@@ -361,7 +361,8 @@ const MIN_INNER_MATCH = 2;
 
 /**
  * The labels and tags whose names hold what is typed, one row per name,
- * those that start with it first.
+ * those that start with it first. A name with a quote mark is left out: the
+ * search reads quotes as a phrase's ends, so it can't be named exactly.
  */
 export function matchEmailSearchLabels(
   labels: readonly EmailSearchLabel[],
@@ -373,7 +374,7 @@ export function matchEmailSearchLabels(
   const contains: EmailSearchLabel[] = [];
   for (const label of labels) {
     const name = label.name.toLowerCase();
-    if (seen.has(name)) continue;
+    if (seen.has(name) || name.includes('"')) continue;
     seen.add(name);
     if (name.startsWith(wanted)) starts.push(label);
     else if (wanted.length >= MIN_INNER_MATCH && name.includes(wanted))

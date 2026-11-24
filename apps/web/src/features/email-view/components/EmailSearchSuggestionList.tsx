@@ -45,25 +45,26 @@ type OperatorRow = Extract<
  * The minus typed before it shows as `Not:`.
  */
 function filterDescription(row: OperatorRow): string | undefined {
-  const description =
-    row.kind === 'value'
-      ? row.value === 'shared'
-        ? t('emailViews.searchFilterShared')
-        : undefined
-      : match(row.key)
-          .with('to', () => t('emailViews.searchFilterTo'))
-          .with('label', () => t('emailViews.searchFilterLabel'))
-          .with('in', () => t('emailViews.searchFilterIn'))
-          .with('after', () => t('emailViews.searchFilterAfter'))
-          .with('before', () => t('emailViews.searchFilterBefore'))
-          .with('newer_than', () => t('emailViews.searchFilterNewerThan'))
-          .with('older_than', () => t('emailViews.searchFilterOlderThan'))
-          .with('from', 'subject', 'cc', 'bcc', 'is', 'has', () => undefined)
-          .exhaustive();
-  if (!description) return undefined;
-  return row.exclude
-    ? t('emailViews.searchFilterNot', { filter: description })
-    : description;
+  const description = describeFilter(row);
+  if (!description || !row.exclude) return description;
+  return t('emailViews.searchFilterNot', { filter: description });
+}
+
+function describeFilter(row: OperatorRow): string | undefined {
+  if (row.kind === 'value') {
+    if (row.value !== 'shared') return undefined;
+    return t('emailViews.searchFilterShared');
+  }
+  return match(row.key)
+    .with('to', () => t('emailViews.searchFilterTo'))
+    .with('label', () => t('emailViews.searchFilterLabel'))
+    .with('in', () => t('emailViews.searchFilterIn'))
+    .with('after', () => t('emailViews.searchFilterAfter'))
+    .with('before', () => t('emailViews.searchFilterBefore'))
+    .with('newer_than', () => t('emailViews.searchFilterNewerThan'))
+    .with('older_than', () => t('emailViews.searchFilterOlderThan'))
+    .with('from', 'subject', 'cc', 'bcc', 'is', 'has', () => undefined)
+    .exhaustive();
 }
 
 /** A filter's text, drawn as the field draws an operator. */
@@ -89,12 +90,16 @@ function FilterRow(props: { text: string; description?: string }) {
 function PersonRow(props: { person: EmailSearchPerson }) {
   return (
     <>
-      <UserIcon
-        id={props.person.id}
-        name={props.person.name ?? props.person.email}
-        size="sm"
-        isDeleted={false}
-      />
+      <span aria-hidden="true" class="flex shrink-0">
+        <UserIcon
+          id={props.person.id}
+          name={props.person.name ?? props.person.email}
+          size="sm"
+          isDeleted={false}
+          suppressClick
+          showTooltip={false}
+        />
+      </span>
       <span class="min-w-0 flex-1 truncate">
         {props.person.name ?? props.person.email}
       </span>

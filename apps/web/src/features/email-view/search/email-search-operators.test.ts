@@ -197,6 +197,15 @@ describe('matchEmailSearchLabels', () => {
     ]);
   });
 
+  it('leaves out a name with a quote mark, which the search cannot name', () => {
+    expect(
+      matchEmailSearchLabels(
+        [...labels, { name: 'Re "urgent"', kind: 'label' }],
+        're'
+      ).map((l) => l.name)
+    ).toEqual(['Receipts/Travel', 'Respond']);
+  });
+
   it('needs two letters before matching inside a name', () => {
     expect(matchEmailSearchLabels(labels, 'r').map((l) => l.name)).toEqual([
       'Receipts/Travel',
