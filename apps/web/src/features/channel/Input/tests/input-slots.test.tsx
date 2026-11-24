@@ -377,6 +377,7 @@ vi.mock('@queries/messages/typing', () => ({
 }));
 
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
+import type { MessageParent } from '@service-storage/messages';
 import { codexMentionUser, cursorMentionUser } from '../../macroAi';
 import { ThreadReplyChannelInput } from '../../Thread/ThreadReplyChannelInput';
 import { createInputAttachmentTracker } from '../attachment-tracker';
@@ -942,20 +943,13 @@ describe('mention people', () => {
 });
 
 describe('Thread reply sends', () => {
-  const parent = { type: 'channel', id: 'channel-2' } as const;
-  const draft: InputSnapshot = {
-    value: 'did this arrive?',
-    mentions: [],
-    attachments: [],
-  };
   const unknown = new ThrownResultError([
     { code: 'DELIVERY_UNKNOWN', message: 'could not confirm' },
   ]);
-
-  it('restores a reply of unknown delivery after its composer closed, and sends it again under its id', async () => {
-    const [state, setState] = createSignal<InputSnapshot | undefined>(draft);
-    const [open, setOpen] = createSignal(true);
-    let handle: InputHandle | undefined;
+  const nextFrame = () =>
+    new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  /** The next send stays pending until the returned function fails it. */
+  const holdNextSend = () => {
     let fail: (error: unknown) => void = () => {};
     sendMocks.send.mockImplementationOnce(
       () =>
@@ -963,32 +957,146 @@ describe('Thread reply sends', () => {
           fail = reject;
         })
     );
-    render(() => (
+    return (error: unknown) => fail(error);
+  };
+  const sentIds = () =>
+    sendMocks.send.mock.calls.map(([input]) => input.optimisticId);
+
+  beforeEach(() => {
+    localStorage.clear();
+    sendMocks.send.mockClear();
+  });
+
+  /** One reply input on a thread, opened and closed like a thread's reply. */
+  function mountReply(parent: MessageParent, threadId: string) {
+    const [state, setState] = createSignal<InputSnapshot | undefined>();
+    const [open, setOpen] = createSignal(true);
+    const reply = {
+      handle: undefined as InputHandle | undefined,
+      open,
+      setOpen,
+    };
+    const view = () => (
       <Show when={open()}>
         <ThreadReplyChannelInput
           parent={parent}
-          threadId="root-2"
+          threadId={threadId}
           replyInputState={state}
           setReplyInputState={setState}
           onExit={() => setOpen(false)}
           onReady={(next) => {
-            handle = next;
+            reply.handle = next;
           }}
         />
       </Show>
-    ));
+    );
+    return { reply, view };
+  }
 
-    await handle?.send();
-    expect(open()).toBe(false);
-    expect(sendMocks.send).toHaveBeenCalledOnce();
-    const first = sendMocks.send.mock.calls[0]?.[0].optimisticId;
+  it('restores a reply of unknown delivery after its composer closed, and sends it again under its id', async () => {
+    const { reply, view } = mountReply(
+      { type: 'channel', id: 'channel-2' },
+      'root-2'
+    );
+    render(view);
+    await nextFrame();
+    const fail = holdNextSend();
+    editorMocks.emitChange?.('did this arrive?');
+    expect(await reply.handle?.send()).toBe(true);
+    expect(reply.open()).toBe(false);
 
     fail(unknown);
-    await vi.waitFor(() => expect(state()?.value).toBe(draft.value));
+    await nextFrame();
+    reply.setOpen(true);
+    await nextFrame();
 
-    setOpen(true);
-    await handle?.send();
-    expect(sendMocks.send).toHaveBeenCalledTimes(2);
-    expect(sendMocks.send.mock.calls[1]?.[0].optimisticId).toBe(first);
+    expect(reply.handle?.snapshot().value).toBe('did this arrive?');
+    await reply.handle?.send();
+    expect(sentIds()).toHaveLength(2);
+    expect(sentIds()[1]).toBe(sentIds()[0]);
+  });
+
+  it('keeps a newer draft of the same reply typed in another view', async () => {
+    const parent = { type: 'channel', id: 'channel-3' } as const;
+    const first = mountReply(parent, 'root-3');
+    const second = mountReply(parent, 'root-3');
+    second.reply.setOpen(false);
+    render(() => (
+      <>
+        {first.view()}
+        {second.view()}
+      </>
+    ));
+    await nextFrame();
+    const fail = holdNextSend();
+    editorMocks.emitChange?.('first reply');
+    expect(await first.reply.handle?.send()).toBe(true);
+    second.reply.setOpen(true);
+    await nextFrame();
+    editorMocks.emitChange?.('new reply in the second view');
+
+    fail(unknown);
+    await nextFrame();
+    first.reply.setOpen(true);
+    await nextFrame();
+
+    expect(second.reply.handle?.snapshot().value).toBe(
+      'new reply in the second view'
+    );
+    expect(first.reply.handle?.snapshot().value).toBe(
+      'new reply in the second view'
+    );
+  });
+
+  it('restores a reply into the thread opened again after its whole channel view closed', async () => {
+    const parent = { type: 'channel', id: 'channel-4' } as const;
+    const [channelOpen, setChannelOpen] = createSignal(true);
+    let latest: ReturnType<typeof mountReply> | undefined;
+    function ChannelView() {
+      latest = mountReply(parent, 'root-4');
+      return latest.view();
+    }
+    render(() => (
+      <Show when={channelOpen()}>
+        <ChannelView />
+      </Show>
+    ));
+    await nextFrame();
+    const fail = holdNextSend();
+    editorMocks.emitChange?.('reply before leaving');
+    expect(await latest?.reply.handle?.send()).toBe(true);
+    setChannelOpen(false);
+    setChannelOpen(true);
+    await nextFrame();
+
+    fail(unknown);
+    await nextFrame();
+
+    expect(latest?.reply.handle?.snapshot().value).toBe('reply before leaving');
+  });
+
+  it('sends a fresh reply under a new id after the restored draft was edited', async () => {
+    const { reply, view } = mountReply(
+      { type: 'channel', id: 'channel-5' },
+      'root-5'
+    );
+    render(view);
+    await nextFrame();
+    const fail = holdNextSend();
+    editorMocks.emitChange?.('Thanks');
+    await reply.handle?.send();
+    fail(unknown);
+    await nextFrame();
+    reply.setOpen(true);
+    await nextFrame();
+    expect(reply.handle?.snapshot().value).toBe('Thanks');
+
+    // Discarded by typing over it, then the same words written again.
+    editorMocks.emitChange?.('T');
+    editorMocks.emitChange?.('Thanks');
+    await reply.handle?.send();
+
+    expect(sentIds()).toHaveLength(2);
+    expect(sentIds()[1]).not.toBe(sentIds()[0]);
   });
 });

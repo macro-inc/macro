@@ -791,6 +791,14 @@ export function Channel(props: ChannelProps) {
 
   const uncertainSends = createUncertainSends(() => newMessageId());
 
+  const onDraftChange = (snapshot: InputSnapshot) => {
+    setChannelInputSnapshot(snapshot);
+    const senderId = userId();
+    if (!senderId || !hasSendableInputContent(snapshot)) return;
+    const { message } = buildPostMessageSendPayload({ snapshot });
+    uncertainSends.drafted({ senderId, channelId: props.channelId, message });
+  };
+
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const channelId = props.channelId;
     const senderId = userId();
@@ -1368,9 +1376,7 @@ export function Channel(props: ChannelProps) {
                                   );
                                   setChannelInputHandle(handle);
                                 }}
-                                onChange={(snapshot) => {
-                                  setChannelInputSnapshot(snapshot);
-                                }}
+                                onChange={onDraftChange}
                                 onSend={onSend}
                                 onStartCall={
                                   ENABLE_CALLS && !channelCall.isInThisChannel()

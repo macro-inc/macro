@@ -16,14 +16,15 @@ import {
 import type { InputHandle, InputSnapshot } from '../Input';
 import { ChannelInput, createInputAttachmentTracker } from '../Input';
 import { buildPostMessageSendPayload } from '../Input/message-payload';
-import {
-  makeAttachmentTrackerPersistenceKey,
-  makeInputValuePersistenceKey,
-} from '../Input/utils/persistence';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { createUncertainSends } from '../Input/utils/uncertain-sends';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import type { FocusRequest } from './focus-request';
+import {
+  registerReplyInput,
+  replyDraftKeys,
+  restoreFailedReply,
+} from './reply-drafts';
 
 type ThreadReplyChannelInputProps = {
   parent: MessageParent;
@@ -94,11 +95,10 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
     return snapshot && !REPORTED_SNAPSHOTS.has(snapshot) ? snapshot : undefined;
   };
 
+  const draftKeys = () => replyDraftKeys(props.parent, props.threadId);
+
   const tracker = createInputAttachmentTracker({
-    persistenceKey: makeAttachmentTrackerPersistenceKey({
-      channelId: `${props.parent.type}:${props.parent.id}`,
-      threadId: props.threadId,
-    }),
+    persistenceKey: draftKeys().attachments,
     initialAttachments: pendingSnapshot()?.attachments,
   });
 
@@ -118,7 +118,12 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
     focusIfRequested();
   });
 
+  let unregister: (() => void) | undefined;
+  onCleanup(() => unregister?.());
+
   const onReady = (handle: InputHandle) => {
+    unregister?.();
+    unregister = registerReplyInput(draftKeys(), handle);
     setLocalReplyInputHandle(handle);
     props.setReplyInputHandle?.(handle);
     props.onReady?.(handle);
@@ -145,15 +150,19 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
       autofocus={false}
       bots={channelBotMentionUsers}
       attachmentTracker={tracker}
-      persistenceKey={makeInputValuePersistenceKey({
-        channelId: `${props.parent.type}:${props.parent.id}`,
-        threadId: props.threadId,
-      })}
+      persistenceKey={draftKeys().text}
       markdownNamespace={`thread-reply-input-${props.threadId}-markdown`}
       onReady={onReady}
       onChange={(snapshot) => {
         REPORTED_SNAPSHOTS.add(snapshot);
         props.setReplyInputState(snapshot);
+        const senderId = userId();
+        if (!senderId || !hasSendableInputContent(snapshot)) return;
+        const { message } = buildPostMessageSendPayload({
+          snapshot,
+          threadId: props.threadId,
+        });
+        UNCERTAIN_REPLIES.drafted({ senderId, parent: props.parent, message });
       }}
       onStartTyping={() =>
         typingMutation.mutate({
@@ -192,6 +201,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
           message: payload.message,
         };
         const optimisticId = UNCERTAIN_REPLIES.idFor(uncertainKey);
+        const keys = draftKeys();
         // Awaited, not `mutate`'s per-call `onError`: the input unmounts as
         // it sends, and TanStack drops a call's callbacks once its observer
         // is gone, which would lose the draft.
@@ -205,15 +215,9 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
                 ...payload,
               }),
             (error) => {
-              // The user may have started a new draft by now; keep it.
-              const current = props.replyInputState();
-              if (current && hasSendableInputContent(current)) return;
-              // The send cleared the stored draft, so reopening restores it.
-              REPORTED_SNAPSHOTS.delete(snapshot);
-              props.setReplyInputState(snapshot);
-              props.replyInputHandle?.()?.restoreSnapshot(snapshot, {
-                focus: false,
-              });
+              // Through the thread's stored draft, not this view's state: the
+              // view may be gone, and another may hold a newer draft.
+              if (!restoreFailedReply(keys, snapshot)) return;
               // Sent again unchanged, a reply that may have arrived keeps its id.
               UNCERTAIN_REPLIES.restored(uncertainKey, optimisticId, error);
             }

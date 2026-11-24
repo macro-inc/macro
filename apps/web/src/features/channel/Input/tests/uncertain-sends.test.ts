@@ -63,6 +63,25 @@ describe('createUncertainSends', () => {
     expect(sends.idFor(send('second'))).toBe(b);
   });
 
+  it('gives a new id once the restored draft was edited, even back to the same words', () => {
+    const sends = ids();
+    const first = sends.idFor(send('Thanks'));
+    sends.restored(send('Thanks'), first, unknown);
+    sends.drafted(send('Thanks'));
+    sends.drafted(send('T'));
+    sends.drafted(send('Thanks'));
+    expect(sends.idFor(send('Thanks'))).not.toBe(first);
+  });
+
+  it('keeps a restored draft’s id while another place’s composer changes', () => {
+    const sends = ids();
+    const first = sends.idFor(send('Thanks'));
+    sends.restored(send('Thanks'), first, unknown);
+    sends.drafted(send('something else', 'b'));
+    sends.drafted(send('something else', 'a', 'ben'));
+    expect(sends.idFor(send('Thanks'))).toBe(first);
+  });
+
   it('reuses an uncertain id once', () => {
     const sends = ids();
     const first = sends.idFor(send('hello'));
