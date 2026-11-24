@@ -5,7 +5,7 @@
 //! The reusable job definitions live in [`super::build_appimage_on_tag`],
 //! [`super::build_dmg_on_tag`] and [`super::desktop_windows`]. macOS and Linux
 //! must both build for a release; Windows joins it only when its build
-//! succeeds and may be published. The macOS release QA job comes from
+//! succeeds, the installed app launches, and it may be published. The macOS release QA job comes from
 //! [`super::desktop_qa_macos`]; promotion to `desktop-stable` waits for it.
 
 use gh_workflow::expr::typed::{
@@ -99,6 +99,12 @@ pub fn build_desktop_on_tag() -> Workflow {
                 .add_needs(RESOLVE_REF)
                 .add_needs(desktop_windows::WINDOWS_FRONTEND),
         )
+        .add_job(
+            desktop_windows::LAUNCH_WINDOWS,
+            desktop_windows::launch_job(resolved_ref())
+                .add_needs(RESOLVE_REF)
+                .add_needs(desktop_windows::BUILD_WINDOWS),
+        )
         // The installers users download must reach the release on their own.
         // Updater signing needs Doppler, Apple, and the stable channel; none of
         // that may stand between a green build and macro.com/download.
@@ -113,9 +119,9 @@ pub fn build_desktop_on_tag() -> Workflow {
             .add_needs(RESOLVE_REF)
             .add_needs(build_appimage_on_tag::BUILD_APPIMAGE)
             .add_needs(build_dmg_on_tag::BUILD_DMG)
-            // Waits for Windows so a published installer ships with this
-            // release, but its failure only leaves Windows out.
-            .add_needs(desktop_windows::BUILD_WINDOWS)
+            // Waits for the Windows launch so a published installer ships with
+            // this release, but a Windows failure only leaves Windows out.
+            .add_needs(desktop_windows::LAUNCH_WINDOWS)
             .cond(
                 (!cancelled())
                     .and(RESOLVE_REF.result().eq("success"))

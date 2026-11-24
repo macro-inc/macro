@@ -997,6 +997,9 @@ jobs:
       id-token: write
     environment:
       name: desktop-windows-signing
+    outputs:
+      signed: ${{ steps.signing.outputs.signed }}
+      publish: ${{ steps.signing.outputs.publish }}
     env:
       TAURI_CLI_VERSION: '2.11.4'
       AZURE_TENANT_ID: ${{ vars.WINDOWS_SIGNING_AZURE_TENANT_ID }}
@@ -1229,18 +1232,20 @@ jobs:
           (cd artifacts && sha256sum -- *.exe > macro-windows-SHA256SUMS)
           echo "INSTALLER=$(cygpath -w "$PWD/artifacts/Macro-$version-x86_64-windows-setup.exe")" >> "$GITHUB_ENV"
         shell: bash
-      - name: Install, launch and uninstall
+      - name: Install and check
         run: |
           $ErrorActionPreference = 'Stop'
           Set-StrictMode -Version Latest
 
-          # Installs the built installer the way a user's machine would run it, checks
-          # what it registered, launches Macro and checks the page loaded in WebView2,
-          # then uninstalls. INSTALLER is the installer's path; EXPECT_SIGNED=true also
+          # Installs the built installer the way a user's machine would run it and
+          # checks what it registered. With LAUNCH=true it then launches Macro, checks
+          # the page loaded in WebView2, and uninstalls. INSTALLER is the installer's
+          # path, which may be a wildcard matching one file; EXPECT_SIGNED=true also
           # requires a valid Authenticode signature on it and on what it installs.
 
-          $installer = $env:INSTALLER
-          if (-not (Test-Path $installer)) { throw "No installer at $installer" }
+          $installers = @(Get-Item -Path $env:INSTALLER -ErrorAction SilentlyContinue)
+          if ($installers.Count -ne 1) { throw "Expected one installer at $env:INSTALLER, found $($installers.Count)" }
+          $installer = $installers[0].FullName
 
           function Assert-Signed([string] $Path) {
             $signature = Get-AuthenticodeSignature -FilePath $Path
@@ -1270,6 +1275,11 @@ jobs:
             if ($expectSigned) { Assert-Signed $file }
           }
 
+          if ($env:LAUNCH -ne 'true') {
+            Write-Output 'Installed; the launch check runs on a runner that can start WebView2'
+            exit 0
+          }
+
           # What the runner offers WebView2, so a runtime that cannot start can be told
           # apart from a fault in Macro. Never fails the check.
           try {
@@ -1290,15 +1300,9 @@ jobs:
           }
 
           # WebView2 reads extra Chromium switches from the environment, so the page can
-          # be inspected over the DevTools protocol like any Chromium. The runner's
-          # account is an administrator, and an elevated WebView2 host normally starts
-          # its browser processes de-elevated through the desktop shell, which a runner
-          # service has none of (CreateCoreWebView2Environment fails with 0x80080005,
-          # "Server execution failed"); --do-not-de-elevate keeps them elevated instead.
-          # This is the runner's limit, not a user's: installs are per-user and Macro
-          # never runs elevated.
+          # be inspected over the DevTools protocol like any Chromium.
           $port = 9222
-          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$port --do-not-de-elevate"
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$port"
           $env:RUST_BACKTRACE = '1'
           # The app's log and any panic go to its standard streams; keep them to show
           # when the check fails.
@@ -1396,11 +1400,216 @@ jobs:
         shell: pwsh
         env:
           EXPECT_SIGNED: ${{ steps.signing.outputs.signed }}
-      - name: Upload ${{ steps.signing.outputs.publish == 'true' && 'macro-windows' || 'windows-installer' }}-${{ steps.metadata.outputs.safe_tag }} artifact
+      - name: Upload windows-installer-${{ steps.metadata.outputs.safe_tag }} artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           path: artifacts/*
-          name: ${{ steps.signing.outputs.publish == 'true' && 'macro-windows' || 'windows-installer' }}-${{ steps.metadata.outputs.safe_tag }}
+          name: windows-installer-${{ steps.metadata.outputs.safe_tag }}
+          if-no-files-found: error
+          retention-days: '30'
+  launch-windows:
+    needs:
+      - resolve-ref
+      - build-windows
+    name: Launch Windows installer
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - id: metadata
+        name: Derive artifact metadata
+        run: |
+          set -euo pipefail
+          tag="${RAW_REF#refs/tags/}"
+          if [ -z "$tag" ]; then
+            tag="${GITHUB_REF_NAME:-untagged}"
+          fi
+          safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+        shell: bash
+        env:
+          RAW_REF: ${{ needs.resolve-ref.outputs.ref }}
+      - name: Download installer
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: windows-installer-${{ steps.metadata.outputs.safe_tag }}
+          path: artifacts
+      - name: Install, launch and uninstall
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+
+          # Installs the built installer the way a user's machine would run it and
+          # checks what it registered. With LAUNCH=true it then launches Macro, checks
+          # the page loaded in WebView2, and uninstalls. INSTALLER is the installer's
+          # path, which may be a wildcard matching one file; EXPECT_SIGNED=true also
+          # requires a valid Authenticode signature on it and on what it installs.
+
+          $installers = @(Get-Item -Path $env:INSTALLER -ErrorAction SilentlyContinue)
+          if ($installers.Count -ne 1) { throw "Expected one installer at $env:INSTALLER, found $($installers.Count)" }
+          $installer = $installers[0].FullName
+
+          function Assert-Signed([string] $Path) {
+            $signature = Get-AuthenticodeSignature -FilePath $Path
+            if ($signature.Status -ne 'Valid') { throw "$Path is not validly signed: $($signature.Status) $($signature.StatusMessage)" }
+            Write-Output "Signed by $($signature.SignerCertificate.Subject): $Path"
+          }
+
+          $expectSigned = $env:EXPECT_SIGNED -eq 'true'
+          if ($expectSigned) { Assert-Signed $installer }
+
+          # /S: silent. Per-user, so no elevation; this also installs WebView2 if the
+          # runner lacks it, through the bootstrapper the installer carries.
+          $install = Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
+
+          # The macro:// handler sign-in callbacks return through, written to HKCU.
+          $commandKey = 'HKCU:\Software\Classes\macro\shell\open\command'
+          if (-not (Test-Path $commandKey)) { throw 'The installer did not register the macro:// scheme' }
+          $command = (Get-ItemProperty -Path $commandKey).'(default)'
+          # The callback URI must reach the app as its argument.
+          if ($command -notmatch '^"([^"]+\.exe)"\s+"%1"$') { throw "Unexpected macro:// command: $command" }
+          $app = $Matches[1]
+          $installDir = Split-Path $app
+          Write-Output "Installed $app"
+          foreach ($file in @($app, (Join-Path $installDir 'macrod.exe'))) {
+            if (-not (Test-Path $file)) { throw "Missing installed file $file" }
+            if ($expectSigned) { Assert-Signed $file }
+          }
+
+          if ($env:LAUNCH -ne 'true') {
+            Write-Output 'Installed; the launch check runs on a runner that can start WebView2'
+            exit 0
+          }
+
+          # What the runner offers WebView2, so a runtime that cannot start can be told
+          # apart from a fault in Macro. Never fails the check.
+          try {
+            $os = Get-CimInstance Win32_OperatingSystem
+            $installation = Get-ItemPropertyValue 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name InstallationType -ErrorAction SilentlyContinue
+            $runtime = foreach ($key in @(
+                'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+                'HKCU:\Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+              )) {
+              if (Test-Path $key) { "$key = $(Get-ItemPropertyValue $key -Name pv -ErrorAction SilentlyContinue)" }
+            }
+            $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $elevated = ([Security.Principal.WindowsPrincipal]$identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+            Write-Output "Runner: $($os.Caption) $($os.Version) ($installation), session $((Get-Process -Id $PID).SessionId), interactive $([Environment]::UserInteractive), elevated $elevated"
+            Write-Output "WebView2 runtime: $(if ($runtime) { $runtime -join '; ' } else { 'not registered' })"
+          } catch {
+            Write-Output "Could not describe the runner: $_"
+          }
+
+          # WebView2 reads extra Chromium switches from the environment, so the page can
+          # be inspected over the DevTools protocol like any Chromium.
+          $port = 9222
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$port"
+          $env:RUST_BACKTRACE = '1'
+          # The app's log and any panic go to its standard streams; keep them to show
+          # when the check fails.
+          $stdout = Join-Path $env:RUNNER_TEMP 'macro-stdout.log'
+          $stderr = Join-Path $env:RUNNER_TEMP 'macro-stderr.log'
+          $process = Start-Process -FilePath $app -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          try {
+            $page = $null
+            $deadline = (Get-Date).AddSeconds(120)
+            while (-not $page -and (Get-Date) -lt $deadline) {
+              if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) before its page loaded" }
+              Start-Sleep -Seconds 2
+              try {
+                $targets = Invoke-RestMethod -Uri "http://127.0.0.1:$port/json/list" -TimeoutSec 5
+                $page = $targets | Where-Object { $_.type -eq 'page' -and $_.url -like 'https://tauri.localhost/*' } | Select-Object -First 1
+              } catch {
+                # DevTools is not listening until WebView2 has started.
+              }
+            }
+            if (-not $page) { throw 'No Macro page at https://tauri.localhost within 120 seconds' }
+
+            # Wait for the app to render text: an origin the protocol handler rejects,
+            # or a bundle that fails to start, leaves the document empty. Every socket
+            # call shares the deadline, so a page that stops answering fails the check
+            # instead of holding the job.
+            $timeout = [Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds(90))
+            $socket = [System.Net.WebSockets.ClientWebSocket]::new()
+            try {
+              $expression = 'JSON.stringify({ href: location.href, state: document.readyState, text: (document.body ? document.body.innerText : "").trim().length })'
+              $result = $null
+              $loaded = $false
+              $id = 0
+              try {
+                $socket.ConnectAsync([Uri]$page.webSocketDebuggerUrl, $timeout.Token).Wait()
+                while (-not $loaded -and -not $timeout.IsCancellationRequested) {
+                  if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) while its page loaded" }
+                  $id++
+                  $request = @{ id = $id; method = 'Runtime.evaluate'; params = @{ expression = $expression; returnByValue = $true } } | ConvertTo-Json -Compress -Depth 4
+                  $bytes = [Text.Encoding]::UTF8.GetBytes($request)
+                  $socket.SendAsync([ArraySegment[byte]]::new($bytes), 'Text', $true, $timeout.Token).Wait()
+                  $reply = $null
+                  while (-not $reply) {
+                    $message = [IO.MemoryStream]::new()
+                    do {
+                      $buffer = [byte[]]::new(65536)
+                      $receive = $socket.ReceiveAsync([ArraySegment[byte]]::new($buffer), $timeout.Token)
+                      $receive.Wait()
+                      $message.Write($buffer, 0, $receive.Result.Count)
+                    } while (-not $receive.Result.EndOfMessage)
+                    $frame = [Text.Encoding]::UTF8.GetString($message.ToArray()) | ConvertFrom-Json
+                    # Skip events; only our reply carries our id.
+                    if ($frame.PSObject.Properties['id'] -and $frame.id -eq $id) { $reply = $frame }
+                  }
+                  # An error reply (the page navigating or reloading mid-evaluation) has
+                  # no value; try again.
+                  if ($reply.PSObject.Properties['result'] -and $reply.result.result.PSObject.Properties['value']) {
+                    $result = $reply.result.result.value | ConvertFrom-Json
+                    $loaded = $result.state -eq 'complete' -and $result.text -gt 0 -and $result.href -like 'https://tauri.localhost/*'
+                  }
+                  if (-not $loaded) { Start-Sleep -Seconds 2 }
+                }
+              } catch {
+                if (-not $timeout.IsCancellationRequested) { throw }
+              }
+              if (-not $loaded) { throw "Macro's page did not load at https://tauri.localhost within 90 seconds: $($result | ConvertTo-Json -Compress)" }
+              Write-Output "Page loaded: $($result | ConvertTo-Json -Compress)"
+            } finally {
+              $socket.Dispose()
+              $timeout.Dispose()
+            }
+
+            Start-Sleep -Seconds 5
+            if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) after loading" }
+          } catch {
+            foreach ($log in @($stdout, $stderr)) {
+              if (Test-Path $log) {
+                Write-Output "--- $log (last 200 lines)"
+                Get-Content -Path $log -Tail 200
+              }
+            }
+            throw
+          } finally {
+            Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($installDir, [StringComparison]::OrdinalIgnoreCase) } |
+              Stop-Process -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:\WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS, Env:\RUST_BACKTRACE
+          }
+
+          # The uninstaller copies itself elsewhere and returns at once, so wait for its work.
+          Start-Process -FilePath (Join-Path $installDir 'uninstall.exe') -ArgumentList '/S' -Wait
+          $deadline = (Get-Date).AddSeconds(60)
+          while (((Test-Path $app) -or (Test-Path $commandKey)) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
+          if (Test-Path $app) { throw "Uninstall left $app" }
+          if (Test-Path $commandKey) { throw 'Uninstall left the macro:// scheme registered' }
+          Write-Output 'Uninstalled'
+        shell: pwsh
+        env:
+          INSTALLER: artifacts/*-windows-setup.exe
+          EXPECT_SIGNED: ${{ needs.build-windows.outputs.signed }}
+          LAUNCH: 'true'
+      - name: Upload macro-windows-${{ steps.metadata.outputs.safe_tag }} artifact
+        if: needs.build-windows.outputs.publish == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          path: artifacts/*
+          name: macro-windows-${{ steps.metadata.outputs.safe_tag }}
           if-no-files-found: error
           retention-days: '30'
   publish-installers:
@@ -1408,7 +1617,7 @@ jobs:
       - resolve-ref
       - build-appimage
       - build-dmg
-      - build-windows
+      - launch-windows
     if: '!cancelled() && needs.resolve-ref.result == ''success'' && needs.build-appimage.result == ''success'' && needs.build-dmg.result == ''success'''
     name: Publish desktop installers
     runs-on: ubuntu-latest

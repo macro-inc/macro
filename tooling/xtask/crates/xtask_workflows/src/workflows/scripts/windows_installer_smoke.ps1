@@ -1,13 +1,15 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-# Installs the built installer the way a user's machine would run it, checks
-# what it registered, launches Macro and checks the page loaded in WebView2,
-# then uninstalls. INSTALLER is the installer's path; EXPECT_SIGNED=true also
+# Installs the built installer the way a user's machine would run it and
+# checks what it registered. With LAUNCH=true it then launches Macro, checks
+# the page loaded in WebView2, and uninstalls. INSTALLER is the installer's
+# path, which may be a wildcard matching one file; EXPECT_SIGNED=true also
 # requires a valid Authenticode signature on it and on what it installs.
 
-$installer = $env:INSTALLER
-if (-not (Test-Path $installer)) { throw "No installer at $installer" }
+$installers = @(Get-Item -Path $env:INSTALLER -ErrorAction SilentlyContinue)
+if ($installers.Count -ne 1) { throw "Expected one installer at $env:INSTALLER, found $($installers.Count)" }
+$installer = $installers[0].FullName
 
 function Assert-Signed([string] $Path) {
   $signature = Get-AuthenticodeSignature -FilePath $Path
@@ -37,6 +39,11 @@ foreach ($file in @($app, (Join-Path $installDir 'macrod.exe'))) {
   if ($expectSigned) { Assert-Signed $file }
 }
 
+if ($env:LAUNCH -ne 'true') {
+  Write-Output 'Installed; the launch check runs on a runner that can start WebView2'
+  exit 0
+}
+
 # What the runner offers WebView2, so a runtime that cannot start can be told
 # apart from a fault in Macro. Never fails the check.
 try {
@@ -57,15 +64,9 @@ try {
 }
 
 # WebView2 reads extra Chromium switches from the environment, so the page can
-# be inspected over the DevTools protocol like any Chromium. The runner's
-# account is an administrator, and an elevated WebView2 host normally starts
-# its browser processes de-elevated through the desktop shell, which a runner
-# service has none of (CreateCoreWebView2Environment fails with 0x80080005,
-# "Server execution failed"); --do-not-de-elevate keeps them elevated instead.
-# This is the runner's limit, not a user's: installs are per-user and Macro
-# never runs elevated.
+# be inspected over the DevTools protocol like any Chromium.
 $port = 9222
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$port --do-not-de-elevate"
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$port"
 $env:RUST_BACKTRACE = '1'
 # The app's log and any panic go to its standard streams; keep them to show
 # when the check fails.

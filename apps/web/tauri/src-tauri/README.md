@@ -702,12 +702,15 @@ Release builds come from `Build Desktop on Tag` (`xtask_workflows`'
 `desktop_windows.rs`). A Linux job builds the frontend in Nix
 (`.#tauri-frontend`) and the Tauri release config
 (`desktop-release.mjs tauri-config`); the Namespace Windows runner builds macrod
-and the installer with MSVC and the pinned `tauri-cli`, installs it silently,
-checks the `macro://` handler, launches it, checks its page over the WebView2
-DevTools protocol and uninstalls it. A Windows failure leaves the macOS and
-Linux release alone; Windows users stay on their version. The release does
-wait for the Windows job to end, so keep the `desktop-windows-signing`
-environment free of required reviewers and wait timers.
+and the installer with MSVC and the pinned `tauri-cli`, installs it silently and
+checks the `macro://` handler. WebView2 cannot start there (the runner runs jobs
+elevated in session 0), so a GitHub-hosted `windows-2025` job installs it again,
+launches it, checks its page over the WebView2 DevTools protocol and uninstalls
+it; only an installer that passed reaches the release. A Windows failure leaves
+the macOS and Linux release alone; Windows users stay on their version. The
+release does wait for the Windows jobs to end, so keep the
+`desktop-windows-signing` environment free of required reviewers and wait
+timers.
 
 Signing uses Azure Artifact Signing (formerly Trusted Signing). The bundler
 signs `Macro.exe`, `macrod.exe`, the uninstaller and the installer through

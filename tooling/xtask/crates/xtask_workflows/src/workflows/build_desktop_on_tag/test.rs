@@ -659,12 +659,13 @@ fn windows_failure_leaves_the_macos_and_linux_release_alone() {
     let installers = job_yaml(&yaml, "publish-installers");
     // It waits for Windows, so a published installer ships with the release,
     // but only macOS and Linux must have succeeded.
-    assert!(installers.contains("- build-windows"), "{installers}");
+    assert!(installers.contains("- launch-windows"), "{installers}");
     assert!(installers.contains("!cancelled()"), "{installers}");
     assert!(
         installers.contains("needs.build-appimage.result == ''success''")
             && installers.contains("needs.build-dmg.result == ''success''")
-            && !installers.contains("needs.build-windows.result"),
+            && !installers.contains("needs.build-windows.result")
+            && !installers.contains("needs.launch-windows.result"),
         "{installers}"
     );
     let updates = job_yaml(&yaml, "publish-release");
@@ -684,12 +685,16 @@ fn publish_jobs_take_only_release_artifacts() {
         assert!(publish.contains("pattern: macro-*"), "{publish}");
     }
     let windows = job_yaml(&yaml, "build-windows");
-    // Only a build allowed to publish uploads under the release prefix.
+    assert!(windows.contains("name: windows-installer-"), "{windows}");
+    assert!(!windows.contains("name: macro-windows-"), "{windows}");
+    // Only an installer that launched and may be published joins the release.
+    let launch = job_yaml(&yaml, "launch-windows");
+    assert!(launch.contains("- build-windows"), "{launch}");
+    assert!(launch.contains("name: windows-installer-"), "{launch}");
     assert!(
-        windows.contains(
-            "steps.signing.outputs.publish == 'true' && 'macro-windows' || 'windows-installer'"
-        ),
-        "{windows}"
+        launch.contains("if: needs.build-windows.outputs.publish == 'true'")
+            && launch.contains("name: macro-windows-"),
+        "{launch}"
     );
     let frontend = job_yaml(&yaml, "build-windows-frontend");
     assert!(frontend.contains("name: windows-frontend-"), "{frontend}");

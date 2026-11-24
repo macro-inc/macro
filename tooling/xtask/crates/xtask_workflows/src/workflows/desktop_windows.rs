@@ -1,6 +1,7 @@
 //! The Windows desktop installer: a per-user NSIS installer around the wry
 //! (WebView2) app, built with MSVC on the Namespace Windows runner from a
-//! frontend Nix builds on Linux.
+//! frontend Nix builds on Linux, and launched on a GitHub-hosted Windows runner,
+//! since WebView2 cannot start on the Namespace one.
 //!
 //! [`super::build_desktop_on_tag`] runs these jobs on every desktop tag; the
 //! installer is Authenticode-signed when the signing variables are set (see
@@ -10,12 +11,16 @@
 //! Windows job to end, so keep the signing environment free of required
 //! reviewers and wait timers.
 //!
-//! `Desktop Windows smoke` builds the same installer unsigned for pull requests
-//! that touch the app, installs it silently, launches it and checks its page
-//! over the WebView2 DevTools protocol, then uninstalls. `PR CI` calls it
-//! outside `CI gate`. Generated into `desktop_windows.yml`.
+//! Every build installs the installer silently and checks what it registered;
+//! the launch job installs it again, launches it, checks its page over the
+//! WebView2 DevTools protocol and uninstalls, and only then uploads it for the
+//! release. `Desktop Windows smoke` does the same, unsigned, for pull requests
+//! that touch the app. `PR CI` calls it outside `CI gate`. Generated into
+//! `desktop_windows.yml`.
 
-use gh_workflow::expr::typed::{Expr, Flag, JobHandle, StepHandle, StepOutput, Str, github};
+use gh_workflow::expr::typed::{
+    Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, github,
+};
 use gh_workflow::{
     Environment, Event, Job, Level, Permissions, Run, Step, Use, Workflow, WorkflowCall,
     WorkflowDispatch,
@@ -57,8 +62,24 @@ pub const PATHS: &[RepoGlob<'static>] = &[
 
 /// Builds the frontend the Windows job bundles.
 pub(crate) const WINDOWS_FRONTEND: JobHandle<()> = JobHandle::new("build-windows-frontend", ());
-/// Builds, checks and uploads the installer.
-pub(crate) const BUILD_WINDOWS: JobHandle<()> = JobHandle::new("build-windows", ());
+pub(crate) struct BuildWindowsOutputs {
+    /// The installer and what it installs are signed.
+    signed: JobOutput<Flag>,
+    /// The installer may reach the release, the feed and the download pages.
+    publish: JobOutput<Flag>,
+}
+
+/// Builds the installer, checks what it installs and uploads it.
+pub(crate) const BUILD_WINDOWS: JobHandle<BuildWindowsOutputs> = JobHandle::new(
+    "build-windows",
+    BuildWindowsOutputs {
+        signed: JobOutput::new("build-windows", "signed"),
+        publish: JobOutput::new("build-windows", "publish"),
+    },
+);
+/// Launches the installed app and uploads the installer for the release when
+/// it may be published.
+pub(crate) const LAUNCH_WINDOWS: JobHandle<()> = JobHandle::new("launch-windows", ());
 
 struct SigningOutputs {
     /// The installer and what it installs will be signed.
@@ -102,6 +123,10 @@ pub fn desktop_windows_smoke() -> Workflow {
             BUILD_WINDOWS,
             windows_job(github().git_ref(), Purpose::Smoke).add_needs(WINDOWS_FRONTEND),
         )
+        .add_job(
+            LAUNCH_WINDOWS,
+            launch_job(github().git_ref()).add_needs(BUILD_WINDOWS),
+        )
 }
 
 fn frontend_artifact() -> String {
@@ -140,8 +165,8 @@ pub(crate) fn frontend_job(ref_expr: Expr<Str>, purpose: Purpose) -> Job {
         .add_step(steps::teardown_nix())
 }
 
-/// Builds the installer, smoke-tests it and uploads it: as `macro-windows-*`,
-/// which the release jobs publish, only when it may be published.
+/// Builds the installer, installs it and checks what it registered, then
+/// uploads it for [`launch_job`].
 pub(crate) fn windows_job(ref_expr: Expr<Str>, purpose: Purpose) -> Job {
     let configure_signing = match purpose {
         Purpose::Release => configure_signing().add_env((
@@ -181,12 +206,23 @@ pub(crate) fn windows_job(ref_expr: Expr<Str>, purpose: Purpose) -> Job {
                 .shell("bash"),
         )
         .add_step(
-            Step::new("Install, launch and uninstall")
+            Step::new("Install and check")
                 .run(include_str!("scripts/windows_installer_smoke.ps1"))
                 .shell("pwsh")
                 .add_env(("EXPECT_SIGNED", SIGNING.outputs.signed.read())),
         )
-        .add_step(upload_installer());
+        .add_output(
+            BUILD_WINDOWS.outputs.signed.name(),
+            SIGNING.outputs.signed.read(),
+        )
+        .add_output(
+            BUILD_WINDOWS.outputs.publish.name(),
+            SIGNING.outputs.publish.read(),
+        )
+        .add_step(steps::upload_artifact(
+            &installer_artifact(),
+            xtask_paths::runtime_path!("artifacts/*"),
+        ));
     match purpose {
         Purpose::Release => job
             .permissions(Permissions {
@@ -216,20 +252,49 @@ fn configure_signing() -> Step<Run> {
         .id(SIGNING.id())
 }
 
-/// `macro-windows-*` joins the release's `macro-*` build artifacts; anything
-/// else stays in the workflow run for people to test.
-fn upload_installer() -> Step<Use> {
-    let prefix = SIGNING
-        .outputs
-        .publish
-        .read()
-        .is_set()
-        .then_else("macro-windows", "windows-installer");
+/// The installer as built, which stays in the workflow run for people to test.
+fn installer_artifact() -> String {
+    format!(
+        "windows-installer-{}",
+        steps::ARTIFACT_METADATA.outputs.safe_tag.read()
+    )
+}
+
+/// Installs the built installer, launches Macro, checks its page and
+/// uninstalls. A Namespace Windows runner cannot do this part: it runs jobs
+/// elevated in session 0, where WebView2 fails to start (0x80080005).
+pub(crate) fn launch_job(ref_expr: Expr<Str>) -> Job {
+    Job::default()
+        .name("Launch Windows installer")
+        .runs_on(runners::GITHUB_WINDOWS)
+        .timeout_minutes(20u32)
+        .add_step(steps::derive_artifact_metadata(ref_expr))
+        .add_step(
+            ActionsDownloadArtifact::new("Download installer")
+                .name(installer_artifact())
+                .path("artifacts")
+                .step(),
+        )
+        .add_step(
+            Step::new("Install, launch and uninstall")
+                .run(include_str!("scripts/windows_installer_smoke.ps1"))
+                .shell("pwsh")
+                .add_env(("INSTALLER", "artifacts/*-windows-setup.exe"))
+                .add_env(("EXPECT_SIGNED", BUILD_WINDOWS.outputs.signed.read()))
+                .add_env(("LAUNCH", "true")),
+        )
+        .add_step(upload_release_installer())
+}
+
+/// `macro-windows-*` joins the release's `macro-*` build artifacts, once the
+/// installed app has launched.
+fn upload_release_installer() -> Step<Use> {
     steps::upload_artifact(
         &format!(
-            "{prefix}-{}",
+            "macro-windows-{}",
             steps::ARTIFACT_METADATA.outputs.safe_tag.read()
         ),
         xtask_paths::runtime_path!("artifacts/*"),
     )
+    .if_condition(BUILD_WINDOWS.outputs.publish.read().is_set())
 }
