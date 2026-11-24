@@ -40,10 +40,33 @@ export function debouncedDependent<T>(source: () => T, delay = 300): () => T {
 }
 
 /**
+ * Calls `func` at the earliest time (`performance.now()` milliseconds) it was
+ * asked for since it last ran; cleared with the caller's owner. `func` may
+ * ask again while it runs.
+ */
+function createWakeUp(func: () => void): (atMs: number) => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let dueMs = Number.POSITIVE_INFINITY;
+  onCleanup(() => clearTimeout(timer));
+  return (atMs) => {
+    if (atMs >= dueMs) return;
+    clearTimeout(timer);
+    dueMs = atMs;
+    timer = setTimeout(
+      () => {
+        dueMs = Number.POSITIVE_INFINITY;
+        func();
+      },
+      Math.max(0, atMs - performance.now())
+    );
+  };
+}
+
+/**
  * The ids `source` has listed for at least `delay`, in its order. Each id
- * keeps its own clock from when it joined, so ids coming and going never
- * postpone one that stays; an id that leaves starts again if it returns. An
- * id shows within twice `delay` of joining.
+ * keeps its own clock from when it joined, on the monotonic clock, so ids
+ * coming and going never postpone one that stays and a wall clock change
+ * moves none; an id that leaves starts again if it returns.
  */
 export function createRipeIds(
   source: () => readonly string[],
@@ -51,27 +74,27 @@ export function createRipeIds(
 ): () => string[] {
   const since = new Map<string, number>();
   const [tick, setTick] = createSignal(0);
-  const recheck = solidThrottle(() => setTick((n) => n + 1), delay);
-  onCleanup(() => recheck.clear());
+  const wakeUp = createWakeUp(() => setTick((n) => n + 1));
   const state = createMemo(() => {
     tick();
     const ids = source();
     const listed = new Set(ids);
-    const now = Date.now();
+    const now = performance.now();
     for (const id of since.keys()) if (!listed.has(id)) since.delete(id);
     const ripe: string[] = [];
-    let waiting = false;
+    let nextMs: number | undefined;
     for (const id of ids) {
       const joined = since.get(id) ?? now;
       since.set(id, joined);
       if (now - joined >= delay) ripe.push(id);
-      else waiting = true;
+      else
+        nextMs = Math.min(nextMs ?? Number.POSITIVE_INFINITY, joined + delay);
     }
-    return { ripe, waiting };
+    return { ripe, nextMs };
   });
   createEffect(
-    on(state, ({ waiting }) => {
-      if (waiting) recheck();
+    on(state, ({ nextMs }) => {
+      if (nextMs !== undefined) wakeUp(nextMs);
     })
   );
   return () => state().ripe;

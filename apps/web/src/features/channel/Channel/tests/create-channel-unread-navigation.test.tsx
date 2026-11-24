@@ -538,6 +538,56 @@ it('looks an offscreen parent up while pushes keep arriving', async () => {
   }
 });
 
+it('looks a newer parent up once its own second has passed', async () => {
+  vi.useFakeTimers();
+  try {
+    const view = renderRootLookup(true);
+    const older = notification('root-older', 10);
+    view.setRecords([older]);
+    await vi.advanceTimersByTimeAsync(900);
+    view.setRecords([notification('root-newer', 12), older]);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(view.rootIds()).toEqual(['root-older']);
+    await vi.advanceTimersByTimeAsync(800);
+    expect(view.rootIds()).toEqual(['root-older']);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(view.rootIds()).toEqual(['root-newer']);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('looks a quiet channel’s lone offscreen parent up after one second', async () => {
+  vi.useFakeTimers();
+  try {
+    const view = renderRootLookup(true);
+    view.setRecords([notification('root-older', 10)]);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(view.rootIds()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(view.rootIds()).toEqual(['root-older']);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('waits its second out when the wall clock jumps', async () => {
+  vi.useFakeTimers();
+  try {
+    const view = renderRootLookup(true);
+    const unread = notification('root-older', 10);
+    view.setRecords([unread]);
+    await vi.advanceTimersByTimeAsync(100);
+    vi.setSystemTime(Date.now() + 10_000);
+    view.setRecords([unread]);
+    expect(view.rootIds()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(900);
+    expect(view.rootIds()).toEqual(['root-older']);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it('looks an unloaded parent up at once on the REST path', () => {
   const view = renderRootLookup(false);
   view.setRecords([notification('root-new', 12)]);
