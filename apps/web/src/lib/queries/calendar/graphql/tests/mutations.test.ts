@@ -845,21 +845,22 @@ describe('executeGraphqlCreate', () => {
     const accepted = vi.fn();
     let settled = false;
 
-    const created = executeGraphqlCreate(
-      {
-        title: 'Offsite',
-        time: {
-          kind: 'allDay',
-          startDate: '2026-11-28',
-          endDate: '2026-11-29',
+    const created = (async () => {
+      const result = await executeGraphqlCreate(
+        {
+          title: 'Offsite',
+          time: {
+            kind: 'allDay',
+            startDate: '2026-11-28',
+            endDate: '2026-11-29',
+          },
+          onAccepted: accepted,
         },
-        onAccepted: accepted,
-      },
-      held
-    ).then((result) => {
+        held
+      );
       settled = true;
       return result;
-    });
+    })();
     await vi.waitFor(() => expect(accepted).toHaveBeenCalledTimes(1));
 
     const clientId = calls[0]?.optimistic.uuid ?? '';
