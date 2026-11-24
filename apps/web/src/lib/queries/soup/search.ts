@@ -3,6 +3,7 @@ import { useChannelDirectory } from '@core/context/channels';
 import { throwOnErr } from '@core/util/result';
 import type { ChannelMessageEntity, EntityData, WithSearch } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
+import { straightenQuotes } from '@queries/soup/search-quotes';
 import {
   channelSearchMetadata,
   createSearchResponseItemMapper,
@@ -38,7 +39,7 @@ interface SearchQueryOptions {
  * quotes, so text made only of quotes and spaces holds nothing to search for.
  */
 export const validateSearchServiceText = (text: string) => {
-  return text.replaceAll('"', '').trim().length > 0;
+  return straightenQuotes(text).replaceAll('"', '').trim().length > 0;
 };
 
 // Only plain request values and channel metadata enter the cached callbacks.

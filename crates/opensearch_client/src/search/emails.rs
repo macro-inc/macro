@@ -3,7 +3,7 @@ use crate::{
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         properties::build_tag_filter,
-        query::{CreateQueryParams, QueryKey, create_query, single_word},
+        query::{CreateQueryParams, QueryKey, create_query},
         utils::should_wildcard_field_query_builder,
     },
 };
@@ -170,7 +170,7 @@ fn terms_query<'a>(
     if !keyword_fields.is_empty() {
         combined.should(
             SimpleQueryStringQuery::new(
-                build_keyword_query_string(terms),
+                build_keyword_query_string(terms, match_type),
                 keyword_fields.iter().copied(),
             )
             .default_operator("AND")
@@ -235,8 +235,9 @@ fn text_terms_query<'a>(
 /// which the tokenizer keeps as one token), as the shared term builder
 /// decides. A phrase in quotes or an address already matches as a phrase in
 /// [`build_text_query_string`], and a short term as its analyzed words. A
-/// word UAX #29 keeps whole stays an uncapped prefix, even one
-/// [`single_word`] does not count, such as a Devanagari word with a virama.
+/// word UAX #29 keeps whole stays an uncapped prefix, even one the shared
+/// term builder does not count as one, such as a Devanagari word with a
+/// virama.
 fn reads_as_several_words(term: &str, match_type: &str) -> bool {
     match_type == "partial"
         && !term.contains('@')
@@ -261,20 +262,61 @@ fn reads_as_several_words(term: &str, match_type: &str) -> bool {
 /// but reordered or gapped segments don't. Without the quotes,
 /// `default_operator: "AND"` would match each segment independently anywhere
 /// in the field.
+/// A term of one word with punctuation around it (`-lunch`) matches by that
+/// word alone ([`one_word`]).
 /// The email pattern is lowercased because email addresses are case-insensitive.
 /// Terms are ANDed together with `+`.
-fn build_keyword_query_string(terms: &[String]) -> String {
+fn build_keyword_query_string(terms: &[String], match_type: &str) -> String {
     terms
         .iter()
         .map(|term| {
             if term.contains('@') || term.contains('.') || term.contains(' ') {
-                format!("\"{}\"", term)
-            } else {
-                format!("({} | {}@*)", term, term.to_lowercase())
+                return format!("\"{}\"", escape_syntax(term, match_type));
             }
+            let word = escape_syntax(one_word(term, match_type), match_type);
+            format!("({} | {}@*)", word, word.to_lowercase())
         })
         .collect::<Vec<_>>()
         .join(" + ")
+}
+
+/// The word of a term that is one Unicode (UAX #29) word with nothing but
+/// ASCII punctuation around it (`-lunch`, `(lunch`, `Re:`), or the whole term.
+/// A prefix is not analyzed, so with the punctuation it would look for a token
+/// the index never holds. The index does hold a symbol as a token, so a term
+/// with one (`C♯`) stays whole, as regexp input does.
+fn one_word<'a>(term: &'a str, match_type: &str) -> &'a str {
+    let mut words = term.unicode_word_indices();
+    let (Some((start, word)), None) = (words.next(), words.next()) else {
+        return term;
+    };
+    let mut around = term[..start]
+        .chars()
+        .chain(term[start + word.len()..].chars());
+    if match_type != "regexp" && around.all(|c| c.is_ascii_punctuation()) {
+        word
+    } else {
+        term
+    }
+}
+
+/// `term` as literal text for a simple_query_string, which otherwise reads
+/// punctuation in it as syntax: a leading `-` as NOT, so `-lunch` matched
+/// every message whose addresses lack `lunch`, `|` as OR, `(` as a group and
+/// `~2` as a fuzzy match. Regexp input keeps its punctuation, which is syntax
+/// there.
+fn escape_syntax(term: &str, match_type: &str) -> String {
+    if match_type == "regexp" {
+        return term.to_string();
+    }
+    let mut escaped = String::with_capacity(term.len());
+    for c in term.chars() {
+        if matches!(c, '+' | '|' | '-' | '"' | '*' | '(' | ')' | '~' | '\\') {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    escaped
 }
 
 /// Minimum prefix length before we emit a `term*` wildcard. Shorter prefixes
@@ -294,34 +336,23 @@ const MIN_PREFIX_LEN: usize = 3;
 /// `(reply test)` into `reply AND test` and match each token independently
 /// anywhere in the field instead of as an adjacent phrase.
 ///
-/// A partial term that is one word with punctuation around it (`follow-`,
-/// `Re:`, `(lunch)`) matches by that word alone, as
-/// [`child_content_query`](super::query::child_content_query) does: the
-/// prefix is not analyzed, so `follow-*` would look for a token `follow-`
-/// the index never holds.
+/// A term that is one word with punctuation around it (`follow-`, `Re:`,
+/// `-lunch`) matches by that word alone ([`one_word`]), as
+/// [`child_content_query`](super::query::child_content_query) does.
 fn build_text_query_string(terms: &[String], match_type: &str) -> String {
     let exact = match_type == "exact";
-    let partial = match_type == "partial";
     terms
         .iter()
         .map(|term| {
             if term.contains('@') || term.contains(' ') {
-                return format!("\"{}\"", term);
+                return format!("\"{}\"", escape_syntax(term, match_type));
             }
-            if exact {
-                return format!("({})", term);
-            }
-            if partial && let Some(word) = single_word(term) {
-                return if word.chars().count() < MIN_PREFIX_LEN {
-                    format!("({})", word)
-                } else {
-                    format!("{}*", word)
-                };
-            }
-            if term.chars().count() < MIN_PREFIX_LEN {
-                format!("({})", term)
+            let word = one_word(term, match_type);
+            let literal = escape_syntax(word, match_type);
+            if exact || word.chars().count() < MIN_PREFIX_LEN {
+                format!("({})", literal)
             } else {
-                format!("{}*", term)
+                format!("{}*", literal)
             }
         })
         .collect::<Vec<_>>()

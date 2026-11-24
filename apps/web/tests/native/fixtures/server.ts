@@ -223,7 +223,7 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
             timeTracking: {
               id: USER_ID,
               runningTimer: null,
-              serverNow: TIMESTAMP,
+              serverNow: new Date().toISOString(),
             },
             favorites: ({ filter }: { filter?: FavoritesFilterInput | null }) =>
               (corpus ?? [])
