@@ -6,6 +6,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
+import type { CacheAuthority } from '../authority';
 import {
   cacheRequestStamp,
   isReadOnlyCacheRequest,
@@ -43,9 +44,11 @@ import {
 } from '../telemetry';
 import { cacheDatabaseIdentity } from './coordinator-protocol';
 import {
+  abortedError,
   CacheSyncDriver,
   type SyncAppliedWire,
   type SyncEngine,
+  type SyncStep,
 } from './sync-driver';
 import {
   type CacheEngine,
@@ -81,6 +84,7 @@ type RequestWaiter = {
 /** One step of the worker's own streamed sync run, queued like a hydrate. */
 type SyncTask = {
   kind: 'sync-task';
+  step: SyncStep;
   run: (engine: CacheEngine) => Promise<unknown>;
 };
 
@@ -304,6 +308,8 @@ export class CacheWorkerCore {
   private readonly drainWaiters = new Set<() => void>();
   private resetRequiredReported = false;
   private executingAuthority: string | undefined;
+  /** The authority generation the sync run in progress writes under. */
+  private syncAuthority: string | undefined;
   private hotCapacity: number | undefined;
   private readonly ports = new Set<PortLike>();
   private readonly telemetry: CacheTelemetryRecorderLike;
@@ -318,7 +324,7 @@ export class CacheWorkerCore {
   private cancelQueueDiagnostics: (() => void) | undefined;
   /** At most one streamed sync run per engine (one engine per database). */
   private readonly sync = new CacheSyncDriver({
-    runTask: (task) => this.enqueueSyncTask(task),
+    runTask: (task, step) => this.enqueueSyncTask(task, step),
     publish: (applied) => this.publishSync(applied),
     reportEngineError: (error) => this.reportResetRequired(error),
   });
@@ -528,9 +534,10 @@ export class CacheWorkerCore {
   }
 
   private async enqueueSyncTask<T>(
-    task: (engine: SyncEngine) => Promise<T>
+    task: (engine: SyncEngine) => Promise<T>,
+    step: SyncStep
   ): Promise<T> {
-    return (await this.enqueue({ kind: 'sync-task', run: task })) as T;
+    return (await this.enqueue({ kind: 'sync-task', step, run: task })) as T;
   }
 
   /** Publishes one sync frame like the request it stands in for. */
@@ -997,26 +1004,44 @@ export class CacheWorkerCore {
   }
 
   /**
-   * One step of a sync run, under the authority it runs in, like a hydrate:
-   * its pages may switch identity, so the authority is read again after.
+   * One step of a sync run. The run writes under the authority generation it
+   * began in, like a hydrate under its captured stamp: a write once the
+   * authority changed (a clear, a permission transition, another account)
+   * fails the run as `aborted`. Its pages may switch identity themselves, so
+   * the authority is read again after each write and the run follows it.
+   * Only `begin` and `apply` touch the authority: the other steps write no
+   * records, and `finish` and `abort` must still end the engine's run when
+   * the authority cannot be read.
    */
   private async runSyncTask(task: SyncTask): Promise<unknown> {
     const engine = this.requireEngine();
+    if (task.step !== 'begin' && task.step !== 'apply')
+      return await task.run(engine);
+
     const authority = await engine.currentAuthority(this.scope!);
     if (this.executingAuthority !== authority.generation)
       this.push({ kind: 'authority-changed', authority });
     this.executingAuthority = authority.generation;
+    if (task.step === 'begin') {
+      this.syncAuthority = authority.generation;
+      return await task.run(engine);
+    }
+    if (authority.generation !== this.syncAuthority)
+      throw abortedError('the cache authority changed during the sync run');
+
     let result: unknown;
+    let after: CacheAuthority;
     try {
       result = await task.run(engine);
+      after = await engine.currentAuthority(this.scope!);
     } catch (error) {
       this.executingAuthority = undefined;
       throw error;
     }
-    const after = await engine.currentAuthority(this.scope!);
     if (after.generation !== this.executingAuthority)
       this.push({ kind: 'authority-changed', authority: after });
     this.executingAuthority = after.generation;
+    this.syncAuthority = after.generation;
     return result;
   }
 
@@ -1121,6 +1146,8 @@ export class CacheWorkerCore {
         );
         this.executingAuthority = result.authority.generation;
         if (result.changed) {
+          // The run's pages were fetched under the retired generation.
+          this.sync.abort();
           this.push({ kind: 'authority-changed', authority: result.authority });
           this.push({
             kind: 'ops-affected',
@@ -1476,6 +1503,8 @@ export class CacheWorkerCore {
         return null;
       })
       .with({ kind: 'clear' }, async () => {
+        // The run's saved state and pages belong to the cache being wiped.
+        this.sync.abort();
         const result: CacheRevisionResult = await this.requireEngine().clear();
         this.executingAuthority = undefined;
         const revision = parseCacheRevision(result.revision);

@@ -4191,16 +4191,18 @@ describe('CacheWorkerCore', () => {
       });
     });
 
-    it('aborts a run when the engine drains, replying before the drain ends', async () => {
-      const engine = {
-        syncBegin: vi.fn().mockResolvedValue('{"lanes":[]}'),
-        syncFeed: vi.fn(),
-        syncApplyNext: vi.fn(),
-        syncFinish: vi.fn(),
-        syncAbort: vi.fn().mockResolvedValue({ ...result, reason: 'maxPages' }),
-        syncState: vi.fn(),
-        close: vi.fn().mockResolvedValue(undefined),
-      };
+    const aborted = {
+      id: 2,
+      ok: true,
+      result: {
+        ok: false,
+        failure: { kind: 'aborted' },
+        partial: { ...result, reason: 'maxPages' },
+      },
+    };
+
+    /** A stream request that stays open until it is aborted. */
+    function stubHangingFetch(): Promise<void> {
       let fetched!: () => void;
       const fetchedOnce = new Promise<void>((resolve) => {
         fetched = resolve;
@@ -4209,7 +4211,6 @@ describe('CacheWorkerCore', () => {
         'fetch',
         vi.fn((_url: unknown, init: RequestInit) => {
           fetched();
-          // The request stays open until it is aborted.
           return new Promise((_resolve, reject) =>
             init.signal?.addEventListener('abort', () =>
               reject(new DOMException('aborted', 'AbortError'))
@@ -4217,23 +4218,142 @@ describe('CacheWorkerCore', () => {
           );
         })
       );
-      const { core, port, messages } = await startedCore(engine);
+      return fetchedOnce;
+    }
+
+    function idleSyncEngine() {
+      return {
+        syncBegin: vi.fn().mockResolvedValue('{"lanes":[]}'),
+        syncFeed: vi.fn(),
+        syncApplyNext: vi.fn(),
+        syncFinish: vi.fn(),
+        syncAbort: vi.fn().mockResolvedValue({ ...result, reason: 'maxPages' }),
+        syncState: vi.fn(),
+      };
+    }
+
+    it('aborts a run when the engine drains, replying before the engine closes', async () => {
+      let messages: unknown[] = [];
+      // The run's reply must reach the tab before the engine goes away.
+      const close = vi.fn(async () => {
+        expect(messages).toContainEqual(aborted);
+      });
+      const started = await startedCore({ ...idleSyncEngine(), close });
+      messages = started.messages;
+      const { core, port } = started;
+      const fetched = stubHangingFetch();
 
       const run = core.handleRequest(port, { id: 2, kind: 'sync-start', args });
-      await fetchedOnce;
+      await fetched;
       await core.drain();
       await run;
 
-      expect(messages).toContainEqual({
-        id: 2,
-        ok: true,
-        result: {
-          ok: false,
-          failure: { kind: 'aborted' },
-          partial: { ...result, reason: 'maxPages' },
-        },
+      expect(close).toHaveBeenCalledOnce();
+    });
+
+    it('aborts a run when the cache is cleared', async () => {
+      const engine = {
+        ...idleSyncEngine(),
+        clear: vi.fn().mockResolvedValue({ revision: '1' }),
+      };
+      const { core, port, messages } = await startedCore(engine);
+      const fetched = stubHangingFetch();
+
+      const run = core.handleRequest(port, { id: 2, kind: 'sync-start', args });
+      await fetched;
+      await core.handleRequest(port, { id: 3, kind: 'clear' });
+      await run;
+
+      expect(messages).toContainEqual(aborted);
+      expect(engine.syncAbort).toHaveBeenCalledOnce();
+    });
+
+    it('aborts a run when a permission transition retires the generation', async () => {
+      const next = '00000000-0000-4000-8000-000000000099';
+      const engine = {
+        ...idleSyncEngine(),
+        transitionAuthority: vi.fn(async (identity: string) => ({
+          authority: { ...testAuthority(identity), generation: next },
+          revision: '1',
+          changed: true,
+          affectedOps: [],
+        })),
+      };
+      const { core, port, messages } = await startedCore(engine);
+      const fetched = stubHangingFetch();
+
+      const run = core.handleRequest(port, { id: 2, kind: 'sync-start', args });
+      await fetched;
+      await core.handleRequest(port, {
+        id: 3,
+        kind: 'transition-authority',
+        identity: 'scope-1',
+        expected: TEST_AUTHORITY_GENERATION,
+        policy: 'team:denied',
       });
-      expect(engine.close).toHaveBeenCalledOnce();
+      await run;
+
+      expect(messages).toContainEqual(aborted);
+    });
+
+    it('writes nothing once the authority changed since the run began', async () => {
+      let generation = TEST_AUTHORITY_GENERATION;
+      const engine = {
+        ...idleSyncEngine(),
+        currentAuthority: async (identity: string) => ({
+          ...testAuthority(identity),
+          generation,
+        }),
+        syncFeed: vi.fn(async () => {
+          // Another request retired the generation meanwhile.
+          generation = '00000000-0000-4000-8000-000000000099';
+          return 1;
+        }),
+      };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response('{}\n'))
+      );
+      const { core, port, messages } = await startedCore(engine);
+
+      await core.handleRequest(port, { id: 2, kind: 'sync-start', args });
+
+      expect(messages).toContainEqual(aborted);
+      expect(engine.syncApplyNext).not.toHaveBeenCalled();
+      expect(engine.syncAbort).toHaveBeenCalledOnce();
+    });
+
+    it('drops the engine run when the authority cannot be read for a write', async () => {
+      let readable = true;
+      const engine = {
+        ...idleSyncEngine(),
+        currentAuthority: async (identity: string) => {
+          if (!readable) throw new Error('storage unavailable');
+          return testAuthority(identity);
+        },
+        syncFeed: vi.fn(async () => {
+          readable = false;
+          return 1;
+        }),
+      };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response('{}\n'))
+      );
+      const { core, port, messages } = await startedCore(engine);
+
+      await core.handleRequest(port, { id: 2, kind: 'sync-start', args });
+
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          id: 2,
+          result: expect.objectContaining({
+            ok: false,
+            failure: { kind: 'write', message: 'storage unavailable' },
+          }),
+        })
+      );
+      expect(engine.syncAbort).toHaveBeenCalledOnce();
     });
   });
 });
