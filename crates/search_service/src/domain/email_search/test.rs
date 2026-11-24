@@ -238,6 +238,21 @@ async fn only_without_shares_searches_no_email() {
 }
 
 #[tokio::test]
+async fn a_viewer_without_inboxes_or_shares_searches_no_email() {
+    let service = EmailSearchService(Source::default());
+    let no_inboxes = ViewerInboxes::default();
+
+    for shared in [SharedEmailFilter::Exclude, SharedEmailFilter::Include] {
+        let scope = service
+            .scope(&viewer(), &filters(shared), &no_inboxes)
+            .await
+            .unwrap();
+
+        assert_eq!(scope, EmailScope::Nothing, "{shared:?}");
+    }
+}
+
+#[tokio::test]
 async fn include_adds_shared_threads_to_the_viewers_inboxes() {
     let service = EmailSearchService(Source {
         shared: vec![shared(10)],

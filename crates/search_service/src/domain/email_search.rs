@@ -491,7 +491,8 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
                 threads.required_thread_ids = requested;
             }
         }
-        if threads.ids_only && threads.thread_ids.is_empty() {
+        let reaches_no_inbox = threads.ids_only || threads.inbox_link_ids.is_empty();
+        if reaches_no_inbox && threads.thread_ids.is_empty() {
             return Ok(EmailScope::Nothing);
         }
         Ok(EmailScope::Threads(Box::new(threads)))

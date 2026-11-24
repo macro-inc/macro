@@ -126,11 +126,14 @@ async fn insert_thread(
     Ok(thread_id)
 }
 
-fn state(pool: PgPool, index: opensearch_client::OpensearchClient) -> SearchHandlerState {
+fn state(
+    pool: PgPool,
+    index: std::sync::Arc<opensearch_client::OpensearchClient>,
+) -> SearchHandlerState {
     SearchHandlerState {
         db: readonly_pool::ReadOnlyPool(pool.clone()),
         crm_db: pool.clone(),
-        opensearch_client: std::sync::Arc::new(index),
+        opensearch_client: index,
         entity_access_service: std::sync::Arc::new(
             entity_access::domain::service::EntityAccessServiceImpl::new(
                 entity_access::outbound::PgAccessRepository::new(pool),
@@ -231,6 +234,9 @@ async fn clear_index(index: &opensearch_client::OpensearchClient) -> anyhow::Res
     Ok(())
 }
 
+/// What each search returned and what it should have, by thread name.
+type Searched = Vec<(String, BTreeSet<&'static str>)>;
+
 /// The owner has two inboxes and has delegated one of them. The delegate's
 /// search reaches their own inbox and the delegated one and, when it asks for
 /// shared threads, a thread the owner shared with them from the other inbox,
@@ -241,9 +247,24 @@ async fn a_delegate_searches_only_the_inboxes_delegated_to_them(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let url = std::env::var("SEARCH_TEST_OPENSEARCH_URL")?;
-    let index = opensearch_client::OpensearchClient::new(url, String::new(), String::new())?;
+    let index = std::sync::Arc::new(opensearch_client::OpensearchClient::new(
+        url,
+        String::new(),
+        String::new(),
+    )?);
     clear_index(&index).await?;
 
+    let outcome = seed_and_search(pool, std::sync::Arc::clone(&index)).await;
+    clear_index(&index).await?;
+    let (found, expected) = outcome?;
+    assert_eq!(found, expected);
+    Ok(())
+}
+
+async fn seed_and_search(
+    pool: PgPool,
+    index: std::sync::Arc<opensearch_client::OpensearchClient>,
+) -> anyhow::Result<(Searched, Searched)> {
     insert_user(&pool, OWNER, "owner@delegation.example").await?;
     insert_user(&pool, DELEGATE, "delegate@delegation.example").await?;
     let owner_inbox = insert_inbox(&pool, OWNER, "owner@delegation.example").await?;
@@ -288,7 +309,7 @@ async fn a_delegate_searches_only_the_inboxes_delegated_to_them(
     let ctx = state(pool, index);
     let own_only = item_filters::SharedEmailFilter::Exclude;
     let with_shared = item_filters::SharedEmailFilter::Include;
-    let searches: [(&str, &str, Vec<Uuid>, _, &[&str]); 5] = [
+    let searches: [(&str, &str, Vec<Uuid>, _, &[&'static str]); 5] = [
         (
             "the delegate's search",
             DELEGATE,
@@ -325,45 +346,28 @@ async fn a_delegate_searches_only_the_inboxes_delegated_to_them(
             &["delegated", "private", "shared"],
         ),
     ];
-    let searched: anyhow::Result<Vec<(String, BTreeSet<Uuid>)>> = async {
-        let mut searched = Vec::new();
-        for (search, user, link_ids, shared, _) in &searches {
-            let request = email_search(link_ids, *shared);
-            searched.push((
-                format!("{search} on /search/simple"),
-                simple_threads(&ctx, user, &request).await?,
-            ));
-            searched.push((
-                format!("{search} on /search"),
-                unified_threads(&ctx, user, &request).await?,
-            ));
-        }
-        Ok(searched)
-    }
-    .await;
-    clear_index(&ctx.opensearch_client).await?;
 
-    let found: Vec<(String, BTreeSet<&str>)> = searched?
-        .into_iter()
-        .map(|(search, threads)| {
-            let threads = threads
-                .iter()
-                .map(|id| names.get(id).copied().unwrap_or("another thread"))
-                .collect();
-            (search, threads)
-        })
-        .collect();
-    let expected: Vec<(String, BTreeSet<&str>)> = searches
-        .iter()
-        .flat_map(|(search, _, _, _, threads)| {
-            ["/search/simple", "/search"].map(|route| {
-                (
-                    format!("{search} on {route}"),
-                    threads.iter().copied().collect(),
-                )
-            })
-        })
-        .collect();
-    assert_eq!(found, expected);
-    Ok(())
+    let by_name = |threads: BTreeSet<Uuid>| -> BTreeSet<&'static str> {
+        threads
+            .iter()
+            .map(|id| names.get(id).copied().unwrap_or("another thread"))
+            .collect()
+    };
+    let mut found = Vec::new();
+    let mut expected = Vec::new();
+    for (search, user, link_ids, shared, threads) in &searches {
+        let request = email_search(link_ids, *shared);
+        let threads: BTreeSet<&'static str> = threads.iter().copied().collect();
+        found.push((
+            format!("{search} on /search/simple"),
+            by_name(simple_threads(&ctx, user, &request).await?),
+        ));
+        expected.push((format!("{search} on /search/simple"), threads.clone()));
+        found.push((
+            format!("{search} on /search"),
+            by_name(unified_threads(&ctx, user, &request).await?),
+        ));
+        expected.push((format!("{search} on /search"), threads));
+    }
+    Ok((found, expected))
 }
