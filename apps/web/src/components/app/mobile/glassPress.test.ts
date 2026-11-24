@@ -61,6 +61,11 @@ describe('mobile glass surface press', () => {
     expect(glassPressGeometry(600, 46).outset).toBe(6);
     expect(glassPressGeometry(600, 80).outset).toBe(6);
   });
+  it('expands wide paint by scaling it, the same 6px on every edge', () => {
+    const { scaleX, scaleY } = glassPressGeometry(300, 46);
+    expect(300 * scaleX - 300).toBeCloseTo(12);
+    expect(46 * scaleY - 46).toBeCloseTo(12);
+  });
   it.each(['android', 'web', 'desktop'])(
     'leaves %s controls without the iOS press effect',
     (platform) => {
@@ -132,7 +137,13 @@ describe('mobile glass surface press', () => {
       pointer(button, 'pointerdown');
 
       expect(group.dataset.glassPress).toBe('wide');
-      expect(group.style.getPropertyValue('--press-outset')).toBe('6px');
+      // 6px per edge, as scale factors of the pill's 46 x height box.
+      expect(
+        Number(group.style.getPropertyValue('--press-scale-x'))
+      ).toBeCloseTo(58 / 46);
+      expect(
+        Number(group.style.getPropertyValue('--press-scale-y'))
+      ).toBeCloseTo((height + 12) / height);
       expect(button.hasAttribute('data-glass-press')).toBe(false);
 
       pointer(button, 'pointerup');

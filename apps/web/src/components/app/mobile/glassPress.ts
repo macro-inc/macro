@@ -8,13 +8,21 @@ const CONTROL =
 const INPUT = '[data-glass-input], [data-input] [data-composer-collapsed]';
 const DISABLED = ':disabled, [data-disabled], [aria-disabled="true"]';
 
-/** Nearly square controls grow 28%; elongated surfaces expand their paint by up to 6px per edge. */
+/**
+ * Nearly square controls grow 28%; elongated surfaces expand their paint by up
+ * to 6px per edge. The paint expands by scaling its layers (`scaleX`,
+ * `scaleY`) rather than moving their edges: iOS runs a transform transition
+ * on the compositor at the display's full rate, while an edge (`inset`)
+ * transition re-lays out on the main thread, which Safari caps at 60 Hz.
+ */
 export function glassPressGeometry(width: number, height: number) {
   const outset = Math.min(6, width * 0.15, height * 0.15);
   return {
     outset,
     round: Math.max(width, height) <= Math.min(width, height) * 1.15,
     scale: 1.28,
+    scaleX: (width + 2 * outset) / width,
+    scaleY: (height + 2 * outset) / height,
   };
 }
 
@@ -94,8 +102,9 @@ export function installGlassPress() {
       y: event.clientY,
     };
     const geometry = glassPressGeometry(width, height);
-    element.style.setProperty('--press-outset', `${geometry.outset}px`);
     element.style.setProperty('--press-scale', String(geometry.scale));
+    element.style.setProperty('--press-scale-x', String(geometry.scaleX));
+    element.style.setProperty('--press-scale-y', String(geometry.scaleY));
     // Convert the tap into local coordinates, including a partially scaled
     // round control when a second press interrupts its release.
     positionHighlight(bounds);

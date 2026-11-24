@@ -1264,15 +1264,11 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
   initial-value: 0.45;
 }
 
-@property --press-expansion {
-  syntax: "<length>";
-  inherits: true;
-  initial-value: 0px;
-}
-
 /* Native iOS press paint layers belong to the material, including channel inputs.
    ::before paints the live fill, shadow and tap-centered sheen; ::after keeps
    the glass rim. No child nodes, computed-style snapshots or release cleanup.
+   Every moving part is a `scale` transition, which iOS animates on the
+   compositor at 120 Hz; only the sheen's brightness fades on the main thread.
    Keep this scope in sync with glassPress.ts's surface selection.
    Only iOS WebKit knows -webkit-touch-callout, so other browsers drop the block
    instead of testing every element against it on each restyle. */
@@ -1287,7 +1283,6 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
   ) {
     /* The shimmer replaces native tap feedback only on these press surfaces. */
     -webkit-tap-highlight-color: transparent;
-    --press-expansion: 0px;
     position: relative;
     isolation: isolate;
     overflow: visible;
@@ -1296,8 +1291,7 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
     box-shadow: none;
     scale: 1;
     transform-origin: center;
-    transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1),
-      --press-expansion 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1);
 
     & button {
       scale: 1 !important;
@@ -1311,7 +1305,7 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
       background-color: color-mix(in oklch, var(--glass-press-tint) calc(8% * var(--press-light)), var(--glass-fill));
       background-image: radial-gradient(
         circle calc(var(--press-shimmer-size, 100px) * var(--press-spread) / 2)
-        at calc(var(--press-x, 50%) + var(--press-expansion)) calc(var(--press-y, 50%) + var(--press-expansion)),
+        at var(--press-x, 50%) var(--press-y, 50%),
         color-mix(in oklch, var(--glass-press-tint) calc(28% * var(--press-light)), transparent),
         color-mix(in oklch, var(--glass-press-tint) calc(12% * var(--press-light)), transparent) 45%,
         transparent 100%
@@ -1319,12 +1313,18 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
       backdrop-filter: var(--glass-backdrop, none);
       box-shadow: var(--glass-shadow, none);
       transition: --press-light 220ms ease-out,
-        --press-spread 350ms cubic-bezier(0.22, 1, 0.36, 1);
+        --press-spread 350ms cubic-bezier(0.22, 1, 0.36, 1),
+        scale 300ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     &::before, &::after {
-      inset: calc(-1 * var(--press-expansion));
+      inset: 0;
       border-radius: inherit;
+      scale: 1;
+    }
+
+    &::after {
+      transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     & svg {
@@ -1343,7 +1343,9 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
         scale: var(--press-scale);
       }
       &[data-glass-press='wide'] {
-        --press-expansion: var(--press-outset);
+        &::before, &::after {
+          scale: var(--press-scale-x, 1) var(--press-scale-y, 1);
+        }
 
         & svg {
           scale: 1.18;
