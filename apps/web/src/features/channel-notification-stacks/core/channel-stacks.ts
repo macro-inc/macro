@@ -173,13 +173,13 @@ function sameNotifications(a: ChannelStack, b: ChannelStack) {
 
 /**
  * The notifications the gutter lists, gathered since the channel opened: every
- * notification unread at its first settled answer, then only thread replies and
- * mentions that arrive unread. A notification stays once listed, whether or not
- * it is read later; only marking it done takes it off.
+ * notification unread when it opened, then only thread replies and mentions
+ * that arrive while it is open. A notification stays once listed, whether or
+ * not it is read later; only marking it done takes it off.
  */
 export type ListedNotifications = {
   notifications: readonly UnifiedNotification[];
-  /** The first settled answer has been taken; new top-level messages stay out. */
+  /** The first server answer has been taken; new top-level messages stay out. */
   closed: boolean;
 };
 
@@ -188,6 +188,22 @@ export const NO_LISTED_NOTIFICATIONS: ListedNotifications = {
   closed: false,
 };
 
+/**
+ * Reads this close before the channel mounted count as part of opening it:
+ * opening a channel from a Home or inbox row marks the row's stack read on the
+ * click, before the channel's reads start.
+ */
+export const OPENING_GRACE_MS = 15_000;
+
+/** Unread when the channel opened, or arrived and read since then. */
+function unreadSinceOpen(notification: UnifiedNotification, since: number) {
+  if (notification.state === 'done') return false;
+  if (notification.state === 'unseen') return true;
+  return (
+    !!notification.viewed_at && Date.parse(notification.viewed_at) >= since
+  );
+}
+
 /** Notifications that join the list after the channel's first answer. */
 function joinsAfterOpen(notification: UnifiedNotification) {
   const tag = notification.notification_metadata.tag;
@@ -195,44 +211,56 @@ function joinsAfterOpen(notification: UnifiedNotification) {
 }
 
 /**
- * `listed`, with the unread notifications it does not hold yet added. Before
- * the first settled answer every unread one joins; after it, only replies and
+ * `listed`, with the not-done notifications that were unread when the channel
+ * opened added: unseen, or read at or after `since` (epoch ms). Nothing joins until the read's first
+ * server answer (`settled`), so a stale cached answer lists nothing; that
+ * answer lists everything unread, and later ones add only replies and
  * mentions. Returns `listed` itself when nothing changed.
  */
 export function admitUnread(
   listed: ListedNotifications,
-  unread: readonly UnifiedNotification[],
-  settled: boolean
+  notDone: readonly UnifiedNotification[],
+  settled: boolean,
+  since: number
 ): ListedNotifications {
+  if (!listed.closed && !settled) return listed;
   const known = new Set(listed.notifications.map((n) => n.id));
-  const added = unread.filter(
+  const added = notDone.filter(
     (notification) =>
-      notification.state === 'unseen' &&
       !known.has(notification.id) &&
+      unreadSinceOpen(notification, since) &&
       (!listed.closed || joinsAfterOpen(notification))
   );
-  const closed = listed.closed || settled;
-  if (added.length === 0 && closed === listed.closed) return listed;
-  return { notifications: [...listed.notifications, ...added], closed };
+  if (added.length === 0 && listed.closed) return listed;
+  return { notifications: [...listed.notifications, ...added], closed: true };
 }
 
 /**
  * What marking listed stacks done marks: their own notifications, and every
- * not-done notification in the channel's stacks of the same key, so the whole
- * inbox stack leaves Home and the inbox rather than only its unread part.
+ * not-done notification in the channel's inbox stacks that share a key or a
+ * notification with them, so the whole inbox stack leaves Home and the inbox
+ * rather than only its unread part. (A listed root mention whose seen replies
+ * the inbox stacks with it as a thread shares a notification, not a key.)
  */
 export function notificationsToMarkDone(
   stacks: readonly ChannelStack[],
   notDone: readonly ChannelStack[]
 ): UnifiedNotification[] {
   const keys = new Set(stacks.map((stack) => stack.key));
+  const ids = new Set(
+    stacks.flatMap((stack) => stack.notifications.map((n) => n.id))
+  );
   const byId = new Map<string, UnifiedNotification>();
   const add = (notification: UnifiedNotification) => {
     if (notification.state !== 'done') byId.set(notification.id, notification);
   };
   for (const stack of stacks) stack.notifications.forEach(add);
   for (const stack of notDone) {
-    if (keys.has(stack.key)) stack.notifications.forEach(add);
+    if (
+      keys.has(stack.key) ||
+      stack.notifications.some((notification) => ids.has(notification.id))
+    )
+      stack.notifications.forEach(add);
   }
   return [...byId.values()];
 }

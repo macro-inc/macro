@@ -336,10 +336,6 @@ export function Channel(props: ChannelProps) {
     channelId: props.channelId,
     ready: () =>
       !callPanel && !isTouchDevice() && threadListNavigation() !== undefined,
-    unread: unread.notifications,
-    unreadStatus: unread.notificationsStatus,
-    unreadSettled: unread.notificationsSettled,
-    retryUnread: unread.retryNotifications,
     pane: threadListContainerEl,
     goToMessage: (threadId, replyId) => goToMessage(threadId, replyId),
   });

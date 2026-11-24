@@ -35,30 +35,33 @@ function reply(
 
 function setup(markDone: () => Promise<boolean>) {
   return createRoot((dispose) => {
-    const [unread, setUnread] = createSignal<UnifiedNotification[]>([
+    const [notDone, setNotDone] = createSignal<UnifiedNotification[]>([
+      reply('older', 'seen'),
       reply('a', 'unseen'),
     ]);
     const marked: string[][] = [];
     const stacks = createChannelNotificationStacks({
-      unread,
-      unreadSettled: () => true,
-      active: () => [reply('older', 'seen'), reply('a', 'unseen')],
+      notDone,
+      settled: () => true,
+      unreadSince: Date.now() - 1_000,
       markDone: (_stacks, notifications) => {
         marked.push(notifications.map((n) => n.id));
         return markDone();
       },
     });
-    return { stacks, setUnread, marked, dispose };
+    return { stacks, setNotDone, marked, dispose };
   });
 }
 
 describe('createChannelNotificationStacks', () => {
   it('keeps a read entry listed without its unread state', () => {
-    const { stacks, setUnread, dispose } = setup(async () => true);
+    const { stacks, setNotDone, dispose } = setup(async () => true);
     expect(stacks.listed()[0]?.notifications[0]?.state).toBe('unseen');
 
-    // Read: the unread read no longer holds it.
-    setUnread([]);
+    setNotDone([
+      reply('older', 'seen'),
+      { ...reply('a', 'seen'), viewed_at: new Date().toISOString() },
+    ]);
     expect(stacks.listed()).toHaveLength(1);
     expect(stacks.listed()[0]?.notifications[0]?.state).toBe('seen');
     dispose();

@@ -86,6 +86,15 @@ test('reading the messages leaves every entry listed', async ({ page }) => {
   await expect(toggle(page)).not.toHaveAttribute('aria-description', /./);
 });
 
+test('opening from a Home row lists what the row just read', async ({
+  page,
+}) => {
+  await open(page, 1600, '&openedFromRow');
+  await expect(rows(page)).toHaveCount(3);
+  // Read by the row's click, so only the mention keeps its dot.
+  await expect(list(page).getByRole('img', { name: 'Unread' })).toHaveCount(1);
+});
+
 test('the toggle dot sits after the count, centred with it', async ({
   page,
 }) => {
@@ -142,7 +151,11 @@ test('replies and mentions that arrive are listed, new messages are not', async 
   await expect(row(page, 'New message from Leo')).toHaveCount(1);
   await expect(rows(page)).toHaveCount(3);
 
-  await page.evaluate(() => window.notify('late-mention', 'mention'));
+  // A mention read as it arrives (on screen) is listed too.
+  await page.evaluate(() => {
+    window.notify('late-mention', 'mention');
+    window.read(['late-mention']);
+  });
   await expect(rows(page)).toHaveCount(4);
   await expect(row(page, 'Ana mentioned you')).toHaveCount(1);
 });
@@ -190,7 +203,7 @@ test('reopening the channel takes a fresh list', async ({ page }) => {
 });
 
 test('a failed read offers Retry, then lists', async ({ page }) => {
-  await open(page, 1600, '&unread=failed');
+  await open(page, 1600, '&notDone=failed');
   await expect(list(page)).toContainText('Couldn’t load these notifications');
   await expect(rows(page)).toHaveCount(0);
 
@@ -201,7 +214,7 @@ test('a failed read offers Retry, then lists', async ({ page }) => {
 });
 
 test('nothing shows while loading or with nothing unread', async ({ page }) => {
-  await open(page, 1600, '&unread=loading');
+  await open(page, 1600, '&notDone=loading');
   await expect(toggle(page)).toHaveCount(0);
   await expect(list(page)).toHaveCount(0);
 

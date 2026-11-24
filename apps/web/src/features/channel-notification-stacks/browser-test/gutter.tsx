@@ -11,6 +11,7 @@ import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import type { StackListStatus } from '../core/channel-stacks';
 import { createChannelNotificationStacks } from '../primitives/channel-notification-stacks';
+import { createChannelVisit } from '../primitives/channel-visits';
 import { NotificationList } from '../views/notification-list';
 import '@fontsource-variable/inter';
 import '../../../index.css';
@@ -162,8 +163,21 @@ function initialStatus(name: string): StackListStatus {
 }
 
 // Notifications outlive a channel, as the server's do.
+// `?openedFromRow` opens the channel as a Home row does: the row's click has
+// just read the new messages and the thread.
+const OPENED_FROM_ROW = params.has('openedFromRow');
 const [records, setRecords] = createSignal(
-  params.has('empty') ? [] : NOTIFICATIONS
+  params.has('empty')
+    ? []
+    : NOTIFICATIONS.map((n) =>
+        OPENED_FROM_ROW && (n.id === 'n2' || n.id === 'n3')
+          ? {
+              ...n,
+              state: 'seen' as const,
+              viewed_at: new Date().toISOString(),
+            }
+          : n
+      )
 );
 window.notify = (id, kind) =>
   setRecords((current) => [
@@ -173,23 +187,23 @@ window.notify = (id, kind) =>
 window.read = (ids) =>
   setRecords((current) =>
     current.map((n) =>
-      ids.includes(n.id) && n.state === 'unseen' ? { ...n, state: 'seen' } : n
+      ids.includes(n.id) && n.state === 'unseen'
+        ? { ...n, state: 'seen', viewed_at: new Date().toISOString() }
+        : n
     )
   );
 
 /** One open channel: its list gathers from the moment it mounts. */
 function Channel(props: { width: number }) {
-  // `?unread=failed|loading` starts as if the unread read failed or loads.
-  const [unreadStatus, setUnreadStatus] = createSignal(initialStatus('unread'));
-  // `?notDone=loading` keeps the not-done read loading.
-  const notDoneStatus = initialStatus('notDone');
+  // `?notDone=failed|loading` starts as if the not-done read failed or loads.
+  const [status, setStatus] = createSignal(initialStatus('notDone'));
   const [open, setOpen] = createSignal(true);
 
   const stacks = createChannelNotificationStacks({
-    // Like the unread read: nothing until it has answered.
-    unread: () => (unreadStatus() === 'ready' ? records() : []),
-    unreadSettled: () => unreadStatus() === 'ready',
-    active: () => (notDoneStatus === 'ready' ? records() : undefined),
+    // Like the not-done read: nothing until it has answered.
+    notDone: () => (status() === 'ready' ? records() : undefined),
+    settled: () => status() === 'ready',
+    unreadSince: createChannelVisit('channel-1'),
     markDone: async (_stacks, notifications) => {
       const ids = notifications.map((n) => n.id);
       if (window.failNextMark) {
@@ -250,11 +264,11 @@ function Channel(props: { width: number }) {
         open={open}
         onOpenChange={setOpen}
         stacks={stacks.listed}
-        status={unreadStatus}
+        status={status}
         onRetry={() => {
           // The retry's answer arrives a moment later.
-          setUnreadStatus('retrying');
-          setTimeout(() => setUnreadStatus('ready'), 300);
+          setStatus('retrying');
+          setTimeout(() => setStatus('ready'), 300);
         }}
         senderName={(id) => NAMES[id]}
         onOpenStack={(stack) =>

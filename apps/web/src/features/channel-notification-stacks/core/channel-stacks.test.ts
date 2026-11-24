@@ -170,21 +170,31 @@ const unseen = (record: UnifiedNotification): UnifiedNotification => ({
 const ids = (records: readonly UnifiedNotification[]) =>
   records.map((record) => record.id);
 
+// Reads from this moment on count as unread at open.
+const OPENED_AT = Date.UTC(2026, 10, 18, 12, 0);
+const readAt = (record: UnifiedNotification, at: number) => ({
+  ...record,
+  viewed_at: new Date(at).toISOString(),
+});
+
 describe('admitUnread', () => {
-  it('lists everything unread until the first settled answer', () => {
+  it('lists nothing until the server answers, then everything unread since opening', () => {
+    const notDone = [
+      unseen(send('a', 1, 'ana')),
+      send('read-long-ago', 2, 'ana'),
+      // Read by the Home row that opened the channel.
+      readAt(send('read-opening', 3, 'leo'), OPENED_AT + 2_000),
+    ];
     const fromCache = admitUnread(
       NO_LISTED_NOTIFICATIONS,
-      [unseen(send('a', 1, 'ana')), send('read', 2, 'ana')],
-      false
+      notDone,
+      false,
+      OPENED_AT
     );
-    const settled = admitUnread(
-      fromCache,
-      [unseen(send('a', 1, 'ana')), unseen(send('b', 3, 'leo'))],
-      true
-    );
+    const settled = admitUnread(fromCache, notDone, true, OPENED_AT);
 
-    expect(ids(fromCache.notifications)).toEqual(['a']);
-    expect(ids(settled.notifications)).toEqual(['a', 'b']);
+    expect(fromCache).toBe(NO_LISTED_NOTIFICATIONS);
+    expect(ids(settled.notifications)).toEqual(['a', 'read-opening']);
     expect(settled.closed).toBe(true);
   });
 
@@ -192,17 +202,19 @@ describe('admitUnread', () => {
     const listed = admitUnread(
       NO_LISTED_NOTIFICATIONS,
       [unseen(send('a', 1, 'ana'))],
-      true
+      true,
+      OPENED_AT
     );
 
-    expect(admitUnread(listed, [], true)).toBe(listed);
+    expect(admitUnread(listed, [], true, OPENED_AT)).toBe(listed);
   });
 
   it('adds only replies and mentions that arrive after it settles', () => {
     const listed = admitUnread(
       NO_LISTED_NOTIFICATIONS,
       [unseen(send('a', 1, 'ana'))],
-      true
+      true,
+      OPENED_AT
     );
     const later = admitUnread(
       listed,
@@ -210,9 +222,11 @@ describe('admitUnread', () => {
         unseen(send('a', 1, 'ana')),
         unseen(send('new-message', 5, 'leo')),
         unseen(reply('new-reply', 6, 'leo', 'm-a')),
-        unseen(mention('new-mention', 7, 'mara')),
+        // Read as it arrived, on screen.
+        readAt(mention('new-mention', 7, 'mara'), OPENED_AT + 60_000),
       ],
-      true
+      true,
+      OPENED_AT
     );
 
     expect(ids(later.notifications)).toEqual(['a', 'new-reply', 'new-mention']);
@@ -232,6 +246,20 @@ describe('notificationsToMarkDone', () => {
     expect(ids(notificationsToMarkDone(listed, notDone)).sort()).toEqual([
       'b',
       'older',
+    ]);
+  });
+
+  it('marks the thread a listed root mention is stacked into', () => {
+    const listed = channelStacks([unseen(mention('root', 2, 'leo'))]);
+    const notDone = channelStacks([
+      unseen(mention('root', 2, 'leo')),
+      reply('seen-reply', 3, 'ana', 'm-root'),
+    ]);
+
+    expect(listed[0]?.key).not.toBe(notDone[0]?.key);
+    expect(ids(notificationsToMarkDone(listed, notDone)).sort()).toEqual([
+      'root',
+      'seen-reply',
     ]);
   });
 

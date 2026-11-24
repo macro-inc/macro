@@ -14,6 +14,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { type Accessor, Show, untrack } from 'solid-js';
 import type { ChannelStack, StackListStatus } from './core/channel-stacks';
 import { createChannelNotificationStacks } from './primitives/channel-notification-stacks';
+import { createChannelVisit } from './primitives/channel-visits';
 import { createGutterPreferences } from './primitives/gutter-preferences';
 import { NotificationList } from './views/notification-list';
 
@@ -37,18 +38,14 @@ export function createChannelNotificationGutter(options: {
   channelId: string;
   /** The channel is open on desktop and has shown its first messages. */
   ready: Accessor<boolean>;
-  /** The channel's unread notifications, read for its own unread markers. */
-  unread: Accessor<readonly UnifiedNotification[]>;
-  /** Whether `unread` is known yet. */
-  unreadStatus: Accessor<StackListStatus>;
-  /** `unread` came from the server, not only from cache. */
-  unreadSettled: Accessor<boolean>;
-  retryUnread: () => void;
   /** The element the message column is centered in. */
   pane: Accessor<HTMLElement | undefined>;
   /** Scroll the channel to a top-level message, or a reply in its thread. */
   goToMessage: (threadId: string, replyId?: string) => void;
 }) {
+  // Created as the channel mounts, so reads made while opening it (a Home
+  // row marks its stack read on the click) still count as unread at open.
+  const unreadSince = createChannelVisit(options.channelId);
   const flag = useFeatureFlag(enableChannelNotificationGutter);
   const enabled = () => options.ready() && flag().enabled;
 
@@ -57,19 +54,21 @@ export function createChannelNotificationGutter(options: {
     options.channelId,
     enabled
   );
-  const active = () => {
+  const notDone = () => {
     if (activeQuery.isPending) return undefined;
     const records = activeQuery.data ?? [];
     return notificationSource.withLocalOverrides
       ? records.map(notificationSource.withLocalOverrides)
       : records;
   };
-  // Created with the channel, whatever the flag, so the first unread answer
-  // is listed before the channel reads the messages on screen.
   const stacks = createChannelNotificationStacks({
-    unread: options.unread,
-    unreadSettled: options.unreadSettled,
-    active,
+    notDone,
+    // A cached answer can be stale; list from the server's.
+    settled: () =>
+      activeQuery.data !== undefined &&
+      !activeQuery.isFetching &&
+      !activeQuery.isError,
+    unreadSince,
     markDone: (marked, notifications) =>
       markStacksDone({
         channelId: options.channelId,
@@ -79,6 +78,17 @@ export function createChannelNotificationGutter(options: {
           notificationSource.bulkMarkAsDone(records),
       }),
   });
+
+  // Listed stacks stay listed while a refresh fails.
+  const status = (): StackListStatus => {
+    if (!activeQuery.isError) {
+      return activeQuery.data === undefined ? 'loading' : 'ready';
+    }
+    // A retry keeps the earlier error until its answer arrives.
+    return activeQuery.isFetching ? 'retrying' : 'failed';
+  };
+  const retry = () =>
+    fireAndForget(activeQuery.refetch(), 'channel-notification-stacks');
 
   const markDone = (marked: readonly ChannelStack[]) =>
     fireAndForget(stacks.markDone(marked), 'channel-notification-stacks');
@@ -93,8 +103,8 @@ export function createChannelNotificationGutter(options: {
     enabled,
     pane: options.pane,
     stacks: stacks.listed,
-    status: options.unreadStatus,
-    retry: options.retryUnread,
+    status,
+    retry,
     markDone,
     openStack,
   };

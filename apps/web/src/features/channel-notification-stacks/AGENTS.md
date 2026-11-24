@@ -13,24 +13,27 @@ flag, `enable-channel-notification-gutter`
 - Stacks are the inbox's: `stackNotifications` groups new top-level messages
   into one stack, each thread into one, and each top-level mention into one
   (`core/channel-stacks.ts`). Reactions are left out.
-- The list gathers from the channel's existing unread read
-  (`createChannelUnreadNavigation`), which fetches nothing extra
-  (`admitUnread`, `primitives/channel-notification-stacks.ts`). Until that
-  read's first server answer (`notificationsSettled`; a cached answer comes
-  first) every unread notification joins; after it, only thread replies and
-  mentions that arrive unread do, never new top-level messages. A listed
-  notification stays when it is read; a row's unread dot shows whether it is
-  still in the unread read. The list lives as long as the mounted channel, so
-  reopening takes a fresh one.
-- A check takes its entry off at once and marks it done together with every
-  not-done notification in the channel's stack of the same key
-  (`notificationsToMarkDone`), so the whole inbox stack leaves Home. The
-  not-done notifications come from `ChannelActiveNotifications`
+- The list gathers from `ChannelActiveNotifications`
   (`@queries/channel/active-notifications`: unseen and seen message, reply and
-  mention notifications, newest first, at most 200). A failed mark puts the
-  entry back and shows a toast.
-- The not-done read waits until the channel is open on a non-touch device,
-  outside a call panel, with its first rows on screen.
+  mention notifications, newest first, at most 200; `admitUnread`,
+  `primitives/channel-notification-stacks.ts`). Nothing is listed until that
+  read's first server answer (a cached answer comes first and can be stale).
+  That answer lists every notification that was unread at open: unseen, or
+  read since the channel mounted. Its `viewed_at` decides, so the channel's
+  own reads of the messages on screen, and a Home or inbox row that marked its
+  stack read on the click that opened the channel, still count
+  (`primitives/channel-visits.ts`: from 15s before the mount, never before the
+  channel was last left in this page). Later answers add only thread replies
+  and mentions, read or not, never new top-level messages. A listed
+  notification stays when it is read; a row's unread dot follows its current
+  state. The list lives as long as the mounted channel, so reopening takes a
+  fresh one.
+- A check takes its entry off at once and marks it done together with every
+  not-done notification in the channel's inbox stacks that share its key or one
+  of its notifications (`notificationsToMarkDone`), so the whole inbox stack
+  leaves Home. A failed mark puts the entry back and shows a toast.
+- The read waits until the channel is open on a non-touch device, outside a
+  call panel, with its first rows on screen.
 - Tracing: the first not-done read runs in `channel.active_notifications.read`
   (channel id, count, limit reached), inside the channel view's trace while
   that view still loads; the request's `graphql.transport` span sits under it.
@@ -45,14 +48,13 @@ flag, `enable-channel-notification-gutter`
 
 ## Gotchas
 
-- `createChannelNotificationGutter` must be created as the channel mounts,
-  whatever the flag: the first unread answer has to be gathered before the
-  channel marks the messages on screen read.
+- `createChannelNotificationGutter` must be created as the channel mounts:
+  its mount time and the last leave bound which reads count as unread at open.
 - The list docks in the gutter as a `Card` (filled, depth 3) when the gutter
   is ≥240px wide, and opens as a popover (`menu-surface`) otherwise. Below
   72px it hides.
-- The toggle and list show only while something is listed (or the unread read
-  failed, to offer Retry): never while that read loads, and not after the last
+- The toggle and list show only while something is listed (or the not-done
+  read failed, to offer Retry): never while that read loads, and not after the last
   entry is marked done, until a reply or mention arrives. Unread rows carry
   the inbox's unread dot (`UnreadIndicator`), and the toggle shows the same
   dot after its count while any listed stack is unread.
@@ -69,4 +71,4 @@ flag, `enable-channel-notification-gutter`
 - Backend-free desktop regression over the real list, gathering and stacking:
   `bunx playwright test --config src/features/channel-notification-stacks/browser-test/playwright.config.ts`
   (`gutter.html?pane=<px>&theme=light|dark` to look at it; `&names=long` for
-  long senders, `&unread=failed|loading`, `&notDone=loading`, `&empty`).
+  long senders, `&notDone=failed|loading`, `&empty`, `&openedFromRow`).

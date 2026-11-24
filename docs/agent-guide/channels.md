@@ -1161,7 +1161,9 @@ popover and the hidden states. Check that:
   the gutter. With ≥240px of gutter (pane ≥1400px), it opens the list as a
   card docked in the gutter. Narrower panes open the list as a popover. There
   are no checks beside the messages and no view switch: the list, headed
-  **Unread**, holds what was unread when the channel opened.
+  **Unread**, holds what was unread when the channel opened. Opening the
+  channel from its Home or inbox row (which marks that row read) still lists
+  the row's notifications, without their unread dot.
 - Scrolling through every message leaves the list unchanged; read entries
   lose their unread dot, and the toggle loses its dot once none is unread.
 - A thread reply or a mention that arrives while the channel is open joins
@@ -1173,8 +1175,8 @@ popover and the hidden states. Check that:
 - After the last entry is checked off (or **Mark all done**), the bell and
   the list hide; a reply or mention arriving brings the bell back. Leaving
   and reopening the channel takes a fresh list.
-- While the unread notifications load nothing shows; if the read fails, the
-  bell offers Retry. Below 72px of gutter, the toggle hides.
+- While the channel's notifications load nothing shows; if the read fails,
+  the bell offers Retry. Below 72px of gutter, the toggle hides.
 
 ## Requests to join
 
