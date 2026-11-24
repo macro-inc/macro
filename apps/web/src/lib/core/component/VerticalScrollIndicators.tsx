@@ -34,7 +34,6 @@ export const ScrollIndicators = (props: {
   noBorderStart?: boolean;
   noBorderEnd?: boolean;
   falloff?: 'mobile';
-  startOffset?: () => number;
 }) => {
   let startIndicator: HTMLDivElement | undefined;
   let endIndicator: HTMLDivElement | undefined;
@@ -57,9 +56,7 @@ export const ScrollIndicators = (props: {
       );
     } else {
       const { scrollTop, scrollHeight, clientHeight } = ref;
-      startIndicator.style.opacity = String(
-        thresholdOpacity(scrollTop - (props.startOffset?.() ?? 0))
-      );
+      startIndicator.style.opacity = String(thresholdOpacity(scrollTop));
       endIndicator.style.opacity = String(
         thresholdOpacity(scrollHeight - clientHeight - scrollTop)
       );

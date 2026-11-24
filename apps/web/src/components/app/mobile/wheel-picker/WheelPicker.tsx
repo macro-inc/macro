@@ -65,11 +65,6 @@ export function WheelColumn(props: {
   const rowCount = createMemo(() =>
     wheelRowCount(props.options.length, props.loop ?? false)
   );
-  // Native snapping needs targets beyond the visible labels during a fling.
-  // Keep anchors static and recycle only the small visible text window.
-  const anchors = createMemo(() =>
-    Array.from({ length: rowCount() }, () => <div class="wheel-picker-snap" />)
-  );
   const rows = () => wheelVisibleRows(model.state.position, rowCount());
   const chooseAt = (event: MouseEvent) => {
     if (props.disabled || !element) return;
@@ -106,8 +101,11 @@ export function WheelColumn(props: {
       onKeyDown={model.keyDown}
       onClick={chooseAt}
     >
-      <div class="wheel-picker-track" aria-hidden="true">
-        {anchors()}
+      <div
+        class="wheel-picker-track"
+        aria-hidden="true"
+        style={{ height: `${rowCount() * WHEEL_ROW_HEIGHT}px` }}
+      >
         <For each={rows()}>
           {(index) => (
             <div

@@ -152,10 +152,6 @@ Content under a bar that does not float (no enclosing pane) keeps resetting the
 inset; check with `useTouchTopBarsFloat`.
 
 A detail whose standalone view has a split header shows that same header in a
-
-Scrollable navigation can reuse `ScrollIndicators` with `appearance="gradient"`,
-`gradientColor="menu"`, and `falloff="mobile"` for the shared 32px edge stops.
-Keep its positioning container above any fixed footer so the bottom fade ends there.
 touch preview. The host wraps the pane in `SplitHeaderScope.Root` and renders
 `SplitHeaderScope.TopBar`; the detail fills that bar as it fills its own
 split's header. A detail with a mobile view renders it, and its `MobileHeader`

@@ -126,7 +126,7 @@ export function extractGuidelines(source: string): Guidelines {
 }
 
 /**
- * Returns a top-level `type` or `interface` declaration by name, so the
+ * Returns a top-level `type` declaration by name, so the
  * gallery can show a component's real prop type instead of a hand-copied table
  * that drifts. Returns null when the type is not declared in this file.
  */
@@ -136,32 +136,7 @@ export function extractTypeSource(source: string, name: string): string | null {
     'm'
   );
   const start = declaration.exec(source);
-  if (!start) {
-    const interfaceDeclaration = new RegExp(
-      `^(?:export\\s+)?interface\\s+${name}\\b[^{}]*\\{`,
-      'm'
-    );
-    const interfaceStart = interfaceDeclaration.exec(source);
-    if (!interfaceStart) return null;
-
-    let depth = 0;
-    for (
-      let i = interfaceStart.index + interfaceStart[0].length - 1;
-      i < source.length;
-      i++
-    ) {
-      const char = source[i]!;
-      if (char === '{') depth++;
-      else if (char === '}') {
-        depth--;
-        if (depth === 0) {
-          const end = source[i + 1] === ';' ? i + 2 : i + 1;
-          return source.slice(interfaceStart.index, end);
-        }
-      }
-    }
-    return null;
-  }
+  if (!start) return null;
 
   // Ends at the first semicolon outside any bracket pair. Angle brackets are
   // deliberately not counted: the `>` in an arrow-function prop type

@@ -3,16 +3,15 @@ import { createMemo, Show } from 'solid-js';
 import {
   WheelColumn,
   WheelPicker,
-} from '../../app/mobile/wheel-picker/WheelPicker';
-import type { ClockFormat } from '../primitives/clock-format';
-import { mobileClockValue } from '../primitives/mobile-clock-value';
+} from '../app/mobile/wheel-picker/WheelPicker';
+import type { ClockFormat } from './clock-format';
+import { mobileClockValue } from './mobile-clock-value';
 import {
   timeFromWheelParts,
   timeWheelHours,
   timeWheelMinutes,
   timeWheelParts,
-  usesTwelveHourClock,
-} from '../time-wheel';
+} from './time-wheel';
 
 /** Locale-aware clock columns; the caller owns dates, range policy and validation. */
 export function TimeWheel(props: {
@@ -23,7 +22,13 @@ export function TimeWheel(props: {
   duration?: string;
   label: string;
 }) {
-  const twelveHour = () => usesTwelveHourClock(props.format, formatLocale());
+  const twelveHour = createMemo(() =>
+    props.format
+      ? props.format === '12-hour'
+      : new Intl.DateTimeFormat(formatLocale(), {
+          hour: 'numeric',
+        }).resolvedOptions().hour12 === true
+  );
   const hours = createMemo(() => timeWheelHours(twelveHour()));
   const minute = () => Number(props.value.slice(3, 5));
   const minutes = createMemo(() => timeWheelMinutes(minute()));

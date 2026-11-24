@@ -1,4 +1,4 @@
-import { formatLocale } from '@app/lib/i18n';
+import { t } from '@app/lib/i18n';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { onElementConnect } from '@core/util/onElementConnect';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -8,13 +8,12 @@ import { Input } from '@ui/components/Input';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
 import { createMemo, createUniqueId, For, onCleanup, Show } from 'solid-js';
-import type { ClockFormat } from './primitives/clock-format';
-import { createTimeInput } from './primitives/create-time-input';
-import { editableClockValue } from './primitives/mobile-clock-value';
+import type { ClockDisplayFormat } from './clock-format';
+import { createTimeInput } from './create-time-input';
 import {
   observeTimeOptionViewport,
   revealTimeOption,
-} from './primitives/reveal-time-option';
+} from './reveal-time-option';
 import {
   dayTimeOptions,
   formatTimeValue,
@@ -28,14 +27,14 @@ export const dateLabelFormatter = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
 });
 
-interface TimeInputProps {
+type TimeInputProps = {
   id: string;
   /** Accessible name, e.g. `Start time`. */
   label: string;
   /** `HH:mm`, or empty. */
   value: string;
-  /** Explicit calendar clock preference; omitted keeps the locale's default. */
-  timeFormat?: ClockFormat;
+  /** Calendar strings use compact markers; native hour12 booleans keep locale labels. */
+  timeFormat?: ClockDisplayFormat;
   /** Selectable times; defaults to every quarter-hour in a day. */
   options?: TimeOption[];
   /** Highlighted option; defaults to `value` on the anchor day. */
@@ -45,9 +44,7 @@ interface TimeInputProps {
   invalid?: boolean;
   describedBy?: string;
   class?: string;
-  /** Keep the numeric input and meridiem in fixed columns while resting or typing. */
-  splitMeridiem?: boolean;
-}
+};
 
 /**
  * A clock time typed or picked from a list, as Google Calendar's time fields
@@ -58,7 +55,6 @@ interface TimeInputProps {
 export function TimeInput(props: TimeInputProps) {
   const listId = createUniqueId();
   let input!: HTMLInputElement;
-  const periodId = `${listId}-period`;
   let list: HTMLDivElement | undefined;
 
   const options = createMemo(
@@ -73,16 +69,6 @@ export function TimeInput(props: TimeInputProps) {
     timeFormat: () => props.timeFormat,
     onChange: (option) => props.onChange(option),
   });
-  const display = () =>
-    editableClockValue(
-      props.value,
-      model.state.shown,
-      model.state.navigated || model.state.typed !== undefined
-        ? model.highlighted()?.value
-        : undefined,
-      props.timeFormat,
-      formatLocale()
-    );
   const optionDomId = (option: TimeOption) =>
     `${listId}-${option.id.replace('|', '-')}`;
   const activeDescendant = () => {
@@ -118,10 +104,9 @@ export function TimeInput(props: TimeInputProps) {
     const filled = model.input(text, event.inputType.startsWith('insert'));
     // The normalized clock can equal the previous render after typing a period suffix.
     // Repair the native value too, since Solid then has no changed value to write.
-    if (props.splitMeridiem) event.currentTarget.value = display().time;
     if (model.highlighted()) revealHighlighted('center');
     if (filled) {
-      const completed = props.splitMeridiem ? display().time : filled;
+      const completed = filled;
       input.setSelectionRange(
         Math.min(text.length, completed.length),
         completed.length
@@ -174,30 +159,16 @@ export function TimeInput(props: TimeInputProps) {
           aria-expanded={model.isOpen()}
           aria-activedescendant={activeDescendant()}
           aria-invalid={props.invalid || undefined}
-          aria-describedby={
-            [
-              props.describedBy,
-              props.splitMeridiem && display().meridiem ? periodId : undefined,
-            ]
-              .filter(Boolean)
-              .join(' ') || undefined
-          }
+          aria-describedby={props.describedBy}
           disabled={props.disabled}
           value={
-            props.splitMeridiem
-              ? display().time
-              : (model.state.shown ??
-                formatTimeValue(props.value, props.timeFormat) ??
-                '')
+            model.state.shown ??
+            formatTimeValue(props.value, props.timeFormat) ??
+            ''
           }
-          placeholder="Time"
+          placeholder={t('calendar.time')}
           size="sm"
-          class={cn(
-            'w-[4.75rem] shrink-0',
-            props.splitMeridiem && 'h-7 pr-10 text-sm',
-            props.class
-          )}
-          variant={props.splitMeridiem ? 'value' : undefined}
+          class={cn('w-[4.75rem] shrink-0', props.class)}
           onFocus={() => {
             openList();
             input.select();
@@ -209,17 +180,6 @@ export function TimeInput(props: TimeInputProps) {
           onBlur={model.commit}
           on:keydown={onKeyDown}
         />
-        <Show when={props.splitMeridiem && display().meridiem}>
-          <span
-            id={periodId}
-            class={cn(
-              'pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-sm text-ink-muted',
-              props.disabled && 'opacity-50'
-            )}
-          >
-            {display().meridiem}
-          </span>
-        </Show>
       </span>
 
       <Show when={model.isOpen()}>

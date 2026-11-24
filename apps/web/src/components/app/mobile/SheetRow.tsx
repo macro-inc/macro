@@ -1,11 +1,10 @@
 import { cn } from '@ui';
-import { type JSX, type ParentProps, Show } from 'solid-js';
+import type { JSX, ParentProps } from 'solid-js';
 
-export interface SheetRowProps extends ParentProps {
+export type SheetRowProps = ParentProps & {
   icon?: JSX.Element;
   class?: string;
-  label?: string;
-}
+};
 
 /** A sheet row with a stable icon gutter and a freely composed value column. */
 export function SheetRow(props: SheetRowProps) {
@@ -23,14 +22,7 @@ export function SheetRow(props: SheetRowProps) {
         {props.icon}
       </span>
       <div class="min-w-0 text-base leading-[22px] text-ink">
-        <Show when={props.label} fallback={props.children}>
-          <div class="flex min-w-0 items-center justify-between gap-3">
-            <span class="shrink-0">{props.label}</span>
-            <div class="flex min-w-0 items-center justify-end gap-1">
-              {props.children}
-            </div>
-          </div>
-        </Show>
+        {props.children}
       </div>
     </div>
   );

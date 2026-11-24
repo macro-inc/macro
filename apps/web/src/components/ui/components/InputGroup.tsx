@@ -158,6 +158,7 @@ function InputGroupRoot(props: InputGroupProps) {
   );
   const inheritedSize = (): InputSize | undefined => {
     const size = buttonGroup?.size;
+    if (size === 'select') return 'md';
     return size && !size.startsWith('icon-') ? (size as InputSize) : undefined;
   };
   const size = (): InputSize => local.size ?? inheritedSize() ?? 'md';

@@ -5,7 +5,6 @@ import { type JSX, Show } from 'solid-js';
 import { type DateTimeRangeProps, Root } from './date-time-range-context';
 import { EndDate } from './end-date';
 import { EndTime } from './end-time';
-import { RangeDates } from './range-dates/RangeDates';
 import { StartDate } from './start-date';
 import { StartTime } from './start-time';
 
@@ -37,7 +36,6 @@ export const DateTimeRange = {
   Root,
   Start,
   End,
-  Dates: RangeDates,
   StartDate,
   EndDate,
   StartTime,

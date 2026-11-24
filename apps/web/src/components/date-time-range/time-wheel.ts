@@ -1,15 +1,6 @@
 import type { WheelOption } from '../app/mobile/wheel-picker/wheel-values';
-import type { ClockFormat } from './primitives/clock-format';
 
 export const TIME_WHEEL_MINUTE_STEP = 5;
-
-export function usesTwelveHourClock(format?: ClockFormat, locale?: string) {
-  if (format) return format === '12-hour';
-  return (
-    new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions()
-      .hour12 === true
-  );
-}
 
 /** Keep both half-days in the hour cycle so crossing eleven carries the period. */
 export function timeWheelHours(twelveHour: boolean): WheelOption[] {

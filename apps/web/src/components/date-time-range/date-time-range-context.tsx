@@ -1,5 +1,5 @@
 import { createContext, type JSX, useContext } from 'solid-js';
-import type { ClockFormat } from './primitives/clock-format';
+import type { ClockDisplayFormat } from './clock-format';
 
 export interface DateTimeRangeProps {
   /** What the range belongs to, named in the fields' labels: `event`, a column's name. */
@@ -10,8 +10,8 @@ export interface DateTimeRangeProps {
   start: string;
   end: string;
   allDay: boolean;
-  /** Explicit display preference; omitted preserves other hosts' locale default. */
-  timeFormat?: ClockFormat;
+  /** Calendar strings use compact markers; native hour12 booleans keep locale labels. */
+  timeFormat?: ClockDisplayFormat;
   onStartChange: (value: string) => void;
   onEndChange: (value: string) => void;
   startDisabled?: boolean;

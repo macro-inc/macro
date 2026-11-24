@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { formatLocalDate, parseLocalDate } from '@core/util/local-date';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
@@ -39,7 +40,12 @@ export function DateField(props: DateFieldProps) {
       <Popover.Trigger
         id={props.id}
         disabled={props.disabled}
-        aria-label={`Edit ${props.subject} ${props.label.toLowerCase()} date`}
+        aria-label={t(
+          props.label === 'Start'
+            ? 'common.editStartDate'
+            : 'common.editEndDate',
+          { subject: props.subject }
+        )}
         aria-invalid={props.invalid || undefined}
         aria-describedby={props.describedBy}
         class={buttonClasses({
@@ -56,7 +62,9 @@ export function DateField(props: DateFieldProps) {
         <span class="truncate">
           {selectedDate()
             ? dateLabelFormatter.format(selectedDate())
-            : `${props.label} date`}
+            : t(
+                props.label === 'Start' ? 'common.startDate' : 'common.endDate'
+              )}
         </span>
       </Popover.Trigger>
 
@@ -73,7 +81,11 @@ export function DateField(props: DateFieldProps) {
             onOpenAutoFocus={(event) => event.preventDefault()}
             onCloseAutoFocus={(event) => event.preventDefault()}
           >
-            <Popover.Title class="sr-only">{props.label} date</Popover.Title>
+            <Popover.Title class="sr-only">
+              {t(
+                props.label === 'Start' ? 'common.startDate' : 'common.endDate'
+              )}
+            </Popover.Title>
             <Calendar
               required
               fixedWeeks

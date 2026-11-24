@@ -213,50 +213,6 @@ describe('extractTypeSource', () => {
     );
   });
 
-  it('returns an exported interface without requiring a trailing semicolon', () => {
-    const source = [
-      'const x = 1;',
-      'export interface CalendarSwatchProps {',
-      '  color: string;',
-      '  compact?: boolean;',
-      '}',
-      'const y = 2;',
-    ].join('\n');
-    expect(extractTypeSource(source, 'CalendarSwatchProps')).toBe(
-      'export interface CalendarSwatchProps {\n  color: string;\n  compact?: boolean;\n}'
-    );
-  });
-
-  it('includes inherited interfaces and nested member braces', () => {
-    const source = [
-      'interface PanelProps<T> extends SurfaceProps,',
-      '  Root<T> {',
-      '  layout: {',
-      '    spacing: { top: number; bottom: number };',
-      '  };',
-      '  onChange?: (value: T) => void;',
-      '};',
-      'const after = true;',
-    ].join('\n');
-    expect(extractTypeSource(source, 'PanelProps')).toBe(
-      [
-        'interface PanelProps<T> extends SurfaceProps,',
-        '  Root<T> {',
-        '  layout: {',
-        '    spacing: { top: number; bottom: number };',
-        '  };',
-        '  onChange?: (value: T) => void;',
-        '};',
-      ].join('\n')
-    );
-  });
-
-  it('does not match a similarly named interface', () => {
-    expect(
-      extractTypeSource('export interface ButtonVariantProps {}', 'ButtonProps')
-    ).toBeNull();
-  });
-
   it('does not match a similarly named type', () => {
     const source = 'export type ButtonVariantProps = string;';
     expect(extractTypeSource(source, 'ButtonProps')).toBeNull();

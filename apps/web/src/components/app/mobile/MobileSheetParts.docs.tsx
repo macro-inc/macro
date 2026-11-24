@@ -3,9 +3,9 @@ import ClockIcon from '@icon/system/regular/clock.svg';
 import { Button } from '@ui';
 import { createSignal, For } from 'solid-js';
 import { MobileDrawer } from './MobileDrawer';
-import { SheetFooter } from './sheet-footer/SheetFooter';
-import { SheetGroup } from './sheet-group/SheetGroup';
-import { SheetRow } from './sheet-row/SheetRow';
+import { SheetFooter } from './SheetFooter';
+import { SheetGroup } from './SheetGroup';
+import { SheetRow } from './SheetRow';
 
 // #region demo:sheet
 function MobileSheetPartsDemo() {

@@ -1,7 +1,7 @@
 import { formatLocalDate, parseLocalDate } from '@core/util/local-date';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 import { minutesInDay, minutesInHour } from 'date-fns/constants';
-import { type ClockFormat, formatClockTime } from './primitives/clock-format';
+import { type ClockDisplayFormat, formatClockTime } from './clock-format';
 
 /** Granularity of every time picker. */
 const SLOT_MINUTES = 15;
@@ -11,19 +11,6 @@ const SLOT_MINUTES = 15;
  * short of a full day, so a same-start end time is never listed twice.
  */
 const MAX_RANGE_MINUTES = minutesInDay - SLOT_MINUTES;
-// Calendar preferences use compact labels; generic date editors retain the
-// locale's AM/PM spelling when they supply a native hour12 preference.
-type TimeLabelFormat = ClockFormat | boolean;
-const TWELVE_HOUR_LABEL = new Intl.DateTimeFormat(undefined, {
-  hour: 'numeric',
-  minute: '2-digit',
-  hour12: true,
-});
-const TWENTY_FOUR_HOUR_LABEL = new Intl.DateTimeFormat(undefined, {
-  hour: 'numeric',
-  minute: '2-digit',
-  hour12: false,
-});
 
 /** One selectable clock time in a time picker. */
 export interface TimeOption {
@@ -62,7 +49,7 @@ export function parseTimeValue(value: string): number | undefined {
 /** Localized clock label for an `HH:mm` value. */
 export function formatTimeValue(
   value: string,
-  format?: TimeLabelFormat
+  format?: ClockDisplayFormat
 ): string | undefined {
   const minutesOfDay = parseTimeValue(value);
   if (minutesOfDay === undefined) return undefined;
@@ -73,8 +60,6 @@ export function formatTimeValue(
     Math.floor(minutesOfDay / minutesInHour),
     minutesOfDay % minutesInHour
   );
-  if (typeof format === 'boolean')
-    return (format ? TWELVE_HOUR_LABEL : TWENTY_FOUR_HOUR_LABEL).format(date);
   return formatClockTime(date, format);
 }
 
@@ -90,7 +75,7 @@ function timeOption(
   minutesOfDay: number,
   dayOffset: number,
   detail?: string,
-  format?: TimeLabelFormat
+  format?: ClockDisplayFormat
 ) {
   const value = timeValue(minutesOfDay);
   return {
@@ -102,7 +87,7 @@ function timeOption(
   };
 }
 
-function createDayTimeOptions(format?: TimeLabelFormat): TimeOption[] {
+function createDayTimeOptions(format?: ClockDisplayFormat): TimeOption[] {
   return Array.from({ length: minutesInDay / SLOT_MINUTES }, (_, index) =>
     timeOption(index * SLOT_MINUTES, 0, undefined, format)
   );
@@ -117,7 +102,7 @@ const DAY_TIME_OPTIONS_BY_CLOCK = {
 };
 
 /** Stable quarter-hour choices in the requested display format. */
-export function dayTimeOptions(format?: TimeLabelFormat): TimeOption[] {
+export function dayTimeOptions(format?: ClockDisplayFormat): TimeOption[] {
   if (typeof format === 'boolean')
     return DAY_TIME_OPTIONS_BY_CLOCK[format ? 'true' : 'false'];
   return format === undefined
@@ -132,7 +117,7 @@ export function dayTimeOptions(format?: TimeLabelFormat): TimeOption[] {
  */
 export function endTimeOptions(
   startTime: string,
-  format?: TimeLabelFormat
+  format?: ClockDisplayFormat
 ): TimeOption[] {
   const startMinutes = parseTimeValue(startTime);
   if (startMinutes === undefined) {
@@ -224,7 +209,7 @@ export function matchTypedTime(
 export function typedTimeOption(
   options: TimeOption[],
   text: string,
-  format?: TimeLabelFormat
+  format?: ClockDisplayFormat
 ): TimeOption | undefined {
   const matched = matchTypedTime(options, text);
   if (matched) return matched;

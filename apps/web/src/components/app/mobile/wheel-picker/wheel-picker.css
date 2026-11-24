@@ -53,12 +53,8 @@
   position: relative;
 }
 
-.wheel-picker-snap {
-  height: var(--wheel-row-height);
-  scroll-snap-align: center;
-}
-
 .wheel-picker-row {
+  scroll-snap-align: center;
   position: absolute;
   inset-inline: 0;
   display: flex;

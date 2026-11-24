@@ -1,13 +1,13 @@
 import type { Accessor } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import type { ClockDisplayFormat } from './clock-format';
 import {
   completedTypedTime,
   matchTypedTime,
   type TimeOption,
   typedTimeCandidates,
   typedTimeOption,
-} from '../time-options';
-import type { ClockFormat } from './clock-format';
+} from './time-options';
 
 interface TimeInputState {
   mode: 'closed' | 'list' | 'typing';
@@ -24,7 +24,7 @@ export function createTimeInput(options: {
   selectedId: Accessor<string>;
   disabled: Accessor<boolean>;
   onChange: (option: TimeOption) => void;
-  timeFormat?: Accessor<ClockFormat | undefined>;
+  timeFormat?: Accessor<ClockDisplayFormat | undefined>;
 }) {
   const [state, setState] = createStore<TimeInputState>({
     mode: 'closed',

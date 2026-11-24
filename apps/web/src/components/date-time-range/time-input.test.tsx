@@ -13,11 +13,7 @@ beforeAll(() => {
 
 afterEach(cleanup);
 
-function renderTime(
-  initial: string,
-  options?: TimeOption[],
-  splitMeridiem = false
-) {
+function renderTime(initial: string, options?: TimeOption[]) {
   const onChange = vi.fn<(option: TimeOption) => void>();
   render(() => {
     const [value, setValue] = createSignal(initial);
@@ -28,7 +24,6 @@ function renderTime(
           label="Start time"
           value={value()}
           options={options}
-          splitMeridiem={splitMeridiem}
           onChange={(option) => {
             onChange(option);
             setValue(option.value);
@@ -146,26 +141,5 @@ describe('TimeInput', () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ value: '07:00', dayOffset: 1, detail: '11h' })
     );
-  });
-
-  it('preserves typing and full accessible values with a split meridiem', async () => {
-    const { field, onChange } = renderTime('13:30', undefined, true);
-    expect(field.value).toBe('1:30');
-    expect(
-      document.getElementById(field.getAttribute('aria-describedby') ?? '')
-        ?.textContent
-    ).toBe('pm');
-    await userEvent.click(field);
-    await userEvent.keyboard('1230p');
-    expect(field.value).toBe('1230');
-    await userEvent.keyboard('{Enter}');
-    expect(onChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({ value: '12:30' })
-    );
-    expect(field.value).toBe('12:30');
-    await userEvent.click(field);
-    await userEvent.keyboard('8a{Escape}');
-    expect(field.value).toBe('12:30');
-    expect(onChange).toHaveBeenCalledOnce();
   });
 });

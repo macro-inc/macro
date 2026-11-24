@@ -50,7 +50,7 @@ const buttonPressedStyles =
 
 /** Shared recipe for Button and headless controls that own their rendering. */
 const buttonStyles = createVariants(
-  'relative inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border font-medium select-none transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 data-disabled:cursor-not-allowed data-disabled:opacity-45 focus-visible:outline-hidden focus-visible:-outline-offset-2 motion-reduce:transition-none forced-colors:focus-visible:outline-current touch:min-w-9',
+  'relative inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border font-medium select-none transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 data-disabled:cursor-not-allowed data-disabled:opacity-45 focus-visible:outline-hidden focus-visible:-outline-offset-2 motion-reduce:transition-none forced-colors:focus-visible:outline-current touch:min-h-9 touch:min-w-9',
   {
     variant: {
       primary: cn(
@@ -60,7 +60,7 @@ const buttonStyles = createVariants(
       ),
       value: cn(
         buttonFrames.value,
-        'px-2.5 not-touch:not-data-disabled:hover:bg-button-secondary-hover not-data-disabled:active:bg-button-secondary-hover popup-open:ring-[1.5px] popup-open:ring-accent',
+        'px-2.5 not-touch:not-data-disabled:hover:bg-button-secondary-hover not-data-disabled:active:bg-button-secondary-hover popup-open:ring-[1.5px] popup-open:ring-accent aria-expanded:ring-[1.5px] aria-expanded:ring-accent',
         buttonPressedStyles
       ),
       accent: cn(
@@ -87,7 +87,7 @@ const buttonStyles = createVariants(
       ),
       row: cn(
         buttonFrames.row,
-        'not-touch:not-data-disabled:hover:bg-button-tertiary-hover not-data-disabled:active:bg-button-tertiary-pressed popup-open:bg-button-tertiary-pressed',
+        'not-touch:not-data-disabled:hover:bg-button-tertiary-hover not-data-disabled:active:bg-button-tertiary-pressed popup-open:bg-button-tertiary-pressed aria-expanded:ring-[1.5px] aria-expanded:ring-accent',
         buttonPressedStyles
       ),
       danger: cn(
@@ -115,9 +115,10 @@ const buttonStyles = createVariants(
       'icon-xs': iconControlSizes.xs,
       'icon-sm': iconControlSizes.sm,
       'icon-md': iconControlSizes.md,
-      sheet: 'min-h-11 px-4 py-2 text-base',
-      'sheet-row': 'min-h-11 px-0 py-2 text-base font-normal',
+      sheet: 'min-h-11 touch:min-h-11 px-4 py-2 text-base',
+      'sheet-row': 'min-h-11 touch:min-h-11 px-0 py-2 text-base font-normal',
       field: 'h-9 px-3 text-base font-normal',
+      select: 'h-8 min-w-0 justify-between rounded-lg px-3 text-sm font-normal',
       'icon-lg': iconControlSizes.lg,
       'icon-xl': iconControlSizes.xl,
     },
@@ -173,11 +174,6 @@ export function buttonClasses(options: ButtonClassOptions = {}) {
     buttonStyles({ variant: isBare ? null : variant, size: options.size }),
     isBare && 'border-transparent bg-transparent shadow-none',
     !isBare && buttonFinishClasses(variant, finish),
-    (!options.size ||
-      ['xs', 'sm', 'md', 'icon-xs', 'icon-sm', 'icon-md'].includes(
-        options.size
-      )) &&
-      'touch:min-h-9',
     options.fullWidth && 'w-full',
     options.class
   );

@@ -15,10 +15,10 @@ import './snap-pager.css';
 import { settleTarget } from './settle-target';
 
 // Only older engines without scrollend use a quiet-time fallback.
-export const SNAP_SETTLE_DELAY_MS = 350;
+const SNAP_SETTLE_DELAY_MS = 350;
 // Repeated controls jump to their aggregate target instead of replaying slides.
-export const SNAP_RAPID_PRESS_MS = 180;
-export const SNAP_NO_SCROLL_RECOVERY_MS = 150;
+const SNAP_RAPID_PRESS_MS = 180;
+const SNAP_NO_SCROLL_RECOVERY_MS = 150;
 
 type SnapPagerPhase = 'idle' | 'scrolling' | 'settling';
 interface PagerState {
@@ -37,7 +37,7 @@ export interface SnapPage {
   offset: Accessor<number>;
 }
 
-export interface SnapPagerOptions {
+export type SnapPagerOptions = {
   /** Odd ring size, at least three. Defaults to five. */
   pageCount?: number;
   /** Called after the ring rotates; receives the number of pages traversed. */
@@ -46,15 +46,13 @@ export interface SnapPagerOptions {
   onNavigationCancel?: () => void;
   /** Pause caller-owned render work before native scrolling begins. */
   onScrollStart?: () => void;
-  /** Optional discrete wheel navigation for desktop hosts; touch remains native. */
-  instantWheel?: Accessor<boolean>;
-  /** Quiet interval that re-arms animated programmatic navigation. */
-  rapidPressMs?: number;
+  /** Discrete desktop navigation; other hosts keep native touch scrolling. */
+  discrete?: Accessor<boolean>;
   /** Update host navigation metadata before a discrete wheel jump. */
   onWheelNavigate?: (direction: number) => void;
-}
+};
 
-export interface SnapPagerController {
+export type SnapPagerController = {
   pages: Accessor<readonly SnapPage[]>;
   pageOrder: Accessor<readonly number[]>;
   activePage: Accessor<number>;
@@ -65,7 +63,6 @@ export interface SnapPagerController {
   phase: Accessor<SnapPagerPhase>;
   /** Desktop period buttons ignore active animation, but accept idle burst steps. */
   canStep: () => boolean;
-  viewport: Accessor<HTMLDivElement | undefined>;
   attachViewport: (element: HTMLDivElement) => () => void;
   next: () => void;
   previous: () => void;
@@ -74,17 +71,18 @@ export interface SnapPagerController {
   reset: () => void;
   setLocked: (locked: boolean) => void;
   locked: Accessor<boolean>;
+  discrete: Accessor<boolean>;
   resize: () => void;
   /** Origin shared by all pages; page-specific slots remain stable. */
   origin: Accessor<number>;
-}
+};
 
 /** Creates an endless native scroll-snap ring without replacing page nodes. */
 export function createSnapPager(
   options: SnapPagerOptions = {}
 ): SnapPagerController {
   const count = options.pageCount ?? 5;
-  const rapidPressMs = options.rapidPressMs ?? SNAP_RAPID_PRESS_MS;
+  const rapidPressMs = () => (options.discrete?.() ? 300 : SNAP_RAPID_PRESS_MS);
   let wheelLastAt: number | undefined;
   let programmaticAnimating = false;
   if (!Number.isInteger(count) || count < 3 || count % 2 === 0) {
@@ -111,7 +109,6 @@ export function createSnapPager(
     setState('position', value);
   const setPhase = (value: SnapPagerPhase) => setState('phase', value);
   const setLocked = (value: boolean) => setState('locked', value);
-  const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const slots = Array.from({ length: count }, (_, index) =>
     createSignal(index)
   );
@@ -124,7 +121,6 @@ export function createSnapPager(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let frame: number | undefined;
   let noScrollTimer: ReturnType<typeof setTimeout> | undefined;
-  let noScrollFrame: number | undefined;
   let recoveredWithoutScroll = false;
   let attached: HTMLDivElement | undefined;
   let measuredWidth = 0;
@@ -146,17 +142,12 @@ export function createSnapPager(
     if (locked()) return;
     recoveredWithoutScroll = false;
     if (nativeScroll && alignmentTarget === undefined) return;
-    nativeScroll = true;
-    alignmentTarget = undefined;
-    scrollObserved = false;
-    nativeEndedWhileHeld = false;
-    releaseVelocity = 0;
-    sample = { left: attached?.scrollLeft ?? 0, at: Date.now(), velocity: 0 };
-    clearFrame();
-    if (attached) attached.style.scrollSnapType = 'none';
     setPhase('scrolling');
-    options.onScrollStart?.();
     cancelNavigation();
+    nativeScroll = true;
+    sample = { left: attached?.scrollLeft ?? 0, at: Date.now(), velocity: 0 };
+    if (attached) attached.style.scrollSnapType = 'none';
+    options.onScrollStart?.();
   };
   const captureRelease = () => {
     releaseVelocity = Date.now() - sample.at <= 80 ? sample.velocity : 0;
@@ -166,14 +157,25 @@ export function createSnapPager(
     unreportedMovement = 0;
     options.onSettle?.(moved);
   };
-  const cancelNavigation = () => {
-    lastCommandAt = undefined;
-    rapidNavigation = false;
-    if (pending === 0 && queuedJump === undefined) return;
-    pending = 0;
-    queuedJump = undefined;
-    queuedAtScrollLeft = undefined;
-    options.onNavigationCancel?.();
+  const cancelNavigation = (preserveGesture = false) => {
+    const hadNavigation = pending !== 0 || queuedJump !== undefined;
+    const gesture = {
+      nativeScroll,
+      releaseVelocity,
+      scrollObserved,
+      nativeEndedWhileHeld,
+      sample,
+    };
+    clearMotion();
+    if (preserveGesture)
+      ({
+        nativeScroll,
+        releaseVelocity,
+        scrollObserved,
+        nativeEndedWhileHeld,
+        sample,
+      } = gesture);
+    if (hadNavigation) options.onNavigationCancel?.();
   };
   const gestureHeld = () => touchHeld || pointerHeld;
 
@@ -188,7 +190,7 @@ export function createSnapPager(
       return;
     timer = setTimeout(
       settle,
-      rapidNavigation && !nativeScroll ? rapidPressMs : SNAP_SETTLE_DELAY_MS
+      rapidNavigation && !nativeScroll ? rapidPressMs() : SNAP_SETTLE_DELAY_MS
     );
   };
   const finishGesture = () => {
@@ -207,21 +209,11 @@ export function createSnapPager(
     const element = attached;
     if (!element) return;
     const left = element.scrollLeft;
-    const checkPosition = () => {
-      if (attached !== element || element.scrollLeft !== left) {
-        clearNoScrollTimer();
-        return;
-      }
-      noScrollFrame = requestAnimationFrame(checkPosition);
-    };
-    noScrollFrame = requestAnimationFrame(checkPosition);
     // No-op gestures need not emit scrollend. Recover only after a bounded
     // interval with no scroll event and no position change; late scrolling
     // takes native ownership back before any further command can run.
     noScrollTimer = setTimeout(() => {
       noScrollTimer = undefined;
-      if (noScrollFrame !== undefined) cancelAnimationFrame(noScrollFrame);
-      noScrollFrame = undefined;
       if (
         attached !== element ||
         gestureHeld() ||
@@ -248,7 +240,7 @@ export function createSnapPager(
     finishGesture();
   };
   const pointerStart = (event: PointerEvent) => {
-    if (event.pointerType === 'touch') return;
+    if (event.pointerType === 'touch' || options.discrete?.()) return;
     pointerHeld = true;
     beginNativeScroll();
     clearTimer();
@@ -259,11 +251,12 @@ export function createSnapPager(
     finishGesture();
   };
   const onWheel = (event: WheelEvent) => {
-    if (options.instantWheel?.()) {
+    if (options.discrete?.()) {
       const horizontal = Math.abs(event.deltaX);
       if (event.ctrlKey || horizontal <= Math.abs(event.deltaY)) return;
       const now = Date.now();
-      const inBurst = wheelLastAt !== undefined && now - wheelLastAt < 180;
+      const inBurst =
+        wheelLastAt !== undefined && now - wheelLastAt < SNAP_RAPID_PRESS_MS;
       if (horizontal < 4 && !inBurst) return;
       event.preventDefault();
       if (locked()) return;
@@ -291,12 +284,16 @@ export function createSnapPager(
     scheduleSettle();
   };
   const performJump = (target: number, deferReport = false) => {
-    programmaticAnimating = false;
     const moved = target - position();
-    nativeScroll = false;
-    pending = 0;
-    queuedJump = undefined;
-    queuedAtScrollLeft = undefined;
+    const command = {
+      lastCommandAt,
+      wheelLastAt,
+      rapidNavigation,
+      recoveredWithoutScroll,
+    };
+    clearMotion();
+    ({ lastCommandAt, wheelLastAt, rapidNavigation, recoveredWithoutScroll } =
+      command);
     rotate(moved);
     if (attached) jump(attached, middle * attached.clientWidth);
     setPhase(deferReport ? 'scrolling' : 'idle');
@@ -312,8 +309,6 @@ export function createSnapPager(
   const clearNoScrollTimer = () => {
     if (noScrollTimer !== undefined) clearTimeout(noScrollTimer);
     noScrollTimer = undefined;
-    if (noScrollFrame !== undefined) cancelAnimationFrame(noScrollFrame);
-    noScrollFrame = undefined;
   };
 
   const clearFrame = () => {
@@ -321,9 +316,31 @@ export function createSnapPager(
     frame = undefined;
   };
 
+  // Full teardown is shared; gesture cancellation and aggregate jumps retain only
+  // their explicitly captured state, never a stale destination or alignment.
+  const clearMotion = () => {
+    clearTimer();
+    clearNoScrollTimer();
+    clearFrame();
+    programmaticAnimating = false;
+    recoveredWithoutScroll = false;
+    pending = 0;
+    queuedJump = undefined;
+    queuedAtScrollLeft = undefined;
+    lastCommandAt = undefined;
+    wheelLastAt = undefined;
+    rapidNavigation = false;
+    nativeScroll = false;
+    alignmentTarget = undefined;
+    releaseVelocity = 0;
+    scrollObserved = false;
+    nativeEndedWhileHeld = false;
+    sample = { left: 0, at: 0, velocity: 0 };
+  };
+
   const jump = (element: HTMLDivElement, left: number) => {
     element.style.scrollSnapType = 'none';
-    element.scrollTo({ left, behavior: 'instant' });
+    element.scrollLeft = left;
     clearFrame();
     frame = requestAnimationFrame(() => {
       frame = undefined;
@@ -364,10 +381,12 @@ export function createSnapPager(
         const reduced =
           window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ??
           false;
-        element.scrollTo({
-          left: middle * element.clientWidth,
-          behavior: reduced ? 'instant' : 'smooth',
-        });
+        if (reduced) element.scrollLeft = middle * element.clientWidth;
+        else
+          element.scrollTo({
+            left: middle * element.clientWidth,
+            behavior: 'smooth',
+          });
       }
       return;
     }
@@ -385,10 +404,13 @@ export function createSnapPager(
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     setPhase('scrolling');
     programmaticAnimating = !reducedMotion;
-    element.scrollTo({
-      left: (middle + delta) * element.clientWidth,
-      behavior: reducedMotion ? 'instant' : 'smooth',
-    });
+    if (reducedMotion)
+      element.scrollLeft = (middle + delta) * element.clientWidth;
+    else
+      element.scrollTo({
+        left: (middle + delta) * element.clientWidth,
+        behavior: 'smooth',
+      });
     // Instant scrolling does not always emit scrollend or even scroll.
     if (reducedMotion) {
       clearTimer();
@@ -401,7 +423,7 @@ export function createSnapPager(
     const element = attached;
     if (!element || locked() || gestureHeld() || !element.clientWidth) return;
     if (
-      options.instantWheel?.() &&
+      options.discrete?.() &&
       programmaticAnimating &&
       'onscrollend' in element
     )
@@ -409,7 +431,7 @@ export function createSnapPager(
     // A burst changes the visible target immediately but prepares data only once
     // controls go quiet. Ignore synthetic scrollend events from each re-centre.
     if (rapidNavigation && lastCommandAt !== undefined) {
-      const remaining = rapidPressMs - (Date.now() - lastCommandAt);
+      const remaining = rapidPressMs() - (Date.now() - lastCommandAt);
       if (remaining > 0) {
         timer = setTimeout(settle, remaining);
         return;
@@ -434,10 +456,8 @@ export function createSnapPager(
       const reduced =
         window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ??
         false;
-      element.scrollTo({
-        left: targetLeft,
-        behavior: reduced ? 'instant' : 'smooth',
-      });
+      if (reduced) element.scrollLeft = targetLeft;
+      else element.scrollTo({ left: targetLeft, behavior: 'smooth' });
       if (reduced) settle();
       else scheduleSettle();
       return;
@@ -524,7 +544,7 @@ export function createSnapPager(
       queuedJump !== undefined &&
       attached?.scrollLeft !== queuedAtScrollLeft
     )
-      cancelNavigation();
+      cancelNavigation(true);
     setPhase('scrolling');
     clearTimer();
     scheduleSettle();
@@ -542,7 +562,7 @@ export function createSnapPager(
 
   const canStep = () =>
     !locked() &&
-    (!options.instantWheel?.() ||
+    (!options.discrete?.() ||
       (!programmaticAnimating &&
         !nativeScroll &&
         !gestureHeld() &&
@@ -551,7 +571,7 @@ export function createSnapPager(
     if (locked() || !Number.isInteger(offset) || offset === 0) return;
     const now = Date.now();
     const rapid =
-      lastCommandAt !== undefined && now - lastCommandAt < rapidPressMs;
+      lastCommandAt !== undefined && now - lastCommandAt < rapidPressMs();
     lastCommandAt = now;
     const target = (queuedJump ?? position() + pending) + offset;
     // Never re-centre a native gesture under the user's finger or momentum.
@@ -563,7 +583,7 @@ export function createSnapPager(
       return;
     }
     const animating =
-      options.instantWheel?.() && phase() !== 'idle' && pending !== 0;
+      options.discrete?.() && phase() !== 'idle' && pending !== 0;
     pending = target - position();
     alignmentTarget = undefined;
     if (rapid || animating || Math.abs(pending) > middle) {
@@ -572,7 +592,7 @@ export function createSnapPager(
       performJump(target, rapidNavigation);
       return;
     }
-    if (options.instantWheel?.()) rapidNavigation = true;
+    if (options.discrete?.()) rapidNavigation = true;
     navigate();
   };
   const detach = (element: HTMLDivElement) => {
@@ -588,20 +608,12 @@ export function createSnapPager(
     window.removeEventListener('touchcancel', touchEnd, true);
     window.removeEventListener('pointerup', pointerEnd, true);
     window.removeEventListener('pointercancel', pointerEnd, true);
-    wheelLastAt = undefined;
     touchHeld = false;
     pointerHeld = false;
-    nativeScroll = false;
-    alignmentTarget = undefined;
-    releaseVelocity = 0;
+    clearMotion();
     element.style.scrollSnapType = '';
-    clearTimer();
-    clearFrame();
-    clearNoScrollTimer();
-    recoveredWithoutScroll = false;
     if (attached === element) {
       attached = undefined;
-      setViewport(undefined);
       setPhase('idle');
     }
   };
@@ -614,18 +626,13 @@ export function createSnapPager(
     targetPosition: () => queuedJump ?? position() + pending,
     phase,
     canStep,
-    viewport,
     origin,
     locked,
+    discrete: () => options.discrete?.() ?? false,
     attachViewport(element) {
       if (attached) detach(attached);
       attached = element;
-      element.classList.toggle(
-        'snap-pager-discrete',
-        Boolean(options.instantWheel?.())
-      );
       measuredWidth = element.clientWidth;
-      setViewport(element);
       element.addEventListener('wheel', onWheel, { passive: false });
       element.addEventListener('scroll', onScroll);
       element.addEventListener('scrollend', onScrollEnd);
@@ -666,18 +673,7 @@ export function createSnapPager(
     },
     goTo: command,
     reset() {
-      programmaticAnimating = false;
-      clearTimer();
-      clearNoScrollTimer();
-      recoveredWithoutScroll = false;
-      pending = 0;
-      queuedJump = undefined;
-      lastCommandAt = undefined;
-      wheelLastAt = undefined;
-      rapidNavigation = false;
-      nativeScroll = false;
-      alignmentTarget = undefined;
-      releaseVelocity = 0;
+      clearMotion();
       unreportedMovement = 0;
       batch(() => {
         slots.forEach(([, setSlot], index) => setSlot(index));
@@ -691,22 +687,14 @@ export function createSnapPager(
     setLocked(value) {
       if (value === locked()) return;
       if (value) cancelNavigation();
-      programmaticAnimating = false;
-      clearNoScrollTimer();
-      recoveredWithoutScroll = false;
-      nativeScroll = false;
-      alignmentTarget = undefined;
-      releaseVelocity = 0;
-      pending = 0;
-      queuedJump = undefined;
-      clearTimer();
+      else clearMotion();
       setLocked(value);
       if (attached) {
         if (value) {
           // Cancel native smooth scrolling without committing a partial gesture.
           const left = attached.scrollLeft;
           attached.style.scrollSnapType = 'none';
-          attached.scrollTo({ left, behavior: 'instant' });
+          attached.scrollLeft = left;
         } else {
           attached.style.scrollSnapType = '';
           settle();
@@ -774,8 +762,8 @@ export function SnapPagerViewport(props: SnapPagerViewportProps) {
       classList={{
         ...local.classList,
         'snap-pager-locked': controller.locked(),
+        'snap-pager-discrete': controller.discrete(),
       }}
-      data-phase={controller.phase()}
     >
       <div
         class="snap-pager-rail"
@@ -805,3 +793,9 @@ export function SnapPagerPage(props: SnapPagerPageProps) {
     </div>
   );
 }
+
+export const SnapPager = {
+  Root: SnapPagerRoot,
+  Viewport: SnapPagerViewport,
+  Page: SnapPagerPage,
+};

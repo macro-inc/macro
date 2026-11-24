@@ -1,5 +1,5 @@
 import { debounce } from '@core/util/debounce';
-import { createEffect, on, onCleanup, onMount } from 'solid-js';
+import { createEffect, on, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import {
   WHEEL_ROW_HEIGHT,
@@ -11,7 +11,7 @@ import {
 
 // Safari 16.4 has no scrollend event. Wait for native momentum and snap scrolling
 // to stop, and never commit while the pointer still owns a drag.
-export const WHEEL_SETTLE_DELAY_MS = 150;
+const WHEEL_SETTLE_DELAY_MS = 150;
 
 export function createWheelColumn(options: {
   options: () => readonly WheelOption[];
@@ -47,6 +47,7 @@ export function createWheelColumn(options: {
       )
     );
   };
+  let committing = false;
   const commit = (index: number) => {
     const items = options.options();
     if (options.disabled() || items.length === 0) return;
@@ -55,17 +56,14 @@ export function createWheelColumn(options: {
       : index;
     const item = items[logical];
     if (!item) return;
-    align(wheelCenterIndex(logical, items.length, options.loop()));
-    if (item.value !== options.value()) options.onChange(item.value);
-    // A controlled owner can clamp or reject a value. Reflect that result, not
-    // a stale native scroll position, even when the owner's value did not change.
-    align(
-      wheelCenterIndex(
-        selectedIndex(),
-        options.options().length,
-        options.loop()
-      )
-    );
+    committing = true;
+    try {
+      if (item.value !== options.value()) options.onChange(item.value);
+    } finally {
+      committing = false;
+      // Align once to the controlled result, including a rejected or clamped pick.
+      reset();
+    }
   };
   const settle = () => {
     settleLater.clear();
@@ -129,9 +127,10 @@ export function createWheelColumn(options: {
     commit(next);
   };
   createEffect(
-    on([options.value, options.options, options.disabled, options.loop], reset)
+    on([options.value, options.options, options.disabled, options.loop], () => {
+      if (!committing) reset();
+    })
   );
-  onMount(reset);
   window.addEventListener('pointerup', pointerUp);
   window.addEventListener('pointercancel', pointerUp);
   window.addEventListener('touchend', touchEnd);

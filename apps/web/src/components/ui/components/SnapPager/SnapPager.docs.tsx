@@ -1,7 +1,7 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
 import { For } from 'solid-js';
 import { Button } from '../Button';
-import { createSnapPager, SnapPager } from './index';
+import { createSnapPager, SnapPager } from './SnapPager';
 
 // #region demo:periods
 function PeriodDemo() {

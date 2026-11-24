@@ -18,6 +18,7 @@ const docModules = import.meta.glob<{ default: ComponentDoc }>(
     '../../components/ui/**/*.docs.tsx',
     '../../components/date-time-range/**/*.docs.tsx',
     '../../components/app/mobile/MobileSheetParts.docs.tsx',
+    '../../components/app/mobile/wheel-picker/*.docs.tsx',
     '../../features/calendar/components/**/*.docs.tsx',
   ],
   { eager: true }
@@ -28,6 +29,7 @@ const docSources = import.meta.glob<string>(
     '../../components/ui/**/*.docs.tsx',
     '../../components/date-time-range/**/*.docs.tsx',
     '../../components/app/mobile/MobileSheetParts.docs.tsx',
+    '../../components/app/mobile/wheel-picker/*.docs.tsx',
     '../../features/calendar/components/**/*.docs.tsx',
   ],
   { query: '?raw', import: 'default' }
@@ -47,7 +49,7 @@ const componentSources = import.meta.glob<string>(
   [
     '../../components/ui/components/**/*.tsx',
     '../../components/date-time-range/**/*.tsx',
-    '../../components/app/mobile/sheet-*/*.tsx',
+    '../../components/app/mobile/Sheet*.tsx',
     '../../features/calendar/components/**/*.tsx',
   ],
   { query: '?raw', import: 'default' }

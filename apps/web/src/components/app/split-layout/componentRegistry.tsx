@@ -135,9 +135,9 @@ const TasksRouteView = lazyNamed(
   () => import('@app/features/tasks-view/route-views'),
   'TasksRouteView'
 );
-const CalendarComposerSplitAdapter = lazyNamed(
-  () => import('@block-calendar/components/CalendarComposerSplitAdapter'),
-  'CalendarComposerSplitAdapter'
+const EventComposerSplit = lazyNamed(
+  () => import('@block-calendar/components/EventComposerSplit'),
+  'EventComposerSplit'
 );
 const ChannelCompose = lazyNamed(
   () => import('@block-channel/component/Compose'),
@@ -425,7 +425,7 @@ registerComponent('agent-session-compose', () => (
 registerComponent('calendar-event-compose', (params) => {
   usePageViewTracking('calendar-event-compose');
   const composer = () => (
-    <CalendarComposerSplitAdapter
+    <EventComposerSplit
       event={params?.event as CalendarEvent | undefined}
       initialValues={
         params?.initialValues as EventEditorInitialValues | undefined

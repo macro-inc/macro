@@ -4,7 +4,7 @@ export const WHEEL_VISIBLE_ROWS = 5;
 export const WHEEL_PADDING = (WHEEL_VISIBLE_ROWS - 1) / 2;
 // A pixel-sized native runway keeps short cycles from hitting an edge in a fling.
 // Labels are recycled; its snap anchors stay fixed until scrolling settles.
-export const WHEEL_LOOP_RUNWAY_PX = 131_072;
+const WHEEL_LOOP_RUNWAY_PX = 131_072;
 
 export interface WheelOption {
   value: string;

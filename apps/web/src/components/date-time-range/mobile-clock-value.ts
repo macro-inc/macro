@@ -1,5 +1,5 @@
-import { parseTimeValue } from '../time-options';
 import type { ClockFormat } from './clock-format';
+import { parseTimeValue } from './time-options';
 
 /** Split display parts so a clock field can align its meridiem independently. */
 export function mobileClockValue(

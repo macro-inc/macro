@@ -1,6 +1,6 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
 import { createSignal } from 'solid-js';
-import { SheetGroup } from '../sheet-group/SheetGroup';
+import { SheetGroup } from '../SheetGroup';
 import { WheelColumn, WheelPicker } from './WheelPicker';
 
 const MINUTES = Array.from({ length: 12 }, (_, index) => ({
@@ -8,6 +8,7 @@ const MINUTES = Array.from({ length: 12 }, (_, index) => ({
   label: String(index * 5).padStart(2, '0'),
 }));
 
+// #region demo:minute
 function WheelDemo() {
   const [minute, setMinute] = createSignal('30');
   return (
@@ -25,6 +26,7 @@ function WheelDemo() {
     </SheetGroup>
   );
 }
+// #endregion
 
 export default defineDoc({
   name: 'Wheel picker',

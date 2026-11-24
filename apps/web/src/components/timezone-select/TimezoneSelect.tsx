@@ -5,6 +5,7 @@ import { Combobox } from '@kobalte/core/combobox';
 import { buttonClasses, Dropdown, Layer, selectTriggerClasses } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { TimezoneListbox } from './TimezoneListbox';
+import { timezoneOptionsWithCurrent } from './timezone-options';
 import type { TimezoneOption } from './types';
 
 /**
@@ -24,7 +25,6 @@ export function TimezoneSelect(props: {
   appearance?: 'default' | 'value' | 'ghost';
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  fullWidth?: boolean;
   size?: 'sm' | 'md';
 }) {
   let triggerRef: HTMLButtonElement | undefined;
@@ -52,12 +52,7 @@ export function TimezoneSelect(props: {
   // lists it (a zone dropped between releases), so it resolves as the selection
   // and a stray pick cannot silently replace a still-valid stored zone.
   const optionsWithCurrent = createMemo(() =>
-    props.options.some((option) => option.value === props.value)
-      ? props.options
-      : [
-          { value: props.value, label: props.value.replace(/_/g, ' ') },
-          ...props.options,
-        ]
+    timezoneOptionsWithCurrent(props.options, props.value)
   );
   const selected = () =>
     optionsWithCurrent().find((option) => option.value === props.value) ?? null;
@@ -117,15 +112,9 @@ export function TimezoneSelect(props: {
           class={
             props.appearance === 'value' || props.appearance === 'ghost'
               ? buttonClasses({
-                  variant:
-                    props.appearance === 'ghost'
-                      ? 'ghost'
-                      : props.fullWidth
-                        ? 'row'
-                        : 'value',
-                  size: props.fullWidth ? 'sheet-row' : (props.size ?? 'sm'),
-                  fullWidth: props.fullWidth,
-                  class: `min-w-0 ${props.fullWidth ? 'justify-between' : ''} ${props.class ?? ''}`,
+                  variant: props.appearance === 'ghost' ? 'ghost' : 'value',
+                  size: props.size ?? 'sm',
+                  class: `min-w-0 ${props.class ?? ''}`,
                 })
               : selectTriggerClasses(
                   `min-w-0 text-sm touch:h-9 ${props.class ?? ''}`

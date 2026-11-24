@@ -10,7 +10,7 @@ type NativeInputSize = number;
 /** Text-bearing Button sizes that also make sense for an input. */
 export type InputSize = Exclude<
   ButtonSize,
-  `icon-${string}` | 'sheet' | 'sheet-row'
+  `icon-${string}` | 'sheet' | 'sheet-row' | 'select'
 >;
 
 // Single-line inputs are pills like Buttons on desktop, so their text sits further in.
