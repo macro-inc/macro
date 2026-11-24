@@ -146,6 +146,17 @@ const messagesOfKind = <T extends string>(port: FakePort, kind: T) =>
         (message as { kind?: unknown }).kind === kind
     );
 
+/** Fails every later send of startup progress, as the coordinator's own ports
+ * do when a send fails. */
+const failStartupNews = (port: FakePort): void => {
+  const post = port.postMessage.bind(port);
+  port.postMessage = (message: unknown) => {
+    const { kind } = effectPayload(message) as { kind?: unknown };
+    if (kind === 'engine-startup') port.onmessageerror?.();
+    else post(message);
+  };
+};
+
 describe('CoordinatorRouter', () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -2185,13 +2196,7 @@ describe('CoordinatorRouter', () => {
     await register(router, tabB, 'tab-b');
     const engine = new FakePort();
     await attach(router, tabA, 'tab-a', 1, engine);
-    const post = tabA.postMessage.bind(tabA);
-    // As the coordinator's own ports do when a send fails.
-    tabA.postMessage = (message: unknown) => {
-      const { kind } = effectPayload(message) as { kind?: unknown };
-      if (kind === 'engine-startup') tabA.onmessageerror?.();
-      else post(message);
-    };
+    failStartupNews(tabA);
     engine.receive({
       ...version,
       tabId: 'tab-a',
@@ -2279,6 +2284,156 @@ describe('CoordinatorRouter', () => {
       expect(router.snapshot()?.tabIds).toEqual(['tab-b']);
     }
   );
+
+  it.each(['a late answer', 'its page being hidden', 'a departure'] as const)(
+    'ends an owner whose lock was released in spite of %s',
+    async (event) => {
+      vi.useFakeTimers();
+      const router = new CoordinatorRouter({
+        heartbeatIntervalMs: 5,
+        heartbeatTimeoutMs: 7,
+        verifyTabLockHeld: async () => true,
+        verifyOwnerLockHeld: async () => false,
+        watchTabLock: () => () => {},
+      });
+      const tabA = new FakePort();
+      const tabB = new FakePort();
+      await register(router, tabA, 'tab-a');
+      await register(router, tabB, 'tab-b');
+      const engine = new FakePort();
+      await attach(router, tabA, 'tab-a', 1, engine);
+      ready(engine, 'tab-a', 1, 'opened-existing');
+      await vi.advanceTimersByTimeAsync(12);
+
+      if (event === 'a late answer')
+        engine.receive({
+          ...version,
+          kind: 'heartbeat-ack',
+          ownerEpoch: 1,
+          heartbeatId: messagesOfKind(engine, 'heartbeat')[0]?.heartbeatId,
+        });
+      else
+        await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+          ...version,
+          tabId: 'tab-a',
+          ...(event === 'a departure'
+            ? { kind: 'graceful-departure', ownerEpoch: 1 }
+            : { kind: 'tab-visibility', visible: false }),
+        });
+      await vi.advanceTimersByTimeAsync(5);
+
+      expect(messagesOfKind(tabB, 'become-owner')).toEqual([
+        expect.objectContaining({
+          ownerEpoch: 2,
+          databaseAction: 'wipe-before-open',
+        }),
+      ]);
+    }
+  );
+
+  it.each([
+    { failures: 1, databaseAction: 'open-existing' },
+    { failures: Number.POSITIVE_INFINITY, databaseAction: 'wipe-before-open' },
+  ])(
+    'looks for the page of a silent owner again when looking fails $failures times',
+    async ({ failures, databaseAction }) => {
+      vi.useFakeTimers();
+      let left = 0;
+      const router = new CoordinatorRouter({
+        heartbeatIntervalMs: 5,
+        heartbeatTimeoutMs: 7,
+        verifyTabLockHeld: async () => {
+          if (left === 0) return true;
+          left -= 1;
+          if (left > 0) throw new Error('lock service unavailable');
+          left = 1;
+          return false;
+        },
+        verifyOwnerLockHeld: async () => false,
+        watchTabLock: () => () => {},
+      });
+      const tabA = new FakePort();
+      const tabB = new FakePort();
+      await register(router, tabA, 'tab-a');
+      await register(router, tabB, 'tab-b');
+      const engine = new FakePort();
+      await attach(router, tabA, 'tab-a', 1, engine);
+      ready(engine, 'tab-a', 1, 'opened-existing');
+      left = failures + 1;
+      await vi.advanceTimersByTimeAsync(12 + 5);
+      expect(messagesOfKind(tabB, 'become-owner')).toEqual([]);
+
+      await vi.advanceTimersByTimeAsync(10);
+      expect(messagesOfKind(tabB, 'become-owner')).toEqual([
+        expect.objectContaining({ ownerEpoch: 2, databaseAction }),
+      ]);
+    }
+  );
+
+  it('arms one deadline when telling another tab of its startup fails', async () => {
+    vi.useFakeTimers();
+    const verifyTabLockHeld = vi.fn(async () => true);
+    const router = new CoordinatorRouter({
+      ownerLockWaitTimeoutMs: 10,
+      verifyTabLockHeld,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    router.connect(tabB as CoordinatorMessagePort);
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    failStartupNews(tabB);
+    engine.receive({
+      ...version,
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      kind: 'engine-assets-ready',
+    });
+    expect(router.snapshot()?.tabIds).toEqual(['tab-a']);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    verifyTabLockHeld.mockClear();
+
+    await vi.advanceTimersByTimeAsync(11);
+    expect(verifyTabLockHeld).not.toHaveBeenCalled();
+  });
+
+  it('ends the read wait of the next owner when showing a tab ends the starting one', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      handoffReadTimeoutMs: 10,
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    router.connect(tabA as CoordinatorMessagePort);
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const show = (port: FakePort, tabId: string, visible: boolean) =>
+      router.handleTabMessage(port as CoordinatorMessagePort, {
+        ...version,
+        kind: 'tab-visibility',
+        tabId,
+        visible,
+      });
+    await show(tabA, 'tab-a', false);
+    await show(tabB, 'tab-b', false);
+    failStartupNews(tabA);
+    await show(tabB, 'tab-b', true);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      tabId: 'tab-b',
+      ownerEpoch: 2,
+    });
+
+    await vi.advanceTimersByTimeAsync(11);
+    expect(
+      messagesOfKind(tabB, 'cache-read-availability').at(-1)
+    ).toMatchObject({ ownerEpoch: 2, state: 'blocked' });
+  });
 
   it('fails its owner without arming a watchdog when heartbeat send fails', async () => {
     vi.useFakeTimers();

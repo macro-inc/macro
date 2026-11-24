@@ -118,6 +118,8 @@ type EngineRoute = {
 };
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 2_000;
+/** How often to look for a silent owner's page when looking fails. */
+const MAX_PAGE_PROBES = 3;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
 /** How many departed tab ids a long-lived coordinator remembers. */
 const DEPARTED_TAB_MEMORY = 256;
@@ -1141,6 +1143,8 @@ export class CoordinatorRouter {
         if (!core.hasVisibleTab) this.clearActivationTimer();
         else if (this.activationTimer === undefined)
           this.armStartupWatchdog(tabId, ownerEpoch);
+        // Arming can end this owner, whose successor then synced for itself.
+        if (core.snapshot().ownerEpoch !== ownerEpoch) return;
         if (this.handoff.transitioning)
           this.handoff.start(ownerEpoch, core.hasVisibleTab);
       })
@@ -1192,6 +1196,8 @@ export class CoordinatorRouter {
     // A port that fails here can end this owner and arm the next one's watchdog.
     const state = this.coreValue?.state;
     if (state?.kind !== 'activating' || state.ownerEpoch !== ownerEpoch) return;
+    // It can also drop another tab, which arms this owner's on the way.
+    this.clearActivationTimer();
     // A hidden startup may be suspended by the browser while we wait to park
     // it. Resume the phase budget when there is a visible consumer again.
     if (!this.coreValue?.hasVisibleTab) return;
@@ -1743,23 +1749,27 @@ export class CoordinatorRouter {
     }
     // The ack, a graceful drain, or another failure may have won the race
     // while the lock probe was pending. Never act on that stale observation.
-    const silent = () =>
-      this.engineRoute === route &&
-      this.pendingHeartbeat?.ownerEpoch === route.ownerEpoch &&
-      this.pendingHeartbeat.heartbeatId === heartbeatId;
-    if (!silent()) return;
+    if (
+      this.engineRoute !== route ||
+      this.pendingHeartbeat?.ownerEpoch !== route.ownerEpoch ||
+      this.pendingHeartbeat.heartbeatId !== heartbeatId
+    )
+      return;
     if (lockHeld) {
       this.scheduleHeartbeat(route.ownerEpoch);
       return;
     }
+    // Nothing that arrives now keeps this engine: an answer it sent before it
+    // died, or a drain asked of it.
+    this.clearHeartbeatTimers();
     // A page that is leaving frees its engine's lock, frees its own and says
     // goodbye, and these can arrive in any order. Give the rest time.
-    this.heartbeatTimeoutTimer = this.setTimeoutFn(() => {
+    this.setTimeoutFn(() => {
       this.endSilentOwner(
         route.tabId,
         route.ownerEpoch,
         'engine owner lock was released',
-        silent
+        () => this.engineRoute === route
       ).catch(reportCoordinatorTaskFailure);
     }, this.heartbeatIntervalMs);
   }
@@ -1773,7 +1783,8 @@ export class CoordinatorRouter {
     tabId: string,
     ownerEpoch: number,
     reason: string,
-    silent: () => boolean
+    silent: () => boolean,
+    probes = 1
   ): Promise<void> {
     const core = this.coreValue;
     if (!core) return;
@@ -1783,6 +1794,21 @@ export class CoordinatorRouter {
         tabLivenessLockName(core.scope, tabId)
       ));
     } catch {
+      // A failed probe says nothing about the page. Ask again before taking
+      // this for an engine that failed.
+      if (probes < MAX_PAGE_PROBES) {
+        this.setTimeoutFn(() => {
+          if (!silent()) return;
+          this.endSilentOwner(
+            tabId,
+            ownerEpoch,
+            reason,
+            silent,
+            probes + 1
+          ).catch(reportCoordinatorTaskFailure);
+        }, this.heartbeatIntervalMs);
+        return;
+      }
       pageGone = false;
     }
     // An answer or another failure may have won the race.
