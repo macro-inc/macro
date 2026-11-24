@@ -778,6 +778,8 @@ body.tauri-ios {
 }
 
 [data-theme-light='true'] {
+  /* Light previews inside a dark touch app stay opaque, like light mode. */
+  --raised-glass-alpha: 100%;
   --color-task-status-in-progress: color-mix(in srgb, var(--color-amber) 85%, var(--color-content-0));
   /* Neutral borders. */
   --border-primary: oklch(0 0 0 / 16%);
@@ -891,7 +893,7 @@ html:lang(th) {
 @custom-variant touch (&:where(html[data-touch-device="true"] *));
 @custom-variant not-touch (&:where(html:not([data-touch-device="true"]) *));
 
-/* Restore native feedback suppressed by Tailwind's reset; glass opts out below. */
+/* Restore native tap feedback suppressed by Tailwind's reset. */
 html[data-touch-device='true'] {
   --sidebar-control-size: 2.25rem;
   -webkit-tap-highlight-color: initial;
