@@ -172,6 +172,7 @@ it('lists the week by day and logs time on a picked task through its sheet', asy
         clock={{ today: () => '2026-11-24', weekStartsOn: () => 0 }}
         showWeekends={() => true}
         person={(userId) => <span>{userId}</span>}
+        entryPerson={{ avatar: () => null, name: (userId) => userId }}
         task={TEST_TASK_PARTS}
         onOpenTask={onOpenTask}
         editAccess={(_taskId, render) => render(() => true)}
@@ -225,6 +226,7 @@ it('shows a teammate with no time as a plain row with a dash, not one that opens
         clock={{ today: () => '2026-11-24', weekStartsOn: () => 0 }}
         showWeekends={() => true}
         person={(userId) => <span>{userId}</span>}
+        entryPerson={{ avatar: () => null, name: (userId) => userId }}
         task={TEST_TASK_PARTS}
         onOpenTask={vi.fn()}
         editAccess={(_taskId, render) => render(() => true)}

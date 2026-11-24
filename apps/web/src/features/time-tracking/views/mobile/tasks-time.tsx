@@ -189,7 +189,7 @@ function MyWeekMobile(props: TasksTimeViewProps): JSX.Element {
               taskId={task.id}
               minutes={0}
               canEdit={canEdit() === true}
-              person={props.person}
+              person={props.entryPerson}
               open
               onOpenChange={(open) => {
                 if (!open) setLogging(undefined);
