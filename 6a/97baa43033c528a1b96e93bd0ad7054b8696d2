@@ -1,0 +1,49 @@
+crates/fusion_import/fixtures/versions.json
+  s_8c8123a52748fa::t_56eff939104257 1-179
+crates/fusion_import/src/outbound.rs
+  s_8c8123a52748fa::t_62530e20b6a6ac 1-4
+crates/fusion_import/fixtures/top_folders.json
+  s_8c8123a52748fa::t_56eff939104257 1-110
+crates/fusion_import/fixtures/projects.json
+  s_8c8123a52748fa::t_56eff939104257 1-148
+crates/fusion_import/fixtures/signeds3download_fallback.json
+  s_8c8123a52748fa::t_56eff939104257 1-9
+crates/fusion_import/src/lib.rs
+  s_8c8123a52748fa::t_62530e20b6a6ac 12-13
+crates/fusion_import/src/outbound/aps/test.rs
+  s_8c8123a52748fa::t_ca057196af2548 1-396,402-403,410,433-434,441,459,469-470,488-489,503,514,516,518-519,524,526-527
+  s_8c8123a52748fa::t_b3cc1975489b3a 397-401,404-409,411-432,435-440,442-458,460-468,471-487,490-502,504-513,515,517,520-523,525
+crates/fusion_import/fixtures/hubs.json
+  s_8c8123a52748fa::t_56eff939104257 1-84
+crates/fusion_import/fixtures/signeds3download_chunked.json
+  s_8c8123a52748fa::t_56eff939104257 1-12
+crates/fusion_import/fixtures/item.json
+  s_8c8123a52748fa::t_56eff939104257 1-211
+crates/fusion_import/src/outbound/aps.rs
+  s_8c8123a52748fa::t_f559345915cead 1-593,599-600
+  s_8c8123a52748fa::t_92f59deb2e2ad5 594-598
+crates/fusion_import/fixtures/README.md
+  s_8c8123a52748fa::t_4a0de92354bea5 1-32
+crates/fusion_import/fixtures/signeds3download_complete.json
+  s_8c8123a52748fa::t_56eff939104257 1-10
+crates/fusion_import/fixtures/projects_paged.json
+  s_8c8123a52748fa::t_56eff939104257 1-131
+crates/fusion_import/fixtures/folder_contents.json
+  s_8c8123a52748fa::t_56eff939104257 1-262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6a97baa43033c528a1b96e93bd0ad7054b8696d2",
+  "prompts": {},
+  "sessions": {
+    "s_8c8123a52748fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e3ebe64b-e3f3-41de-91c9-1dffbc9d884d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
