@@ -7,6 +7,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
+use tracing::Instrument as _;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -38,7 +39,8 @@ impl OutlookFlag {
     }
 }
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum MicrosoftAuthError {
     #[error("a professional subscription is required to link an additional inbox")]
     PaymentRequired,
@@ -604,6 +606,13 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
         if !self.repo.acquire_refresh(&grant, lease).await? {
             return Err(MicrosoftAuthError::Busy);
         }
+        let span = tracing::info_span!(
+            "microsoft.token.refresh",
+            microsoft.grant_id = %grant.id,
+            microsoft.grant_generation = grant.generation,
+            microsoft.outcome = tracing::field::Empty,
+            microsoft.grant_revoked = tracing::field::Empty,
+        );
         let result = async {
             let refresh = self
                 .cipher
@@ -657,18 +666,33 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
                 cached: false,
             })
         }
+        .instrument(span.clone())
         .await;
+        let outcome = match &result {
+            Ok(_) => "refreshed",
+            Err(error) => error.into(),
+        };
+        span.record("microsoft.outcome", outcome);
         if let Err(error) = &result {
+            let revoke = matches!(
+                error,
+                MicrosoftAuthError::ReauthorizationRequired
+                    | MicrosoftAuthError::MissingPermissions
+            );
+            span.record("microsoft.grant_revoked", revoke);
+            if revoke {
+                tracing::warn!(
+                    parent: &span,
+                    grant_id = %grant.id,
+                    grant_generation = grant.generation,
+                    grant_revision = grant.revision,
+                    outcome,
+                    "microsoft grant revoked after a refused refresh"
+                );
+            }
             self.repo
-                .release_refresh(
-                    &grant,
-                    lease,
-                    matches!(
-                        error,
-                        MicrosoftAuthError::ReauthorizationRequired
-                            | MicrosoftAuthError::MissingPermissions
-                    ),
-                )
+                .release_refresh(&grant, lease, revoke)
+                .instrument(span)
                 .await?;
         }
         result
