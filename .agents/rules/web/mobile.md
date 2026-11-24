@@ -175,13 +175,17 @@ read their code, and follow that pattern rather than inventing a new one.
   and draw nothing when it is 0, so panes without a top safe area or floating
   chrome (the iPhone Duo) get no fade; place them where that inset is set.
   They draw only on touch devices: desktop split panes set the inset to their
-  in-flow header's height, which would paint a band under the header.
+  in-flow header's height, which would paint a band under the header. A fade
+  whose pane reaches a side safe area continues across it, so the Duo's clock
+  column matches the pane.
 - Safe areas come from the `--safe-*` CSS variables (e.g.
   `bottom-[var(--safe-bottom,0px)]`); `getSafeAreaInset` only when JS needs
   the number. Never measure insets yourself.
 - Fixed overlays outside the app frame (sheets, toasts) stay between
   `--safe-left` and `--safe-right`: the iPhone Duo's clock and camera column
-  is a right safe area. Only scrims cover the whole screen.
+  is a right safe area. Only scrims cover the whole screen. Chrome inside a
+  pane is already inside the frame's side padding: position it from the pane
+  edge with the gutter, never adding `--safe-left` / `--safe-right` again.
 - Show a detail beside a list on wide touch through `SplitHeaderScope`, which
   hosts the detail's own mobile header (`MobileEmailThread`,
   `HostedMarkdownHeader`, `MobileAgentSessionHeader`) in the pane's top bar,
