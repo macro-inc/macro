@@ -112,7 +112,8 @@ function shouldUseFallbackForRecentMention(
   );
 }
 
-function MentionContainer(props: {
+/** A mention's face: an icon and an underlined name, as chips in text show. */
+export function MentionContainer(props: {
   icon: JSX.Element;
   text: JSX.Element;
   collapsed?: boolean;
