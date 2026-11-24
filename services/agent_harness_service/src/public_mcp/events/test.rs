@@ -1589,3 +1589,82 @@ async fn a_client_that_leaves_ends_the_stream() {
 pub(crate) fn fake_events() -> Arc<McpEvents> {
     Arc::new(fixture().events)
 }
+
+#[test]
+fn a_choice_of_values_beside_another_condition_is_bracketed() {
+    let filter = McpEventFilter {
+        any_of: vec![McpFilterClause {
+            events: vec!["message.mentioned".to_owned()],
+            ids: None,
+            all_of: vec![
+                McpFieldCondition {
+                    field: McpFilterField::Actor,
+                    one_of: vec![literal("a"), literal("b")],
+                },
+                McpFieldCondition {
+                    field: McpFilterField::MentionedId,
+                    one_of: vec![McpFilterValue::Me],
+                },
+            ],
+        }],
+    };
+    assert_eq!(
+        super::describe::describe(&filter),
+        "`message.mentioned` events where (the sender is `\"a\"` or `\"b\"`) and the \
+         mentioned item is you."
+    );
+}
+
+/// A client that stops reading after its first notification: every later
+/// send stays pending. Counts the sends it was given.
+#[derive(Default)]
+struct StuckSink(std::sync::atomic::AtomicUsize);
+
+impl NotificationSink for StuckSink {
+    async fn send(&self, _: &'static str, _: Value) -> Result<(), SinkClosed> {
+        if self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+            return Ok(());
+        }
+        std::future::pending().await
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_cancelled_stream_ends_while_a_send_is_pending() {
+    for (first_send_stuck, cancel_after) in [(true, 1), (false, 6)] {
+        let fixture = fixture();
+        let cancel = CancellationToken::new();
+        let extensions = no_extensions();
+        let sink = StuckSink::default();
+        if first_send_stuck {
+            sink.0.store(1, std::sync::atomic::Ordering::SeqCst);
+        }
+        let handler = handle(
+            &fixture.events,
+            "events/stream",
+            // The 5 s heartbeat is the send that blocks once the active
+            // notice went through.
+            Some(json!({"name": "message.posted", "heartbeatMs": 5_000})),
+            RequestScope {
+                user: me(),
+                request_id: json!(7),
+                extensions: &extensions,
+                sink: &sink,
+                cancel: cancel.clone(),
+                span: tracing::Span::none(),
+            },
+        );
+        let stop = async {
+            tokio::time::sleep(Duration::from_secs(cancel_after)).await;
+            cancel.cancel();
+        };
+        let (result, ()) = tokio::time::timeout(Duration::from_secs(60), async {
+            tokio::join!(handler, stop)
+        })
+        .await
+        .expect("the stream ended once cancelled");
+        result.unwrap();
+        let sends = sink.0.load(std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(sends, 2, "cancelled during a pending send");
+    }
+}

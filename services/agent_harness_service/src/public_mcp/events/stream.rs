@@ -38,6 +38,8 @@ const SOURCE_SILENCE: Duration =
 const FIRST_RETRY: Duration = Duration::from_millis(500);
 /// Longest wait between reconnects.
 const MAX_RETRY: Duration = Duration::from_secs(30);
+/// The notification that carries one event.
+const EVENT_NOTIFICATION: &str = "notifications/events/event";
 
 /// Where a stream's notifications go.
 pub(crate) trait NotificationSink: Send + Sync {
@@ -148,12 +150,8 @@ pub(crate) async fn run(
             "com.macro/interpretation": plan.interpretation,
         },
     });
-    if sink
-        .send("notifications/events/active", active)
-        .await
-        .is_err()
-    {
-        return (StreamEnd::ClientGone, stats);
+    if let Err(end) = send(sink, &cancel, "notifications/events/active", active).await {
+        return (end, stats);
     }
     let opened_at = sources.opened_at;
     let mut merged = stream::select_all(sources.groups.into_iter().map(|(group, opened)| {
@@ -171,8 +169,7 @@ pub(crate) async fn run(
                     if !recent.insert(&event.event_id) {
                         continue;
                     }
-                    stats.delivered += 1;
-                    ("notifications/events/event", occurrence(&plan.name, event, &meta))
+                    (EVENT_NOTIFICATION, occurrence(&plan.name, event, &meta))
                 }
                 Some(GroupItem::Lost) => {
                     stats.source_errors += 1;
@@ -196,12 +193,33 @@ pub(crate) async fn run(
                 json!({"cursor": null, "_meta": meta}),
             ),
         };
-        if sink.send(method, params).await.is_err() {
-            return (StreamEnd::ClientGone, stats);
+        if let Err(end) = send(sink, &cancel, method, params).await {
+            return (end, stats);
+        }
+        // Counted once the transport confirms the send; one cancelled while
+        // pending is not counted, though rmcp may still write it.
+        if method == EVENT_NOTIFICATION {
+            stats.delivered += 1;
         }
         heartbeat
             .as_mut()
             .reset(tokio::time::Instant::now() + plan.heartbeat);
+    }
+}
+
+/// Sends one notification unless the request is cancelled first: a client
+/// that stops reading leaves a send pending, and the user's stream slot is
+/// released only when [`run`] returns.
+async fn send(
+    sink: &impl NotificationSink,
+    cancel: &CancellationToken,
+    method: &'static str,
+    params: Value,
+) -> Result<(), StreamEnd> {
+    tokio::select! {
+        biased;
+        () = cancel.cancelled() => Err(StreamEnd::Cancelled),
+        sent = sink.send(method, params) => sent.map_err(|_| StreamEnd::ClientGone),
     }
 }
 
