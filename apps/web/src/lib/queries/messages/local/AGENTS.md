@@ -30,13 +30,15 @@ TanStack path in `../` runs untouched.
   answers from the device copy, else the server copy (`ChannelMessage`), else
   `NOT_SENT`, or `DELIVERY_UNKNOWN` when the server cannot say; the composers
   send a restored draft of that message again, from the same person to the
-  same place, under the same id (`features/channel/Input/utils/uncertain-sends.ts`,
-  which ignores mention order), until another message is sent there. The
+  same place and from any view of it, under the same id
+  (`features/channel/Input/utils/uncertain-sends.ts`, which ignores mention
+  order), until another message is sent there. The
   reply composer awaits its send, since it unmounts as it sends, and puts a
   failed reply back through the thread's stored draft, which every open reply
   input holds (`features/channel/Thread/reply-drafts.ts`): a view opened later
-  shows it, a newer draft in any view is kept, and nothing is written back once
-  sign-out cleared composer storage. A queue that
+  shows it, a newer draft in any view is kept (a quote builds on it too), and
+  nothing is written back by a composer that was open when sign-out cleared
+  composer storage. A queue that
   cannot be read is asked again with backoff, except after a reset, which
   fails the write with `CACHE_RESET`. A write is its transaction id and its
   mutation id: transaction ids restart when the queue is rebuilt. The queue

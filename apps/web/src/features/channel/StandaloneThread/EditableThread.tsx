@@ -10,7 +10,7 @@ import { createChannelMessageActions } from '../Channel/create-channel-message-a
 import { createDeleteMessageConfirmation } from '../Channel/create-delete-message-confirmation';
 import type { InputHandle, InputSnapshot } from '../Input';
 import { Thread } from '../Thread';
-import { readReplyDraft, replyDraftKeys } from '../Thread/reply-drafts';
+import { currentReplyDraft, replyDraftKeys } from '../Thread/reply-drafts';
 import { buildReplyTargetValue } from '../Thread/utils/message-actions';
 import { channelReplyInputOffsetX } from '../Thread/utils/thread-rail-geometry';
 import { useStandaloneThread } from './context';
@@ -46,15 +46,13 @@ function EditableThreadInner() {
     removeReaction: removeReactionMutation.mutate,
     onReply: ({ message, selectedText, renderedText }) => {
       if (message.thread_id) {
-        // A closed composer leaves its draft in storage only.
-        const current =
-          replyInputState() ??
-          readReplyDraft(
-            replyDraftKeys(
-              { type: 'channel', id: ctx.channelId() },
-              ctx.messageId()
-            )
-          );
+        const current = currentReplyDraft(
+          replyDraftKeys(
+            { type: 'channel', id: ctx.channelId() },
+            ctx.messageId()
+          ),
+          replyInputState()
+        );
         const nextSnapshot: InputSnapshot = {
           value: buildReplyTargetValue({
             channelId: ctx.channelId(),

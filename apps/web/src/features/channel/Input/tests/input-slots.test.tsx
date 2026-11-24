@@ -380,7 +380,7 @@ vi.mock('@queries/messages/typing', () => ({
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import type { MessageParent } from '@service-storage/messages';
 import { codexMentionUser, cursorMentionUser } from '../../macroAi';
-import { readReplyDraft, replyDraftKeys } from '../../Thread/reply-drafts';
+import { currentReplyDraft, replyDraftKeys } from '../../Thread/reply-drafts';
 import { ThreadReplyChannelInput } from '../../Thread/ThreadReplyChannelInput';
 import { buildReplyTargetValue } from '../../Thread/utils/message-actions';
 import { createInputAttachmentTracker } from '../attachment-tracker';
@@ -1193,8 +1193,10 @@ describe('Thread reply sends', () => {
     await nextFrame();
 
     // As the channel's quote action builds it, before the composer opens.
-    const before =
-      reply.state() ?? readReplyDraft(replyDraftKeys(parent, 'root-9'));
+    const before = currentReplyDraft(
+      replyDraftKeys(parent, 'root-9'),
+      reply.state()
+    );
     expect(before?.value).toBe('The reply that failed');
     const value = buildReplyTargetValue({
       channelId: parent.id,
@@ -1209,5 +1211,53 @@ describe('Thread reply sends', () => {
     });
     expect(value).toContain('reply-to-quote');
     expect(value).toContain('The reply that failed');
+  });
+
+  it('quotes into the stored draft, not a closed composer’s older snapshot', async () => {
+    const parent = { type: 'channel', id: 'channel-10' } as const;
+    const first = mountReply(parent, 'root-10');
+    const second = mountReply(parent, 'root-10');
+    second.reply.setOpen(false);
+    render(() => (
+      <>
+        {first.view()}
+        {second.view()}
+      </>
+    ));
+    await nextFrame();
+    editorMocks.emitChange?.('older words');
+    await nextFrame();
+    const stale = first.reply.state();
+    expect(stale?.value).toBe('older words');
+    first.reply.setOpen(false);
+    second.reply.setOpen(true);
+    await nextFrame();
+    editorMocks.emitChange?.('newer words');
+    await nextFrame();
+
+    const before = currentReplyDraft(replyDraftKeys(parent, 'root-10'), stale);
+    expect(before?.value).toBe('newer words');
+  });
+
+  it('writes no draft back for a reply sent after sign-out cleared composer storage', async () => {
+    const parent = { type: 'channel', id: 'channel-11' } as const;
+    const { reply, view } = mountReply(parent, 'root-11');
+    render(view);
+    await nextFrame();
+    editorMocks.emitChange?.('typed before sign-out');
+    clearComposerStorage();
+    const fail = holdNextSend();
+    expect(await reply.handle?.send()).toBe(true);
+    fail(unknown);
+    await nextFrame();
+
+    // Sending empties the composer, which may store an empty list; never words.
+    const stored = Object.keys(localStorage)
+      .filter((key) => key.includes('channel-11'))
+      .map((key) => localStorage.getItem(key));
+    expect(stored.filter((value) => value?.includes('sign-out'))).toEqual([]);
+    expect(
+      Object.keys(localStorage).some((key) => key.startsWith('input-value-'))
+    ).toBe(false);
   });
 });

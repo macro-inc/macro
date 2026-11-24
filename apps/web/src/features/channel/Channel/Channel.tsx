@@ -120,7 +120,7 @@ import {
 } from '../queries/system-activity';
 import { SystemActivity } from '../SystemActivity';
 import { ChannelThread } from '../Thread';
-import { readReplyDraft, replyDraftKeys } from '../Thread/reply-drafts';
+import { currentReplyDraft, replyDraftKeys } from '../Thread/reply-drafts';
 import { ThreadRow } from '../Thread/ThreadRow';
 import { ThreadTypingIndicator } from '../Thread/ThreadTypingIndicator';
 import { buildReplyTargetValue } from '../Thread/utils/message-actions';
@@ -203,6 +203,12 @@ export type ChannelHandle = {
   getMessagesStateSnapshot: () => MessageTimelineStateSnapshot | undefined;
   focusInput: () => void;
 };
+
+/**
+ * Sends whose delivery is unknown, for every view of a channel: views of one
+ * channel share its draft, so the restored one may be sent from another.
+ */
+const UNCERTAIN_SENDS = createUncertainSends(() => newMessageId());
 
 /** A composer that stays where it is, for a surface with no floating chrome. */
 function InPlaceRegion(props: ParentProps) {
@@ -552,12 +558,10 @@ export function Channel(props: ChannelProps) {
   ) => {
     const threadId = message.thread_id ?? message.id;
     const state = threadManager.getOrCreateThreadState(threadId);
-    // A closed composer leaves its draft in storage only.
-    const beforeSnapshot =
-      state.replyInputState() ??
-      readReplyDraft(
-        replyDraftKeys({ type: 'channel', id: props.channelId }, threadId)
-      );
+    const beforeSnapshot = currentReplyDraft(
+      replyDraftKeys({ type: 'channel', id: props.channelId }, threadId),
+      state.replyInputState()
+    );
     const nextSnapshot: InputSnapshot = {
       value: buildReplyTargetValue({
         channelId: props.channelId,
@@ -795,8 +799,6 @@ export function Channel(props: ChannelProps) {
     sendSurfaceDisposed = true;
   });
 
-  const uncertainSends = createUncertainSends(() => newMessageId());
-
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const channelId = props.channelId;
     const senderId = userId();
@@ -808,7 +810,7 @@ export function Channel(props: ChannelProps) {
     // Who sends it, where it goes and what it says: the same text in another
     // channel, or from another account, is another message.
     const uncertainKey = { senderId, channelId, message: payload.message };
-    const optimisticId = uncertainSends.idFor(uncertainKey);
+    const optimisticId = UNCERTAIN_SENDS.idFor(uncertainKey);
     // Send to the optimistic message's paint; channel.send follows delivery.
     const sendUi = startUiOperation('message.send', {
       attributes: { 'channel.id': channelId, 'message.id': optimisticId },
@@ -847,7 +849,7 @@ export function Channel(props: ChannelProps) {
           }
           handle.restoreSnapshot(snapshot);
           // Sent again unchanged, a send that may have arrived keeps its id.
-          uncertainSends.restored(uncertainKey, optimisticId, error);
+          UNCERTAIN_SENDS.restored(uncertainKey, optimisticId, error);
           span.setAttr('composer.outcome', 'restored');
         }
       }),

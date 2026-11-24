@@ -53,9 +53,7 @@ function withReplyDraft<T>(
 }
 
 /** The thread's stored reply draft, if it holds anything. */
-export function readReplyDraft(
-  keys: ReplyDraftKeys
-): InputSnapshot | undefined {
+function readReplyDraft(keys: ReplyDraftKeys): InputSnapshot | undefined {
   return withReplyDraft(keys, ({ text, attachments }) => {
     const value = text() ?? '';
     const files = attachments.attachments();
@@ -83,4 +81,20 @@ export function restoreFailedReply(
     attachments.setAttachments(snapshot.attachments);
     return true;
   });
+}
+
+/**
+ * The reply draft to build on, such as for a quote: the thread's stored draft,
+ * which every view of the thread writes, with the mentions of `live` (the
+ * view's last snapshot) only while it still says the same. A composer that
+ * closed keeps its last snapshot, which another view may have replaced since.
+ */
+export function currentReplyDraft(
+  keys: ReplyDraftKeys,
+  live: InputSnapshot | undefined
+): InputSnapshot | undefined {
+  const stored = readReplyDraft(keys);
+  if (!stored) return undefined;
+  const mentions = live?.value === stored.value ? live.mentions : [];
+  return { ...stored, mentions };
 }

@@ -78,6 +78,10 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
 
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
+  // Taken as the input mounts, not as it sends: sign-out clears composer
+  // storage before it signs the user out, and a send in between must not
+  // write its draft back.
+  const storageGeneration = composerStorageGeneration();
   const typingMutation = usePostTypingUpdateMutation();
   const channelBotMentionUsers = useMessageBotMentionUsers(() => props.parent);
 
@@ -182,7 +186,6 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         };
         const optimisticId = UNCERTAIN_REPLIES.idFor(uncertainKey);
         const keys = draftKeys();
-        const generation = composerStorageGeneration();
         // Awaited, not `mutate`'s per-call `onError`: the input unmounts as
         // it sends, and TanStack drops a call's callbacks once its observer
         // is gone, which would lose the draft.
@@ -197,8 +200,11 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
               }),
             (error) => {
               // Through the thread's stored draft, not this view's state: the
-              // view may be gone, and another may hold a newer draft.
-              if (!restoreFailedReply(keys, snapshot, generation)) return;
+              // view may be gone, and another may hold a newer draft. Not for
+              // another account.
+              if (userId() !== senderId) return;
+              if (!restoreFailedReply(keys, snapshot, storageGeneration))
+                return;
               // Sent again unchanged, a reply that may have arrived keeps its id.
               UNCERTAIN_REPLIES.restored(uncertainKey, optimisticId, error);
             }

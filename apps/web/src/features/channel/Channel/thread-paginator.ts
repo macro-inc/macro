@@ -1,4 +1,10 @@
-import { type Accessor, createSignal, type Setter } from 'solid-js';
+import { until } from '@solid-primitives/promise';
+import {
+  type Accessor,
+  createSignal,
+  runWithOwner,
+  type Setter,
+} from 'solid-js';
 import type { Store } from 'solid-js/store';
 
 export type ThreadPaginator = {
@@ -64,7 +70,7 @@ export function createThreadPaginator(paging: TimelinePaging): ThreadPaginator {
     state.setMore(hasMore());
 
     if (!hasMore()) return;
-    if (isFetching() || state.is()) {
+    if (state.is()) {
       state.setIsPending(true);
       return;
     }
@@ -72,6 +78,15 @@ export function createThreadPaginator(paging: TimelinePaging): ThreadPaginator {
     state.setIs(true);
 
     try {
+      // A load this paginator did not start holds the direction (a window
+      // read again). Ask once it lets go: the list asks only when it reaches a
+      // new edge, so a request dropped here would wait for the next scroll.
+      if (isFetching()) {
+        // Ownerless: a caller's owner going away would reject the wait.
+        await runWithOwner(null, () => until(() => !isFetching()));
+        state.setMore(hasMore());
+        if (!hasMore()) return;
+      }
       do {
         state.setIsPending(false);
         await paginateFn();
