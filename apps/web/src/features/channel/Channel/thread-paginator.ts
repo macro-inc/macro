@@ -84,6 +84,8 @@ export function createThreadPaginator(paging: TimelinePaging): ThreadPaginator {
 
     try {
       do {
+        // A list that went away while a page loaded asks for no more.
+        if (disposed()) return;
         // A load this paginator did not start holds the direction (a window
         // read again), before its first page or between two. Ask once it
         // lets go: the list asks only when it reaches a new edge, so a

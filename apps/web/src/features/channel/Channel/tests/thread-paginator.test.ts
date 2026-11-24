@@ -93,6 +93,21 @@ describe('createThreadPaginator', () => {
     expect(loadOlder).toHaveBeenCalledTimes(2);
   });
 
+  it('asks for no queued page once the list goes away', async () => {
+    const { loadOlder, paginator, dispose } = paging();
+    let finish!: () => void;
+    loadOlder.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finish = resolve))
+    );
+    const asked = paginator.shiftPaginate();
+    await Promise.resolve();
+    await paginator.shiftPaginate();
+    dispose();
+    finish();
+    await asked;
+    expect(loadOlder).toHaveBeenCalledTimes(1);
+  });
+
   it('lets a waiting request go when the list goes away mid-load', async () => {
     const { setLoadingOlder, loadOlder, paginator, dispose } = paging();
     setLoadingOlder(true);
