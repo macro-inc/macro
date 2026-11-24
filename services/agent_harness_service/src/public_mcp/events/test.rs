@@ -1160,13 +1160,14 @@ async fn next(
 async fn a_stream_delivers_only_what_its_filter_matches() {
     let fixture = fixture();
     let source = fixture.source.queue(None);
-    let wanted = event("message.mentioned", mention("channel", CHANNEL, ME));
-    let wanted_id = wanted.event_id.clone();
 
     let result = stream_with(
         &fixture.events,
         json!({"name": QUERY_EVENT, "arguments": confirmed(), "heartbeatMs": 10_000}),
         |mut receiver, cancel| async move {
+            // Minted after the stream opened, as a live event is.
+            let wanted = event("message.mentioned", mention("channel", CHANNEL, ME));
+            let wanted_id = wanted.event_id.clone();
             let (method, active) = next(&mut receiver).await;
             assert_eq!(method, "notifications/events/active");
             assert_eq!(active["heartbeatMs"], 10_000);
@@ -1218,16 +1219,16 @@ async fn a_stream_delivers_only_what_its_filter_matches() {
         json!({"resultType": "complete", "_meta": {SUBSCRIPTION_ID_META: 7}})
     );
     let opens = fixture.source.opens.lock().unwrap();
+    assert_eq!(opens.len(), 1);
     assert_eq!(
-        *opens,
-        vec![(
-            WebhookFilter {
-                events: vec!["message.mentioned".to_owned()],
-                ids: None
-            },
-            None
-        )]
+        opens[0].0,
+        WebhookFilter {
+            events: vec!["message.mentioned".to_owned()],
+            ids: None
+        }
     );
+    // Opened from the stream's start.
+    assert!(opens[0].1.is_some());
 }
 
 #[tokio::test(start_paused = true)]
@@ -1330,6 +1331,9 @@ async fn a_silent_source_is_replaced_and_resumes_from_when_it_opened() {
 
     let opens = fixture.source.opens.lock().unwrap();
     assert_eq!(opens.len(), 2, "the silent source was reopened");
+    // The first open already carries the stream's start, so a source that
+    // falls behind ends and is resumed rather than skipping events.
+    assert_eq!(opens[0].1, opens[1].1);
     let cursor = uuid::Uuid::parse_str(opens[1].1.as_deref().unwrap()).unwrap();
     assert_eq!(cursor.get_version_num(), 7);
     assert!(cursor >= opened_at);
@@ -1359,6 +1363,30 @@ async fn a_resumed_source_drops_what_it_replays_from_before_the_stream_opened() 
             let after = event("message.posted", json!({"metadata": {}}));
             let after_id = after.event_id.clone();
             second.unbounded_send(Ok(SourceItem::Event(after))).unwrap();
+            let (method, occurrence) = next(&mut receiver).await;
+            assert_eq!(method, "notifications/events/event");
+            assert_eq!(occurrence["eventId"], after_id);
+            cancel.cancel();
+        },
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_first_source_drops_what_it_replays_from_before_the_stream_opened() {
+    let fixture = fixture();
+    let first = fixture.source.queue(None);
+    let before = event("message.posted", json!({"metadata": {}}));
+    stream_with(
+        &fixture.events,
+        json!({"name": "message.posted"}),
+        |mut receiver, cancel| async move {
+            next(&mut receiver).await;
+            first.unbounded_send(Ok(SourceItem::Event(before))).unwrap();
+            let after = event("message.posted", json!({"metadata": {}}));
+            let after_id = after.event_id.clone();
+            first.unbounded_send(Ok(SourceItem::Event(after))).unwrap();
             let (method, occurrence) = next(&mut receiver).await;
             assert_eq!(method, "notifications/events/event");
             assert_eq!(occurrence["eventId"], after_id);
