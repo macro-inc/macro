@@ -87,7 +87,7 @@ export function RouteGithub() {
         <FeaturePageSection
           id="pr-tasks"
           title="Macro Tasks move as the pull request moves."
-          description="The linked task moves through In Progress, In Review, and Completed as you create, review, and merge a pull request. Click the GitHub pill to jump between the task and PR—it opens in split screen so you never leave Macro."
+          description="The linked task moves through In Progress, In Review, and Completed as you create, review, and merge a pull request. Click the GitHub pill to jump between the task and PR in split screen without leaving Macro."
           screen={featureScreens['pr-tasks']}
         />
         <FeaturePageSection

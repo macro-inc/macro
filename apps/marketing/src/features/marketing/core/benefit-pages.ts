@@ -90,7 +90,7 @@ export const BENEFIT_PAGES: Record<string, BenefitPage> = {
         id: 'automatic-tags',
         title: 'Automatically tag your Macro Mail.',
         description:
-          'Run a routine on incoming Macro Mail to tag threads by customer, topic, and urgency the moment they land—no manual filing.',
+          'Run a routine on incoming Macro Mail to tag threads by customer, topic, and urgency the moment they land without manual filing.',
         scene: 'auto-tags',
       },
       {
@@ -128,14 +128,14 @@ export const BENEFIT_PAGES: Record<string, BenefitPage> = {
         id: 'share-in-channel',
         title: 'Share access through Macro Chat.',
         description:
-          'Drop a doc from Macro Docs, a thread from Macro Mail, or a task into Macro Chat and every member can open it immediately—just like attaching a file to an email.',
+          'Drop a doc from Macro Docs, a thread from Macro Mail, or a task into Macro Chat and every member can open it right away just like attaching a file to an email.',
         scene: 'channel-access',
       },
       {
         id: 'follow-membership',
         title: 'Give new teammates the context.',
         description:
-          'Add a new teammate to a channel and they automatically unlock every doc, email, and task already shared there—no one-by-one sharing needed.',
+          'Add a new teammate to a channel and they automatically unlock every doc, email, and task already shared there without anyone having to share links one by one.',
         scene: 'membership',
       },
       {
@@ -190,7 +190,7 @@ export const BENEFIT_PAGES: Record<string, BenefitPage> = {
         id: 'search-workspace',
         title: 'Find it wherever it happened.',
         description:
-          'Press / to search across Macro Mail, Macro Chat, Macro Docs, and Macro Calls at once—no guessing which app something lives in.',
+          'Press / to search across Macro Mail, Macro Chat, Macro Docs, and Macro Calls at once instead of guessing which app something lives in.',
         scene: 'search',
       },
       {

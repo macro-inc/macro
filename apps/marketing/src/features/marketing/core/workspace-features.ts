@@ -78,7 +78,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
       'Typed tables, boards, and timelines for teams and agents—linked right to emails, docs, and tasks.',
     heading: '@mention anything in a column.',
     detail:
-      'Every row is a record and every column is typed—text, numbers, formulas, dropdowns, or live @mentions of people, Macro Tasks, Macro Docs, Macro Mail, and Macro CRM companies. Link tables together and pipe Macro Forms responses straight in as rows.',
+      'Every row is a record and every column has a type: text, numbers, formulas, dropdowns, or live @mentions of people, Macro Tasks, Macro Docs, Macro Mail, and Macro CRM companies. Link tables together and pipe Macro Forms responses straight in as rows.',
     sceneTitle: 'Launch projects',
     rows: [],
     message: 'I added the launch tasks to the table.',
@@ -96,7 +96,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
       {
         title: 'Import your Notion databases.',
         description:
-          'Import from Notion inside Macro Drive—review what the agent finds, set permissions, and approve while leaving your originals untouched.',
+          'Import from Notion inside Macro Drive. Review what the agent finds, set permissions, and approve while leaving your originals untouched.',
       },
     ],
     faq: [
@@ -220,7 +220,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
         id: 'calendar-booking-links',
         title: 'Let guests book with Macro Booking Links.',
         description:
-          'Share Macro Booking Links so guests pick open times in their own time zone—no Macro account needed and answers link straight to Macro CRM and Macro Mail.',
+          'Share Macro Booking Links so guests pick open times in their own time zone with no Macro account needed. Their answers link straight to Macro CRM and Macro Mail.',
       },
     ],
     faq: [
@@ -326,7 +326,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
       {
         title: 'Folders and Macro Databases side by side.',
         description:
-          'Use folders for quick sharing and Macro Databases for structured tracking—drag files in and filter by type, tag, or creator.',
+          'Use folders for quick sharing and Macro Databases for structured tracking. Drag files in and filter by type, tag, or creator.',
       },
       {
         title: 'Auto-organized with Macro Tags.',

@@ -38,19 +38,19 @@ export function RouteChannels() {
       <FeaturePageSection
         id="channel-agents"
         title="Macro Agents are first-class like humans."
-        description="Tag Macro Agents in a thread and they read the full conversation plus every linked file, email, and task—or let them chime in automatically when they can help."
+        description="Tag Macro Agents in a thread and they read the full conversation plus every linked file, email, and task. You can also let them chime in automatically when they can help."
         screen={featureScreens['channel-agents']}
       />
       <FeaturePageSection
         id="channel-threads"
         title="Built for focused technical conversations."
-        description="The first few replies appear inline and the rest tuck cleanly into a thread—readable like a structured forum and fast like iMessage without Slack’s buried sidebars."
+        description="The first few replies show up inline and the rest tuck cleanly into a thread. It reads like a structured forum and feels as fast as iMessage without Slack’s buried sidebars."
         screen={featureScreens['channel-threads']}
       />
       <FeaturePageSection
         id="chat-inbox"
         title="A real inbox like Macro Mail."
-        description="Slack has no real inbox—only read and unread. Macro keeps messages waiting for later so you don’t have to remember to reply and you mark them done as you go. Mark a channel as Signal or Noise to decide what reaches your main inbox."
+        description="Slack has no real inbox, only read and unread. Macro keeps messages waiting for later so you don’t have to remember to reply and you mark them done as you go. Mark a channel as Signal or Noise to decide what reaches your main inbox."
         screen={featureScreens['chat-inbox']}
       />
       <FeaturePhoneScreens screens={phoneScreens['channels']} product="Chat" />

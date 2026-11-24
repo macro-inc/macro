@@ -123,7 +123,7 @@ export function RouteTasks() {
         <FeaturePageSection
           id="github"
           title="Linked to Macro GitHub both ways."
-          description="Opening, reviewing, and merging a Macro GitHub PR moves the linked task through In Progress, In Review, and Completed automatically—no updating two systems."
+          description="Opening, reviewing, and merging a Macro GitHub PR moves the linked task through In Progress, In Review, and Completed automatically so you never have to update two systems."
           screen={featureScreens['github']}
         />
         <FeaturePageSection
@@ -135,7 +135,7 @@ export function RouteTasks() {
         <FeaturePageSection
           id="task-views"
           title="List, board, or timeline."
-          description="Switch between list, kanban board, and timeline views—or ask Macro Agents for a live status update across your team’s tasks."
+          description="Switch between list, kanban board, and timeline views or ask Macro Agents for a live status update across your team’s tasks."
           screen={featureScreens['task-views']}
         />
         <FeaturePhoneScreens screens={phoneScreens['tasks']} product="Tasks" />

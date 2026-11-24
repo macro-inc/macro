@@ -201,7 +201,7 @@ export function RouteEmail() {
       <FeaturePageSection
         id="email-routines"
         title="Kick off Macro Routines from any email."
-        description="Trigger Macro Routines whenever an email arrives—notify a Macro Chat channel, create Macro Tasks, or send yourself a push alert for VIP customers."
+        description="Trigger Macro Routines whenever an email arrives to notify a Macro Chat channel, create Macro Tasks, or send yourself a push alert for VIP customers."
         screen={featureScreens['email-routines']}
       />
       <FeaturePhoneScreens screens={phoneScreens['email']} product="Mail" />

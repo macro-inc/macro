@@ -87,13 +87,13 @@ export function RouteCalls() {
         <FeaturePageSection
           id="call-start"
           title="As easy as a Slack huddle."
-          description="Jump into a huddle from any Macro Chat channel or DM with one click—no calendar invite or meeting link required."
+          description="Jump into a huddle from any Macro Chat channel or DM in one click without sending a calendar invite or meeting link."
           screen={featureScreens['call-start']}
         />
         <FeaturePageSection
           id="call-external"
           title="External calls shared by link."
-          description="Need to meet with a customer or candidate? Send a standalone browser link like Google Meet—no Macro account or download required."
+          description="Need to meet with a customer or candidate? Send a standalone browser link like Google Meet that works with no Macro account or download."
           screen={featureScreens['call-external']}
         />
         <FeaturePhoneScreens screens={phoneScreens['calls']} product="Calls" />

@@ -79,7 +79,7 @@ export function RouteDocuments() {
         <FeaturePageSection
           id="document-agents"
           title="Macro Agents get a live cursor in the doc."
-          description="Macro Agents edit beside you with a live cursor—no waiting for markdown diffs. Go offline and CRDT sync merges everyone’s edits automatically when you reconnect."
+          description="Macro Agents edit right beside you with a live cursor instead of making you review markdown diffs. If you go offline, CRDT sync merges everyone’s edits automatically when you reconnect."
           screen={featureScreens['document-agents']}
         />
         <FeaturePageSection

@@ -83,7 +83,7 @@ export function RouteAgents() {
       <FeaturePageSection
         id="agent-sources"
         title="Unified memory across your whole team."
-        description="ChatGPT and Claude only remember your own prompts. Macro builds shared memory from your team’s Macro Mail, Macro Chat, Macro Docs, Macro Tasks, and Macro Calls—so agents know who owns what."
+        description="ChatGPT and Claude only remember your own prompts. Macro builds shared memory from your team’s Macro Mail, Macro Chat, Macro Docs, Macro Tasks, and Macro Calls so agents know who owns what."
         screen={featureScreens['agent-sources']}
       />
       <FeaturePageSection
@@ -101,7 +101,7 @@ export function RouteAgents() {
       <FeaturePageSection
         id="existing-agents"
         title="Bring your own agents."
-        description="Point Claude Code, Codex, or any MCP client at your workspace—or run agents on your own machine with macrod. Your team’s memory and Macro’s tools work with all the latest models from every provider so you’re never locked into one."
+        description="Point Claude Code, Codex, or any MCP client at your workspace or run agents on your own machine with macrod. Your team’s memory and Macro’s tools work with all the latest models from every provider so you’re never locked into one."
         screen={featureScreens['existing-agents']}
       >
         <div class="agents-connections">

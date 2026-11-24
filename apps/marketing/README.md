@@ -147,7 +147,7 @@ product demos, including changing walkthrough narration inside their footer
 controls; retain useful keyboard shortcuts and controls.
 Write it the way the founder talks to another founder: plain words, “we,” the
 competitor by name when the comparison is specific, and why we built it.
-Keep punctuation light: use commas only when truly needed for clarity (such as lists), skipping them before “so,” short clauses, or parenthetical asides.
+Keep punctuation light (commas only when truly needed for clarity) and write with natural, conversational flow rather than staccato parallelisms, em-dash punchlines, or formulaic openers.
 Feature and benefit introductions use two paragraphs (one for Calls) from `product-introductions.ts` immediately
 below the hero tutorial and above the feature sections. On phones, align product introductions and hero tutorials to the same 20px viewport inset: 12px from the page shell plus 8px from the product page, with no extra width inset on either element. Use the H2 section body
 typography: explain what we wanted from existing tools, then
