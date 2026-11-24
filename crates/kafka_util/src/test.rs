@@ -329,3 +329,37 @@ async fn a_position_past_the_log_is_reset_and_counted() {
         "the warning still reaches the inner context"
     );
 }
+
+#[tokio::test]
+async fn an_assignment_from_now_receives_what_is_published_before_it_is_fetched() {
+    let cluster = MockCluster::new(1).expect("mock cluster");
+    cluster.create_topic("from-now", 1, 1).expect("topic");
+    let producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", cluster.bootstrap_servers())
+        .create()
+        .expect("producer");
+    let publish = async |payload: &str| {
+        producer
+            .send(
+                FutureRecord::<(), _>::to("from-now").payload(payload),
+                SEND_TIMEOUT,
+            )
+            .await
+            .expect("publish");
+    };
+    publish("before").await;
+
+    let consumer: StreamConsumer = ungrouped_config(&cluster.bootstrap_servers())
+        .create()
+        .expect("consumer");
+    let assignment = build_assignment_from_now(&consumer, &["from-now"], Duration::from_secs(10))
+        .expect("assignment");
+    publish("after").await;
+    consumer.assign(&assignment).expect("assign");
+
+    let message = tokio::time::timeout(Duration::from_secs(10), consumer.recv())
+        .await
+        .expect("the record published after the assignment was made is missed")
+        .expect("message");
+    assert_eq!(message.payload(), Some("after".as_bytes()));
+}

@@ -10,7 +10,7 @@ mod test;
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use either::Either;
 use macro_env::Environment;
@@ -363,6 +363,31 @@ fn prime_oauth_token<C: ConsumerContext + 'static>(consumer: &StreamConsumer<C>)
     let _ = std::future::Future::poll(recv.as_mut(), &mut context);
 }
 
+/// Every current partition of `topics` at the end it has now.
+fn build_assignment_from_now<C, T>(
+    consumer: &T,
+    topics: &[&str],
+    timeout: Duration,
+) -> KafkaResult<TopicPartitionList>
+where
+    C: ConsumerContext,
+    T: Consumer<C>,
+{
+    let deadline = Instant::now() + timeout;
+    let partitions = build_assignment(consumer, topics, Offset::End, timeout)?;
+    let mut assignment = TopicPartitionList::new();
+    for partition in partitions.elements() {
+        let left = deadline.saturating_duration_since(Instant::now());
+        let (_, end) = consumer.fetch_watermarks(partition.topic(), partition.partition(), left)?;
+        assignment.add_partition_offset(
+            partition.topic(),
+            partition.partition(),
+            Offset::Offset(end),
+        )?;
+    }
+    Ok(assignment)
+}
+
 fn build_assignment<C, T>(
     consumer: &T,
     topics: &[&str],
@@ -586,6 +611,20 @@ impl KafkaEventConsumer<Ungrouped> {
             };
             let assignment = build_assignment(consumer, topics, offset, metadata_timeout)?;
             consumer.assign(&assignment)
+        })
+    }
+
+    /// Manually assigns every current partition of `topics` at its end, as
+    /// [`Self::assign_topics`] does from [`InitialOffset::Latest`], but with the
+    /// ends read before this returns: every record published from then on is
+    /// received. `Latest` finds them in the background, so a record published
+    /// right after assignment can fall before the end it settles on.
+    ///
+    /// All broker requests must finish within `timeout`.
+    pub fn assign_topics_from_now(&self, topics: &[&str], timeout: Duration) -> KafkaResult<()> {
+        either::for_both!(&self.consumer.0, consumer => {
+            prime_oauth_token(consumer);
+            consumer.assign(&build_assignment_from_now(consumer, topics, timeout)?)
         })
     }
 }
