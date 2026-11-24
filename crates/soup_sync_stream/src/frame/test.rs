@@ -16,7 +16,6 @@ fn encodes_each_frame_as_one_ndjson_line() {
             paging: Paging::Soup,
             kind: LaneKind::Hydrate,
             pass_started_at: "2026-11-02T12:00:00.000Z".to_owned(),
-            coverage: Some(json!({ "entity": "task", "scope": "all" })),
         },
         Frame::Page {
             lane: lane.clone(),
@@ -47,7 +46,7 @@ fn encodes_each_frame_as_one_ndjson_line() {
     assert_eq!(
         lines,
         [
-            "{\"type\":\"lane\",\"lane\":\"tasks\",\"query\":\"query Tasks {\\n  user { id }\\n}\",\"operationName\":\"Tasks\",\"paging\":\"soup\",\"kind\":{\"kind\":\"hydrate\"},\"passStartedAt\":\"2026-11-02T12:00:00.000Z\",\"coverage\":{\"entity\":\"task\",\"scope\":\"all\"}}\n",
+            "{\"type\":\"lane\",\"lane\":\"tasks\",\"query\":\"query Tasks {\\n  user { id }\\n}\",\"operationName\":\"Tasks\",\"paging\":\"soup\",\"kind\":{\"kind\":\"hydrate\"},\"passStartedAt\":\"2026-11-02T12:00:00.000Z\"}\n",
             "{\"type\":\"page\",\"lane\":\"tasks\",\"page\":0,\"variables\":{\"input\":{\"initial\":{\"limit\":2}}},\"response\":{\"data\":{\"user\":{\"soup\":{\"nextCursor\":\"c1\\nc2\"}}}},\"items\":2,\"resume\":{\"cursor\":\"c1\\nc2\",\"items\":2}}\n",
             "{\"type\":\"laneDone\",\"lane\":\"tasks\",\"pages\":12,\"items\":5800,\"reason\":\"maxItems\"}\n",
             "{\"type\":\"laneError\",\"lane\":\"tasks\",\"message\":\"page response has GraphQL errors\"}\n",
@@ -71,7 +70,6 @@ fn a_calendar_lane_declares_its_coverage_and_no_lane_coverage() {
             }],
         },
         pass_started_at: "2026-11-02T12:00:00.000Z".to_owned(),
-        coverage: None,
     };
     assert_eq!(
         frame.to_line().unwrap().as_ref(),

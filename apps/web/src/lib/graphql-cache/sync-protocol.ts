@@ -79,8 +79,6 @@ export type SyncLaneState = {
   completedAt: string | null;
   /** `passStartedAt` of the last completed pass: "changed since" for the next one. */
   watermark: string | null;
-  /** `coverage` of the last completed pass. */
-  coverage: unknown;
 };
 
 /** Optional cache host capability; absent on hosts that cannot stream. */

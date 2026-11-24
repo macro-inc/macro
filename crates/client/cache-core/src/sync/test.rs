@@ -26,7 +26,6 @@ fn declare(id: &str, paging: SyncPaging, kind: SyncLaneKind) -> SyncLane {
         paging,
         kind,
         pass_started_at: "2026-11-01T00:00:00.000Z".to_owned(),
-        coverage: None,
     }
 }
 
@@ -61,7 +60,7 @@ fn decoder_splits_a_byte_at_a_time() {
 fn run_decodes_every_frame_type_and_counts_bytes() {
     let mut run = run();
     let stream = concat!(
-        r#"{"type":"lane","lane":"tasks","query":"query Q { user { id } }","operationName":"Q","paging":"soup","kind":{"kind":"hydrate"},"passStartedAt":"2026-11-01T00:00:00.000Z","coverage":{"entity":"task","scope":"all"}}"#,
+        r#"{"type":"lane","lane":"tasks","query":"query Q { user { id } }","operationName":"Q","paging":"soup","kind":{"kind":"hydrate"},"passStartedAt":"2026-11-01T00:00:00.000Z"}"#,
         "\n",
         r#"{"type":"page","lane":"tasks","page":0,"variables":{"input":{}},"response":{"data":{"user":{"id":"u"}}},"items":0,"resume":{"cursor":"c1"}}"#,
         "\n",
@@ -82,7 +81,7 @@ fn run_decodes_every_frame_type_and_counts_bytes() {
     let frames = run.pending.iter().cloned().collect::<Vec<_>>();
     assert!(matches!(
         &frames[0],
-        SyncFrame::Lane { lane, operation_name: Some(name), paging: SyncPaging::Soup, coverage: Some(_), .. }
+        SyncFrame::Lane { lane, operation_name: Some(name), paging: SyncPaging::Soup, .. }
             if lane == "tasks" && name == "Q"
     ));
     assert!(
@@ -245,7 +244,6 @@ fn the_request_carries_the_pass_and_every_lane_s_saved_state() {
             id: "tasks".to_owned(),
             completed_at: Some("2026-11-01T00:10:00.000Z".to_owned()),
             watermark: Some("2026-11-01T00:00:00.000Z".to_owned()),
-            coverage: json!({"entity": "task", "scope": "all"}),
             ..SyncLaneState::default()
         },
     ];

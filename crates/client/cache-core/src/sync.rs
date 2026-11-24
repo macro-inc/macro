@@ -85,9 +85,6 @@ pub struct SyncLane {
     /// ISO time this lane's pass started; stored with the first page, and as
     /// the watermark once the lane completes.
     pub pass_started_at: String,
-    /// Opaque description stored when the lane completes.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub coverage: Option<Json>,
 }
 
 /// The sync pass a run streams; the server plans each pass's lanes.
@@ -154,9 +151,6 @@ pub struct SyncLaneState {
     pub completed_at: Option<String>,
     /// `pass_started_at` of the last completed pass.
     pub watermark: Option<String>,
-    /// `coverage` of the last completed pass.
-    #[serde(default)]
-    pub coverage: Json,
 }
 
 /// One lane's saved state as storage keeps it: an opaque encoded row.
@@ -263,9 +257,6 @@ pub enum SyncFrame {
         kind: SyncLaneKind,
         /// When the lane's pass started.
         pass_started_at: String,
-        /// Stored when the lane completes.
-        #[serde(default)]
-        coverage: Option<Json>,
     },
     /// One executed page of a lane.
     #[serde(rename_all = "camelCase")]

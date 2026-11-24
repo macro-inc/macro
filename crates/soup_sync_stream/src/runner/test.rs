@@ -113,7 +113,6 @@ fn test_plan(body: Value) -> SyncPlan {
                     .and_then(Value::as_bool)
                     .unwrap_or(paging == Paging::Soup),
                 pass_started_at: PASS_STARTED_AT.to_owned(),
-                coverage: None,
             })
             .unwrap()
         })
@@ -970,7 +969,6 @@ async fn declares_each_lane_once_before_anything_else_of_it() {
             paging: Paging::Soup,
             kind: LaneKind::Hydrate,
             pass_started_at: PASS_STARTED_AT.to_owned(),
-            coverage: None,
         }
     );
 }

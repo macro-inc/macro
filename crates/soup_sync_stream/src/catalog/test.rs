@@ -72,11 +72,6 @@ fn every_lane_runs_its_expected_query_and_first_input() {
                 expected["maxItems"].as_u64(),
                 "{id}"
             );
-            assert_eq!(
-                lane.coverage.clone().unwrap_or(Value::Null),
-                expected["coverage"],
-                "{id}"
-            );
             let restart = expected["restartOnRun"].as_bool().unwrap();
             assert_eq!(
                 lane.resumable,

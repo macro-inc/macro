@@ -214,7 +214,6 @@ where
                 paging,
                 kind,
                 pass_started_at,
-                coverage,
             } => {
                 run.declare(SyncLane {
                     id: lane,
@@ -223,7 +222,6 @@ where
                     paging,
                     kind,
                     pass_started_at,
-                    coverage,
                 })?;
                 SyncApplied::Recorded
             }
@@ -455,7 +453,6 @@ where
         };
         stored.state.completed_at = iso_time(hooks.wall_clock_ms());
         stored.state.watermark = Some(lane.pass_started_at.clone());
-        stored.state.coverage = lane.coverage.clone().unwrap_or(Json::Null);
         stored.state.resume = None;
         self.storage
             .save_sync_lane(stored.encode(), Vec::new())

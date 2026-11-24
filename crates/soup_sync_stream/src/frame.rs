@@ -32,9 +32,6 @@ pub enum Frame {
         /// When the lane's pass started; the cache stores it as the lane's
         /// watermark once the lane completes.
         pass_started_at: String,
-        /// Stored by the cache once the lane completes.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        coverage: Option<Value>,
     },
     /// One executed page.
     Page {

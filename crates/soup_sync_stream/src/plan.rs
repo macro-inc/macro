@@ -156,7 +156,6 @@ fn soup_lane(
             items_before,
             resumable,
             pass_started_at,
-            coverage: spec.coverage.map(|coverage| coverage.to_json()),
         })
     };
     let fresh = |input: Map<String, Value>| draft(json!({ "initial": input }), 0, iso_instant(now));
@@ -213,7 +212,6 @@ fn calendar_lane(
         items_before: 0,
         resumable: false,
         pass_started_at: iso_instant(now),
-        coverage: None,
     })
 }
 

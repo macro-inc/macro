@@ -368,7 +368,6 @@ impl LaneRun {
             paging: self.plan.paging.wire(),
             kind: self.plan.kind.clone(),
             pass_started_at: self.plan.pass_started_at.clone(),
-            coverage: self.plan.coverage.clone(),
         }
     }
 

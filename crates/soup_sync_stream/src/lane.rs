@@ -155,8 +155,6 @@ pub(crate) struct LaneDraft {
     pub(crate) resumable: bool,
     /// When the lane's pass started (ISO 8601).
     pub(crate) pass_started_at: String,
-    /// Stored by the cache once the lane completes.
-    pub(crate) coverage: Option<Value>,
 }
 
 /// One planned lane.
@@ -175,7 +173,6 @@ pub(crate) struct LanePlan {
     pub(crate) items_before: u32,
     pub(crate) resumable: bool,
     pub(crate) pass_started_at: String,
-    pub(crate) coverage: Option<Value>,
 }
 
 impl LanePlan {
@@ -214,7 +211,6 @@ impl LanePlan {
             items_before: draft.items_before,
             resumable: draft.resumable,
             pass_started_at: draft.pass_started_at,
-            coverage: draft.coverage,
         })
     }
 }

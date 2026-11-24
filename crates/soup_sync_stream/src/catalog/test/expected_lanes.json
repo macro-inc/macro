@@ -170,10 +170,6 @@
     "kind": "hydrate"
    },
    "maxItems": null,
-   "coverage": {
-    "entity": "channel",
-    "scope": "all"
-   },
    "restartOnRun": true
   },
   {
@@ -358,10 +354,6 @@
     "kind": "hydrate"
    },
    "maxItems": null,
-   "coverage": {
-    "entity": "task",
-    "scope": "all"
-   },
    "restartOnRun": false
   },
   {
@@ -556,10 +548,6 @@
     "kind": "hydrate"
    },
    "maxItems": null,
-   "coverage": {
-    "entity": "initiative",
-    "scope": "all"
-   },
    "restartOnRun": false
   },
   {
@@ -748,7 +736,6 @@
     "kind": "hydrate"
    },
    "maxItems": null,
-   "coverage": null,
    "restartOnRun": false
   },
   {
@@ -1013,7 +1000,6 @@
     "kind": "hydrate"
    },
    "maxItems": null,
-   "coverage": null,
    "restartOnRun": true
   },
   {
@@ -1202,7 +1188,6 @@
     "kind": "hydrate"
    },
    "maxItems": 1000,
-   "coverage": null,
    "restartOnRun": false
   },
   {
@@ -1394,7 +1379,6 @@
     ]
    },
    "maxItems": null,
-   "coverage": null,
    "restartOnRun": false
   },
   {
@@ -1592,7 +1576,6 @@
     ]
    },
    "maxItems": null,
-   "coverage": null,
    "restartOnRun": false
   },
   {
@@ -1770,7 +1753,6 @@
     ]
    },
    "maxItems": null,
-   "coverage": null,
    "restartOnRun": false
   },
   {
@@ -1963,7 +1945,6 @@
     ]
    },
    "maxItems": null,
-   "coverage": null,
    "restartOnRun": false
   },
   {
@@ -2151,7 +2132,6 @@
     ]
    },
    "maxItems": null,
-   "coverage": null,
    "restartOnRun": false
   }
  ],
@@ -2362,7 +2342,6 @@
     "kind": "hydrate"
    },
    "maxItems": null,
-   "coverage": null,
    "restartOnRun": false
   },
   {
@@ -2489,7 +2468,6 @@
     "kind": "hydrate"
    },
    "maxItems": null,
-   "coverage": null,
    "restartOnRun": false
   },
   {
@@ -2678,10 +2656,6 @@
     "kind": "hydrate"
    },
    "maxItems": null,
-   "coverage": {
-    "entity": "document",
-    "scope": "all"
-   },
    "restartOnRun": false
   },
   {
@@ -2874,7 +2848,6 @@
     "kind": "hydrate"
    },
    "maxItems": 10000,
-   "coverage": null,
    "restartOnRun": false
   },
   {
@@ -3059,7 +3032,6 @@
     "kind": "hydrate"
    },
    "maxItems": null,
-   "coverage": null,
    "restartOnRun": false
   },
   {
@@ -3248,7 +3220,6 @@
     "kind": "hydrate"
    },
    "maxItems": 1000,
-   "coverage": null,
    "restartOnRun": false
   },
   {
@@ -3437,7 +3408,6 @@
     "kind": "hydrate"
    },
    "maxItems": null,
-   "coverage": null,
    "restartOnRun": false
   }
  ]

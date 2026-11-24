@@ -144,7 +144,7 @@ Pages run like this:
 `200`, `content-type: application/x-ndjson`, one JSON object per line:
 
 ```
-{"type":"lane","lane":"tasks","query":"query SoupBackfillSyncTasks(…) {…}","operationName":"SoupBackfillSyncTasks","paging":"soup","kind":{"kind":"hydrate"},"passStartedAt":"2026-11-02T12:00:00.000Z","coverage":{"entity":"task","scope":"all"}}
+{"type":"lane","lane":"tasks","query":"query SoupBackfillSyncTasks(…) {…}","operationName":"SoupBackfillSyncTasks","paging":"soup","kind":{"kind":"hydrate"},"passStartedAt":"2026-11-02T12:00:00.000Z"}
 {"type":"page","lane":"tasks","page":0,"variables":{...},"response":{"data":{...}},"items":500,"resume":{...}}
 {"type":"laneDone","lane":"tasks","pages":12,"items":5800,"reason":"complete"}
 {"type":"laneError","lane":"tasks","message":"..."}
@@ -156,8 +156,8 @@ Pages run like this:
   the `laneError` of a lane whose first page failed); a lane the stream never
   reaches is not declared. It carries the query every page runs and its
   operation, the paging, what the cache does with the pages (`kind`:
-  `hydrate`, `membership { scopes }` or `calendar { coverage }`), when its pass
-  started, and the `coverage` the cache stores once it completes.
+  `hydrate`, `membership { scopes }` or `calendar { coverage }`), and when its
+  pass started.
 - `page.variables`: exactly what the server executed for the page.
 - `page.response`: the GraphQL response `POST /soup/graphql` would return.
 - `page.resume`: what the cache sends back as the lane's `resume` to continue
@@ -241,7 +241,7 @@ Lane kinds:
   `passStartedAt` with each page; a lane declared with another
   `passStartedAt` starts counting a new pass. On `laneDone` the lane is marked
   complete: `completedAt = now`, `watermark = passStartedAt`,
-  `coverage = lane.coverage`, `resume = null`.
+  `resume = null`.
 - `membership { scopes }`: pages are not written; their item keys are
   collected in memory. On `laneDone` with reason `complete`, every key recorded
   as a member of a lane in `scopes` but absent from the collected set is

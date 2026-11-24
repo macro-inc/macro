@@ -80,7 +80,6 @@ fn lane(id: &str, query: &str, paging: &str, kind: Json) -> Json {
         "paging": paging,
         "kind": kind,
         "passStartedAt": PASS,
-        "coverage": {"entity": "task", "scope": "all"},
     })
 }
 
@@ -238,7 +237,6 @@ fn hydrate_lane_writes_pages_saves_resume_state_and_completes() {
             Some("2026-11-02T00:00:00.000Z")
         );
         assert_eq!(state.watermark.as_deref(), Some(PASS));
-        assert_eq!(state.coverage, json!({"entity": "task", "scope": "all"}));
     });
 }
 

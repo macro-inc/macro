@@ -77,8 +77,6 @@ pub(crate) struct SoupLaneSpec {
     /// A full pass every run: never resumed, never narrowed to changes.
     pub(crate) restart_on_run: bool,
     pub(crate) max_items: Option<u32>,
-    /// Stored by the cache once the lane completes: what it proves complete.
-    pub(crate) coverage: Option<Coverage>,
 }
 
 /// What the cache does with a Soup lane's pages.
@@ -86,16 +84,6 @@ pub(crate) enum SoupLaneKind {
     Hydrate,
     /// An ID listing authoritative for these lanes' members.
     Membership(&'static [&'static str]),
-}
-
-/// "Every record of this entity is cached", stored when a lane completes.
-#[derive(Clone, Copy)]
-pub(crate) struct Coverage(&'static str);
-
-impl Coverage {
-    pub(crate) fn to_json(self) -> Value {
-        json!({ "entity": self.0, "scope": "all" })
-    }
 }
 
 /// Email threads updated within `days`, of one importance or any.
@@ -247,7 +235,6 @@ fn first_pass() -> Vec<LaneSpec> {
             kind: SoupLaneKind::Hydrate,
             restart_on_run: true,
             max_items: None,
-            coverage: Some(Coverage("channel")),
         }),
         LaneSpec::Soup(SoupLaneSpec {
             id: TASKS,
@@ -256,7 +243,6 @@ fn first_pass() -> Vec<LaneSpec> {
             kind: SoupLaneKind::Hydrate,
             restart_on_run: false,
             max_items: None,
-            coverage: Some(Coverage("task")),
         }),
         // Project chips answer from these records once the lane completed.
         LaneSpec::Soup(SoupLaneSpec {
@@ -266,7 +252,6 @@ fn first_pass() -> Vec<LaneSpec> {
             kind: SoupLaneKind::Hydrate,
             restart_on_run: false,
             max_items: None,
-            coverage: Some(Coverage("initiative")),
         }),
         LaneSpec::Soup(SoupLaneSpec {
             id: "email-recent",
@@ -275,7 +260,6 @@ fn first_pass() -> Vec<LaneSpec> {
             kind: SoupLaneKind::Hydrate,
             restart_on_run: false,
             max_items: None,
-            coverage: None,
         }),
         // Shared threads, both windows, refreshed in full every run;
         // `email-shared-ids` reconciles the scope.
@@ -292,7 +276,6 @@ fn first_pass() -> Vec<LaneSpec> {
             kind: SoupLaneKind::Hydrate,
             restart_on_run: true,
             max_items: None,
-            coverage: None,
         }),
         LaneSpec::Soup(SoupLaneSpec {
             id: DOCUMENTS_RECENT,
@@ -301,7 +284,6 @@ fn first_pass() -> Vec<LaneSpec> {
             kind: SoupLaneKind::Hydrate,
             restart_on_run: false,
             max_items: Some(DOCUMENTS_RECENT_MAX_ITEMS),
-            coverage: None,
         }),
         LaneSpec::Calendar {
             id_prefix: "calendar-near",
@@ -364,11 +346,8 @@ fn second_pass() -> Vec<LaneSpec> {
         hydrate_lane("core-rest", &SOUP_BACKFILL_QUERY, |_| {
             rows(core_rest_filters(), "VIEWED_UPDATED", HYDRATE_PAGE)
         }),
-        LaneSpec::Soup(SoupLaneSpec {
-            coverage: Some(Coverage("document")),
-            ..soup_hydrate(DOCUMENTS_REST, &MINIMAL_DOCUMENTS_QUERY, |_| {
-                rows(document_filters(), "VIEWED_UPDATED", HYDRATE_PAGE)
-            })
+        hydrate_lane(DOCUMENTS_REST, &MINIMAL_DOCUMENTS_QUERY, |_| {
+            rows(document_filters(), "VIEWED_UPDATED", HYDRATE_PAGE)
         }),
         LaneSpec::Calendar {
             id_prefix: "calendar-far",
@@ -408,7 +387,6 @@ fn soup_hydrate(
         kind: SoupLaneKind::Hydrate,
         restart_on_run: false,
         max_items: None,
-        coverage: None,
     }
 }
 

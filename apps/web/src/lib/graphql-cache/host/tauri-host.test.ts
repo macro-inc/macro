@@ -1905,7 +1905,6 @@ describe('createTauriCacheHost', () => {
           passStartedAt: '2026-11-01T00:00:00.000Z',
           completedAt: null,
           watermark: null,
-          coverage: null,
         },
       ];
       invokeMock.mockImplementation(async (command: string) =>
