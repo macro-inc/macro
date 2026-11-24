@@ -70,6 +70,14 @@ fn words(text: &str) -> Vec<Word> {
     words
 }
 
+/// `text` with any highlight tags it holds broken by an invisible word
+/// joiner, so a cell that says `<macro_em>` shows those characters rather
+/// than a highlight.
+fn literal_tags(text: &str) -> String {
+    text.replace(OPEN_TAG, "<\u{2060}macro_em>")
+        .replace(CLOSE_TAG, "<\u{2060}/macro_em>")
+}
+
 impl RowQuery {
     /// A query of `terms`, dropping terms with no word in them. `None` when
     /// none is left: such a query matches no row.
@@ -123,6 +131,7 @@ impl RowQuery {
     /// The passage of `text` around its first match, every matched word in it
     /// wrapped in highlight tags. `None` when no term matches `text`.
     pub(crate) fn snippet(&self, text: &str) -> Option<String> {
+        let text = &literal_tags(text);
         let text_words = words(text);
         let mut highlighted: Vec<Range<usize>> = self
             .terms

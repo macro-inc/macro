@@ -95,3 +95,18 @@ fn snippet_counts_characters_not_bytes() {
         Some("Le <macro_em>Café</macro_em> ☕ ouvre")
     );
 }
+
+#[test]
+fn highlight_tags_typed_into_a_cell_are_not_highlights() {
+    let query = query(&["acme"], RowMatchType::Partial);
+
+    let snippet = query
+        .snippet("Acme <macro_em>bold</macro_em>")
+        .expect("matches");
+
+    assert_eq!(
+        snippet,
+        "<macro_em>Acme</macro_em> <\u{2060}macro_em>bold<\u{2060}/macro_em>"
+    );
+    assert_eq!(snippet.matches(OPEN_TAG).count(), 1);
+}
