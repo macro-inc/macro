@@ -17,6 +17,7 @@ import {
   createChannelSyncRuntime,
   MAX_CHANGE_PAGES,
 } from '../channel-sync-runtime';
+import { announceWritten } from '../channel-tab-writes';
 import { fakeLocks } from './fake-locks';
 import { CHANNEL_ID, devicePage } from './fixtures';
 
@@ -433,6 +434,21 @@ describe('createChannelSyncRuntime', () => {
     other.postMessage({ channelIds: [CHANNEL_ID] });
     other.close();
     await waitFor(() => changed.mock.calls.length === 1);
+  });
+
+  it('does not reread for a write this tab announced itself', async () => {
+    const { runtime, changed } = setup(5n);
+    const otherChanged = vi.fn();
+    runtime.onChanged('other-channel', otherChanged);
+
+    announceWritten(CHANNEL_ID);
+    // Another tab's announcement, sent after, arrives after it.
+    const other = new BroadcastChannel('macro.channel-timeline.writes');
+    other.postMessage({ channelIds: ['other-channel'] });
+    other.close();
+    await waitFor(() => otherChanged.mock.calls.length === 1);
+    await settle();
+    expect(changed).not.toHaveBeenCalled();
   });
 
   it('gives a channel evicted in another tab a sync row again', async () => {

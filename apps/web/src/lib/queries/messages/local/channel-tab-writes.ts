@@ -8,7 +8,13 @@
  */
 const WRITES = 'macro.channel-timeline.writes';
 
-type Written = { channelIds: readonly string[] };
+/**
+ * This page, in its announcements: a page also hears its own (the publisher
+ * and the listener are separate channels), and already told its views.
+ */
+const THIS_TAB = crypto.randomUUID();
+
+type Written = { channelIds: readonly string[]; from: string };
 
 function writesChannel(): BroadcastChannel | null {
   return typeof BroadcastChannel === 'undefined'
@@ -20,7 +26,10 @@ function writesChannel(): BroadcastChannel | null {
 export function announceWritten(channelId: string): void {
   const channel = writesChannel();
   if (!channel) return;
-  channel.postMessage({ channelIds: [channelId] } satisfies Written);
+  channel.postMessage({
+    channelIds: [channelId],
+    from: THIS_TAB,
+  } satisfies Written);
   channel.close();
 }
 
@@ -32,7 +41,7 @@ export function onWrittenElsewhere(
   if (!channel) return () => {};
   channel.onmessage = (event: MessageEvent<unknown>) => {
     const data = event.data as Partial<Written> | null;
-    if (!Array.isArray(data?.channelIds)) return;
+    if (!Array.isArray(data?.channelIds) || data.from === THIS_TAB) return;
     listener(data.channelIds.filter((id) => typeof id === 'string'));
   };
   return () => channel.close();

@@ -102,7 +102,9 @@ describe('createChannelWrites', () => {
 
     await writes.send(send(stored.id));
     await vi.waitFor(() =>
-      expect(heard).toContainEqual({ channelIds: [CHANNEL_ID] })
+      expect(heard).toContainEqual(
+        expect.objectContaining({ channelIds: [CHANNEL_ID] })
+      )
     );
     other.close();
   });
