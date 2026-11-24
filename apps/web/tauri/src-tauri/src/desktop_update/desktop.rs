@@ -196,6 +196,14 @@ pub fn setup<R: Runtime>(
     let Some(store) = store else {
         return Ok(());
     };
+    // A newer update the last launch was still downloading beside a ready
+    // one; nothing is ready yet in this launch, so its check downloads into
+    // the store itself.
+    store
+        .staging()
+        .remove()
+        .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not remove a staged native update download"))
+        .ok();
     app.handle()
         .plugin(tauri_plugin_updater::Builder::new().build())?;
     let notify = coordinator.clone();
@@ -292,20 +300,6 @@ fn fail<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator) {
     emit(app, &status);
 }
 
-/// Drops the ready update for `next` and shows it. False when an install has
-/// already taken the update, which the check then leaves alone.
-fn supersede<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator, next: Status) -> bool {
-    let superseded = coordinator
-        .state
-        .lock()
-        .expect("native update state poisoned")
-        .supersede(next.clone());
-    if superseded {
-        emit(app, &next);
-    }
-    superseded
-}
-
 fn emit<R: Runtime>(app: &AppHandle<R>, status: &Status) {
     app.emit(EVENT, status)
         .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update status"))
@@ -347,9 +341,9 @@ fn report_outcome<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator, rep
 /// earlier launch or attempt saved. `Ok(false)` when the state refused to
 /// start a check, so no request was made.
 ///
-/// A ready update stays installable while the feed is checked again: it is
-/// kept when the feed offers it again or offers a release this Mac can't run,
-/// and dropped only when the feed offers a newer release or withdraws it.
+/// A ready update stays ready while the feed is checked again. A newer
+/// release downloads to the store's staging directory and replaces it only
+/// once verified, so a restart or quit meanwhile still installs the ready one.
 async fn check<R: Runtime>(
     app: &AppHandle<R>,
     coordinator: &Coordinator,
@@ -378,15 +372,14 @@ async fn check<R: Runtime>(
         .await
         .map_err(CheckError::Check)?
     else {
-        // A saved download is for a version this app already runs, or one
-        // the feed withdrew.
-        if ready.is_none() {
-            publish(app, coordinator, Status::Idle);
-        } else if !supersede(app, coordinator, Status::Idle) {
+        report(app, coordinator, timing, Outcome::UpToDate);
+        if ready.is_some() {
             return Ok(true);
         }
+        // A saved download is for a version this app already runs, or one
+        // the feed withdrew.
         remove_saved(store);
-        report(app, coordinator, timing, Outcome::UpToDate);
+        publish(app, coordinator, Status::Idle);
         return Ok(true);
     };
     // Installing a release built for a newer macOS would leave an app that
@@ -425,20 +418,23 @@ async fn check<R: Runtime>(
             target_version: version.clone(),
         },
     );
-    let downloading = Status::Downloading {
-        version: version.clone(),
+    let destination = if ready.is_none() {
+        publish(
+            app,
+            coordinator,
+            Status::Downloading {
+                version: version.clone(),
+            },
+        );
+        store.clone()
+    } else {
+        store.staging()
     };
-    if ready.is_none() {
-        publish(app, coordinator, downloading);
-    } else if !supersede(app, coordinator, downloading) {
-        // The ready update is installing; the newer one is for the next launch.
-        return Ok(true);
-    }
     update.timeout = Some(DOWNLOAD_TIMEOUT);
     let download_started = Instant::now();
     // The store verifies the whole file before returning; partial or
     // unverified bytes never become ready.
-    let downloaded = store
+    let downloaded = destination
         .download(&update)
         .await
         .map_err(|error| CheckError::Download {
@@ -457,17 +453,33 @@ async fn check<R: Runtime>(
             resumed_bytes: downloaded.resumed_bytes,
         },
     );
-    coordinator
-        .state
-        .lock()
-        .expect("native update state poisoned")
-        .downloaded(
+    {
+        let mut state = coordinator
+            .state
+            .lock()
+            .expect("native update state poisoned");
+        if ready.is_some() {
+            // An install that took the ready update meanwhile reads the
+            // store, so the newer bytes wait for the next launch's check.
+            if state.ready_version().is_none() {
+                return Ok(true);
+            }
+            store
+                .adopt(&destination)
+                .map_err(|error| CheckError::Download {
+                    version: version.clone(),
+                    download_ms: duration_ms(download_started.elapsed()),
+                    error: error.into(),
+                })?;
+        }
+        state.downloaded(
             version.clone(),
             Download {
                 update,
                 store: store.clone(),
             },
         );
+    }
     app.emit(EVENT, Status::Ready { version })
         .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update ready"))
         .ok();

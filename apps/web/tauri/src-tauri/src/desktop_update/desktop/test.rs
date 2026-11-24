@@ -297,12 +297,48 @@ async fn a_ready_update_is_replaced_when_a_newer_release_ships() {
     assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
     assert_eq!(run.artifact_requests, [0]);
     assert_eq!(downloaded(&run), (ARTIFACT.len() as u64, 0));
+    assert!(run.store.read_verified(&run.signature).is_ok());
+    assert!(
+        std::fs::read_to_string(directory.path().join(RECORD))
+            .unwrap()
+            .contains("99.0.0")
+    );
+    let staging = directory.path().join("next");
+    for name in [COMPLETE, PARTIAL, RECORD] {
+        assert!(!staging.join(name).exists(), "staged {name} kept");
+    }
     let mut state = coordinator.state.lock().unwrap();
     assert_eq!(
         state
             .begin_install()
             .map(|download| download.update.version),
         Some("99.0.0".into())
+    );
+}
+
+#[tokio::test]
+async fn a_failed_newer_download_keeps_the_ready_update() {
+    let directory = tempfile::tempdir().unwrap();
+    let coordinator = Coordinator::new(true, "1.0.0".into());
+    check_again(&coordinator, directory.path(), "98.0.0", Serve::Signed).await;
+
+    let run = check_again(&coordinator, directory.path(), "99.0.0", Serve::Cut).await;
+    assert!(matches!(run.result, Err(CheckError::Download { .. })));
+    // The update loop's failure handling, which must leave it ready.
+    assert!(!coordinator.state.lock().unwrap().fail("offline".into()));
+    assert_eq!(
+        run.status,
+        Status::Ready {
+            version: "98.0.0".into()
+        }
+    );
+    assert!(run.store.read_verified(&run.signature).is_ok());
+    let mut state = coordinator.state.lock().unwrap();
+    assert_eq!(
+        state
+            .begin_install()
+            .map(|download| download.update.version),
+        Some("98.0.0".into())
     );
 }
 
@@ -324,22 +360,6 @@ async fn a_ready_update_offered_again_stays_ready() {
     assert!(run.artifact_requests.is_empty());
     assert!(run.store.read_verified(&run.signature).is_ok());
     assert!(coordinator.state.lock().unwrap().begin_install().is_some());
-}
-
-#[tokio::test]
-async fn a_ready_update_the_feed_withdrew_is_dropped() {
-    let directory = tempfile::tempdir().unwrap();
-    let coordinator = Coordinator::new(true, "1.0.0".into());
-    check_again(&coordinator, directory.path(), "99.0.0", Serve::Signed).await;
-
-    let run = check_again(&coordinator, directory.path(), "0.0.0", Serve::Signed).await;
-    assert!(matches!(run.result, Ok(true)), "{:?}", run.result);
-    assert_eq!(run.status, Status::Idle);
-    assert_eq!(run.outcomes, [Outcome::UpToDate]);
-    for name in [COMPLETE, PARTIAL, RECORD] {
-        assert!(!directory.path().join(name).exists(), "{name} kept");
-    }
-    assert!(coordinator.state.lock().unwrap().begin_install().is_none());
 }
 
 #[tokio::test]

@@ -27,28 +27,22 @@ fn a_ready_update_stays_installable_while_the_feed_is_checked_again() {
 }
 
 #[test]
-fn a_newer_release_supersedes_the_ready_update() {
+fn a_newer_download_replaces_the_ready_update() {
     let mut state = State::new(true);
     state.downloaded("2.5.1".into(), 1);
-    state.begin_check();
-    assert!(state.supersede(Status::Downloading {
-        version: "2.5.2".into()
-    }));
-    assert_eq!(state.ready_version(), None);
-    assert!(state.begin_install().is_none());
-    assert!(state.fail("offline".into()));
     assert!(state.begin_check());
+    state.downloaded("2.5.2".into(), 2);
+    assert_eq!(state.ready_version(), Some("2.5.2"));
+    assert_eq!(state.begin_install(), Some(2));
 }
 
 #[test]
-fn an_install_started_during_a_check_keeps_its_update() {
+fn an_install_started_during_a_check_keeps_its_status() {
     let mut state = State::new(true);
     state.downloaded("2.5.1".into(), 1);
     state.begin_check();
     assert_eq!(state.begin_install(), Some(1));
-    assert!(!state.supersede(Status::Downloading {
-        version: "2.5.2".into()
-    }));
+    assert_eq!(state.ready_version(), None);
     assert!(!state.fail("offline".into()));
     assert!(state.is_installing());
 }
