@@ -64,7 +64,9 @@ import { createDatabaseUndo } from '../../database/primitives/undo-controller';
 import { createViewCreation } from '../../database/primitives/view-creation';
 import { databaseChat } from '../core/chat-context';
 import {
+  DatabasePageHeader,
   DatabasePageNoTables,
+  DatabasePageRecords,
   DatabasePageToolbar,
 } from '../database-page-controls';
 import { databaseDetailSearch } from '../database-route';
@@ -88,7 +90,6 @@ import {
 import { DatabaseGrid } from './DatabaseGrid';
 import { DatabasePageShell } from './DatabasePageShell';
 import { DatabaseSidePanelSections } from './sidepanel/DatabaseSidePanelSections';
-import { TopBar } from './TopBar';
 
 // Forms load only when the flag is on, and only through this boundary.
 const DatabaseFormsEntry = lazy(async () => ({
@@ -411,7 +412,7 @@ const Block: Component = () => {
           databaseId={databaseId}
           database={detail()?.database}
         />
-        <TopBar
+        <DatabasePageHeader
           databaseId={databaseId}
           detail={detail()}
           canEdit={canEdit()}
@@ -528,116 +529,121 @@ const Block: Component = () => {
                               </div>
                             )}
                           </Show>
-                          <DatabaseGrid
-                            host="block"
-                            schema="opened"
-                            databaseId={databaseId}
-                            table={table()}
-                            contentClass="mx-4 mb-4 mt-1 rounded-xl border border-edge-muted touch:mb-[calc(var(--mobile-content-inset-bottom,0px)+0.5rem)]"
-                            canEdit={canEdit() && !activeCreation()}
-                            view={shown().view}
-                            stored={!!selectedView() && !activeCreation()}
-                            preparingView={!!activeCreation()?.needsColumn}
-                            onViewChange={changeView}
-                            onClearConstraints={() => {
-                              changeView({
-                                query: {
-                                  ...shown().view.query,
-                                  filter: null,
-                                },
-                              });
-                            }}
-                            onOpenRelated={openRelated}
-                            actionsRef={(actions) => {
-                              gridEntry = {
-                                tableId: table().table.id,
-                                openRecord: actions.openRecord,
-                              };
-                              openRequestedRecord();
-                            }}
-                            renderToolbar={(actions) => (
-                              <DatabasePageToolbar
-                                columns={columns()}
-                                views={storedViews()}
-                                view={shown().view}
-                                selectedViewId={selectedView()?.id}
-                                canEdit={canEdit() && !activeCreation()}
-                                tables={tables().map((entry) => ({
-                                  id: entry.table.id,
-                                  name: entry.table.name,
-                                }))}
-                                activeTableId={activeTableId()}
-                                onSelectTable={selectTableFromMenu}
-                                onCreateTable={createTable()}
-                                focusTableMenu={
-                                  tableMenuFocus() !== undefined &&
-                                  tableMenuFocus() === activeTableId()
-                                }
-                                onTableMenuFocused={() =>
-                                  setTableMenuFocus(undefined)
-                                }
-                                tableMenuItems={tableMenuItems()}
-                                search={
-                                  <DatabaseSearch
-                                    term={search.term()}
-                                    isOpen={search.isOpen()}
-                                    results={search.results()}
-                                    onTermChange={search.setTerm}
-                                    onOpen={search.open}
-                                    onClose={search.close}
-                                    inputRef={search.setInput}
-                                    onChoose={(choice) =>
-                                      fireAndForget(
-                                        openRelated({
-                                          databaseId,
-                                          ...choice,
-                                        }),
-                                        'database-view'
-                                      )
-                                    }
-                                  />
-                                }
-                                onSelectView={selectView}
-                                onChangeView={changeView}
-                                onCreateView={(created) =>
-                                  createView(shown().view, created)
-                                }
-                                onRenameView={(target, name) =>
-                                  updateDatabaseView(target, { name }).map(
-                                    () => undefined
-                                  )
-                                }
-                                onShowViewAs={showViewAs}
-                                onDeleteView={(target) => {
-                                  if (selectedView()?.id === target.id)
-                                    selectView();
-                                  return deleteDatabaseView(target);
-                                }}
-                                onReorderViews={(order) => {
-                                  reorderDatabaseViews(
-                                    databaseId,
-                                    table().table.id,
-                                    order
-                                  ).mapErr((failure) =>
-                                    toast.failure(
-                                      databaseOpMessage(failure, 'these views')
-                                    )
-                                  );
-                                }}
-                                onCreateRecord={
-                                  canEdit()
-                                    ? () =>
+                          <DatabasePageRecords>
+                            <DatabaseGrid
+                              host="block"
+                              schema="opened"
+                              databaseId={databaseId}
+                              table={table()}
+                              contentClass="mx-4 mb-4 mt-1 rounded-xl border border-edge-muted touch:mb-[calc(var(--mobile-content-inset-bottom,0px)+0.5rem)]"
+                              canEdit={canEdit() && !activeCreation()}
+                              view={shown().view}
+                              stored={!!selectedView() && !activeCreation()}
+                              preparingView={!!activeCreation()?.needsColumn}
+                              onViewChange={changeView}
+                              onClearConstraints={() => {
+                                changeView({
+                                  query: {
+                                    ...shown().view.query,
+                                    filter: null,
+                                  },
+                                });
+                              }}
+                              onOpenRelated={openRelated}
+                              actionsRef={(actions) => {
+                                gridEntry = {
+                                  tableId: table().table.id,
+                                  openRecord: actions.openRecord,
+                                };
+                                openRequestedRecord();
+                              }}
+                              renderToolbar={(actions) => (
+                                <DatabasePageToolbar
+                                  columns={columns()}
+                                  views={storedViews()}
+                                  view={shown().view}
+                                  selectedViewId={selectedView()?.id}
+                                  canEdit={canEdit() && !activeCreation()}
+                                  tables={tables().map((entry) => ({
+                                    id: entry.table.id,
+                                    name: entry.table.name,
+                                  }))}
+                                  activeTableId={activeTableId()}
+                                  onSelectTable={selectTableFromMenu}
+                                  onCreateTable={createTable()}
+                                  focusTableMenu={
+                                    tableMenuFocus() !== undefined &&
+                                    tableMenuFocus() === activeTableId()
+                                  }
+                                  onTableMenuFocused={() =>
+                                    setTableMenuFocus(undefined)
+                                  }
+                                  tableMenuItems={tableMenuItems()}
+                                  search={
+                                    <DatabaseSearch
+                                      term={search.term()}
+                                      isOpen={search.isOpen()}
+                                      results={search.results()}
+                                      onTermChange={search.setTerm}
+                                      onOpen={search.open}
+                                      onClose={search.close}
+                                      inputRef={search.setInput}
+                                      onChoose={(choice) =>
                                         fireAndForget(
-                                          actions.createRecord(),
+                                          openRelated({
+                                            databaseId,
+                                            ...choice,
+                                          }),
                                           'database-view'
                                         )
-                                    : undefined
-                                }
-                                canCreateRecord={columns().length > 0}
-                                creating={actions.pending()}
-                              />
-                            )}
-                          />
+                                      }
+                                    />
+                                  }
+                                  onSelectView={selectView}
+                                  onChangeView={changeView}
+                                  onCreateView={(created) =>
+                                    createView(shown().view, created)
+                                  }
+                                  onRenameView={(target, name) =>
+                                    updateDatabaseView(target, { name }).map(
+                                      () => undefined
+                                    )
+                                  }
+                                  onShowViewAs={showViewAs}
+                                  onDeleteView={(target) => {
+                                    if (selectedView()?.id === target.id)
+                                      selectView();
+                                    return deleteDatabaseView(target);
+                                  }}
+                                  onReorderViews={(order) => {
+                                    reorderDatabaseViews(
+                                      databaseId,
+                                      table().table.id,
+                                      order
+                                    ).mapErr((failure) =>
+                                      toast.failure(
+                                        databaseOpMessage(
+                                          failure,
+                                          'these views'
+                                        )
+                                      )
+                                    );
+                                  }}
+                                  onCreateRecord={
+                                    canEdit()
+                                      ? () =>
+                                          fireAndForget(
+                                            actions.createRecord(),
+                                            'database-view'
+                                          )
+                                      : undefined
+                                  }
+                                  canCreateRecord={columns().length > 0}
+                                  creating={actions.pending()}
+                                />
+                              )}
+                            />
+                          </DatabasePageRecords>
                         </>
                       );
                     }}

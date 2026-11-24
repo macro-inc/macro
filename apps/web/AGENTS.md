@@ -803,6 +803,14 @@ selected view tab shows whole; and **View actions** creates, renames and
 deletes a view. Desktop keeps one row with **New view**. Both toolbars draw
 their view tabs from `createViewControls`;
 `block-database/database-page-controls.tsx` holds the page's device switches.
+`DatabasePageHeader` there switches the header: `MobileDatabaseHeader`
+(`MobileHeader` plus a `SplitFileMenu` title menu whose database rows come from
+`databaseTitleMenuRows`) on touch, `TopBar` on desktop; both read
+`createDatabaseHeader` and `createDatabaseTransfers`. `DatabasePageRecords`
+provides `ColumnMenuContext` on touch, so `DatabaseColumnHeader` draws its menu
+as `ColumnMenuDrawer`, where Change type opens in the same sheet; embedded
+grids provide none and keep the dropdown. `column-menu-drawer.test.tsx` drives
+the real header through that sheet.
 A touch menu item that opens a dialog, starts a rename or switches tables does
 so from the menu's `onCloseAutoFocus`: a Kobalte menu closing over an open
 dialog leaves `body` with `pointer-events: none`. The database block pads

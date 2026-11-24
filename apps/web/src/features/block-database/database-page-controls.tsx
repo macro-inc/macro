@@ -1,13 +1,27 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { type JSX, Show, splitProps } from 'solid-js';
+import { type JSX, type ParentProps, Show, splitProps } from 'solid-js';
 import {
   DatabaseToolbar,
   type DatabaseToolbarProps,
 } from '../database/components/database-toolbar';
+import { ColumnMenuContext } from '../database/context/column-menu';
 import type { CreateTable } from '../database/core/table-creation';
+import { ColumnMenuDrawer } from '../database/views/mobile/column-menu-drawer';
 import { MobileDatabaseToolbar } from '../database/views/mobile/database-toolbar';
 import { MobileNoTables } from '../database/views/mobile/no-tables';
 import { TablePicker } from '../database/views/mobile/table-picker';
+import { TopBar } from './component/TopBar';
+import { MobileDatabaseHeader } from './views/mobile/database-header';
+import type { DatabaseHeaderProps } from './views/shared/database-header';
+
+/** The database page's header: the desktop bar, or the touch view's title with its menu. */
+export function DatabasePageHeader(props: DatabaseHeaderProps) {
+  return (
+    <Show when={isTouchDevice()} fallback={<TopBar {...props} />}>
+      <MobileDatabaseHeader {...props} />
+    </Show>
+  );
+}
 
 /** The database page's view toolbar: the desktop bar, or the touch view's two rows. */
 export function DatabasePageToolbar(
@@ -51,6 +65,20 @@ export function DatabasePageToolbar(
           />
         }
       />
+    </Show>
+  );
+}
+
+/**
+ * The database page's records. On touch its column menus are sheets, where
+ * Change type opens in place: a phone has no room for a submenu beside a menu.
+ */
+export function DatabasePageRecords(props: ParentProps) {
+  return (
+    <Show when={isTouchDevice()} fallback={props.children}>
+      <ColumnMenuContext.Provider value={ColumnMenuDrawer}>
+        {props.children}
+      </ColumnMenuContext.Provider>
     </Show>
   );
 }

@@ -14,17 +14,20 @@ import XIcon from '@icon/system/regular/x.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Popover } from '@kobalte/core/popover';
 import { Key } from '@solid-primitives/keyed';
+import { Button } from '@ui/components/Button';
 import { ConfirmDialog } from '@ui/components/ConfirmDialog';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { Dropdown } from '@ui/components/Dropdown';
 import type { JSX } from 'solid-js';
 import { createSignal, createUniqueId, For, onCleanup, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import {
   ContextMenuContent,
   MenuItem,
   MenuSeparator,
 } from '../../../lib/core/component/ContextMenu';
+import { type ColumnMenuAction, useColumnMenu } from '../context/column-menu';
 import { useColumnUsage } from '../context/column-usage';
 import { useFormulaEditing } from '../context/formula-editing';
 import { useOptionEditing } from '../context/option-editing';
@@ -41,6 +44,7 @@ import { columnDeleteNote } from '../core/forms-usage';
 import { defaultFormulaColumnName } from '../core/property-creation';
 import {
   ColumnTypeMenu,
+  type ColumnTypeMenuProps,
   type DatabaseColumnConversionChoice,
 } from './column-type-menu';
 import { FormulaEditor } from './formula-editor';
@@ -90,6 +94,8 @@ export type DatabaseColumnHeaderProps = {
 /** Header interactions stay local; the host supplies the persisted rename. */
 export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
   const columnUsage = useColumnUsage();
+  /** The host's own menu, in place of the dropdown: a sheet on touch. */
+  const HostMenu = useColumnMenu();
   const [operating, setOperating] = createSignal(false);
   const [menuOpen, setMenuOpen] = createSignal(false);
   const [deleteOpen, setDeleteOpen] = createSignal(false);
@@ -209,13 +215,14 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
       (errors) => setError(columnSchemaMessage(errors))
     );
   }
-  const actions = () => [
+  const actions = (): ColumnMenuAction[] => [
     ...(canRename()
       ? [
           {
             label: 'Rename column',
             icon: PencilIcon,
             group: 'edit',
+            focuses: 'input[aria-label="Column name"]',
             run: rename,
           },
         ]
@@ -317,6 +324,43 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
         ]
       : []),
   ];
+  const canChangeType = () =>
+    !!props.onChangeType &&
+    canRename() &&
+    (!props.column.formula || props.column.dataType === 'NUMBER');
+  const typeMenu: ColumnTypeMenuProps = {
+    get column() {
+      return props.column;
+    },
+    get tables() {
+      return props.relationTables;
+    },
+    loadCasts: (open) => props.columnCasts?.(props.column.id, open),
+    onChange: (change) => fireAndForget(changeType(change), 'database'),
+    get onFormula() {
+      if (!formulas || props.column.formula) return undefined;
+
+      return () => {
+        const replace = formulaReplaces();
+        requested = () => setFormulaEditing({ kind: 'create', replace });
+        setMenuOpen(false);
+      };
+    },
+    get onConvertToNewColumn() {
+      if (!props.onConvert) return undefined;
+
+      return (choice: DatabaseColumnConversionChoice) => {
+        setMenuOpen(false);
+        setError('');
+        setConverting(choice);
+      };
+    },
+  };
+  const menuClosed = (event: Event) => {
+    if (columnRename.target()) event.preventDefault();
+    openRequestedOptions(event);
+  };
+
   return (
     <>
       <ContextMenu>
@@ -406,114 +450,109 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                     <ArrowUpIcon class="size-3 shrink-0 text-accent" />
                   </Show>
                 </Show>
-                <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
-                  <Dropdown.Trigger
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`${columnName()} column menu`}
-                  >
-                    <CaretDownIcon class="size-3" />
-                  </Dropdown.Trigger>
-                  <Dropdown.Content
-                    class="min-w-44"
-                    onCloseAutoFocus={(event) => {
-                      if (columnRename.target()) event.preventDefault();
-                      openRequestedOptions(event);
-                    }}
-                  >
-                    <For each={['edit', 'view', 'delete']}>
-                      {(group) => (
-                        <Show
-                          when={
-                            actions().some(
-                              (action) => action.group === group
-                            ) ||
-                            (group === 'edit' &&
-                              props.onChangeType &&
-                              canRename())
-                          }
-                        >
-                          <Dropdown.Group>
+                <Show
+                  when={HostMenu}
+                  fallback={
+                    <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
+                      <Dropdown.Trigger
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`${columnName()} column menu`}
+                      >
+                        <CaretDownIcon class="size-3" />
+                      </Dropdown.Trigger>
+                      <Dropdown.Content
+                        class="min-w-44"
+                        onCloseAutoFocus={(event) => {
+                          if (columnRename.target()) event.preventDefault();
+                          openRequestedOptions(event);
+                        }}
+                      >
+                        <For each={['edit', 'view', 'delete']}>
+                          {(group) => (
                             <Show
                               when={
-                                group === 'delete' &&
-                                props.column.protections?.includes('delete')
+                                actions().some(
+                                  (action) => action.group === group
+                                ) ||
+                                (group === 'edit' &&
+                                  props.onChangeType &&
+                                  canRename())
                               }
                             >
-                              <Dropdown.Item disabled>
-                                This column cannot be deleted
-                              </Dropdown.Item>
-                            </Show>
-                            <For
-                              each={actions().filter(
-                                (action) => action.group === group
-                              )}
-                            >
-                              {(action) => (
-                                <Dropdown.Item
-                                  disabled={
-                                    pending() ||
-                                    ('disabled' in action && action.disabled)
-                                  }
-                                  onSelect={action.run}
-                                  class={
-                                    group === 'delete'
-                                      ? 'text-failure-ink'
-                                      : undefined
+                              <Dropdown.Group>
+                                <Show
+                                  when={
+                                    group === 'delete' &&
+                                    props.column.protections?.includes('delete')
                                   }
                                 >
-                                  <action.icon class="size-3.5" />
-                                  {action.label}
-                                </Dropdown.Item>
-                              )}
-                            </For>
-                            <Show
-                              when={
-                                group === 'edit' &&
-                                props.onChangeType &&
-                                canRename() &&
-                                (!props.column.formula ||
-                                  props.column.dataType === 'NUMBER')
-                              }
-                            >
-                              <ColumnTypeMenu
-                                column={props.column}
-                                tables={props.relationTables}
-                                loadCasts={(open) =>
-                                  props.columnCasts?.(props.column.id, open)
-                                }
-                                onChange={(change) =>
-                                  fireAndForget(changeType(change), 'database')
-                                }
-                                onFormula={
-                                  formulas && !props.column.formula
-                                    ? () => {
-                                        const replace = formulaReplaces();
-                                        requested = () =>
-                                          setFormulaEditing({
-                                            kind: 'create',
-                                            replace,
-                                          });
-                                        setMenuOpen(false);
+                                  <Dropdown.Item disabled>
+                                    This column cannot be deleted
+                                  </Dropdown.Item>
+                                </Show>
+                                <For
+                                  each={actions().filter(
+                                    (action) => action.group === group
+                                  )}
+                                >
+                                  {(action) => (
+                                    <Dropdown.Item
+                                      disabled={
+                                        pending() ||
+                                        ('disabled' in action &&
+                                          action.disabled)
                                       }
-                                    : undefined
-                                }
-                                onConvertToNewColumn={
-                                  props.onConvert &&
-                                  ((choice) => {
-                                    setMenuOpen(false);
-                                    setError('');
-                                    setConverting(choice);
-                                  })
-                                }
-                              />
+                                      onSelect={action.run}
+                                      class={
+                                        group === 'delete'
+                                          ? 'text-failure-ink'
+                                          : undefined
+                                      }
+                                    >
+                                      <action.icon class="size-3.5" />
+                                      {action.label}
+                                    </Dropdown.Item>
+                                  )}
+                                </For>
+                                <Show
+                                  when={group === 'edit' && canChangeType()}
+                                >
+                                  <ColumnTypeMenu {...typeMenu} />
+                                </Show>
+                              </Dropdown.Group>
                             </Show>
-                          </Dropdown.Group>
-                        </Show>
-                      )}
-                    </For>
-                  </Dropdown.Content>
-                </Dropdown>
+                          )}
+                        </For>
+                      </Dropdown.Content>
+                    </Dropdown>
+                  }
+                >
+                  {(Menu) => (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`${columnName()} column menu`}
+                        aria-haspopup="dialog"
+                        aria-expanded={menuOpen()}
+                        onClick={() => setMenuOpen(true)}
+                      >
+                        <CaretDownIcon class="size-3" />
+                      </Button>
+                      <Dynamic
+                        component={Menu()}
+                        column={props.column}
+                        open={menuOpen()}
+                        onOpenChange={setMenuOpen}
+                        actions={actions()}
+                        pending={pending()}
+                        types={canChangeType() ? typeMenu : undefined}
+                        onClosed={menuClosed}
+                      />
+                    </>
+                  )}
+                </Show>
               </div>
             }
           >
