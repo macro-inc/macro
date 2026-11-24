@@ -23641,6 +23641,139 @@ export type TimeEntryPage = {
 export type TimeEntrySource = 'manual' | 'timer';
 
 /**
+ * A scope's entries over a period as CSV text.
+ */
+export type TimeExport = {
+    /**
+     * False when entries were left out: past 10,000 entries or 16 MiB, or
+     * past the first 5,000 tasks of the scope.
+     */
+    complete: boolean;
+    /**
+     * The CSV: one row per entry, oldest day first.
+     */
+    csv: string;
+    /**
+     * Entries written.
+     */
+    rows: number;
+};
+
+/**
+ * The total of one group, and its split by the second grouping.
+ */
+export type TimeGroup = {
+    /**
+     * What the group is for.
+     */
+    key: TimeGroupKey;
+    /**
+     * Minutes logged in the group.
+     */
+    minutes: number;
+    /**
+     * The group's totals by the second grouping, in report order; empty
+     * without one.
+     */
+    rows: Array<TimeTotal>;
+    /**
+     * Tasks with time in the group.
+     */
+    taskCount: number;
+};
+
+/**
+ * What one total is for.
+ */
+export type TimeGroupKey = {
+    by: 'person';
+    /**
+     * The person.
+     */
+    userId: string;
+} | {
+    by: 'task';
+    /**
+     * The task document.
+     */
+    taskId: string;
+} | {
+    by: 'day';
+    /**
+     * The loggers' calendar day.
+     */
+    date: string;
+};
+
+/**
+ * What a report's totals are grouped by.
+ */
+export type TimeGrouping = 'person' | 'task' | 'day';
+
+/**
+ * Whose time a report reads.
+ */
+export type TimeScopeName = 'project' | 'mine' | 'team';
+
+/**
+ * The time a scope logged over a period.
+ */
+export type TimeSummary = {
+    /**
+     * False when the scope held more than 5,000 tasks and only the first
+     * 5,000 were read.
+     */
+    complete: boolean;
+    /**
+     * The first day of the period.
+     */
+    from: string;
+    /**
+     * Totals by the first grouping, in report order: days in calendar order,
+     * people and tasks with the most time first. For the caller's own and
+     * their team's time grouped by person, every current member has a group,
+     * with or without time.
+     */
+    groups: Array<TimeGroup>;
+    /**
+     * For a project, its tasks the caller can see that are out of the
+     * Trash, with time or not; absent for other scopes.
+     */
+    scopeTaskCount?: number | null;
+    /**
+     * Tasks with time in the period.
+     */
+    taskCount: number;
+    /**
+     * Totals by the second grouping across all groups, in report order;
+     * empty without one.
+     */
+    thenTotals: Array<TimeTotal>;
+    /**
+     * The last day of the period.
+     */
+    to: string;
+    /**
+     * Minutes logged in the period.
+     */
+    totalMinutes: number;
+};
+
+/**
+ * A total of minutes.
+ */
+export type TimeTotal = {
+    /**
+     * What the total is for.
+     */
+    key: TimeGroupKey;
+    /**
+     * Minutes logged.
+     */
+    minutes: number;
+};
+
+/**
  * Error body of the time tracking endpoints.
  */
 export type TimeTrackingApiError = {
@@ -38380,6 +38513,96 @@ export type UpdateTimeEntryResponses = {
 };
 
 export type UpdateTimeEntryResponse = UpdateTimeEntryResponses[keyof UpdateTimeEntryResponses];
+
+export type ExportTimeData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Whose time to read.
+         */
+        scope: TimeScopeName;
+        /**
+         * The project, with `scope=project` only.
+         */
+        projectId?: string;
+        /**
+         * The first day, `YYYY-MM-DD`.
+         */
+        from: string;
+        /**
+         * The last day, `YYYY-MM-DD`, at most 365 days after `from`.
+         */
+        to: string;
+    };
+    url: '/time/export';
+};
+
+export type ExportTimeErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type ExportTimeError = ExportTimeErrors[keyof ExportTimeErrors];
+
+export type ExportTimeResponses = {
+    200: TimeExport;
+};
+
+export type ExportTimeResponse = ExportTimeResponses[keyof ExportTimeResponses];
+
+export type GetTimeSummaryData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Whose time to read.
+         */
+        scope: TimeScopeName;
+        /**
+         * The project, with `scope=project` only.
+         */
+        projectId?: string;
+        /**
+         * The first day, `YYYY-MM-DD`.
+         */
+        from: string;
+        /**
+         * The last day, `YYYY-MM-DD`, at most 365 days after `from`.
+         */
+        to: string;
+        /**
+         * What the totals are grouped by.
+         */
+        groupBy: TimeGrouping;
+        /**
+         * What each group is split by; another grouping than `groupBy`.
+         */
+        thenBy?: TimeGrouping;
+    };
+    url: '/time/summary';
+};
+
+export type GetTimeSummaryErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type GetTimeSummaryError = GetTimeSummaryErrors[keyof GetTimeSummaryErrors];
+
+export type GetTimeSummaryResponses = {
+    200: TimeSummary;
+};
+
+export type GetTimeSummaryResponse = GetTimeSummaryResponses[keyof GetTimeSummaryResponses];
 
 export type ListTimeEntriesData = {
     body?: never;
