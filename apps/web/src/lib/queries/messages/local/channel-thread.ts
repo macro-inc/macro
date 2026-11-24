@@ -27,6 +27,7 @@ import {
 } from './channel-map';
 import {
   cacheSessionChanged,
+  onReconnect,
   queryChannelNetwork,
   SESSION_CHANGE_RELOADS,
   storeFailure,
@@ -400,6 +401,9 @@ export function createLocalChannelThread(
   // The load in flight. A reload starts after an await, outside any Solid
   // owner, so closing the thread aborts it through here, not `onCleanup`.
   let abort: AbortController | undefined;
+  // Loads the thread again when the connection returns after a failed load:
+  // nothing on screen retries it.
+  let stopReconnect = () => {};
 
   const show = (thread: MessageThread) =>
     setState('replies', reconcile(thread.replies, { key: 'id' }));
@@ -408,6 +412,7 @@ export function createLocalChannelThread(
     const current = ++token;
     held = false;
     abort?.abort();
+    stopReconnect();
     abort = new AbortController();
     const signal = abort.signal;
     // Taken before any await: the catch-up joins the open's trace.
@@ -458,6 +463,9 @@ export function createLocalChannelThread(
     } catch (error) {
       if (current !== token) return;
       setState('error', error);
+      stopReconnect = onReconnect(() =>
+        fireAndForget(load(root), 'channel-thread')
+      );
     }
   };
 
@@ -504,6 +512,7 @@ export function createLocalChannelThread(
       onCleanup(() => {
         token += 1;
         abort?.abort();
+        stopReconnect();
         stop();
         release();
       });

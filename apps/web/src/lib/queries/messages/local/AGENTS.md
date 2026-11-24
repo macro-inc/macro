@@ -19,9 +19,9 @@ TanStack path in `../` runs untouched.
 - Follow: one runtime per host (`channel-sync-runtime.ts`) tracks the sequence
   the device holds per channel, applies subscription frames
   (`channel-stream.ts`), catches up open channels on reconnect, and tells open
-  timelines and threads to reread (`onChanged`). A window that failed to load,
-  and an older or newer page that failed, load again when the connection comes
-  back (`onReconnect`): nothing on screen retries them. Tabs share the device but hear
+  timelines and threads to reread (`onChanged`). A window or a thread that
+  failed to load, and an older or newer page that failed, load again when the
+  connection comes back (`onReconnect`): nothing on screen retries them. Tabs share the device but hear
   only their own writes and the server's frames, so a write announces its
   channel to the other tabs once the queue stores it and once it settles
   (`channel-tab-writes.ts`, the `macro.channel-timeline.writes`

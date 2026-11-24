@@ -4,6 +4,7 @@ import {
   CHANNEL_TIMELINE_START,
 } from '@graphql-cache/index';
 import type { Message } from '@service-storage/messages';
+import { onlineManager } from '@tanstack/solid-query';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { channelMessageKey, mapChannelMessage } from '../channel-map';
@@ -428,6 +429,87 @@ describe('createLocalChannelThread', () => {
         vi.unstubAllGlobals();
       }
     });
+  });
+
+  it('loads a thread that failed with no connection again once it is back', async () => {
+    const host = fakeHost(() => devicePage([], { covered: false }));
+    let connected = false;
+    const server = serverThread();
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async (input, signal) => {
+      if (!connected) throw new TypeError('Failed to fetch');
+      return server(input, signal);
+    });
+    onlineManager.setOnline(false);
+    try {
+      let dispose = () => {};
+      const thread = createRoot((disposeRoot) => {
+        dispose = disposeRoot;
+        return createLocalChannelThread(
+          { host, runtime: runtime(), fetchPage },
+          CHANNEL_ID,
+          () => ROOT_ID,
+          () => true,
+          () => undefined
+        );
+      });
+      await vi.waitFor(() => expect(thread.error()).toBeDefined());
+
+      // Nothing on screen asks for the thread again.
+      connected = true;
+      onlineManager.setOnline(true);
+      await vi.waitFor(() =>
+        expect(thread.replies()?.map((reply) => reply.id)).toEqual([
+          first.id,
+          second.id,
+        ])
+      );
+      expect(thread.error()).toBeUndefined();
+      dispose();
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('loads a failed thread again once the connection is back after another thread closed', async () => {
+    const host = fakeHost(() => devicePage([], { covered: false }));
+    let connected = false;
+    const server = serverThread();
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async (input, signal) => {
+      if (!connected) throw new TypeError('Failed to fetch');
+      return server(input, signal);
+    });
+    const open = () => {
+      let dispose = () => {};
+      const thread = createRoot((disposeRoot) => {
+        dispose = disposeRoot;
+        return createLocalChannelThread(
+          { host, runtime: runtime(), fetchPage },
+          CHANNEL_ID,
+          () => ROOT_ID,
+          () => true,
+          () => undefined
+        );
+      });
+      return { thread, dispose };
+    };
+    onlineManager.setOnline(false);
+    try {
+      const closed = open();
+      const kept = open();
+      await vi.waitFor(() => {
+        expect(closed.thread.error()).toBeDefined();
+        expect(kept.thread.error()).toBeDefined();
+      });
+      closed.dispose();
+
+      connected = true;
+      onlineManager.setOnline(true);
+      await vi.waitFor(() => expect(kept.thread.replies()).toHaveLength(2));
+      expect(fetchPage).toHaveBeenCalledTimes(3);
+      kept.dispose();
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 
   it('aborts the load in flight when the thread closes', async () => {
