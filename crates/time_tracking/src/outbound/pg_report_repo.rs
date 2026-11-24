@@ -1,7 +1,10 @@
 //! Postgres reads behind reports over logged time.
 //!
 //! Each read runs in its own transaction under a five-second statement
-//! timeout, since what it costs depends on how much time a team logged.
+//! timeout, since what it costs depends on how much time a team logged, and
+//! is planned for its own arguments: a reused generic plan cannot tell one
+//! task from 5,000 or a grouping by person from one by day, and read ten to
+//! eighty times the rows on a production-size seed.
 //! [`ReportRead::Latest`] reads the primary; [`ReportRead::MayLag`] reads the
 //! replica, which can be seconds behind.
 
@@ -15,7 +18,9 @@ use sqlx::{PgPool, Postgres, Transaction};
 use crate::domain::{
     models::TimeEntrySource,
     ports::{ReportFilter, ReportRead, TimeReportRepository},
-    report::{ExportEntry, SummarySum, TimeBreakdown, TimeGroupKey, TimeGrouping, TimePeriod},
+    report::{
+        ExportEntry, ReportTask, SummarySum, TimeBreakdown, TimeGroupKey, TimeGrouping, TimePeriod,
+    },
 };
 
 /// Errors from the Postgres report repository.
@@ -51,9 +56,14 @@ impl PgTimeReportRepository {
             ReportRead::MayLag => &self.replica,
         };
         let mut tx = pool.begin().await?;
-        sqlx::query!("SET LOCAL statement_timeout = '5s'")
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query!(
+            r#"
+            SELECT set_config('statement_timeout', '5s', true) AS "statement_timeout",
+                   set_config('plan_cache_mode', 'force_custom_plan', true) AS "plan_cache_mode"
+            "#
+        )
+        .fetch_one(&mut *tx)
+        .await?;
         Ok(tx)
     }
 }
@@ -159,7 +169,7 @@ fn sum_from(
 struct ExportRow {
     entry_date: NaiveDate,
     user_id: String,
-    task_name: String,
+    task_id: String,
     minutes: i32,
     note: Option<String>,
     source: TimeEntrySource,
@@ -172,7 +182,7 @@ impl TryFrom<ExportRow> for ExportEntry {
         Ok(ExportEntry {
             date: row.entry_date,
             user_id: parse_user(&row.user_id)?,
-            task_name: row.task_name,
+            task_id: row.task_id,
             minutes: u16::try_from(row.minutes)
                 .map_err(|_| PgTimeReportError::InvalidRow(format!("minutes {}", row.minutes)))?,
             note: row.note,
@@ -251,30 +261,33 @@ impl TimeReportRepository for PgTimeReportRepository {
     }
 
     #[tracing::instrument(
-        name = "time.count_live_tasks",
+        name = "time.read_live_tasks",
         skip_all,
-        fields(read = ?read, tasks = task_ids.len()),
+        fields(read = ?read, tasks = task_ids.len(), live = tracing::field::Empty),
         err
     )]
-    async fn live_task_count(
+    async fn live_tasks(
         &self,
         task_ids: &[String],
         read: ReportRead,
-    ) -> Result<u32, Self::Err> {
+    ) -> Result<Vec<ReportTask>, Self::Err> {
         let mut tx = self.begin(read).await?;
-        let live = sqlx::query_scalar!(
+        let live = sqlx::query_as!(
+            ReportTask,
             r#"
-            SELECT count(*) AS "count!"
+            SELECT id, name
             FROM "Document"
             WHERE id = ANY($1::text[])
               AND "deletedAt" IS NULL
+            ORDER BY id
             "#,
             task_ids,
         )
-        .fetch_one(&mut *tx)
+        .fetch_all(&mut *tx)
         .await?;
         tx.commit().await?;
-        count(live, "live tasks")
+        tracing::Span::current().record("live", live.len());
+        Ok(live)
     }
 
     #[tracing::instrument(
@@ -360,13 +373,11 @@ impl TimeReportRepository for PgTimeReportRepository {
                 sqlx::query_as!(
                     ExportRow,
                     r#"
-                    SELECT e.entry_date, e.user_id, d.name AS task_name, e.minutes, e.note,
+                    SELECT e.entry_date, e.user_id, e.task_id, e.minutes, e.note,
                            e.source AS "source: TimeEntrySource"
                     FROM time_entry e
-                    JOIN "Document" d ON d.id = e.task_id
                     WHERE e.task_id = ANY($1::text[])
                       AND e.entry_date BETWEEN $2 AND $3
-                      AND d."deletedAt" IS NULL
                     ORDER BY e.entry_date, e.id
                     LIMIT $4
                     "#,
@@ -382,14 +393,12 @@ impl TimeReportRepository for PgTimeReportRepository {
                 sqlx::query_as!(
                     ExportRow,
                     r#"
-                    SELECT e.entry_date, e.user_id, d.name AS task_name, e.minutes, e.note,
+                    SELECT e.entry_date, e.user_id, e.task_id, e.minutes, e.note,
                            e.source AS "source: TimeEntrySource"
                     FROM time_entry e
-                    JOIN "Document" d ON d.id = e.task_id
                     WHERE e.task_id = ANY($1::text[])
                       AND e.user_id = ANY($5::text[])
                       AND e.entry_date BETWEEN $2 AND $3
-                      AND d."deletedAt" IS NULL
                     ORDER BY e.entry_date, e.id
                     LIMIT $4
                     "#,

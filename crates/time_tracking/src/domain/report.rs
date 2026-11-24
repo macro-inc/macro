@@ -9,7 +9,7 @@
 #[cfg(test)]
 mod test;
 
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashMap};
 
 use chrono::NaiveDate;
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
@@ -375,6 +375,15 @@ pub fn assemble_summary(
     }
 }
 
+/// A task a report reads: out of the Trash, visible to the caller.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReportTask {
+    /// The task document.
+    pub id: String,
+    /// Its name, for the export.
+    pub name: String,
+}
+
 /// One entry as an export writes it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExportEntry {
@@ -382,8 +391,8 @@ pub struct ExportEntry {
     pub date: NaiveDate,
     /// Who logged it.
     pub user_id: MacroUserIdStr<'static>,
-    /// The task's name.
-    pub task_name: String,
+    /// The task document.
+    pub task_id: String,
     /// Length in whole minutes.
     pub minutes: u16,
     /// What the time was spent on.
@@ -421,11 +430,15 @@ fn safe_cell(value: &str) -> String {
     }
 }
 
-fn export_record(entry: &ExportEntry) -> [String; 7] {
+fn export_record(entry: &ExportEntry, task_names: &HashMap<&str, &str>) -> [String; 7] {
     [
         entry.date.to_string(),
         entry.user_id.email_str().to_owned(),
-        entry.task_name.clone(),
+        task_names
+            .get(entry.task_id.as_str())
+            .copied()
+            .unwrap_or_default()
+            .to_owned(),
         entry.minutes.to_string(),
         format!("{:.2}", f64::from(entry.minutes) / 60.0),
         entry.note.clone().unwrap_or_default(),
@@ -450,12 +463,18 @@ fn csv_line(record: &[String]) -> Result<Vec<u8>, TimeTrackingError> {
 }
 
 /// The entries as CSV, at most [`MAX_EXPORT_ROWS`] rows and
-/// [`MAX_EXPORT_BYTES`] bytes. `complete` says whether `entries` held every
-/// entry of the scope; the caps can only make it false.
+/// [`MAX_EXPORT_BYTES`] bytes, each task named from `tasks`. `complete` says
+/// whether `entries` held every entry of the scope; the caps can only make it
+/// false.
 pub fn encode_export(
     entries: &[ExportEntry],
+    tasks: &[ReportTask],
     complete: bool,
 ) -> Result<TimeExport, TimeTrackingError> {
+    let task_names: HashMap<&str, &str> = tasks
+        .iter()
+        .map(|task| (task.id.as_str(), task.name.as_str()))
+        .collect();
     let headers = EXPORT_HEADERS.map(str::to_owned);
     let mut bytes = csv_line(&headers)?;
     let mut rows: u32 = 0;
@@ -465,7 +484,7 @@ pub fn encode_export(
             complete = false;
             break;
         }
-        let line = csv_line(&export_record(entry))?;
+        let line = csv_line(&export_record(entry, &task_names))?;
         if bytes.len() + line.len() > MAX_EXPORT_BYTES {
             complete = false;
             break;

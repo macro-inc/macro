@@ -11,7 +11,7 @@ mod test;
 
 use crate::domain::{
     models::{EntryValues, LoggedTime, NewEntryRow, RunningTimer, TimeEntry, TimeEntryCursor},
-    report::{ExportEntry, SummarySum, TimeBreakdown, TimePeriod},
+    report::{ExportEntry, ReportTask, SummarySum, TimeBreakdown, TimePeriod},
 };
 
 /// Source of the current time, injected so timer limits can be tested.
@@ -239,11 +239,11 @@ pub trait ProjectTasks: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
 }
 
-/// The entries a report reads: those on `task_ids` in `period`, and only
-/// `people`'s when given.
+/// The entries a report reads: those on `task_ids` (live tasks the caller can
+/// see) in `period`, and only `people`'s when given.
 #[derive(Debug, Clone, Copy)]
 pub struct ReportFilter<'a> {
-    /// Tasks the caller can see.
+    /// Live tasks the caller can see.
     pub task_ids: &'a [String],
     /// Only these people's entries; everyone's when absent.
     pub people: Option<&'a [MacroUserIdStr<'static>]>,
@@ -251,8 +251,8 @@ pub struct ReportFilter<'a> {
     pub period: TimePeriod,
 }
 
-/// Outbound reads behind reports. Every read is bounded by its arguments and
-/// gives up after a statement timeout.
+/// Outbound reads behind reports. Every read is bounded by its arguments,
+/// planned for them, and gives up after a statement timeout.
 pub trait TimeReportRepository: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: std::error::Error + Send + Sync + 'static;
@@ -275,16 +275,18 @@ pub trait TimeReportRepository: Send + Sync + 'static {
         read: ReportRead,
     ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
 
-    /// How many of the tasks are out of the Trash.
-    fn live_task_count(
+    /// The tasks that are out of the Trash, with their names, in id order.
+    /// The access check keeps trashed documents, so reports pass only these
+    /// to the reads below.
+    fn live_tasks(
         &self,
         task_ids: &[String],
         read: ReportRead,
-    ) -> impl Future<Output = Result<u32, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<ReportTask>, Self::Err>> + Send;
 
-    /// The filtered entries of tasks out of the Trash, summed as the
-    /// breakdown groups them: the whole period, each group, and with a second
-    /// grouping each group's split and that grouping's totals.
+    /// The filtered entries summed as the breakdown groups them: the whole
+    /// period, each group, and with a second grouping each group's split and
+    /// that grouping's totals.
     fn summary_sums(
         &self,
         filter: ReportFilter<'_>,
@@ -292,8 +294,7 @@ pub trait TimeReportRepository: Send + Sync + 'static {
         read: ReportRead,
     ) -> impl Future<Output = Result<Vec<SummarySum>, Self::Err>> + Send;
 
-    /// Up to `limit` filtered entries of tasks out of the Trash, oldest day
-    /// first, with their task's name.
+    /// Up to `limit` filtered entries, oldest day first.
     fn export_entries(
         &self,
         filter: ReportFilter<'_>,

@@ -100,14 +100,26 @@ async fn people_tasks_are_the_tasks_they_logged_on_in_the_period(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("time_reports"))
 )]
-async fn live_task_count_leaves_out_the_trash(pool: PgPool) -> anyhow::Result<()> {
-    let count = repo(pool)
-        .live_task_count(
-            &tasks(&[BRIEF, REVIEW, TRASHED, "missing"]),
+async fn live_tasks_leave_out_the_trash(pool: PgPool) -> anyhow::Result<()> {
+    let live = repo(pool)
+        .live_tasks(
+            &tasks(&[TRASHED, REVIEW, BRIEF, "missing"]),
             ReportRead::Latest,
         )
         .await?;
-    assert_eq!(count, 2);
+    assert_eq!(
+        live,
+        [
+            ReportTask {
+                id: BRIEF.to_string(),
+                name: "Write the brief".to_string(),
+            },
+            ReportTask {
+                id: REVIEW.to_string(),
+                name: "=Review the brief".to_string(),
+            },
+        ]
+    );
     Ok(())
 }
 
@@ -121,7 +133,7 @@ async fn summary_sums_everyone_on_the_tasks_by_person_then_task(
     let sums = repo(pool)
         .summary_sums(
             ReportFilter {
-                task_ids: &tasks(&[BRIEF, REVIEW, TRASHED]),
+                task_ids: &tasks(&[BRIEF, REVIEW]),
                 people: None,
                 period: november(),
             },
@@ -130,7 +142,7 @@ async fn summary_sums_everyone_on_the_tasks_by_person_then_task(
         )
         .await?;
 
-    // The trashed task's 300 minutes and October's 999 are left out.
+    // October's 999 minutes are left out.
     let expected = vec![
         SummarySum::Total {
             minutes: 300,
@@ -250,10 +262,10 @@ async fn summary_of_people_counts_only_their_entries_by_day(pool: PgPool) -> any
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("time_reports"))
 )]
-async fn export_lists_entries_oldest_first_with_task_names(pool: PgPool) -> anyhow::Result<()> {
+async fn export_lists_entries_oldest_first(pool: PgPool) -> anyhow::Result<()> {
     let repo = repo(pool);
     let filter = ReportFilter {
-        task_ids: &tasks(&[BRIEF, REVIEW, HIDDEN, TRASHED]),
+        task_ids: &tasks(&[BRIEF, REVIEW, HIDDEN]),
         people: Some(&[user(AUTHOR), user(EDITOR)]),
         period: november(),
     };
@@ -265,7 +277,7 @@ async fn export_lists_entries_oldest_first_with_task_names(pool: PgPool) -> anyh
             (
                 entry.date,
                 entry.user_id.as_ref(),
-                entry.task_name.as_str(),
+                entry.task_id.as_str(),
                 entry.minutes,
             )
         })
@@ -273,11 +285,11 @@ async fn export_lists_entries_oldest_first_with_task_names(pool: PgPool) -> anyh
     assert_eq!(
         listed,
         [
-            (day(2), AUTHOR, "Write the brief", 60),
-            (day(2), EDITOR, "Write the brief", 45),
-            (day(3), AUTHOR, "Write the brief", 30),
-            (day(4), EDITOR, "=Review the brief", 120),
-            (day(4), EDITOR, "Hidden task", 90),
+            (day(2), AUTHOR, BRIEF, 60),
+            (day(2), EDITOR, BRIEF, 45),
+            (day(3), AUTHOR, BRIEF, 30),
+            (day(4), EDITOR, REVIEW, 120),
+            (day(4), EDITOR, HIDDEN, 90),
         ]
     );
     assert_eq!(entries[0].note.as_deref(), Some("Outline"));
@@ -289,10 +301,16 @@ async fn export_lists_entries_oldest_first_with_task_names(pool: PgPool) -> anyh
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn every_read_runs_under_a_statement_timeout(pool: PgPool) -> anyhow::Result<()> {
+async fn every_read_runs_under_a_statement_timeout_and_its_own_plan(
+    pool: PgPool,
+) -> anyhow::Result<()> {
     let repo = repo(pool);
     for read in [ReportRead::Latest, ReportRead::MayLag] {
         let mut tx = repo.begin(read).await?;
+        let plans = sqlx::query_scalar!(r#"SELECT current_setting('plan_cache_mode') AS "plans!""#)
+            .fetch_one(&mut *tx)
+            .await?;
+        assert_eq!(plans, "force_custom_plan");
         let timeout =
             sqlx::query_scalar!(r#"SELECT current_setting('statement_timeout') AS "timeout!""#)
                 .fetch_one(&mut *tx)

@@ -2,7 +2,8 @@
 -- grouping ($4), and when a second grouping ($5) is given, each group's split
 -- by it and its totals across groups. The key columns of a grouping not asked
 -- for are always null, so grouping by them changes nothing; GROUPING() tells
--- the sets apart. Trashed tasks are left out here: the access check keeps them.
+-- the sets apart. The caller passes only live tasks, so time_entry is the only
+-- table read.
 --
 -- Only the people's ($6) entries on the tasks ($1): the planner reads whichever
 -- of time_entry_user_date and time_entry_task_date narrows more.
@@ -19,11 +20,9 @@ WITH keyed AS (
         CASE WHEN $5 = 'task' THEN e.task_id END AS then_task,
         CASE WHEN $5 = 'day' THEN e.entry_date END AS then_day
     FROM time_entry e
-    JOIN "Document" d ON d.id = e.task_id
     WHERE e.task_id = ANY($1::text[])
       AND e.user_id = ANY($6::text[])
       AND e.entry_date BETWEEN $2 AND $3
-      AND d."deletedAt" IS NULL
 )
 SELECT
     GROUPING(group_user, group_task, group_day) = 0 AS "in_group!",

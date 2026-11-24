@@ -24,8 +24,8 @@ use crate::domain::{
     models::TimeTrackingError,
     ports::{ProjectTasks, ReportFilter, ReportRead, TimeReportRepository},
     report::{
-        MAX_EXPORT_ROWS, MAX_SCOPE_TASKS, TimeBreakdown, TimeExport, TimePeriod, TimeScope,
-        TimeSummary, assemble_summary, encode_export,
+        MAX_EXPORT_ROWS, MAX_SCOPE_TASKS, ReportTask, TimeBreakdown, TimeExport, TimePeriod,
+        TimeScope, TimeSummary, assemble_summary, encode_export,
     },
 };
 
@@ -76,7 +76,9 @@ fn internal<E: std::error::Error + Send + Sync + 'static>(error: E) -> TimeTrack
 
 /// A scope after its tasks were found and checked.
 struct ResolvedScope {
-    /// Tasks the caller can see, in id order.
+    /// Live tasks the caller can see, in id order.
+    tasks: Vec<ReportTask>,
+    /// Their ids.
     task_ids: Vec<String>,
     /// Only these people's entries count; everyone's when absent.
     people: Option<Vec<MacroUserIdStr<'static>>>,
@@ -145,21 +147,38 @@ where
         span.record("scope_tasks", task_ids.len());
         span.record("scope_complete", complete);
 
-        let mut visible: Vec<String> = if task_ids.is_empty() {
-            Vec::new()
-        } else {
-            self.access
-                .generate_document_view_access_receipts(user_id, &task_ids)
-                .await
-                .map_err(internal)?
-                .into_keys()
-                .collect()
-        };
+        if task_ids.is_empty() {
+            span.record("visible_tasks", 0);
+            return Ok(ResolvedScope {
+                tasks: Vec::new(),
+                task_ids,
+                people,
+                project: matches!(scope, TimeScope::Project(_)),
+                complete,
+            });
+        }
+        let mut visible: Vec<String> = self
+            .access
+            .generate_document_view_access_receipts(user_id, &task_ids)
+            .await
+            .map_err(internal)?
+            .into_keys()
+            .collect();
         visible.sort_unstable();
         span.record("visible_tasks", visible.len());
+        // The access check keeps trashed documents; reports leave them out.
+        let tasks = if visible.is_empty() {
+            Vec::new()
+        } else {
+            self.repo
+                .live_tasks(&visible, read)
+                .await
+                .map_err(internal)?
+        };
 
         Ok(ResolvedScope {
-            task_ids: visible,
+            task_ids: tasks.iter().map(|task| task.id.clone()).collect(),
+            tasks,
             people,
             project: matches!(scope, TimeScope::Project(_)),
             complete,
@@ -217,16 +236,9 @@ where
                 .await
                 .map_err(internal)?
         };
-        let scope_task_count = match (resolved.project, resolved.task_ids.is_empty()) {
-            (false, _) => None,
-            (true, true) => Some(0),
-            (true, false) => Some(
-                self.repo
-                    .live_task_count(&resolved.task_ids, read)
-                    .await
-                    .map_err(internal)?,
-            ),
-        };
+        let scope_task_count = resolved
+            .project
+            .then(|| u32::try_from(resolved.task_ids.len()).unwrap_or(u32::MAX));
 
         let summary = assemble_summary(
             period,
@@ -284,7 +296,7 @@ where
                 .map_err(internal)?
         };
 
-        let export = encode_export(&entries, resolved.complete)?;
+        let export = encode_export(&entries, &resolved.tasks, resolved.complete)?;
         let span = tracing::Span::current();
         span.record("rows", export.rows);
         span.record("complete", export.complete);

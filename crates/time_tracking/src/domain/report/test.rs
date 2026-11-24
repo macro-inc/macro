@@ -211,17 +211,25 @@ fn entry(note: Option<&str>, minutes: u16) -> ExportEntry {
     ExportEntry {
         date: day(23),
         user_id: user(ANA),
-        task_name: "Design review".to_string(),
+        task_id: "t1".to_string(),
         minutes,
         note: note.map(str::to_owned),
         source: TimeEntrySource::Manual,
     }
 }
 
+fn tasks(name: &str) -> Vec<ReportTask> {
+    vec![ReportTask {
+        id: "t1".to_string(),
+        name: name.to_string(),
+    }]
+}
+
 #[test]
 fn an_export_writes_one_row_per_entry_with_hours() {
     let export = encode_export(
         &[entry(Some("Kickoff, with notes"), 90), entry(None, 20)],
+        &tasks("Design review"),
         true,
     )
     .unwrap();
@@ -237,9 +245,13 @@ fn an_export_writes_one_row_per_entry_with_hours() {
 
 #[test]
 fn an_export_never_writes_a_cell_a_spreadsheet_would_run() {
-    let mut risky = entry(Some("=HYPERLINK(\"http://example.com\")"), 30);
-    risky.task_name = "@SUM(A1)".to_string();
-    let export = encode_export(&[risky, entry(Some("-5 for travel"), 15)], true).unwrap();
+    let risky = entry(Some("=HYPERLINK(\"http://example.com\")"), 30);
+    let export = encode_export(
+        &[risky, entry(Some("-5 for travel"), 15)],
+        &tasks("@SUM(A1)"),
+        true,
+    )
+    .unwrap();
     let lines: Vec<&str> = export.csv.lines().collect();
     assert!(lines[1].contains("'@SUM(A1)"));
     assert!(lines[1].contains("'=HYPERLINK"));
@@ -249,11 +261,16 @@ fn an_export_never_writes_a_cell_a_spreadsheet_would_run() {
 #[test]
 fn an_export_stops_at_ten_thousand_entries() {
     let entries = vec![entry(None, 15); usize::from(MAX_EXPORT_ROWS) + 1];
-    let export = encode_export(&entries, true).unwrap();
+    let export = encode_export(&entries, &tasks("Design review"), true).unwrap();
     assert_eq!(export.rows, u32::from(MAX_EXPORT_ROWS));
     assert!(!export.complete);
 
-    let exactly = encode_export(&entries[..usize::from(MAX_EXPORT_ROWS)], true).unwrap();
+    let exactly = encode_export(
+        &entries[..usize::from(MAX_EXPORT_ROWS)],
+        &tasks("Design review"),
+        true,
+    )
+    .unwrap();
     assert!(exactly.complete);
 }
 
@@ -261,7 +278,7 @@ fn an_export_stops_at_ten_thousand_entries() {
 fn an_export_stops_before_sixteen_mebibytes() {
     let note = "n".repeat(2_000);
     let entries = vec![entry(Some(&note), 15); usize::from(MAX_EXPORT_ROWS)];
-    let export = encode_export(&entries, true).unwrap();
+    let export = encode_export(&entries, &tasks("Design review"), true).unwrap();
     assert!(export.csv.len() <= MAX_EXPORT_BYTES);
     assert!(export.rows < u32::from(MAX_EXPORT_ROWS));
     assert!(!export.complete);
@@ -269,6 +286,6 @@ fn an_export_stops_before_sixteen_mebibytes() {
 
 #[test]
 fn an_export_of_an_incomplete_scope_says_so() {
-    let export = encode_export(&[entry(None, 15)], false).unwrap();
+    let export = encode_export(&[entry(None, 15)], &tasks("Design review"), false).unwrap();
     assert!(!export.complete);
 }

@@ -91,13 +91,18 @@ through `crates/graphql_time_tracking`.
 - Reports resolve their scope first (a project's tasks from its Project
   property, or the tasks the people logged on in the period), stop at 5,000
   tasks (`complete: false`), keep the caller's visible ones in one
-  `generate_document_view_access_receipts` call, then sum. That check keeps
-  trashed documents, so the sums join `"Document"` and leave them out.
+  `generate_document_view_access_receipts` call, look up the live ones (and
+  their names, for the export) by id, then sum `time_entry` alone. The
+  access check keeps trashed documents; joining `"Document"` in the sums let
+  the planner hash the whole table.
   Team is `team_user` read directly, as calendar's team view does: the
   caller's teammates and the caller (a person has at most one team).
 - Summaries read the primary (`ReportRead::Latest`): the screens read them
   again after each change, and the replica lags by seconds. Exports read the
-  replica. Every report read runs under a five-second statement timeout.
+  replica. Every report transaction sets a five-second statement timeout and
+  `plan_cache_mode = force_custom_plan`: generic plans of these statements,
+  which take 1 to 5,000 ids and a grouping per request, read ten to eighty
+  times the rows on a 2-million-entry seed.
 - Reports, like a task's entry list, answer with the rollout off.
 
 ## Related

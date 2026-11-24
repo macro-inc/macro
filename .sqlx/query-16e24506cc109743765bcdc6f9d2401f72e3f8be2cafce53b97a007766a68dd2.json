@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                    SELECT e.entry_date, e.user_id, d.name AS task_name, e.minutes, e.note,\n                           e.source AS \"source: TimeEntrySource\"\n                    FROM time_entry e\n                    JOIN \"Document\" d ON d.id = e.task_id\n                    WHERE e.task_id = ANY($1::text[])\n                      AND e.entry_date BETWEEN $2 AND $3\n                      AND d.\"deletedAt\" IS NULL\n                    ORDER BY e.entry_date, e.id\n                    LIMIT $4\n                    ",
+  "query": "\n                    SELECT e.entry_date, e.user_id, e.task_id, e.minutes, e.note,\n                           e.source AS \"source: TimeEntrySource\"\n                    FROM time_entry e\n                    WHERE e.task_id = ANY($1::text[])\n                      AND e.user_id = ANY($5::text[])\n                      AND e.entry_date BETWEEN $2 AND $3\n                    ORDER BY e.entry_date, e.id\n                    LIMIT $4\n                    ",
   "describe": {
     "columns": [
       {
@@ -15,7 +15,7 @@
       },
       {
         "ordinal": 2,
-        "name": "task_name",
+        "name": "task_id",
         "type_info": "Text"
       },
       {
@@ -49,7 +49,8 @@
         "TextArray",
         "Date",
         "Date",
-        "Int8"
+        "Int8",
+        "TextArray"
       ]
     },
     "nullable": [
@@ -61,5 +62,5 @@
       false
     ]
   },
-  "hash": "36d235b6e1b59870b95b37fd0dcc80c9317f0221f70b78507d57d787644278d6"
+  "hash": "16e24506cc109743765bcdc6f9d2401f72e3f8be2cafce53b97a007766a68dd2"
 }

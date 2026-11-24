@@ -12,7 +12,7 @@ use super::*;
 use crate::{
     domain::{
         ports::ReportFilter,
-        report::{ExportEntry, SummarySum, TimeGroupKey, TimeGrouping},
+        report::{ExportEntry, ReportTask, SummarySum, TimeGroupKey, TimeGrouping},
     },
     outbound::pg_report_repo::PgTimeReportRepository,
     test_support::{FakeAccess, user},
@@ -403,13 +403,19 @@ impl TimeReportRepository for RecordingReports {
         Ok(vec![BRIEF.to_string()])
     }
 
-    async fn live_task_count(
+    async fn live_tasks(
         &self,
-        _task_ids: &[String],
+        task_ids: &[String],
         read: ReportRead,
-    ) -> Result<u32, Self::Err> {
+    ) -> Result<Vec<ReportTask>, Self::Err> {
         self.record(read);
-        Ok(1)
+        Ok(task_ids
+            .iter()
+            .map(|id| ReportTask {
+                id: id.clone(),
+                name: "Task".to_string(),
+            })
+            .collect())
     }
 
     async fn summary_sums(
