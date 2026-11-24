@@ -462,7 +462,8 @@ const mocks = vi.hoisted(() => {
     registerCacheHost: vi.fn(
       (
         _host: CacheHost,
-        _recover?: (error: unknown) => CacheHost | undefined
+        _recover?: (error: unknown) => CacheHost | undefined,
+        _clearTimeoutMs?: number
       ) =>
         () => {}
     ),
@@ -540,6 +541,7 @@ vi.mock('@graphql-cache/index', () => ({
   entityFromArgument: () => () => undefined,
 }));
 vi.mock('@graphql-cache/lifecycle', () => ({
+  LOGOUT_CLEAR_TIMEOUT_MS: 10_000,
   registerCacheHost: mocks.registerCacheHost,
 }));
 vi.mock('@graphql-cache/scope', () => ({
@@ -1134,6 +1136,19 @@ describe('GraphQL Soup browser cache session gate', () => {
       expect(mocks.normalizedCacheExchange).toHaveBeenCalledOnce();
       expect(soup.graphqlCacheEnabled()).toBe(false);
       repaired?.dispose();
+    }
+  );
+
+  it.each([
+    [false, 10_000],
+    [true, undefined],
+  ])(
+    'limits how long a logout waits for a browser cache, whose scope can change (native=%s)',
+    async (native, limit) => {
+      mocks.tauri = native;
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      expect(mocks.registerCacheHost.mock.calls[0]?.[2]).toBe(limit);
     }
   );
 

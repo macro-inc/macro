@@ -3,7 +3,10 @@ import type { CacheHost } from './host/types';
 import { rotateCacheScope } from './scope';
 import { beginCacheWriteSession, endCacheWriteSession } from './session-writes';
 
-/** How long a logout waits for one cache to be wiped. */
+/**
+ * How long a logout waits for a browser cache to be wiped. A native cache gets no
+ * limit: the app's running engine refuses the scope that would replace it.
+ */
 export const LOGOUT_CLEAR_TIMEOUT_MS = 10_000;
 
 const hosts = new Set<CacheHost>();
@@ -11,6 +14,7 @@ const hosts = new Set<CacheHost>();
 // reopen failures. A different current host is never a repair substitute.
 type RecoverCacheHost = (error: unknown) => CacheHost | undefined;
 const recoveryByHost = new WeakMap<CacheHost, RecoverCacheHost>();
+const clearTimeoutByHost = new WeakMap<CacheHost, number>();
 const sessionRecords = new Map<
   CacheHost,
   {
@@ -52,9 +56,12 @@ function clearExternalCacheState(): void {
 /** Registers a cache host for account-lifecycle clearing. */
 export function registerCacheHost(
   host: CacheHost,
-  recover?: RecoverCacheHost
+  recover?: RecoverCacheHost,
+  clearTimeoutMs?: number
 ): () => void {
   hosts.add(host);
+  if (clearTimeoutMs !== undefined)
+    clearTimeoutByHost.set(host, clearTimeoutMs);
   if (recover) recoveryByHost.set(host, recover);
   return () => hosts.delete(host);
 }
@@ -71,8 +78,9 @@ function forgetAllSessionRecords() {
 /** A wipe still running at the limit goes on, for storage nobody opens again. */
 async function settleWithin(
   wiping: Promise<void>,
-  timeoutMs: number
+  timeoutMs: number | undefined
 ): Promise<void> {
+  if (timeoutMs === undefined) return await wiping;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(
@@ -144,7 +152,10 @@ function prepareCacheClear() {
       }
       const results = await Promise.allSettled(
         storageHosts.map(async (storage) => {
-          await settleWithin(wipe(storage), LOGOUT_CLEAR_TIMEOUT_MS);
+          await settleWithin(
+            wipe(storage),
+            clearTimeoutByHost.get(storage.owner)
+          );
           forgetSessionRecords(storage.owner);
         })
       );
@@ -155,6 +166,7 @@ function prepareCacheClear() {
     },
   };
 }
+
 /** Close writes through every logout wipe and teardown, preserving the host. */
 export function clearRegisteredCaches(
   clearSession: (clearCaches: () => Promise<void>) => Promise<void> = (clear) =>

@@ -46,7 +46,10 @@ import {
   createWorkerCacheHost,
   entityFromArgument,
 } from '@graphql-cache/index';
-import { registerCacheHost } from '@graphql-cache/lifecycle';
+import {
+  LOGOUT_CLEAR_TIMEOUT_MS,
+  registerCacheHost,
+} from '@graphql-cache/lifecycle';
 import {
   isAdmittedEnqueueUncertainError,
   isCacheSupersededError,
@@ -1145,8 +1148,10 @@ export function getGraphqlSoupClient(): Client {
       // A replacement stays blocked until its persisted queue is readable.
       if (cacheRecovery.state() !== 'recovering')
         cacheInitializationFailed = false;
-      unregisterHost = registerCacheHost(host, (error) =>
-        canReopenCache(error) ? createHost(false) : undefined
+      unregisterHost = registerCacheHost(
+        host,
+        (error) => (canReopenCache(error) ? createHost(false) : undefined),
+        native ? undefined : LOGOUT_CLEAR_TIMEOUT_MS
       );
       cachedCacheCleanup = cleanup;
       browserCacheClientActivated = !native;

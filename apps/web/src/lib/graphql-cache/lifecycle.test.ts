@@ -177,6 +177,7 @@ describe('clearRegisteredCaches', () => {
     const dispose = vi.fn();
     const {
       clearRegisteredCaches,
+      LOGOUT_CLEAR_TIMEOUT_MS,
       recordSessionCacheWrite,
       registerCacheHost,
     } = await import('./lifecycle');
@@ -191,7 +192,7 @@ describe('clearRegisteredCaches', () => {
         ),
       dispose,
     });
-    registerCacheHost(host);
+    registerCacheHost(host, undefined, LOGOUT_CLEAR_TIMEOUT_MS);
     recordSessionCacheWrite(host, 'Contact:1');
     let ended = false;
     const clearing = clearRegisteredCaches().then(() => {
@@ -213,6 +214,32 @@ describe('clearRegisteredCaches', () => {
     wipes[0]?.();
     await vi.advanceTimersByTimeAsync(0);
     expect(dispose).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
+  it('waits for a cache registered without a limit, and keeps its scope', async () => {
+    vi.useFakeTimers();
+    localStorage.setItem('graphql-cache:scope', 'current-scope');
+    const { clearRegisteredCaches, registerCacheHost } = await import(
+      './lifecycle'
+    );
+    const { createRetirableCacheHost } = await import('./host/retirable-host');
+    let wiped: () => void = () => undefined;
+    registerCacheHost(
+      createRetirableCacheHost({
+        ...createNoopCacheHost(),
+        disabled: false,
+        clear: () =>
+          new Promise((resolve) => {
+            wiped = () => resolve(INITIAL_CACHE_REVISION);
+          }),
+      })
+    );
+    const clearing = clearRegisteredCaches();
+    await vi.advanceTimersByTimeAsync(60_000);
+    wiped();
+    await clearing;
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('current-scope');
     vi.useRealTimers();
   });
 
