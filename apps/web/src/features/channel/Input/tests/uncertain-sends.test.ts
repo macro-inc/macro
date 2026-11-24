@@ -8,10 +8,14 @@ const unknown = new ThrownResultError([
 const refused = new ThrownResultError([
   { code: 'NOT_SENT', message: 'not sent' },
 ]);
-const message = (content: string) => ({
-  content,
-  mentions: [],
-  attachments: [{ entity_type: 'document', entity_id: 'doc-1' }],
+const send = (content: string, to = 'a', from = 'ada') => ({
+  senderId: from,
+  channelId: to,
+  message: {
+    content,
+    mentions: [],
+    attachments: [{ entity_type: 'document', entity_id: 'doc-1' }],
+  },
 });
 
 describe('createUncertainSends', () => {
@@ -20,41 +24,50 @@ describe('createUncertainSends', () => {
     return createUncertainSends(() => `id-${++next}`);
   };
 
-  it('sends a message whose delivery is unknown again under its own id', () => {
+  it('sends a restored message whose delivery is unknown again under its own id', () => {
     const sends = ids();
-    const first = sends.idFor(message('hello'));
-    sends.failed(message('hello'), first, unknown);
-    expect(sends.idFor(message('hello'))).toBe(first);
+    const first = sends.idFor(send('hello'));
+    sends.restored(send('hello'), first, unknown);
+    expect(sends.idFor(send('hello'))).toBe(first);
   });
 
   it('gives a changed message a new id', () => {
     const sends = ids();
-    const first = sends.idFor(message('hello'));
-    sends.failed(message('hello'), first, unknown);
-    expect(sends.idFor(message('hello, again'))).not.toBe(first);
+    const first = sends.idFor(send('hello'));
+    sends.restored(send('hello'), first, unknown);
+    expect(sends.idFor(send('hello, again'))).not.toBe(first);
   });
 
-  it('gives the same message to another channel a new id', () => {
+  it('gives the same message to another channel, or from another person, a new id', () => {
     const sends = ids();
-    const first = sends.idFor({ channelId: 'a', message: message('hello') });
-    sends.failed({ channelId: 'a', message: message('hello') }, first, unknown);
-    expect(sends.idFor({ channelId: 'b', message: message('hello') })).not.toBe(
-      first
-    );
+    const first = sends.idFor(send('hello'));
+    sends.restored(send('hello'), first, unknown);
+    expect(sends.idFor(send('hello', 'b'))).not.toBe(first);
+    expect(sends.idFor(send('hello', 'a', 'ben'))).not.toBe(first);
   });
 
   it('gives a new id after a send the server did not take', () => {
     const sends = ids();
-    const first = sends.idFor(message('hello'));
-    sends.failed(message('hello'), first, refused);
-    expect(sends.idFor(message('hello'))).not.toBe(first);
+    const first = sends.idFor(send('hello'));
+    sends.restored(send('hello'), first, refused);
+    expect(sends.idFor(send('hello'))).not.toBe(first);
+  });
+
+  it('keeps each restored draft’s id when another uncertain send follows', () => {
+    const sends = ids();
+    const a = sends.idFor(send('first'));
+    const b = sends.idFor(send('second'));
+    sends.restored(send('first'), a, unknown);
+    sends.restored(send('second'), b, unknown);
+    expect(sends.idFor(send('first'))).toBe(a);
+    expect(sends.idFor(send('second'))).toBe(b);
   });
 
   it('reuses an uncertain id once', () => {
     const sends = ids();
-    const first = sends.idFor(message('hello'));
-    sends.failed(message('hello'), first, unknown);
-    expect(sends.idFor(message('hello'))).toBe(first);
-    expect(sends.idFor(message('hello'))).not.toBe(first);
+    const first = sends.idFor(send('hello'));
+    sends.restored(send('hello'), first, unknown);
+    expect(sends.idFor(send('hello'))).toBe(first);
+    expect(sends.idFor(send('hello'))).not.toBe(first);
   });
 });

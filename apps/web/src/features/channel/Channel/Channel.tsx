@@ -799,9 +799,9 @@ export function Channel(props: ChannelProps) {
       snapshot,
     });
 
-    // Where it goes with what it says: the same text in another channel is
-    // another message.
-    const uncertainKey = { channelId, message: payload.message };
+    // Who sends it, where it goes and what it says: the same text in another
+    // channel, or from another account, is another message.
+    const uncertainKey = { senderId, channelId, message: payload.message };
     const optimisticId = uncertainSends.idFor(uncertainKey);
     // Send to the optimistic message's paint; channel.send follows delivery.
     const sendUi = startUiOperation('message.send', {
@@ -824,8 +824,6 @@ export function Channel(props: ChannelProps) {
         } catch (error) {
           sendUi.finish('error');
           span.error('Channel send failed');
-          // Sent again unchanged, a send that may have arrived keeps its id.
-          uncertainSends.failed(uncertainKey, optimisticId, error);
           const handle = channelInputHandle();
           if (
             !handle ||
@@ -842,6 +840,8 @@ export function Channel(props: ChannelProps) {
             return;
           }
           handle.restoreSnapshot(snapshot);
+          // Sent again unchanged, a send that may have arrived keeps its id.
+          uncertainSends.restored(uncertainKey, optimisticId, error);
           span.setAttr('composer.outcome', 'restored');
         }
       }),

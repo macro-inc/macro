@@ -1,4 +1,5 @@
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   newMessageId,
   useSendMessageMutation,
@@ -65,6 +66,18 @@ const REPORTED_SNAPSHOTS = new WeakSet<InputSnapshot>();
  * unknown is remembered here, with where it went.
  */
 const UNCERTAIN_REPLIES = createUncertainSends(() => newMessageId());
+
+/** Sends a reply, handing a failure to `onFailed`; the mutation toasts it. */
+async function sendReply(
+  send: () => Promise<unknown>,
+  onFailed: (error: unknown) => void
+): Promise<void> {
+  try {
+    await send();
+  } catch (error) {
+    onFailed(error);
+  }
+}
 
 export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
   onCleanup(() => {
@@ -171,20 +184,27 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
           snapshot,
           threadId: props.threadId,
         });
-        const uncertainKey = { parent: props.parent, message: payload.message };
+        // Who sends it, where it goes and what it says: the same text in
+        // another thread, or from another account, is another message.
+        const uncertainKey = {
+          senderId,
+          parent: props.parent,
+          message: payload.message,
+        };
         const optimisticId = UNCERTAIN_REPLIES.idFor(uncertainKey);
-
-        sendMessageMutation.mutate(
-          {
-            parent: props.parent,
-            senderId,
-            optimisticId,
-            ...payload,
-          },
-          {
-            onError: (error) => {
-              // Sent again unchanged, a reply that may have arrived keeps its id.
-              UNCERTAIN_REPLIES.failed(uncertainKey, optimisticId, error);
+        // Awaited, not `mutate`'s per-call `onError`: the input unmounts as
+        // it sends, and TanStack drops a call's callbacks once its observer
+        // is gone, which would lose the draft.
+        fireAndForget(
+          sendReply(
+            () =>
+              sendMessageMutation.mutateAsync({
+                parent: props.parent,
+                senderId,
+                optimisticId,
+                ...payload,
+              }),
+            (error) => {
               // The user may have started a new draft by now; keep it.
               const current = props.replyInputState();
               if (current && hasSendableInputContent(current)) return;
@@ -194,8 +214,11 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
               props.replyInputHandle?.()?.restoreSnapshot(snapshot, {
                 focus: false,
               });
-            },
-          }
+              // Sent again unchanged, a reply that may have arrived keeps its id.
+              UNCERTAIN_REPLIES.restored(uncertainKey, optimisticId, error);
+            }
+          ),
+          'thread-reply-input'
         );
 
         // Exit right away — the send is optimistic; the mutation's failure

@@ -5,6 +5,7 @@
 import type { MentionsOptions } from '@core/component/LexicalMarkdown/builder/types';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
+import { ThrownResultError } from '@core/util/result';
 import {
   fireEvent,
   render as renderBare,
@@ -12,7 +13,7 @@ import {
 } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import userEvent from '@testing-library/user-event';
-import { createSignal, type JSX, onMount } from 'solid-js';
+import { createSignal, type JSX, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -356,9 +357,21 @@ vi.mock('@core/context/user', async (importOriginal) => ({
   useUserId: () => () => 'macro|me@macro.test',
   useIsAuthenticated: () => () => true,
 }));
-vi.mock('@queries/messages/mutations', () => ({
-  useSendMessageMutation: () => ({ mutate: vi.fn() }),
+const sendMocks = vi.hoisted(() => ({
+  send: vi.fn((_input: { optimisticId: string }) => Promise.resolve()),
+  next: 0,
 }));
+vi.mock('@queries/messages/mutations', async () => {
+  const { useMutation } = await import('@tanstack/solid-query');
+  return {
+    // A real mutation: its per-call callbacks die with the composer, as in the app.
+    useSendMessageMutation: () =>
+      useMutation(() => ({
+        mutationFn: (input: { optimisticId: string }) => sendMocks.send(input),
+      })),
+    newMessageId: () => `message-${++sendMocks.next}`,
+  };
+});
 vi.mock('@queries/messages/typing', () => ({
   usePostTypingUpdateMutation: () => ({ mutate: vi.fn() }),
 }));
@@ -370,7 +383,7 @@ import { createInputAttachmentTracker } from '../attachment-tracker';
 import { ChannelInput } from '../ChannelInput';
 import { DropOverlay } from '../DropOverlay';
 import { Root } from '../Root';
-import type { InputData, InputHandle } from '../types';
+import type { InputData, InputHandle, InputSnapshot } from '../types';
 
 const baseInput: InputData = {
   mode: 'channel',
@@ -925,5 +938,57 @@ describe('mention people', () => {
     ));
 
     expect(mentionIds()).toContain(CONTACT.id);
+  });
+});
+
+describe('Thread reply sends', () => {
+  const parent = { type: 'channel', id: 'channel-2' } as const;
+  const draft: InputSnapshot = {
+    value: 'did this arrive?',
+    mentions: [],
+    attachments: [],
+  };
+  const unknown = new ThrownResultError([
+    { code: 'DELIVERY_UNKNOWN', message: 'could not confirm' },
+  ]);
+
+  it('restores a reply of unknown delivery after its composer closed, and sends it again under its id', async () => {
+    const [state, setState] = createSignal<InputSnapshot | undefined>(draft);
+    const [open, setOpen] = createSignal(true);
+    let handle: InputHandle | undefined;
+    let fail: (error: unknown) => void = () => {};
+    sendMocks.send.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        })
+    );
+    render(() => (
+      <Show when={open()}>
+        <ThreadReplyChannelInput
+          parent={parent}
+          threadId="root-2"
+          replyInputState={state}
+          setReplyInputState={setState}
+          onExit={() => setOpen(false)}
+          onReady={(next) => {
+            handle = next;
+          }}
+        />
+      </Show>
+    ));
+
+    await handle?.send();
+    expect(open()).toBe(false);
+    expect(sendMocks.send).toHaveBeenCalledOnce();
+    const first = sendMocks.send.mock.calls[0]?.[0].optimisticId;
+
+    fail(unknown);
+    await vi.waitFor(() => expect(state()?.value).toBe(draft.value));
+
+    setOpen(true);
+    await handle?.send();
+    expect(sendMocks.send).toHaveBeenCalledTimes(2);
+    expect(sendMocks.send.mock.calls[1]?.[0].optimisticId).toBe(first);
   });
 });
