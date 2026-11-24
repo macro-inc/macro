@@ -6,6 +6,7 @@ import {
 } from '../../app/utils/utilCta';
 import { setPageSeo } from '../../app/utils/utilSeo';
 import { FeatureUiStyles } from '../marketing/components/FeaturePage';
+import { HomepageFounderLetter } from '../marketing/components/HomepageFounderLetter';
 import { HomepageResources } from '../marketing/components/HomepageResources';
 import { HomepageTrustBadges } from '../marketing/components/HomepageTrustBadges';
 import { HomepageTour } from '../marketing/components/homepage/HomepageTour';
@@ -90,6 +91,7 @@ export function Homepage(props: { embedded?: boolean } = {}) {
           </header>
           <HomepageTour />
           <HomepageTrustBadges showGithub />
+          <HomepageFounderLetter />
           <Suspense>
             <HomepageSections />
           </Suspense>
