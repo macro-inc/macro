@@ -1068,6 +1068,141 @@ describe('scheduling a Macro call', () => {
   });
 });
 
+describe('closing once a save is queued', () => {
+  /** A next call that saves locally at once and answers when told to. */
+  function queuedMutation(mock: typeof mocks.createEvent, local?: unknown) {
+    let answer: (value: unknown) => void = () => {};
+    let refuse: (error: Error) => void = () => {};
+    mock.mockImplementationOnce(
+      (args: { onAccepted?: (event: unknown) => void }) =>
+        new Promise((resolve, reject) => {
+          args.onAccepted?.(local);
+          answer = resolve;
+          refuse = reject;
+        })
+    );
+    return {
+      answer: (value: unknown) => answer(value),
+      refuse: (error: Error) => refuse(error),
+    };
+  }
+
+  function editor(event?: CalendarEvent, macroCalls = false) {
+    const saved = vi.fn();
+    const created = vi.fn();
+    const [hook, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({
+            macroCallsEnabled: () => macroCalls,
+            event: () => event,
+            onCreated: created,
+            onSaved: saved,
+          }),
+          dispose,
+        ] as const
+    );
+    return { hook, dispose, saved, created };
+  }
+
+  it('closes a new event before the server answers, under its local id', async () => {
+    const server = queuedMutation(mocks.createEvent, { id: 'local-1' });
+    const { hook, dispose, saved, created } = editor();
+    try {
+      const saving = hook.save(values);
+      await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce());
+
+      expect(created).toHaveBeenCalledExactlyOnceWith({
+        eventId: 'local-1',
+        time: values.time,
+      });
+      expect(hook.pending()).toBe(false);
+
+      server.answer({ id: 'server-1' });
+      await saving;
+      expect(created).toHaveBeenCalledOnce();
+      expect(saved).toHaveBeenCalledOnce();
+      expect(mocks.failure).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('reports a create the server refuses after the editor closed', async () => {
+    const server = queuedMutation(mocks.createEvent, { id: 'local-1' });
+    const { hook, dispose, saved } = editor();
+    try {
+      const saving = hook.save(values);
+      await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce());
+
+      server.refuse(new Error('This calendar is read-only.'));
+      await saving;
+      expect(mocks.failure).toHaveBeenCalledExactlyOnceWith(
+        'Failed to create event',
+        { subtext: 'This calendar is read-only.' }
+      );
+      expect(saved).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('closes an edit before the server answers', async () => {
+    const server = queuedMutation(mocks.updateEvent);
+    const { hook, dispose, saved } = editor({ ...savedEvent, location: '' });
+    try {
+      const saving = hook.save({
+        ...values,
+        title: 'Planning review',
+        location: '',
+        description: '',
+        conferenceChoice: 'none',
+        guestEmails: [],
+      });
+      await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce());
+      expect(mocks.updateEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          patch: expect.objectContaining({ title: 'Planning review' }),
+        })
+      );
+
+      server.refuse(new Error('Event not found'));
+      await saving;
+      expect(mocks.failure).toHaveBeenCalledExactlyOnceWith(
+        'Failed to update event',
+        { subtext: 'Event not found' }
+      );
+      expect(saved).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps an edit that adds a Macro call open until the call is linked', async () => {
+    const server = queuedMutation(mocks.updateEvent);
+    const { hook, dispose, saved } = editor(
+      { ...savedEvent, location: '' },
+      true
+    );
+    try {
+      const saving = hook.save({
+        ...values,
+        title: 'Planning review',
+        location: '',
+        description: '',
+        guestEmails: [],
+      });
+      await vi.waitFor(() => expect(mocks.updateEvent).toHaveBeenCalled());
+      expect(saved).not.toHaveBeenCalled();
+      server.answer({ id: 'event-1' });
+      await saving;
+      expect(saved).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+    }
+  });
+});
+
 describe('guests of an event the viewer was invited to', () => {
   const invitedEvent = (
     viewerCan: CalendarEvent['viewerCan'],
@@ -1161,6 +1296,7 @@ describe('guests of an event the viewer was invited to', () => {
         scope: 'all',
         recurrenceId: undefined,
         occurrenceKey: undefined,
+        onAccepted: expect.any(Function),
       });
       expect(mocks.updateEvent.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.inviteGuests.mock.invocationCallOrder[0]

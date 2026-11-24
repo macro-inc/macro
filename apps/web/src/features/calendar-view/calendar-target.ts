@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { parseLocalDate } from '@core/util/local-date';
 import { Telemetry } from '@macro-inc/observability';
+import { createdCalendarEventId } from '@queries/calendar/graphql/mutations';
 import { syncCalendarOccurrences } from '@queries/calendar/occurrences';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import { type Accessor, createEffect, createMemo } from 'solid-js';
@@ -24,9 +25,11 @@ export function resolveCalendarTarget(
   items: CalendarOccurrenceItem[],
   request: CalendarFocusRequest
 ): CalendarFocusTarget | undefined {
+  // A create opened under its local id lands under the server's.
+  const landedId = createdCalendarEventId(request.eventId);
   const matches = items.filter(
     (item) =>
-      item.event.id === request.eventId &&
+      (item.event.id === request.eventId || item.event.id === landedId) &&
       (request.occurrenceKey === undefined ||
         item.occurrence.occurrenceKey === request.occurrenceKey)
   );

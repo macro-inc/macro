@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { OptimisticResponse } from '@graphql-cache/exchange/optimistic';
 import { UNKNOWN_CACHE_GENERATION } from '@graphql-cache/generation-mirror';
 import {
@@ -8,7 +9,6 @@ import {
   selectRecords,
 } from '@graphql-cache/index';
 import type { CalendarEvent } from '@service-calendar/generated/schemas/calendarEvent';
-import type { CreateCalendarEventRequest } from '@service-calendar/generated/schemas/createCalendarEventRequest';
 import {
   type CalendarEventFieldsFragment,
   CalendarEventFieldsFragmentDoc,
@@ -43,6 +43,7 @@ import {
 import type { AnyVariables, Client, OperationResult } from '@urql/core';
 import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 import type {
+  CreateCalendarEventArgs,
   DeleteCalendarEventArgs,
   InviteCalendarEventGuestsArgs,
   RsvpCalendarEventArgs,
@@ -109,30 +110,92 @@ const eventKey = (id: string) => `${EVENT_TYPENAME}:${id}`;
 const eventSelection = selectRecords(CalendarEventFieldsFragmentDoc);
 const eventIdentitySelection = selectRecords(CalendarEventIdentityFragmentDoc);
 
-/** Events created while offline, until their create settles. */
+/** Events saved locally whose create the server has not confirmed yet. */
 const pendingCreates = new Set<string>();
+/** The server id each confirmed create replaced its local id with. */
+const landedCreates = new Map<string, string>();
+const landedListeners = new Set<(localId: string, serverId: string) => void>();
+
+/** Whether `eventId` is a local event the server has not confirmed yet. */
+export function isCalendarEventCreating(eventId: string): boolean {
+  return pendingCreates.has(eventId);
+}
+
+/** The server id of an event created under the local id `eventId`, once known. */
+export function createdCalendarEventId(eventId: string): string | undefined {
+  return landedCreates.get(eventId);
+}
+
+/** Calls `listener` when a create made here lands under its server id. */
+export function onCalendarEventCreated(
+  listener: (localId: string, serverId: string) => void
+): () => void {
+  landedListeners.add(listener);
+  return () => landedListeners.delete(listener);
+}
+
+function landCreate(localId: string, serverId: string | undefined) {
+  pendingCreates.delete(localId);
+  if (!serverId || serverId === localId) return;
+  landedCreates.set(localId, serverId);
+  for (const listener of [...landedListeners]) listener(localId, serverId);
+}
 
 /**
- * The durable queue replays a mutation's variables unchanged, so a write
- * addressed to an event that exists only locally would reach the server with
- * an id it never issued.
+ * The id a write must address. The durable queue replays a mutation's
+ * variables unchanged, so a write addressed to an event that exists only
+ * locally would reach the server with an id it never issued; one opened
+ * before its create landed goes to the id the server gave it.
  */
-function assertCreated(eventId: string) {
-  if (pendingCreates.has(eventId)) {
+function withServerEventId<T extends { eventId: string }>(args: T): T {
+  if (pendingCreates.has(args.eventId)) {
     throw new CalendarMutationError(
       'This event is still being created. Try again once it syncs.',
       'not_found',
       false
     );
   }
+  const serverId = landedCreates.get(args.eventId);
+  return serverId ? { ...args, eventId: serverId } : args;
 }
 
-/** Forgets queued creates once the queue settles them. */
+/**
+ * The server id the cache aliases a created event's local key to, once the
+ * create has settled. The alias outlives the response content, so it holds
+ * even when the response itself was retired.
+ */
+async function settledEventId(
+  host: Pick<CacheHost, 'readRecordsByKeys'>,
+  localId: string
+): Promise<string | undefined> {
+  const selected = await readRecordsByKeys(host, eventIdentitySelection, [
+    eventKey(localId),
+  ]).catch(() => undefined);
+  const identity = selected?.records[0];
+  if (
+    !identity?.record.id ||
+    identity.identity?.pending !== false ||
+    identity.identity.mutationUuid !== localId
+  )
+    return undefined;
+  return identity.record.id;
+}
+
+/** Records where queued creates land once the queue settles them. */
 export function trackCalendarCreateSettlements(
-  host: Pick<CacheHost, 'onMutationSettled'>
+  host: Pick<CacheHost, 'onMutationSettled' | 'readRecordsByKeys'>
 ): () => void {
   return host.onMutationSettled((settlement) => {
-    if (settlement.mutationUuid) pendingCreates.delete(settlement.mutationUuid);
+    const localId = settlement.mutationUuid;
+    if (!localId || !pendingCreates.has(localId)) return;
+    if (settlement.status !== 'committed') {
+      pendingCreates.delete(localId);
+      return;
+    }
+    fireAndForget(
+      (async () => landCreate(localId, await settledEventId(host, localId)))(),
+      'calendar-create-settlement'
+    );
   });
 }
 
@@ -235,10 +298,10 @@ function payloadOf(
 /** Sets the viewer's RSVP through the durable queue. */
 export async function executeGraphqlRsvp(
   host: CalendarMutationHost,
-  args: RsvpCalendarEventArgs,
+  rsvp: RsvpCalendarEventArgs,
   client: Client = getGraphqlSoupClient()
 ): Promise<CalendarMutationOutcome> {
-  assertCreated(args.eventId);
+  const args = withServerEventId(rsvp);
   const response = graphqlEnum<GraphqlCalendarAttendeeResponseStatus>(
     args.response
   );
@@ -323,10 +386,10 @@ export async function executeGraphqlRsvp(
 /** Adds guests to the series or one occurrence through the durable queue. */
 export async function executeGraphqlInviteGuests(
   host: CalendarMutationHost,
-  args: InviteCalendarEventGuestsArgs,
+  invitation: InviteCalendarEventGuestsArgs,
   client: Client = getGraphqlSoupClient()
 ): Promise<CalendarMutationOutcome> {
-  assertCreated(args.eventId);
+  const args = withServerEventId(invitation);
   const oneOccurrence = args.scope === 'this_event';
   const [event, occurrences] = await Promise.all([
     cachedEvent(host, args.eventId),
@@ -376,7 +439,7 @@ export async function executeGraphqlInviteGuests(
         patchedOccurrences
       ),
     } as OptimisticResponse<InviteCalendarEventGuestsMutation>,
-    { uuid: uuidv4() }
+    { uuid: uuidv4(), onEnqueued: args.onAccepted }
   ).toPromise();
   return settle(
     host,
@@ -388,10 +451,10 @@ export async function executeGraphqlInviteGuests(
 /** Patches an event, the series or one occurrence, through the durable queue. */
 export async function executeGraphqlUpdate(
   host: CalendarMutationHost,
-  args: UpdateCalendarEventArgs,
+  update: UpdateCalendarEventArgs,
   client: Client = getGraphqlSoupClient()
 ): Promise<CalendarMutationOutcome> {
-  assertCreated(args.eventId);
+  const args = withServerEventId(update);
   const { patch } = args;
   const oneOccurrence =
     args.scope === 'this_event' && args.occurrenceKey !== undefined;
@@ -501,6 +564,7 @@ export async function executeGraphqlUpdate(
     } as OptimisticResponse<UpdateCalendarEventMutation>,
     {
       uuid: uuidv4(),
+      onEnqueued: args.onAccepted,
       ...(uncertain
         ? { uncertainCalendarEventKeys: [eventKey(args.eventId)] }
         : {}),
@@ -512,10 +576,10 @@ export async function executeGraphqlUpdate(
 /** Deletes an event, one occurrence, or an occurrence onward. */
 export async function executeGraphqlDelete(
   host: CalendarMutationHost,
-  args: DeleteCalendarEventArgs,
+  deletion: DeleteCalendarEventArgs,
   client: Client = getGraphqlSoupClient()
 ): Promise<CalendarMutationOutcome> {
-  assertCreated(args.eventId);
+  const args = withServerEventId(deletion);
   const [event, occurrences] = await Promise.all([
     cachedEvent(host, args.eventId),
     cachedOccurrences(host, args.eventId),
@@ -563,12 +627,13 @@ async function targetCalendar(client: Client, calendarId: string | undefined) {
 /**
  * Creates an event through the durable queue. The event shows at once under
  * a client id that is also the request's idempotency key, so a replay after
- * a lost response cannot create it twice.
+ * a lost response cannot create it twice. `onAccepted` receives that local
+ * event once the queue holds the create, before the server answers.
  * A confirmed create may omit `event` when response retirement leaves its
  * canonical identity temporarily unavailable; callers close and refresh.
  */
 export async function executeGraphqlCreate(
-  args: CreateCalendarEventRequest,
+  { onAccepted, ...args }: CreateCalendarEventArgs,
   client: Client = getGraphqlSoupClient(),
   host?: Pick<CacheHost, 'readRecordsByKeys'>
 ): Promise<{ outcome: CalendarMutationOutcome; event?: CalendarEvent }> {
@@ -741,7 +806,10 @@ export async function executeGraphqlCreate(
       uuid: clientId,
       // Registered as the queue installs the create, so a settlement that
       // arrives before this call returns always clears it.
-      onEnqueued: () => pendingCreates.add(clientId),
+      onEnqueued: () => {
+        pendingCreates.add(clientId);
+        onAccepted?.(mapCalendarEvent(event));
+      },
       identityBindings: [
         {
           localKey: eventKey(clientId),
@@ -764,31 +832,18 @@ export async function executeGraphqlCreate(
   if (outcome.kind === 'queued') {
     return { outcome, event: mapCalendarEvent(event) };
   }
-  pendingCreates.delete(clientId);
   if (!outcome.payload?.event) {
     // Settlement preserves the local-to-server alias even when its response
     // content is retired. Navigation and later edits must use that server ID.
     const cache = host ?? getGraphqlSoupCacheHost();
-    const selected = cache
-      ? await readRecordsByKeys(cache, eventIdentitySelection, [
-          eventKey(clientId),
-        ]).catch(() => undefined)
-      : undefined;
-    const identity = selected?.records[0];
-    if (
-      !identity?.record.id ||
-      identity.identity?.pending !== false ||
-      identity.identity.mutationUuid !== clientId
-    ) {
-      // Creation succeeded. The caller closes and refreshes without offering
-      // a duplicate create or navigating to an unconfirmed local identifier.
-      return { outcome };
-    }
-    return {
-      outcome,
-      event: mapCalendarEvent({ ...event, id: identity.record.id }),
-    };
+    const serverId = cache ? await settledEventId(cache, clientId) : undefined;
+    landCreate(clientId, serverId);
+    // Creation succeeded. The caller closes and refreshes without offering
+    // a duplicate create or navigating to an unconfirmed local identifier.
+    if (!serverId) return { outcome };
+    return { outcome, event: mapCalendarEvent({ ...event, id: serverId }) };
   }
+  landCreate(clientId, outcome.payload.event.id);
   return {
     outcome,
     event: mapCalendarEvent(outcome.payload.event),

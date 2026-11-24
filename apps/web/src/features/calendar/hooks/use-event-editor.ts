@@ -154,7 +154,11 @@ export type CreatedCalendarEvent = {
 interface UseEventEditorProps {
   event: Accessor<CalendarEvent | undefined>;
   onSaved: () => void;
-  /** Called with a new event once it exists, before `onSaved`. */
+  /**
+   * Called with a new event once it exists, before `onSaved`: under its local
+   * id when it is saved locally ahead of the server, which the calendar
+   * follows to the server's id once the create lands.
+   */
   onCreated?: (created: CreatedCalendarEvent) => void;
   macroCallsEnabled: Accessor<boolean>;
   /**
@@ -488,9 +492,19 @@ export function useEventEditor(props: UseEventEditorProps) {
       return;
     }
     let calendarSaved = false;
+    // A write saved locally and queued closes the editor before the server
+    // answers, as property saves do; a later refusal still reports below.
+    let closed = false;
+    const closeAccepted = () => {
+      if (closed) return;
+      closed = true;
+      setPending(false);
+      props.onSaved();
+    };
 
     try {
       if (!event) {
+        let accepted = false;
         // The server mints the call and writes its link into the event, so
         // the one invitation attendees receive already carries it.
         const created = await create.mutateAsync({
@@ -510,18 +524,32 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(values.reminders ? { reminders: values.reminders } : {}),
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
           ...(values.guestPolicy ? { guestPolicy: values.guestPolicy } : {}),
+          onAccepted: (local) => {
+            accepted = true;
+            props.onCreated?.({ eventId: local.id, time: values.time });
+            closeAccepted();
+          },
         });
-        if (created)
+        if (created && !accepted)
           props.onCreated?.({ eventId: created.id, time: values.time });
-        props.onSaved();
+        closeAccepted();
         return;
       }
 
       const { updateArgs, invitedEmails } = editUpdate(event, values, scope);
-      if (Object.keys(updateArgs.patch).length > 0) {
-        await update.mutateAsync(updateArgs);
+      const updates = Object.keys(updateArgs.patch).length > 0;
+      const invites = invitedEmails.length > 0;
+      // A new Macro call is minted by its own request and linked by a second
+      // update, so that save waits for the server to finish.
+      const addsCall = needsCall() && canManageCall && !existingMeetingUrl;
+      const lastWrite = addsCall ? undefined : invites ? 'invite' : 'update';
+      if (updates) {
+        await update.mutateAsync({
+          ...updateArgs,
+          ...(lastWrite === 'update' ? { onAccepted: closeAccepted } : {}),
+        });
       }
-      if (invitedEmails.length > 0) {
+      if (invites) {
         await invite.mutateAsync({
           eventId: updateArgs.eventId,
           calendarId: updateArgs.calendarId,
@@ -529,11 +557,12 @@ export function useEventEditor(props: UseEventEditorProps) {
           scope: updateArgs.scope,
           recurrenceId: updateArgs.recurrenceId,
           occurrenceKey: updateArgs.occurrenceKey,
+          ...(lastWrite === 'invite' ? { onAccepted: closeAccepted } : {}),
         });
       }
       calendarSaved = true;
 
-      if (needsCall() && canManageCall && !existingMeetingUrl) {
+      if (addsCall) {
         const meetingUrl = await createScheduledMeeting(values);
         const linkedContent = attachCalendarMacroCall(cleanContent, meetingUrl);
         if (needsCall())
@@ -548,13 +577,13 @@ export function useEventEditor(props: UseEventEditorProps) {
         const shareToken = getMeetingShareToken(existingMeetingUrl);
         if (shareToken) await syncScheduledMeeting(shareToken, values);
       }
-      props.onSaved();
+      closeAccepted();
     } catch (error) {
       const subtext = error instanceof Error ? error.message : undefined;
       if (calendarSaved) {
         if (existingMeetingUrl) {
           toast.alert('Event saved, but call details could not be updated');
-          props.onSaved();
+          closeAccepted();
         } else {
           setSaveError(
             'Your event is saved, but its call link could not be added. Save again to retry.'

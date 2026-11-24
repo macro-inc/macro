@@ -388,6 +388,8 @@ export interface InviteCalendarEventGuestsArgs {
   recurrenceId?: string;
   /** Cache key of the occurrence, for the optimistic update. */
   occurrenceKey?: string;
+  /** Runs once the invitation is saved locally and queued, before the server answers. */
+  onAccepted?: () => void;
 }
 
 /** The cached item with invited guests appended as unanswered. */
@@ -700,6 +702,8 @@ export interface UpdateCalendarEventArgs {
     UpdateCalendarEventRequest,
     'calendarId' | 'scope' | 'recurrenceId'
   >;
+  /** Runs once the update is saved locally and queued, before the server answers. */
+  onAccepted?: () => void;
 }
 
 type UpdateCallbacks = MutationCallbacks<
@@ -837,10 +841,18 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
   }));
 }
 
+export type CreateCalendarEventArgs = CreateCalendarEventRequest & {
+  /**
+   * Runs with the event under its local id once the create is saved locally
+   * and queued, before the server answers. Never runs over REST.
+   */
+  onAccepted?: (event: CalendarEventEntity) => void;
+};
+
 type CreateCallbacks = MutationCallbacks<
   CalendarEventEntity | undefined,
   Error,
-  CreateCalendarEventRequest,
+  CreateCalendarEventArgs,
   unknown
 >;
 
@@ -853,15 +865,16 @@ type CreateCallbacks = MutationCallbacks<
  */
 export function useCreateCalendarEventMutation(callbacks?: CreateCallbacks) {
   return useMutation(() => ({
-    mutationFn: async (args: CreateCalendarEventRequest) => {
+    mutationFn: async (args: CreateCalendarEventArgs) => {
       if (answeringGraphqlCalendarHost())
         return (await executeGraphqlCreate(args)).event;
-      return await throwOnErr(() => emailClient.createCalendarEvent(args));
+      const { onAccepted: _localOnly, ...request } = args;
+      return await throwOnErr(() => emailClient.createCalendarEvent(request));
     },
     ...withCallbacks<
       CalendarEventEntity | undefined,
       Error,
-      CreateCalendarEventRequest
+      CreateCalendarEventArgs
     >(
       {
         onSuccess: (event, args) => {

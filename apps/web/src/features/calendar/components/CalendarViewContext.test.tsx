@@ -18,12 +18,20 @@ import {
 } from './CalendarViewContext';
 
 const teamReset = vi.hoisted(() => ({ fire: () => {} }));
+const creates = vi.hoisted(() => ({
+  creating: new Set<string>(),
+  landed: new Map<string, string>(),
+}));
 
 vi.mock('@queries/calendar/team-cache', () => ({
   subscribeToTeamCalendarReset: (onReset: () => void) => {
     teamReset.fire = onReset;
     return () => {};
   },
+}));
+vi.mock('@queries/calendar/graphql/mutations', () => ({
+  isCalendarEventCreating: (id: string) => creates.creating.has(id),
+  createdCalendarEventId: (id: string) => creates.landed.get(id),
 }));
 vi.mock('../hooks/use-calendar-sources', () => ({
   useCalendarSources: () => ({
@@ -52,7 +60,9 @@ function withSelection(
   });
 }
 
-function renderContexts() {
+function renderContexts(
+  onFocusedEventIdChange?: (eventId: string | undefined) => void
+) {
   let focus!: ReturnType<typeof useCalendarFocus>;
   let view!: ReturnType<typeof useCalendarView>;
   function Probe() {
@@ -62,7 +72,9 @@ function renderContexts() {
   }
   render(() => (
     <CalendarFocusContextProvider>
-      <CalendarViewContextProvider>
+      <CalendarViewContextProvider
+        onFocusedEventIdChange={onFocusedEventIdChange}
+      >
         <Probe />
       </CalendarViewContextProvider>
     </CalendarFocusContextProvider>
@@ -142,5 +154,70 @@ describe('CalendarViewContext with a row waiting for its chip', () => {
     view().reanchorSelectedEvent(EVENT, document.createElement('a'));
 
     expect(focus().pendingTarget()).toMatchObject(OCCURRENCE);
+  });
+});
+
+describe('details opened on an event whose create has not landed', () => {
+  const KEY = '2026-11-28T15:00:00+00:00';
+  const occurrence = (eventId: string, title = 'Offsite') =>
+    ({
+      id: JSON.stringify([eventId, KEY]),
+      eventId,
+      occurrenceKey: KEY,
+      title,
+      sourceCalendarIds: ['calendar-1'],
+      calendar: { id: 'calendar-1' },
+    }) as CalendarEvent;
+  const local = occurrence('local-1');
+  const server = occurrence('server-1', 'Offsite (synced)');
+  const page = (...events: CalendarEvent[]) =>
+    new Map(events.map((event) => [event.id, event]));
+
+  beforeEach(() => {
+    creates.creating = new Set(['local-1']);
+    creates.landed = new Map();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('stays open under the local id without reporting it as a destination', () => {
+    const focused = vi.fn();
+    const { view } = renderContexts(focused);
+
+    view().selectEvent(local, document.createElement('a'));
+    view().refreshSelectedEventFromPage(page(server), true);
+
+    expect(view().selectedEvent()).toBe(local);
+    expect(focused).not.toHaveBeenCalled();
+  });
+
+  it('moves to the server id and its chip once the create lands', () => {
+    const focused = vi.fn();
+    const { view } = renderContexts(focused);
+    const chip = document.createElement('a');
+    view().selectEvent(local, document.createElement('a'));
+
+    creates.creating.delete('local-1');
+    creates.landed.set('local-1', 'server-1');
+    view().refreshSelectedEventFromPage(page(server), true, (id) =>
+      id === server.id ? chip : undefined
+    );
+
+    expect(view().selectedEvent()).toBe(server);
+    expect(view().selectedEventAnchor()).toBe(chip);
+    expect(focused).toHaveBeenLastCalledWith('server-1');
+  });
+
+  it('closes when the landed event is not on the page', () => {
+    const { view } = renderContexts();
+    view().selectEvent(local, document.createElement('a'));
+
+    creates.creating.delete('local-1');
+    creates.landed.set('local-1', 'server-1');
+    view().refreshSelectedEventFromPage(page(), true);
+
+    expect(view().selectedEvent()).toBeUndefined();
   });
 });
