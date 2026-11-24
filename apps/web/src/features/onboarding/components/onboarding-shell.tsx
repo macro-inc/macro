@@ -46,6 +46,12 @@ export function OnboardingShell(props: {
       `
       }</style>
 
+      {/* On phones, long steps scroll under the back button; fade them out
+        beneath it. Content starts below this band, so nothing is covered at rest. */}
+      <div
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-x-0 top-0 z-40 h-22 bg-linear-to-b from-surface from-60% to-transparent sm:hidden"
+      />
       <header class="absolute left-6 top-5 z-50 sm:left-10">
         <Show when={props.onBack}>
           <button

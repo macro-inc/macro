@@ -6,7 +6,7 @@ export function BypassButton(props: {
   onBypass: () => void;
 }) {
   return (
-    <div class="absolute top-4 right-4 z-30">
+    <div class="absolute top-4 right-4 z-50">
       <Button
         variant="ghost"
         size="sm"

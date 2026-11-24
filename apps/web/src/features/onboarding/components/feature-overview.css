@@ -140,7 +140,8 @@
 }
 @media (max-width: 639px) {
   .feature-overview { width: 100%; margin-left: 0; overflow-x: clip; overflow-clip-margin: 24px; }
-  .feature-overview .feature-flow-expanded { height: auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 8px; margin-top: 0; }
+  /* Five columns keep Continue on screen in short in-app browsers. */
+  .feature-overview .feature-flow-expanded { height: auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px 4px; margin-top: 0; }
   .feature-overview .feature-flow-core { display: none; }
   .feature-overview button.feature-flow-node { position: relative; left: auto !important; top: auto !important; transform: none; gap: 7px; border-radius: 8px; }
   .feature-overview .feature-flow-icon { width: 44px; height: 44px; }

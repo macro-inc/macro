@@ -96,12 +96,16 @@ export function PlanComparison(props: {
                   scope="row"
                   class="py-4 pr-2 align-top font-normal sm:py-5 sm:pr-4"
                 >
-                  {row.feature}
+                  <span class="sm:hidden">{row.short}</span>
+                  <span class="max-sm:hidden">{row.feature}</span>
                 </th>
                 <For each={PLANS}>
                   {(plan) => (
                     <td class="py-4 pr-2 align-top last:pr-0 sm:py-5 sm:pr-4">
-                      {row.values[plan.tier]}
+                      <span class="sm:hidden">
+                        {row.shortValues[plan.tier]}
+                      </span>
+                      <span class="max-sm:hidden">{row.values[plan.tier]}</span>
                     </td>
                   )}
                 </For>
@@ -133,7 +137,9 @@ export function PlanComparison(props: {
                     }
                     class="flex min-h-10 w-full items-center justify-center rounded-full border border-edge px-2 py-2 text-center text-[11px] font-medium leading-4 text-ink-muted hover:border-ink-muted hover:text-ink disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink sm:px-3"
                   >
-                    Continue with {plan.name}
+                    {/* Phones show the plan alone so all three fit on one line. */}
+                    <span class="max-sm:sr-only">Continue with </span>
+                    {plan.name}
                   </button>
                 </td>
               )}

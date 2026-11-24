@@ -79,7 +79,7 @@ export function WorkspaceIntro(props: {
         teammates next.
       </p>
       <div
-        class="relative mt-8 flex h-40 w-full max-w-[400px] items-center justify-center sm:h-44"
+        class="relative mt-6 flex h-32 w-full max-w-[400px] items-center justify-center sm:mt-8 sm:h-44"
         aria-label={`${accent().name} workspace preview`}
       >
         <div
