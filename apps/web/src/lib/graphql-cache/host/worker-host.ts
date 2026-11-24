@@ -129,6 +129,15 @@ function isInitializationRequest(kind: CacheRequest['kind']): boolean {
   return kind === 'init' || kind === 'current-authority';
 }
 
+/**
+ * Reads give up after `requestTimeoutMs`. `sync-stop` is admitted like a read
+ * but resolves only once the run has stopped, which can take one page write
+ * longer: a caller told it stopped earlier would start the next run as busy.
+ */
+function hasReadTimeout(kind: CacheRequest['kind']): boolean {
+  return isReadOnlyCacheRequest(kind) && kind !== 'sync-stop';
+}
+
 type HostState =
   | 'idle'
   | 'initializing'
@@ -494,7 +503,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     for (const [id, entry] of pending) {
       if (isInitializationRequest(entry.kind))
         armRequestTimeout(id, entry, initializationTimeoutMs);
-      else if (isReadOnlyCacheRequest(entry.kind))
+      else if (hasReadTimeout(entry.kind))
         armRequestTimeout(id, entry, requestTimeoutMs);
     }
   }
@@ -1247,7 +1256,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         ? undefined
         : isInitializationRequest(msg.kind)
           ? initializationTimeoutMs
-          : isReadOnlyCacheRequest(msg.kind)
+          : hasReadTimeout(msg.kind)
             ? requestTimeoutMs
             : undefined;
       if (timeoutMs !== undefined) {

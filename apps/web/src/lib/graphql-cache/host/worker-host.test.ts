@@ -688,6 +688,28 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('resolves a sync stop only once the run stopped, past the read timeout', async () => {
+    vi.useFakeTimers();
+    configureAdapter = (fake) => fake.ignoredKinds.add('sync-stop');
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+    });
+    let stopped = false;
+    const stop = host.syncStop!().then(() => {
+      stopped = true;
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(stopped).toBe(false);
+
+    const adapter = requireAdapter();
+    const request = adapter.requests.find(({ kind }) => kind === 'sync-stop');
+    adapter.respond(request!.id, null);
+    await stop;
+    expect(stopped).toBe(true);
+    host.dispose();
+  });
+
   it('retries a transient coordinator registration failure without disabling or quarantining the cache', async () => {
     let attempt = 0;
     let first: FakePageAdapter | undefined;
