@@ -54,16 +54,18 @@ describe('handover checker', () => {
       `finds nothing new: ${scenario.name}`,
       async () => {
         const started = Date.now();
-        const result = await explore(scenario, bound);
+        // The deep run also merges no states where it can afford not to.
+        const prune = !DEEP || bound.maxFaults + bound.maxDelays > 1;
+        const result = await explore(scenario, { ...bound, prune });
         report.push({
-          scenario: scenario.name,
           ms: Date.now() - started,
           ...result,
         });
         expect(unknown(result.findings)).toEqual([]);
         expect(result.truncated, 'the bound was explored in full').toBe(false);
+        expect(result.cutShort, 'runs that hit a step cap').toBe(0);
       },
-      120 * 60_000
+      10 * 60 * 60_000
     );
   }
 
@@ -76,6 +78,7 @@ describe('handover checker', () => {
         steps: result.steps,
       });
       expect(unknown(result.violations)).toEqual([]);
+      expect(result.cutShort, 'the run hit a step cap').toBe(false);
     }, 60_000);
   }
 

@@ -16,7 +16,7 @@ export const EVERY_FAULT: FaultKind[] = [
   'thaw',
   'bfcache',
   'restore',
-  'replace-client',
+  'expire-session',
   'offline',
   'online',
   'hold-owner-lock',
@@ -44,7 +44,7 @@ export const SCENARIOS: CheckedScenario[] = [
       faults: EVERY_FAULT,
       horizonMs: HORIZON_MS,
     },
-    bound: { maxFaults: 1, maxDelays: 0, maxRuns: 20_000, prune: false },
+    bound: { maxFaults: 1, maxDelays: 0, maxRuns: 50_000 },
   },
   {
     scenario: {
@@ -53,16 +53,26 @@ export const SCENARIOS: CheckedScenario[] = [
       faults: EVERY_FAULT,
       horizonMs: HORIZON_MS,
     },
-    bound: { maxFaults: 1, maxDelays: 0, maxRuns: 20_000, prune: false },
+    bound: { maxFaults: 1, maxDelays: 0, maxRuns: 50_000 },
   },
   {
     scenario: {
-      name: 'two tabs, a tab leaving, one reordered message',
+      name: 'two tabs, one closing, one reordered message',
       pages: [1, 1],
-      faults: LEAVING,
+      faults: ['close'],
       horizonMs: HORIZON_MS,
     },
-    bound: { maxFaults: 1, maxDelays: 1, maxRuns: 20_000 },
+    bound: { maxFaults: 1, maxDelays: 1, maxRuns: 50_000 },
+  },
+  {
+    scenario: {
+      name: 'two tabs, one late message',
+      pages: [1, 1],
+      faults: [],
+      horizonMs: HORIZON_MS,
+      late: true,
+    },
+    bound: { maxFaults: 0, maxDelays: 1, maxRuns: 50_000 },
   },
   {
     scenario: {
@@ -71,7 +81,7 @@ export const SCENARIOS: CheckedScenario[] = [
       faults: EVERY_FAULT,
       horizonMs: HORIZON_MS,
     },
-    bound: { maxFaults: 1, maxDelays: 0, maxRuns: 50_000, prune: false },
+    bound: { maxFaults: 1, maxDelays: 0, maxRuns: 50_000 },
     deep: true,
   },
   {
@@ -81,7 +91,17 @@ export const SCENARIOS: CheckedScenario[] = [
       faults: EVERY_FAULT,
       horizonMs: HORIZON_MS,
     },
-    bound: { maxFaults: 1, maxDelays: 0, maxRuns: 50_000, prune: false },
+    bound: { maxFaults: 1, maxDelays: 0, maxRuns: 50_000 },
+  },
+  {
+    scenario: {
+      name: 'two tabs, a tab leaving, one late message',
+      pages: [1, 1],
+      faults: LEAVING,
+      horizonMs: HORIZON_MS,
+      late: true,
+    },
+    bound: { maxFaults: 1, maxDelays: 1, maxRuns: 1_000_000 },
     deep: true,
   },
   {
@@ -91,7 +111,7 @@ export const SCENARIOS: CheckedScenario[] = [
       faults: EVERY_FAULT,
       horizonMs: HORIZON_MS,
     },
-    bound: { maxFaults: 1, maxDelays: 1, maxRuns: 200_000 },
+    bound: { maxFaults: 1, maxDelays: 1, maxRuns: 1_000_000 },
     deep: true,
   },
   {
@@ -101,7 +121,7 @@ export const SCENARIOS: CheckedScenario[] = [
       faults: EVERY_FAULT,
       horizonMs: HORIZON_MS,
     },
-    bound: { maxFaults: 2, maxDelays: 0, maxRuns: 200_000 },
+    bound: { maxFaults: 2, maxDelays: 0, maxRuns: 1_000_000 },
     deep: true,
   },
 ];

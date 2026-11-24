@@ -11,6 +11,7 @@
  * client, WebSocket and auth, which the handover does not depend on).
  */
 
+import { createHash } from 'node:crypto';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { match } from 'ts-pattern';
 import { vi } from 'vitest';
@@ -23,7 +24,7 @@ import { installCacheCoordinatorWorker } from '../worker/cache-coordinator-runti
 import { installCacheEngineWorker } from '../worker/cache-engine-runtime';
 import { databaseOwnerLockName } from '../worker/coordinator-protocol';
 import { CoordinatorRouter } from '../worker/coordinator-router';
-import { DurableStorage, FakeEngineCore } from './fake-engine';
+import { DRAFT_MUTATION, DurableStorage, FakeEngineCore } from './fake-engine';
 import {
   Sim,
   SimBroadcastChannel,
@@ -47,6 +48,8 @@ export type CallOutcome = {
   settledAt?: number;
   result?: 'ok' | 'error';
   error?: unknown;
+  /** The page had ended, or its session had, by the time it settled. */
+  moot?: boolean;
 };
 
 /** Each time a page dropped its host and went to the network. */
@@ -216,6 +219,8 @@ export class Page {
   cacheOff = false;
   readonly recovery: ReturnType<typeof createCacheRecovery>;
   stops: string[] = [];
+  /** Goes up each time the page's session ends. */
+  session = 0;
 
   constructor(
     private readonly world: World,
@@ -275,11 +280,12 @@ export class Page {
     const host = this.host;
     this.host = undefined;
     this.cacheOff = true;
-    this.world.retirements.push({
-      page: this.id,
-      at: this.world.sim.now,
-      error,
-    });
+    if (!this.closing)
+      this.world.retirements.push({
+        page: this.id,
+        at: this.world.sim.now,
+        error,
+      });
     host?.dispose();
     this.recovery.failed(error);
   }
@@ -307,7 +313,9 @@ export class Page {
       ...(probe ? { probe } : {}),
     };
     this.world.calls.push(call);
-    this.track(call, () => host.readQuery({ query: 'query Inbox { inbox }' }));
+    this.track(call, () =>
+      host.readQuery({ query: 'query Viewer { user { id } }' })
+    );
   }
 
   draft(): void {
@@ -325,9 +333,14 @@ export class Page {
       host.enqueueOptimisticMutation(
         {
           uuid,
-          query: 'mutation Draft { draft }',
-          variables: {},
-          data: { draft: true },
+          query: DRAFT_MUTATION,
+          variables: { input: { draftId: uuid } },
+          data: {
+            saveEmailDraft: {
+              __typename: 'SaveEmailDraftPayload',
+              draftId: uuid,
+            },
+          },
           generation: '00000000-0000-4000-8000-000000000098',
         },
         { owner: this.id, nowMs: this.world.sim.now, leaseExpiresAtMs: 0 }
@@ -343,6 +356,7 @@ export class Page {
     call: CallOutcome,
     request: () => Promise<unknown>
   ): Promise<void> {
+    const session = this.session;
     try {
       await request();
       call.result = 'ok';
@@ -351,6 +365,7 @@ export class Page {
       call.error = error;
     }
     call.settledAt = this.world.sim.now;
+    call.moot = this.closing || session !== this.session;
   }
 
   setVisibility(state: DocumentVisibilityState): void {
@@ -383,12 +398,18 @@ export class Page {
     this.setVisibility('visible');
   }
 
-  /** The page swaps its client, as sign-in and session changes do. */
-  replaceClient(): void {
+  /** The session ends (`disposeSessionClients`), and is back a second later. */
+  expireSession(): void {
+    this.session += 1;
+    this.recovery.reset();
+    this.stops = [];
+    this.cacheOff = false;
     const host = this.host;
     this.host = undefined;
     host?.dispose();
-    this.client();
+    this.world.sim.setTimeout(() => {
+      fireAndForget(this.start(), 'handover-checker');
+    }, 1_000);
   }
 }
 
@@ -396,7 +417,8 @@ export class Page {
  * What can happen to the origin. `close` runs the page's `pagehide`; `kill`
  * ends it with no event, as a crash or a discarded tab does. `crash-engine`
  * ends a page's engine worker and tells nobody. `bfcache` navigates away with
- * the page kept, frozen, and `restore` comes back to it. `hold-owner-lock`
+ * the page kept, frozen, and `restore` comes back to it. `expire-session` signs
+ * a page out for a second. `hold-owner-lock`
  * has another context keep the database's lock for 5 s, and `fail-open` makes
  * the next open of the database fail.
  */
@@ -409,7 +431,7 @@ export type FaultKind =
   | 'restart-coordinator'
   | 'freeze'
   | 'thaw'
-  | 'replace-client'
+  | 'expire-session'
   | 'offline'
   | 'online'
   | 'hold-owner-lock'
@@ -420,6 +442,10 @@ export type FaultKind =
 
 export type Fault = { kind: FaultKind; page?: string };
 
+/** A fault as violations name it: what it was, and whether it hit a page with
+ * an engine. */
+export type InjectedFault = FaultKind | `${FaultKind} owner` | 'late-message';
+
 export type Scenario = {
   name: string;
   /** Build time of each page opened at the start, in order. */
@@ -428,13 +454,25 @@ export type Scenario = {
   faults: FaultKind[];
   /** Fault-phase length in virtual ms. */
   horizonMs: number;
+  /** Whether a message can be held back until a timer has fired. */
+  late?: boolean;
+};
+
+type Option = {
+  label: string;
+  run: () => Promise<void>;
+  /** Whether it counts against the bound's delays. */
+  delay: boolean;
+  /** Whether it delivers out of order. */
+  reorders?: boolean;
 };
 
 export class World {
   readonly sim = new Sim();
   readonly storage = new DurableStorage();
   readonly pages: Page[] = [];
-  readonly coordinators = new Map<number, Coordinator>();
+  /** By SharedWorker name, which has the scope and the build in it. */
+  readonly coordinators = new Map<string, Coordinator>();
   readonly engines: EngineWorker[] = [];
   readonly calls: CallOutcome[] = [];
   readonly retirements: Retirement[] = [];
@@ -451,8 +489,8 @@ export class World {
   private openedNewer = false;
   /** Set once faults stop; what is applied after that is the quiet phase. */
   quiet = false;
-  /** The kinds of fault injected before the quiet phase, in order. */
-  readonly injected: FaultKind[] = [];
+  /** The faults injected before the quiet phase, in order. */
+  readonly injected: InjectedFault[] = [];
   /** Deliveries made out of order before the quiet phase. */
   reordered = 0;
 
@@ -510,8 +548,10 @@ export class World {
       class {
         onerror: ((event: unknown) => unknown) | null = null;
         readonly port: SimPort;
-        constructor() {
-          this.port = world.coordinator(currentBuildTime()).connect();
+        constructor(_url: URL, options?: WorkerOptions) {
+          this.port = world
+            .coordinator(options?.name ?? '', currentBuildTime())
+            .connect();
         }
       }
     );
@@ -610,6 +650,10 @@ export class World {
     if (active === this) active = undefined;
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    // `install` put these in front of the ones on Document.prototype.
+    Reflect.deleteProperty(document, 'visibilityState');
+    Reflect.deleteProperty(document, 'hidden');
+    localStorage.clear();
   }
 
   private listenersOf(page: SimContext, type: string) {
@@ -637,11 +681,11 @@ export class World {
     }
   }
 
-  coordinator(buildTime: number): Coordinator {
-    let coordinator = this.coordinators.get(buildTime);
+  coordinator(name: string, buildTime: number): Coordinator {
+    let coordinator = this.coordinators.get(name);
     if (!coordinator) {
       coordinator = new Coordinator(this, buildTime);
-      this.coordinators.set(buildTime, coordinator);
+      this.coordinators.set(name, coordinator);
     }
     return coordinator;
   }
@@ -713,8 +757,8 @@ export class World {
         .with('close', () => !context.frozen)
         .with('kill', () => true)
         .with(
-          'replace-client',
-          () => page.host !== undefined && !context.frozen
+          'expire-session',
+          () => page.host !== undefined && !context.frozen && !page.closing
         )
         .with(
           'restart-coordinator',
@@ -734,12 +778,18 @@ export class World {
   }
 
   async apply(fault: Fault): Promise<void> {
-    if (!this.quiet) this.injected.push(fault.kind);
     this.steps.push({
       kind: 'fault',
       fault: `${fault.kind}${fault.page ? `:${fault.page}` : ''}`,
     });
     const page = this.pages.find((candidate) => candidate.id === fault.page);
+    const owner = page !== undefined && this.enginesOf(page).length > 0;
+    if (!this.quiet)
+      this.injected.push(owner ? `${fault.kind} owner` : fault.kind);
+    page?.context.note(fault.kind);
+    if (fault.kind === 'crash-engine' && page)
+      for (const engine of this.enginesOf(page))
+        engine.context.note(fault.kind);
     if (page) await this.applyToPage(fault.kind, page);
     else this.applyToOrigin(fault.kind);
     this.sim.prune();
@@ -796,7 +846,7 @@ export class World {
         page.closing = true;
         this.endPage(page);
       })
-      .with('replace-client', () => inPage(() => page.replaceClient()))
+      .with('expire-session', () => inPage(() => page.expireSession()))
       .otherwise((other) => {
         throw new Error(`${other} is not a page fault`);
       });
@@ -837,83 +887,86 @@ export class World {
     );
   }
 
-  /** The default next step: the oldest delivery, else the next timer. */
-  options(): { label: string; run: () => Promise<void>; delay: boolean }[] {
+  /** What can happen next: first the default, the oldest delivery or else the
+   * next timer, then the choices that are delays. */
+  options(): Option[] {
     this.sim.prune();
-    const options: {
-      label: string;
-      run: () => Promise<void>;
-      delay: boolean;
-    }[] = [];
     const heads = this.sim.channels();
-    heads.forEach((delivery, index) => {
-      options.push({
-        label: `deliver ${delivery.channel} ${summarize(delivery.data)}`,
+    const deliveries = heads.map((delivery, index): Option => {
+      const summary = summarize(delivery.data);
+      return {
+        label: `deliver ${delivery.channel} ${summary}`,
         delay: index > 0,
+        reorders: index > 0,
         run: async () => {
           this.steps.push({
             kind: 'deliver',
             channel: delivery.channel,
-            summary: summarize(delivery.data),
+            summary,
           });
           await this.sim.deliver(delivery);
         },
-      });
+      };
     });
-    if (heads.length === 0) {
-      const timer = this.sim.nextTimer();
-      if (timer)
-        options.push({
-          label: `timer ${timer.label}`,
-          delay: false,
-          run: async () => {
-            this.steps.push({
-              kind: 'timer',
-              label: timer.label,
-              at: timer.at,
-            });
-            await this.sim.advance(timer);
-          },
-        });
-    }
-    return options;
+    const [oldest] = heads;
+    if (!oldest) return this.timerOption();
+    return [...deliveries, ...this.lateOptions(oldest.channel)];
   }
 
-  /** Coarse state for pruning schedules that reach a state already seen. */
+  private timerOption(): Option[] {
+    const timer = this.sim.nextTimer();
+    if (!timer) return [];
+    return [
+      {
+        label: `timer ${timer.label}`,
+        delay: false,
+        run: async () => {
+          this.steps.push({ kind: 'timer', label: timer.label, at: timer.at });
+          await this.sim.advance(timer);
+        },
+      },
+    ];
+  }
+
+  private lateOptions(channel: string): Option[] {
+    if (!this.scenario.late || this.sim.lateChannel() !== undefined) return [];
+    return this.sim.deadlines().map((timer) => ({
+      label: `hold ${channel} until ${timer.label}`,
+      delay: true,
+      run: async () => {
+        this.steps.push({ kind: 'hold', channel, label: timer.label });
+        this.injected.push('late-message');
+        this.sim.holdUntil(channel, timer);
+      },
+    }));
+  }
+
+  /**
+   * The state a run is in, for skipping schedules that reach it again: what
+   * every context has handled, what is on its way, the locks, the databases
+   * and the armed timers in order. Heartbeats and the time are left out.
+   */
   signature(): string {
-    const coordinators = [...this.coordinators.values()]
-      .map(
-        (coordinator) => `${coordinator.buildTime}:${coordinator.coreState()}`
-      )
-      .join(',');
-    const pages = this.pages
-      .map((page) =>
-        [
-          page.id,
-          page.context.alive ? 'alive' : 'gone',
-          page.context.visibilityState[0],
-          page.context.frozen ? 'F' : '',
-          page.context.onLine ? '' : 'off',
-          page.host ? (page.host.disabled ? 'disabled' : 'host') : 'nohost',
-          page.recovery.state(),
-          page.cacheOff ? 'network' : 'cache',
-        ].join('.')
-      )
-      .join('|');
+    const contexts = this.sim.contexts.map(
+      (context) =>
+        `${context.id}:${context.history}${context.alive ? '' : 'x'}${context.frozen ? 'f' : ''}`
+    );
     const pending = this.sim
-      .channels()
-      .map((delivery) => `${delivery.channel}=${summarize(delivery.data)}`)
-      .join(',');
-    const calls = this.calls.filter((call) => call.result === undefined).length;
-    const engines = this.engines.filter(
-      (engine) => engine.context.alive
-    ).length;
-    const storage = [...this.storage.databases.values()]
-      .map(
-        (database) =>
-          `${database.queue.size}.${database.wipes}.${database.openBy ? 'open' : 'closed'}`
-      )
-      .join(',');
-    return `${coordinators}#${pages}#${pending}#${calls}#${engines}#${storage}.${this.storage.failNextOpens}#${this.sim.timerSummary()}`;
+      .pending()
+      .map((delivery) => `${delivery.channel}=${summarize(delivery.data)}`);
+    const storage = [...this.storage.databases].map(
+      ([scope, { queue, wipes, openBy }]) =>
+        `${scope}:${queue.size}.${wipes}.${openBy ?? ''}`
+    );
+    const state = [
+      contexts.join(),
+      pending.join(),
+      this.sim.lateChannel(),
+      this.sim.locks.summary(),
+      storage.join(),
+      this.storage.failNextOpens,
+      this.sim.timerSummary(),
+    ].join('#');
+    return createHash('sha1').update(state).digest('base64');
   }
 }

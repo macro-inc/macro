@@ -21,6 +21,9 @@ export class SimContext {
   readonly listeners = new Map<string, Set<EventListenerLike>>();
   visibilityState: DocumentVisibilityState = 'visible';
   onLine = true;
+  /** A hash of every event this context handled, in order: its code is
+   * deterministic, so equal histories mean equal state. */
+  history = 0;
   constructor(
     readonly id: string,
     readonly kind: ContextKind,
@@ -28,7 +31,27 @@ export class SimContext {
     readonly parent: SimContext | undefined,
     readonly buildTime: number
   ) {}
+
+  note(event: string): void {
+    this.history = hash(event, this.history);
+  }
 }
+
+/** FNV-1a over 53 bits, continued from `seed`. */
+function hash(text: string, seed: number): number {
+  let low = (seed ^ 0x811c9dc5) >>> 0;
+  let high = (Math.floor(seed / 0x100000000) ^ 0x1000193) >>> 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    low = Math.imul(low ^ code, 0x01000193) >>> 0;
+    high = Math.imul(high ^ code, 0x85ebca6b) >>> 0;
+  }
+  return (high & 0x1fffff) * 0x100000000 + low;
+}
+
+/** Heartbeats change nothing that outlives them, so histories leave them out. */
+const isHeartbeat = (label: string): boolean =>
+  label.startsWith('heartbeat') || label.endsWith(':2000ms');
 
 type EventListenerLike =
   | ((event: unknown) => unknown)
@@ -38,7 +61,7 @@ type Delivery = {
   seq: number;
   channel: string;
   sender: SimContext | undefined;
-  target: SimPort | SimBroadcastChannel | SimLockGrant;
+  target: SimPort | SimBroadcastChannel | SimTask;
   data: unknown;
   ports: SimPort[];
 };
@@ -69,6 +92,11 @@ export class SimPort {
     private readonly sim: Sim,
     readonly id: string
   ) {}
+
+  /** A message's ports are named by id in a context's history. */
+  toJSON(): string {
+    return this.id;
+  }
 
   get onmessage(): ((event: unknown) => unknown) | null {
     return this.handler;
@@ -151,19 +179,18 @@ export class SimPort {
   receiverAlive(): boolean {
     if (this.closed) return false;
     if (!this.started) return true;
-    const contexts = [
+    return this.receivers().some((context) => !context || context.alive);
+  }
+
+  receivers(): (SimContext | undefined)[] {
+    return [
       ...(this.handler ? [this.handlerContext] : []),
       ...(this.listeners.get('message')?.values() ?? []),
     ];
-    return contexts.some((context) => !context || context.alive);
   }
 
   receiverFrozen(): boolean {
-    const contexts = [
-      ...(this.handler ? [this.handlerContext] : []),
-      ...(this.listeners.get('message')?.values() ?? []),
-    ];
-    return contexts.some((context) => context?.frozen === true);
+    return this.receivers().some((context) => context?.frozen === true);
   }
 }
 
@@ -229,11 +256,11 @@ type LockRequest = {
 };
 
 /**
- * A lock grant that crosses processes: another context died and the browser
- * hands its lock on. It is scheduled like a message, so it can arrive before
- * or after what the dead context posted just before it died.
+ * A task the browser queues for a context from outside it, such as the answer
+ * to a lock request. It is scheduled like a message, so it can arrive before
+ * or after what another context posted just before it.
  */
-export class SimLockGrant {
+export class SimTask {
   readonly closed = false;
   constructor(
     readonly context: SimContext,
@@ -248,7 +275,6 @@ export class SimLockGrant {
 /** Web Locks for one origin, with the browser's grant order. */
 export class SimLockManager {
   private readonly held: HeldLock[] = [];
-  private deferGrants = false;
   private readonly queue: LockRequest[] = [];
 
   constructor(private readonly sim: Sim) {}
@@ -287,7 +313,7 @@ export class SimLockManager {
         return;
       }
       if (options.ifAvailable && !this.grantable(name, mode, true)) {
-        this.sim.task(context, 'lock-unavailable', () => {
+        this.answer(context, 'lock-unavailable', () => {
           this.settle(request, null);
         });
         return;
@@ -303,7 +329,28 @@ export class SimLockManager {
     });
   }
 
+  /** One pipe from the browser to each context, so its answers stay in order. */
+  private answer(context: SimContext, kind: string, run: () => void): void {
+    this.sim.queueTask(context, `lock:${context.id}`, kind, run);
+  }
+
   async query(): Promise<LockManagerSnapshot> {
+    const snapshot = this.snapshot();
+    return await new Promise((resolve) => {
+      this.answer(this.sim.current() ?? this.sim.rootContext, 'locks', () =>
+        resolve(snapshot)
+      );
+    });
+  }
+
+  /** Who holds and who waits for what, in order. */
+  summary(): string {
+    const list = (locks: { name: string; context: SimContext }[]) =>
+      locks.map(({ name, context }) => `${name}=${context.id}`).join(',');
+    return `${list(this.held)};${list(this.queue)}`;
+  }
+
+  private snapshot(): LockManagerSnapshot {
     return {
       held: this.held.map((lock) => ({
         name: lock.name,
@@ -323,14 +370,9 @@ export class SimLockManager {
     for (let index = this.queue.length - 1; index >= 0; index -= 1) {
       if (this.queue[index]?.context === context) this.queue.splice(index, 1);
     }
-    this.deferGrants = true;
-    try {
-      for (const lock of this.held.filter((held) => held.context === context))
-        this.release(lock);
-      this.pump();
-    } finally {
-      this.deferGrants = false;
-    }
+    for (const lock of this.held.filter((held) => held.context === context))
+      this.release(lock);
+    this.pump();
   }
 
   private grantable(name: string, mode: LockMode, ignoreQueue: boolean) {
@@ -364,18 +406,9 @@ export class SimLockManager {
     };
     this.held.push(lock);
     this.pendingHeld.set(request, lock);
-    const run = () =>
-      this.settle(request, { name: request.name, mode: request.mode });
-    if (this.deferGrants) {
-      this.sim.enqueue({
-        channel: `lock:${request.name}`,
-        target: new SimLockGrant(request.context, run),
-        data: { kind: 'lock-granted' },
-        ports: [],
-      });
-      return;
-    }
-    this.sim.task(request.context, `lock-granted:${request.name}`, run);
+    this.answer(request.context, 'lock-granted', () =>
+      this.settle(request, { name: request.name, mode: request.mode })
+    );
   }
 
   private readonly pendingHeld = new Map<LockRequest, HeldLock>();
@@ -401,19 +434,11 @@ export class SimLockManager {
     this.sim.start(request.context, run);
   }
 
-  /** A lock passed on after a release reaches its next holder like a
-   * message from another process, ordered with the releaser's messages. */
   private release(lock: HeldLock): void {
     const index = this.held.indexOf(lock);
     if (index < 0) return;
     this.held.splice(index, 1);
-    const defer = this.deferGrants;
-    this.deferGrants = true;
-    try {
-      this.pump();
-    } finally {
-      this.deferGrants = defer;
-    }
+    this.pump();
   }
 }
 
@@ -421,6 +446,7 @@ export class SimLockManager {
 export type Step =
   | { kind: 'deliver'; channel: string; summary: string }
   | { kind: 'timer'; label: string; at: number }
+  | { kind: 'hold'; channel: string; label: string }
   | { kind: 'fault'; fault: string };
 
 const nativeSetImmediate = globalThis.setImmediate;
@@ -509,6 +535,24 @@ export class Sim {
     this.deliveries.push({ ...delivery, seq: this.seq, sender });
   }
 
+  /** Queues `run` for `context` as a delivery of its own. */
+  queueTask(
+    context: SimContext,
+    channel: string,
+    kind: string,
+    run: () => void
+  ): void {
+    this.seq += 1;
+    this.deliveries.push({
+      channel,
+      target: new SimTask(context, run),
+      data: { kind },
+      ports: [],
+      seq: this.seq,
+      sender: undefined,
+    });
+  }
+
   task(context: SimContext | undefined, label: string, fn: () => void): void {
     this.tasks.push({ context, fn, label });
   }
@@ -581,6 +625,7 @@ export class Sim {
     } else {
       this.timers.delete(timer.id);
     }
+    if (!isHeartbeat(timer.label)) timer.context?.note(timer.label);
     this.runIn(timer.context, timer.fn);
   }
 
@@ -592,8 +637,44 @@ export class Sim {
       heads.set(delivery.channel, delivery);
     }
     return [...heads.values()]
-      .filter((delivery) => !this.heldBack(delivery))
+      .filter(
+        (delivery) =>
+          delivery.channel !== this.lateChannel() && !this.heldBack(delivery)
+      )
       .sort((a, b) => a.seq - b.seq);
+  }
+
+  /** Every message on its way, by channel and then in order. */
+  pending(): Delivery[] {
+    return [...this.deliveries].sort(
+      (a, b) => a.channel.localeCompare(b.channel) || a.seq - b.seq
+    );
+  }
+
+  private late: { channel: string; timer: number } | undefined;
+
+  /** Holds a channel's messages back until a timer has fired. */
+  holdUntil(channel: string, timer: Timer): void {
+    this.late = { channel, timer: timer.id };
+  }
+
+  releaseLate(): void {
+    this.late = undefined;
+  }
+
+  lateChannel(): string | undefined {
+    if (this.late && !this.timers.has(this.late.timer)) this.late = undefined;
+    return this.late?.channel;
+  }
+
+  /** The armed timers a message could come after, by label. */
+  deadlines(): Timer[] {
+    const byLabel = new Map<string, Timer>();
+    for (const timer of this.timers.values()) {
+      if (timer.context?.frozen || isHeartbeat(timer.label)) continue;
+      if (!byLabel.has(timer.label)) byLabel.set(timer.label, timer);
+    }
+    return [...byLabel.values()];
   }
 
   private heldBack(delivery: Delivery): boolean {
@@ -620,10 +701,19 @@ export class Sim {
   async deliver(delivery: Delivery): Promise<void> {
     const index = this.deliveries.indexOf(delivery);
     if (index >= 0) this.deliveries.splice(index, 1);
+    this.note(delivery);
     if (delivery.target instanceof SimPort)
       delivery.target.receive(delivery.data, delivery.ports);
     else delivery.target.receive(delivery.data);
     await this.settle();
+  }
+
+  private note({ target, channel, data }: Delivery): void {
+    if (isHeartbeat(summarize(data))) return;
+    const event = `${channel} ${JSON.stringify(data)}`;
+    const receivers =
+      target instanceof SimPort ? target.receivers() : [target.context];
+    for (const context of new Set(receivers)) context?.note(event);
   }
 
   nextTimer(): Timer | undefined {
@@ -646,18 +736,20 @@ export class Sim {
     await this.settle();
   }
 
-  /** Which timers are armed (context and delay, not time left), for state
-   * signatures: a pending timeout is state, how far along it is is not. */
+  /** The armed timers in the order they are due, for state signatures. */
   timerSummary(): string {
-    return [
-      ...new Set(
-        [...this.timers.values()]
-          .filter((timer) => timer.context?.alive !== false)
-          .map((timer) => timer.label)
-      ),
-    ]
-      .sort()
+    return [...this.timers.values()]
+      .filter(
+        (timer) => timer.context?.alive !== false && !isHeartbeat(timer.label)
+      )
+      .sort((a, b) => a.at - b.at || a.seq - b.seq)
+      .map((timer) => timer.label)
       .join(',');
+  }
+
+  /** Moves the clock on, with every timer due before then already fired. */
+  advanceTo(at: number): void {
+    this.now = Math.max(this.now, at);
   }
 }
 

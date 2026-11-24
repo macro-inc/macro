@@ -1,11 +1,12 @@
 /**
  * Systematic exploration: every schedule of a scenario with at most
- * `maxFaults` injected faults and at most `maxDelays` out-of-order deliveries
- * (delivering a later channel's message before the oldest one), within the
- * scenario's horizon. Runs are replayed from scratch from their choices.
- * A branch is skipped when the same coarse state (`World.signature`) was
- * already branched from with at least the same budget left; that is the one
- * approximation in "every schedule", and the report says how many it pruned.
+ * `maxFaults` injected faults and at most `maxDelays` delays, within the
+ * scenario's horizon. A delay delivers a later channel's message before the
+ * oldest one or, where the scenario has late messages, holds the oldest back
+ * until one of the armed timers has fired. Runs are replayed from scratch from their choices.
+ * A branch is skipped when the same state (`World.signature`) was already
+ * branched from with at least the same budget left, and the report says how
+ * many it pruned.
  */
 import { check, QUIET_MS } from './properties';
 import { type Fault, type Scenario, World } from './world';
@@ -35,9 +36,11 @@ export type RunResult = {
   records: StepRecord[];
   violations: FoundViolation[];
   steps: string[];
+  /** A step cap ended a phase early, so the run says less than it claims. */
+  cutShort: boolean;
 };
 
-/** Faults of a violation's key, as a set to compare with another's. */
+/** A violation and the faults that led to it, sorted, repeats kept. */
 export type ViolationKey = {
   symptom: string;
   faults: string[];
@@ -49,16 +52,26 @@ export function violationKey({
   faults,
   reordered,
 }: ViolationKey): string {
-  const how = faults.length > 0 ? faults.join('+') : 'no fault';
+  const times = new Map<string, number>();
+  for (const fault of faults) times.set(fault, (times.get(fault) ?? 0) + 1);
+  const named = [...times].map(([fault, count]) =>
+    count > 1 ? `${fault}×${count}` : fault
+  );
+  const how = named.length > 0 ? named.join('+') : 'no fault';
   return `${symptom} [${how}${reordered ? ', reordered' : ''}]`;
 }
+
+const count = (faults: string[], fault: string): number =>
+  faults.filter((other) => other === fault).length;
 
 /** Whether `narrow` shows the same symptom as `wide` with no more to cause it. */
 export function explains(narrow: ViolationKey, wide: ViolationKey): boolean {
   return (
     narrow.symptom === wide.symptom &&
     (wide.reordered || !narrow.reordered) &&
-    narrow.faults.every((fault) => wide.faults.includes(fault))
+    narrow.faults.every(
+      (fault) => count(wide.faults, fault) >= count(narrow.faults, fault)
+    )
   );
 }
 
@@ -77,6 +90,8 @@ export type ExplorationReport = {
   runs: number;
   pruned: number;
   truncated: boolean;
+  /** Runs a step cap ended early. */
+  cutShort: number;
   /** Each distinct violation, less those a simpler cause also shows. */
   findings: Finding[];
 };
@@ -99,19 +114,22 @@ async function boot(world: World): Promise<void> {
   await world.sim.settle();
 }
 
-/** Runs the default schedule until nothing is due before `ms` from now. */
-async function quiesce(world: World, ms: number): Promise<void> {
+/** Runs the default schedule for `ms`; false if the step cap ended it first. */
+async function quiesce(world: World, ms: number): Promise<boolean> {
   const until = world.sim.now + ms;
   for (let step = 0; step < 20_000; step += 1) {
     const [next] = world.options();
-    if (!next) return;
     if (
-      next.label.startsWith('timer') &&
-      (world.sim.nextTimer()?.at ?? Infinity) > until
-    )
-      return;
+      !next ||
+      (next.label.startsWith('timer') &&
+        (world.sim.nextTimer()?.at ?? Infinity) > until)
+    ) {
+      world.sim.advanceTo(until);
+      return true;
+    }
     await next.run();
   }
+  return false;
 }
 
 /**
@@ -119,8 +137,9 @@ async function quiesce(world: World, ms: number): Promise<void> {
  * one. A background page can stay frozen for as long as the browser likes,
  * so it stays hidden and frozen, and the other pages must not need it.
  */
-async function quiet(world: World): Promise<void> {
+async function quiet(world: World): Promise<boolean> {
   world.quiet = true;
+  world.sim.releaseLate();
   for (const page of world.livePages()) {
     if (page.closing || page.context.frozen) continue;
     if (!page.context.onLine)
@@ -128,19 +147,19 @@ async function quiet(world: World): Promise<void> {
     if (page.context.visibilityState === 'hidden')
       await world.apply({ kind: 'show', page: page.id });
   }
-  await quiesce(world, QUIET_MS);
+  const settled = await quiesce(world, QUIET_MS);
   for (const page of world.livePages()) {
     if (page.closing || page.context.frozen) continue;
     world.sim.runIn(page.context, () => page.read(true));
   }
   await world.sim.settle();
-  await quiesce(world, 30_000);
+  return (await quiesce(world, 30_000)) && settled;
 }
 
 /** A violation's key says which faults led to it, so one symptom reached
  * different ways (an engine crash, a reload) reads as two. */
 function found(world: World): FoundViolation[] {
-  const faults = [...new Set(world.injected)].sort();
+  const faults = [...world.injected].sort();
   return check(world).map((violation) => ({
     symptom: violation.symptom,
     faults,
@@ -163,6 +182,7 @@ export function minimal<T extends ViolationKey>(findings: T[]): T[] {
 function describeStep(step: World['steps'][number]): string {
   if (step.kind === 'fault') return `fault ${step.fault}`;
   if (step.kind === 'timer') return `timer ${step.label}`;
+  if (step.kind === 'hold') return `hold ${step.channel} until ${step.label}`;
   return `deliver ${step.channel} ${step.summary}`;
 }
 
@@ -177,7 +197,9 @@ export async function runSchedule(
     const start = world.sim.now;
     const records: StepRecord[] = [];
     const choices: number[] = [];
+    let cutShort = true;
     for (let step = 0; step < MAX_STEPS; step += 1) {
+      cutShort = false;
       if (world.sim.now - start > scenario.horizonMs) break;
       const options = world.options();
       const faults: Fault[] = world.faults();
@@ -199,20 +221,22 @@ export async function runSchedule(
       if (choice < faultStart) {
         const option = options[choice];
         if (!option) break;
-        if (option.delay) world.reordered += 1;
+        if (option.reorders) world.reordered += 1;
         await option.run();
       } else {
         const fault = faults[choice - faultStart];
         if (!fault) break;
         await world.apply(fault);
       }
+      cutShort = true;
     }
-    await quiet(world);
+    const settled = await quiet(world);
     return {
       choices,
       records,
       violations: found(world),
       steps: world.steps.map(describeStep),
+      cutShort: cutShort || !settled,
     };
   } finally {
     world.uninstall();
@@ -241,6 +265,7 @@ export async function explore(
     runs: 0,
     pruned: 0,
     truncated: false,
+    cutShort: 0,
     findings: [],
   };
   const byKey = new Map<string, Finding>();
@@ -254,6 +279,7 @@ export async function explore(
     const prefix = stack.pop() as number[];
     const result = await runSchedule(scenario, prefix);
     report.runs += 1;
+    if (result.cutShort) report.cutShort += 1;
     for (const violation of result.violations) {
       const key = violationKey(violation);
       const seen = byKey.get(key);
@@ -317,16 +343,19 @@ export async function runScript(
   world.install();
   try {
     await boot(world);
+    let settled = true;
     for (const step of script) {
-      if ('waitMs' in step) await quiesce(world, step.waitMs);
+      if ('waitMs' in step)
+        settled = (await quiesce(world, step.waitMs)) && settled;
       else await world.apply(step);
     }
-    await quiet(world);
+    settled = (await quiet(world)) && settled;
     return {
       choices: [],
       records: [],
       violations: found(world),
       steps: world.steps.map(describeStep),
+      cutShort: !settled,
     };
   } finally {
     world.uninstall();

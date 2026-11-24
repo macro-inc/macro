@@ -31,10 +31,10 @@ export type Violation = {
 /**
  * After the last fault, how long a page has to get its cache back (T in the
  * property). The code's own waits fit well inside it: the owner-lock budget
- * (about 11.4 s), the open deadline (20 s), the page backoff cap (30 s) and
- * the recovery healthy window (60 s).
+ * (about 11.4 s), the open deadline (20 s), the page backoff cap (30 s), the
+ * recovery healthy window (60 s) and the engine's asset load (5 min).
  */
-export const QUIET_MS = 3 * 60_000;
+export const QUIET_MS = 6 * 60_000;
 
 export function errorClass(error: unknown): string {
   if (!(error instanceof Error)) return typeof error;
@@ -63,7 +63,10 @@ function cacheState(page: Page, probe: CallOutcome | undefined): string {
 
 /** What became of a queued write that is not in the queue any more. */
 function lostBecause(world: World, admittedTo: string, scope: string): string {
-  if (admittedTo !== scope) return 'scope changed';
+  if (admittedTo !== scope)
+    return world.engines.some(({ core }) => core?.serving === admittedTo)
+      ? 'scope changed, old database still open'
+      : 'scope changed';
   if (world.storage.database(admittedTo).wipes > 0) return 'database wiped';
   return 'removed';
 }
@@ -80,10 +83,7 @@ const pageOf = (world: World, id: string): Page | undefined =>
 
 function retirements(world: World): Violation[] {
   return world.retirements
-    .filter(
-      ({ page, error }) =>
-        pageOf(world, page)?.closing === false && !superseded(error)
-    )
+    .filter(({ error }) => !superseded(error))
     .map(({ page, error, at }) => ({
       symptom: `S2:host retired on ${errorClass(error)}`,
       detail: `${page} at ${at}`,
@@ -93,12 +93,24 @@ function retirements(world: World): Violation[] {
 function lostWrites(world: World): Violation[] {
   const scope = getOrCreateCacheScope();
   const { queue } = world.storage.database(scope);
-  return [...world.storage.admitted]
+  const neverStored = world.calls
+    .filter(
+      ({ kind, result, uuid }) =>
+        kind === 'draft' &&
+        result === 'ok' &&
+        !world.storage.admitted.has(uuid ?? '')
+    )
+    .map(({ page }) => ({
+      symptom: 'S3:accepted write never stored',
+      detail: page,
+    }));
+  const lost = [...world.storage.admitted]
     .filter(([uuid]) => !queue.has(uuid))
     .map(([uuid, admittedTo]) => ({
       symptom: `S3:queued write lost (${lostBecause(world, admittedTo, scope)})`,
       detail: uuid,
     }));
+  return [...neverStored, ...lost];
 }
 
 function olderOpens(world: World): Violation[] {
@@ -118,9 +130,9 @@ function olderOpens(world: World): Violation[] {
 function uncodedRefusals(world: World): Violation[] {
   return world.calls
     .filter(
-      ({ page, result, error }) =>
+      ({ result, moot, error }) =>
         result === 'error' &&
-        pageOf(world, page)?.closing === false &&
+        !moot &&
         typeof (error as { errorCode?: unknown }).errorCode !== 'string' &&
         (error as Error).name !== 'CacheNavigationError'
     )
@@ -154,8 +166,12 @@ function cachesNotBack(world: World, live: Page[]): Violation[] {
 
 function missingEngine(world: World, live: Page[]): Violation[] {
   const newest = Math.max(...live.map((page) => page.context.buildTime));
-  const state = world.coordinators.get(newest)?.coreState();
-  if (state === undefined || state.startsWith('active')) return [];
+  const states = [...world.coordinators.values()]
+    .filter(({ buildTime }) => buildTime === newest)
+    .map((coordinator) => coordinator.coreState());
+  const state = states.at(-1);
+  if (state === undefined || states.some((each) => each.startsWith('active')))
+    return [];
   return [
     {
       symptom: `L2:no active engine (${state.replace(/[@:/].*/, '')})`,

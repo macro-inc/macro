@@ -19,6 +19,9 @@ import { databaseOwnerLockName } from '../worker/coordinator-protocol';
 import type { CacheWorkerCoreOptions } from '../worker/worker-core';
 import type { Sim, SimContext } from './sim';
 
+export const DRAFT_MUTATION =
+  'mutation SaveDraft($input: SaveEmailDraftInput!) { saveEmailDraft(input: $input) { draftId } }';
+
 export type StoredMutation = { uuid: string; enqueuedBy: string };
 
 type Database = {
@@ -47,7 +50,7 @@ export class DurableStorage {
     return database;
   }
 
-  open(scope: string, engine: string, wipe: boolean, buildTime: number): void {
+  open(scope: string, engine: string, buildTime: number): void {
     const database = this.database(scope);
     this.opens.push({ engine, buildTime, scope });
     if (database.openBy !== undefined && database.openBy !== engine)
@@ -55,10 +58,12 @@ export class DurableStorage {
         `${engine} opened ${scope} while ${database.openBy} had it open`
       );
     database.openBy = engine;
-    if (wipe) {
-      database.queue.clear();
-      database.wipes += 1;
-    }
+  }
+
+  wipe(scope: string): void {
+    const database = this.database(scope);
+    database.queue.clear();
+    database.wipes += 1;
   }
 
   close(scope: string, engine: string): void {
@@ -94,6 +99,7 @@ export class FakeEngineCore {
     }
     this.active += 1;
     try {
+      if (request.kind !== 'init') await this.laterTask();
       const result = await this.answer(request);
       respond({
         id: request.id,
@@ -114,6 +120,23 @@ export class FakeEngineCore {
         this.idle.clear();
       }
     }
+  }
+
+  /** The core queues a request and starts it in a later task. */
+  private async laterTask(): Promise<void> {
+    await new Promise<void>((resolve) => {
+      this.sim.queueTask(
+        this.context,
+        `engine:${this.context.id}`,
+        'engine-task',
+        resolve
+      );
+    });
+  }
+
+  /** The scope whose database this engine has open. */
+  get serving(): string | undefined {
+    return this.context.alive && this.accepting ? this.openedScope : undefined;
   }
 
   private async answer(request: CacheRequest): Promise<unknown> {
@@ -148,8 +171,8 @@ export class FakeEngineCore {
           transactionId: mutation.uuid,
           uuid: mutation.uuid,
           superseded: false,
-          query: 'mutation Draft { draft }',
-          variables: {},
+          query: DRAFT_MUTATION,
+          variables: { input: { draftId: mutation.uuid } },
           optimisticData: null,
           enqueuedAtMs: 0,
         }))
@@ -186,17 +209,13 @@ export class FakeEngineCore {
       await this.options.onOwnerLockBusy?.(attempt);
     }
     await this.options.onOwnerLockAcquired?.();
+    if (this.options.recoveryOpen) this.storage.wipe(scope);
     if (this.storage.failNextOpens > 0) {
       this.storage.failNextOpens -= 1;
       this.releaseLock?.();
       throw new Error('storage error: unable to open database file');
     }
-    this.storage.open(
-      scope,
-      this.context.id,
-      this.options.recoveryOpen === true,
-      this.context.buildTime
-    );
+    this.storage.open(scope, this.context.id, this.context.buildTime);
     this.openedScope = scope;
     this.options.onInitializationOutcome?.(
       this.options.recoveryOpen ? 'reset-storage-uncertain' : 'opened-existing'
@@ -205,20 +224,20 @@ export class FakeEngineCore {
 
   /** Like turso-opfs: never queue for the lock, and hold it until closed. */
   private async takeOwnerLock(lockName: string): Promise<boolean> {
-    const granted = Promise.withResolvers<boolean>();
-    const held = this.sim.locks.request(
-      lockName,
-      { mode: 'exclusive', ifAvailable: true },
-      (lock) => {
-        granted.resolve(lock !== null);
-        if (!lock) return;
-        return new Promise<void>((release) => {
-          this.releaseLock = release;
-        });
-      }
-    );
-    fireAndForget(held, 'handover-checker');
-    return await granted.promise;
+    return await new Promise<boolean>((granted) => {
+      const held = this.sim.locks.request(
+        lockName,
+        { mode: 'exclusive', ifAvailable: true },
+        (lock) => {
+          granted(lock !== null);
+          if (!lock) return;
+          return new Promise<void>((release) => {
+            this.releaseLock = release;
+          });
+        }
+      );
+      fireAndForget(held, 'handover-checker');
+    });
   }
 
   async drain(): Promise<void> {
