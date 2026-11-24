@@ -132,7 +132,12 @@ function LabelOverflow(props: { labels: RowLabel[]; visibleCount: number }) {
             class: 'border-edge bg-surface-2 text-ink-muted touch:min-h-0',
           })}
         >
-          {`${props.visibleCount > 0 ? '+' : ''}${props.labels.length}`}
+          <span aria-hidden="true">
+            {`${props.visibleCount > 0 ? '+' : ''}${props.labels.length}`}
+          </span>
+          <span class="sr-only">
+            {props.labels.map((label) => label.fullName).join(', ')}
+          </span>
         </span>
       </HoverCard>
     </Layer>

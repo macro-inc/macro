@@ -72,10 +72,11 @@ for (const size of SIZES) {
         for (const name of ['Orders', 'Escalations', 'Billing']) {
           await expect(four.getByText(name, { exact: true })).toBeVisible();
         }
-        await expect(four.getByText('Customers', { exact: true })).toHaveCount(
-          0
-        );
         await expect(four.getByText('+1', { exact: true })).toBeVisible();
+        // Folded labels are read to screen readers only.
+        await expect(four.getByText('Customers', { exact: true })).toHaveClass(
+          /sr-only/
+        );
 
         // Labels Gmail hides from the message list stay off the row.
         const hidden = page.getByTestId('row-hidden');
@@ -88,19 +89,31 @@ for (const size of SIZES) {
     test('a label shows its whole name on hover', async ({ page }) => {
       test.skip(!size.shows || size.touch);
       await open(page);
+      // Screen readers hear the whole name; the screen shows it on hover.
+      const shown = (text: string) =>
+        page
+          .getByText(text, { exact: true })
+          .and(page.locator(':not(.sr-only)'));
+      await expect(
+        page
+          .getByTestId('row-two')
+          .getByText('Customers / Larkspur', { exact: true })
+      ).toHaveClass(/sr-only/);
+      await expect(shown('Customers / Larkspur')).toHaveCount(0);
       await page
         .getByTestId('row-two')
         .getByText('Larkspur', { exact: true })
         .hover();
-      await expect(
-        page.getByText('Customers / Larkspur', { exact: true })
-      ).toBeVisible();
+      await expect(shown('Customers / Larkspur')).toBeVisible();
       await shoot(page, `hover-${size.name}`);
+      // Its card opens over the rows below; let it close first.
+      await page.mouse.move(10, size.height - 10);
+      await expect(shown('Customers / Larkspur')).toHaveCount(0);
       await page
         .getByTestId('row-four')
         .getByText('+1', { exact: true })
         .hover();
-      await expect(page.getByText('Customers', { exact: true })).toBeVisible();
+      await expect(shown('Customers')).toBeVisible();
     });
   });
 }

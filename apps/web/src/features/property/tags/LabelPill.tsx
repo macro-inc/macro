@@ -29,12 +29,20 @@ export function LabelIcon(props: { class?: string }) {
   );
 }
 
-/** A read-only label drawn like a tag pill. */
+/**
+ * A read-only label drawn like a tag pill. Given a whole name longer than the
+ * one it shows, it reads the whole name to screen readers.
+ */
 export function LabelChip(props: {
   name: string;
+  fullName?: string;
   size?: 'xs' | 'sm';
   class?: string;
 }) {
+  const spoken = () =>
+    props.fullName && props.fullName !== props.name
+      ? props.fullName
+      : undefined;
   return (
     <span
       class={badgeClasses({
@@ -47,7 +55,19 @@ export function LabelChip(props: {
       })}
     >
       <LabelIcon />
-      <span class="min-w-0 truncate">{props.name}</span>
+      <Show
+        when={spoken()}
+        fallback={<span class="min-w-0 truncate">{props.name}</span>}
+      >
+        {(fullName) => (
+          <>
+            <span aria-hidden="true" class="min-w-0 truncate">
+              {props.name}
+            </span>
+            <span class="sr-only">{fullName()}</span>
+          </>
+        )}
+      </Show>
     </span>
   );
 }
@@ -67,7 +87,11 @@ export function LabelPill(props: { label: RowLabel; class?: string }) {
           </span>
         }
       >
-        <LabelChip name={props.label.name} class={props.class} />
+        <LabelChip
+          name={props.label.name}
+          fullName={props.label.fullName}
+          class={props.class}
+        />
       </HoverCard>
     </Layer>
   );

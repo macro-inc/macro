@@ -461,8 +461,12 @@ describe('EntityRowTags live insertions', () => {
       expect(view.getByRole('button', { name: 'First' })).toBeTruthy();
       expect(view.getByRole('button', { name: 'Second' })).toBeTruthy();
       expect(view.getByText('Larkspur')).toBeTruthy();
-      expect(view.queryByText('Orders')).toBeNull();
       expect(view.getByText('+1')).toBeTruthy();
+      // The hidden label is only read to screen readers, by its whole name.
+      expect(view.getByText('Orders').classList).toContain('sr-only');
+      expect(view.getByText('Customers / Larkspur').classList).toContain(
+        'sr-only'
+      );
     });
 
     it('counts hidden tags and labels together', () => {
@@ -478,8 +482,12 @@ describe('EntityRowTags live insertions', () => {
 
     it('shows a sole label by its own name', () => {
       const view = renderRow([], [label('Larkspur', 'Customers / Larkspur')]);
-      expect(view.getByText('Larkspur')).toBeTruthy();
-      expect(view.queryByText('Customers / Larkspur')).toBeNull();
+      expect(view.getByText('Larkspur').getAttribute('aria-hidden')).toBe(
+        'true'
+      );
+      expect(view.getByText('Customers / Larkspur').classList).toContain(
+        'sr-only'
+      );
     });
   });
 });
