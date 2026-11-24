@@ -48,7 +48,7 @@ export function ScrollToBottomOverlay(props: ScrollToBottomOverlayProps) {
         >
           <div
             data-scroll-to-bottom
-            class="absolute z-10 right-[calc(var(--safe-right,0px)+var(--mobile-chrome-gutter))]"
+            class="absolute z-10 right-(--mobile-chrome-gutter)"
             style={{ bottom: `${FloatRegions.hostHeight() + 12}px` }}
           >
             <MobileDockIsland>
