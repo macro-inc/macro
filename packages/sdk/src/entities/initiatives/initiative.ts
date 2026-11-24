@@ -26,6 +26,14 @@ import {
   sharePermissionBody,
 } from '../sharing/permissions';
 import { Task } from '../tasks/task';
+import {
+  readTimeExport,
+  readTimeSummary,
+  type TimeExport,
+  type TimePeriodOptions,
+  type TimeSummary,
+  type TimeSummaryOptions,
+} from '../time/report';
 import { User } from '../users/user';
 
 /** Initiative creation settings. */
@@ -242,6 +250,48 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
             : undefined,
         },
       }),
+    );
+  }
+
+  /**
+   * Everyone's time on this project's tasks over a period of at most 366
+   * days, grouped by person, task or day, each group optionally split by
+   * `thenBy`; only tasks you can see count, people who left the team included.
+   *
+   * @example
+   * ```ts
+   * // November by person, each person's time split by task.
+   * const month = await initiative.timeSummary({
+   *   from: '2026-11-01',
+   *   to: '2026-11-30',
+   *   groupBy: 'person',
+   *   thenBy: 'task',
+   * });
+   * ```
+   *
+   * @readonly
+   */
+  timeSummary(opts: TimeSummaryOptions): Promise<TimeSummary> {
+    return readTimeSummary(
+      this.client,
+      'initiative.timeSummary',
+      { scope: 'project', initiative: this },
+      opts,
+    );
+  }
+
+  /**
+   * This project's time entries over a period of at most 366 days as CSV
+   * text for invoicing, at most 10,000 entries; only tasks you can see count.
+   *
+   * @readonly
+   */
+  exportTimeCsv(opts: TimePeriodOptions): Promise<TimeExport> {
+    return readTimeExport(
+      this.client,
+      'initiative.exportTimeCsv',
+      { scope: 'project', initiative: this },
+      opts,
     );
   }
 

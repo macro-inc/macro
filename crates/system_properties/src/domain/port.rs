@@ -38,10 +38,13 @@ pub trait SystemPropertiesRepository: Clone + Send + Sync + 'static {
         status: StatusOption,
     ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
 
-    /// Tasks whose Project property names `project_id`, in id order.
+    /// Tasks whose Project property names `project_id`, in id order: the
+    /// first `limit` of them, or all when `limit` is absent. A read with a
+    /// limit runs under a five-second statement timeout.
     fn project_task_ids(
         &self,
         project_id: Uuid,
+        limit: Option<u32>,
     ) -> impl Future<Output = Result<Vec<String>, SystemPropertyError>> + Send;
 
     /// The project each listed task's Project property names, as raw ids;

@@ -284,7 +284,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   readonly teams: TeamNamespace;
 
-  /** Your running timer; time is logged and read on the task. */
+  /** Your running timer and your own or your team's time; time is logged and read on the task. */
   readonly time: TimeNamespace;
 
   readonly users: UserNamespace;
@@ -654,6 +654,17 @@ export {
   NotTimeEntryAuthorError,
   TimerOverLimitError,
 } from './entities/time/errors';
+export type {
+  TimeExport,
+  TimeGroup,
+  TimeGrouping,
+  TimePeriodOptions,
+  TimeScopeOptions,
+  TimeSummary,
+  TimeSummaryOptions,
+  TimeTotal,
+  TimeTotalKey,
+} from './entities/time/report';
 export type {
   LogTimeOptions,
   StartTimerOptions,

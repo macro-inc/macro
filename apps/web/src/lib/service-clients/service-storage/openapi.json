@@ -30590,6 +30590,264 @@
         }
       }
     },
+    "/time/export": {
+      "get": {
+        "tags": ["time_tracking"],
+        "summary": "A scope's entries over a period as CSV text, oldest day first: one row\nper entry with its day, person (as an email), task, minutes, hours, note\nand source. Capped at 10,000 entries and 16 MiB; `complete` is false when\nentries were left out. May miss writes from the last few seconds.",
+        "operationId": "export_time",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Whose time to read.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TimeScopeName"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "description": "The project, with `scope=project` only.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "The first day, `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "The last day, `YYYY-MM-DD`, at most 365 days after `from`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeExport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time/summary": {
+      "get": {
+        "tags": ["time_tracking"],
+        "summary": "A scope's time over a period: the total, totals by the first grouping,\neach split by the second, and the second grouping's totals. Only tasks\nthe caller can see count, out of the Trash; a scope past 5,000 tasks is\nread to the first 5,000 and answers `complete: false`.",
+        "operationId": "get_time_summary",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Whose time to read.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TimeScopeName"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "description": "The project, with `scope=project` only.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "The first day, `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "The last day, `YYYY-MM-DD`, at most 365 days after `from`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "description": "What the totals are grouped by.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TimeGrouping"
+            }
+          },
+          {
+            "name": "thenBy",
+            "in": "query",
+            "description": "What each group is split by; another grouping than `groupBy`.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TimeGrouping"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/time/tasks/{task_id}/entries": {
       "get": {
         "tags": ["time_tracking"],
@@ -69284,6 +69542,196 @@
         "type": "string",
         "description": "How a time entry was made.",
         "enum": ["manual", "timer"]
+      },
+      "TimeExport": {
+        "type": "object",
+        "description": "A scope's entries over a period as CSV text.",
+        "required": ["csv", "rows", "complete"],
+        "properties": {
+          "complete": {
+            "type": "boolean",
+            "description": "False when entries were left out: past 10,000 entries or 16 MiB, or\npast the first 5,000 tasks of the scope."
+          },
+          "csv": {
+            "type": "string",
+            "description": "The CSV: one row per entry, oldest day first."
+          },
+          "rows": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Entries written.",
+            "minimum": 0
+          }
+        }
+      },
+      "TimeGroup": {
+        "type": "object",
+        "description": "The total of one group, and its split by the second grouping.",
+        "required": ["key", "minutes", "taskCount", "rows"],
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/TimeGroupKey",
+            "description": "What the group is for."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes logged in the group.",
+            "minimum": 0
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeTotal"
+            },
+            "description": "The group's totals by the second grouping, in report order; empty\nwithout one."
+          },
+          "taskCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tasks with time in the group.",
+            "minimum": 0
+          }
+        }
+      },
+      "TimeGroupKey": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "One person's time.",
+            "required": ["userId", "by"],
+            "properties": {
+              "by": {
+                "type": "string",
+                "enum": ["person"]
+              },
+              "userId": {
+                "type": "string",
+                "description": "The person."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The time on one task.",
+            "required": ["taskId", "by"],
+            "properties": {
+              "by": {
+                "type": "string",
+                "enum": ["task"]
+              },
+              "taskId": {
+                "type": "string",
+                "description": "The task document."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The time logged for one day.",
+            "required": ["date", "by"],
+            "properties": {
+              "by": {
+                "type": "string",
+                "enum": ["day"]
+              },
+              "date": {
+                "type": "string",
+                "format": "date",
+                "description": "The loggers' calendar day."
+              }
+            }
+          }
+        ],
+        "description": "What one total is for."
+      },
+      "TimeGrouping": {
+        "type": "string",
+        "description": "What a report's totals are grouped by.",
+        "enum": ["person", "task", "day"]
+      },
+      "TimeScopeName": {
+        "type": "string",
+        "description": "Whose time a report reads.",
+        "enum": ["project", "mine", "team"]
+      },
+      "TimeSummary": {
+        "type": "object",
+        "description": "The time a scope logged over a period.",
+        "required": [
+          "from",
+          "to",
+          "totalMinutes",
+          "taskCount",
+          "complete",
+          "groups",
+          "thenTotals"
+        ],
+        "properties": {
+          "complete": {
+            "type": "boolean",
+            "description": "False when the scope held more than 5,000 tasks and only the first\n5,000 were read."
+          },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "description": "The first day of the period."
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeGroup"
+            },
+            "description": "Totals by the first grouping, in report order: days in calendar order,\npeople and tasks with the most time first. For the caller's own and\ntheir team's time grouped by person, every current member has a group,\nwith or without time."
+          },
+          "scopeTaskCount": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "For a project, its tasks the caller can see that are out of the\nTrash, with time or not; absent for other scopes.",
+            "minimum": 0
+          },
+          "taskCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tasks with time in the period.",
+            "minimum": 0
+          },
+          "thenTotals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeTotal"
+            },
+            "description": "Totals by the second grouping across all groups, in report order;\nempty without one."
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "description": "The last day of the period."
+          },
+          "totalMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes logged in the period.",
+            "minimum": 0
+          }
+        }
+      },
+      "TimeTotal": {
+        "type": "object",
+        "description": "A total of minutes.",
+        "required": ["key", "minutes"],
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/TimeGroupKey",
+            "description": "What the total is for."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes logged.",
+            "minimum": 0
+          }
+        }
       },
       "TimeTrackingApiError": {
         "type": "object",

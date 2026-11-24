@@ -11153,6 +11153,112 @@ enum GraphqlTimeEntrySource {
 }
 
 """
+One group's total and its split by the second grouping.
+"""
+type GraphqlTimeGroup {
+	"""
+	What the group is for.
+	"""
+	key: GraphqlTimeGroupKey!
+	"""
+	Minutes logged in the group.
+	"""
+	minutes: Int!
+	"""
+	Tasks with time in the group.
+	"""
+	taskCount: Int!
+	"""
+	The group's totals by the second grouping, in report order; empty
+	without one.
+	"""
+	rows: [GraphqlTimeTotal!]!
+}
+
+"""
+What one total is for: a person, a task or a day.
+"""
+type GraphqlTimeGroupKey {
+	"""
+	Which of the fields below is set.
+	"""
+	by: TimeGrouping!
+	"""
+	The person, for `PERSON`.
+	"""
+	userId: String
+	"""
+	The task document, for `TASK`.
+	"""
+	taskId: ID
+	"""
+	The task, for `TASK`; null when the viewer can no longer see it.
+	"""
+	task: GraphqlSoupDocument
+	"""
+	The loggers' calendar day, `YYYY-MM-DD`, for `DAY`.
+	"""
+	date: String
+}
+
+"""
+The time a scope logged over a period. Only tasks the viewer can see
+count, out of the Trash.
+"""
+type GraphqlTimeSummary {
+	"""
+	The first day of the period, `YYYY-MM-DD`.
+	"""
+	from: String!
+	"""
+	The last day of the period, `YYYY-MM-DD`.
+	"""
+	to: String!
+	"""
+	Minutes logged in the period.
+	"""
+	totalMinutes: Int!
+	"""
+	Tasks with time in the period.
+	"""
+	taskCount: Int!
+	"""
+	For a project, its tasks the viewer can see that are out of the
+	Trash, with time or not; null for other scopes.
+	"""
+	scopeTaskCount: Int
+	"""
+	False when the scope held more than 5,000 tasks and only the first
+	5,000 were read.
+	"""
+	complete: Boolean!
+	"""
+	Totals by the first grouping: days in calendar order, people and
+	tasks with the most time first. Grouped by person, the viewer's own
+	and their team's summaries list every current member.
+	"""
+	groups: [GraphqlTimeGroup!]!
+	"""
+	Totals by the second grouping across all groups; empty without one.
+	"""
+	thenTotals: [GraphqlTimeTotal!]!
+}
+
+"""
+A total of minutes.
+"""
+type GraphqlTimeTotal {
+	"""
+	What the total is for.
+	"""
+	key: GraphqlTimeGroupKey!
+	"""
+	Minutes logged.
+	"""
+	minutes: Int!
+}
+
+"""
 The authenticated viewer's time tracking state.
 """
 type GraphqlTimeTracking {
@@ -11237,6 +11343,12 @@ type GraphqlUser {
 	The authenticated user's running timer and the server's clock.
 	"""
 	timeTracking: GraphqlTimeTracking!
+	"""
+	The authenticated user's time over a period, for a project, themselves
+	or their team, grouped by person, task or day. Only tasks they can see
+	count. Reads the latest writes, so read it again after a change.
+	"""
+	timeSummary(input: TimeSummaryInput!): GraphqlTimeSummary!
 	"""
 	AI routines the authenticated user can access.
 	"""
@@ -13163,6 +13275,72 @@ type StopTimerPayload {
 	when the viewer can no longer see it.
 	"""
 	task: GraphqlSoupDocument
+}
+
+"""
+What a report's totals are grouped by.
+"""
+enum TimeGrouping {
+	"""
+	The person who logged the time.
+	"""
+	PERSON
+	"""
+	The task the time was logged on.
+	"""
+	TASK
+	"""
+	The logger's calendar day.
+	"""
+	DAY
+}
+
+"""
+Whose time a report reads.
+"""
+enum TimeReportScope {
+	"""
+	Everyone's time on a project's tasks; needs `projectId`.
+	"""
+	PROJECT
+	"""
+	The viewer's own time.
+	"""
+	MINE
+	"""
+	The time of the viewer's team's current members, the viewer included.
+	"""
+	TEAM
+}
+
+"""
+The scope, days and grouping of a time summary.
+"""
+input TimeSummaryInput {
+	"""
+	Whose time to read.
+	"""
+	scope: TimeReportScope!
+	"""
+	The project, with scope `PROJECT` only.
+	"""
+	projectId: ID
+	"""
+	The first day, `YYYY-MM-DD`.
+	"""
+	from: String!
+	"""
+	The last day, `YYYY-MM-DD`, at most 365 days after `from`.
+	"""
+	to: String!
+	"""
+	What the totals are grouped by.
+	"""
+	groupBy: TimeGrouping!
+	"""
+	What each group is split by; another grouping than `groupBy`.
+	"""
+	thenBy: TimeGrouping
 }
 
 """
