@@ -95,6 +95,10 @@ export type SuggestionInput =
  * - Name items in `about`, never in words: titles, summaries and prompts name no one's email address, phone number or street address.
  * - A reply suggestion may carry a reply draft: write it with `macro.email.createDraft({thread, replyingTo, ...}, await thread.link())`, never send it, and attach it with `suggestion.attachDraft(draft, reason)`. Write none in a thread that already holds a draft (`thread.drafts()`).
  *
+ * ### In a suggestion's background run
+ *
+ * - Just before your last message, call `macro.suggestions.reportRun(line)` once: one plain line for the user's card saying what you did, then what you sent (`'12 seats added · Nothing was sent'`).
+ *
  * @mcp-exclude Suggestions are written by hidden generation sessions and acted on in the app, not over MCP.
  */
 export class SuggestionNamespace {
@@ -166,6 +170,29 @@ export class SuggestionNamespace {
       unwrap(
         await this.client.scheduledAction.addSuggestion({
           body: { ...rest, about: targets(about ?? []) },
+        }),
+      ),
+    );
+  }
+
+  /**
+   * In a suggestion's background run, call this once, just before your last
+   * message: one plain line for the user's card saying what you did, then what
+   * you sent, such as `'12 seats added · Nothing was sent'`. At most 120
+   * characters, naming no one's email address, phone number or street
+   * address. A later call replaces it. When `ok` is false, fix what `problems`
+   * says and call it again. Any other session gets a 403.
+   *
+   * @example
+   * const outcome = await macro.suggestions.reportRun('Compared 3 quotes · Nothing was sent');
+   * if (!outcome.ok) return outcome.problems;
+   */
+  async reportRun(report: string): Promise<SuggestionWriteOutcome> {
+    return outcome(
+      this.client,
+      unwrap(
+        await this.client.scheduledAction.reportSuggestionRun({
+          body: { report },
         }),
       ),
     );

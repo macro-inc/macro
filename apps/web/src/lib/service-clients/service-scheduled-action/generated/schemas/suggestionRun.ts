@@ -5,13 +5,18 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+
 import type { RunStateName } from './runStateName';
+import type { SuggestionRunReport } from './suggestionRunReport';
 
 /**
  * A run of a background prompt suggestion: a hidden agent session of the
 person's, with the full toolset, that never stops to ask.
  */
 export interface SuggestionRun {
+  /** The one line the run wrote for the person before it ended, saying
+what it did and what it sent; none until it writes one. */
+  report?: SuggestionRunReport;
   /** The agent session: open it to see the result. */
   sessionId: string;
   /** When it started. */

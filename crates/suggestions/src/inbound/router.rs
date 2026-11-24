@@ -19,7 +19,7 @@ use serde::Deserialize;
 use utoipa::IntoParams;
 
 use crate::domain::model::{
-    Accept, AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion,
+    Accept, AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, RunReport,
     SuggestionCaller, SuggestionError, SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
 };
 use crate::domain::ports::SuggestionApi;
@@ -103,6 +103,10 @@ where
             "/suggestions/{id}/stop",
             post(stop_suggestion_run::<S, Auth>),
         )
+        .route(
+            "/suggestions/runs/report",
+            put(report_suggestion_run::<S, Auth>),
+        )
         .with_state(state)
 }
 
@@ -137,7 +141,9 @@ impl IntoResponse for SuggestionApiError {
                 (StatusCode::CONFLICT, error.to_string()).into_response()
             }
             Self::Service(
-                error @ (SuggestionError::NotGenerating | SuggestionError::Generating),
+                error @ (SuggestionError::NotGenerating
+                | SuggestionError::Generating
+                | SuggestionError::NotARun),
             ) => (StatusCode::FORBIDDEN, error.to_string()).into_response(),
             Self::Service(error @ SuggestionError::Changed(_)) => {
                 let message = error.to_string();
@@ -434,6 +440,44 @@ where
         .stop_run(&user.authorization.macro_user_id, caller, id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    put,
+    path = "/suggestions/runs/report",
+    tag = "suggestions",
+    operation_id = "report_suggestion_run",
+    request_body = RunReport,
+    responses(
+        (status = 200, body = SuggestionWriteOutcome, description = "Whether the report was stored, and what to fix when it wasn't"),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "Only a suggestion's background run, still under way, may report"),
+        (status = 404, body = String, description = "Suggestions are off for the user"),
+        (status = 500, body = String),
+    )
+)]
+/// A suggestion's background run says, in one line for the person, what it
+/// did and what it sent.
+pub async fn report_suggestion_run<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    body: Result<Json<RunReport>, JsonRejection>,
+) -> Result<Json<SuggestionWriteOutcome>, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let Json(report) = body.map_err(SuggestionApiError::InvalidRequest)?;
+    // The run is named by its session, which only a signed code-mode
+    // invocation carries.
+    let correlation = agent_correlation::context::current();
+    Ok(Json(
+        state
+            .service
+            .report_run(&principal, correlation, report)
+            .await?,
+    ))
 }
 
 #[utoipa::path(

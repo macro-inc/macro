@@ -197,6 +197,14 @@ scheduler's spec.
   (each item once, at most 200; the harness reads every page of the session's
   activity); a failed run leaves it accepted, and accepting it again runs it
   again.
+- A run reports what it did: `run_prompt` asks it to call
+  `macro.suggestions.reportRun(line)` (`PUT /suggestions/runs/report`) just
+  before its last message. The run is found from the request's code-mode
+  invocation (`RequestSessions`) and must be the caller's own unsettled run
+  (403 `NotARun` otherwise). The line is checked like a title (one plain line,
+  at most 120 characters, no personal details; `{ ok: false, problems }`
+  otherwise), stored on `suggestion_run.report`, a later one replacing it, and
+  served as the feed's `run.report`. A run that never reports has none.
 - Runs move from their sessions' lifecycle events (`inbound/run_consumer.rs`,
   group `suggestions-runs`, `macro.agent_session_lifecycle`: settled, waiting
   for input, command rejected, stopped, deleted) and from a reconcile sweep
