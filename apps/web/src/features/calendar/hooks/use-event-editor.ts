@@ -3,6 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
   isGuestEditRefused,
+  serverIssuedEventId,
   useCreateCalendarEventMutation,
   useInviteCalendarEventGuestsMutation,
   useUpdateCalendarEventMutation,
@@ -524,8 +525,10 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(values.guestPolicy ? { guestPolicy: values.guestPolicy } : {}),
           onAccepted: closeAccepted,
         });
-        if (created)
-          props.onCreated?.({ eventId: created.id, time: values.time });
+        // A create still queued behind older writes has only a local id,
+        // which names nothing to open yet.
+        const eventId = created && serverIssuedEventId(created.id);
+        if (eventId) props.onCreated?.({ eventId, time: values.time });
         closeAccepted();
         return;
       }

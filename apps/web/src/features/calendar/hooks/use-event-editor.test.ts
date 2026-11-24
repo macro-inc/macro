@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   fetchMeeting: vi.fn(),
   quickCalls: true,
   quickCallsLoading: false,
+  queuedIds: new Set<string>(),
 }));
 
 vi.mock('@core/util/webOrigin', () => ({
@@ -48,6 +49,8 @@ vi.mock('@queries/calendar/mutations', () => ({
   }),
   isGuestEditRefused: (error: unknown) =>
     (error as { code?: string }).code === 'guests_cannot_modify',
+  serverIssuedEventId: (id: string) =>
+    mocks.queuedIds.has(id) ? undefined : id,
 }));
 vi.mock('@queries/call/meetings', () => ({
   useCreateMeetingMutation: () => ({ mutateAsync: mocks.createMeeting }),
@@ -1124,6 +1127,25 @@ describe('closing once a save is queued', () => {
       expect(saved).toHaveBeenCalledOnce();
       expect(mocks.failure).not.toHaveBeenCalled();
     } finally {
+      dispose();
+    }
+  });
+
+  it('closes a create still queued behind older writes without reporting its local id', async () => {
+    mocks.queuedIds.add('local-2');
+    mocks.createEvent.mockImplementationOnce(
+      async (args: { onAccepted?: () => void }) => {
+        args.onAccepted?.();
+        return { id: 'local-2' };
+      }
+    );
+    const { hook, dispose, saved, created } = editor();
+    try {
+      await hook.save(values);
+      expect(saved).toHaveBeenCalledOnce();
+      expect(created).not.toHaveBeenCalled();
+    } finally {
+      mocks.queuedIds.delete('local-2');
       dispose();
     }
   });

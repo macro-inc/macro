@@ -25,11 +25,13 @@ import { answeringGraphqlCalendarHost } from './graphql/flag';
 import {
   CalendarMutationError,
   committedEvent,
+  createdCalendarEventId,
   executeGraphqlCreate,
   executeGraphqlDelete,
   executeGraphqlInviteGuests,
   executeGraphqlRsvp,
   executeGraphqlUpdate,
+  isCalendarEventCreating,
 } from './graphql/mutations';
 import {
   type CalendarInvitationsData,
@@ -839,6 +841,16 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
       callbacks
     ),
   }));
+}
+
+/**
+ * The id the server issued for a created event, or undefined while the
+ * create still waits in the queue under a local id.
+ */
+export function serverIssuedEventId(eventId: string): string | undefined {
+  const landed = createdCalendarEventId(eventId);
+  if (landed) return landed;
+  return isCalendarEventCreating(eventId) ? undefined : eventId;
 }
 
 export type CreateCalendarEventArgs = CreateCalendarEventRequest & {
