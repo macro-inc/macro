@@ -1,0 +1,19 @@
+crates/item_filters/src/ast/tests/other.json
+  s_daac47ed1cb766::t_644eb2761998cb 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c31d92fed18f72a28ae11cab24e553b4e41a0c48",
+  "prompts": {},
+  "sessions": {
+    "s_daac47ed1cb766": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5cc4efcb-4b26-48d2-bf9c-aaee3d38345e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
