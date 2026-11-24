@@ -77,7 +77,11 @@ export function writeHost(records: ChannelMessageFieldsFragment[] = []) {
   // Set to make the queue unreadable, as an engine that did not come back;
   // `failures` fails only that many reads.
   const queue = { unreadable: false, failures: 0, lastUuid: '' };
+  const availability = { paused: false };
   const host: ChannelWriteHost = {
+    get paused() {
+      return availability.paused;
+    },
     readRecordsByKeys: device.readRecordsByKeys,
     async inspectMutations() {
       if (queue.unreadable) throw new Error('queue unreadable');
@@ -106,6 +110,7 @@ export function writeHost(records: ChannelMessageFieldsFragment[] = []) {
   return {
     host,
     device,
+    availability,
     listeners,
     queued,
     queue,
@@ -150,7 +155,15 @@ export function setup(
       return server.find((message) => message.id === messageId) ?? null;
     },
   });
-  return { writes, calls, runtime, fetched, ...device };
+  /** The cache's database is away for now. */
+  const startOutage = () => {
+    device.availability.paused = true;
+  };
+  const endOutage = () => {
+    device.availability.paused = false;
+    writes.resumed();
+  };
+  return { writes, calls, runtime, fetched, startOutage, endOutage, ...device };
 }
 
 export const written = (

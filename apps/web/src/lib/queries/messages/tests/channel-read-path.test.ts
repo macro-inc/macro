@@ -7,7 +7,7 @@ import {
   type SelectionNode,
 } from 'graphql';
 import { createRoot, createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CHANNEL_ID,
   type FakeHost,
@@ -30,14 +30,24 @@ vi.mock('@app/lib/analytics/posthog', async () => {
   });
   return { useFeatureFlag: () => read, __setFlag: write };
 });
-vi.mock('@service-storage/graphql-soup', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@service-storage/graphql-soup')>()),
-  getGraphqlSoupCacheHost: () => mocks.host,
-  graphqlCacheEnabled: () => true,
-}));
-vi.mock('../local/channel-flag', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../local/channel-flag')>()),
-  channelCacheSupported: () => true,
+// Not over the original: it imports the modules under test, which would then
+// read it instead of this.
+vi.mock('@service-storage/graphql-soup', async () => {
+  const solid = await import('solid-js');
+  const [kept, setKept] = solid.createSignal<unknown>();
+  return {
+    // A host the session keeps is not handed out while it does not serve.
+    getGraphqlSoupCacheHost: () => (kept() ? undefined : mocks.host),
+    getKeptGraphqlCacheHost: kept,
+    graphqlCacheEnabled: () => kept() === undefined,
+    dssGraphqlFetch: vi.fn(),
+    graphqlSoupTransportDocument: (document: unknown) => document,
+    __setKept: setKept,
+  };
+});
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  isFeatureEnabled: () => true,
 }));
 
 vi.mock('../timeline', async (importOriginal) => ({
@@ -48,6 +58,12 @@ vi.mock('../timeline', async (importOriginal) => ({
 const { useChannelReadPath, useChannelMessageResolver } = await import(
   '../channel-timeline-source'
 );
+const { channelCacheHost, markChannelCacheAnswered } = await import(
+  '../local/channel-flag'
+);
+const soup = (await import('@service-storage/graphql-soup')) as unknown as {
+  __setKept: (host: unknown) => void;
+};
 const posthog = (await import('@app/lib/analytics/posthog')) as unknown as {
   __setFlag: (next: FlagAnswer) => void;
 };
@@ -146,6 +162,65 @@ describe('useChannelReadPath', () => {
 
     path.setUnsupported();
     expect(path.mode()).toBe('rest');
+  });
+});
+
+describe('a host whose database is away', () => {
+  const outage = { paused: true, disabled: true };
+  afterEach(() => {
+    soup.__setKept(undefined);
+    mocks.host = {};
+  });
+
+  it('keeps an open channel on the device, and reads and writes ask for it still', () => {
+    posthog.__setFlag({ enabled: true, loading: false });
+    const host = { paused: false, disabled: false };
+    mocks.host = host;
+    const [parent] = createSignal({ type: 'channel' as const, id: 'c1' });
+    const path = createRoot(() => useChannelReadPath(parent));
+    expect(path.mode()).toBe('local');
+
+    Object.assign(host, outage);
+    soup.__setKept(host);
+    expect(path.mode()).toBe('local');
+    expect(path.host()).toBe(host);
+    // A write goes to the host and its queue, never past them.
+    expect(channelCacheHost()).toBe(host);
+
+    Object.assign(host, { paused: false, disabled: false });
+    soup.__setKept(undefined);
+    expect(path.mode()).toBe('local');
+    expect(path.host()).toBe(host);
+  });
+
+  it('opens a channel on the device meanwhile', () => {
+    posthog.__setFlag({ enabled: true, loading: false });
+    soup.__setKept({ ...outage });
+    const [parent] = createSignal({ type: 'channel' as const, id: 'c1' });
+    expect(createRoot(() => useChannelReadPath(parent)).mode()).toBe('local');
+  });
+
+  it('stays with a host that answered before while the session proves it again', () => {
+    const host = { paused: false, disabled: false };
+    soup.__setKept(host);
+    // A replacement that has answered nothing yet is not waited on.
+    expect(channelCacheHost()).toBeUndefined();
+    markChannelCacheAnswered(host as never);
+    expect(channelCacheHost()).toBe(host);
+  });
+
+  it('moves an open channel to REST once the host is gone', () => {
+    posthog.__setFlag({ enabled: true, loading: false });
+    const host = { ...outage };
+    soup.__setKept(host);
+    const [parent] = createSignal({ type: 'channel' as const, id: 'c1' });
+    const path = createRoot(() => useChannelReadPath(parent));
+    expect(path.mode()).toBe('local');
+
+    mocks.host = undefined;
+    soup.__setKept(undefined);
+    expect(path.mode()).toBe('rest');
+    expect(channelCacheHost()).toBeUndefined();
   });
 });
 

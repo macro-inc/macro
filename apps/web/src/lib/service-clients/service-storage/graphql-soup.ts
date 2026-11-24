@@ -698,6 +698,10 @@ async function restartCache(span: Span): Promise<void> {
     throw new Error('Cache recovery was superseded.');
   cacheInitializationFailed = false;
   setCacheAvailability((version) => version + 1);
+  // A host kept through an outage: its channels catch up, and the writes made
+  // meanwhile go to its queue.
+  existingChannelSyncRuntime(host)?.resumed();
+  existingChannelWrites(host)?.resumed();
 }
 let cacheSessionGeneration = 0;
 
@@ -835,6 +839,18 @@ export async function recordGraphqlMutationQueueCleared(
 export function getGraphqlCacheHost(): CacheHost | undefined {
   cacheAvailability();
   return cachedCacheHost?.disabled ? undefined : cachedCacheHost;
+}
+
+/**
+ * The session's cache host, also while its database is away (`paused`) or is
+ * being proven readable again; undefined once the host is gone.
+ */
+export function getKeptGraphqlCacheHost(): CacheHost | undefined {
+  cacheAvailability();
+  if (!sessionActive()) return undefined;
+  if (!cachedCacheHost) return undefined;
+  if (cachedCacheHost.disabled && !cachedCacheHost.paused) return undefined;
+  return cachedCacheHost;
 }
 
 /** Establish the local response generation without gating app startup. */

@@ -1078,6 +1078,69 @@ describe('createChannelWrites', () => {
     await expect(sending).resolves.toEqual(mapChannelMessage(stored));
   });
 
+  it('keeps writes made while the cache is away for its queue, in order', async () => {
+    const stored = [graphqlMessage(7), graphqlMessage(8)];
+    const { writes, calls, startOutage, endOutage } = setup((variables) => {
+      const { id } = (variables as { input: { id: string } }).input;
+      const message = stored.find((row) => row.id === id);
+      return { data: message && written('sendChannelMessage', message) };
+    });
+    startOutage();
+    const sends = stored.map((message) => writes.send(send(message.id)));
+    await settleMicrotasks();
+
+    // Nothing is sent around the queue, and the rows show at once.
+    expect(calls).toEqual([]);
+    expect(writes.unstoredRoots(CHANNEL_ID).map((row) => row.key)).toHaveLength(
+      2
+    );
+
+    endOutage();
+    await expect(Promise.all(sends)).resolves.toEqual(
+      stored.map((message) => mapChannelMessage(message))
+    );
+    expect(calls.map((call) => call.variables.input.id)).toEqual(
+      stored.map((message) => message.id)
+    );
+  });
+
+  it('sends a write made as the cache comes back after the ones that waited', async () => {
+    const stored = [graphqlMessage(7), graphqlMessage(8)];
+    const { writes, calls, availability, startOutage, endOutage } = setup(
+      (variables) => {
+        const { id } = (variables as { input: { id: string } }).input;
+        const message = stored.find((row) => row.id === id);
+        return { data: message && written('sendChannelMessage', message) };
+      }
+    );
+    startOutage();
+    const first = writes.send(send(stored[0].id));
+    await settleMicrotasks();
+    // The database answers, but the session has not proven its queue yet.
+    availability.paused = false;
+    const second = writes.send(send(stored[1].id));
+    await settleMicrotasks();
+    expect(calls).toEqual([]);
+
+    endOutage();
+    await Promise.all([first, second]);
+    expect(calls.map((call) => call.variables.input.id)).toEqual(
+      stored.map((message) => message.id)
+    );
+  });
+
+  it('rejects a write waiting for the cache when its host retires', async () => {
+    const { writes, calls, startOutage } = setup(() => ({}));
+    startOutage();
+    const sending = writes.send(send(graphqlMessage(7).id));
+    await settleMicrotasks();
+    writes.retire();
+    const error = await sending.catch((thrown: unknown) => thrown);
+    expect(thrownResultErrorHasCode(error, 'CACHE_RETIRED')).toBe(true);
+    expect(calls).toEqual([]);
+    expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
+  });
+
   it('rejects a held write when its host retires', async () => {
     const { writes, listeners } = setup(() => ({
       disposition: { kind: 'queued', transactionId: '4' },

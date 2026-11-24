@@ -620,7 +620,24 @@ export function createLocalChannelTimeline(
     })();
     fireAndForget(rereading, 'channel-local-sync');
   };
-  onCleanup(deps.runtime.onChanged(channelId, scheduleReread));
+  /** A window the device could not store or read during an outage is read again. */
+  const resume = () => {
+    if (held) return scheduleReread();
+    if (state.phase !== 'ready')
+      return fireAndForget(load(anchorId), 'channel-local-sync');
+    currentLoad = loadWindow(
+      state.newerCursor === null
+        ? undefined
+        : (anchorId ?? middleMessageId(state.entries)),
+      1
+    );
+    fireAndForget(currentLoad, 'channel-local-sync');
+  };
+  onCleanup(
+    deps.runtime.onChanged(channelId, (change) =>
+      change === 'resumed' ? resume() : scheduleReread()
+    )
+  );
 
   /** Fetches the page past `cursor` and merges it into the window. */
   const fetchMore = async (

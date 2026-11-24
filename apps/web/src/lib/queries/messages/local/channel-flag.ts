@@ -6,6 +6,7 @@ import {
 import type { CacheHost } from '@graphql-cache/index';
 import {
   getGraphqlSoupCacheHost,
+  getKeptGraphqlCacheHost,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 
@@ -29,9 +30,28 @@ export function markChannelCacheAnswered(host: CacheHost): void {
   answeredHosts.add(host);
 }
 
-/** Whether a host can serve channel timelines, as far as it has answered. */
-export function channelCacheSupported(host: CacheHost): boolean {
-  return !host.disabled && !unsupportedHosts.has(host);
+/**
+ * Whether a host can serve channel timelines, as far as it has answered: one
+ * whose database is away for now still can.
+ */
+function channelCacheSupported(host: CacheHost): boolean {
+  if (host.disabled && !host.paused) return false;
+  return !unsupportedHosts.has(host);
+}
+
+/**
+ * The session's host for channels, whether or not its flag is on. A host whose
+ * database is away stays it, as does one that served and is being proven
+ * readable again: its queue keeps the writes, which must not go around it, and
+ * the server fills what it cannot read. One that never answered is not waited
+ * on while the session restarts it.
+ */
+export function sessionChannelHost(): CacheHost | undefined {
+  const serving = graphqlCacheEnabled() ? getGraphqlSoupCacheHost() : undefined;
+  const host = serving ?? getKeptGraphqlCacheHost();
+  if (!host || !channelCacheSupported(host)) return undefined;
+  if (!serving && !host.paused && !answeredHosts.has(host)) return undefined;
+  return host;
 }
 
 export function channelCacheAnswered(host: CacheHost): boolean {
@@ -41,16 +61,13 @@ export function channelCacheAnswered(host: CacheHost): boolean {
 /**
  * The cache host serving channel reads and writes, or `undefined` when
  * channels stay on REST: `enable-channel-local-sync` is off or not answered
- * yet, the cache is unavailable, or the native engine cannot serve channel
+ * yet, the cache is gone, or the native engine cannot serve channel
  * timelines.
  */
 export function channelCacheHost(): CacheHost | undefined {
   // No host is the common REST case and needs no flag read.
-  const host = getGraphqlSoupCacheHost();
-  if (!host || !channelCacheSupported(host)) return undefined;
-  if (!isFeatureEnabled(enableChannelLocalSync) || !graphqlCacheEnabled()) {
-    return undefined;
-  }
+  const host = sessionChannelHost();
+  if (!host || !isFeatureEnabled(enableChannelLocalSync)) return undefined;
   return host;
 }
 

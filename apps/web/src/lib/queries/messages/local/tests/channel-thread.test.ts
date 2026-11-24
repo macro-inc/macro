@@ -10,6 +10,7 @@ import { createEffect, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { channelMessageKey, mapChannelMessage } from '../channel-map';
 import { noteChannelReset, whileNoFills } from '../channel-resets';
+import type { ChannelChange } from '../channel-sync-runtime';
 import {
   createLocalChannelThread,
   type FetchChannelThreadPage,
@@ -83,13 +84,15 @@ function serverThread(): FetchChannelThreadPage {
 
 function runtime() {
   const inTrace: boolean[] = [];
-  const listeners = new Set<() => void>();
+  const listeners = new Set<(change: ChannelChange) => void>();
   return {
     open: vi.fn(() => () => undefined),
-    onChanged: vi.fn((_channelId: string, listener: () => void) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    }),
+    onChanged: vi.fn(
+      (_channelId: string, listener: (change: ChannelChange) => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      }
+    ),
     noteStoredSeq: vi.fn(),
     noteServerRead: vi.fn(),
     ensureCurrent: vi.fn(async () => {
@@ -99,7 +102,10 @@ function runtime() {
     inTrace,
     epoch: () => 0,
     change: () => {
-      for (const listener of listeners) listener();
+      for (const listener of listeners) listener('changed');
+    },
+    resume: () => {
+      for (const listener of listeners) listener('resumed');
     },
   };
 }
@@ -715,6 +721,50 @@ describe('createLocalChannelThread', () => {
     );
 
     await vi.waitFor(() => expect(onUnsupported).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('createLocalChannelThread after the cache was away', () => {
+  it('loads a thread the cache could not store again, keeping it shown', async () => {
+    let away = true;
+    const host = fakeHost(() => {
+      if (away) throw new Error('cache is away');
+      return devicePage([], { covered: false });
+    });
+    const sync = runtime();
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async () => ({
+      page: {
+        root,
+        replies: away ? [first] : [first, second],
+        olderCursor: null,
+        newerCursor: null,
+        seq: '12',
+      },
+      cached: away
+        ? Promise.reject(new Error('cache is away'))
+        : Promise.resolve(),
+    }));
+    const thread = createRoot(() =>
+      createLocalChannelThread(
+        { host, runtime: sync, fetchPage },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      )
+    );
+    await vi.waitFor(() =>
+      expect(thread.replies()?.map((reply) => reply.id)).toEqual([first.id])
+    );
+    away = false;
+    sync.resume();
+    expect(thread.replies()).toHaveLength(1);
+    await vi.waitFor(() =>
+      expect(thread.replies()?.map((reply) => reply.id)).toEqual([
+        first.id,
+        second.id,
+      ])
+    );
   });
 });
 

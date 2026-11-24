@@ -143,6 +143,22 @@ describe('createChannelSyncRuntime', () => {
     await waitFor(() => changed.mock.calls.length > 0);
   });
 
+  it('catches up the channels on screen and tells their views once the cache serves again', async () => {
+    const { host, fetch, runtime, changed } = setup(5n, () => changes(6));
+    runtime.onConnected();
+    const release = runtime.open(CHANNEL_ID);
+    await runtime.ensureCurrent(CHANNEL_ID);
+    fetch.mockClear();
+    changed.mockClear();
+
+    runtime.resumed();
+    expect(changed).toHaveBeenCalledWith('resumed');
+    await waitFor(() => fetch.mock.calls.length > 0);
+    // Its sequence is read again: another tab may have moved it.
+    expect(host.heads).toBe(2);
+    release();
+  });
+
   it('commits a frame in the cache session that stored its records', async () => {
     const { host, runtime } = setup(5n);
     runtime.onConnected();

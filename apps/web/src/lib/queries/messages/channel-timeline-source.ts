@@ -5,10 +5,6 @@ import {
 } from '@core/component/EntityLoadGate';
 import { enableChannelLocalSync } from '@core/constant/featureFlags';
 import type { CacheHost } from '@graphql-cache/index';
-import {
-  getGraphqlSoupCacheHost,
-  graphqlCacheEnabled,
-} from '@service-storage/graphql-soup';
 import type {
   MessageParent,
   MessageTimelineEntry,
@@ -16,7 +12,7 @@ import type {
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { queryClient } from '../client';
 import { queryReadyGate } from '../gate';
-import { channelCacheSupported } from './local/channel-flag';
+import { sessionChannelHost } from './local/channel-flag';
 import { readStoredThreadId } from './local/channel-pages';
 import {
   channelSyncRuntime,
@@ -163,9 +159,7 @@ export function useChannelReadPath(parent: Accessor<MessageParent>) {
 
   const host = createMemo((): CacheHost | undefined => {
     if (parent().type !== 'channel' || unsupported()) return undefined;
-    const current = getGraphqlSoupCacheHost();
-    if (!current || !graphqlCacheEnabled()) return undefined;
-    return channelCacheSupported(current) ? current : undefined;
+    return sessionChannelHost();
   });
   // Latched: a flag refresh never moves an open channel between paths. A flag
   // PostHog has not answered yet reads as off, so REST never waits for it; a

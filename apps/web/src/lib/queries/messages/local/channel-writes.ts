@@ -192,6 +192,7 @@ export type ChannelWriteHost = Pick<
   | 'onCacheGenerationChanged'
   | 'readRecordsByKeys'
   | 'inspectMutations'
+  | 'paused'
 >;
 
 type Mention = { entity_type: string; entity_id: string };
@@ -283,6 +284,8 @@ export interface ChannelWrites {
    * pending for good.
    */
   retire(): void;
+  /** The host's database is back after an outage: hands over the writes it kept. */
+  resumed(): void;
 }
 
 /** The messages that writes waiting here delete. A send's uuid is its message id. */
@@ -655,6 +658,8 @@ interface Write<TData, TVariables extends AnyVariables> {
 export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   const [pending, setPending] = createStore<Record<string, PendingWrite[]>>({});
   const retired: Lost = Deferred.makeUnsafe();
+  /** While the host's database is away: done once it serves again. */
+  let served: Deferred.Deferred<void> | undefined;
 
   const addPending = (channelId: string, write: PendingWrite) =>
     setPending(
@@ -929,6 +934,31 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     throw unknownDelivery();
   }
 
+  /**
+   * Waits out an outage of the host's database: straight out, a write would
+   * pass the queue, and one made later could reach the server first. A write
+   * made as the database comes back waits with the ones already waiting.
+   */
+  async function untilServed(
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'operation' | 'channelId' | 'messageId'
+    >
+  ): Promise<void> {
+    while (deps.host.paused || served) {
+      served ??= Deferred.makeUnsafe<void>();
+      const waiting = Deferred.await(served);
+      await Telemetry.span('channel.write.await_cache', async (span) => {
+        span.setAttr('channel.id', write.channelId);
+        span.setAttr('message.id', write.messageId);
+        span.setAttr('write.operation', write.operation);
+        await Effect.runPromise(
+          Effect.raceFirst(waiting, Deferred.await(retired))
+        );
+      });
+    }
+  }
+
   async function queuedWrite<TData, TVariables extends AnyVariables>(
     write: Write<TData, TVariables>
   ): Promise<Message> {
@@ -953,6 +983,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       // The span covers the hand-off and a direct answer; a queued write can
       // wait for hours, which is not this operation's duration.
       const traced = <T>(operation: () => T): T => trace.run(operation);
+      await traced(() => untilServed(write));
       const result = await traced(() =>
         Telemetry.span(write.operation, async (span) => {
           span.setAttr('channel.id', write.channelId);
@@ -1257,6 +1288,11 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
           ? [write.reply.message]
           : []
       );
+    },
+    resumed() {
+      const waited = served;
+      served = undefined;
+      if (waited) Deferred.doneUnsafe(waited, Effect.void);
     },
     retire() {
       Deferred.doneUnsafe(

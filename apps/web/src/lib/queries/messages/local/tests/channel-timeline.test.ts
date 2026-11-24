@@ -24,6 +24,7 @@ import type {
 } from '../channel-pages';
 import { createChannelTouches } from '../channel-pages';
 import { whileNoFills } from '../channel-resets';
+import type { ChannelChange } from '../channel-sync-runtime';
 import {
   type ChannelTimelineRuntime,
   type ChannelWindows,
@@ -135,19 +136,27 @@ function windowOver(rows: () => Row[], held: () => boolean) {
 }
 
 function fakeRuntime() {
-  const listeners = new Set<() => void>();
-  const runtime: ChannelTimelineRuntime & { changed(): void } = {
+  const listeners = new Set<(change: ChannelChange) => void>();
+  const runtime: ChannelTimelineRuntime & {
+    changed(): void;
+    resumed(): void;
+  } = {
     open: vi.fn(() => () => {}),
-    onChanged: vi.fn((_channelId: string, listener: () => void) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    }),
+    onChanged: vi.fn(
+      (_channelId: string, listener: (change: ChannelChange) => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      }
+    ),
     noteStoredSeq: vi.fn(),
     noteServerRead: vi.fn(),
     ensureCurrent: vi.fn(async () => 'current' as const),
     epoch: () => 3,
     changed: () => {
-      for (const listener of listeners) listener();
+      for (const listener of listeners) listener('changed');
+    },
+    resumed: () => {
+      for (const listener of listeners) listener('resumed');
     },
   };
   return runtime;
@@ -623,6 +632,91 @@ describe('createLocalChannelTimeline', () => {
     runtime.changed();
     await waitFor(() => timeline.entries().length === 3);
     mounted.dispose();
+  });
+
+  it('holds a window opened while the cache was away once it serves again, keeping it shown', async () => {
+    const rows = messages(2);
+    let away = true;
+    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
+      page: {
+        __typename: 'GraphqlChannelTimelinePage',
+        entries: [...rows].reverse(),
+        olderCursor: null,
+        newerCursor: null,
+        seq: '9',
+      } as never,
+      cached: away
+        ? Promise.reject(new Error('cache is away'))
+        : Promise.resolve(),
+    }));
+    const mounted = mount({ rows, held: false, fetchPage });
+    const { timeline, runtime } = mounted;
+    await waitFor(() => timeline.entries().length === 2);
+    await settle();
+    // Not held: a change reported meanwhile cannot be read.
+    runtime.changed();
+    await settle();
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+
+    away = false;
+    const shown: number[] = [];
+    runtime.resumed();
+    await waitFor(() => {
+      shown.push(timeline.entries().length);
+      return vi.mocked(runtime.noteServerRead).mock.calls.length > 1;
+    });
+    expect(shown).not.toContain(0);
+
+    mounted.setHeld(true);
+    mounted.addRow(graphqlMessage(3));
+    runtime.changed();
+    await waitFor(() => timeline.entries().length === 3);
+    mounted.dispose();
+  });
+
+  it('holds a window still loading when the cache serves again', async () => {
+    const rows = messages(2);
+    const page = (cached: Promise<void>) => ({
+      page: {
+        __typename: 'GraphqlChannelTimelinePage',
+        entries: [...rows].reverse(),
+        olderCursor: null,
+        newerCursor: null,
+        seq: '9',
+      } as never,
+      cached,
+    });
+    const unstored = Promise.withResolvers<ReturnType<typeof page>>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockReturnValueOnce(unstored.promise)
+      .mockResolvedValue(page(Promise.resolve()));
+    const mounted = mount({ rows, held: false, fetchPage });
+    const { timeline, runtime } = mounted;
+    await waitFor(() => fetchPage.mock.calls.length === 1);
+
+    runtime.resumed();
+    await waitFor(() => timeline.entries().length === 2);
+    // Read while the cache was away, and stored by nothing.
+    const lost = Promise.reject(new Error('cache is away'));
+    unstored.resolve(page(lost));
+    await settle();
+
+    mounted.setHeld(true);
+    mounted.addRow(graphqlMessage(3));
+    runtime.changed();
+    await waitFor(() => timeline.entries().length === 3);
+    mounted.dispose();
+  });
+
+  it('reads a held window again once the cache serves again', async () => {
+    const { timeline, runtime, addRow, dispose } = mount({ rows: messages(2) });
+    await waitFor(() => !timeline.isLoading());
+    await settle();
+    addRow(graphqlMessage(3));
+    runtime.resumed();
+    await waitFor(() => timeline.entries().length === 3);
+    dispose();
   });
 
   it('reads a page again once a delete in another tab is done, holding it then', async () => {

@@ -144,6 +144,12 @@ type ChannelState = {
   failures: number;
 };
 
+/**
+ * What a view hears: the channel changed on the device, or the device's
+ * database is back after an outage, during which it stored and read nothing.
+ */
+export type ChannelChange = 'changed' | 'resumed';
+
 export interface ChannelSyncRuntime {
   /**
    * A pushed frame; `stored` says whether its records reached the cache, in
@@ -178,7 +184,10 @@ export interface ChannelSyncRuntime {
   /** Catches the channel up unless it is current; resolves when done. */
   ensureCurrent(channelId: string): Promise<ChannelCatchUpOutcome>;
   /** Views of a channel hear every change the runtime applies to it. */
-  onChanged(channelId: string, listener: () => void): () => void;
+  onChanged(
+    channelId: string,
+    listener: (change: ChannelChange) => void
+  ): () => void;
   notifyChanged(channelId: string): void;
   /**
    * Forgets channels the device no longer holds, such as after eviction:
@@ -187,6 +196,11 @@ export interface ChannelSyncRuntime {
   forget(channelIds: readonly string[]): void;
   /** Forgets every channel, such as after a storage reset. */
   forgetAll(): void;
+  /**
+   * The device's database is back after an outage: frames meanwhile stored
+   * nothing, so the channels on screen catch up and their views read again.
+   */
+  resumed(): void;
   dispose(): void;
 }
 
@@ -237,7 +251,7 @@ export function createChannelSyncRuntime(
   const random = deps.random ?? Math.random;
   const scope = Effect.runSync(Scope.make());
   const channels = new Map<string, ChannelState>();
-  const listeners = new Map<string, Set<() => void>>();
+  const listeners = new Map<string, Set<(change: ChannelChange) => void>>();
   let isConnected = false;
   let socketEpoch = 0;
   let disposed = false;
@@ -266,15 +280,17 @@ export function createChannelSyncRuntime(
     return state;
   };
 
-  const notifyChanged = (channelId: string) => {
+  const notify = (channelId: string, change: ChannelChange) => {
     for (const listener of listeners.get(channelId) ?? []) {
       try {
-        listener();
+        listener(change);
       } catch (error) {
         Telemetry.error(error, { surface: 'channel-sync' });
       }
     }
   };
+
+  const notifyChanged = (channelId: string) => notify(channelId, 'changed');
 
   const forget = (channelIds: readonly string[]) => {
     for (const channelId of channelIds) {
@@ -1073,6 +1089,16 @@ export function createChannelSyncRuntime(
     forget,
     forgetAll() {
       for (const state of channels.values()) forgetState(state);
+    },
+    resumed() {
+      if (disposed) return;
+      for (const [channelId, state] of channels) {
+        forgetState(state);
+        state.failures = 0;
+        if (state.views === 0) continue;
+        scheduleCatchUp(channelId, 'reconnect');
+        notify(channelId, 'resumed');
+      }
     },
     dispose() {
       disposed = true;

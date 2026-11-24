@@ -7,7 +7,8 @@ The channels client for devices that keep channels in the GraphQL cache engine
 from and go through the device; the server fills what the device lacks and the
 `channelTimelineUpdates` subscription keeps it current. With the flag off, on a
 host without the channel commands, and for non-channel parents, the REST and
-TanStack path in `../` runs untouched.
+TanStack path in `../` runs untouched. A host whose database is away for now
+(`paused`) stays the channels' host: never read or write around its queue.
 
 ## How it works
 
@@ -120,6 +121,13 @@ TanStack path in `../` runs untouched.
   server, then is `DELIVERY_UNKNOWN`. Recovery runs as
   `channel.write.recover` in the write's trace, every lookup included. A page
   and each read of it again run in one `channel.load_page` span.
+- Outage: while the host is `paused` (or being proven readable again after it
+  answered before, `sessionChannelHost` in `channel-flag.ts`), open channels
+  stay as they are, new ones load from the server unheld, and writes wait
+  (`channel.write.await_cache`) for the queue, in order. `restartCache` in
+  `graphql-soup.ts` ends it by calling `resumed()` on the host's runtime, which
+  catches up the channels on screen and reloads what they could not hold, and
+  on its writes; a host given up on rejects them (`CACHE_RETIRED`).
 - Ahead: `channel-prewarm.ts` fetches unread then recent channels while the
   person is idle, and evicts channels untouched for 30 days. A pushed frame
   for a channel the device does not hold gives it an empty sync row once the

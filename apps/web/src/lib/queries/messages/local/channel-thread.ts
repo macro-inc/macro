@@ -156,6 +156,19 @@ export async function readDeviceThread(
   return { kind: 'miss' };
 }
 
+/** A host that cannot read, as while its database is away, sends the thread to the server. */
+async function readDeviceThreadOrMiss(
+  host: ChannelThreadHost,
+  channelId: string,
+  rootId: string
+): Promise<DeviceThread> {
+  try {
+    return await readDeviceThread(host, channelId, rootId);
+  } catch {
+    return { kind: 'miss' };
+  }
+}
+
 /**
  * Every reply from the server, committed as a fully held thread once the
  * normalized cache holds the records. Undefined for a thread too long for the
@@ -313,7 +326,7 @@ export async function loadChannelThread(
   return Telemetry.span('channel.thread_load', async (span) => {
     span.setAttr('channel.id', channelId);
     span.setAttr('thread.root_id', rootId);
-    const device = await readDeviceThread(host, channelId, rootId);
+    const device = await readDeviceThreadOrMiss(host, channelId, rootId);
     if (device.kind === 'unsupported') {
       span.setAttr('thread.source', 'unsupported');
       return 'unsupported';
@@ -508,8 +521,12 @@ export function createLocalChannelThread(
     on([rootId, enabled], ([root, on]) => {
       if (!on) return;
       const release = deps.runtime.open(channelId);
-      const stop = deps.runtime.onChanged(channelId, () =>
-        fireAndForget(reread(root), 'channel-thread')
+      const stop = deps.runtime.onChanged(channelId, (change) =>
+        fireAndForget(
+          // After an outage, a thread the device could not store is loaded.
+          change === 'resumed' && !held ? load(root) : reread(root),
+          'channel-thread'
+        )
       );
       onCleanup(() => {
         token += 1;

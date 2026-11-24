@@ -33,7 +33,8 @@ export function useChannelPrewarm(active: Accessor<boolean>): void {
   createEffect(() => {
     if (!active() || !isLeader() || !localSync().enabled) return;
     const host = channelCacheHost();
-    if (!host) return;
+    // With its database away nothing can be stored; its return runs this again.
+    if (!host || host.paused) return;
     const quiet = createUserQuiet();
     const prewarm = createChannelPrewarm({
       host,
