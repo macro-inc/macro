@@ -1,0 +1,30 @@
+apps/web/src/components/icon/import/autodesk-fusion.svg
+  s_87f3afa86ac8c1::t_a1495c40387f4f 1
+apps/web/src/features/connector-import/core/agent-handoff.ts
+  s_87f3afa86ac8c1::t_fdf18f2065ffe8 59-73,79
+apps/web/src/features/connector-import/core/agent-handoff.test.ts
+  s_87f3afa86ac8c1::t_fdf18f2065ffe8 3,27-38,57-74
+apps/web/src/features/connector-import/core/catalog.ts
+  s_87f3afa86ac8c1::t_2b25b270efbc5e 1,3
+  s_87f3afa86ac8c1::t_a1495c40387f4f 2,82-87,206-231
+  s_87f3afa86ac8c1::t_fdf18f2065ffe8 202-205
+  s_87f3afa86ac8c1::t_3a32ac9673006d 4,7,88-89,232-233,236
+apps/web/src/features/connector-import/core/providers.ts
+  s_87f3afa86ac8c1::t_a1495c40387f4f 1,22-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d071a854d878759991558887e2308a59517215bb",
+  "prompts": {},
+  "sessions": {
+    "s_87f3afa86ac8c1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80304950-74c2-466b-aa73-c3085432a4c6",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
