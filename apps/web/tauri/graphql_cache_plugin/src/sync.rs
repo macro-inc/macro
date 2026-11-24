@@ -374,6 +374,13 @@ impl<P: Fn(SyncPublication)> Coalesced<P> {
         }
     }
 
+    /// When the pending pages are due: one interval after the last
+    /// publication. `None` with nothing pending, or never due.
+    fn due(&self) -> Option<Instant> {
+        self.pending.as_ref()?;
+        self.last?.checked_add(self.interval)
+    }
+
     fn flush(&mut self) {
         if let Some((write, search_changed_buckets)) = self.pending.take() {
             (self.publish)(SyncPublication::Hydrated {
@@ -471,11 +478,29 @@ async fn read_stream(
             pending: None,
             last: None,
         };
-        while let Some(chunk) = cancel
-            .run_until_cancelled(chunks.recv())
-            .await
-            .ok_or(SyncFailure::Aborted)?
-        {
+        loop {
+            let due = publish.due();
+            let received = cancel
+                .run_until_cancelled(async {
+                    match due {
+                        // Pages wait to publish: the end of their interval
+                        // publishes them even when no further bytes arrive.
+                        Some(due) => tokio::time::timeout_at(due.into(), chunks.recv())
+                            .await
+                            .ok(),
+                        None => Some(chunks.recv().await),
+                    }
+                })
+                .await
+                .ok_or(SyncFailure::Aborted)?;
+            let Some(received) = received else {
+                publish.flush();
+                continue;
+            };
+            // The reader is done: the body ended, failed, or the run stopped.
+            let Some(chunk) = received else {
+                break;
+            };
             let chunk: ReadChunk = chunk?;
             run.push_bytes(&chunk.bytes)
                 .map_err(|error| SyncFailure::Stream {

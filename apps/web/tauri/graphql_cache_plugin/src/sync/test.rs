@@ -948,6 +948,57 @@ fn hydrated_pages_coalesce_into_one_publication_per_interval() {
     assert_eq!(&published[2..], ["recorded", "recorded"]);
 }
 
+#[test]
+fn a_held_back_page_publishes_when_its_interval_ends_without_more_bytes() {
+    let handle = engine();
+    let (reached_tx, reached_rx) = oneshot::channel();
+    let opener = Arc::new(FakeOpener::default());
+    opener.responses.lock().unwrap().push_back((
+        200,
+        vec![
+            Chunk::Bytes(ndjson(&[
+                soup_page("tasks", 0, &[1, 2], Some("c1")),
+                soup_page("tasks", 1, &[3, 4], Some("c2")),
+            ])),
+            Chunk::Stall(reached_tx),
+        ],
+    ));
+    // The first page publishes at once; the second, written right after it,
+    // waits for the interval.
+    let runs = Arc::new(SyncRuns {
+        publish_interval: Duration::from_millis(100),
+        ..SyncRuns::default()
+    });
+    runs.install_opener(opener.clone());
+    let (hydrated_tx, hydrated_rx) = std::sync::mpsc::channel();
+    let running = tauri::async_runtime::spawn({
+        let (runs, weak, plan) = (runs.clone(), handle.downgrade(), args());
+        async move {
+            runs.start(weak, plan, move |publication| {
+                if let SyncPublication::Hydrated { write, .. } = publication {
+                    let _ = hydrated_tx.send(write.revision.parse::<u64>().unwrap());
+                }
+            })
+            .await
+        }
+    });
+    block_on(reached_rx).unwrap();
+
+    // Both pages publish while the server sends nothing more.
+    let first = hydrated_rx.recv_timeout(WAIT).unwrap();
+    let second = hydrated_rx.recv_timeout(WAIT).unwrap();
+    assert_eq!(second, first + 1);
+
+    block_on(runs.stop());
+    assert!(matches!(
+        block_on(running).unwrap(),
+        SyncRunOutcome::Failed {
+            failure: SyncFailure::Aborted,
+            ..
+        }
+    ));
+}
+
 fn gzip(bytes: &[u8]) -> Vec<u8> {
     use std::io::Write as _;
     let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
