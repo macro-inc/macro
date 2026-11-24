@@ -79,6 +79,7 @@ import { EntityPropertyEditor } from './entity-property-editor';
 import { useAllProperties } from './hooks/useAllProperties';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
 import { LinkPropertyEditor } from './link-property-editor';
+import { type SavedValueState, SavedValueStatus } from './saved-value-status';
 import {
   closePropertyEditor,
   hasPropertyEditorPropertyAddedHandler,
@@ -753,6 +754,22 @@ function TagAssignmentEditor(props: {
     props.entities[0]?.id === singleEntityForDocTags?.id
       ? singleDocTags
       : undefined;
+  const singleEntityProperties = singleEntityForDocTags
+    ? useEntityPropertiesQuery(
+        () => propertyEditorEntityType(singleEntityForDocTags),
+        () => singleEntityForDocTags.id,
+        false
+      )
+    : undefined;
+  // Until the item's properties are read every tag looks unapplied, so a pick
+  // could only add: the applied tags would neither show nor be removable.
+  const savedTagsState = (): SavedValueState => {
+    if (!singleDocTagsSource() || !singleEntityProperties) return 'known';
+    // Values already read stay usable through a failed refresh.
+    if (singleEntityProperties.data?.length) return 'known';
+    if (singleEntityProperties.error) return 'failed';
+    return singleEntityProperties.data === undefined ? 'loading' : 'known';
+  };
   const currentEntityTagIds = () => {
     const docTags = singleDocTagsSource();
     if (docTags && singleEntityForDocTags) {
@@ -888,6 +905,7 @@ function TagAssignmentEditor(props: {
 
   const rows = createMemo(() => {
     const nextRows: TagAssignmentRow[] = [];
+    if (savedTagsState() !== 'known') return nextRows;
 
     if (showClearAllAtTop()) {
       nextRows.push({ type: 'clear', separatorBefore: false });
@@ -1219,11 +1237,18 @@ function TagAssignmentEditor(props: {
       <Show
         when={rowCount() > 0}
         fallback={
-          <CommandMenuEmptyState>
-            {(tagsQuery.data ?? []).length === 0
-              ? 'No tags available'
-              : 'No tags match your search'}
-          </CommandMenuEmptyState>
+          <Show
+            when={savedTagsState() !== 'known'}
+            fallback={
+              <CommandMenuEmptyState>
+                {(tagsQuery.data ?? []).length === 0
+                  ? 'No tags available'
+                  : 'No tags match your search'}
+              </CommandMenuEmptyState>
+            }
+          >
+            <SavedValueStatus state={savedTagsState()} valuesLabel="tags" />
+          </Show>
         }
       >
         <CommandMenuList
@@ -1370,8 +1395,8 @@ function PropertyValueEditor(props: {
   });
 
   // A definition says nothing about the value a saved item already holds, so
-  // until the item's properties are read its links are unknown, not empty.
-  const savedValueState = (): 'known' | 'loading' | 'failed' => {
+  // until the item's properties are read its values are unknown, not empty.
+  const savedValueState = (): SavedValueState => {
     const property = resolvedProperty();
     if (props.properties || !singleEntity()) return 'known';
     if (property && 'value' in property) return 'known';
@@ -1410,6 +1435,7 @@ function PropertyValueEditor(props: {
             props.properties ? 1 : props.selectedEntities.length
           }
           onSave={props.onSave}
+          savedValueState={savedValueState()}
         />
       </Match>
       <Match when={propertyType() === 'ENTITY'}>
@@ -1425,6 +1451,7 @@ function PropertyValueEditor(props: {
             props.properties ? 1 : props.selectedEntities.length
           }
           onSave={props.onSave}
+          savedValueState={savedValueState()}
         />
       </Match>
       <Match
@@ -1481,6 +1508,7 @@ function SelectPropertyEditor(props: {
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
   selectedEntityCount: number;
+  savedValueState: SavedValueState;
 }) {
   const [localSelectedIds, setLocalSelectedIds] = createSignal(
     selectedOptionIds(props.property)
@@ -1530,6 +1558,11 @@ function SelectPropertyEditor(props: {
     props.selectedEntityCount === 1 &&
     'value' in props.property;
 
+  // Adding to options that haven't been read would save only the new one and
+  // drop the rest; a single option is replaced either way.
+  const waitsForSavedValue = () =>
+    props.property.isMultiSelect && props.savedValueState !== 'known';
+
   const filteredOptions = createMemo(() => {
     const options = props.property?.options || [];
     const search = props.searchValue().trim();
@@ -1576,6 +1609,7 @@ function SelectPropertyEditor(props: {
 
   const rows = createMemo(() => {
     const nextRows: SelectPropertyRow[] = [];
+    if (waitsForSavedValue()) return nextRows;
 
     if (showClearAllAtTop()) {
       nextRows.push({ type: 'clear', separatorBefore: false });
@@ -1687,7 +1721,19 @@ function SelectPropertyEditor(props: {
     <Show
       when={rows().length > 0}
       fallback={
-        <CommandMenuEmptyState>No matching options found</CommandMenuEmptyState>
+        <Show
+          when={waitsForSavedValue()}
+          fallback={
+            <CommandMenuEmptyState>
+              No matching options found
+            </CommandMenuEmptyState>
+          }
+        >
+          <SavedValueStatus
+            state={props.savedValueState}
+            valuesLabel={props.property.displayName.toLowerCase()}
+          />
+        </Show>
       }
     >
       <CommandMenuList
