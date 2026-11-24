@@ -278,6 +278,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     });
   }
   const navigateToToday = () => {
+    if (pager.locked()) return;
     const now = new Date();
     gotoDate(now);
     todayTarget = now;
@@ -305,6 +306,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     }
   };
   const navigateToDate = (date: Date) => {
+    if (pager.locked()) return;
     const current = activeDate();
     const view = periodView();
     let offset: number;

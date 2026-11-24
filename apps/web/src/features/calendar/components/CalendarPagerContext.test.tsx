@@ -1,9 +1,12 @@
+import { WheelColumn } from '@components/app/mobile/wheel-picker/WheelPicker';
+import { WHEEL_ROW_HEIGHT } from '@components/app/mobile/wheel-picker/wheel-values';
 import { Calendar, type DatesSetArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMonthWheelPicker } from '../primitives/create-month-wheel-picker';
 import type { CalendarGridPeriodView } from '../types';
 import {
   applyTimeGridOpeningScroll,
@@ -289,7 +292,7 @@ describe('calendar native paging', () => {
       expect(pager().pager.position()).toBe(before);
       viewport.dispatchEvent(new Event('scrollend'));
       viewport.dispatchEvent(new Event('scrollend'));
-      await vi.advanceTimersByTimeAsync(150);
+      await vi.advanceTimersByTimeAsync(220);
       offset += direction;
       const expected = new Date(2026, 10 + offset, 1);
       expect(calendar().view.currentStart.getTime()).toBe(expected.getTime());
@@ -308,12 +311,13 @@ describe('calendar native paging', () => {
     const changes = [...pages.values()].map(({ calendar }) =>
       vi.spyOn(calendar, 'gotoDate')
     );
-    viewport.dispatchEvent(new WheelEvent('wheel', { deltaX: 60 }));
+    viewport.dispatchEvent(new Event('touchstart'));
     viewport.scrollLeft = 300;
     viewport.dispatchEvent(new Event('scroll'));
     await vi.advanceTimersByTimeAsync(500);
     expect(pager().pager.position()).toBe(0);
     for (const change of changes) expect(change).not.toHaveBeenCalled();
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
     viewport.dispatchEvent(new Event('scrollend'));
     await vi.advanceTimersByTimeAsync(100);
     expect(pager().pager.position()).toBe(1);
@@ -512,11 +516,14 @@ describe('calendar native paging', () => {
     expect(calendar().getDate().getDate()).toBe(5);
     expect(pager().activeDate().getDate()).toBe(5);
   });
-  it('supersedes an adjacent date anchor when Next is pressed before settlement', async () => {
+  it('ignores Next during an adjacent date animation, then accepts an idle rapid step', async () => {
     const { pager, viewport, calendar } = mountCalendar('timeGridThreeDay');
     pager().navigateToDate(new Date(2026, 10, 5));
     pager().nextPeriod();
     viewport.dispatchEvent(new Event('scrollend'));
+    await vi.advanceTimersByTimeAsync(160);
+    expect(pager().navigationDate().getDate()).toBe(5);
+    pager().nextPeriod();
     await vi.advanceTimersByTimeAsync(300);
     expect(calendar().getDate().getDate()).toBe(8);
     viewport.scrollLeft = 100;
@@ -596,7 +603,12 @@ describe('calendar native paging', () => {
       const dateChanges = [...pages.values()].map(({ calendar }) =>
         vi.spyOn(calendar, 'gotoDate')
       );
-      for (let index = 0; index < 5; index++) {
+      pager().nextPeriod();
+      await vi.advanceTimersByTimeAsync(160);
+      const changesAfterAnimation = dateChanges.map(
+        (change) => change.mock.calls.length
+      );
+      for (let index = 0; index < 4; index++) {
         pager().nextPeriod();
         await vi.advanceTimersByTimeAsync(20);
       }
@@ -612,14 +624,20 @@ describe('calendar native paging', () => {
         target.toDateString()
       );
       expect(
-        dateChanges.every((change) => change.mock.calls.length === 0)
+        dateChanges.every(
+          (change, index) =>
+            change.mock.calls.length === changesAfterAnimation[index]
+        )
       ).toBe(true);
       viewport.dispatchEvent(new Event('scrollend'));
       await vi.advanceTimersByTimeAsync(300);
       expect(pager().activeDate().toDateString()).toBe(target.toDateString());
-      expect(dateChanges.every((change) => change.mock.calls.length <= 1)).toBe(
-        true
-      );
+      expect(
+        dateChanges.every(
+          (change, index) =>
+            change.mock.calls.length <= changesAfterAnimation[index] + 1
+        )
+      ).toBe(true);
     }
   );
   it.each(['timeGridDay', 'timeGridThreeDay'] as const)(
@@ -698,6 +716,7 @@ describe('calendar native paging', () => {
     pager().previousPeriod();
     expect(pager().navigationDate().getMonth()).toBe(11);
     viewport.dispatchEvent(new Event('scrollend'));
+    await vi.advanceTimersByTimeAsync(160);
     pager().nextPeriod();
     await vi.advanceTimersByTimeAsync(300);
     expect(pager().activeDate().getFullYear()).toBe(2027);
@@ -714,5 +733,235 @@ describe('calendar native paging', () => {
     expect(pager().navigationDate().getDate()).toBe(3);
     await vi.advanceTimersByTimeAsync(400);
     expect(pager().activeDate().getDate()).toBe(3);
+  });
+});
+
+describe('period animation timing', () => {
+  it.each([false, true])(
+    'finishes a short slide without scrollend and ignores active presses (touch=%s)',
+    async (touch) => {
+      device.touch = touch;
+      const { pager, viewport } = mountCalendar('dayGridMonth');
+      Object.defineProperty(viewport, 'onscrollend', { value: null });
+      pager().nextPeriod();
+      await vi.advanceTimersByTimeAsync(64);
+      expect(viewport.scrollLeft).toBeGreaterThan(200);
+      expect(viewport.scrollLeft).toBeLessThan(300);
+      pager().nextPeriod();
+      pager().previousPeriod();
+      expect(pager().navigationDate().getMonth()).toBe(11);
+      await vi.advanceTimersByTimeAsync(96);
+      expect(pager().activeDate().getMonth()).toBe(11);
+      expect(pager().pager.phase()).toBe('idle');
+      // After completion, a rapid next press jumps instead of animating again.
+      pager().nextPeriod();
+      expect(pager().pager.position()).toBe(2);
+      expect(viewport.scrollLeft).toBe(200);
+    }
+  );
+});
+
+describe('phone Month recovery', () => {
+  it('settles a released swipe when scrollend is exposed but never delivered', async () => {
+    const { pager, viewport } = mountCalendar('dayGridMonth');
+    Object.defineProperty(viewport, 'onscrollend', { value: null });
+    viewport.dispatchEvent(new Event('touchstart'));
+    viewport.scrollLeft = 270;
+    viewport.dispatchEvent(new Event('scroll'));
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    await vi.advanceTimersByTimeAsync(700);
+    expect(pager().pager.phase()).toBe('idle');
+    expect(pager().activeDate().getMonth()).toBe(11);
+    expect(viewport.scrollLeft).toBe(200);
+  });
+
+  it('recovers after a drag lock ends before the held touch releases', async () => {
+    const { pager, viewport } = mountCalendar('dayGridMonth');
+    Object.defineProperty(viewport, 'onscrollend', { value: null });
+    viewport.dispatchEvent(new Event('touchstart'));
+    viewport.scrollLeft = 225;
+    viewport.dispatchEvent(new Event('scroll'));
+    pager().setPagingLocked(true);
+    pager().setPagingLocked(false);
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    await vi.advanceTimersByTimeAsync(700);
+    expect(pager().pager.phase()).toBe('idle');
+    expect(viewport.scrollLeft).toBe(200);
+    pager().nextPeriod();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(pager().activeDate().getMonth()).toBe(11);
+  });
+
+  it('does not align while native momentum moves without main-thread scroll events', async () => {
+    const { pager, viewport } = mountCalendar('dayGridMonth');
+    Object.defineProperty(viewport, 'onscrollend', { value: null });
+    viewport.dispatchEvent(new Event('touchstart'));
+    viewport.scrollLeft = 230;
+    viewport.dispatchEvent(new Event('scroll'));
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    for (const left of [240, 250, 260, 275, 290, 300]) {
+      await vi.advanceTimersByTimeAsync(100);
+      viewport.scrollLeft = left;
+      expect(pager().pager.position()).toBe(0);
+    }
+    await vi.advanceTimersByTimeAsync(250);
+    expect(viewport.scrollLeft).toBe(300);
+    expect(pager().pager.position()).toBe(0);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(pager().pager.position()).toBe(1);
+    expect(pager().pager.phase()).toBe('idle');
+  });
+});
+
+describe('phone month/year selector alignment', () => {
+  it('does not navigate to an old snap target when mounting or changing the year', async () => {
+    const offsets = new WeakMap<Element, number>();
+    vi.spyOn(Element.prototype, 'scrollTop', 'get').mockImplementation(
+      function (this: Element) {
+        return offsets.get(this) ?? 0;
+      }
+    );
+    vi.spyOn(Element.prototype, 'scrollTop', 'set').mockImplementation(
+      function (this: Element, value: number) {
+        let target = value;
+        // Model mandatory native snap against the rows mounted at the write.
+        if (
+          this.classList.contains('wheel-picker-column') &&
+          this instanceof HTMLElement &&
+          this.style.scrollSnapType !== 'none'
+        ) {
+          const points = [
+            ...this.querySelectorAll<HTMLElement>('.wheel-picker-row'),
+          ].map((row) => Number.parseFloat(row.style.top));
+          if (points.length)
+            target = points.reduce((closest, point) =>
+              Math.abs(point - value) < Math.abs(closest - value)
+                ? point
+                : closest
+            );
+        }
+        offsets.set(this, target);
+      }
+    );
+    const { pager } = mountCalendar('dayGridMonth');
+    const picker = createMonthWheelPicker(
+      new Date(2026, 10, 1),
+      pager().navigateToDate
+    );
+    const years = Array.from({ length: 131 }, (_, index) => ({
+      value: String(1970 + index),
+      label: String(1970 + index),
+    }));
+    render(() => (
+      <WheelColumn
+        label="Year"
+        options={years}
+        value={String(picker.year())}
+        onChange={(value) => picker.selectYear(Number(value))}
+        width={72}
+      />
+    ));
+    const year = screen.getByRole('spinbutton', { name: 'Year' });
+    fireEvent.scroll(year);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(picker.year()).toBe(2026);
+    expect(pager().navigationDate().getFullYear()).toBe(2026);
+    expect(year.scrollTop).toBe((2026 - 1970) * WHEEL_ROW_HEIGHT);
+
+    picker.selectYear(2040);
+    fireEvent.scroll(year);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(picker.year()).toBe(2040);
+    expect(pager().activeDate().getFullYear()).toBe(2040);
+    expect(year.scrollTop).toBe((2040 - 1970) * WHEEL_ROW_HEIGHT);
+  });
+
+  it('keeps the last month and year selection when native momentum delays navigation', async () => {
+    const { pager, viewport, calendar } = mountCalendar('dayGridMonth');
+    Object.defineProperty(viewport, 'onscrollend', { value: null });
+    viewport.dispatchEvent(new Event('touchstart'));
+    viewport.scrollLeft = 265;
+    viewport.dispatchEvent(new Event('scroll'));
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    const picker = createMonthWheelPicker(
+      new Date(2026, 10, 1),
+      pager().navigateToDate
+    );
+    picker.selectYear(2040);
+    picker.selectMonth(2);
+    picker.selectYear(2028);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(pager().activeDate().getFullYear()).toBe(2026);
+    expect(viewport.scrollLeft).toBe(265);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(pager().activeDate().toDateString()).toBe(
+      new Date(2028, 2, 1).toDateString()
+    );
+    expect(calendar().getDate().toDateString()).toBe(
+      new Date(2028, 2, 1).toDateString()
+    );
+    viewport.dispatchEvent(new Event('touchstart'));
+    viewport.scrollLeft = 300;
+    viewport.dispatchEvent(new Event('scroll'));
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    viewport.dispatchEvent(new Event('scrollend'));
+    await vi.advanceTimersByTimeAsync(200);
+    expect(calendar().getDate().toDateString()).toBe(
+      new Date(2028, 3, 1).toDateString()
+    );
+  });
+});
+
+describe('native ownership after controlled navigation', () => {
+  it.each([false, true])(
+    'ignores an old slide scrollend around touch release (held=%s)',
+    async (held) => {
+      const { pager, viewport } = mountCalendar('dayGridMonth');
+      pager().nextPeriod();
+      await vi.advanceTimersByTimeAsync(200);
+      viewport.dispatchEvent(new Event('touchstart'));
+      viewport.scrollLeft = 300;
+      viewport.dispatchEvent(new Event('scroll'));
+      // A delayed completion from the previous slide is not this gesture's end.
+      if (held) viewport.dispatchEvent(new Event('scrollend'));
+      window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+      if (!held) viewport.dispatchEvent(new Event('scrollend'));
+      expect(pager().pager.position()).toBe(1);
+      await vi.advanceTimersByTimeAsync(16);
+      viewport.scrollLeft = 315;
+      viewport.dispatchEvent(new Event('scroll'));
+      await vi.advanceTimersByTimeAsync(200);
+      expect(pager().pager.position()).toBe(1);
+      viewport.scrollLeft = 300;
+      viewport.dispatchEvent(new Event('scrollend'));
+      await vi.advanceTimersByTimeAsync(50);
+      expect(pager().pager.position()).toBe(2);
+    }
+  );
+
+  it('returns a locked partial animation to the committed month', async () => {
+    const { pager, viewport } = mountCalendar('dayGridMonth');
+    pager().nextPeriod();
+    await vi.advanceTimersByTimeAsync(48);
+    expect(viewport.scrollLeft).toBeGreaterThan(250);
+    pager().setPagingLocked(true);
+    pager().setPagingLocked(false);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(pager().pager.position()).toBe(0);
+    expect(pager().navigationDate().getMonth()).toBe(10);
+    expect(viewport.scrollLeft).toBe(200);
+  });
+
+  it('rejects an adjacent month selection while paging is locked', async () => {
+    const { pager } = mountCalendar('dayGridMonth');
+    pager().setPagingLocked(true);
+    pager().navigateToDate(new Date(2026, 11, 1));
+    expect(pager().navigationDate().getMonth()).toBe(10);
+    pager().setPagingLocked(false);
+    expect(pager().navigationDate().getMonth()).toBe(10);
+    pager().nextPeriod();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(pager().navigationDate().getMonth()).toBe(11);
+    expect(pager().activeDate().getMonth()).toBe(11);
   });
 });

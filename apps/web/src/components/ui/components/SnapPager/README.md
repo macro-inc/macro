@@ -27,8 +27,15 @@ Controller: `pages`, `pageOrder`, `activePage`, `position`, `targetPosition`,
 `locked`, `setLocked`, `resize`, and `attachViewport`. Page descriptors expose
 stable `key`, `position`, and relative `offset`.
 
-- Native touch scrolling owns momentum until settlement; discrete desktop mode
-  turns horizontal wheel gestures into one step and ignores active-animation presses.
-- Repeated idle commands settle as an aggregate; `onSettle` reports the total
-  movement after recycling, including cancelled gestures with zero movement.
-- Lock paging during child drag/resize; unlocking realigns the current page.
+- Native touch scrolling owns momentum until settlement. Native `scrollend`
+  settles promptly; 350ms of observed positional stillness also recovers missing
+  events, including when the browser exposes the API but does not deliver one.
+- Controlled slides and final alignment take 140ms with the shared Pager ease-out
+  curve. Their frame completion owns settlement; delayed scrollend cannot finish
+  another controlled slide. Reduced motion is immediate.
+- Period buttons ignore an active controlled slide. Repeated idle commands jump
+  instantly and report the aggregate after the burst.
+- Discrete desktop mode turns horizontal wheel gestures into one step.
+- `onSettle` reports total movement after recycling, including zero-move cancellation.
+- Lock paging during child drag/resize; unlocking realigns the current page after
+  contact ends. No recovery writes the viewport while contact or momentum moves it.

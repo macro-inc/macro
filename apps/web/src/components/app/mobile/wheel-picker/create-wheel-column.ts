@@ -26,10 +26,20 @@ export function createWheelColumn(options: {
     dragging: false,
     touching: false,
   });
+  let snapFrame: number | undefined;
   const align = (index: number) => {
+    if (snapFrame !== undefined) cancelAnimationFrame(snapFrame);
     const element = options.element();
-    if (element) element.scrollTop = index * WHEEL_ROW_HEIGHT;
+    // Rebuild the virtual target window before native snap can choose a row.
+    // Otherwise a distant controlled jump can snap back to an old mounted year.
     setState('position', index);
+    if (!element) return;
+    element.style.scrollSnapType = 'none';
+    element.scrollTop = index * WHEEL_ROW_HEIGHT;
+    snapFrame = requestAnimationFrame(() => {
+      snapFrame = undefined;
+      element.style.scrollSnapType = '';
+    });
   };
   const selectedIndex = () =>
     Math.max(
@@ -137,6 +147,9 @@ export function createWheelColumn(options: {
   window.addEventListener('touchcancel', touchEnd);
   onCleanup(() => {
     settleLater.clear();
+    if (snapFrame !== undefined) cancelAnimationFrame(snapFrame);
+    const element = options.element();
+    if (element) element.style.scrollSnapType = '';
     window.removeEventListener('pointerup', pointerUp);
     window.removeEventListener('pointercancel', pointerUp);
     window.removeEventListener('touchend', touchEnd);

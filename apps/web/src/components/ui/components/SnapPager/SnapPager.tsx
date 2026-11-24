@@ -14,11 +14,26 @@ import { createStore } from 'solid-js/store';
 import './snap-pager.css';
 import { settleTarget } from './settle-target';
 
-// Only older engines without scrollend use a quiet-time fallback.
+// A missing scrollend must not strand the ring; require observed stillness.
 const SNAP_SETTLE_DELAY_MS = 350;
 // Repeated controls jump to their aggregate target instead of replaying slides.
 const SNAP_RAPID_PRESS_MS = 180;
 const SNAP_NO_SCROLL_RECOVERY_MS = 150;
+// Match the shared Pager's ease-out curve, with a short explicit duration.
+const SNAP_ANIMATION_MS = 140;
+const snapEase = (progress: number) => {
+  // Invert the Bezier x-coordinate before evaluating y: (0.22, 1, 0.36, 1).
+  let low = 0;
+  let high = 1;
+  for (let step = 0; step < 16; step++) {
+    const t = (low + high) / 2;
+    const x =
+      3 * (1 - t) ** 2 * t * 0.22 + 3 * (1 - t) * t ** 2 * 0.36 + t ** 3;
+    if (x < progress) low = t;
+    else high = t;
+  }
+  return 1 - (1 - (low + high) / 2) ** 3;
+};
 
 type SnapPagerPhase = 'idle' | 'scrolling' | 'settling';
 interface PagerState {
@@ -120,6 +135,8 @@ export function createSnapPager(
   let pending = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let frame: number | undefined;
+  let animationFrame: number | undefined;
+  let nativeFrame: number | undefined;
   let noScrollTimer: ReturnType<typeof setTimeout> | undefined;
   let recoveredWithoutScroll = false;
   let attached: HTMLDivElement | undefined;
@@ -135,7 +152,6 @@ export function createSnapPager(
   let alignmentTarget: number | undefined;
   let releaseVelocity = 0;
   let scrollObserved = false;
-  let nativeEndedWhileHeld = false;
   let sample = { left: 0, at: 0, velocity: 0 };
   const beginNativeScroll = () => {
     clearNoScrollTimer();
@@ -163,42 +179,62 @@ export function createSnapPager(
       nativeScroll,
       releaseVelocity,
       scrollObserved,
-      nativeEndedWhileHeld,
       sample,
     };
     clearMotion();
     if (preserveGesture)
-      ({
-        nativeScroll,
-        releaseVelocity,
-        scrollObserved,
-        nativeEndedWhileHeld,
-        sample,
-      } = gesture);
+      ({ nativeScroll, releaseVelocity, scrollObserved, sample } = gesture);
     if (hadNavigation) options.onNavigationCancel?.();
   };
   const gestureHeld = () => touchHeld || pointerHeld;
 
+  const clearNativeWatch = () => {
+    if (nativeFrame !== undefined) cancelAnimationFrame(nativeFrame);
+    nativeFrame = undefined;
+  };
+  const watchNativeEnd = (quietMs = SNAP_SETTLE_DELAY_MS) => {
+    clearNativeWatch();
+    const element = attached;
+    if (!element || gestureHeld() || locked() || programmaticAnimating) return;
+    let left = element.scrollLeft;
+    let stillSince = Date.now();
+    // WebKit can move the compositor without dispatching scroll/scrollend.
+    // Sample actual position, and never write or recycle until it stays still.
+    const observe = () => {
+      nativeFrame = undefined;
+      if (
+        attached !== element ||
+        gestureHeld() ||
+        locked() ||
+        programmaticAnimating
+      )
+        return;
+      if (element.scrollLeft !== left) {
+        left = element.scrollLeft;
+        stillSince = Date.now();
+        quietMs = SNAP_SETTLE_DELAY_MS;
+      }
+      if (Date.now() - stillSince >= quietMs) {
+        settle();
+        return;
+      }
+      nativeFrame = requestAnimationFrame(observe);
+    };
+    nativeFrame = requestAnimationFrame(observe);
+  };
   const scheduleSettle = () => {
     clearTimer();
-    if (
-      attached &&
-      'onscrollend' in attached &&
-      scrollObserved &&
-      (nativeScroll || !rapidNavigation)
-    )
+    if (nativeScroll || (scrollObserved && !rapidNavigation)) {
+      watchNativeEnd();
       return;
+    }
     timer = setTimeout(
       settle,
-      rapidNavigation && !nativeScroll ? rapidPressMs() : SNAP_SETTLE_DELAY_MS
+      rapidNavigation ? rapidPressMs() : SNAP_SETTLE_DELAY_MS
     );
   };
   const finishGesture = () => {
     captureRelease();
-    if (nativeEndedWhileHeld) {
-      settle();
-      return;
-    }
     if (scrollObserved || (attached && attached.scrollLeft !== sample.left)) {
       scrollObserved = true;
       scheduleSettle();
@@ -316,13 +352,53 @@ export function createSnapPager(
     frame = undefined;
   };
 
+  const cancelAnimation = () => {
+    if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
+    animationFrame = undefined;
+    programmaticAnimating = false;
+  };
+
+  const animateTo = (element: HTMLDivElement, target: number) => {
+    cancelAnimation();
+    clearNativeWatch();
+    const start = element.scrollLeft;
+    const reduced = window.matchMedia?.(
+      '(prefers-reduced-motion: reduce)'
+    ).matches;
+    element.style.scrollSnapType = 'none';
+    if (reduced || Math.abs(target - start) < 1) {
+      element.scrollLeft = target;
+      settle();
+      return;
+    }
+    const startedAt = Date.now();
+    programmaticAnimating = true;
+    const advance = () => {
+      const progress = Math.min(
+        1,
+        (Date.now() - startedAt) / SNAP_ANIMATION_MS
+      );
+      element.scrollLeft = start + (target - start) * snapEase(progress);
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(advance);
+        return;
+      }
+      animationFrame = undefined;
+      element.scrollLeft = target;
+      programmaticAnimating = false;
+      // Own animation completion; Safari need not emit scrollend for these writes.
+      settle();
+    };
+    animationFrame = requestAnimationFrame(advance);
+  };
   // Full teardown is shared; gesture cancellation and aggregate jumps retain only
   // their explicitly captured state, never a stale destination or alignment.
   const clearMotion = () => {
     clearTimer();
+    clearNativeWatch();
     clearNoScrollTimer();
     clearFrame();
-    programmaticAnimating = false;
+    cancelAnimation();
     recoveredWithoutScroll = false;
     pending = 0;
     queuedJump = undefined;
@@ -334,7 +410,6 @@ export function createSnapPager(
     alignmentTarget = undefined;
     releaseVelocity = 0;
     scrollObserved = false;
-    nativeEndedWhileHeld = false;
     sample = { left: 0, at: 0, velocity: 0 };
   };
 
@@ -378,15 +453,7 @@ export function createSnapPager(
     if (locked()) return;
     if (pending === 0) {
       if (element && phase() === 'scrolling') {
-        const reduced =
-          window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ??
-          false;
-        if (reduced) element.scrollLeft = middle * element.clientWidth;
-        else
-          element.scrollTo({
-            left: middle * element.clientWidth,
-            behavior: 'smooth',
-          });
+        animateTo(element, middle * element.clientWidth);
       }
       return;
     }
@@ -400,34 +467,15 @@ export function createSnapPager(
       return;
     }
     const delta = Math.max(-middle, Math.min(middle, pending));
-    const reducedMotion =
-      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     setPhase('scrolling');
-    programmaticAnimating = !reducedMotion;
-    if (reducedMotion)
-      element.scrollLeft = (middle + delta) * element.clientWidth;
-    else
-      element.scrollTo({
-        left: (middle + delta) * element.clientWidth,
-        behavior: 'smooth',
-      });
-    // Instant scrolling does not always emit scrollend or even scroll.
-    if (reducedMotion) {
-      clearTimer();
-      timer = setTimeout(settle, 0);
-    }
+    animateTo(element, (middle + delta) * element.clientWidth);
   };
 
   const settle = () => {
     clearTimer();
     const element = attached;
     if (!element || locked() || gestureHeld() || !element.clientWidth) return;
-    if (
-      options.discrete?.() &&
-      programmaticAnimating &&
-      'onscrollend' in element
-    )
-      return;
+    if (programmaticAnimating) return;
     // A burst changes the visible target immediately but prepares data only once
     // controls go quiet. Ignore synthetic scrollend events from each re-centre.
     if (rapidNavigation && lastCommandAt !== undefined) {
@@ -453,13 +501,7 @@ export function createSnapPager(
     if (Math.abs(element.scrollLeft - targetLeft) > 1) {
       alignmentTarget = moved;
       setPhase('settling');
-      const reduced =
-        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ??
-        false;
-      if (reduced) element.scrollLeft = targetLeft;
-      else element.scrollTo({ left: targetLeft, behavior: 'smooth' });
-      if (reduced) settle();
-      else scheduleSettle();
+      animateTo(element, targetLeft);
       return;
     }
     alignmentTarget = undefined;
@@ -512,6 +554,7 @@ export function createSnapPager(
     clearNoScrollTimer();
     if (recoverResize()) return;
     if (locked()) return;
+    if (programmaticAnimating) return;
     if (
       recoveredWithoutScroll &&
       attached &&
@@ -528,7 +571,6 @@ export function createSnapPager(
       return;
     if (phase() === 'idle' && pending === 0) beginNativeScroll();
     scrollObserved = true;
-    nativeEndedWhileHeld = false;
     if (nativeScroll && gestureHeld()) {
       const now = Date.now();
       const left = attached?.scrollLeft ?? 0;
@@ -550,23 +592,25 @@ export function createSnapPager(
     scheduleSettle();
   };
   const onScrollEnd = () => {
-    programmaticAnimating = false;
+    if (programmaticAnimating) return;
     clearNoScrollTimer();
+    clearNativeWatch();
     if (recoverResize()) return;
-    if (gestureHeld()) {
-      nativeEndedWhileHeld = true;
-      return;
-    }
-    settle();
+    // A completion delivered during a later held touch can belong to an old slide.
+    // Release must observe this gesture's own stop instead of trusting that event.
+    if (gestureHeld()) return;
+    if (nativeScroll) {
+      // A queued completion can predate this gesture. Confirm two still frames;
+      // any continuing movement returns to the full native quiet interval.
+      watchNativeEnd(32);
+    } else settle();
   };
 
   const canStep = () =>
     !locked() &&
+    !programmaticAnimating &&
     (!options.discrete?.() ||
-      (!programmaticAnimating &&
-        !nativeScroll &&
-        !gestureHeld() &&
-        alignmentTarget === undefined));
+      (!nativeScroll && !gestureHeld() && alignmentTarget === undefined));
   const command = (offset: number) => {
     if (locked() || !Number.isInteger(offset) || offset === 0) return;
     const now = Date.now();
@@ -592,7 +636,6 @@ export function createSnapPager(
       performJump(target, rapidNavigation);
       return;
     }
-    if (options.discrete?.()) rapidNavigation = true;
     navigate();
   };
   const detach = (element: HTMLDivElement) => {
@@ -696,8 +739,12 @@ export function createSnapPager(
           attached.style.scrollSnapType = 'none';
           attached.scrollLeft = left;
         } else {
-          attached.style.scrollSnapType = '';
-          settle();
+          // The lock cancelled the request, not committed the partial viewport.
+          alignmentTarget = 0;
+          setPhase('scrolling');
+          nativeScroll = gestureHeld();
+          if (!gestureHeld())
+            animateTo(attached, middle * attached.clientWidth);
         }
       }
       if (value) setPhase('idle');
