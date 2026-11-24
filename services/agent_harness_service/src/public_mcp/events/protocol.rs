@@ -1,7 +1,7 @@
 //! The `events/*` requests on the wire: parsing params, the results, and the
 //! extension's error codes.
 
-use super::catalog::{EVENT_TYPES, selection};
+use super::catalog::{EVENT_TYPES, QUERY_EVENT, selection};
 use super::stream::{
     DEFAULT_HEARTBEAT, MAX_HEARTBEAT, MIN_HEARTBEAT, NotificationSink, SUBSCRIPTION_ID_META,
     StreamPlan,
@@ -16,6 +16,7 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 use webhook::domain::mcp::models::McpTtlRequest;
+use webhook::domain::models::WEBHOOK_EVENT_NAMES;
 use webhook_signature::standard::SigningSecret;
 
 /// The extension's identifier in `capabilities.extensions`.
@@ -215,6 +216,25 @@ pub(crate) struct RequestScope<'a, Sink> {
     pub(crate) span: tracing::Span,
 }
 
+/// The methods [`handle`] answers; a span records no other method text.
+const KNOWN_METHODS: [&str; 5] = [
+    "events/list",
+    "events/subscribe",
+    "events/unsubscribe",
+    "events/stream",
+    "events/poll",
+];
+
+/// What a span records in place of a method or event name Macro does not
+/// define, so a caller's text (which can hold an email) never reaches it.
+const UNKNOWN: &str = "unknown";
+
+/// Records `name` as the request's event name when Macro defines it.
+fn record_event_name(name: &str) {
+    let known = name == QUERY_EVENT || WEBHOOK_EVENT_NAMES.contains(&name);
+    tracing::Span::current().record("mcp.event.name", if known { name } else { UNKNOWN });
+}
+
 /// Answer one `events/*` request.
 pub(crate) async fn handle<Sink: NotificationSink>(
     events: &McpEvents,
@@ -223,7 +243,14 @@ pub(crate) async fn handle<Sink: NotificationSink>(
     scope: RequestScope<'_, Sink>,
 ) -> Result<CustomResult, McpError> {
     let span = scope.span.clone();
-    span.record("mcp.events.method", method);
+    span.record(
+        "mcp.events.method",
+        if KNOWN_METHODS.contains(&method) {
+            method
+        } else {
+            UNKNOWN
+        },
+    );
     let result = async {
         match method {
             "events/list" => Ok(CustomResult(json!({
@@ -281,7 +308,7 @@ async fn subscribe<Sink>(
         delivery,
     } = parse(params)?;
     check_name_header(scope.extensions, &name)?;
-    tracing::Span::current().record("mcp.event.name", name.as_str());
+    record_event_name(&name);
     if delivery.mode != "webhook" {
         return Err(EventsError::Unsupported {
             feature: "deliveryMode",
@@ -332,7 +359,7 @@ async fn unsubscribe<Sink>(
         delivery,
     } = parse(params)?;
     check_name_header(scope.extensions, &name)?;
-    tracing::Span::current().record("mcp.event.name", name.as_str());
+    record_event_name(&name);
     events
         .unsubscribe(
             &scope.user,
@@ -357,7 +384,7 @@ async fn stream<Sink: NotificationSink>(
         heartbeat_ms,
     } = parse(params)?;
     check_name_header(scope.extensions, &name)?;
-    tracing::Span::current().record("mcp.event.name", name.as_str());
+    record_event_name(&name);
     let selected = selection(&name, &arguments)?;
     // rmcp signals a client leaving without dropping this future, so setup
     // stops on it too, rather than waiting for the model and the sources.
@@ -388,8 +415,8 @@ async fn stream<Sink: NotificationSink>(
         interpretation: compiled.interpretation,
         heartbeat,
     };
-    // The delivery loop runs outside the request span: it lasts as long as
-    // the client stays, and its end is logged with its counts instead.
+    // The delivery loop runs in the request span, which lasts as long as the
+    // client stays (`events_span`); its end is logged there with its counts.
     let (end, stats) = super::stream::run(
         scope.sink,
         std::sync::Arc::clone(&events.source),
@@ -398,7 +425,6 @@ async fn stream<Sink: NotificationSink>(
         plan,
         scope.cancel.clone(),
     )
-    .instrument(tracing::Span::none())
     .await;
     drop(slot);
     tracing::info!(
