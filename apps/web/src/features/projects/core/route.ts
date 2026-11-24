@@ -22,7 +22,8 @@ export function parseProjectRoute(value: string): ProjectRoute | undefined {
   if (!id || !UUID.test(id) || extra !== undefined) return;
   // Existing activity links now land on the combined Overview.
   const section = rawSection === 'activity' ? 'overview' : rawSection;
-  if (section !== 'overview' && section !== 'tasks') return;
+  if (section !== 'overview' && section !== 'tasks' && section !== 'time')
+    return;
   if (discussionId && (section !== 'overview' || !UUID.test(discussionId)))
     return;
   if (discussionId === '') return;
