@@ -136,7 +136,7 @@ impl PgMessageRepository {
 }
 
 impl ChannelChangeLogPruner for PgMessageRepository {
-    #[tracing::instrument(name = "messages.prune_channel_change_batch", skip_all, fields(batch = batch as i64, removed = tracing::field::Empty, counters = tracing::field::Empty, skipped = false), err)]
+    #[tracing::instrument(name = "messages.prune_channel_change_batch", skip_all, fields(batch = batch as i64, removed = tracing::field::Empty, counters = tracing::field::Empty, skipped = tracing::field::Empty), err)]
     async fn prune_channel_change_log(
         &self,
         cutoff: DateTime<Utc>,
@@ -175,7 +175,9 @@ impl ChannelChangeLogPruner for PgMessageRepository {
         tx.commit().await.map_err(database_error)?;
         let removed = usize::try_from(removed)
             .map_err(|_| MessageError::Invalid("pruned channel row count overflows"))?;
-        tracing::Span::current().record("removed", removed as i64);
+        let span = tracing::Span::current();
+        span.record("removed", removed as i64);
+        span.record("skipped", false);
         Ok(removed)
     }
 }
