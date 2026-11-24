@@ -94,11 +94,7 @@ fn project_receipt(viewer: &str, entity_type: EntityType) -> TimeScope {
 }
 
 fn project_tasks() -> FakeProjects {
-    FakeProjects(
-        [BRIEF, REVIEW, HIDDEN, TRASHED]
-            .map(str::to_owned)
-            .to_vec(),
-    )
+    FakeProjects([BRIEF, REVIEW, HIDDEN, TRASHED].map(str::to_owned).to_vec())
 }
 
 type PgService = TimeReportServiceImpl<PgTimeReportRepository, FakeAccess, FakeProjects>;
@@ -159,12 +155,15 @@ async fn team_time_leaves_out_tasks_the_viewer_cannot_see(pool: PgPool) -> anyho
     assert!(editor.rows.iter().all(|row| row.key != task(HIDDEN)));
 
     // One access check, for every task the team logged time on.
-    assert_eq!(access.bulk_checks(), [vec![
-        BRIEF.to_string(),
-        REVIEW.to_string(),
-        HIDDEN.to_string(),
-        TRASHED.to_string(),
-    ]]);
+    assert_eq!(
+        access.bulk_checks(),
+        [vec![
+            BRIEF.to_string(),
+            REVIEW.to_string(),
+            HIDDEN.to_string(),
+            TRASHED.to_string(),
+        ]]
+    );
     Ok(())
 }
 
@@ -241,7 +240,10 @@ async fn a_project_report_needs_the_callers_own_project_receipt(
         let refused = reports
             .summary(&user(VIEWER), scope, november(), by_person())
             .await;
-        assert!(matches!(refused, Err(TimeTrackingError::NotFound("project"))));
+        assert!(matches!(
+            refused,
+            Err(TimeTrackingError::NotFound("project"))
+        ));
     }
     Ok(())
 }
@@ -401,7 +403,11 @@ impl TimeReportRepository for RecordingReports {
         Ok(vec![BRIEF.to_string()])
     }
 
-    async fn live_task_count(&self, _task_ids: &[String], read: ReportRead) -> Result<u32, Self::Err> {
+    async fn live_task_count(
+        &self,
+        _task_ids: &[String],
+        read: ReportRead,
+    ) -> Result<u32, Self::Err> {
         self.record(read);
         Ok(1)
     }

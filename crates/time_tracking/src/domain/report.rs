@@ -345,11 +345,7 @@ pub fn assemble_summary(
     }
     if breakdown.then_by() == Some(TimeGrouping::Person) {
         let missing = missing_members(then_totals.iter().map(|total| &total.key), members);
-        then_totals.extend(
-            missing
-                .into_iter()
-                .map(|key| TimeTotal { key, minutes: 0 }),
-        );
+        then_totals.extend(missing.into_iter().map(|key| TimeTotal { key, minutes: 0 }));
     }
 
     if breakdown.then_by().is_some() {
@@ -411,7 +407,9 @@ pub struct TimeExport {
 }
 
 /// The export's header row.
-const EXPORT_HEADERS: [&str; 7] = ["Date", "Person", "Task", "Minutes", "Hours", "Note", "Source"];
+const EXPORT_HEADERS: [&str; 7] = [
+    "Date", "Person", "Task", "Minutes", "Hours", "Note", "Source",
+];
 
 /// A cell written so a spreadsheet shows it as text, never as a formula, by
 /// the rule the CRM export follows.
@@ -443,7 +441,9 @@ fn csv_line(record: &[String]) -> Result<Vec<u8>, TimeTrackingError> {
     let mut writer = csv::WriterBuilder::new().from_writer(Vec::new());
     writer
         .write_record(record.iter().map(|cell| safe_cell(cell)))
-        .map_err(|error| TimeTrackingError::Internal(rootcause::Report::new(error).into_dynamic()))?;
+        .map_err(|error| {
+            TimeTrackingError::Internal(rootcause::Report::new(error).into_dynamic())
+        })?;
     writer
         .into_inner()
         .map_err(|error| TimeTrackingError::Internal(rootcause::report!("{error}").into_dynamic()))
@@ -473,8 +473,9 @@ pub fn encode_export(
         bytes.extend(line);
         rows += 1;
     }
-    let csv = String::from_utf8(bytes)
-        .map_err(|error| TimeTrackingError::Internal(rootcause::Report::new(error).into_dynamic()))?;
+    let csv = String::from_utf8(bytes).map_err(|error| {
+        TimeTrackingError::Internal(rootcause::Report::new(error).into_dynamic())
+    })?;
     Ok(TimeExport {
         csv,
         rows,

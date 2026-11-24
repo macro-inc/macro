@@ -179,7 +179,11 @@ fn every_member_gets_a_person_group_with_or_without_time() {
         .collect();
     assert_eq!(
         groups,
-        [(&person(BEN), 90, 1), (&person(ANA), 0, 0), (&person(CAL), 0, 0)]
+        [
+            (&person(BEN), 90, 1),
+            (&person(ANA), 0, 0),
+            (&person(CAL), 0, 0)
+        ]
     );
 
     let by_day = TimeBreakdown::new(TimeGrouping::Day, Some(TimeGrouping::Person)).unwrap();

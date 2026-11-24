@@ -102,7 +102,10 @@ async fn people_tasks_are_the_tasks_they_logged_on_in_the_period(
 )]
 async fn live_task_count_leaves_out_the_trash(pool: PgPool) -> anyhow::Result<()> {
     let count = repo(pool)
-        .live_task_count(&tasks(&[BRIEF, REVIEW, TRASHED, "missing"]), ReportRead::Latest)
+        .live_task_count(
+            &tasks(&[BRIEF, REVIEW, TRASHED, "missing"]),
+            ReportRead::Latest,
+        )
         .await?;
     assert_eq!(count, 2);
     Ok(())
@@ -290,9 +293,10 @@ async fn every_read_runs_under_a_statement_timeout(pool: PgPool) -> anyhow::Resu
     let repo = repo(pool);
     for read in [ReportRead::Latest, ReportRead::MayLag] {
         let mut tx = repo.begin(read).await?;
-        let timeout = sqlx::query_scalar!(r#"SELECT current_setting('statement_timeout') AS "timeout!""#)
-            .fetch_one(&mut *tx)
-            .await?;
+        let timeout =
+            sqlx::query_scalar!(r#"SELECT current_setting('statement_timeout') AS "timeout!""#)
+                .fetch_one(&mut *tx)
+                .await?;
         assert_eq!(timeout, "5s");
     }
     Ok(())

@@ -355,10 +355,7 @@ impl EntityAccessService for FakeAccess {
         user_id: &MacroUserId<Lowercase<'_>>,
         document_ids: &[String],
     ) -> Result<HashMap<String, EntityAccessReceipt<ViewAccessLevel>>, AccessError> {
-        self.bulk_checks
-            .lock()
-            .unwrap()
-            .push(document_ids.to_vec());
+        self.bulk_checks.lock().unwrap().push(document_ids.to_vec());
         let mut receipts = HashMap::new();
         for document_id in document_ids {
             if let Ok(receipt) = self
@@ -556,5 +553,58 @@ impl TestClock {
 impl Clock for TestClock {
     fn now(&self) -> DateTime<Utc> {
         *self.0.lock().unwrap()
+    }
+}
+
+/// A bearer token is the user id it stands for.
+#[cfg(feature = "inbound")]
+#[derive(Clone)]
+pub(crate) struct BearerIsUser;
+
+#[cfg(feature = "inbound")]
+impl macro_authorization::MacroAuthorizationService for BearerIsUser {
+    async fn authorize(
+        &self,
+        jwt: &str,
+    ) -> Result<
+        model_user::UserContext,
+        rootcause::Report<macro_authorization::MacroAuthorizationError>,
+    > {
+        if !jwt.starts_with("macro|") {
+            return Err(rootcause::Report::new(
+                macro_authorization::MacroAuthorizationError::InvalidCredentials,
+            ));
+        }
+        Ok(model_user::UserContext {
+            user_id: jwt.to_string(),
+            fusion_user_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb".to_string(),
+            permissions: None,
+            organization_id: None,
+        })
+    }
+
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<
+        macro_authorization::ValidatedCredential,
+        rootcause::Report<macro_authorization::MacroAuthorizationError>,
+    > {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
+    async fn authorize_internal(
+        &self,
+        _provided_key: &str,
+        _claims: macro_authorization::InternalIdentityClaims,
+    ) -> Result<
+        Option<model_user::UserContext>,
+        rootcause::Report<macro_authorization::MacroAuthorizationError>,
+    > {
+        Err(rootcause::Report::new(
+            macro_authorization::MacroAuthorizationError::InvalidCredentials,
+        ))
     }
 }

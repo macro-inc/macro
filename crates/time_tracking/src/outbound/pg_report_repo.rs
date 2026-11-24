@@ -67,7 +67,10 @@ fn grouping_name(grouping: TimeGrouping) -> &'static str {
 }
 
 fn user_ids(people: &[MacroUserIdStr<'static>]) -> Vec<String> {
-    people.iter().map(|person| person.as_ref().to_owned()).collect()
+    people
+        .iter()
+        .map(|person| person.as_ref().to_owned())
+        .collect()
 }
 
 fn parse_user(id: &str) -> Result<MacroUserIdStr<'static>, PgTimeReportError> {
@@ -253,7 +256,11 @@ impl TimeReportRepository for PgTimeReportRepository {
         fields(read = ?read, tasks = task_ids.len()),
         err
     )]
-    async fn live_task_count(&self, task_ids: &[String], read: ReportRead) -> Result<u32, Self::Err> {
+    async fn live_task_count(
+        &self,
+        task_ids: &[String],
+        read: ReportRead,
+    ) -> Result<u32, Self::Err> {
         let mut tx = self.begin(read).await?;
         let live = sqlx::query_scalar!(
             r#"
