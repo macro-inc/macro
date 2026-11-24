@@ -1,6 +1,9 @@
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import { Show } from 'solid-js';
-import type { TutorialVideoId } from '../../core/tutorial-videos';
+import {
+  TUTORIAL_VIDEOS,
+  type TutorialVideoId,
+} from '../../core/tutorial-videos';
 import { TutorialVideoDialog } from '../TutorialVideoDialog';
 import { TutorialWallpaper } from '../TutorialWallpaper';
 import './homepage-screen.css';
@@ -16,6 +19,7 @@ export function HomepageScreen(props: {
   fit?: 'bleed' | 'full';
   page?: { title: string; path: string };
 }) {
+  const tutorial = () => TUTORIAL_VIDEOS[props.tutorial];
   const pageLabel = () => {
     if (!props.page) return '';
     return props.page.title === 'CRM'
@@ -43,6 +47,7 @@ export function HomepageScreen(props: {
           triggerClass="homepage-screen-action homepage-screen-action--video"
           lengthClass="homepage-screen-action-length"
           triggerLabel="Watch"
+          triggerAriaLabel={`Watch ${tutorial().feature} demo, ${tutorial().length}`}
           autoPlay
         />
         <Show when={props.page}>

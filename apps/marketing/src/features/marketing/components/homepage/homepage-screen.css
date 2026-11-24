@@ -151,11 +151,19 @@
   .feature-page .homepage-screen-action:hover {
     background: rgb(28 28 32 / 0.9);
     border-color: rgb(255 255 255 / 0.28);
-    transform: translateY(-1px);
   }
 
   .feature-page .homepage-screen-action--page:hover svg {
     color: #fff;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .feature-page .homepage-screen-action:hover {
+    transform: translateY(-1px);
+  }
+
+  .feature-page .homepage-screen-action--page:hover svg {
     transform: translateX(2px);
   }
 }

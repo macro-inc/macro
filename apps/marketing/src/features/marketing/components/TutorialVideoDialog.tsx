@@ -38,12 +38,14 @@ export function TutorialVideoDialog(props: {
   tutorial: TutorialVideoId;
   triggerClass?: string;
   triggerLabel?: string;
+  triggerAriaLabel?: string;
   lengthClass?: string;
   autoPlay?: boolean;
 }) {
   const [open, setOpen] = createSignal(false);
   const [started, setStarted] = createSignal(false);
   let video: HTMLVideoElement | undefined;
+  let playButton: HTMLButtonElement | undefined;
   let playRecorded = false;
 
   const tutorial = () => TUTORIAL_VIDEOS[props.tutorial];
@@ -64,15 +66,17 @@ export function TutorialVideoDialog(props: {
   };
 
   const play = async () => {
-    if (!video) return;
+    if (!open() || !video?.isConnected) return;
     setStarted(true);
     // The pill unmounts, so the video takes focus and keeps Space working.
     video.focus();
     try {
       await video.play();
     } catch {
-      // Playback was refused; bring the play pill back.
+      if (!open()) return;
+      // Playback was refused; bring the play pill back and move focus to it.
       setStarted(false);
+      queueMicrotask(() => playButton?.focus());
     }
   };
 
@@ -87,6 +91,7 @@ export function TutorialVideoDialog(props: {
     <Dialog open={open()} onOpenChange={changeOpen} modal>
       <Dialog.Trigger
         class={props.triggerClass ?? 'site-nav-demo tutorial-video-trigger'}
+        aria-label={props.triggerAriaLabel}
       >
         <Play aria-hidden="true" />
         <span>{props.triggerLabel ?? 'Watch demo'}</span>
@@ -96,7 +101,16 @@ export function TutorialVideoDialog(props: {
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay class="tutorial-video-overlay" />
-        <Dialog.Content class="tutorial-video-dialog">
+        <Dialog.Content
+          class="tutorial-video-dialog"
+          onOpenAutoFocus={(event) => {
+            // Keep Space bound to the auto-playing video instead of Kobalte
+            // moving focus onto the Close button on the next macrotask.
+            if (!props.autoPlay || !video?.isConnected) return;
+            event.preventDefault();
+            video.focus();
+          }}
+        >
           <header class="tutorial-video-titlebar">
             <Dialog.Title>{tutorial().title}</Dialog.Title>
             <Dialog.CloseButton
@@ -133,6 +147,7 @@ export function TutorialVideoDialog(props: {
                 onClick={play}
               />
               <button
+                ref={playButton}
                 type="button"
                 class="tutorial-video-play"
                 aria-label={`Play ${tutorial().title}, ${tutorial().length}`}

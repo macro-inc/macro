@@ -20,7 +20,8 @@
 .homepage-testimonial-attribution { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .homepage-testimonial-name { color: var(--color-ink); font-weight: 500; }
 .homepage-blog { width: min(800px, calc(100% - 64px)); margin-inline: auto; padding: 24px 0 20px; border-top: 1px solid var(--color-edge-muted); }
-.homepage-blog + .homepage-feature-end { margin-top: 0; }
+.homepage-blog + .homepage-feature-end,
+.feature-page[data-product-spacing=true] .homepage-blog + .homepage-feature-end { margin-top: 0; }
 .homepage-blog > header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
 .homepage-blog h2, .homepage-blog > header > a { font-family: 'Inter Variable', var(--font-sans); font-size: 13px; font-weight: 370; line-height: 20px; letter-spacing: normal; color: var(--color-ink-muted); }
 .homepage-blog h2 { margin: 0; }
@@ -42,9 +43,10 @@
 .homepage-blog-controls button:disabled { opacity: .3; }
 .homepage-blog-controls button:hover:not(:disabled) { background: var(--color-hover); color: var(--color-ink); }
 .homepage-blog-controls svg { width: 18px; height: 18px; }
-.homepage-blog :focus-visible { outline: 2px solid var(--color-ink-muted); outline-offset: -2px; }
+.homepage-blog :focus-visible,
+.macro-homepage .homepage-blog :is(a, button, ul):focus-visible { outline: 2px solid var(--color-ink-muted); outline-offset: -2px; }
 @media (max-width: 767px) {
-  .homepage-testimonials { padding: 56px 12px; margin-top: var(--feature-section-space, 32px); }
+  .homepage-testimonials { padding: 56px 12px; }
   .homepage-testimonials figure { gap: 32px; }
 }
 /* Phones: a full list of posts under a homepage-style slab heading instead of
