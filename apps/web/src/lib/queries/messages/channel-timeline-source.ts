@@ -17,6 +17,7 @@ import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { queryClient } from '../client';
 import { queryReadyGate } from '../gate';
 import { channelCacheSupported } from './local/channel-flag';
+import { readStoredThreadId } from './local/channel-pages';
 import {
   channelSyncRuntime,
   channelTouches,
@@ -28,6 +29,7 @@ import {
   type LocalChannelTimeline,
 } from './local/channel-timeline';
 import {
+  fetchResolvedChannelMessage,
   getMessageTimelineQueryKey,
   isMissingMessageError,
   type MessageTimelineData,
@@ -215,5 +217,34 @@ export function useChannelTimelineSource(
     loadNewer: () => active().loadNewer(),
     retry: () => active().retry(),
     toLatest: () => active().toLatest(),
+  };
+}
+
+/** A message target placed in its channel: a top-level message or a reply. */
+export type ResolvedChannelMessage =
+  | { kind: 'top_level' }
+  | { kind: 'thread_reply'; threadId: string };
+
+/**
+ * Finds whether a linked message is a reply, from the device on the device
+ * path (a link opened with no connection has only the device to ask), and
+ * from the server when the device does not hold it or on the REST path.
+ */
+export function useChannelMessageResolver(
+  parent: Accessor<MessageParent>
+): (messageId: string) => Promise<ResolvedChannelMessage> {
+  const { host, mode } = useChannelReadPath(parent);
+  return async (messageId) => {
+    const current = mode() === 'local' ? host() : undefined;
+    const target = parent();
+    if (current) {
+      const threadId = await readStoredThreadId(current, target.id, messageId);
+      if (threadId === null) return { kind: 'top_level' };
+      if (threadId !== undefined) return { kind: 'thread_reply', threadId };
+    }
+    const resolved = await fetchResolvedChannelMessage(target, messageId);
+    return resolved.kind === 'thread_reply'
+      ? { kind: 'thread_reply', threadId: resolved.thread_id }
+      : { kind: 'top_level' };
   };
 }

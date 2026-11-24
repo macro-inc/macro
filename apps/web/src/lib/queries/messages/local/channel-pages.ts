@@ -26,6 +26,7 @@ import {
   markChannelCacheUnsupported,
 } from './channel-flag';
 import {
+  CHANNEL_MESSAGE_TYPENAME,
   type ChannelTimelineRecord,
   channelMessageKey,
   mapChannelTimelineEntry,
@@ -595,4 +596,20 @@ async function storedOutcome(
     Telemetry.error(error, { surface: 'channel-local-sync' });
     return { kind: 'stored', seq: null };
   }
+}
+
+/**
+ * The thread the device's copy of a message is in: null for a top-level
+ * message, undefined when the device does not hold it in that channel.
+ */
+export async function readStoredThreadId(
+  host: Pick<CacheHost, 'readRecordsByKeys'>,
+  channelId: string,
+  messageId: string
+): Promise<string | null | undefined> {
+  const [record] =
+    (await readTimelineRecords(host, [channelMessageKey(messageId)])) ?? [];
+  if (record?.__typename !== CHANNEL_MESSAGE_TYPENAME) return undefined;
+  if (record.channelId !== channelId) return undefined;
+  return record.threadId;
 }

@@ -40,11 +40,11 @@ import {
   mapChannelTimelineEntry,
   unplacedSortKey,
 } from './channel-map';
-import { announceWritten } from './channel-tab-writes';
 import { queryChannelNetwork } from './channel-network';
 import type { ChannelPageEntry } from './channel-pages';
 import { readTimelineRecords } from './channel-pages';
 import type { ChannelSyncRuntime } from './channel-sync-runtime';
+import { announceWritten } from './channel-tab-writes';
 
 const WRITE_TYPENAME = 'GraphqlChannelMessageWrite';
 const SEND_OPERATION = 'channel.write.send';

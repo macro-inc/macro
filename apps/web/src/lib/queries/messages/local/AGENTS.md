@@ -68,6 +68,9 @@ TanStack path in `../` runs untouched.
 - `../channel-timeline-source.ts`: `useChannelReadPath`, the once-per-mount
   choice between device and REST; `../thread-replies.ts` uses the same choice.
   A flag PostHog has not answered yet reads as off: REST never waits for it.
+  A link to a message learns whether it is a reply from the device copy on the
+  device path (`useChannelMessageResolver`), and from the server only when the
+  device lacks it, so a link opens with no connection.
 - `channel-resets.ts`: counts deletes and evictions per host, so a page
   fetched across one commits no coverage. Tabs share the device, so a fill
   also holds the `macro.channel-timeline.deletes` Web Lock shared from before

@@ -5,8 +5,8 @@ import type {
   ChannelTimelineCacheResult,
 } from '@graphql-cache/index';
 import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/generated/graphql';
-import { CombinedError } from '@urql/core';
 import { onlineManager } from '@tanstack/solid-query';
+import { CombinedError } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import {

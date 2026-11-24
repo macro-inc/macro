@@ -15,8 +15,15 @@ const mocks = vi.hoisted(() => ({
   focusInput: vi.fn(),
 }));
 
+vi.mock('@queries/messages/channel-timeline-source', () => ({
+  useChannelMessageResolver: () => async (messageId: string) => {
+    const message = await mocks.resolve(messageId);
+    return message.kind === 'thread_reply'
+      ? { kind: 'thread_reply', threadId: message.thread_id }
+      : { kind: 'top_level' };
+  },
+}));
 vi.mock('@queries/messages/timeline', () => ({
-  fetchResolvedChannelMessage: mocks.resolve,
   findThreadIdInMessageTimeline: () => undefined,
   findTopLevelMessageInMessageTimeline: () => undefined,
 }));
@@ -168,9 +175,9 @@ describe('channel message link startup', () => {
     expect(screen.queryByRole('status')).toBeNull();
 
     message.resolve({ kind: 'thread_reply', thread_id: 'root-2' });
-    await message.promise;
-    await Promise.resolve();
-    expect(mocks.navigate).toHaveBeenCalledWith('root-2', 'reply-2');
+    await vi.waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledWith('root-2', 'reply-2')
+    );
     expect(mocks.mount).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('textbox')).toBe(composer);
     expect(composer).toHaveProperty('value', 'Unsent draft');
