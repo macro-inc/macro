@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT version_id, version_number, outcome, extension\n            FROM fusion_item_version\n            WHERE user_id = $1 AND item_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "version_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "version_number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "outcome",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "extension",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "04ffc5157f96c0ac73d1080ec7ec08c908b52c05b35f1318c19f407e545e9b6d"
+}

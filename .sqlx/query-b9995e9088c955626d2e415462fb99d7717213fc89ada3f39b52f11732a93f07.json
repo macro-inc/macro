@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE fusion_item\n            SET document_id = $3, state = 'creating'\n            WHERE user_id = $1 AND item_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b9995e9088c955626d2e415462fb99d7717213fc89ada3f39b52f11732a93f07"
+}

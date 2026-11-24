@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE fusion_item\n            SET sync_lease_until = now() + make_interval(secs => $3)\n            WHERE user_id = $1\n              AND item_id = $2\n              AND (sync_lease_until IS NULL OR sync_lease_until < now())\n            RETURNING project_id, document_id, state, sync_lease_until AS \"sync_lease_until!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "document_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "sync_lease_until!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "f4acca4f26e84773ad0c4b76f569c7f4924825db168f6767374f61b46603d722"
+}

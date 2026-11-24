@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE fusion_item\n            SET state = 'linked'\n            WHERE user_id = $1 AND item_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "22143cc6291218d5e177031ee039998a72b7b21fe938c006e78561dbbe801c98"
+}
