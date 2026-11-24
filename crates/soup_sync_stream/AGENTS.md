@@ -19,8 +19,9 @@ file.
 with 426), then the pass, the saved lane state and the lane documents
 (`queries`; none is `NoLaneQueries`, also 426), and plans the lanes
 (`plan.rs`): an unfinished pass resumes from its `resume` checkpoint, a
-completed lane catches up from its watermark, membership and restart-on-run
-lanes start fresh, and calendar windows fill what the 32-lane cap leaves.
+completed lane catches up from its watermark less `CATCH_UP_OVERLAP`,
+membership and restart-on-run lanes start fresh, and calendar windows fill
+what the 32-lane cap leaves.
 `frames` / `ndjson_stream` run lanes in order over a `PageExecutor`, one page
 per poll, each lane's `lane` line first: the next page executes only when the
 reader asks for the next line, and dropping the stream stops the loop.

@@ -14,7 +14,7 @@ use crate::lane::{
     INPUT_VARIABLE, LaneDraft, LaneError, LaneId, LaneKind, LanePlan, Paging, SOUP_CARRIED_FIELDS,
 };
 use crate::request::{MAX_LANES, RequestError, SavedLane, SyncRequest};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use chrono_tz::Tz;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
@@ -22,6 +22,13 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+
+/// How far before its watermark a completed lane catches up. The watermark
+/// is when the server planned the pass, and pages read from a replica, so an
+/// edit committed around that time (or not yet replicated when its page read)
+/// can carry an `updatedAt` just below it; re-reading the overlap is cheap and
+/// the cache merges what it already holds.
+const CATCH_UP_OVERLAP: TimeDelta = TimeDelta::minutes(10);
 
 /// What a resumable lane's page carries as `resume`, and the client sends
 /// back: where the pass continues, and what it has sent so far.
@@ -219,7 +226,9 @@ fn soup_lane(
         );
     }
     match (state.completed_at, state.watermark) {
-        (Some(_), Some(watermark)) => fresh(with_updated_since(input, watermark)),
+        (Some(_), Some(watermark)) => {
+            fresh(with_updated_since(input, watermark - CATCH_UP_OVERLAP))
+        }
         _ => fresh(input),
     }
 }

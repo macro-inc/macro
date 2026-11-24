@@ -85,7 +85,10 @@ The server plans a stream's lanes from the pass's lane catalog
 - A lane with a `resume` continues its pass from that cursor, counting its
   `maxItems` over the whole pass.
 - A completed hydrate lane (`watermark` and `completedAt`) runs again with
-  only what changed since its watermark.
+  only what changed since 10 minutes before its watermark
+  (`CATCH_UP_OVERLAP`): the watermark is the server's planning time and pages
+  read from a replica, so an edit committed around the pass can carry an
+  `updatedAt` just below it.
 - Membership lanes and lanes listed whole every run (`channels`,
   `email-shared`) start fresh; anything else does too.
 - Calendar windows are the months the pass covers, nearest first, in the
@@ -361,7 +364,7 @@ pages), and a stream still running after 30 s is stopped, keeping its written
 pages (`SECOND_PASS_STREAM` in `apps/web/src/lib/queries/soup/sync/host.ts`).
 
 A completed lane runs again on later passes with "changed since its
-watermark"; membership lanes, channels and shared email run in full every
+watermark", less a 10-minute overlap; membership lanes, channels and shared email run in full every
 time. Channel messages and threads, and calls, are not synced. Contacts are
 not a lane: the app's contact directory backfill (`queries/contacts`) keeps
 them, beside the sync.

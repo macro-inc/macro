@@ -9,8 +9,8 @@ use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 
 /// What each lane runs at [`now`]: its first input, and its input once it
-/// completed with the watermark 2026-10-01 (`updatedSince`). Update it with
-/// the lane.
+/// completed with the watermark 2026-10-01 (`updatedSince`, which starts
+/// `CATCH_UP_OVERLAP` earlier). Update it with the lane.
 const EXPECTED_LANES: &str = include_str!("test/expected_lanes.json");
 const WATERMARK: &str = "2026-10-01T00:00:00.000Z";
 const SCHEMA: &str = include_str!("../../../../static_assets/schema.graphql");
