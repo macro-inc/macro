@@ -247,7 +247,7 @@ body.tauri-ios {
   --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
   /* Floating touch chrome (dock, header islands, composers): translucent over
      its backdrop blur in dark mode, opaque wherever there is no blur. */
-  --color-chrome-glass: color-mix(in oklch, var(--color-chrome) var(--raised-glass-alpha, 100%), transparent);
+  --color-chrome-glass: color-mix(in oklch, color-mix(in oklch, var(--color-chrome), var(--color-content-0) var(--raised-glass-lift, 0%)) var(--raised-glass-alpha, 100%), transparent);
   --color-tooltip: var(--color-surface-2);
   --color-toast: var(--color-surface-2);
   --color-input: transparent;
@@ -440,7 +440,7 @@ body.tauri-ios {
   --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
   /* Floating touch chrome (dock, header islands, composers): translucent over
      its backdrop blur in dark mode, opaque wherever there is no blur. */
-  --color-chrome-glass: color-mix(in oklch, var(--color-chrome) var(--raised-glass-alpha, 100%), transparent);
+  --color-chrome-glass: color-mix(in oklch, color-mix(in oklch, var(--color-chrome), var(--color-content-0) var(--raised-glass-lift, 0%)) var(--raised-glass-alpha, 100%), transparent);
   --color-tooltip: var(--color-surface-2);
   --color-toast: var(--color-surface-2);
   --color-input: transparent;
@@ -761,7 +761,9 @@ body.tauri-ios {
     --glass-shadow-alpha: 0.55;
     --glass-highlight-base: 6%;
     --glass-shade-base: 40%;
-    /* Dark touch chrome lets the blurred content behind it show through. */
+    /* Dark touch chrome sits lighter than the page so it reads as raised,
+       and lets the blurred content behind it show through. */
+    --raised-glass-lift: 10%;
     --raised-glass-alpha: 88%;
     --glass-desktop-outline: rgb(0 0 0 / 0.4);
     --glass-desktop-inner-edge: rgb(255 255 255 / 0.08);
@@ -780,7 +782,8 @@ body.tauri-ios {
 [data-theme-light='true'] {
   /* Light previews inside a dark touch app stay opaque, like light mode. */
   --raised-glass-alpha: 100%;
-  --color-chrome-glass: color-mix(in oklch, var(--color-chrome) var(--raised-glass-alpha), transparent);
+  --raised-glass-lift: 0%;
+  --color-chrome-glass: color-mix(in oklch, color-mix(in oklch, var(--color-chrome), var(--color-content-0) var(--raised-glass-lift)) var(--raised-glass-alpha), transparent);
   --color-task-status-in-progress: color-mix(in srgb, var(--color-amber) 85%, var(--color-content-0));
   /* Neutral borders. */
   --border-primary: oklch(0 0 0 / 16%);
@@ -821,6 +824,7 @@ body.tauri-ios {
     --glass-shadow-alpha: 0.28;
     --glass-highlight-base: 55%;
     --glass-shade-base: 8%;
+    --raised-glass-lift: 0%;
     --raised-glass-alpha: 100%;
     --glass-desktop-outline: var(--color-edge-frame);
     --glass-desktop-inner-edge: rgb(255 255 255 / 0.6);
@@ -903,6 +907,7 @@ html[data-touch-device='true'] {
 html:not([data-touch-device="true"]),
 html:not([data-touch-device="true"]) [data-invert] {
   --color-menu-glass: var(--color-menu);
+  --raised-glass-lift: 0%;
   --raised-glass-alpha: 100%;
 }
 

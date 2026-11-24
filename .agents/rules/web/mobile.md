@@ -70,7 +70,7 @@ read their code, and follow that pattern rather than inventing a new one.
   look and respond like a mobile browser, with normal tap feedback. Navigation
   acts on click so held or cancelled touches do nothing. Touch `glass` and
   `island` surfaces draw a flat hairline edge; tune floating chrome through the
-  theme tokens (`--color-chrome-glass`, `--raised-glass-alpha`), not per component.
+  theme tokens (`--color-chrome-glass`, `--raised-glass-lift`, `--raised-glass-alpha`), not per component.
 
 ## Sheets, menus, and dialogs
 
