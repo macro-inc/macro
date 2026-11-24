@@ -263,7 +263,7 @@ pub fn notification_context(notifications: &[Notification]) -> Result<String, se
             escape(&payload),
         ));
     }
-    xml.push_str("</m-notifications>\nThese are system events, not user requests. Do not repeat completed actions or retry uncertain outcomes. Read final drafts through GetReview. If nothing needs saying and you have not called any tool in this turn, reply exactly <noop/>. After any tool call, summarize the result instead of replying with <noop/>.");
+    xml.push_str("</m-notifications>\nThese are system events, not user requests. Do not repeat completed actions or retry uncertain outcomes. Read final drafts through GetReview. If nothing needs saying and you have not called any tool in this turn, reply with <noop/> and nothing else: no text before or after it. After any tool call, summarize the result instead of replying with <noop/>.");
     Ok(xml)
 }
 
