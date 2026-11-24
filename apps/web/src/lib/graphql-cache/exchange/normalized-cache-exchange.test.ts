@@ -774,6 +774,36 @@ describe('normalizedCacheExchange', () => {
     }
   });
 
+  it('lets its queue owner go when its client lifetime ends', async () => {
+    const held = vi.fn();
+    const letGo = vi.fn();
+    const mutationQueueLocks = {
+      request: async (
+        name: string,
+        _options: LockOptions,
+        callback: () => Promise<void>
+      ) => {
+        held(name);
+        await callback();
+        letGo(name);
+      },
+    } as unknown as LockManager;
+    const lifetime = new AbortController();
+    controlledQueryHarness(host, {
+      signal: lifetime.signal,
+      mutationQueueLocks,
+    });
+    expect(held).toHaveBeenCalledOnce();
+    await Promise.resolve();
+    expect(letGo).not.toHaveBeenCalled();
+
+    lifetime.abort();
+
+    await vi.waitFor(() =>
+      expect(letGo).toHaveBeenCalledExactlyOnceWith(held.mock.calls[0]?.[0])
+    );
+  });
+
   it.each([false, true, 'owner unavailable'] as const)(
     'recovers a rejected copied response once while preserving memory rendering (rejected again=%s)',
     async (rejectAgain) => {

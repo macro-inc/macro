@@ -84,6 +84,7 @@ const PLAIN_OWNER: MutationQueueOwner = {
   claimOwner: () => 'owner',
   holds: () => true,
   departed: () => undefined,
+  dispose: () => {},
 };
 function fixture(
   options: MutationQueueRunnerDeps['options'] = {},
@@ -715,6 +716,7 @@ it('hands back a claim whose owner the page let go while it waited for admission
     claimOwner: () => 'exchange-live:here:0',
     holds: (claimedAs) => shown || !claimedAs.startsWith('exchange-live:'),
     departed: () => undefined,
+    dispose: () => {},
   };
   const { runner, forwarded, host } = fixture(
     {

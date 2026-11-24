@@ -1914,7 +1914,7 @@ export function normalizedCacheExchange(
       if (!host.disabled) {
         mutationQueue.start();
       }
-      const cleanups = [unsubscribePush, stopSettlements];
+      const cleanups = [unsubscribePush, stopSettlements, queueOwner.dispose];
       if (!host.disabled) {
         cleanups.push(
           cacheSessionGeneration.onChanged(() => {
