@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        UPDATE email_mailbox_drafts SET synced_revision = revision,base_version = $2,base_content = NULL,checkpoint = NULL,\n                            state = 'synced',error_code = 'accepting_remote',delete_requested = false,actor_id = $3,updated_at = now()\n                        WHERE message_id = $1\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "75fcd92e8c6fd6e3f7978396d58c47160f89e7148b66bc3da7b4602a3f680227"
+}

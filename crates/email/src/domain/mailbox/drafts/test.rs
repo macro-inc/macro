@@ -93,7 +93,10 @@ fn harness(stage: Option<DraftStage>) -> Harness {
             attachments: Default::default(),
             provider_id: stage.map(|_| remote.id.clone()),
             base_version: Some("v1".into()),
-            base_fingerprint: Some("unchanged-body".into()),
+            base_content: Some(DraftContent {
+                fingerprint: "unchanged-body".into(),
+                fields: [("body".to_owned(), "unchanged-body".to_owned())].into(),
+            }),
             delete_requested: false,
             checkpoint,
         },
@@ -703,7 +706,7 @@ async fn a_draft_the_mailbox_stamped_before_its_send_still_sends() {
 #[tokio::test]
 async fn a_moved_version_with_no_recorded_content_conflicts() {
     let h = harness(Some(DraftStage::Inspect));
-    h.0.lock().unwrap().lease.base_fingerprint = None;
+    h.0.lock().unwrap().lease.base_content = None;
     stamp(&h, "stamped");
     service(&h).execute_once().await.unwrap();
     let s = h.0.lock().unwrap();
@@ -813,13 +816,16 @@ fn a_change_names_the_fields_that_differ_and_nothing_else() {
         ]
         .into(),
     };
-    let prior = [
-        ("subject".to_owned(), "same".to_owned()),
-        ("body".to_owned(), "original".to_owned()),
-    ]
-    .into();
-    let between = |fingerprint, observed: &ProviderDraft| {
-        DraftChange::between(Some("v1"), fingerprint, Some(&prior), observed)
+    let prior = |fingerprint: &str| DraftContent {
+        fingerprint: fingerprint.into(),
+        fields: [
+            ("subject".to_owned(), "same".to_owned()),
+            ("body".to_owned(), "original".to_owned()),
+        ]
+        .into(),
+    };
+    let between = |fingerprint: Option<&str>, observed: &ProviderDraft| {
+        DraftChange::between(Some("v1"), fingerprint.map(prior).as_ref(), observed)
     };
     assert_eq!(
         between(Some("original"), &observed),
@@ -871,4 +877,47 @@ async fn a_failed_draft_is_logged_with_its_mailbox_message_and_attempts() {
     };
     assert_eq!(span["email.message_id"], lease.message_id.to_string());
     assert_eq!(span["draft.error_code"], "draft_conflict");
+}
+
+#[tokio::test]
+async fn an_edit_found_at_inspection_names_the_fields_that_changed() {
+    let h = harness(Some(DraftStage::Inspect));
+    edit(&h, "remote-edit");
+    let lease = h.0.lock().unwrap().lease.clone();
+    let remote = h.0.lock().unwrap().remote.clone().unwrap();
+    assert_eq!(
+        DraftChange::between(
+            lease.base_version.as_deref(),
+            lease.base_content.as_ref(),
+            &remote
+        ),
+        Some(DraftChange::Content(vec!["body".into()]))
+    );
+}
+
+#[tokio::test]
+async fn a_moved_version_without_an_edit_is_logged() {
+    let telemetry = crate::telemetry_capture::Telemetry::default();
+    let _guard = telemetry.install();
+    let send = || async {
+        let h = harness(Some(DraftStage::Ready));
+        stamp(&h, "stamped");
+        service(&h).execute_once().await.unwrap();
+        let state = h.0.lock().unwrap();
+        state.lease.clone()
+    };
+    // See the failure log test: the first run registers the callsites.
+    send().await;
+    tracing::callsite::rebuild_interest_cache();
+    let lease = send().await;
+
+    let events = telemetry.events("outlook draft version moved without an edit");
+    let link_id = lease.mailbox.link_id.to_string();
+    let event = events.iter().find(|(_, event)| event["link_id"] == link_id);
+    let Some((level, event)) = event else {
+        panic!("expected the moved version to be logged, got {events:?}");
+    };
+    assert_eq!(*level, tracing::Level::INFO);
+    assert_eq!(event["message_id"], lease.message_id.to_string());
+    assert_eq!(event["stage"], "ready");
 }

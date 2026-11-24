@@ -73,7 +73,7 @@ pub(super) async fn commit(
             match plan.action {
                 MessageResolutionAction::KeepLocal => {
                     sqlx::query!(r#"
-                        UPDATE email_mailbox_drafts SET revision = revision + 1,base_version = $2,base_fingerprint = NULL,checkpoint = NULL,
+                        UPDATE email_mailbox_drafts SET revision = revision + 1,base_version = $2,base_content = NULL,checkpoint = NULL,
                             state = 'pending',error_code = NULL,delete_requested = false,actor_id = $3,available_at = now(),updated_at = now()
                         WHERE message_id = $1
                     "#,id,message.provider_version,actor.as_ref()).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
@@ -84,7 +84,7 @@ pub(super) async fn commit(
                         .as_ref()
                         .ok_or(EmailErr::MessageDeliveryConflict(id))?;
                     sqlx::query!(r#"
-                        UPDATE email_mailbox_drafts SET synced_revision = revision,base_version = $2,base_fingerprint = NULL,checkpoint = NULL,
+                        UPDATE email_mailbox_drafts SET synced_revision = revision,base_version = $2,base_content = NULL,checkpoint = NULL,
                             state = 'synced',error_code = 'accepting_remote',delete_requested = false,actor_id = $3,updated_at = now()
                         WHERE message_id = $1
                     "#,id,message.provider_version,actor.as_ref()).execute(&mut *tx).await.map_err(anyhow::Error::from)?;

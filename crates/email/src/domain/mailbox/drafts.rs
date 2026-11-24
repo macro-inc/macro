@@ -196,16 +196,13 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             if draft.version.is_none() {
                 return Err(EmailApiError::Conflict.into());
             }
-            if !lease.delete_requested
-                && lease.provider_id.is_some()
-                && let Some(change) = DraftChange::between(
+            if !lease.delete_requested && lease.provider_id.is_some() {
+                refuse_edit(
+                    lease,
                     lease.base_version.as_deref(),
-                    lease.base_fingerprint.as_deref(),
-                    None,
+                    lease.base_content.as_ref(),
                     &draft,
-                )
-            {
-                return Err(MailboxError::DraftChanged(change));
+                )?;
             }
             checkpoint.draft = Some(draft);
             if lease.delete_requested {
@@ -297,7 +294,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                 return Ok(());
             }
             let version = observed.version.clone().ok_or(EmailApiError::Conflict)?;
-            refuse_edit(prior, &observed)?;
+            refuse_edit_since(lease, prior, &observed)?;
             if lease.delete_requested {
                 checkpoint.draft = Some(observed);
                 checkpoint.advance(DraftStage::Deleting);
@@ -348,12 +345,8 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             return Ok(());
         }
         // Attachment writes move the version, so only the content counts here.
-        if let Some(change) = DraftChange::between(
-            None,
-            draft.content_fingerprint.as_deref(),
-            Some(&draft.field_digests),
-            &observed,
-        ) {
+        let written = DraftContent::of(draft);
+        if let Some(change) = DraftChange::between(None, written.as_ref(), &observed) {
             return Err(MailboxError::DraftChanged(change));
         }
         if lease.delete_requested {
@@ -535,7 +528,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
         if observed.version.is_none() {
             return Err(EmailApiError::Conflict.into());
         }
-        refuse_edit(prior, &observed)?;
+        refuse_edit_since(lease, prior, &observed)?;
         if observed.version != prior.version {
             // The fingerprint does not cover attachments, so a moved version
             // has to show that every file the person approved is still there.
@@ -620,7 +613,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             checkpoint.draft = Some(draft);
             return self.repo.confirm_sent(lease, checkpoint).await;
         }
-        refuse_edit(prior, &draft)?;
+        refuse_edit_since(lease, prior, &draft)?;
         self.provider
             .delete_draft(
                 lease.mailbox,
@@ -642,17 +635,32 @@ fn draft_request(lease: &DraftLease, checkpoint: &DraftCheckpoint) -> DraftReque
 }
 
 /// Refuses to write over, send or delete a draft edited since `prior`.
-fn refuse_edit(prior: &ProviderDraft, observed: &ProviderDraft) -> Result<(), MailboxError> {
-    let change = DraftChange::between(
+fn refuse_edit_since(
+    lease: &DraftLease,
+    prior: &ProviderDraft,
+    observed: &ProviderDraft,
+) -> Result<(), MailboxError> {
+    refuse_edit(
+        lease,
         prior.version.as_deref(),
-        prior.content_fingerprint.as_deref(),
-        Some(&prior.field_digests),
+        DraftContent::of(prior).as_ref(),
         observed,
-    );
-    match change {
-        Some(change) => Err(MailboxError::DraftChanged(change)),
-        None => Ok(()),
+    )
+}
+
+fn refuse_edit(
+    lease: &DraftLease,
+    prior_version: Option<&str>,
+    prior: Option<&DraftContent>,
+    observed: &ProviderDraft,
+) -> Result<(), MailboxError> {
+    if let Some(change) = DraftChange::between(prior_version, prior, observed) {
+        return Err(MailboxError::DraftChanged(change));
     }
+    if observed.version.as_deref() != prior_version {
+        super::telemetry::draft_version_moved(lease);
+    }
+    Ok(())
 }
 
 /// Whether the draft holds `file` as uploaded; another file under its

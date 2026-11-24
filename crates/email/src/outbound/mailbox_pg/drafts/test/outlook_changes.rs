@@ -356,9 +356,9 @@ impl World {
         self.sync.ingest(&work, read).await.unwrap();
     }
 
-    async fn base_fingerprint(&self) -> Option<String> {
+    async fn base_content(&self) -> Option<serde_json::Value> {
         sqlx::query_scalar!(
-            "SELECT base_fingerprint FROM email_mailbox_drafts WHERE message_id = $1",
+            "SELECT base_content FROM email_mailbox_drafts WHERE message_id = $1",
             self.input.db_id
         )
         .fetch_one(&self.db)
@@ -441,11 +441,11 @@ async fn a_draft_stamped_before_every_read_still_sends(db: PgPool) {
 async fn a_draft_stamped_again_after_sync_read_the_first_stamp_still_sends(db: PgPool) {
     let mut world = World::new(db).await;
     world.work().await;
-    let fingerprint = world.base_fingerprint().await;
-    assert!(fingerprint.is_some());
+    let content = world.base_content().await;
+    assert!(content.is_some());
     world.stamp();
     world.read_back("Local  body\n").await;
-    assert_eq!(world.base_fingerprint().await, fingerprint);
+    assert_eq!(world.base_content().await, content);
     world.stamp();
     world.save("Ready to go", true).await;
     world.work().await;
@@ -453,12 +453,12 @@ async fn a_draft_stamped_again_after_sync_read_the_first_stamp_still_sends(db: P
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn an_edit_sync_read_is_a_new_baseline_with_no_fingerprint(db: PgPool) {
+async fn an_edit_sync_read_is_a_new_baseline_with_no_content_digests(db: PgPool) {
     let mut world = World::new(db).await;
     world.work().await;
     world.edit("Edited in Outlook");
     world.read_back("Edited in Outlook").await;
-    assert_eq!(world.base_fingerprint().await, None);
+    assert_eq!(world.base_content().await, None);
 
     // Macro edits on top of what sync read: known, so it is written.
     world.save("Edited after reading it", false).await;

@@ -529,7 +529,7 @@ tools — hexagonal, heavily feature-gated.
   stamps drafts on its own (an add-in, a label policy) and Macro's own archive
   moves them, which move the version and keep the content fingerprint. Compare
   Outlook's copy with Outlook's earlier copy, never with what Macro submitted,
-  because Outlook rewrites whitespace as it stores a body. `base_fingerprint`
+  because Outlook rewrites whitespace as it stores a body. `base_content`
   is that earlier copy once a new revision clears the checkpoint: `settle_draft`
   writes it, a resolution clears it, and `ingest` clears it only when
   `holds_synced` says the content changed. Without one, a moved version
@@ -538,9 +538,11 @@ tools — hexagonal, heavily feature-gated.
   (412) is written again at most `UPDATE_ATTEMPTS` times, after a read that
   shows no edit.
 - Every stopped draft logs `email_send.draft_failed` with its link, message,
-  waiting send attempts, code and the names (never values) of the changed
-  fields, and a send admitted onto a stopped draft logs
-  `email_send.admitted_stopped`, since no worker takes that send up. Each
+  waiting send attempts, code and the names (never values) of the raw Graph
+  fields that changed (`base_content` keeps each field's digest for that), and a
+  moved version it goes on with logs `email_send.draft_version_moved`. A send
+  admitted onto a stopped draft logs `email_send.admitted_stopped`, since no
+  worker takes that send up. Each
   claimed draft step is one `outlook.draft.step` span, the parent of its Graph
   requests. Stop a draft through `MailboxDraftService::fail`.
 - Each `email_message_mailbox_facts` probe rebuilds a message's facts from its

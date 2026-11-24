@@ -203,6 +203,18 @@ pub(super) fn record_draft_deferred(span: &Span, error: &MailboxError) {
     span.record("otel.status_description", tracing::field::display(error));
 }
 
+/// The draft's version moved with no edit, so the step goes on with the moved
+/// draft. Shows which mailboxes change drafts on their own.
+pub(super) fn draft_version_moved(lease: &DraftLease) {
+    tracing::info!(
+        event = "email_send.draft_version_moved",
+        link_id = %lease.mailbox.link_id,
+        message_id = %lease.message_id,
+        stage = draft_stage(lease),
+        "outlook draft version moved without an edit"
+    );
+}
+
 /// The draft stopped with `failure`, so every send attempt waiting on it
 /// reads as failed or unconfirmed. Logs ids and field names, never content.
 pub(super) fn draft_failed(

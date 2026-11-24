@@ -253,15 +253,18 @@ token that works again clears the flag.
 
 A draft step that gives up logs `email_send.draft_failed` (WARN) with `link_id`,
 `message_id`, the waiting `attempt_ids`, `code`, `stage`, and for a conflict
-`change` (`content`, or `unknown` with nothing recorded to compare) and
-`changed_fields`, the names of the fields someone edited. A send admitted onto a
+`change` and `changed_fields`. `change=content` means the content Graph returns
+(raw, before Macro's sanitizer) differs from the last one Macro read or wrote, in
+the fields `changed_fields` names (`body`, `subject`, `toRecipients`, …);
+`change=unknown` means nothing was recorded to compare. A send admitted onto a
 draft that already stopped logs `email_send.admitted_stopped`. Every step is an
 `outlook.draft.step` span (`@draft.stage`, `@draft.error_code`) whose children
 are its Graph requests.
 
-A moved version alone never stops a draft. If `change` is `content` for most of
-one mailbox's drafts, `changed_fields` says which part a tool in that tenant
-rewrites.
+A moved version alone never stops a draft: the step goes on and logs
+`email_send.draft_version_moved` (INFO). On a mailbox whose tenant changes drafts
+on its own, those lines show the rule at work, and a `change=content` line shows
+where it does not apply, with the field a tool rewrites.
 
 ## No mailbox
 

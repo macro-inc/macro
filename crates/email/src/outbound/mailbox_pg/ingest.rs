@@ -131,14 +131,14 @@ impl MailboxIngest for PgMailboxSync {
                     .is_some_and(|s| !s.dirty && !s.delete_requested)
             {
                 // Content someone edited at the provider is a new baseline with
-                // no fingerprint; a stamped version keeps the old one.
+                // no digests; a stamped version keeps the old ones.
                 let unedited = shadow
                     .as_ref()
                     .and_then(|s| {
                         serde_json::from_value::<ResolvedDraftInput>(s.desired_content.clone()).ok()
                     })
                     .is_some_and(|synced| holds_synced(&synced, &message));
-                sqlx::query!("UPDATE email_mailbox_drafts SET base_version = $2,base_fingerprint = CASE WHEN $3 OR base_version IS NOT DISTINCT FROM $2 THEN base_fingerprint END,error_code = NULL WHERE message_id = $1 AND state = 'synced'",existing.id,version,unedited).execute(&mut *tx).await.map_err(db_error)?;
+                sqlx::query!("UPDATE email_mailbox_drafts SET base_version = $2,base_content = CASE WHEN $3 OR base_version IS NOT DISTINCT FROM $2 THEN base_content END,error_code = NULL WHERE message_id = $1 AND state = 'synced'",existing.id,version,unedited).execute(&mut *tx).await.map_err(db_error)?;
             }
         }
         // A sent snapshot is authoritative even after a timeout, cancellation or

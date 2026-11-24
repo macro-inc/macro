@@ -92,9 +92,9 @@ pub struct DraftLease {
     pub attachments: crate::domain::models::draft_attachment_manifest::DraftAttachmentManifest,
     pub provider_id: Option<ProviderId>,
     pub base_version: Option<String>,
-    /// Content the provider held at the last sync, by fingerprint. Survives the
-    /// checkpoint, which a new local revision clears.
-    pub base_fingerprint: Option<String>,
+    /// Content the provider held at the last sync. Survives the checkpoint,
+    /// which a new local revision clears.
+    pub base_content: Option<DraftContent>,
     pub delete_requested: bool,
     pub checkpoint: Option<DraftCheckpoint>,
 }
@@ -129,11 +129,29 @@ pub fn holds_synced(synced: &ResolvedDraftInput, remote: &Message) -> bool {
         && synced.subject.trim() == remote.subject.as_deref().unwrap_or_default().trim()
 }
 
+/// The content of a draft as the provider held it, by digest: the whole, and
+/// each field by its provider name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DraftContent {
+    pub fingerprint: String,
+    #[serde(default)]
+    pub fields: BTreeMap<String, String>,
+}
+
+impl DraftContent {
+    pub fn of(draft: &ProviderDraft) -> Option<Self> {
+        Some(Self {
+            fingerprint: draft.content_fingerprint.clone()?,
+            fields: draft.field_digests.clone(),
+        })
+    }
+}
+
 /// How a draft differs from the one Macro last read or wrote. Names only, so it
 /// can be logged.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DraftChange {
-    /// The content changed, in these fields when both sides' digests are known.
+    /// The content the provider returns changed, in these fields.
     Content(Vec<String>),
     /// Nothing is recorded to compare the content with.
     Unknown,
@@ -142,27 +160,27 @@ pub enum DraftChange {
 impl DraftChange {
     /// What `observed` changed since `prior`, or `None` when nobody edited it. A
     /// mailbox stamps drafts on its own (an add-in, a label policy) and Macro's
-    /// own organization writes move them: both change only the version. An edit
-    /// also changes the content, which the fingerprint covers. Attachments are
-    /// not in it.
+    /// own archive moves them: both change only the version. An edit also
+    /// changes the content, which the fingerprint covers. Attachments are not
+    /// in it.
     pub fn between(
         prior_version: Option<&str>,
-        prior_fingerprint: Option<&str>,
-        prior_digests: Option<&BTreeMap<String, String>>,
+        prior: Option<&DraftContent>,
         observed: &ProviderDraft,
     ) -> Option<Self> {
         if prior_version.is_some() && observed.version.as_deref() == prior_version {
             return None;
         }
-        let Some(fingerprint) = prior_fingerprint else {
+        let Some(prior) = prior else {
             return Some(Self::Unknown);
         };
-        if observed.content_fingerprint.as_deref() == Some(fingerprint) {
+        if observed.content_fingerprint.as_deref() == Some(prior.fingerprint.as_str()) {
             return None;
         }
-        let names = prior_digests.into_iter().flatten();
         Some(Self::Content(
-            names
+            prior
+                .fields
+                .iter()
                 .filter(|(name, digest)| observed.field_digests.get(*name) != Some(digest))
                 .map(|(name, _)| name.clone())
                 .collect(),
