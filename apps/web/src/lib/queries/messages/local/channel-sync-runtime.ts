@@ -235,8 +235,13 @@ export function createChannelSyncRuntime(
   const run = <A>(effect: Effect.Effect<A, unknown>): Promise<A> =>
     Effect.runPromise(effect);
 
+  /**
+   * Runs `effect` in the runtime's scope and returns its own fiber, so an
+   * interrupt reaches it (runFork of a forkIn would return the fiber that
+   * forked it, which is already done).
+   */
   const fork = (effect: Effect.Effect<unknown, unknown>) =>
-    Effect.runFork(
+    Effect.runSync(
       effect.pipe(
         Effect.catchCause((cause) =>
           Effect.sync(() => Telemetry.error(cause, { surface: 'channel-sync' }))
@@ -605,6 +610,10 @@ export function createChannelSyncRuntime(
       for (const state of channels.values()) {
         state.current = false;
         state.seenSeq = undefined;
+        // A changes page read before the drop can land after a frame of the
+        // next connection and write older records over it: end it, and the
+        // reconnect, or the next open, reads from the stored sequence.
+        if (state.debounce) Effect.runFork(Fiber.interrupt(state.debounce));
       }
     },
     onConnected() {

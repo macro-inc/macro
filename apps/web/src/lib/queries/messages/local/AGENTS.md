@@ -19,7 +19,10 @@ TanStack path in `../` runs untouched.
 - Follow: one runtime per host (`channel-sync-runtime.ts`) tracks the sequence
   the device holds per channel, applies subscription frames
   (`channel-stream.ts`), catches up open channels on reconnect, and tells open
-  timelines and threads to reread (`onChanged`). A window or a thread that
+  timelines and threads to reread (`onChanged`). A drop ends a scheduled
+  catch-up still out, and a newer one replaces it: a changes page read before
+  can land after a frame of the next connection and write older records over
+  it. A window or a thread that
   failed to load, and an older or newer page that failed, load again when the
   connection comes back (`watchReconnect`, started before each request, so a
   request that fails after the connection is already back loads again at
