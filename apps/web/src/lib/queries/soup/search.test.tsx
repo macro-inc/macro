@@ -19,7 +19,7 @@ vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_SEARCH_SERVICE: true,
 }));
 vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({ channels: () => [] }),
+  useChannelDirectory: () => ({ channels: () => [] }),
 }));
 vi.mock('@service-search/client', () => ({
   searchClient: { search: server.search },
@@ -29,6 +29,7 @@ vi.mock('@queries/soup/transform-utils', () => ({
     () =>
     ({ id }: { id: string }) => [{ type: 'calendar_event', id, search: {} }],
   mapChannelSearchResultItem: vi.fn(),
+  channelSearchMetadata: () => [],
 }));
 
 afterEach(() => {
@@ -131,5 +132,7 @@ it('does not send a blank query to the search service', () => {
 it('does not send quote marks around nothing to the search service', () => {
   expect(searchFor('"').at(-1)).toBe(false);
   expect(searchFor('" "').at(-1)).toBe(false);
+  expect(searchFor('“').at(-1)).toBe(false);
+  expect(searchFor('“ ”').at(-1)).toBe(false);
   expect(server.search).not.toHaveBeenCalled();
 });

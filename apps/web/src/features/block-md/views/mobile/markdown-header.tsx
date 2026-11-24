@@ -1,4 +1,5 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { useTaskTimerTool } from '@app/features/time-tracking/task-timer-tool';
 import type { BlockTool } from '@components/app/block-tool';
 import {
   CollaborationStatusIndicator,
@@ -27,13 +28,16 @@ import {
 
 /**
  * The title menu rows of the mobile header. Phones offer no version history,
- * and no wide mode because the document already fills the screen.
+ * and no wide mode because the document already fills the screen. A task adds
+ * its timer.
  */
 export function mobileMarkdownHeaderMenu(
-  actions: MarkdownDocumentActions
+  actions: MarkdownDocumentActions,
+  timer?: BlockTool
 ): BlockTool[] {
   return [
     ...(isMobile() ? [] : [actions.history, actions.wideMode]),
+    ...(timer ? [timer] : []),
     actions.askMacro,
     actions.codeActions,
     actions.share,
@@ -60,6 +64,10 @@ export function MobileMarkdownHeader(props: {
   const name = () => displayName() ?? '';
   const iconType = () => (kind() === 'document' ? 'md' : kind());
   const { fileOperations, actions } = useMarkdownDocumentTools();
+  const timerTool = useTaskTimerTool(
+    documentId,
+    () => kind() === 'task' && permissions.canEdit()
+  );
   const headerEntity = useMarkdownHeaderEntity();
   const menuPermissions = () => {
     if (props.permissions !== undefined) return props.permissions;
@@ -130,7 +138,7 @@ export function MobileMarkdownHeader(props: {
         itemType="document"
         name={name()}
         ops={fileOperations}
-        tools={mobileMarkdownHeaderMenu(actions)}
+        tools={mobileMarkdownHeaderMenu(actions, timerTool)}
         entity={headerEntity()}
         entityKind={markdownDocumentBlockName(kind())}
         permissions={menuPermissions()}

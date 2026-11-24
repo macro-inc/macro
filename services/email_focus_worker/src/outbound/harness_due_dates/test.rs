@@ -99,6 +99,44 @@ async fn a_failure_reports_no_mail_text() {
     let batch = metrics.take();
     assert_eq!(batch.sums[&Metric::DueDateCalls], 1.0);
     assert_eq!(batch.sums[&Metric::DueDateFailures], 1.0);
+    assert_eq!(batch.sums[&Metric::DueDateRejected], 0.0);
+}
+
+#[tokio::test]
+async fn a_rejected_answer_reads_as_no_dates_and_counts_as_rejected_with_its_cost() {
+    let harness = MockServer::start().await;
+    Mock::given(matchers::any())
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "due_on": null,
+            "event_on": null,
+            "rejected": true,
+            "usage": {
+                "model": "fireworks/nemotron",
+                "input_tokens": 2_000_000,
+                "output_tokens": 1_000_000,
+                "cache_read_tokens": 0,
+                "cache_write_tokens": 0,
+            },
+        })))
+        .mount(&harness)
+        .await;
+    let (due_dates, metrics) = harness_at(&harness.uri());
+
+    assert_eq!(
+        due_dates
+            .dates(&owner(), Uuid::now_v7(), &input())
+            .await
+            .unwrap(),
+        ThreadDates::default()
+    );
+
+    let batch = metrics.take();
+    assert_eq!(batch.sums[&Metric::DueDateCalls], 1.0);
+    assert_eq!(batch.sums[&Metric::DueDateFailures], 0.0);
+    assert_eq!(batch.sums[&Metric::DueDateRejected], 1.0);
+    // 2M input at $0.05 and 1M output at $0.20 a million.
+    let cost = batch.sums[&Metric::DueDateCostUsd];
+    assert!((cost - 0.3).abs() < 1e-6, "{cost}");
 }
 
 fn harness_at(base: &str) -> (HarnessDueDates, FocusMetrics) {

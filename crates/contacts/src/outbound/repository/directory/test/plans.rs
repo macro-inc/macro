@@ -122,10 +122,38 @@ async fn seed(pool: &PgPool) {
     .execute(pool)
     .await
     .unwrap();
-    sqlx::query!("VACUUM (ANALYZE) contact_list_members, contact_inbox_members, team_user")
+    // The block budgets assume index-only scans that never visit the heap,
+    // so every seeded page must be in the visibility map. On a database
+    // shared with parallel tests a single VACUUM sometimes leaves pages out
+    // (seen in CI on Postgres 14, with no other transaction holding the
+    // horizon), so vacuum until none is left, a bounded number of times.
+    let mut unmarked = None;
+    for _ in 0..10 {
+        sqlx::query!(
+            "VACUUM (FREEZE, ANALYZE) contact_list_members, contact_inbox_members, team_user"
+        )
         .execute(pool)
         .await
         .unwrap();
+        let pages = sqlx::query_scalar!(
+            r#"SELECT coalesce(sum(relpages - relallvisible), 0)::bigint AS "pages!"
+               FROM pg_class
+               WHERE relname IN ('contact_list_members', 'contact_inbox_members', 'team_user')"#
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        unmarked = Some(pages);
+        if pages == 0 {
+            break;
+        }
+    }
+    assert_eq!(
+        unmarked,
+        Some(0),
+        "VACUUM left seeded pages out of the visibility map after 10 tries, so \
+         index-only scans would fetch heap tuples and overrun the block budgets"
+    );
 }
 
 async fn hosted_planner(connection: &mut PgConnection) {
@@ -263,6 +291,21 @@ async fn directory_reads_stay_bounded_at_100k_in_custom_and_generic_plans(pool: 
         include_str!("../inbox_contacts.sql"),
     )
     .await;
+    for (list, sql) in [
+        ("interacted", include_str!("../list_members/interacted.sql")),
+        ("invited", include_str!("../list_members/invited.sql")),
+        ("gmail", include_str!("../list_members/gmail.sql")),
+        ("outlook", include_str!("../list_members/outlook.sql")),
+        ("teammates", include_str!("../list_members/teammates.sql")),
+    ] {
+        prepare(
+            &mut connection,
+            &format!("members_{list}"),
+            "text, text, bigint",
+            sql,
+        )
+        .await;
+    }
     let requested = requested();
 
     for generic in [false, true] {
@@ -326,6 +369,37 @@ async fn directory_reads_stay_bounded_at_100k_in_custom_and_generic_plans(pool: 
             generic,
         )
         .await;
+        // A stored or inbox list's page seeks its partial index from the
+        // cursor; a list the viewer has no rows in reads nothing.
+        for (list, viewer, after, rows) in [
+            ("interacted", SUBJECT, "NULL", 501),
+            ("interacted", SUBJECT, "'macro|c040000@example.com'", 501),
+            // The last 10 invited, then nothing: no walk into interacted.
+            ("invited", SUBJECT, "'macro|c009990@example.com'", 10),
+            ("invited", "macro|stranger@example.com", "NULL", 0),
+            ("gmail", SUBJECT, "NULL", 501),
+            ("outlook", SUBJECT, "NULL", 0),
+        ] {
+            check(
+                &mut connection,
+                &format!("EXECUTE members_{list}('{viewer}', {after}, 501)"),
+                rows,
+                30,
+                generic,
+            )
+            .await;
+        }
+        // The roster is read whole; the subject is not their own teammate.
+        for (after, rows) in [("NULL", 501), ("'macro|c049000@example.com'", 19)] {
+            check(
+                &mut connection,
+                &format!("EXECUTE members_teammates('{SUBJECT}', {after}, 501)"),
+                rows,
+                300,
+                generic,
+            )
+            .await;
+        }
         // One range read of the subject's inbox rows.
         check(
             &mut connection,

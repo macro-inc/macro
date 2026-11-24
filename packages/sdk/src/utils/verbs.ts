@@ -162,7 +162,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     generated: 'generateImage',
     stopped: 'stopChatStream',
   },
-  contacts: { searched: 'searchPeople' },
+  contacts: { searched: 'searchPeople', listed: 'listContactListMembers' },
   email: {
     read: `
       getAttachment getAttachmentDocumentId messageOperationStatus resolveMessageOperation
@@ -248,7 +248,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       exportDocument streamEvents
       passwordsAgentDisclose passwordsAgentMyRequest passwordsAgentTotpCode
       exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
-      getTaskTemplate
+      getTaskTemplate getTimer getTimeSummary exportTime
     `,
     listed: `
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
@@ -263,7 +263,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getPinsHandler getProjectContentHandler recentlyDeleted listEmailReminders listUserApiKeys
       listWebhooks whatsappChats
       getCallParticipants getLiveCalls listCrmRecordPipelineEntries listHarnessDirectory listHarnessResidents listSavedViewDefinitions pageInitiatives
-      listTaskTemplates
+      listTaskTemplates listTimeEntries
     `,
     searched: `
       searchContacts taskSimilaritySearchHandler passwordsAgentSearch
@@ -304,8 +304,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       updateInitiative entityMessageEdit entityMessagePatchThread editThreadV2 editProjectV2
       patchWebhook
       setDatabaseAppearance setDocumentAppearance setFormAppearance setInitiativeAppearance
-      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition setSavedViewAppearance writeDocumentMarkdown
-      updateTaskTemplate
+      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail addCrmCompanyDomain removeCrmCompanyDomain updateCrmPipelineEntries updateSavedViewDefinition setSavedViewAppearance writeDocumentMarkdown
+      updateTaskTemplate updateTimeEntry
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `
@@ -316,7 +316,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       entityMessageDeleteMessage entityMessageDeleteThread deleteProjectHandler
       permanentlyDeleteProject deleteUserApiKey deleteWebhook
       deleteSavedViewDefinition
-      deleteTaskTemplate
+      deleteTaskTemplate deleteTimeEntry
     `,
     removed: `
       removeBotFromChannelByBot removeParticipants removeFavoriteByEntity removePinHandler
@@ -324,7 +324,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     added: `
       addChannelBot addParticipants addFavorite addPinHandler
-      addCrmPipelineEntries
+      addCrmPipelineEntries logTime
     `,
     blocked: 'blockCrmDomain',
     unblocked: 'unblockCrmDomain',
@@ -345,7 +345,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     unshared: 'revokeAccountManagerGrant',
     invited: 'meetingInvite meetingInviteUsers',
-    cancelled: 'meetingCancel cancelChannelAccessRequest accessRequestsCancel',
+    cancelled:
+      'meetingCancel cancelChannelAccessRequest accessRequestsCancel discardTimer',
     joined: `
       joinChannel
       joinCall meetingGuestJoin meetingJoin
@@ -376,7 +377,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     labeled: 'setChannelLabel',
     marked: 'setEmailFollowup externalChatRead',
-    ran: 'claimAccountManagerToken',
+    ran: 'claimAccountManagerToken startTimer',
+    stopped: 'stopTimer',
   },
 };
 

@@ -7,6 +7,8 @@ export type BundleRejection =
 "manifest_invalid" |
 /**  Its completion record is missing or names another build. */
 "extraction_incomplete" |
+/**  A file its completion record lists is missing or changed size. */
+"files_missing" |
 /**  It is older than the embedded bundle. */
 "older_than_embedded" |
 /**  It requires a newer native build. */
@@ -40,6 +42,12 @@ export type BundleStartup = {
 	bundleDirsFound: number,
 	/**  Numbered bundle directories startup cleanup deleted. */
 	bundleDirsRemoved: number,
+	/**
+	 *  Milliseconds startup spent checking the saved OTA bundle, including
+	 *  that every file its completion record lists is present. Unset when no
+	 *  OTA bundle was saved.
+	 */
+	savedBundleCheckMs: number | null,
 };
 
 /**  What the persisted bundle selection held at startup. */

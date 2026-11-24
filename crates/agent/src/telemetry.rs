@@ -204,8 +204,19 @@ impl GenAiContext {
         span.set_u64(attr::MACRO_PROMPT_TOOL_RESULTS, sizes.tool_results);
     }
 
+    /// The policy for content recorded now: the session's, or the disabled
+    /// one inside [`genai_telemetry::withhold_content`], which withholds
+    /// content however long before the scope this context was built.
+    fn policy(&self) -> ContentPolicy {
+        if genai_telemetry::content_withheld() {
+            ContentPolicy::disabled()
+        } else {
+            self.0.policy
+        }
+    }
+
     fn record_request_fields(&self, span: &tracing::Span, request: &CompletionRequest) {
-        let policy = &self.0.policy;
+        let policy = self.policy();
 
         if let Some(conversation_id) = self.conversation_id() {
             span.set_str(attr::CONVERSATION_ID, conversation_id);
@@ -321,13 +332,13 @@ impl GenAiContext {
         };
         let finish_reason = finish_reason(content);
         span.set_str_array(attr::RESPONSE_FINISH_REASONS, [finish_reason]);
-        if self.0.policy.capture {
+        if self.policy().capture {
             let message = messages::output_message(
                 messages::ROLE_ASSISTANT,
                 assistant_parts(content),
                 finish_reason,
             );
-            let bounded = bound_messages(vec![message], &self.0.policy.limits);
+            let bounded = bound_messages(vec![message], &self.policy().limits);
             span.set_str(attr::OUTPUT_MESSAGES, bounded.json);
             if bounded.truncated {
                 span.set_bool(attr::MACRO_CONTENT_TRUNCATED, true);
@@ -378,8 +389,8 @@ impl GenAiContext {
     /// when content may be recorded - an error message can quote the request
     /// - and a fixed summary otherwise.
     fn failure_description(&self, error_type: &str, detail: &str) -> String {
-        if self.0.policy.capture {
-            genai_telemetry::truncate_chars(detail, self.0.policy.limits.max_part_chars)
+        if self.policy().capture {
+            genai_telemetry::truncate_chars(detail, self.policy().limits.max_part_chars)
                 .into_owned()
         } else {
             format!("the call ended with {error_type}")
@@ -414,10 +425,10 @@ impl GenAiContext {
 
     /// Record the prompt of an agent run as the agent span's input.
     pub(crate) fn record_agent_input(&self, agent_span: &tracing::Span, prompt: &Message) {
-        if !self.0.enabled || !self.0.policy.capture {
+        if !self.0.enabled || !self.policy().capture {
             return;
         }
-        let bounded = bound_messages(message_json(prompt), &self.0.policy.limits);
+        let bounded = bound_messages(message_json(prompt), &self.policy().limits);
         agent_span.set_str(attr::INPUT_MESSAGES, bounded.json);
         if bounded.truncated {
             agent_span.set_bool(attr::MACRO_CONTENT_TRUNCATED, true);
@@ -439,7 +450,7 @@ impl GenAiContext {
         agent_span.set_u64(attr::USAGE_INPUT_TOKENS, usage.input_tokens);
         agent_span.set_u64(attr::USAGE_OUTPUT_TOKENS, usage.output_tokens);
         agent_span.set_str_array(attr::RESPONSE_FINISH_REASONS, [attr::finish_reason::STOP]);
-        if !self.0.policy.capture {
+        if !self.policy().capture {
             return;
         }
         let message = messages::output_message(
@@ -447,7 +458,7 @@ impl GenAiContext {
             vec![messages::text_part(output)],
             attr::finish_reason::STOP,
         );
-        let bounded = bound_messages(vec![message], &self.0.policy.limits);
+        let bounded = bound_messages(vec![message], &self.policy().limits);
         agent_span.set_str(attr::OUTPUT_MESSAGES, bounded.json);
         if bounded.truncated {
             agent_span.set_bool(attr::MACRO_CONTENT_TRUNCATED, true);

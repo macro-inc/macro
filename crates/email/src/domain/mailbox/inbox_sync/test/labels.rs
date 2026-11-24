@@ -339,7 +339,7 @@ async fn additions_commit_before_removals_and_events_preserve_fixed_order_and_la
 }
 
 #[tokio::test]
-async fn removals_mark_read_and_provider_system_labels_only_refresh_without_user_events() {
+async fn removals_mark_read_and_labels_without_their_own_event_reindex_the_thread() {
     for read in [false, true] {
         let (service, fake) = make_service(false);
         {
@@ -359,7 +359,27 @@ async fn removals_mark_read_and_provider_system_labels_only_refresh_without_user
         ));
         let calls = fake.calls();
         assert_eq!(calls.contains(&Call::SetRead(true)), read);
-        assert_eq!(events(&calls).len(), usize::from(read));
+        let events = events(&calls);
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0]["event_type"],
+            if read {
+                "email.thread_read"
+            } else {
+                "email.threads_reindex_requested"
+            }
+        );
+        if !read {
+            assert_eq!(
+                events[0]["metadata"],
+                serde_json::json!({
+                    "link_id": LINK,
+                    "owner": "macro|owner@example.com",
+                    "thread_ids": [THREAD],
+                    "reason": "provider_changed",
+                })
+            );
+        }
         assert_eq!(calls.last(), Some(&Call::Refresh(false)));
     }
 }

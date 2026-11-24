@@ -80,7 +80,11 @@ function fetchSchedules() {
   return throwOnErr(async () => await scheduledActionClient.listSchedules());
 }
 
-export function useSchedulesQuery(enabled: Accessor<boolean>) {
+/** Passive navigation observers reuse cached data without refreshing on every drawer open. */
+export function useSchedulesQuery(
+  enabled: Accessor<boolean>,
+  refreshOnMount = true
+) {
   return useQuery(() => ({
     queryKey: scheduledActionKeys.list.queryKey,
     enabled: enabled(),
@@ -88,6 +92,7 @@ export function useSchedulesQuery(enabled: Accessor<boolean>) {
     placeholderData: keepPreviousData,
     reconcile: 'id',
     ...QUERY_REFETCH_BEHAVIOR,
+    refetchOnMount: refreshOnMount ? 'always' : false,
   }));
 }
 

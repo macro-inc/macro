@@ -6,6 +6,7 @@ import { createSoundPlayer } from '@app/features/notification-sounds/primitives/
 import { readNotificationSoundSettings } from '@app/features/notification-sounds/primitives/sound-settings';
 import { createSoundUnlock } from '@app/features/notification-sounds/primitives/sound-unlock';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import type { CallPresenceEvent } from './call-presence';
 
@@ -30,6 +31,14 @@ export function createCallSoundPlayer(
   return (event: CallPresenceEvent) => {
     const current = settings();
     const sound = soundForCallEvent(event, current);
-    if (sound) fireAndForget(player.play(sound, current.volume), 'call-sounds');
+    if (!sound) return;
+    fireAndForget(
+      Telemetry.span('call.sound.play', async (span) => {
+        span.setAttr('call.sound.kind', event);
+        span.setAttr('call.sound.count', 1);
+        await player.play(sound, current.volume);
+      }),
+      'call-sounds'
+    );
   };
 }

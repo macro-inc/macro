@@ -1,4 +1,8 @@
-import { SearchBar, ViewShell, ViewSidebar } from '@app/components/view-shell';
+import {
+  SearchBar,
+  useViewTabHotkeys,
+  ViewShell,
+} from '@app/components/view-shell';
 import {
   ListHeader,
   ListHeaderSearch,
@@ -6,6 +10,10 @@ import {
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { t } from '@app/lib/i18n';
+import {
+  splitRootScope,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { Key } from '@solid-primitives/keyed';
@@ -19,6 +27,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { RoutineTemplate } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
 import {
@@ -133,9 +142,30 @@ export function RoutinesList(props: {
       return props.rows.length === 0 && !props.loading && !props.error;
     },
   };
+  const tabIds = (): ListTab[] =>
+    props.discover ? ['all', 'on', 'discover'] : ['all', 'on'];
+  const [tabsElement, setTabsElement] = createSignal<HTMLElement>();
+  const panel = useSplitPanel();
+  if (panel) {
+    useViewTabHotkeys<ListTab>({
+      scopeId: splitRootScope(panel),
+      enabled: panel.isPanelActive,
+      tabs: tabsElement,
+      ids: tabIds,
+      activeId: showing,
+      setActiveId: setShow,
+      label: (tab) =>
+        match(tab)
+          .with('all', () => t('routinesList.all'))
+          .with('on', () => t('routinesList.on'))
+          .with('discover', () => t('routineSuggestions.discover'))
+          .exhaustive(),
+    });
+  }
   const tabs = (): JSX.Element => (
     <Tabs
       aria-label={t('routinesList.showLabel')}
+      ref={setTabsElement}
       options={[
         {
           value: 'all',
@@ -174,10 +204,23 @@ export function RoutinesList(props: {
               {props.mobileHeader?.(() => focusSearch?.())}
             </Show>
             <ViewShell.Header>
-              <div class="mb-3 flex min-w-0 items-center gap-2">
-                <ViewSidebar.Toggle action="expand" presentation="pill" />
-                {tabs()}
-              </div>
+              <Show when={props.showTitle !== false}>
+                <div class="mb-3 flex items-baseline gap-2">
+                  <h1 class="text-xl/6.5 font-semibold">
+                    {t('agentWork.routines')}
+                  </h1>
+                  <Show
+                    when={
+                      !props.loading && !props.error && props.rows.length > 0
+                    }
+                  >
+                    <span class="text-[15px]/5 text-ink-extra-muted tabular-nums">
+                      {props.rows.length}
+                    </span>
+                  </Show>
+                </div>
+              </Show>
+              <div class="mb-3">{tabs()}</div>
               <div class="flex min-w-0 items-center justify-between gap-3">
                 <SearchBar
                   ref={(input) => {

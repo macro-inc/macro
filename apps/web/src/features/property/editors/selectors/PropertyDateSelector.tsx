@@ -7,10 +7,12 @@ import type { DateProperty } from '@property/types';
 import { useSearchInputFocus } from '@property/utils/focus';
 import { cn } from '@ui';
 import {
+  children,
   createEffect,
   createMemo,
   createSignal,
   For,
+  type JSX,
   Match,
   on,
   onCleanup,
@@ -31,6 +33,12 @@ type DateSelectorProps = {
   onClose?: () => void;
   /** Fill a sized container, such as a sheet, rather than a popover's height. */
   fillHeight?: boolean;
+  /** Shown above the search field, in place of the current value below it. */
+  header?: JSX.Element;
+  /** Shown after "Pick from calendar" instead of the single-day calendar. */
+  calendar?: JSX.Element;
+  /** Shown below the suggestions and the calendar. */
+  footer?: JSX.Element;
 };
 
 export const PropertyDateSelector = (props: DateSelectorProps) => {
@@ -39,6 +47,8 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   let searchInputRef!: HTMLInputElement;
   const keyboardMode = useKeyPressed(100);
+  const header = children(() => props.header);
+  const calendar = children(() => props.calendar);
 
   const dateOptions = useDateSearch({
     query: searchQuery,
@@ -162,6 +172,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
     <div
       class={cn('relative flex min-h-0 flex-col', props.fillHeight && 'flex-1')}
     >
+      {header()}
       <div class="flex w-full shrink-0 items-center py-2 gap-2 px-2 border-b border-edge-muted">
         <SearchIcon class="size-4 text-ink-muted" />
         <input
@@ -183,11 +194,13 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
           disabled={mode() !== 'search'}
         />
       </div>
-      <p class="flex items-center gap-2 border-b border-edge-muted px-3 py-2">
-        <CalendarIcon class="size-4 shrink-0 text-ink-muted" />
-        <span class="text-ink-muted">Current:</span>
-        <span class="min-w-0 truncate">{selectedDateLabel()}</span>
-      </p>
+      <Show when={!header()}>
+        <p class="flex items-center gap-2 border-b border-edge-muted px-3 py-2">
+          <CalendarIcon class="size-4 shrink-0 text-ink-muted" />
+          <span class="text-ink-muted">Current:</span>
+          <span class="min-w-0 truncate">{selectedDateLabel()}</span>
+        </p>
+      </Show>
       <Switch>
         <Match when={mode() === 'search'}>
           {/* Picking a row keeps focus in the date field, so the phone
@@ -301,13 +314,21 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
 
         <Match when={mode() === 'calendar'}>
           <div class="min-h-0 overflow-y-auto border-b border-edge-muted text-sm flex justify-center">
-            <DatePickerUI
-              value={props.selectedDate || new Date()}
-              onChange={handleCalendarChange}
-            />
+            <Show
+              when={calendar()}
+              fallback={
+                <DatePickerUI
+                  value={props.selectedDate || new Date()}
+                  onChange={handleCalendarChange}
+                />
+              }
+            >
+              {calendar()}
+            </Show>
           </div>
         </Match>
       </Switch>
+      {props.footer}
     </div>
   );
 };

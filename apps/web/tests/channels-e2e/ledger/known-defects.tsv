@@ -1,5 +1,4 @@
 test	defect
 NAV-05	Reading forward from an old message jumps over part of the history (from message 150 to about 217 of 230)
-CHN-04	A rename does not reach the header and composer of another member who has the channel open, until reload
 CHN-14	A new channel with no messages shows neither its created line nor an empty state
 UNR-09	The first message in a new channel leaves the other member's row unmarked; the second marks it

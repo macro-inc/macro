@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use axum::Router;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use connectors::{ConnectionManagementService, McpConnectionsService};
 use email_service_client::EmailServiceClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::OwnerGrantPolicy;
@@ -304,6 +305,7 @@ where
                 action: action.clone(),
                 prompt: prompt.to_owned(),
                 context: None,
+                withhold_content: false,
             })
             .await
         {
@@ -549,7 +551,7 @@ impl SchedulingRuntime {
     clippy::too_many_arguments,
     reason = "each argument is a separate resource the composition root shares with scheduling; bundling them only moves the list"
 )]
-pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
+pub async fn build<Ingress, S>(
     config: Config,
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
@@ -557,8 +559,12 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
     search: search_service_client::SearchServiceClient,
-    routine_connect: Option<Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>,
-) -> Result<SchedulingRuntime> {
+    connectors: Arc<S>,
+) -> Result<SchedulingRuntime>
+where
+    Ingress: notification::domain::service::NotificationIngress,
+    S: McpConnectionsService + ConnectionManagementService,
+{
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
     let generation_ready = ready.clone();
@@ -873,10 +879,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         // A routine's draft may require the apps its owner connected,
         // counted as saving and every run count them.
         .with_apps(Arc::new(
-            crate::routine_sessions::PipedreamConnectedApps::new(
-                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
-                routine_connect.clone(),
-            ),
+            crate::routine_sessions::RoutineConnectedApps::new(Arc::clone(&connectors)),
         ))
         .with_finding(DraftFinding {
             model: Arc::new(routine_drafting::RouterDraftModels {
@@ -926,37 +929,47 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // non-billable (`SessionBilling::NonBillable`), so their usage is
     // recorded, never billed. Suggestions sessions write through `macro.suggestions.*`;
     // routines sessions through `macro.routines.suggest`, reading the newest
-    // mail through email_service, which reads it from the provider.
+    // mail through email_service, which reads it from the provider. With
+    // `routine-suggestions-find-work` on, onboarding first finds the work in
+    // the person's month of mail in one model call, recorded with the
+    // first drafting session's usage.
     let generations = Arc::new(PgGenerationRepo::new(db.clone()));
     let plans: Arc<dyn suggestion_generation::domain::ports::Plans> = Arc::new(EntitlementPlans(
         ai_billing::composition::pg_entitlement_source(db.clone()),
     ));
-    let suggestions = Arc::new(RoutineSuggestionService::new(
-        Arc::clone(&service),
-        suggestion_repo,
-        Arc::new(routine_suggestions::HarnessSuggestionSources {
-            email: Arc::new(EmailServiceClient::new(
-                config.internal_api_key.to_string(),
-                EmailServiceUrl::new()?.to_string(),
-            )),
-            apps: crate::routine_sessions::PipedreamConnectedApps::new(
-                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
-                routine_connect,
+    let suggestions = Arc::new(
+        RoutineSuggestionService::new(
+            Arc::clone(&service),
+            suggestion_repo,
+            Arc::new(routine_suggestions::HarnessSuggestionSources {
+                email: Arc::new(EmailServiceClient::new(
+                    config.internal_api_key.to_string(),
+                    EmailServiceUrl::new()?.to_string(),
+                )),
+                apps: crate::routine_sessions::RoutineConnectedApps::new(connectors),
+                teams: entity_access::outbound::PgAccessRepository::new(db.clone()),
+                crm: crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
+            }),
+            suggestion_code,
+            request_sessions,
+            generations.clone(),
+            generations.clone(),
+            routine_flags.clone(),
+            RoutineBriefing {
+                guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+                agent_model: chat::domain::models::FREE_MODEL.to_owned(),
+                conditions: conditions_enabled,
+            },
+        )
+        .with_work_model(Arc::new(routine_suggestions::RouterWorkModel {
+            recorder: ai_billing::composition::pg_settling_recorder(
+                db.clone(),
+                config.enable_ai_usage_enforcement,
+                config.ai_pricing(),
+                config.settlement_route()?,
             ),
-            teams: entity_access::outbound::PgAccessRepository::new(db.clone()),
-            crm: crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
-        }),
-        suggestion_code,
-        request_sessions,
-        generations.clone(),
-        generations.clone(),
-        routine_flags.clone(),
-        RoutineBriefing {
-            guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
-            agent_model: chat::domain::models::FREE_MODEL.to_owned(),
-            conditions: conditions_enabled,
-        },
-    ));
+        })),
+    );
     let feed_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
     let suggestion_access = Arc::new(EntitySuggestionAccess {
         access: access.as_ref().clone(),

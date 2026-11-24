@@ -4,7 +4,7 @@ import {
   getPreviewItemIconType,
 } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import { useChannelsContext } from '@core/context/channels';
+import { directMessagePeer, useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import {
   muteItemFallbackIconType,
@@ -19,7 +19,6 @@ import {
   useItemPreview,
 } from '@queries/preview';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
-import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { createMemo, Show } from 'solid-js';
 
 /**
@@ -166,17 +165,16 @@ function useMutedChannelDmRecipientId(
   item: () => UserUnsubscribe
 ): () => string | undefined {
   const isChannel = () => normalizeMuteItemType(item().item_type) === 'channel';
-  const ctx = useChannelsContext();
+  const directory = useChannelDirectory();
   const userId = useUserId();
   return createMemo(() => {
     if (!isChannel()) return undefined;
-    const channel = ctx.channelsById()[item().item_id];
-    if (channel?.channel_type !== ChannelType.direct_message) {
-      return undefined;
-    }
-    const recipient =
-      channel.participants.find((p) => p.user_id !== userId()) ??
-      channel.participants[0];
-    return recipient?.user_id;
+    const lookup = directory.lookup(item().item_id);
+    if (lookup.status !== 'loaded') return undefined;
+    const channel = lookup.channel;
+    if (channel.channelType !== 'direct_message') return undefined;
+    return (
+      directMessagePeer(channel, userId()) ?? channel.participants[0]?.userId
+    );
   });
 }

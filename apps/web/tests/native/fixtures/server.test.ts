@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'bun:test';
 import { type DocumentNode, type ExecutionResult, print, visit } from 'graphql';
 import {
+  ChannelDirectoryPageDocument,
   ChannelUnreadPresenceDocument,
   type ChannelUnreadPresenceQuery,
   FavoritesDocument,
@@ -9,7 +10,10 @@ import {
   type ItemPreviewsQuery,
   MailAccountsDocument,
   type MailAccountsQuery,
+  RunningTimerDocument,
+  type RunningTimerQuery,
   SoupBackfillDocument,
+  SoupChannelDirectoryBackfillDocument,
   SoupDocument,
   type SoupInput,
   SoupMailBackfillDocument,
@@ -436,6 +440,43 @@ test('favorite previews are ID-scoped and cannot seed arbitrary Mail pages', asy
   ).toBe('ItemPreviews only serves fixture favorites');
 });
 
+test('the channel directory lane and its network fallback read no channels', async () => {
+  server = startFixtureServer();
+  for (const [document, operationName] of [
+    [SoupChannelDirectoryBackfillDocument, 'SoupChannelDirectoryBackfill'],
+    [ChannelDirectoryPageDocument, 'ChannelDirectoryPage'],
+  ] as const) {
+    const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query: transportQuery(document),
+        operationName,
+        variables: {
+          input: {
+            initial: {
+              limit: 100,
+              emailView: 'ALL',
+              channelReads: 'PRIMARY',
+              filters: {
+                emailFilter: { tree: { literal: { threadId: fixtureId(0) } } },
+              },
+            },
+          },
+        },
+      }),
+    });
+    const result = await response.json();
+    expect(result.errors).toBeUndefined();
+    expect(result.data.user.soup).toEqual({
+      ...(operationName === 'SoupChannelDirectoryBackfill'
+        ? { items: [], scopeIds: [] }
+        : { items: [] }),
+      nextCursor: null,
+    });
+  }
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
+});
+
 test('matrix fixtures validate against the production backfill selections', async () => {
   server = startFixtureServer(0, true);
   for (const [document, operationName, input, count] of [
@@ -472,6 +513,24 @@ test('matrix fixtures validate against the production backfill selections', asyn
     expect(result.errors).toBeUndefined();
     expect(result.data.user.soup.items).toHaveLength(count);
   }
+});
+
+test('the startup running-timer read finds no timer', async () => {
+  server = startFixtureServer();
+  const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+    method: 'POST',
+    body: JSON.stringify({
+      query: transportQuery(RunningTimerDocument),
+      operationName: 'RunningTimer',
+    }),
+  });
+  const result: ExecutionResult<RunningTimerQuery> = await response.json();
+  expect(result.errors).toBeUndefined();
+  const timeTracking = result.data?.user.timeTracking;
+  expect(timeTracking?.id).toBe(USER_ID);
+  expect(timeTracking?.runningTimer).toBeNull();
+  expect(Number.isNaN(Date.parse(timeTracking?.serverNow ?? ''))).toBe(false);
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
 });
 
 test('startup notification settings have no overrides', async () => {

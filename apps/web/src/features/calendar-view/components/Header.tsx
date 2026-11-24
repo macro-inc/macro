@@ -19,9 +19,11 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createLabelCollapse } from '@core/signal/create-label-collapse';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import { mergeRefs } from '@solid-primitives/refs';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, ButtonGroup, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -43,6 +45,9 @@ import {
 } from './CalendarCreateItems';
 import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { CalendarSearch } from './CalendarSearch';
+
+/** What the period controls give up, in order, when they would not fit their row. */
+const CONTROLS_COLLAPSE_ORDER = ['todayLabel'] as const;
 
 const formatMonthTitle = new Intl.DateTimeFormat(undefined, {
   month: 'long',
@@ -100,11 +105,28 @@ export function Header(props: {
     () => ({
       fullHeader: { min: hasDockedSidebar() ? 580 : 600 },
       inlineSearch: { min: 1040 },
-      labeledToday: { min: 304 },
     })
+  );
+  // A narrow pane (the desktop window has no minimum width) shows Today as
+  // its icon, then wraps Search below the other controls, then wraps those
+  // too, rather than push any control past the pane's edge.
+  const [controls, setControls] = createSignal<HTMLElement>();
+  const collapsed = createLabelCollapse(
+    controls,
+    () => CONTROLS_COLLAPSE_ORDER,
+    { watchContent: true }
   );
   const isCompactHeader = () => !breakpoints.fullHeader();
   const searchOverlaysControls = () => !breakpoints.inlineSearch();
+  // Search has wrapped onto a row of its own when the controls box is taller
+  // than the controls beside it; open, it then covers none of them.
+  const [periodControls, setPeriodControls] = createSignal<HTMLElement>();
+  const controlsSize = createElementSize(controls);
+  const periodControlsSize = createElementSize(periodControls);
+  const searchOnOwnRow = () =>
+    (controlsSize.height ?? 0) > (periodControlsSize.height ?? 0);
+  const searchCoversControls = () =>
+    searchOverlaysControls() && searchExpanded() && !searchOnOwnRow();
   const today = createLocalToday();
   const [searchExpanded, setSearchExpandedInternal] = createSignal(false);
   const [searchPopupReady, setSearchPopupReady] = createSignal(false);
@@ -319,7 +341,7 @@ export function Header(props: {
       <Match when={!usesTouchHeader()}>
         <ViewShell.TopBar
           ref={setHeaderElement}
-          class="@container/calendar-toolbar h-auto min-h-12 flex-wrap gap-x-2 gap-y-2 py-2 [--view-search-height:2rem]"
+          class="h-auto min-h-12 flex-wrap gap-x-2 gap-y-2 py-2 [--view-search-height:2rem]"
         >
           <div class="relative flex min-w-0 flex-1 items-center gap-2">
             {props.leading}
@@ -329,26 +351,26 @@ export function Header(props: {
           </div>
           <div
             class={cn(
-              'relative flex shrink-0 items-center justify-end gap-2',
+              'relative flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-2',
               isCompactHeader() && 'basis-full'
             )}
             data-calendar-period-controls=""
-            ref={tourTarget(CALENDAR_TOUR.period)}
+            ref={mergeRefs(setControls, tourTarget(CALENDAR_TOUR.period))}
             onClick={() => setSearchExpanded(false)}
           >
             <div
-              class="flex items-center gap-2"
+              ref={setPeriodControls}
+              class="flex flex-wrap items-center justify-end gap-2"
               classList={{
-                invisible: searchOverlaysControls() && searchExpanded(),
-                'pointer-events-none':
-                  searchOverlaysControls() && searchExpanded(),
+                invisible: searchCoversControls(),
+                'pointer-events-none': searchCoversControls(),
               }}
             >
               <Show when={showBookingLinks()}>
                 <CalendarSchedulingActions compact />
               </Show>
               <HeaderActionGroup label="Calendar navigation" size="md">
-                {todayButton(!breakpoints.labeledToday(), true)}
+                {todayButton(collapsed('todayLabel'), true)}
                 {previous(true)}
                 {next(true)}
               </HeaderActionGroup>
@@ -357,6 +379,8 @@ export function Header(props: {
               </HeaderActionGroup>
               {headerCreateMenu()}
             </div>
+            {/* In a narrow pane this slot wraps onto its own last row; the
+                overlay hangs from the row box's bottom so it stays over it. */}
             <div
               onTransitionEnd={handleSearchTransitionEnd}
               onClick={(event) => event.stopPropagation()}
@@ -381,7 +405,7 @@ export function Header(props: {
                 class={cn(
                   'h-8',
                   searchOverlaysControls() &&
-                    'absolute right-0 top-0 transition-[width] duration-200 ease-out motion-reduce:transition-none'
+                    'absolute bottom-0 right-0 transition-[width] duration-200 ease-out motion-reduce:transition-none'
                 )}
                 style={
                   searchOverlaysControls()

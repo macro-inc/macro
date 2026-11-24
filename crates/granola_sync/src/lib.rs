@@ -1,4 +1,5 @@
-//! Continuous, opt-in Granola meeting sync through Pipedream-managed credentials.
+//! Continuous Granola meeting sync over the Granola connection the connectors
+//! services count for each user.
 pub mod domain;
 pub mod inbound;
 pub mod outbound;

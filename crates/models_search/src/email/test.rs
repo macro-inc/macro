@@ -170,3 +170,29 @@ fn test_email_search_request_filters_only() {
     assert!(request.filters.as_ref().unwrap().cc.is_empty());
     assert!(request.filters.as_ref().unwrap().bcc.is_empty());
 }
+
+#[test]
+fn email_search_result_recorded_before_has_received_mail_reads_as_received() {
+    let recorded = serde_json::json!({
+        "created_at": "2026-09-01T00:00:00Z",
+        "updated_at": "2026-09-01T00:00:00Z",
+        "viewed_at": null,
+        "snippet": null,
+        "is_read": true,
+        "inbox_visible": false,
+        "is_draft": false,
+        "is_important": false,
+        "id": "019a1f40-2c7e-7d10-9a4b-6f2b0c1d2e3f",
+        "thread_id": "019a1f40-2c7e-7d10-9a4b-6f2b0c1d2e3f",
+        "link_id": "019a1f40-2c7e-7d10-9a4b-6f2b0c1d2e40",
+        "owner_id": "macro|owner@example.com",
+        "user_id": "macro|owner@example.com",
+        "participants": [],
+        "email_message_search_results": [],
+    });
+
+    let item: EmailSearchResponseItemWithMetadata =
+        serde_json::from_value(recorded).expect("an older result still reads");
+
+    assert!(item.has_received_mail);
+}

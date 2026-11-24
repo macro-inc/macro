@@ -13,11 +13,12 @@ tasks**, or **Import customers**. Customers shows it only to team members.
 The button opens a dialog listing that category's apps (Files: Notion, Google
 Drive, Dropbox, OneDrive, Box, Confluence; Tasks: Linear, Jira, Asana, GitHub,
 Trello, monday.com; Customers: HubSpot, Salesforce, Close, Airtable). A
-disconnected row offers **Connect** (`Connect <App>`). GitHub connects through
-Macro's native GitHub MCP server (`api.githubcopilot.com/mcp`): authorization
-opens in a new tab, and the row flips to connected when the app regains focus.
-Every other app opens Pipedream's Connect UI inside the dialog. A connected row
-(native MCP or Pipedream) shows a check and **Import** (`Import from <App>`).
+disconnected row offers **Connect** (`Connect <App>`). Connecting follows the
+server's answer: a consent page in a new tab (the row flips to connected when
+the app regains focus) or the embedded connect dialog inside the import dialog.
+GitHub links the Macro GitHub account. A connected row shows a check and, when
+the server says its connection can be imported from (`importAvailable`),
+**Import** (`Import from <App>`).
 
 - Every **Import** closes the dialog and opens an agent chat beside the current
   view with an unsent prompt. Notion, Linear and Jira open workspace importers
@@ -121,11 +122,17 @@ card sits above **Settings**, outside the scrolling list.
 ## Suggested routines
 
 With `enable-routine-suggestions` on, the
-Email, Calendar, Tasks, Drive, Customers, Chat, Calls, Reviews and Agents
+Email, Calendar, Tasks, Drive, Customers, Chat, Calls and Reviews
 sidebars start with a suggestions card while the scheduler has suggestions for
-that area; it never shows on touch devices. The card shows up to three
-different routine icons overlapping (each routine's other area besides the
-sidebar's, Agents aside, else Calendar for a scheduled one), **N routines for
+that area; it never shows on touch devices. The Agents surface has
+suggestions, but the desktop Agents sidebar (`DesktopAgentsSidebar`) doesn't
+mount the card; only the touch one does, where it stays hidden. In every
+sidebar it sits 1rem (`--sidebar-content-inset`) under New and 1.5rem
+(`--sidebar-section-gap`) above what follows, as the first child of a default
+`ViewSidebar.Content` places it; a sidebar laid out otherwise (Calendar, Chat)
+pads the card (padding, which its collapse animates, not margin) to match.
+The card shows up to three different routine icons overlapping (each
+routine's other area besides the sidebar's, Agents aside, else Calendar for a scheduled one), **N routines for
 you**, the suggestions' names, and a caret, framed like the Email sidebar's
 **Accounts** card. Clicking it opens **Routines for <area>**: a two-column
 grid of cards, with **For you** and **Templates** tabs (each with a count)

@@ -447,14 +447,29 @@ async fn enqueue_failure_reports_only_restored_messages_as_failed() {
     assert_eq!(outcome.successful_ids, vec![Uuid::from_u128(4)]);
     assert_eq!(outcome.failed_ids, vec![Uuid::from_u128(3)]);
     let write_id = service.repository.staged.lock().unwrap()[0].write_id;
+    let calls = service.repository.calls.lock().unwrap();
+    let reverted = calls
+        .iter()
+        .position(|call| {
+            *call
+                == Call::Revert(
+                    Uuid::from_u128(1),
+                    vec![Uuid::from_u128(9)],
+                    vec![Uuid::from_u128(3)],
+                    write_id,
+                )
+        })
+        .unwrap();
+    // The change was published before the write was undone, so the thread is
+    // reindexed once the old labels are back.
+    assert_eq!(calls[reverted + 1..], [Call::Event]);
+    let events = service.broker.events.lock().unwrap();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["event_type"], "email.thread_labels_updated");
+    assert_eq!(events[1]["event_type"], "email.threads_reindex_requested");
     assert_eq!(
-        service.repository.calls.lock().unwrap().last(),
-        Some(&Call::Revert(
-            Uuid::from_u128(1),
-            vec![Uuid::from_u128(9)],
-            vec![Uuid::from_u128(3)],
-            write_id
-        ))
+        events[1]["metadata"]["thread_ids"],
+        serde_json::json!([Uuid::from_u128(9)])
     );
 }
 

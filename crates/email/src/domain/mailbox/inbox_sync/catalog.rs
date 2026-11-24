@@ -1,14 +1,29 @@
-use super::{ConnectionSourceError, InboxSyncCatalog};
+use super::super::telemetry::span_int;
+use super::{ConnectionSourceError, InboxSyncCatalog, LabelledMessage};
 use anyhow::Context;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::email::service::label::Label;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
+use tracing::field;
 use uuid::Uuid;
 
 /// Reconcile the provider catalog with the stored catalog, preserving existing label identities.
-#[tracing::instrument(skip(db, provider_labels), err)]
-pub async fn sync_labels<R: LabelCatalogRepository>(
+/// Search indexes a message's label names, so renaming a label also reindexes the threads
+/// carrying it. Those reindexes are queued before the new name is stored: if queueing fails, the
+/// rename is still found by the next sync.
+#[tracing::instrument(
+    skip(db, queue, owner, provider_labels),
+    fields(
+        labels.renamed = field::Empty,
+        labels.reindexed_threads = field::Empty,
+    ),
+    err
+)]
+pub async fn sync_labels<R: LabelCatalogRepository, Q: ThreadReindexQueue>(
     db: &R,
+    queue: &Q,
     link_id: Uuid,
+    owner: &MacroUserIdStr<'static>,
     provider_labels: &[Label],
 ) -> anyhow::Result<()> {
     // Step 1: Fetch the persisted labels
@@ -37,6 +52,7 @@ pub async fn sync_labels<R: LabelCatalogRepository>(
         .collect();
 
     let mut labels_to_upsert = Vec::new();
+    let mut renamed_labels = Vec::new();
     let mut insert_count = 0;
     let mut update_count = 0;
 
@@ -49,6 +65,10 @@ pub async fn sync_labels<R: LabelCatalogRepository>(
                 || provider_label.message_list_visibility != db_label.message_list_visibility
                 || provider_label.label_list_visibility != db_label.label_list_visibility
                 || provider_label.type_ != db_label.type_;
+
+            if provider_label.name != db_label.name {
+                renamed_labels.push(provider_label.provider_label_id.clone());
+            }
 
             if needs_update {
                 let mut updated_label = (*provider_label).clone();
@@ -65,7 +85,23 @@ pub async fn sync_labels<R: LabelCatalogRepository>(
         }
     }
 
-    // Step 4: Perform deletions if needed
+    // Step 4: Queue the reindex of the threads carrying a renamed label. A
+    // failure keeps the old names stored, so the next sync finds the renames
+    // again; it must not stop the mailbox's sync.
+    if !renamed_labels.is_empty()
+        && let Err(error) =
+            queue_renamed_label_reindex(db, queue, link_id, owner, &renamed_labels).await
+    {
+        tracing::error!(
+            error = ?error,
+            %link_id,
+            renamed = renamed_labels.len(),
+            "Failed to queue the reindex of threads carrying renamed labels"
+        );
+        labels_to_upsert.retain(|label| !renamed_labels.contains(&label.provider_label_id));
+    }
+
+    // Step 5: Perform deletions if needed
     let deleted_count = if !labels_to_delete.is_empty() {
         let result = db
             .delete_stored_catalog(link_id, labels_to_delete.clone())
@@ -81,7 +117,7 @@ pub async fn sync_labels<R: LabelCatalogRepository>(
         0
     };
 
-    // Step 5: Perform insert/update operations
+    // Step 6: Perform insert/update operations
     if !labels_to_upsert.is_empty() {
         db.upsert_stored_catalog(labels_to_upsert)
             .await
@@ -100,6 +136,53 @@ pub async fn sync_labels<R: LabelCatalogRepository>(
     }
 
     Ok(())
+}
+
+/// Messages read per page of a renamed label, so no read grows with the label.
+const LABELLED_MESSAGES_PAGE: u16 = 5_000;
+
+/// Queue the reindex of the threads carrying the renamed labels. They are read
+/// in pages and queued together, so the queue's delay starts after the read.
+async fn queue_renamed_label_reindex<R: LabelCatalogRepository, Q: ThreadReindexQueue>(
+    db: &R,
+    queue: &Q,
+    link_id: Uuid,
+    owner: &MacroUserIdStr<'static>,
+    renamed_labels: &[String],
+) -> anyhow::Result<()> {
+    let span = tracing::Span::current();
+    span.record("labels.renamed", span_int(renamed_labels.len()));
+
+    let mut threads = BTreeSet::new();
+    for label in renamed_labels {
+        let mut after = Uuid::nil();
+        loop {
+            let page = db
+                .labelled_messages(link_id, label, after, LABELLED_MESSAGES_PAGE)
+                .await
+                .map_err(ConnectionSourceError::into_original)
+                .context("Failed to fetch the messages carrying a renamed label")?;
+            threads.extend(page.iter().map(|message| message.thread_id));
+
+            match page.last() {
+                Some(last) if page.len() == usize::from(LABELLED_MESSAGES_PAGE) => {
+                    after = last.message_id;
+                }
+                _ => break,
+            }
+        }
+    }
+    span.record("labels.reindexed_threads", span_int(threads.len()));
+
+    if threads.is_empty() {
+        return Ok(());
+    }
+
+    queue
+        .enqueue_thread_reindex(owner, threads.into_iter().collect())
+        .await
+        .map_err(ConnectionSourceError::into_original)
+        .context("Failed to queue the threads")
 }
 
 /// Catalog facts and writes shared by live sync and backfill initialization.
@@ -122,6 +205,28 @@ pub trait LabelCatalogRepository: Send + Sync {
         &self,
         labels: Vec<Label>,
     ) -> impl Future<Output = Result<(), Self::CatalogError>> + Send;
+    /// Up to `limit` messages carrying this provider label, in message order
+    /// after `after` (the nil id for the first page).
+    fn labelled_messages(
+        &self,
+        link: Uuid,
+        label: &str,
+        after: Uuid,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<LabelledMessage>, Self::CatalogError>> + Send;
+}
+
+/// Bulk search reindexing, kept off the queue that carries live mail's events.
+pub trait ThreadReindexQueue: Send + Sync + 'static {
+    /// Original queue failure.
+    type ReindexError: ConnectionSourceError;
+    /// Queue the threads to be reread and reindexed. They are reread no sooner
+    /// than a minute later, after the caller's own change is stored.
+    fn enqueue_thread_reindex(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        threads: Vec<Uuid>,
+    ) -> impl Future<Output = Result<(), Self::ReindexError>> + Send;
 }
 impl<R: InboxSyncCatalog> LabelCatalogRepository for R {
     type CatalogError = R::Err;
@@ -137,5 +242,14 @@ impl<R: InboxSyncCatalog> LabelCatalogRepository for R {
     }
     async fn upsert_stored_catalog(&self, labels: Vec<Label>) -> Result<(), Self::CatalogError> {
         self.upsert_catalog(labels).await
+    }
+    async fn labelled_messages(
+        &self,
+        link: Uuid,
+        label: &str,
+        after: Uuid,
+        limit: u16,
+    ) -> Result<Vec<LabelledMessage>, Self::CatalogError> {
+        InboxSyncCatalog::labelled_messages(self, link, label, after, limit).await
     }
 }

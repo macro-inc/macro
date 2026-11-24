@@ -41,7 +41,7 @@ realtime = [
   "macro_event_broker/outbound",
   "outbound",
 ]
-ports = ["dep:entity_access", "entity_access/ports", "dep:rootcause", "dep:tokio", "messages/ports"]
+ports = ["dep:channels", "dep:entity_access", "entity_access/ports", "dep:rootcause", "dep:tokio", "messages/ports"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]
