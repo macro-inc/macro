@@ -3,6 +3,7 @@ use crate::{
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         properties::build_tag_filter,
+        query::{CreateQueryParams, QueryKey, create_query, single_word},
         utils::should_wildcard_field_query_builder,
     },
 };
@@ -12,6 +13,7 @@ use opensearch_query_builder::{
     BoolQuery, BoolQueryBuilder, QueryType, Script, ScriptQuery, SimpleQueryStringQuery,
     WildcardQuery,
 };
+use unicode_segmentation::UnicodeSegmentation;
 
 pub(crate) struct EmailSearchConfig;
 
@@ -85,8 +87,8 @@ pub enum EmailTextFields {
 
 impl EmailTextFields {
     /// The address fields, matched by segment as [`build_keyword_query_string`]
-    /// does, and the text fields, matched by prefix as
-    /// [`build_text_query_string`] does.
+    /// does, and the text fields, matched by prefix as [`text_terms_query`]
+    /// does.
     fn fields(self) -> (&'static [&'static str], &'static [&'static str]) {
         match self {
             Self::Any => (EMAIL_KEYWORD_FIELDS, EMAIL_TEXT_FIELDS),
@@ -158,7 +160,7 @@ fn sent_between_query<'a>(
 /// Matches `terms`, all of them, against the address fields by segment or
 /// the text fields by prefix.
 fn terms_query<'a>(
-    terms: &[String],
+    terms: &'a [String],
     match_type: &str,
     keyword_fields: &'static [&'static str],
     text_fields: &'static [&'static str],
@@ -175,15 +177,72 @@ fn terms_query<'a>(
             .into(),
         );
     }
-    combined.should(
-        SimpleQueryStringQuery::new(
-            build_text_query_string(terms, match_type),
-            text_fields.iter().copied(),
-        )
-        .default_operator("AND")
-        .into(),
-    );
+    combined.should(text_terms_query(terms, match_type, text_fields));
     combined.build().into()
+}
+
+/// Matches `terms`, all of them, against the text fields. A partial term the
+/// analyzer reads as several words (`follow-up`, `e-mail`) matches them
+/// adjacent in one field, the last as a prefix, as the shared term builder
+/// matches it ([`create_query`]): a `term*` prefix is not analyzed, so it
+/// would look for one token `follow-up` the index never holds. Every other
+/// term goes in the simple_query_string [`build_text_query_string`] builds.
+fn text_terms_query<'a>(
+    terms: &'a [String],
+    match_type: &str,
+    text_fields: &'static [&'static str],
+) -> QueryType<'a> {
+    let (several_words, others): (Vec<&String>, Vec<&String>) = terms
+        .iter()
+        .partition(|term| reads_as_several_words(term, match_type));
+    let others = (!others.is_empty()).then(|| {
+        let others: Vec<String> = others.into_iter().cloned().collect();
+        QueryType::from(
+            SimpleQueryStringQuery::new(
+                build_text_query_string(&others, match_type),
+                text_fields.iter().copied(),
+            )
+            .default_operator("AND"),
+        )
+    });
+    if several_words.is_empty()
+        && let Some(others) = others
+    {
+        return others;
+    }
+
+    let mut all = BoolQueryBuilder::new();
+    if let Some(others) = others {
+        all.must(others);
+    }
+    for term in several_words {
+        let mut any_field = BoolQueryBuilder::new();
+        any_field.minimum_should_match(1);
+        for field in text_fields {
+            any_field.should(create_query(CreateQueryParams {
+                query_key: QueryKey::MatchPhrasePrefix,
+                field,
+                term,
+            }));
+        }
+        all.must(any_field.build().into());
+    }
+    all.build().into()
+}
+
+/// Whether a partial `term` long enough to match as a prefix holds several
+/// Unicode (UAX #29) words (`follow-up`, `AT&T`, `東京都`, and a Thai run,
+/// which the tokenizer keeps as one token), as the shared term builder
+/// decides. A phrase in quotes or an address already matches as a phrase in
+/// [`build_text_query_string`], and a short term as its analyzed words. A
+/// word UAX #29 keeps whole stays an uncapped prefix, even one
+/// [`single_word`] does not count, such as a Devanagari word with a virama.
+fn reads_as_several_words(term: &str, match_type: &str) -> bool {
+    match_type == "partial"
+        && !term.contains('@')
+        && !term.contains(' ')
+        && term.chars().count() >= MIN_PREFIX_LEN
+        && term.unicode_words().nth(1).is_some()
 }
 
 /// Builds the simple_query_string over the email-address fields.
@@ -234,14 +293,32 @@ const MIN_PREFIX_LEN: usize = 3;
 /// force phrase matching — otherwise `default_operator: "AND"` would turn
 /// `(reply test)` into `reply AND test` and match each token independently
 /// anywhere in the field instead of as an adjacent phrase.
+///
+/// A partial term that is one word with punctuation around it (`follow-`,
+/// `Re:`, `(lunch)`) matches by that word alone, as
+/// [`child_content_query`](super::query::child_content_query) does: the
+/// prefix is not analyzed, so `follow-*` would look for a token `follow-`
+/// the index never holds.
 fn build_text_query_string(terms: &[String], match_type: &str) -> String {
     let exact = match_type == "exact";
+    let partial = match_type == "partial";
     terms
         .iter()
         .map(|term| {
             if term.contains('@') || term.contains(' ') {
-                format!("\"{}\"", term)
-            } else if exact || term.chars().count() < MIN_PREFIX_LEN {
+                return format!("\"{}\"", term);
+            }
+            if exact {
+                return format!("({})", term);
+            }
+            if partial && let Some(word) = single_word(term) {
+                return if word.chars().count() < MIN_PREFIX_LEN {
+                    format!("({})", word)
+                } else {
+                    format!("{}*", word)
+                };
+            }
+            if term.chars().count() < MIN_PREFIX_LEN {
                 format!("({})", term)
             } else {
                 format!("{}*", term)

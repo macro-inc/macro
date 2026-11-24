@@ -85,7 +85,7 @@ const MAX_TOKEN_LEN: usize = 255;
 /// in it. So a word counts only when it holds nothing but letters, digits,
 /// combining marks (a decomposed `é`), ASCII punctuation and `’`, has nothing
 /// but ASCII punctuation around it, and fits in one token.
-fn single_word(term: &str) -> Option<&str> {
+pub(crate) fn single_word(term: &str) -> Option<&str> {
     let mut words = term.unicode_word_indices();
     let (start, word) = words.next()?;
     if words.next().is_some() {
