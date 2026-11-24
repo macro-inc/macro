@@ -320,14 +320,14 @@ impl FoldState {
         stop: Option<StopReason>,
         logged_at: Option<DateTime<Utc>>,
     ) -> Option<Changed> {
+        // Settling held text can open the agent message, which is still news.
+        let had_message = self.turn.as_ref().is_some_and(|turn| turn.agent.is_some());
+        self.settle_held_noop();
         let Some(stop) = stop else {
             // Nothing to record, so nothing to mint a message for.
             self.turn = None;
             return None;
         };
-        // Settling held text can open the agent message, which is still news.
-        let had_message = self.turn.as_ref().is_some_and(|turn| turn.agent.is_some());
-        self.settle_held_noop();
         let turn = self.turn.take()?;
         if turn.answered_with_noop() {
             self.metadata.noop_turn = Some(turn.id.0);

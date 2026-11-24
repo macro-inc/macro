@@ -496,3 +496,37 @@ fn notification_turn_drops_a_trailing_noop_after_prose_and_reasoning() {
     )));
     assert_eq!(fold(frames).as_slice(), live);
 }
+
+/// A prompt response without a stop reason still ends the turn; reasoning the
+/// turn held back while it might have been silent is kept, not lost.
+#[test]
+fn notification_turn_keeps_held_reasoning_when_its_response_has_no_stop_reason() {
+    use crate::domain::model::MessagePart;
+    let request = AgentAction::notification(vec![Notification {
+        id: macro_uuid::generate_uuid_v7(),
+        subject_id: "app".into(),
+        created_at: "2026-10-21T00:00:00Z".into(),
+        event: NotificationEvent::AppConnected {
+            app: "Calendar".into(),
+        },
+    }])
+    .to_runtime(&SessionId::new("s"), RequestId::Str("event".into()))
+    .unwrap();
+    let mut frames = vec![AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::Notification(request),
+        logged_at: None,
+    }];
+    frames.extend(parse_log(r#"
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"Calendar was already connected."}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"event","result":{}}}
+"#));
+
+    let messages = fold(frames);
+    assert_eq!(messages.len(), 1);
+    assert!(matches!(
+        messages[0].parts.as_slice(),
+        [MessagePart::Thought { text }] if text == "Calendar was already connected."
+    ));
+}
