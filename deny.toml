@@ -263,6 +263,7 @@ deny = [
     "loom",                      # External concurrency testing dependency
     "macro_entrypoint",
     "macro_authorization",      # Credential-redaction span tests only
+    "macro_middleware",          # Connection-drop task span test only (dev-dependency)
     "macro_tower_layers",        # OpenTelemetry layer tests
     "mcp_toolset",               # MCP trace-context propagation tests only (dev-dependency)
     "name_search",               # Search-term redaction span tests only (dev-dependency)
