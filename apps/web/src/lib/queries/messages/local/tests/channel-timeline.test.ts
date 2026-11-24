@@ -314,6 +314,42 @@ describe('createLocalChannelTimeline', () => {
     dispose();
   });
 
+  it('pages older entries again once the connection is back after a page failed with none', async () => {
+    const rows = messages(70);
+    let connected = false;
+    const fetchPage = vi.fn<FetchChannelServerPage>(async () => {
+      if (!connected) throw new TypeError('Failed to fetch');
+      return {
+        page: {
+          __typename: 'GraphqlChannelTimelinePage',
+          entries: rows.slice(0, 20).reverse(),
+          olderCursor: null,
+          newerCursor: null,
+          seq: '9',
+        } as never,
+        cached: Promise.resolve(),
+      };
+    });
+    const mounted = mount({ rows, fetchPage });
+    await waitFor(() => !mounted.timeline.isLoading());
+    expect(mounted.timeline.entries()).toHaveLength(50);
+    // The device holds only the latest fifty.
+    mounted.setHeld(false);
+    onlineManager.setOnline(false);
+    try {
+      await mounted.timeline.loadOlder();
+      expect(mounted.timeline.entries()).toHaveLength(50);
+
+      // Scrolled to the top there is no next scroll to ask again.
+      connected = true;
+      onlineManager.setOnline(true);
+      await waitFor(() => mounted.timeline.entries().length === 70);
+      mounted.dispose();
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  });
+
   it('stops an older page’s server request when the view closes', async () => {
     const rows = messages(70);
     let sent: AbortSignal | undefined;

@@ -288,6 +288,12 @@ export function createLocalChannelTimeline(
   let currentLoad: Promise<void> = Promise.resolve();
   // Loads the window again when the connection returns after a failed load.
   let stopReconnect = () => {};
+  // Pages again in a direction whose page failed, when the connection returns.
+  const pageReconnects = { older: () => {}, newer: () => {} };
+  const stopPageReconnects = () => {
+    pageReconnects.older();
+    pageReconnects.newer();
+  };
 
   const release = deps.runtime.open(channelId);
   onCleanup(() => {
@@ -307,6 +313,7 @@ export function createLocalChannelTimeline(
     loadToken += 1;
     abort?.abort();
     stopReconnect();
+    stopPageReconnects();
   });
 
   /**
@@ -350,6 +357,7 @@ export function createLocalChannelTimeline(
     held = false;
     anchorId = around;
     stopReconnect();
+    stopPageReconnects();
     if (reloads === 0)
       setState({
         phase: 'loading',
@@ -560,8 +568,14 @@ export function createLocalChannelTimeline(
     } catch (error) {
       // Aborted by a switch or unmount: nothing failed.
       if (token !== loadToken) return;
-      // The window keeps what it shows; the next scroll asks again.
+      // The window keeps what it shows. The next scroll asks again, and so
+      // does the connection coming back: scrolled to the end there is no
+      // next scroll.
       Telemetry.error(error, { surface: 'channel-local-sync' });
+      pageReconnects[direction]();
+      pageReconnects[direction] = onReconnect(() =>
+        fireAndForget(loadMore(direction), 'channel-local-sync')
+      );
     } finally {
       if (token === loadToken) setState(flag, false);
     }
