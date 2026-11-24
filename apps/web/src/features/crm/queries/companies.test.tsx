@@ -180,7 +180,7 @@ it.each(['add', 'remove'] as const)(
   }
 );
 
-it("reads the company and its domains' email lists again after an email sync change", async () => {
+it('reads the company and CRM email lists again after an email sync change', async () => {
   storage.setEmailSync.mockResolvedValue(ok({}));
   client.setQueryData(crmKeys.company('company-1').queryKey, {
     id: 'company-1',
@@ -197,7 +197,10 @@ it("reads the company and its domains' email lists again after an email sync cha
   expect(where(COMPANIES)).toBe(true);
   expect(where({ ...NO_CRM, ecd: ['acme.com'] })).toBe(true);
   expect(where({ ...NO_CRM, ef: { ed: ['acme.com'] } })).toBe(true);
-  expect(where({ ...NO_CRM, ecd: ['sub.acme.com'] })).toBe(false);
+  // A contact's email list and CRM activity show the company's mail too.
+  expect(where({ ...NO_CRM, eca: ['person@example.com'] })).toBe(true);
+  expect(where({ ...NO_CRM, crma: 'activity' })).toBe(true);
+  expect(where({ ...NO_CRM, ef: { ed: ['other.com'] } })).toBe(false);
   expect(where(NO_CRM)).toBe(false);
 });
 

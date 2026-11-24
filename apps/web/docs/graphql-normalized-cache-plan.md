@@ -845,7 +845,10 @@ last network answer this client gave to the same query (projection and first
 page), a list that mounts again reads with `cache-first` instead of
 `cache-and-network` (`soup/graphql/network-freshness.ts`), so menus and
 pickers that open often don't read the server each time. Writes, Soup updates
-and `refreshActiveGraphqlSoupQueries` still update it. A
+and `refreshActiveGraphqlSoupQueries` still update it while it is mounted, and
+a write (any `refreshActiveGraphqlSoupQueries` or Soup revalidation call)
+forgets every recorded answer, as invalidating the REST lists marked them
+stale, so a list that mounts after it reads the server again. A
 `graphqlCacheFirstEntities` lookup reads the cache only with a sort the cache
 can order (`created_at` or `updated_at`, `isLocallySortable`); any other sort
 goes to the network.

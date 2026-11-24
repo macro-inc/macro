@@ -24,6 +24,7 @@ import type {
 } from '../core/email-privacy';
 import type { CrmQueryDependencies } from './dependencies';
 import { crmKeys } from './keys';
+import { listReadsCrmEmail } from './list-refresh';
 
 function consentFromResponse(data: CrmEmailConsentResponse): EmailConsent {
   return {
@@ -197,10 +198,7 @@ export function createEmailPrivacyMutation(
               await refreshActiveGraphqlSoupQueries({
                 where: threadChange
                   ? isContributionEmailRead
-                  : (body) =>
-                      typeof body === 'object' &&
-                      body !== null &&
-                      ('ecd' in body || 'eca' in body || 'crma' in body),
+                  : listReadsCrmEmail,
                 throwOnError: true,
               });
             } catch {

@@ -1,5 +1,6 @@
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import { type Client, createRequest } from '@urql/core';
+import { forgetSoupNetworkAnswers } from './network-freshness';
 
 /** An explicit mutation target; detail readers opt out of generic list refreshes. */
 export type GraphqlSoupRefreshTarget = {
@@ -92,6 +93,8 @@ export function getActiveGraphqlSoupRevalidations(
   client?: Pick<Client, 'query'>,
   options: { unmaintainedOnly?: boolean } = {}
 ): QueryRevalidation[] {
+  // Asked for by a write: lists that mount after it read the server again.
+  forgetSoupNetworkAnswers();
   const queries = new Map<number, QueryRevalidation>();
   for (const source of revalidationSources) {
     if (client && source.client && source.client() !== client) continue;
@@ -131,6 +134,7 @@ export async function refreshActiveGraphqlSoupQueries(
     notificationsOnly?: boolean;
   } = {}
 ): Promise<void> {
+  forgetSoupNetworkAnswers();
   const applicable = (query: ActiveGraphqlSoupQuery) => {
     if (!query.isEnabled()) return false;
     if (options.unmaintainedOnly && query.cacheMaintained?.()) return false;
