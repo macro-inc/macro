@@ -271,14 +271,41 @@ Lane kinds:
   deleted as a server cache deletion and removed from those lanes' members.
   Membership lanes always start fresh, never save a resume point, and take no
   `maxItems`.
+- Catch-up refetch: a catch-up pass returns only records changed since the
+  lane's watermark, so a record newly shared with the viewer (unchanged
+  itself) never arrives through it. When a `complete` membership listing names
+  a key that is not a member of any lane in `scopes`, and every one of those
+  lanes has completed a pass, their `watermark` and `completedAt` are cleared:
+  the next run fetches them whole. While a scope lane has not completed
+  (`documents-recent` holds only the newest documents until `documents-rest`
+  completes), its own pass still delivers the record, so nothing is cleared.
+  `email-shared` is listed whole every run anyway, so clearing it only lets a
+  retried first-pass stream run it again.
 - `calendar { coverage }`: pages are written like `hydrate` (no members); the
-  lowest watermark per `linkId` across pages is kept. On `laneDone` the window
-  is committed with the existing calendar commit.
+  lowest watermark per `linkId` across pages is kept. On `laneDone` with
+  reason `complete` the window is committed with the existing calendar commit;
+  a window capped by `maxItems` merges only its watermark and covers nothing.
 
 Rules:
 
-- Each page is one engine write at background priority (the browser worker's
-  hydration priority), so reads for open views go first.
+- Each frame is applied as one engine call at background priority (the
+  browser worker's hydration priority), and hosts schedule reads for open
+  views between frames. A frame is a bounded amount of work, not always one
+  write: a page that falls back to the general hydration write saves its lane
+  state after it, and a membership lane's `laneDone` deletes in chunks of
+  1,000. When such a frame fails after committing part of its work, the
+  browser worker publishes a broad `cache-changed` at the engine's revision so
+  open views still see it.
+- A run writes only into the cache it began against. The engine keeps an
+  in-memory reset epoch, renewed by `clear`, an account reset (a response for
+  another account) and `external_reset`; `sync_begin` records it, and once it
+  changes the run's next frame fails with `SyncStreamError::Superseded`
+  without touching the cache. A reset made by the run's own page (a cache
+  bound to an older account before the run began) moves the run to the new
+  epoch. Hosts report the failure as `aborted`. The browser worker also fences
+  each write on the authority generation the run began under, and aborts the
+  run on `clear` and on a permission transition that changes the generation;
+  the browser engine drops its run on `clear`, `physicalReset` and `close`.
 - Lane state and members live in the cache database (`sync_lanes`,
   `sync_members`, storage schema 13) and are wiped with it.
 - One run at a time per database; a second start returns `busy`.

@@ -7,8 +7,9 @@
 //! feeds the response bytes to the [`SyncRun`]. The server plans the lanes
 //! and declares each one on a `lane` line before its pages. The run decodes
 //! complete lines into frames; the host applies them one at a time with
-//! [`crate::engine::Engine::sync_apply_next`], each application being one
-//! engine write. The run itself never touches the network or a clock: hosts
+//! [`crate::engine::Engine::sync_apply_next`], scheduling foreground reads
+//! between frames; each application is a bounded amount of work, not always
+//! one write. The run itself never touches the network or a clock: hosts
 //! supply both. Contract: `docs/architecture/streamed-cache-sync.md`.
 
 mod decoder;

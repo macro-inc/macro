@@ -105,6 +105,15 @@ eviction and reset make it miss. A miss requires full registration and never reu
   fields, dependency fan-out or new hot-tier entries. It falls back to the
   general write for identity changes and pending optimistic layers; keep its
   merge semantics in step with `write_network` / `persist_updates`.
+- A sync run applies frames only under the reset epoch `sync_begin` recorded;
+  renew `Engine::reset_epoch` on every path that wipes or rebinds the cache
+  (`clear`, `external_reset`, which the account-reset branch of hydration
+  calls) and move the run to the new epoch only after a reset its own page
+  made. A frame is a bounded amount of work, not one write.
+- A complete membership listing that names a key no scope lane holds clears
+  the scope lanes' `watermark` and `completedAt` once every scope lane has
+  completed, so the next run fetches them whole (catch-up passes never return
+  unchanged records newly shared with the viewer).
 - Opaque JSON scalars must preserve floating-point values on reparse — `serde_json`
   is pulled in with the `float_roundtrip` feature; don't drop it.
 - `StoredMutation.created_at_ms` is the first-enqueue time hosts report as
