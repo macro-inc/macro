@@ -1,7 +1,14 @@
-import { splitSearchOperators } from '@app/components/view-shell/search-operator-text';
+import {
+  searchTextRuns,
+  splitSearchOperators,
+} from '@app/components/view-shell/search-operator-text';
 import { t } from '@app/lib/i18n';
 import { EMAIL_TAB_LABELS } from '../constants';
 import type { EmailTab } from '../tabs';
+import {
+  isUnfinishedEmailSearchOperator,
+  readsAsEmailSearchOperator,
+} from './email-search-operators';
 
 /**
  * The Mail views a search can be narrowed to with `in:<view>`, named as Mail
@@ -42,31 +49,43 @@ const isEmailSearchScopeId = (value: string): value is EmailSearchScopeId =>
 export const emailSearchScopesStartingWith = (prefix: string) =>
   EMAIL_SEARCH_SCOPE_IDS.filter((id) => id.startsWith(prefix.toLowerCase()));
 
+/** The search text's tokens, a quoted phrase whole. */
+const searchTokens = (text: string) =>
+  searchTextRuns(text).filter((run) => !/^\s/.test(run));
+
+/**
+ * An `in:` still being typed (`in:se`), or another operator not finished yet
+ * (`is:un`, `subject:`): it names nothing, so no search runs on it.
+ */
+function isBeingTyped(token: string) {
+  const value = IN_FILTER.exec(token)?.[1]?.toLowerCase();
+  if (value === undefined) return isUnfinishedEmailSearchOperator(token);
+
+  return (
+    !isEmailSearchScopeId(value) &&
+    emailSearchScopesStartingWith(value).length > 0
+  );
+}
+
 /**
  * Splits `in:<view>` filters out of the typed search. The last view named
- * wins. An `in:` still being typed (`in:se`) is left out of the words, so the
- * search does not run on it; any other `in:` stays a word.
+ * wins. An operator still being typed (`in:se`, `is:un`) is left out of the
+ * words, so the search does not run on it; every other token, the operators
+ * the search service reads included (`subject:lunch`, `in:travel`), stays in
+ * the query.
  */
 export function parseEmailSearch(text: string): ParsedEmailSearch {
   let scope: EmailSearchScopeId | undefined;
   const words: string[] = [];
 
-  for (const word of text.split(/\s+/)) {
-    if (!word) continue;
-
+  for (const word of searchTokens(text)) {
     const value = IN_FILTER.exec(word)?.[1]?.toLowerCase();
-    if (value === undefined) {
-      words.push(word);
-      continue;
-    }
-
-    if (isEmailSearchScopeId(value)) {
+    if (value !== undefined && isEmailSearchScopeId(value)) {
       scope = value;
       continue;
     }
 
-    if (emailSearchScopesStartingWith(value).length > 0) continue;
-    words.push(word);
+    if (!isBeingTyped(word)) words.push(word);
   }
 
   return { query: words.join(' '), ...(scope ? { scope } : {}) };
@@ -80,33 +99,31 @@ export function formatEmailSearch(
   return scope ? `in:${scope} ${query}` : query;
 }
 
-/** Whether a token is a whole, known `in:<view>` filter, drawn as an operator. */
+/**
+ * Whether a token is drawn as an operator: an `in:<view>` Mail narrows the
+ * search to, or an operator the search service reads.
+ */
 const isEmailSearchOperator = (token: string) => {
   const value = IN_FILTER.exec(token)?.[1]?.toLowerCase();
-  return value !== undefined && isEmailSearchScopeId(value);
+  if (value !== undefined && isEmailSearchScopeId(value)) return true;
+  return !isBeingTyped(token) && readsAsEmailSearchOperator(token);
 };
 
 /**
- * The search text in runs, its complete `in:<view>` filters marked as
- * operators; one still being typed (`in:se`) stays plain.
+ * The search text in runs, its complete operators marked; one still being
+ * typed (`in:se`, `is:un`) stays plain.
  */
 export const emailSearchTextParts = (text: string) =>
   splitSearchOperators(text, isEmailSearchOperator);
 
 /**
- * The search as it ran, to remember: every token but an `in:` still being
+ * The search as it ran, to remember: every token but an operator still being
  * typed, single-spaced.
  */
 export function completeEmailSearch(text: string): string {
-  return text
-    .split(/\s+/)
-    .filter((token) => {
-      const value = IN_FILTER.exec(token)?.[1]?.toLowerCase();
-      if (value === undefined || isEmailSearchScopeId(value)) return true;
-      return emailSearchScopesStartingWith(value).length === 0;
-    })
-    .join(' ')
-    .trim();
+  return searchTokens(text)
+    .filter((token) => !isBeingTyped(token))
+    .join(' ');
 }
 
 /** The tab each view is, except Inbox, which is Focus, Signal and Noise. */

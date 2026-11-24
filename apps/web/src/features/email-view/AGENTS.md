@@ -37,13 +37,22 @@ the Soup-backed thread list, and saved email views.
 - `primitives/create-search-scroll-reset.ts`: a new search starts at the top
   once its own results replace the rows kept on screen.
 - `search/`: the `in:<view>` filter (`email-search-scope.ts`: parsing, the
-  operator runs the field draws and the views it names), recent searches (`recent-searches.ts`,
-  per person in browser storage) and the rows the search field lists, views
-  while `in:` is typed and recent searches otherwise
+  operator runs the field draws and the views it names), the operators the
+  search service reads (`email-search-operators.ts`: which typed terms are
+  operators, which are still being typed and left out of the search, and what
+  finishes one; its tests and the service's read
+  `crates/search_service/src/api/search/email_operators/typed_operators.json`),
+  recent searches (`recent-searches.ts`, per person in browser storage) and
+  the rows the search field lists: views (then labels) while `in:` is typed,
+  people after `from:`/`to:`/`cc:`/`bcc:`, labels and tags after `label:`,
+  otherwise the operators that finish the typed token, then recent searches
   (`create-email-search-suggestions.ts`, drawn by
-  `components/EmailSearchSuggestionList.tsx`), behind
+  `components/EmailSearchSuggestionList.tsx`, fed people and labels by
+  `queries/use-email-search-values.ts`, which reads them only while the
+  field has focus and such an operator is typed), behind
   `enable-email-wide-search`. Operators are drawn by the shared
-  `components/view-shell/search-operator-text.tsx`.
+  `components/view-shell/search-operator-text.tsx`, which keeps a quoted
+  value in its token.
 - `filters/email-saved-view.ts`: the `kind: "email"` definition codec: strict
   capture, permissive read with skipped-setting issues, materialization,
   canonical comparison, scope resolution, and each tab's own filters.
@@ -95,9 +104,12 @@ the Soup-backed thread list, and saved email views.
   sidebar and the header read `shownTab` (the view a search runs in;
   `search`, which selects nothing, without an `in:`), never `state.tab`.
 - The Focus, Signal and Noise tabs read `showsInboxTabs`: they never show
-  while the search field holds a query, an `in:` of the Inbox included, on
-  desktop or phone.
-- Text with no words (`in:`, `in:se`, `in:sent `) runs no search of its own:
+  while the search field is open, empty or not, on desktop or phone. The field
+  on screen (the desktop header's, or the touch search page) tells the view
+  through `registerSearchField`; `searchHasText` alone is whether it holds a
+  query. Empty, the field leaves the open tab's rows on screen, so `shownTab`
+  still names that tab. Picking a view before a word is typed closes the field.
+- Text with no words (`in:`, `in:se`, `in:sent `, `is:un`) runs no search of its own:
   `parsedSearch` stays on the last search that had words, or empty (the open
   tab's list) when there was none. The list, the header, the sidebar and the
   empty state all read it, so they describe the rows on screen. What works on

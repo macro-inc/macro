@@ -220,6 +220,8 @@ pub(in crate::domain::service) fn report(
         .collect();
     importers.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.by.cmp(&b.by)));
     report.already_imported_by = importers;
+    report.hubspot =
+        super::super::hubspot_workspace::report(review_id, current.iter().map(|(row, _)| *row));
     Ok(report)
 }
 

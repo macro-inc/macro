@@ -3,6 +3,7 @@ import {
   alreadyInMacroSummary,
   buildPlanTree,
   EMPTY_IMPORT_DRAFT,
+  hubspotTotals,
   type ImportPlanEntry,
   type ImportProgress,
   importCount,
@@ -279,6 +280,10 @@ describe('importVolume', () => {
     const all = [...entries, database];
     expect(importVolume(all, [])).toEqual({
       projects: 0,
+      pipelines: 0,
+      companies: 0,
+      contacts: 0,
+      deals: 0,
       documents: 2,
       databases: 1,
       rows: 405,
@@ -305,6 +310,7 @@ describe('importReviewPhase', () => {
     waiting: 1,
     writing: 1,
     failures: [],
+    hubspot: null,
   };
 
   it('follows the review item until the plan is approved', () => {
@@ -380,6 +386,7 @@ describe('planning', () => {
     waiting: 0,
     writing: 0,
     failures: [],
+    hubspot: null,
   };
 
   it('reads Notion until the plan is staged, then counts what is decided', () => {
@@ -398,6 +405,10 @@ describe('planning', () => {
     expect(planCounts(staged).deciding).toBe(3);
     expect(importVolume(staged, [])).toEqual({
       projects: 0,
+      pipelines: 0,
+      companies: 0,
+      contacts: 0,
+      deals: 0,
       documents: 1,
       databases: 0,
       rows: 0,
@@ -454,6 +465,10 @@ it('counts tracker issues as tasks independently of their projects', () => {
   ];
   expect(importVolume(tracker, [])).toEqual({
     projects: 1,
+    pipelines: 0,
+    companies: 0,
+    contacts: 0,
+    deals: 0,
     documents: 0,
     databases: 0,
     rows: 0,
@@ -465,4 +480,46 @@ it('counts tracker issues as tasks independently of their projects', () => {
     { label: 'Projects', value: '1' },
     { label: 'Tasks', value: '1' },
   ]);
+});
+
+describe('HubSpot plans', () => {
+  it('totals CRM records per kind and lists owners and losses', () => {
+    const crm: ImportPlanEntry[] = [
+      { ...entries[0], id: 'pipeline', kind: 'pipeline' },
+      { ...entries[0], id: 'company', kind: 'company' },
+      { ...entries[0], id: 'contact', kind: 'contact', parentId: 'company' },
+      { ...entries[0], id: 'deal', kind: 'deal', parentId: 'pipeline' },
+      {
+        ...entries[0],
+        id: 'orphan',
+        kind: 'deal',
+        decision: 'skip',
+        reason: 'It has no company.',
+      },
+    ];
+    expect([
+      ...planTotals(crm, ['contact']),
+      ...hubspotTotals({
+        owners: 2,
+        ownersMatched: 1,
+        created: 3,
+        linked: 1,
+        losses: [
+          { loss: 'owner_not_member', count: 25 },
+          { loss: 'deal_without_company', count: 10 },
+        ],
+      }),
+    ]).toEqual([
+      { label: 'Pipelines', value: '1' },
+      { label: 'Companies', value: '1' },
+      { label: 'Deals', value: '1' },
+      { label: 'Skipped', value: '1' },
+      { label: 'Owners matched', value: '1 of 2' },
+      { label: 'Created', value: '3' },
+      { label: 'Matched existing', value: '1' },
+      { label: 'Owners not on your team', value: '25' },
+      { label: 'Deals without a company', value: '10' },
+    ]);
+    expect(hubspotTotals(null)).toEqual([]);
+  });
 });

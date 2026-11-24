@@ -57,8 +57,8 @@ export function Homepage(props: { embedded?: boolean } = {}) {
             </h1>
             <h2 class="macro-home-tagline">
               <span class="macro-home-tagline-desktop">
-                Macro replaces 27+ apps with one connected system for humans and
-                agents.
+                Macro replaces 27+ apps with one connected <br />
+                system for humans and agents.
               </span>
               <span class="macro-home-tagline-mobile">
                 Macro is email, chat, docs, tasks, calendar, calls and CRM in

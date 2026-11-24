@@ -55,11 +55,11 @@ it('keeps a Time link while the flag loads and drops it when the flag is off', (
   expect(read()).toBeUndefined();
 });
 
-it('opens a task in the week’s place, and leaves Shift, modifier and touch opens to a split', () => {
+it('opens a task in the week’s place, and leaves Shift and modifier opens to a split', () => {
   const navigate = vi.fn(() => Promise.resolve());
   const asNavigate = navigate as unknown as SplitNavigate;
 
-  expect(openTaskFromTime(asNavigate, 'week', 'task-1')).toBe(true);
+  expect(openTaskFromTime(asNavigate, 'week', 'task-1', true)).toBe(true);
   expect(navigate).toHaveBeenCalledWith({
     route: tasksTimeTaskRoute,
     params: { timeView: 'week', taskId: 'task-1' },
@@ -70,11 +70,25 @@ it('opens a task in the week’s place, and leaves Shift, modifier and touch ope
     new MouseEvent('click', { shiftKey: true }),
     new MouseEvent('click', { metaKey: true }),
   ])
-    expect(openTaskFromTime(asNavigate, 'week', 'task-1', { event })).toBe(
-      false
-    );
+    expect(
+      openTaskFromTime(asNavigate, 'week', 'task-1', true, { event })
+    ).toBe(false);
+  expect(navigate).not.toHaveBeenCalled();
+});
+
+it('opens a task beside the week on a tablet, and in a split on a phone', () => {
+  const navigate = vi.fn(() => Promise.resolve());
+  const asNavigate = navigate as unknown as SplitNavigate;
   fixtures.touch = true;
-  expect(openTaskFromTime(asNavigate, 'team', 'task-1')).toBe(false);
+
+  expect(openTaskFromTime(asNavigate, 'week', 'task-1', true)).toBe(true);
+  expect(navigate).toHaveBeenCalledWith({
+    route: tasksTimeTaskRoute,
+    params: { timeView: 'week', taskId: 'task-1' },
+  });
+
+  navigate.mockClear();
+  expect(openTaskFromTime(asNavigate, 'week', 'task-1', false)).toBe(false);
   expect(navigate).not.toHaveBeenCalled();
 });
 

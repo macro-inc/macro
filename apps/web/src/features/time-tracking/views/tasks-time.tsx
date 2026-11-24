@@ -81,6 +81,7 @@ function WeekHeader(props: {
     >
       <WeekStepper
         week={props.week.days()}
+        today={props.week.today()}
         current={props.week.offset() === 0}
         onPrevious={props.week.previousWeek}
         onNext={props.week.nextWeek}

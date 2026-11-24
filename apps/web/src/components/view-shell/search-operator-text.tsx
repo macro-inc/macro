@@ -5,18 +5,41 @@ import { createEffect, For, on, onCleanup, onMount, Show } from 'solid-js';
 export type SearchTextPart = { text: string; operator: boolean };
 
 /**
- * Splits search text into runs, marking each whitespace-separated token that
- * `isOperator` recognises. Whitespace stays in the runs, so joining them gives
- * the text back unchanged.
+ * The search text's tokens and the whitespace between them, in order. A
+ * double quote opens or closes a phrase anywhere in a token, and whitespace
+ * inside one does not end it (`subject:"team lunch"` is one token), as the
+ * search service splits terms.
+ */
+export function searchTextRuns(text: string): string[] {
+  const runs: string[] = [];
+  let run = '';
+  let inQuotes = false;
+  let inSpace = false;
+  for (const char of text) {
+    const space = !inQuotes && /\s/.test(char);
+    if (run && space !== inSpace) {
+      runs.push(run);
+      run = '';
+    }
+    inSpace = space;
+    if (char === '"') inQuotes = !inQuotes;
+    run += char;
+  }
+  if (run) runs.push(run);
+  return runs;
+}
+
+/**
+ * Splits search text into runs, marking each token ({@link searchTextRuns})
+ * that `isOperator` recognises. Whitespace stays in the runs, so joining them
+ * gives the text back unchanged.
  */
 export function splitSearchOperators(
   text: string,
   isOperator: (token: string) => boolean
 ): SearchTextPart[] {
   const parts: SearchTextPart[] = [];
-  for (const run of text.split(/(\s+)/)) {
-    if (!run) continue;
-
+  for (const run of searchTextRuns(text)) {
     const operator = !/^\s/.test(run) && isOperator(run);
     const last = parts.at(-1);
     if (last && !last.operator && !operator) last.text += run;

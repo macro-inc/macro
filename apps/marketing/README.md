@@ -17,7 +17,7 @@ Use a pale blue selection highlight (#b8d5ff) with dark text (#101820) in both w
 The homepage uses the feature-page hero with the live site's headline and subhead.
 Break the H1 after “The unified workspace” and keep the supporting H2 “Macro
 replaces 27+ apps with one connected system for humans and agents.”
-balanced below it on desktop. Below 700px, left-align the hero and use the
+on two lines below it on desktop, breaking after “connected.” Below 700px, left-align the hero and use the
 product-list subhead ending in “Everything links to everything else.” Keep Get
 Macro (signup) beside Book a demo. `HomepageTour` follows in an 800px
 maximum desktop frame at 16:9. Each module

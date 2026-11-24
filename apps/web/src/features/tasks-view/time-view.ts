@@ -3,7 +3,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { type SplitNavigate, useParams } from '@app/lib/split-router';
 import { tasksTimeRoute, tasksTimeTaskRoute } from '@app/routes/routes';
 import { enableTimeTracking } from '@core/constant/featureFlags';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { Accessor } from 'solid-js';
 
@@ -25,19 +24,21 @@ export function useTasksTimeView(): Accessor<TasksTimeView | undefined> {
 }
 
 /**
- * Opens a task in the place of My week or Team, with the week in its
- * breadcrumb, as a project's task opens within its section. Touch and
- * modifier clicks answer false, so the caller opens a split.
+ * Opens a task where the Tasks list would show it: in the week's place on
+ * desktop, in the preview pane beside the week on a tablet, with the week in
+ * its breadcrumb. On a phone or in a narrow pane (`inline` false), and with a
+ * modifier key, it answers false, so the caller opens a split.
  */
 export function openTaskFromTime(
   navigate: SplitNavigate,
   view: TasksTimeView,
   taskId: string,
+  inline: boolean,
   options?: EntityDetailNavigationOptions
 ): boolean {
   const event = options?.event;
   if (
-    isTouchDevice() ||
+    !inline ||
     event?.shiftKey ||
     event?.metaKey ||
     event?.ctrlKey ||

@@ -6,6 +6,7 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import type { ProjectSection } from '@app/features/projects/core/project';
 import { openProject } from '@app/features/projects/open-project';
 import { ProjectSavedViewsProvider } from '@app/features/projects/project-saved-views';
@@ -330,12 +331,15 @@ export function TasksView(props: TasksViewProps) {
   const teamQuery = useCurrentTeamQuery();
   const timeView = useTasksTimeView();
   const navigate = useNavigate();
+  const inlinePreview = useInlinePreviewLayout();
   const openFromTime = (
     task: TaskDetailTarget,
     options?: EntityDetailNavigationOptions
   ) => {
     const view = timeView();
-    return view ? openTaskFromTime(navigate, view, task.id, options) : false;
+    return view
+      ? openTaskFromTime(navigate, view, task.id, inlinePreview(), options)
+      : false;
   };
   return (
     <ListEntityMetadataQueryProvider>

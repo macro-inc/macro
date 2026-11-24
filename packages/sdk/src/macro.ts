@@ -598,8 +598,11 @@ export type { ReferralLink } from './entities/referrals/namespace';
 export type {
   RoutineApp,
   RoutineEventFilter,
+  RoutineEventFilterDetail,
+  RoutineTriggerDetail,
   RoutineTriggerOptions,
   SingleRoutineTrigger,
+  SingleRoutineTriggerDetail,
 } from './entities/routines/routine';
 export {
   Routine,

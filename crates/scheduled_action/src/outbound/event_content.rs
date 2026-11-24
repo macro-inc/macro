@@ -474,14 +474,25 @@ fn message_json(message: &Message) -> Value {
                 .sender_id
                 .as_user()
                 .map(|user| user.email_str().to_owned())
-        });
+        })
+        .or_else(|| message.guest_name.clone())
+        // Code reads `sender` as a string: a sender with no name is its id.
+        .unwrap_or_else(|| message.sender_id.as_ref().to_owned());
     let text = match ParsedXmlText::parse(&message.content) {
         Ok(parsed) => PlainTextFormatter::format_xml_text(parsed).0,
         Err(_) => message.content.clone(),
     };
+    // `STEP_CONTEXT`'s `RoutineMessage` types this for code steps; a field
+    // added here is added there too.
     json!({
-        // The discussion a reply joins: a reply's root, or the message itself.
-        "thread_id": message.thread_id.unwrap_or(message.id),
+        // A reply is posted in a thread; a top-level post starts one.
+        "is_reply": message.thread_id.is_some_and(|root| root != message.id),
+        // The post that started the thread: a reply's root, or the post itself.
+        "root_id": message.root_id(),
+        // Deprecated, and no longer documented: the same value as `root_id`,
+        // under the name the messages API gives a reply's root alone. Kept
+        // for routines written against it.
+        "thread_id": message.root_id(),
         "sender": sender,
         "sent_at": message.created_at,
         "edited": message.edited_at.is_some(),

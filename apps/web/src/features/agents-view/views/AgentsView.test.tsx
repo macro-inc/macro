@@ -549,6 +549,19 @@ it('renders the phone archive heading in its collection without a hidden compose
   expect(heading.closest('[data-mobile-list-header]')).toBeNull();
   expect(heading.closest('[data-mobile-list-layout]')).not.toBeNull();
   expect(screen.queryByRole('textbox', { name: 'Message' })).toBeNull();
+  const section = heading.closest('section')!;
+  const scroller = section.closest('[data-agents-list-scroll]')!;
+  const header = heading.closest('header')!;
+  expect(section.firstElementChild).toBe(header);
+  expect(header.classList.contains('sticky')).toBe(false);
+  expect(header.className).not.toContain('--mobile-content-inset-top');
+  expect(scroller.classList.contains('pt-(--mobile-content-inset-top)')).toBe(
+    true
+  );
+  expect(section.className).not.toContain('overflow');
+  expect(
+    scroller.querySelectorAll('[role="status"] .overflow-y-auto')
+  ).toHaveLength(0);
 });
 
 it('renders Archived without a second workspace header above its content', () => {

@@ -30,6 +30,10 @@ export const AgentsRouteView = lazyNamed(
   () => import('@app/features/agents-view/route-views'),
   'AgentsRouteView'
 );
+export const AgentScreenRouteView = lazyNamed(
+  () => import('@app/features/agent-screen/route-views'),
+  'AgentScreenRouteView'
+);
 export const CallDetailRouteView = lazyNamed(
   () => import('@app/features/block-call/route-views'),
   'CallDetailRouteView'
@@ -182,6 +186,7 @@ export const LIKELY_NEXT_VIEWS = [
  * nobody warmed shows its skeleton while its code loads.
  */
 export const OTHER_APP_VIEWS = [
+  AgentScreenRouteView,
   ForYouRouteView,
   SearchRouteView,
   NotificationsRouteView,

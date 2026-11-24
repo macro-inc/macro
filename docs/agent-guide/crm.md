@@ -318,7 +318,8 @@ Properties hold the team's custom properties only: Stage, Owner and Revenue are
 company-only, so its **Add property** list leaves them out (a company's leaves
 out task-only properties). **Add property** attaches one, such as a Phone text
 or a LinkedIn link, and it saves, clears and survives a reload like a company
-property. On a phone the panel opens from **Show details** in the record header.
+property. Its value field opens right after picking or creating it, and a value
+typed straight away is saved after the add, not cleared by it. On a phone the panel opens from **Show details** in the record header.
 
 Verify successful changes update open People, Companies, Team and ordinary Cmd-K;
 late responses must not reintroduce archived rows or hide restored rows with an

@@ -696,6 +696,58 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         assert!(failing[0].problems[0].contains("Property 'total' does not exist"));
     }
 
+    /// A channel message is typed, so a field the event doesn't carry fails
+    /// the check; every read the code-step guide has taught still checks,
+    /// so saved routines that make them aren't rewritten when the contract
+    /// changes.
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn an_event_message_is_typed_and_the_reads_the_guide_taught_still_check() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        let step = |body: &str| {
+            program(json!([{
+                "type": "code",
+                "title": "Read the event",
+                "source": format!(
+                    "export async function main({{ trigger }}: StepContext) {{\n  if (trigger.kind !== 'event') return null;\n  {body}\n}}\n"
+                ),
+            }]))
+        };
+        for body in [
+            // What the guide teaches now.
+            "const reply: boolean = trigger.item.message.is_reply; const root: string = trigger.item.message.root_id; return { reply, root, id: trigger.item.message_id ?? null };",
+            "if (trigger.item.message.is_reply) return { skipped: true }; return { text: trigger.item.message.text.toUpperCase() };",
+            "return { parent: trigger.item.thread_parent?.text ?? null, by: trigger.item.thread_parent?.sender ?? null };",
+            // What it taught before: `thread_id`, and the other events' items.
+            "if (trigger.item.message.thread_id !== trigger.item.message_id) return { skipped: true }; return { thread: trigger.item.message.thread_id };",
+            "const message = trigger.item.message; return { from: message.sender.toLowerCase(), text: message.text, channel: trigger.item.channel.name };",
+            "if (!trigger.item.message?.text || trigger.item.message.unavailable) return null; return trigger.item.message.text.length;",
+            "return { name: trigger.item.item.name, status: trigger.item.item.properties?.Status, body: trigger.item.item.content };",
+            "if (!trigger.item.email || trigger.item.email.unavailable) return null; return { subject: trigger.item.email.subject, from: trigger.item.email.from?.email, labels: trigger.item.email.labels };",
+            "return { title: trigger.item.call?.title, people: trigger.item.call?.participants?.length, lines: trigger.item.call?.transcript?.join('\\n') };",
+            "const { message } = trigger.item; return { edited: message.edited, files: message.attachments, at: message.sent_at };",
+        ] {
+            assert_eq!(
+                code.check_program(&step(body)).await.unwrap(),
+                Vec::new(),
+                "{body}"
+            );
+        }
+        for (body, field) in [
+            ("return trigger.item.message.isReply;", "isReply"),
+            ("return trigger.item.message.parent_id;", "parent_id"),
+            ("return trigger.item.message.id;", "id"),
+            ("return trigger.item.thread_parent?.thread;", "thread"),
+        ] {
+            let failing = code.check_program(&step(body)).await.unwrap();
+            assert_eq!(failing.len(), 1, "{body}");
+            assert!(
+                failing[0].problems[0].contains(&format!("Property '{field}' does not exist")),
+                "{failing:?}"
+            );
+        }
+    }
+
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
     async fn a_step_runs_with_its_inputs_and_journals_each_call() {
