@@ -176,6 +176,12 @@ from this import's other databases into it are not linked.
   or a row batch and recording it duplicates that one object or batch, and a
   crash between applying a schema op and recording it fails that database on
   resume (Macro refuses the column id).
+- Stage new plan rows with UUIDv7 ids and list tied creation timestamps by id
+  ascending in SQL and after owner/team deduplication. A staging transaction
+  shares one creation timestamp, so monotonic ids preserve sibling input order
+  through writing and completion. Preserve existing ids: legacy random-id ties
+  become stable without reconstructing their original order. Keep the ledger
+  list inside its local 15-second statement timeout.
 - `team_id` on a Notion row means "the team's copy": only shared objects take
   it, at `claim_importing` (staged → importing) before anything is written, so
   `import_entity_team_object_key` makes a second teammate's claim fail. A

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,\n                   initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at, updated_at\n            FROM import_entity\n            WHERE (\n                user_id = $1\n                OR (status = 'imported' AND team_id IS NOT NULL\n                    AND team_id = (SELECT team_id FROM team_user WHERE user_id = $1))\n            )\n            AND ($2::text IS NULL OR source = $2)\n            AND ($3::text IS NULL OR status = $3)\n            ORDER BY (user_id = $1) DESC, created_at DESC\n            ",
+  "query": "\n            SELECT id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,\n                   initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at, updated_at\n            FROM import_entity\n            WHERE (\n                user_id = $1\n                OR (status = 'imported' AND team_id IS NOT NULL\n                    AND team_id = (SELECT team_id FROM team_user WHERE user_id = $1))\n            )\n            AND ($2::text IS NULL OR source = $2)\n            AND ($3::text IS NULL OR status = $3)\n            ORDER BY (user_id = $1) DESC, created_at DESC, id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -116,5 +116,5 @@
       false
     ]
   },
-  "hash": "ca4e4fd8600fb284c1566906a7f5ff46b1d53b9e79ae435bacda1764026a3fbd"
+  "hash": "1777373a80fd7b413e868016b30f13ac4f6f3d819c7d957e90abc8bd037c7f8f"
 }

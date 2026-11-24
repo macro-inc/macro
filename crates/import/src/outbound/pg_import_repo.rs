@@ -354,6 +354,10 @@ impl ImportRepo for PgImportRepo {
         source: Option<ImportSource>,
         status: Option<ImportStatus>,
     ) -> Result<Vec<ImportEntity>> {
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *transaction)
+            .await?;
         let rows = sqlx::query_as!(
             ImportEntityDbRow,
             r#"
@@ -367,14 +371,15 @@ impl ImportRepo for PgImportRepo {
             )
             AND ($2::text IS NULL OR source = $2)
             AND ($3::text IS NULL OR status = $3)
-            ORDER BY (user_id = $1) DESC, created_at DESC
+            ORDER BY (user_id = $1) DESC, created_at DESC, id ASC
             "#,
             user.as_ref(),
             source.map(|s| s.as_ref().to_string()) as Option<String>,
             status.map(|s| s.as_ref().to_string()) as Option<String>,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *transaction)
         .await?;
+        transaction.commit().await?;
 
         // Own rows come first (see ORDER BY); drop teammate rows that
         // duplicate an own row on (source, foreign_id), then restore
@@ -402,7 +407,11 @@ impl ImportRepo for PgImportRepo {
                 }
             }
         }
-        entities.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        entities.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| a.id.cmp(&b.id))
+        });
         Ok(entities)
     }
 
