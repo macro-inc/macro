@@ -151,7 +151,8 @@ it('retires CRM breadcrumbs and task presets while an independently shared item 
 it.each([
   { itemFileType: 'pdf', name: 'contract.pdf' },
   { itemFileType: 'image', name: 'site-photo.jpg' },
-])('opens a $itemFileType file from a record in its file viewer', (file) => {
+  { itemFileType: undefined, name: 'notes.txt' },
+])('opens $name from a record in its file viewer', (file) => {
   fixture.item = { itemType: 'document', itemId: 'file-1', ...file };
   render(() => (
     <SplitPanelContext.Provider value={{} as SplitPanelContextType}>

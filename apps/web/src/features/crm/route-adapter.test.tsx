@@ -479,6 +479,17 @@ it('keeps document metadata in Files and Notes URLs', async () => {
   expect(url()).toBe('/companies/company/acme/document/note-1/md');
 });
 
+it('opens a file with no file type as an unknown file, not a note', async () => {
+  const { url, shows } = renderCustomers('/companies');
+  route.open([acme]);
+  await shows('tab:active section:- records:company:acme:Acme');
+  route.setSection('files');
+  await shows('tab:active section:files records:company:acme:Acme');
+  route.openItem({ type: 'document', id: 'file-2', name: 'Attachment' });
+  await vi.waitFor(() => expect(route.item()?.name).toBe('Attachment'));
+  expect(url()).toBe('/companies/company/acme/files/document/file-2/unknown');
+});
+
 it('skips consecutive items when restoring the captured record section', async () => {
   const { url, shows, canGo, go } = renderCustomers(
     '/companies/pipeline/sales'
