@@ -1,0 +1,19 @@
+crates/documents/src/domain/create/file_version.rs
+  s_daac47ed1cb766::t_80b9484f25196e 30-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5b14e85b7696aee7bb295ca4ee1bd85db2677ca9",
+  "prompts": {},
+  "sessions": {
+    "s_daac47ed1cb766": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5cc4efcb-4b26-48d2-bf9c-aaee3d38345e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
