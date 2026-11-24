@@ -11,7 +11,8 @@ use crate::domain::discovery::{AppDirectory, Catalog};
 use crate::domain::policy::CachedMacroConnectEnabledFlag;
 use crate::domain::ports::{OverlayCatalog, ServerDirectory, Source};
 use crate::domain::service::Connectors;
-use crate::outbound::app_directory::{HostedAppDirectory, NoAppDirectory};
+use crate::domain::sign_in::AppAuthorization;
+use crate::outbound::app_directory::{HostedAppDirectory, NoAppDirectory, WithNativeApiApps};
 use crate::outbound::github_link::GithubLinkSource;
 use crate::outbound::github_link::auth_service::AuthServiceGithubLink;
 use crate::outbound::guarded_http::{AddressPolicy, McpHttp};
@@ -22,6 +23,12 @@ use crate::outbound::native::pg_server_repo::PgServerRepo;
 use crate::outbound::native::redis_state_store::RedisOAuthStateStore;
 use crate::outbound::native::sign_in::OAuthSignIn;
 use crate::outbound::native::source::NativeSource;
+use crate::outbound::native_api::app::ApiApp;
+use crate::outbound::native_api::cipher::GrantCipher;
+use crate::outbound::native_api::oauth::OAuthClient;
+use crate::outbound::native_api::pending::RedisPendingSignIns;
+use crate::outbound::native_api::repo::ApiAppRepo;
+use crate::outbound::native_api::source::NativeApiSource;
 use crate::outbound::overlays::PgOverlayCatalog;
 use crate::outbound::pipedream::api::PipedreamClient;
 use crate::outbound::pipedream::source::PipedreamSource;
@@ -44,6 +51,7 @@ pub use crate::outbound::macro_connect::ConnectConfig;
 pub use crate::outbound::native::models::{AesKey, OAuthClientMetadata};
 #[cfg(feature = "providers")]
 pub use crate::outbound::native::provider_registry::PreRegisteredProviders;
+pub use crate::outbound::native_api::AutodeskConfig;
 pub use crate::outbound::pipedream::api::{
     DEFAULT_API_URL as PIPEDREAM_DEFAULT_API_URL, DEFAULT_MCP_URL as PIPEDREAM_DEFAULT_MCP_URL,
     PipedreamConfig,
@@ -71,6 +79,9 @@ pub struct ConnectorsConfig {
     pub pipedream: Option<PipedreamSettings>,
     /// Macro Connect, when this process has its key.
     pub connect: Option<ConnectConfig>,
+    /// Macro's own OAuth client at Autodesk, when this process has its
+    /// credentials and KMS key. Without it Autodesk is not connectable.
+    pub autodesk: Option<AutodeskConfig>,
     /// The flag provider, when this process has its key. Without one,
     /// nobody is on Macro Connect.
     pub feature_flags: Option<FeatureFlagsConfig>,
@@ -115,8 +126,8 @@ pub struct Composed {
 /// The connection services over every source this process is configured
 /// for.
 ///
-/// Native servers and the GitHub link are always on; Pipedream and Macro
-/// Connect only with their credentials.
+/// Native servers and the GitHub link are always on; Pipedream, Macro
+/// Connect and Autodesk only with their credentials.
 pub fn build(
     config: ConnectorsConfig,
     pool: PgPool,
@@ -126,10 +137,11 @@ pub fn build(
     compose(config, pool, redis, auth_service).map(|composed| composed.connectors)
 }
 
-/// [`build`], with the catalog and the server sign-ins the routes need.
+/// [`build`], with the catalog and the sign-ins the routes need.
 ///
 /// The catalog is Pipedream's directory, whatever source a user connects an
-/// app through; without Pipedream it is empty.
+/// app through, with the REST apps Macro signs in to itself in front;
+/// without either it is empty.
 pub fn compose(
     config: ConnectorsConfig,
     pool: PgPool,
@@ -144,7 +156,7 @@ pub fn compose(
     let servers = PgServerRepo::new(pool.clone(), config.mcp_credentials_key);
     let oauth = Arc::new(OAuthService::new(
         servers.clone(),
-        RedisOAuthStateStore::new(redis),
+        RedisOAuthStateStore::new(redis.clone()),
         config.mcp_oauth_client.clone(),
         http.clone(),
         #[cfg(feature = "providers")]
@@ -201,6 +213,28 @@ pub fn compose(
         )));
     }
 
+    // REST apps Macro signs in to with its own client, API only.
+    let native_api = match config.autodesk {
+        Some(autodesk) => {
+            let client = OAuthClient::new(
+                ApiApp::autodesk()?,
+                autodesk.client_id,
+                autodesk.client_secret,
+                autodesk.redirect_uri,
+            )?;
+            Some(NativeApiSource::new(
+                vec![client],
+                ApiAppRepo::new(pool.clone()),
+                GrantCipher::kms(autodesk.kms, autodesk.kms_key_id),
+                Arc::new(RedisPendingSignIns::new(redis)),
+            )?)
+        }
+        None => None,
+    };
+    if let Some(source) = &native_api {
+        sources.push(Arc::new(source.clone()));
+    }
+
     let flags = config
         .feature_flags
         .map(|flags| {
@@ -217,6 +251,10 @@ pub fn compose(
         Some(client) => Arc::new(HostedAppDirectory::new(client.clone())),
         None => Arc::new(NoAppDirectory),
     };
+    let directory: Arc<dyn AppDirectory> = match &native_api {
+        Some(source) => Arc::new(WithNativeApiApps::new(source.catalog_entries(), directory)),
+        None => directory,
+    };
 
     let overlays = SharedOverlays(Arc::new(PgOverlayCatalog::new(pool)));
     let connectors = Connectors::new(
@@ -226,9 +264,14 @@ pub fn compose(
         overlays.clone(),
     );
 
+    let mut sign_ins = ServerSignIns::new(Arc::new(sign_in), overlays);
+    if let Some(source) = native_api {
+        sign_ins = sign_ins.with_apps(Arc::new(source) as Arc<dyn AppAuthorization>);
+    }
+
     Ok(Composed {
         catalog: Catalog::new(directory, connectors.clone()),
-        sign_ins: ServerSignIns::new(Arc::new(sign_in), overlays),
+        sign_ins,
         connectors,
     })
 }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE api_app_connections SET needs_reauth = TRUE, updated_at = NOW() WHERE user_id = $1 AND app = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "789db187234563914aab20b42f6e78a5c8eaa693651a534de19b6835debc202f"
+}

@@ -1,5 +1,6 @@
 //! The catalog's directory over the hosted app directory: the apps users
-//! browse, and the actions each advertises before it is connected.
+//! browse, and the actions each advertises before it is connected, with the
+//! apps Macro reaches by REST itself in front.
 
 use crate::domain::discovery::{AppDirectory, AppTool, CatalogApp, CatalogPage};
 use crate::domain::models::ConnectorId;
@@ -170,5 +171,84 @@ impl AppDirectory for NoAppDirectory {
         _app: &ConnectorId,
     ) -> Result<Vec<AppTool>, Report> {
         Ok(Vec::new())
+    }
+}
+
+/// A directory with the apps Macro reaches by REST itself listed first:
+/// they are connectable whatever the hosted directory says, and their entry
+/// is Macro's own, never the hosted directory's under the same slug.
+pub(crate) struct WithNativeApiApps {
+    apps: Vec<CatalogApp>,
+    directory: Arc<dyn AppDirectory>,
+}
+
+impl WithNativeApiApps {
+    /// `directory` with `apps` in front.
+    pub(crate) fn new(apps: Vec<CatalogApp>, directory: Arc<dyn AppDirectory>) -> Self {
+        Self { apps, directory }
+    }
+
+    fn native(&self, app: &ConnectorId) -> Option<&CatalogApp> {
+        self.apps.iter().find(|entry| entry.id == *app)
+    }
+}
+
+/// Whether `app` matches a search the way the directory's name search does:
+/// by a case-insensitive part of its name or slug.
+fn matches_search(app: &CatalogApp, search: Option<&str>) -> bool {
+    let Some(search) = search.map(str::to_lowercase) else {
+        return true;
+    };
+    app.name.to_lowercase().contains(&search) || app.id.as_str().contains(&search)
+}
+
+#[async_trait::async_trait]
+impl AppDirectory for WithNativeApiApps {
+    async fn search(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        search: Option<&str>,
+        cursor: Option<&str>,
+        limit: u32,
+    ) -> Result<CatalogPage, Report> {
+        let page = self.directory.search(user, search, cursor, limit).await?;
+        let hosted = page
+            .apps
+            .into_iter()
+            .filter(|app| self.native(&app.id).is_none());
+        // Listed once, on the first page.
+        let native = self
+            .apps
+            .iter()
+            .filter(|app| cursor.is_none() && matches_search(app, search))
+            .cloned();
+
+        Ok(CatalogPage {
+            apps: native.chain(hosted).collect(),
+            next_cursor: page.next_cursor,
+        })
+    }
+
+    async fn retrieve(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        app: &ConnectorId,
+    ) -> Result<Option<CatalogApp>, Report> {
+        match self.native(app) {
+            Some(entry) => Ok(Some(entry.clone())),
+            None => self.directory.retrieve(user, app).await,
+        }
+    }
+
+    /// A REST app advertises no MCP tools.
+    async fn tools(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        app: &ConnectorId,
+    ) -> Result<Vec<AppTool>, Report> {
+        match self.native(app) {
+            Some(_) => Ok(Vec::new()),
+            None => self.directory.tools(user, app).await,
+        }
     }
 }

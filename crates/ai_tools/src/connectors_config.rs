@@ -4,9 +4,9 @@
 
 use anyhow::Context;
 use connectors::composition::{
-    AesKey, ConnectConfig, ConnectorsConfig, FeatureFlagsConfig, OAuthClientMetadata,
-    PIPEDREAM_DEFAULT_API_URL, PIPEDREAM_DEFAULT_MCP_URL, PipedreamConfig, PipedreamSettings,
-    PreRegisteredProviders,
+    AesKey, AutodeskConfig, ConnectConfig, ConnectorsConfig, FeatureFlagsConfig,
+    OAuthClientMetadata, PIPEDREAM_DEFAULT_API_URL, PIPEDREAM_DEFAULT_MCP_URL, PipedreamConfig,
+    PipedreamSettings, PreRegisteredProviders,
 };
 use macro_env::Environment;
 use macro_env_var::maybe_env_var;
@@ -35,6 +35,18 @@ maybe_env_var! {
         PosthogApiKey,
         /// Regional PostHog origin; defaults to the US origin.
         PosthogHost,
+    }
+}
+
+maybe_env_var! {
+    struct AutodeskEnv {
+        /// Macro's APS (Autodesk Platform Services) app's client id.
+        AutodeskClientId,
+        /// Macro's APS app's client secret.
+        AutodeskClientSecret,
+        /// The KMS key (id, ARN or alias) that wraps the grants of REST apps
+        /// Macro signs in to itself, Autodesk's included.
+        ApiAppGrantKmsKeyId,
     }
 }
 
@@ -97,6 +109,7 @@ pub async fn connectors_config_from_env(
         mcp_pre_registered: pre_registered_providers(),
         pipedream,
         connect: connect_config(value!(connect_customer_key).as_deref())?,
+        autodesk: autodesk_config().await?,
         feature_flags: feature_flags_config(
             value!(posthog_api_key).as_deref(),
             value!(posthog_host).as_deref(),
@@ -179,6 +192,55 @@ fn connect_callback_url() -> anyhow::Result<url::Url> {
         public_url.as_str().trim_end_matches('/')
     ))
     .context("Connect callback is not a URL")
+}
+
+/// Macro's own OAuth client at Autodesk, or `None` (Autodesk not
+/// connectable) unless its client id, secret and the grants' KMS key are all
+/// set. Its callback is cognition's public origin, like the MCP one.
+pub async fn autodesk_config() -> anyhow::Result<Option<AutodeskConfig>> {
+    let env = AutodeskEnv::new();
+    let value = |field: Option<&str>| {
+        field
+            .filter(|value| !value.trim().is_empty())
+            .map(str::to_owned)
+    };
+    let (Some(client_id), Some(client_secret), Some(kms_key_id)) = (
+        value(
+            env.autodesk_client_id
+                .as_ref()
+                .and_then(|value| value.value()),
+        ),
+        value(
+            env.autodesk_client_secret
+                .as_ref()
+                .and_then(|value| value.value()),
+        ),
+        value(
+            env.api_app_grant_kms_key_id
+                .as_ref()
+                .and_then(|value| value.value()),
+        ),
+    ) else {
+        tracing::info!("Autodesk credentials not set; Autodesk is not connectable");
+        return Ok(None);
+    };
+
+    let public_url = macro_service_urls::CognitionPublicUrl::new()?;
+    let redirect_uri = url::Url::parse(&format!(
+        "{}{}",
+        public_url.as_str().trim_end_matches('/'),
+        connectors::inbound::callbacks::APP_OAUTH_CALLBACK_PATH
+    ))
+    .context("the Autodesk callback is not a URL")?;
+    let kms = aws_sdk_kms::Client::new(&macro_aws_config::get_macro_aws_config().await);
+
+    Ok(Some(AutodeskConfig {
+        client_id,
+        client_secret: zeroize::Zeroizing::new(client_secret),
+        redirect_uri,
+        kms,
+        kms_key_id,
+    }))
 }
 
 /// The OAuth client Macro signs in to users' MCP servers as: its metadata

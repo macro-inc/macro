@@ -1,5 +1,6 @@
 //! The public routes vendors and authorization servers call: the OAuth
 //! callback and client metadata document for servers signed in to by URL,
+//! the OAuth callback for REST apps Macro signs in to itself (Autodesk),
 //! Macro Connect's consent page, and Pipedream's webhook.
 //!
 //! Their paths are registered with third parties, so they never change.
@@ -26,6 +27,9 @@ mod test;
 
 /// The OAuth callback route's path, registered as the redirect URI.
 pub const OAUTH_CALLBACK_PATH: &str = "/mcp/servers/auth/callback";
+/// The OAuth callback route's path for REST apps Macro signs in to with its
+/// own registered client (Autodesk): the redirect URI registered with each.
+pub const APP_OAUTH_CALLBACK_PATH: &str = "/connectors/apps/auth/callback";
 /// The client metadata document's path, Macro's OAuth client id.
 pub const CLIENT_METADATA_PATH: &str = "/mcp/servers/auth/client-metadata";
 /// The page Macro Connect sends the browser to after consent.
@@ -73,6 +77,7 @@ where
 {
     Router::new()
         .route(OAUTH_CALLBACK_PATH, get(oauth_callback::<G>))
+        .route(APP_OAUTH_CALLBACK_PATH, get(app_oauth_callback::<G>))
         .route(CLIENT_METADATA_PATH, get(client_metadata::<G>))
         .route(CONSENT_CALLBACK_PATH, get(consent_callback))
         .with_state(state)
@@ -150,14 +155,14 @@ fn callback_code(params: OAuthCallbackParams) -> Result<(String, String), Callba
             Some(description) => format!("{error}: {description}"),
             None => error,
         };
-        tracing::warn!(reason, "MCP OAuth provider rejected authorization");
+        tracing::warn!(reason, "OAuth provider rejected authorization");
         return Err(CallbackError::Rejected(reason));
     }
 
     match (params.code, params.state) {
         (Some(code), Some(state)) => Ok((code, state)),
         _ => {
-            tracing::warn!("MCP OAuth callback missing both code and error parameters");
+            tracing::warn!("OAuth callback missing both code and error parameters");
             Err(CallbackError::Malformed)
         }
     }
@@ -199,6 +204,34 @@ pub async fn oauth_callback<G: ServerSignInService>(
     .await;
 
     Ok("Authorization successful. You can close this tab.")
+}
+
+/// Finish connecting a REST app: its consent page redirects the browser
+/// here with a code or an error. Only the one-time state is trusted; the
+/// web, polling `POST /connectors/app/{id}/complete`, sees the connection
+/// once this stored it.
+#[tracing::instrument(name = "connectors.app_oauth_callback", skip_all, err)]
+pub async fn app_oauth_callback<G: ServerSignInService>(
+    State(state): State<CallbacksState<G>>,
+    Query(params): Query<OAuthCallbackParams>,
+) -> Result<Html<&'static str>, CallbackError> {
+    let (code, csrf_state) = callback_code(params)?;
+    let signed_in = state
+        .sign_ins
+        .complete_app_sign_in(&code, &csrf_state)
+        .await
+        .map_err(|error| {
+            tracing::warn!(error = ?error, "could not complete a REST app sign-in");
+            CallbackError::Failed
+        })?;
+    fire(
+        state.on_connected.as_ref(),
+        signed_in.user(),
+        signed_in.keys(),
+    )
+    .await;
+
+    Ok(Html(CONSENT_CONNECTED))
 }
 
 #[utoipa::path(

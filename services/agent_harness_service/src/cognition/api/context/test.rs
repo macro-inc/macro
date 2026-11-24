@@ -829,6 +829,7 @@ fn test_connectors(pool: sqlx::PgPool) -> connectors::composition::Composed {
             mcp_pre_registered: connectors::composition::PreRegisteredProviders::empty(),
             pipedream: None,
             connect: None,
+            autodesk: None,
             feature_flags: None,
         },
         pool,

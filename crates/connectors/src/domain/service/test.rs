@@ -97,6 +97,7 @@ impl World {
             SourceKind::GithubLink => {
                 HashMap::from([(ConnectorId::github(), Surfaces::new(true, false))])
             }
+            SourceKind::NativeApi => HashMap::from([(app("autodesk"), Surfaces::new(false, true))]),
             SourceKind::Native => HashMap::new(),
         };
 
@@ -114,6 +115,7 @@ impl World {
             SourceKind::GithubLink,
             SourceKind::Pipedream,
             SourceKind::Connect,
+            SourceKind::NativeApi,
         ]
         .into_iter()
         .map(|kind| -> Arc<dyn Source> {
@@ -934,6 +936,46 @@ async fn the_shared_fake_puts_each_connection_where_the_rules_count_it() {
         .await
         .unwrap();
     assert_eq!(fake.api_calls().len(), 1);
+}
+
+#[tokio::test]
+async fn the_shared_fake_serves_autodesk_as_an_api_only_connection() {
+    let fake = FakeConnectors::new().with_connection(
+        &user(),
+        FakeConnection::app("autodesk").answering(http::StatusCode::OK, r#"{"data":[]}"#),
+    );
+    let connectors = fake.build();
+
+    let mine = connectors.connections(&user()).await.unwrap();
+    assert_eq!(mine.status(&app_key("autodesk")), Status::Connected);
+    assert_eq!(mine.handles().count(), 0);
+    let listed = connectors.list(&user()).await.unwrap();
+    let autodesk = listed
+        .iter()
+        .find(|connector| *connector.key() == app_key("autodesk"))
+        .unwrap();
+    assert!(autodesk.surfaces().api());
+    assert!(!autodesk.surfaces().mcp());
+
+    let handle = connectors
+        .connection(&user(), &app("autodesk"))
+        .await
+        .unwrap()
+        .unwrap();
+    let response = connectors
+        .call(
+            &handle,
+            ApiRequest {
+                method: http::Method::GET,
+                url: "https://developer.api.autodesk.com/project/v1/hubs".to_owned(),
+                headers: http::HeaderMap::new(),
+                body: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.body, r#"{"data":[]}"#);
+    assert_eq!(fake.api_calls()[0].key, app_key("autodesk"));
 }
 
 #[test]

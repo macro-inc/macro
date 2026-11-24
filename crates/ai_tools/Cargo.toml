@@ -38,6 +38,7 @@ bytes.workspace = true
 bot_id = { path = "../bot_id" }
 async-trait.workspace = true
 axum = { workspace = true, features = ["macros"] }
+aws-sdk-kms.workspace = true
 aws-sdk-sqs.workspace = true
 bots = { path = "../bots", default-features = false, features = ["ai_tools", "outbound"] }
 harnesses = { path = "../harnesses", default-features = false, features = ["outbound"] }
@@ -129,6 +130,7 @@ aws-sdk-secretsmanager = { workspace = true }
 
 macro_service_urls = { path = "../macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize.workspace = true
 
 [dev-dependencies]
 connectors = { path = "../connectors", features = ["test-fakes"] }

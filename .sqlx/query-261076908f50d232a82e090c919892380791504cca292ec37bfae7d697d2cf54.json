@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT user_id, app, name, enabled, needs_reauth, access_expires_at,\n                grant_ciphertext, encrypted_data_key, nonce, encryption_version, kms_key_id\n            FROM api_app_connections\n            WHERE user_id = $1 AND app = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "app",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "needs_reauth",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "access_expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "grant_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 7,
+        "name": "encrypted_data_key",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 8,
+        "name": "nonce",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 9,
+        "name": "encryption_version",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 10,
+        "name": "kms_key_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "261076908f50d232a82e090c919892380791504cca292ec37bfae7d697d2cf54"
+}

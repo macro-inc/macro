@@ -15,6 +15,7 @@ const APPS: &[&str] = &[
     "slack_v2",
     "granola",
     "asana",
+    "autodesk",
 ];
 const SERVERS: &[&str] = &[
     STRIPE_SERVER,
@@ -31,12 +32,14 @@ const SOURCES: &[SourceKind] = &[
     SourceKind::GithubLink,
     SourceKind::Pipedream,
     SourceKind::Connect,
+    SourceKind::NativeApi,
 ];
 
 /// Any connection a source could report. Native rows are servers and every
-/// other source names an app. As in the model, every connection provides
-/// MCP and Pipedream always an API; Connect, native and link rows sometimes
-/// offer one, to check the resolver decides. `index` keeps ids distinct.
+/// other source names an app. As in the model, every connection but a
+/// native API one provides MCP, and Pipedream and the native API source
+/// always an API; Connect, native and link rows sometimes offer one, to
+/// check the resolver decides. `index` keeps ids distinct.
 fn any_connection(index: usize) -> impl Strategy<Value = SourceConnection> {
     (
         0..SOURCES.len(),
@@ -51,8 +54,10 @@ fn any_connection(index: usize) -> impl Strategy<Value = SourceConnection> {
                 SourceKind::Native => server_key(SERVERS[target % SERVERS.len()]),
                 _ => app_key(APPS[target % APPS.len()]),
             };
-            let api = api || source == SourceKind::Pipedream;
+            let api = api || matches!(source, SourceKind::Pipedream | SourceKind::NativeApi);
             let api: Option<Arc<dyn ApiConnection>> = api.then(|| Arc::new(Undialed) as _);
+            let mcp: Option<Arc<dyn McpConnection>> =
+                (source != SourceKind::NativeApi).then(|| Arc::new(Undialed) as _);
             SourceConnection {
                 source,
                 key,
@@ -60,7 +65,7 @@ fn any_connection(index: usize) -> impl Strategy<Value = SourceConnection> {
                 name: format!("connection {index}"),
                 enabled,
                 grant: GRANTS[grant],
-                mcp: Some(Arc::new(Undialed)),
+                mcp,
                 api,
             }
         })
@@ -107,6 +112,8 @@ fn designated(
         SourceKind::Connect
     } else if app.as_str() == "github" {
         SourceKind::GithubLink
+    } else if app.as_str() == "autodesk" {
+        SourceKind::NativeApi
     } else if overlays().is_overlaid(app) {
         SourceKind::Native
     } else {
@@ -192,7 +199,9 @@ proptest! {
         prop_assert_eq!(summary(&resolution), summary(&reordered));
     }
 
-    /// StatusMatchesUse, and a handle (MCP or API) exists only when connected.
+    /// StatusMatchesUse, and a handle (MCP or API) exists only when
+    /// connected: a connected app or server is usable through MCP, or through
+    /// its API where its source provides no MCP.
     #[test]
     fn status_matches_use(
         macro_connect_enabled in any_macro_connect_enabled_flag(),
@@ -203,7 +212,10 @@ proptest! {
         let resolution = resolve(&user(), macro_connect_enabled, &overlays(), &connect, connections);
 
         for resolved in resolution.mcp.resolved() {
-            prop_assert_eq!(resolved.status == Status::Connected, resolved.mcp.is_some());
+            let api = app_of(&resolved.key)
+                .is_some_and(|app| resolution.api.iter().any(|handle| handle.app() == app));
+            let usable = resolved.mcp.is_some() || (!resolved.surfaces.mcp() && api);
+            prop_assert_eq!(resolved.status == Status::Connected, usable);
         }
         for handle in resolution.mcp.handles() {
             prop_assert_eq!(resolution.mcp.status(handle.key()), Status::Connected);
@@ -293,7 +305,7 @@ proptest! {
             let Some(app) = app_of(handle.key()) else { continue };
             let input = mcp_input(&connections, handle);
             let source_has_api = match designated(macro_connect_enabled, &connect, app) {
-                SourceKind::Pipedream => true,
+                SourceKind::Pipedream | SourceKind::NativeApi => true,
                 SourceKind::Connect => connect.surfaces(app).is_some_and(|surfaces| surfaces.api()),
                 SourceKind::Native | SourceKind::GithubLink => false,
             };
@@ -304,9 +316,26 @@ proptest! {
                 prop_assert!(std::ptr::eq(api_input(&connections, api), input));
             }
         }
+        // An API-only connection that counts and is usable always gives its
+        // API.
+        for resolved in resolution.mcp.resolved() {
+            let Some(app) = app_of(&resolved.key) else { continue };
+            if designated(macro_connect_enabled, &connect, app) == SourceKind::NativeApi
+                && resolved.status == Status::Connected
+            {
+                prop_assert!(resolution.api.iter().any(|handle| handle.app() == app));
+            }
+        }
         for handle in &resolution.api {
-            let source = api_input(&connections, handle).source;
-            prop_assert!(matches!(source, SourceKind::Pipedream | SourceKind::Connect));
+            let input = api_input(&connections, handle);
+            prop_assert!(matches!(
+                input.source,
+                SourceKind::Pipedream | SourceKind::Connect | SourceKind::NativeApi
+            ));
+            prop_assert_eq!(
+                input.source,
+                designated(macro_connect_enabled, &connect, handle.app())
+            );
         }
     }
 

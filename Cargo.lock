@@ -1252,6 +1252,7 @@ dependencies = [
  "anthropic",
  "anyhow",
  "async-trait",
+ "aws-sdk-kms",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -1362,6 +1363,7 @@ dependencies = [
  "web_search",
  "wiremock",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -5353,6 +5355,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "authentication_service_client",
+ "aws-sdk-kms",
  "axum",
  "base64 0.22.1",
  "chrono",
@@ -5384,7 +5387,9 @@ dependencies = [
  "tracing",
  "url",
  "utoipa",
+ "wiremock",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]

@@ -93,3 +93,70 @@ async fn retrieve_and_tools_go_by_the_app_slug() {
         Some("linear_search")
     );
 }
+
+fn autodesk_entry() -> CatalogApp {
+    CatalogApp {
+        id: app("autodesk"),
+        name: "Autodesk".to_owned(),
+        description: Some("Designs".to_owned()),
+        icon_url: Some("https://icons.example.com/autodesk.png".to_owned()),
+        categories: Vec::new(),
+    }
+}
+
+fn with_autodesk() -> WithNativeApiApps {
+    WithNativeApiApps::new(
+        vec![autodesk_entry()],
+        Arc::new(HostedAppDirectory::new(Arc::new(FakeDirectory))),
+    )
+}
+
+#[tokio::test]
+async fn native_api_apps_lead_the_first_page_that_matches_them() {
+    let directory = with_autodesk();
+
+    let ids = |page: CatalogPage| page.apps.into_iter().map(|app| app.id).collect::<Vec<_>>();
+    assert_eq!(
+        ids(directory.search(&user(), None, None, 20).await.unwrap()),
+        vec![app("autodesk"), app("slack"), app("linear")]
+    );
+    assert_eq!(
+        ids(directory
+            .search(&user(), Some("AUTO"), None, 20)
+            .await
+            .unwrap())[0],
+        app("autodesk")
+    );
+    assert!(
+        !ids(directory
+            .search(&user(), Some("slack"), None, 20)
+            .await
+            .unwrap())
+        .contains(&app("autodesk"))
+    );
+    assert!(
+        !ids(directory
+            .search(&user(), None, Some("next"), 20)
+            .await
+            .unwrap())
+        .contains(&app("autodesk"))
+    );
+}
+
+#[tokio::test]
+async fn a_native_api_app_is_retrieved_as_macros_own_entry_with_no_tools() {
+    let directory = with_autodesk();
+
+    let found = directory.retrieve(&user(), &app("autodesk")).await.unwrap();
+    let tools = directory.tools(&user(), &app("autodesk")).await.unwrap();
+
+    assert_eq!(found, Some(autodesk_entry()));
+    assert!(tools.is_empty());
+    assert!(
+        directory
+            .retrieve(&user(), &app("linear"))
+            .await
+            .unwrap()
+            .is_some()
+    );
+}

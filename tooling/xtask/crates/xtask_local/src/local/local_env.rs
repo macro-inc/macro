@@ -429,6 +429,12 @@ impl InfraEnv {
             "MCP_OAUTH_KMS_KEY_ID".into(),
             resources::MCP_OAUTH_KMS_ALIAS.into(),
         );
+        // Autodesk is connectable locally once `AUTODESK_CLIENT_ID` and
+        // `AUTODESK_CLIENT_SECRET` are also set (Doppler `lcl_personal`).
+        env.insert(
+            "API_APP_GRANT_KMS_KEY_ID".into(),
+            resources::API_APP_GRANT_KMS_ALIAS.into(),
+        );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());

@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::catalog::Overlays;
 use crate::domain::models::{ConnectorId, ConnectorKey, ServerUrl};
-use crate::domain::sign_in::{ServerAuthorization, ServerSignIns};
+use crate::domain::sign_in::{AppAuthorization, ServerAuthorization, ServerSignIns};
 use crate::fake::FakeOverlays;
 use crate::inbound::ConnectorChange;
 use crate::inbound::test_support::user;
@@ -32,12 +32,30 @@ impl ServerAuthorization for CodeIsServer {
     }
 }
 
+/// Signs `owner` in to Autodesk for `code=good`.
+struct AutodeskSignIn;
+
+#[async_trait::async_trait]
+impl AppAuthorization for AutodeskSignIn {
+    async fn complete(
+        &self,
+        code: &str,
+        state: &str,
+    ) -> Result<(MacroUserIdStr<'static>, ConnectorId), rootcause::Report> {
+        if code != "good" || state != "a-state" {
+            return Err(rootcause::report!("the code was refused"));
+        }
+        Ok((user("owner"), ConnectorId::parse("autodesk").unwrap()))
+    }
+}
+
 fn router(connected: &Arc<Mutex<Vec<ConnectorChange>>>) -> Router {
     let overlays = Overlays::new([(
         ConnectorId::parse("figma").unwrap(),
         ServerUrl::parse("https://mcp.figma.com/mcp").unwrap(),
     )]);
-    let sign_ins = ServerSignIns::new(Arc::new(CodeIsServer), FakeOverlays(overlays));
+    let sign_ins = ServerSignIns::new(Arc::new(CodeIsServer), FakeOverlays(overlays))
+        .with_apps(Arc::new(AutodeskSignIn));
     let log = connected.clone();
     let hook: ConnectorHook = Arc::new(move |change| {
         log.lock().unwrap().push(change);
@@ -198,4 +216,45 @@ async fn the_webhook_checks_its_secret() {
         post_webhook("/pipedream/mcp/webhook?secret=s3cret").await,
         StatusCode::NO_CONTENT
     );
+}
+
+#[tokio::test]
+async fn a_finished_app_sign_in_connects_the_app() {
+    let connected = Arc::new(Mutex::new(Vec::new()));
+
+    let (status, body) = get(
+        router(&connected),
+        "/connectors/apps/auth/callback?code=good&state=a-state",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.contains("Connected"));
+    assert_eq!(
+        *connected.lock().unwrap(),
+        [ConnectorChange {
+            user: user("owner"),
+            key: ConnectorKey::App(ConnectorId::parse("autodesk").unwrap()),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn a_refused_app_sign_in_connects_nothing() {
+    let connected = Arc::new(Mutex::new(Vec::new()));
+
+    let (refused, _) = get(
+        router(&connected),
+        "/connectors/apps/auth/callback?error=access_denied&state=a-state",
+    )
+    .await;
+    let (failed, _) = get(
+        router(&connected),
+        "/connectors/apps/auth/callback?code=bad&state=a-state",
+    )
+    .await;
+
+    assert_eq!(refused, StatusCode::BAD_REQUEST);
+    assert_eq!(failed, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(connected.lock().unwrap().is_empty());
 }
