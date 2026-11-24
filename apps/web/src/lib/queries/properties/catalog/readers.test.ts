@@ -121,7 +121,6 @@ describe('refreshCatalogReaders', () => {
             kind,
             key: () => key,
             definitions: () => [],
-            sets: () => [],
             refresh: async () => refreshed.push(name),
           }
         : {

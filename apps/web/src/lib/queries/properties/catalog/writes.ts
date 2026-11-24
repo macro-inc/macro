@@ -73,6 +73,7 @@ import {
   stringifyDocument,
 } from '@urql/core';
 import { ResultAsync } from 'neverthrow';
+import { createEffect, createRoot } from 'solid-js';
 import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import { queryAccountSession } from '../../auth/account-scope';
@@ -144,16 +145,52 @@ type SettleOptions = {
   session?: number;
 };
 
+const accountChanged = (when: string) =>
+  new CatalogMutationError(
+    `Another login took over ${when}`,
+    'ACCOUNT_CHANGED'
+  );
+
+/**
+ * Waits for a queued write's commit, or rejects with `ACCOUNT_CHANGED` once
+ * another login takes over from `session`: logout may retire the cache
+ * before it reports the write, and the write is no longer this page's.
+ */
+async function commitUnderLogin(
+  settlements: Settlements,
+  transactionId: string,
+  session: number
+): Promise<void> {
+  let stop = () => {};
+  const changed = new Promise<never>((_, reject) => {
+    createRoot((dispose) => {
+      stop = dispose;
+      createEffect(() => {
+        if (queryAccountSession() !== session)
+          reject(accountChanged('before the write was saved'));
+      });
+    });
+  });
+  try {
+    await Promise.race([settlements.waitForCommit(transactionId), changed]);
+  } finally {
+    stop();
+  }
+}
+
 /** Waits for a queued write's commit in the background. */
 async function observeCommit(
   settlements: Settlements,
   transactionId: string,
+  session: number,
   options: SettleOptions
 ): Promise<void> {
   try {
-    await settlements.waitForCommit(transactionId);
+    await commitUnderLogin(settlements, transactionId, session);
     options.onCommit?.();
   } catch (error: unknown) {
+    // The old login's write is not this page's to report.
+    if (isCatalogErrorCode(error, 'ACCOUNT_CHANGED')) return;
     const failure = error instanceof Error ? error : new Error(String(error));
     console.error('Queued property catalog write failed', failure);
     options.onLateFailure?.(failure);
@@ -204,13 +241,13 @@ async function settle<TData, TVariables extends AnyVariables>(
     const disposition = optimisticMutationDispositionOf(result);
     if (disposition?.kind === 'queued') {
       if (options.waitForCommit) {
-        await settlements.waitForCommit(disposition.transactionId);
+        await commitUnderLogin(settlements, disposition.transactionId, session);
         options.onCommit?.();
         return { kind: 'committed', data: undefined, waited: true };
       }
       observing = true;
       fireAndForget(
-        observeCommit(settlements, disposition.transactionId, options),
+        observeCommit(settlements, disposition.transactionId, session, options),
         'property-catalog'
       );
       return { kind: 'queued' };
@@ -642,6 +679,7 @@ export async function ensureTagSet(
 ): Promise<TagSetResponse> {
   return Telemetry.span('property_catalog.ensure_tag_set', async (span) => {
     span.setAttr('property.scope', scope);
+    const session = started.session ?? queryAccountSession();
     const client = getGraphqlSoupClient();
     const outcome = await settle(
       (context) =>
@@ -652,7 +690,7 @@ export async function ensureTagSet(
             { optimisticMutation: false, ...context }
           )
           .toPromise(),
-      { waitForCommit: true, serverAnswered: true, session: started.session }
+      { waitForCommit: true, serverAnswered: true, session }
     );
     const set =
       outcome.kind === 'committed' ? outcome.data?.ensureTagSet : undefined;
@@ -720,6 +758,10 @@ export async function ensureTagSet(
         if (!ready) noData('ensureTagSet reload');
       }
     }
+    // The set is the login's that asked for it; reading it back can outlast
+    // that login.
+    if (queryAccountSession() !== session)
+      throw accountChanged('while the tag set was provisioned');
     return mapped;
   });
 }
@@ -820,29 +862,21 @@ export function refreshTagSets(): void {
  * The viewer's provisioned set for a scope as the cache holds it, without a
  * request. Provisioning is idempotent, so a cached definition stays valid and
  * a tag can be created at once, offline included. A cache that cannot answer
- * answers nothing; a tag list on screen still shows the set it last read. A
- * flow that began under `session` finds nothing once another login took over.
- * The shown sets are taken before the cache read: its answer reaches a tag
- * list reading the same document, and a miss clears that list's error.
+ * answers nothing, and the caller asks the server. A flow that began under
+ * `session` finds nothing once another login took over.
  */
 export async function cachedTagSet(
   scope: TagScope,
   session = queryAccountSession()
 ): Promise<TagSetResponse | undefined> {
   if (!usingCache()) return undefined;
-  const shown = catalogReaders()
-    .flatMap((reader) => (reader.kind === 'tags' ? reader.sets() : []))
-    .find((candidate) => candidate.scope === scope && candidate.definition);
   const cached = await getGraphqlSoupClient()
     .query(PropertyCatalogTagSetsDocument, {}, { requestPolicy: 'cache-only' })
     .toPromise();
   if (queryAccountSession() !== session) return undefined;
-  if (cached.data) {
-    const set = cached.data.user.tagSets.find(
-      (candidate) => candidate.scope === toGraphqlTagScope(scope)
-    );
-    const mapped = set && toTagSet(set);
-    return mapped?.definition ? mapped : undefined;
-  }
-  return shown;
+  const set = cached.data?.user.tagSets.find(
+    (candidate) => candidate.scope === toGraphqlTagScope(scope)
+  );
+  const mapped = set && toTagSet(set);
+  return mapped?.definition ? mapped : undefined;
 }
