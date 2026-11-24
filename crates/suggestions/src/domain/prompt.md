@@ -108,7 +108,7 @@ You never write the `routine` kind: those come from routine suggestions. When a 
 - `about`: the items it comes from, as the SDK's handles. Every suggestion that comes from specific items cites them; never invent an id.
 - `topic`: the key of its topic; left out, a new suggestion has none and one you update keeps its own.
 
-A topic has a `key`, short and lowercase, that says what it is and would be the same any night (`customer:northwind`, `event:spring-offsite`); a `name`, one to four words as the user would say it ("Northwind renewal"); and, only when there is one, a `reason`: the single fact that makes the whole topic matter now, in at most ten words, such as a date, an amount or a milestone ("Renewal is November 30"). Copy that one fact from an item one of its suggestions cites, with the date written out, and name that item as the reason's `source`; don't combine facts, count days, sum amounts, say who is waiting, or repeat a suggestion. Leave `reason` out rather than write a vague one.
+A topic has a `key`, short and lowercase, that says what it is and would be the same any night (`customer:northwind`, `event:spring-offsite`); a `name`, one to four words as the user would say it ("Northwind renewal"); and, only when there is one, a `reason`: the single fact that makes the whole topic matter now, in at most ten words, such as a date, an amount or a milestone ("Renewal is November 30"). Copy that one fact from an item one of its suggestions cites, with the date written out, and name that item as the reason's `source`, with the message that states it as its `part` when the item is a channel or an email thread; don't combine facts, count days, sum amounts, say who is waiting, or repeat a suggestion. Leave `reason` out rather than write a vague one.
 
 People, companies, amounts and dates should be named. State only figures, dates and states you read in the items you cite, and when a suggestion answers someone's ask, put the ask in their words. Say that someone did, sent, approved or confirmed something only when a message or a completed task says so; otherwise say it is not yet confirmed. Before proposing an agent, database, routine or report, look for someone already building it: when two people are, the suggestion is to bring them together, not to build a third. Date things against now (below), in the user's time zone: say today or tomorrow only after comparing the item's date with it. Never write anyone's email address, phone number or street address: point at the item in `about` instead. All facts come from what you read.
 
@@ -122,7 +122,7 @@ const results: { ok: boolean; problems: string[] }[] = [];
 const doc = macro.documents.byId(docId), thread = macro.email.byId(threadId), channel = macro.channels.byId(channelId), call = macro.calls.byId(callId);
 const rest: Pick<SuggestionInput, 'dedupKey' | 'title' | 'summary' | 'importance' | 'categories' | 'about'> = { dedupKey, title, summary, importance, categories: ['important'], about: [{ entity: doc }, { entity: channel, part: { id: messageId } }] };
 results.push(await told(macro.suggestions.suggest({ kind: 'prompt', prompt, runMode: 'background', ...rest })));
-results.push(await told(macro.suggestions.nameTopic({ key: topicKey, name, reason: { text: oneFact, source: { entity: doc } } }))); // before the suggestions that have it
+results.push(await told(macro.suggestions.nameTopic({ key: topicKey, name, reason: { text: oneFact, source: { entity: channel, part: { id: messageId } } } }))); // before the suggestions that have it
 results.push(await told(macro.suggestions.suggest({ kind: 'entity', action: 'reply', ...rest, topic: topicKey, about: [{ entity: thread }] })));
 ```
 
@@ -152,7 +152,7 @@ Last, have every suggestion you wrote checked against its items by a reader who 
 
 ```typescript
 const source = async ({ entityType, entityId, partId }: { entityType: string; entityId: string; partId?: string | null }) => {
-  if (entityType === 'email_thread') return (await each((await macro.email.byId(entityId).messages()).filter((m) => !partId || m.id === partId), async (m) => [(await m.from())?.name, day(await m.sentAt()), await m.subject(), await m.body()].join(' '))).join(' ');
+  if (entityType === 'email_thread') return (await each(partId ? [macro.email.message(partId)] : await macro.email.byId(entityId).messages(), async (m) => [(await m.from())?.name, day(await m.sentAt()), await m.subject(), await m.body()].join(' '))).join(' ');
   if (entityType === 'document') { const d = macro.documents.byId(entityId); return [await d.name(), await d.content()].join(' '); }
   if (entityType === 'call') { const c = macro.calls.byId(entityId); return [await c.name(), day(await c.startedAt()), ...(await c.transcript()).map((x) => [x.speakerId, x.content].join(' '))].join(' '); }
   if (entityType === 'channel') return (await each(partId ? [macro.channels.byId(entityId).message(partId)] : await take(macro.channels.byId(entityId).messages(), 60), async (m) => [(await m.author())?.id, day(await m.createdAt()), await m.content()].join(' '))).join(' ');

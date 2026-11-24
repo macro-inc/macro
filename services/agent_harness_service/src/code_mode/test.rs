@@ -236,6 +236,7 @@ fn the_dry_run_scope_is_every_sdk_read_and_no_write() {
 fn the_generation_scope_matches_the_sdk_catalog() {
     let intended = [
         "scheduled-action.addSuggestion",
+        "scheduled-action.nameSuggestionTopic",
         "scheduled-action.rewriteSuggestion",
         "scheduled-action.retireSuggestion",
         "scheduled-action.attachSuggestionDraft",

@@ -9,6 +9,7 @@
 
 use std::collections::HashSet;
 
+use model_entity::EntityType;
 use shown_text::{is_invisible, line, personal_detail};
 
 use super::model::{Category, KindName, NewKind, NewSuggestion, SuggestionKind, Target};
@@ -125,7 +126,7 @@ pub fn topic(request: NameTopic, problems: &mut Vec<String>) -> Option<NameTopic
     })
 }
 
-/// A topic's reason: its line and the item that states it.
+/// A topic's reason: its line and the item, or the message, that states it.
 fn topic_reason(reason: TopicReason, problems: &mut Vec<String>) -> Option<TopicReason> {
     let text = text(
         &reason.text,
@@ -134,6 +135,22 @@ fn topic_reason(reason: TopicReason, problems: &mut Vec<String>) -> Option<Topic
         problems,
     );
     let source = targets(vec![reason.source], problems)?.pop();
+    // The message itself: the reason goes when it is deleted, while the rest
+    // of the conversation stays.
+    if source.as_ref().is_some_and(|source| {
+        source.part_id.is_none()
+            && matches!(
+                source.entity_type,
+                EntityType::Channel | EntityType::EmailThread
+            )
+    }) {
+        problems.push(
+            "a reason read in a channel or an email thread names the message that states it, as \
+             the source's `part`"
+                .to_owned(),
+        );
+        return None;
+    }
 
     Some(TopicReason {
         text: text?,
