@@ -44,10 +44,11 @@ if [[ -z "${PC_ISOLATED:-}" && "${ISOLATE:-1}" != 0 ]]; then
   PC_ISOLATED=1 exec nix shell nixpkgs#socat -c "$wrapper" "$port" "${BASH_SOURCE[0]}" "${MODES[@]}"
 fi
 # The run shape comes from each mode below, never from the caller's
-# environment; only smoke takes SEED and MUTANT from it.
+# environment; only smoke takes SEED, MUTANT and FRESH_FIRST_MS from it.
 SMOKE_SEED="${SEED:-1}"
 SMOKE_MUTANT="${MUTANT:-}"
-unset SEED SEQS STEPS LANES ROTATE READS_PER_STEP SWEEP VOLUME LOAD CONTROL MUTANT MUTANT_RATE BASELINE SETTLE_MS STOP_ON_CATCH OPTIMISM OUT
+SMOKE_FRESH_FIRST_MS="${FRESH_FIRST_MS:-0}"
+unset SEED SEQS STEPS LANES ROTATE READS_PER_STEP SWEEP VOLUME LOAD CONTROL MUTANT MUTANT_RATE BASELINE SETTLE_MS FRESH_FIRST_MS STOP_ON_CATCH OPTIMISM OUT
 
 # Every run this invocation will make, cleared before anything else can fail:
 # a mode that never starts reads INCOMPLETE, never as an earlier pass.
@@ -122,7 +123,7 @@ node_run() {
 run_mode() {
   case "$1" in
     smoke)
-      SEED=$SMOKE_SEED MUTANT=$SMOKE_MUTANT SEQS=1 STEPS=3 LANES=1 SWEEP=0 VOLUME=0 OUT="$HERE/out/smoke" node_run smoke ;;
+      SEED=$SMOKE_SEED MUTANT=$SMOKE_MUTANT FRESH_FIRST_MS=$SMOKE_FRESH_FIRST_MS SEQS=1 STEPS=3 LANES=1 SWEEP=0 VOLUME=0 OUT="$HERE/out/smoke" node_run smoke ;;
     quiet)
       MUTANT= BASELINE= SEED=1 OUT="$HERE/out/seed-1" node_run quiet ;;
     load)

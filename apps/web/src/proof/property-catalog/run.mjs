@@ -91,6 +91,9 @@ const CONFIG = {
   mutantRate: Number(E.MUTANT_RATE ?? 0.3),
   control: E.CONTROL === '1', // both sides OLD: the old code against itself
   settleMs: Number(E.SETTLE_MS ?? 5000), // live-update bound
+  // smoke only: a first cold mount bound under the mounts' time, so every one
+  // overruns and the retry (at settleMs) stands in; 0 uses settleMs
+  freshFirstMs: Number(E.FRESH_FIRST_MS ?? 0),
   pg: E.PG_CONTAINER ?? 'macro-gqlprops-postgres-1',
   redis: E.REDIS_CONTAINER ?? 'macro-gqlprops-redis-1', // '' to wait out the sign-up limit instead
   headless: E.HEADED !== '1',
@@ -1804,12 +1807,12 @@ async function compareStep(pair, level, op) {
   const [liveAo, liveAn, liveBo, liveBn] = await Promise.all(sides(pair).map(async (s) => prep(s, await ev(s, 'snapshot'))));
   // the frozen readers go back to live before the fresh mounts read
   if (CONFIG.mutant === 'skip-live-update') await Promise.all(news.map((s) => ev(s, 'mutant.release')));
-  const coldMount = async (s) => {
+  const coldMount = async (s, boundMs) => {
     const since = Date.now();
-    const f = await ev(s, 'fresh', keysFor(pair, s, keys), CONFIG.settleMs);
+    const f = await ev(s, 'fresh', keysFor(pair, s, keys), boundMs);
     return { snap: prep(s, f.snap), timing: withWaitedOn(s, f.timing, since), asOf: clockNow() };
   };
-  const fresh = await Promise.all(sides(pair).map(coldMount));
+  const fresh = await Promise.all(sides(pair).map((s) => coldMount(s, CONFIG.freshFirstMs || CONFIG.settleMs)));
   R.counts.freshMounts += 4;
   for (const f of fresh) {
     R.settle.fresh.samples++;
@@ -1826,14 +1829,14 @@ async function compareStep(pair, level, op) {
   for (const at of [0, 2]) {
     if (!fresh[at].timing.timedOut && !fresh[at + 1].timing.timedOut) continue;
     const first = [fresh[at], fresh[at + 1]];
-    const again = await Promise.all([sides(pair)[at], sides(pair)[at + 1]].map(coldMount));
+    const again = await Promise.all([sides(pair)[at], sides(pair)[at + 1]].map((s) => coldMount(s, CONFIG.settleMs)));
     R.counts.freshMounts += 2;
     R.settle.fresh.retried = (R.settle.fresh.retried ?? 0) + 1;
     const settled = again.every((f) => !f.timing.timedOut);
     if (settled) R.settle.fresh.retrySettled = (R.settle.fresh.retrySettled ?? 0) + 1;
     first.forEach((f, j) => {
       if (!f.timing.timedOut) return;
-      record('settle', `${SIDE_NAMES[at + j]} fresh mount did not settle within ${CONFIG.settleMs}ms${settled ? ', and its retry did' : ''}`, settled ? 'fresh-retry' : 'state', null, harnessFigures(f.timing), { waitedOn: f.timing.waitedOn, retryMs: again.map((g) => g.timing.ms) });
+      record('settle', `${SIDE_NAMES[at + j]} fresh mount did not settle within ${CONFIG.freshFirstMs || CONFIG.settleMs}ms${settled ? ', and its retry did' : ''}`, settled ? 'fresh-retry' : 'state', null, harnessFigures(f.timing), { waitedOn: f.timing.waitedOn, retryMs: again.map((g) => g.timing.ms) });
     });
     if (!settled) {
       again.forEach((f, j) => {
