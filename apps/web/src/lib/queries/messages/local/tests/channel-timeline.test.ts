@@ -1846,4 +1846,160 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       vi.useRealTimers();
     }
   });
+
+  it('keeps following a replacement window started by an observer of the page merge', async () => {
+    const rows = messages(70);
+    const cached = Promise.withResolvers<void>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise));
+    const mounted = mount({ rows, fetchPage });
+    const replacement = Promise.withResolvers<Promise<void>>();
+    let stopObserving = () => {};
+    try {
+      await settledOnDevice(mounted.runtime);
+      createRoot((dispose) => {
+        stopObserving = dispose;
+        createEffect(
+          on(
+            () => mounted.timeline.entries().length,
+            (count) => {
+              if (count !== 70) return;
+              mounted.setHeld(true);
+              replacement.resolve(mounted.timeline.retry());
+            }
+          )
+        );
+      });
+      mounted.setHeld(false);
+      const oldPage = mounted.timeline.loadOlder();
+      await replacement.promise;
+      expect(mounted.timeline.entries()).toHaveLength(50);
+      cached.resolve();
+      await oldPage;
+      const latest = graphqlMessage(71);
+      mounted.addRow(latest);
+      const reads = mounted.host.reads.length;
+      mounted.runtime.changed();
+      expect(mounted.host.reads.length).toBe(reads + 1);
+      await until(() => ids(mounted.timeline)[0] === latest.id);
+    } finally {
+      cached.resolve();
+      stopObserving();
+      mounted.dispose();
+    }
+  });
+
+  it('does not start a reread when an observer reports a change as the page is merged', async () => {
+    const rows = messages(70);
+    const cached = Promise.withResolvers<void>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise));
+    const mounted = mount({ rows, fetchPage });
+    const observedReadCount = Promise.withResolvers<number>();
+    let stopObserving = () => {};
+    try {
+      await settledOnDevice(mounted.runtime);
+      createRoot((dispose) => {
+        stopObserving = dispose;
+        createEffect(
+          on(
+            () => mounted.timeline.entries().length,
+            (count) => {
+              if (count !== 70) return;
+              const before = mounted.host.reads.length;
+              mounted.runtime.changed();
+              observedReadCount.resolve(mounted.host.reads.length - before);
+            }
+          )
+        );
+      });
+      mounted.setHeld(false);
+      const oldPage = mounted.timeline.loadOlder();
+      expect(await observedReadCount.promise).toBe(0);
+      mounted.setHeld(true);
+      cached.resolve();
+      await oldPage;
+    } finally {
+      cached.resolve();
+      stopObserving();
+      mounted.dispose();
+    }
+  });
+
+  it('does not arm a retry after disposal triggered by publication of the page failure', async () => {
+    const rows = messages(70);
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const mounted = mount({ rows, fetchPage });
+    let stopObserving = () => {};
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      createRoot((dispose) => {
+        stopObserving = dispose;
+        createEffect(
+          on(mounted.timeline.olderFailed, (failed) => {
+            if (failed) mounted.dispose();
+          })
+        );
+      });
+      const failed = mounted.timeline.loadOlder();
+      await vi.advanceTimersByTimeAsync(0);
+      await failed;
+      expect(mounted.timeline.olderFailed()).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(mounted.timeline.olderFailed()).toBe(true);
+    } finally {
+      stopObserving();
+      mounted.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('replays changes after the old page settles during a replacement page store', async () => {
+    const rows = messages(70);
+    const cached = Promise.withResolvers<void>();
+    const replacementCached = Promise.withResolvers<void>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise))
+      .mockResolvedValueOnce(
+        serverPage(rows, 0, 20, replacementCached.promise)
+      );
+    const mounted = mount({ rows, fetchPage });
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      const oldPage = mounted.timeline.loadOlder();
+      await until(() => mounted.timeline.entries().length === 70);
+      mounted.setHeld(true);
+      await mounted.timeline.retry();
+      expect(mounted.timeline.entries()).toHaveLength(50);
+      mounted.setHeld(false);
+      const currentPage = mounted.timeline.loadOlder();
+      await until(() => mounted.timeline.entries().length === 70);
+
+      const latest = graphqlMessage(71);
+      mounted.addRow(latest);
+      mounted.runtime.changed();
+      mounted.setHeld(true);
+      const reads = mounted.host.reads.length;
+      cached.resolve();
+      await oldPage;
+      expect(mounted.host.reads.length).toBe(reads);
+      expect(ids(mounted.timeline)[0]).not.toBe(latest.id);
+
+      replacementCached.resolve();
+      await currentPage;
+      await until(() => ids(mounted.timeline)[0] === latest.id);
+    } finally {
+      cached.resolve();
+      replacementCached.resolve();
+      mounted.dispose();
+    }
+  });
 });

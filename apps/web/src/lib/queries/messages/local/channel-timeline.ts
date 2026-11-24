@@ -1,6 +1,7 @@
 import type { EntityLoadError } from '@core/component/EntityLoadGate';
 import { untilAborted } from '@core/util/abort-signal';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { sleep } from '@core/util/sleep';
 import { Telemetry } from '@macro-inc/observability';
 import type { MessageTimelineEntry } from '@service-storage/messages';
 import { CombinedError } from '@urql/core';
@@ -315,16 +316,34 @@ export function createLocalChannelTimeline(
   // Failed pages in a row per direction, and the wait before the next ask.
   const pageRetries: Record<
     PageDirection,
-    { failures: number; timer: ReturnType<typeof setTimeout> | undefined }
+    { failures: number; wait: AbortController | undefined }
   > = {
-    older: { failures: 0, timer: undefined },
-    newer: { failures: 0, timer: undefined },
+    older: { failures: 0, wait: undefined },
+    newer: { failures: 0, wait: undefined },
   };
   const stopPageRetry = (direction: PageDirection, reset: boolean) => {
     const retry = pageRetries[direction];
-    clearTimeout(retry.timer);
-    retry.timer = undefined;
+    retry.wait?.abort();
+    retry.wait = undefined;
     if (reset) retry.failures = 0;
+  };
+  /** Clears a failed page once its wait ends, unless stopped meanwhile. */
+  const retryAfterWait = async (direction: PageDirection) => {
+    const retry = pageRetries[direction];
+    retry.failures += 1;
+    const wait = new AbortController();
+    retry.wait = wait;
+    const ms = Math.min(
+      PAGE_RETRY_MAX_MS,
+      PAGE_RETRY_MS * 2 ** (retry.failures - 1)
+    );
+    try {
+      await untilAborted(sleep(ms), wait.signal);
+    } catch {
+      return;
+    }
+    retry.wait = undefined;
+    setState('pageFailed', direction, false);
   };
   // Bumped when a page is given up, so a window still storing as one is
   // given up does not then count as held.
@@ -612,6 +631,9 @@ export function createLocalChannelTimeline(
       return 'stale';
     }
     merges += 1;
+    // Counted before the merge shows: a view answering it may load another
+    // window or report a change while this setState runs.
+    merged();
     setState(
       produce((draft) => {
         draft.entries = mergeEntries(draft.entries, loaded.page.entries);
@@ -622,7 +644,6 @@ export function createLocalChannelTimeline(
         }
       })
     );
-    merged();
     const settled = await settle(loaded, epoch, token);
     return token === loadToken ? settled : 'stale';
   };
@@ -782,6 +803,9 @@ export function createLocalChannelTimeline(
         draft.pageFailed[direction] = outcome === 'failed';
       })
     );
+    // A view answering that update may have closed this window or loaded
+    // another, which stopped its watches.
+    if (token !== loadToken) return;
     if (outcome === 'done') {
       stopPageRetry(direction, true);
       watch.stop();
@@ -790,15 +814,7 @@ export function createLocalChannelTimeline(
     if (outcome === 'failed') {
       // Online, the connection does not come back: a view that pages
       // whenever paging is idle may ask again after a wait that grows.
-      const retry = pageRetries[direction];
-      retry.failures += 1;
-      retry.timer = setTimeout(
-        () => {
-          retry.timer = undefined;
-          setState('pageFailed', direction, false);
-        },
-        Math.min(PAGE_RETRY_MAX_MS, PAGE_RETRY_MS * 2 ** (retry.failures - 1))
-      );
+      fireAndForget(retryAfterWait(direction), 'channel-local-sync');
     } else stopPageRetry(direction, true);
     // The window keeps what it shows. The next scroll asks again, and so does
     // the connection coming back: scrolled to the end there is no next
