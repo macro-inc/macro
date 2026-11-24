@@ -35,6 +35,8 @@ import type {
   SandboxSizeBody,
   SessionAutoArchiveResponse,
   SessionPullRequestsResponse,
+  SessionThreadRepliesResponse,
+  SetSessionThreadRepliesRequest,
   SharePermissionV2,
   ToolApprovalAnswerDto,
   UpdateSharePermissionRequestV2,
@@ -54,6 +56,7 @@ export type {
   SandboxSize,
   SandboxSizeBody,
   SessionAutoArchiveResponse,
+  SessionThreadRepliesResponse,
 };
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
@@ -423,6 +426,30 @@ export const agentHarnessServiceClient = {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(overrides),
+        errorResponseHandler: sessionError,
+      }
+    );
+  },
+
+  /** Whether the session answers unmentioned replies in its thread, and whether the caller may change that. */
+  getSessionThreadReplies(sessionId: string) {
+    return fetchWithToken<SessionThreadRepliesResponse>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/thread-replies`,
+      { method: 'GET', errorResponseHandler: sessionError }
+    );
+  },
+
+  /** Edit access; while paused, the agent answers only messages that mention it. */
+  setSessionThreadReplies(
+    sessionId: string,
+    request: SetSessionThreadRepliesRequest
+  ) {
+    return fetchWithToken<SetSessionThreadRepliesRequest>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/thread-replies`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
         errorResponseHandler: sessionError,
       }
     );

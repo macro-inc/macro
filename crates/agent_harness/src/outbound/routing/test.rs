@@ -204,7 +204,7 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never summarizes an owner's recent sessions")
     }
 
-    async fn find_all_for_thread(
+    async fn find_replying_in_thread(
         &self,
         _thread_id: macro_uuid::Uuid,
     ) -> SessionResult<Vec<AgentSession>> {

@@ -42,6 +42,9 @@ export const agentHarnessExcluded = [
   'startClaudeSignIn', // Computer account credentials are managed in the app.
   'getAgentVoices', // The agent voice picker is an admin app flow.
   'getAgentVoiceSample', // The agent voice picker is an admin app flow.
+  // The thread-reply toggle beside an agent's channel reply is an app control.
+  'getAgentSessionThreadReplies',
+  'putAgentSessionThreadReplies',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =
