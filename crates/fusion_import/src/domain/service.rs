@@ -2,7 +2,8 @@
 //! into Macro file documents.
 //!
 //! Every call is bounded: an import or sync downloads at most
-//! [`DOWNLOADS_PER_CALL`] versions, oldest first, and reports what remains,
+//! [`DOWNLOADS_PER_CALL`] versions, oldest first, starts none after ten
+//! minutes, and reports what remains,
 //! so the agent calls `sync` again until nothing does. That bounds tool
 //! latency and how hard one call leans on Autodesk's rate limits, and every
 //! call can be repeated: the ledger records each version once, a document is
@@ -11,7 +12,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -46,8 +47,39 @@ pub const MAX_IMPORT_ITEMS: usize = 20;
 /// How many items one sync covers.
 pub const MAX_SYNC_ITEMS: usize = 50;
 
-/// How long one sync holds an item: longer than ten capped downloads take.
+/// How long one call starts downloads for. With a download's own timeout
+/// (five minutes) it stays inside [`SYNC_LEASE`], so a lease never lapses
+/// under a sync that is still writing.
+const CALL_WORK_LIMIT: Duration = Duration::from_secs(10 * 60);
+
+/// How long one sync holds an item. A call that is cancelled mid-sync leaves
+/// its item busy until then.
 const SYNC_LEASE: Duration = Duration::from_secs(15 * 60);
+
+/// What one call may still spend: downloads, and time to start them in.
+#[derive(Debug)]
+struct Budget {
+    downloads: u32,
+    deadline: Instant,
+}
+
+impl Budget {
+    fn for_call() -> Self {
+        Self {
+            downloads: DOWNLOADS_PER_CALL,
+            deadline: Instant::now() + CALL_WORK_LIMIT,
+        }
+    }
+
+    /// No further download may start.
+    fn spent(&self) -> bool {
+        self.downloads == 0 || Instant::now() >= self.deadline
+    }
+
+    fn spend_download(&mut self) {
+        self.downloads = self.downloads.saturating_sub(1);
+    }
+}
 
 /// What the flag being off reads as: the feature is not there.
 pub const FUSION_IMPORT_OFF: &str = "Fusion import";
@@ -228,11 +260,11 @@ where
         tracked: TrackedItem,
         name: Option<String>,
         mode: Mode,
-        budget: &mut u32,
+        budget: &mut Budget,
     ) -> Result<ItemReport, FusionImportError> {
         let mut report = ItemReport::untouched(tracked.item_id.clone(), ItemStatus::NotReached);
         report.document_id = (tracked.state == LinkState::Linked).then_some(tracked.document_id);
-        if *budget == 0 {
+        if budget.spent() {
             return Ok(report);
         }
 
@@ -303,7 +335,7 @@ where
         &self,
         sync: &mut ItemSync<'_, C::Reader>,
         mode: Mode,
-        budget: &mut u32,
+        budget: &mut Budget,
         report: &mut ItemReport,
     ) -> Result<(), ItemFailure> {
         let (reader, user) = (sync.reader, sync.user);
@@ -374,7 +406,7 @@ where
         report.status = ItemStatus::Synced;
 
         for version in pending {
-            if *budget == 0 {
+            if budget.spent() {
                 break;
             }
 
@@ -405,7 +437,7 @@ where
         &self,
         sync: &mut ItemSync<'_, C::Reader>,
         version: &FusionVersion,
-        budget: &mut u32,
+        budget: &mut Budget,
     ) -> Result<VersionRecord, ItemFailure> {
         let record = |outcome| VersionRecord {
             version_id: version.id.clone(),
@@ -434,7 +466,7 @@ where
             return Ok(skip(SkipReason::TooLarge));
         }
 
-        *budget = budget.saturating_sub(1);
+        budget.spend_download();
         let signed = match sync.reader.signed_download(storage).await {
             Ok(signed) => signed,
             Err(ApsError::NotFound | ApsError::Forbidden) => {
@@ -656,7 +688,7 @@ where
         let span = tracing::info_span!("fusion.import", item.count = items.len());
         async {
             let reader = self.reader(user).await?;
-            let mut budget = DOWNLOADS_PER_CALL;
+            let mut budget = Budget::for_call();
             let mut reports = Vec::with_capacity(items.len());
 
             // Every item is tracked even once the budget is spent, so a later
@@ -763,7 +795,7 @@ where
             };
             tracing::Span::current().record("item.count", targets.len());
 
-            let mut budget = DOWNLOADS_PER_CALL;
+            let mut budget = Budget::for_call();
             let mut reports = Vec::with_capacity(targets.len());
             for (item_id, tracked) in targets {
                 let Some(tracked) = tracked else {
