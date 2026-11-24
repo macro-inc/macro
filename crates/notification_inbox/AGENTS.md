@@ -45,7 +45,8 @@ agent session, runtime or team-scoped vault access request). Built on the shared
 - Give a new notification kind a row: `place_event` (or the channel and
   discussion rules) in `src/domain/rows.rs` → a row type in
   `src/domain/models.rs` → `graphql_notification_inbox` inputs → a test in
-  `rows/test.rs`. The `place_event` match is exhaustive on purpose.
+  `rows/test.rs`. The `place_event` match is exhaustive on purpose. A kind Chat's
+  sidebar shows as unread also goes in `unread_in_chat`.
 - Offer a button on a row: `actions` in `src/domain/rows.rs` →
   `InboxRowActionKind` → its GraphQL enum. The client performs the action
   through the API of what it acts on.
@@ -100,6 +101,12 @@ agent session, runtime or team-scoped vault access request). Built on the shared
   notification state alone; the number would include rows the inbox does
   not list. An entity type stops being read at `UNREAD_ROWS_COUNTED` rows,
   and `recount_unread_rows` reads only the groups that changed.
+- Chat's dot counts `chat_counts`, the unread rows Chat's sidebar can show:
+  `unread_in_chat` looks at each row's notifications, because a row's kind does
+  not say (a thread row holds replies, mentions and its root message). It
+  mirrors the `topLevelMessagesOnly` filter and the sidebar's mention counts.
+  Channels stop being read only once they also hold `UNREAD_ROWS_COUNTED` of
+  those, or unread replies alone would hide a message past them.
 
 ## Related
 
