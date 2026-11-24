@@ -109,15 +109,21 @@ export type FetchChannelServerPage = (
 /** A store of when each channel was last marked opened. */
 export interface ChannelTouches {
   /**
-   * The time to record, or undefined when the channel was marked recently or
-   * a mark is on its way to the device.
+   * The time to record, or undefined when the channel was marked recently in
+   * the cache session `generation`, or such a mark is on its way to the
+   * device.
    */
-  due(channelId: string, nowMs: number): number | undefined;
+  due(channelId: string, nowMs: number, generation: string): number | undefined;
   /**
    * Tells how the commit carrying a mark from `due` ended: one the device did
    * not store is due again at the next read.
    */
-  settled(channelId: string, touchedAtMs: number, stored: boolean): void;
+  settled(
+    channelId: string,
+    touchedAtMs: number,
+    generation: string,
+    stored: boolean
+  ): void;
 }
 
 /** How often an opened channel's eviction clock is written to the device. */
@@ -129,21 +135,28 @@ export const CHANNEL_TOUCH_INTERVAL_MS = 6 * 60 * 60 * 1000;
  * slack on it never evicts a channel in use. A mark counts once the device
  * stored it: a channel whose mark was refused (the session changed while it
  * was sent) keeps the device's old clock, which a frame's empty row leaves
- * at 0, and the next eviction would take it while it is on screen.
+ * at 0, and the next eviction would take it while it is on screen. A mark
+ * counts only in the cache session it was sent in: the device refuses one
+ * from an earlier session, so a read in a new session marks the channel
+ * again, even while the earlier mark is still on its way.
  */
 export function createChannelTouches(
   intervalMs = CHANNEL_TOUCH_INTERVAL_MS
 ): ChannelTouches {
-  const touched = new Map<string, number>();
+  const touched = new Map<string, { atMs: number; generation: string }>();
   return {
-    due(channelId, nowMs) {
+    due(channelId, nowMs, generation) {
       const last = touched.get(channelId);
-      if (last !== undefined && nowMs - last < intervalMs) return undefined;
-      touched.set(channelId, nowMs);
+      const recent =
+        last?.generation === generation && nowMs - last.atMs < intervalMs;
+      if (recent) return undefined;
+      touched.set(channelId, { atMs: nowMs, generation });
       return nowMs;
     },
-    settled(channelId, touchedAtMs, stored) {
-      if (stored || touched.get(channelId) !== touchedAtMs) return;
+    settled(channelId, touchedAtMs, generation, stored) {
+      const last = touched.get(channelId);
+      if (stored || last?.generation !== generation) return;
+      if (last.atMs !== touchedAtMs) return;
       touched.delete(channelId);
     },
   };
@@ -152,8 +165,7 @@ export function createChannelTouches(
 /** Commits a page or a mark, and settles the mark it carries. */
 async function commitTouch(
   touches: ChannelTouches,
-  channelId: string,
-  touchedAtMs: number | undefined,
+  mark: { channelId: string; touchedAtMs?: number; generation: string },
   commit: () => Promise<ChannelTimelineCommitCacheResult>
 ): Promise<ChannelTimelineCommitCacheResult> {
   let stored = false;
@@ -162,8 +174,9 @@ async function commitTouch(
     stored = committed.kind === 'committed';
     return committed;
   } finally {
+    const { channelId, touchedAtMs, generation } = mark;
     if (touchedAtMs !== undefined)
-      touches.settled(channelId, touchedAtMs, stored);
+      touches.settled(channelId, touchedAtMs, generation, stored);
   }
 }
 
@@ -365,10 +378,14 @@ export function touchChannel(
   channelId: string,
   generation: string
 ): void {
-  const touchedAtMs = deps.touches.due(channelId, (deps.now ?? Date.now)());
+  const touchedAtMs = deps.touches.due(
+    channelId,
+    (deps.now ?? Date.now)(),
+    generation
+  );
   if (touchedAtMs === undefined) return;
   fireAndForget(
-    commitTouch(deps.touches, channelId, touchedAtMs, () =>
+    commitTouch(deps.touches, { channelId, touchedAtMs, generation }, () =>
       deps.host.channelTimelineCommit({ channelId, touchedAtMs }, generation)
     ),
     'channel-local-sync'
@@ -498,12 +515,12 @@ async function loadPage(
     if (!unchangedSince(host, request.channelId, resets)) return null;
     const touchedAtMs = deps.touches.due(
       request.channelId,
-      (deps.now ?? Date.now)()
+      (deps.now ?? Date.now)(),
+      generation
     );
     const committed = await commitTouch(
       deps.touches,
-      request.channelId,
-      touchedAtMs,
+      { channelId: request.channelId, touchedAtMs, generation },
       () =>
         host.channelTimelineCommit(
           {

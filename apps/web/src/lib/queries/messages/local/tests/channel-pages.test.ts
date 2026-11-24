@@ -3,6 +3,7 @@ import {
   CHANNEL_TIMELINE_HEAD,
   CHANNEL_TIMELINE_START,
 } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as ChannelNetwork from '../channel-network';
 import {
@@ -62,6 +63,21 @@ function refuseFirstCommit() {
   };
 }
 
+/**
+ * Every commit sent to `host`, settled. A mark is settled as its commit
+ * answers, before a caller awaiting that answer later resumes.
+ */
+function sentCommits(host: ReturnType<typeof fakeHost>) {
+  const sent: Promise<unknown>[] = [];
+  const commit = host.channelTimelineCommit;
+  host.channelTimelineCommit = (...args) => {
+    const answer = commit(...args);
+    sent.push(answer);
+    return answer;
+  };
+  return () => Promise.allSettled(sent);
+}
+
 /** Counts every host request, the IPCs a native page would make. */
 function countingHost(...args: Parameters<typeof fakeHost>) {
   const host = fakeHost(...args);
@@ -114,7 +130,6 @@ describe('loadChannelPage', () => {
     now += CHANNEL_TOUCH_INTERVAL_MS;
     await open();
 
-    await vi.waitFor(() => expect(host.commits).toHaveLength(2));
     expect(host.commits.map((commit) => commit.touchedAtMs)).toEqual([
       1_000,
       1_000 + CHANNEL_TOUCH_INTERVAL_MS,
@@ -126,18 +141,50 @@ describe('loadChannelPage', () => {
       records: [newer],
       commit: refuseFirstCommit(),
     });
+    const answered = sentCommits(host);
     let now = 1_000;
     const deps = { host, touches: createChannelTouches(), now: () => now };
     const open = () =>
       loadChannelPage(deps, { channelId: CHANNEL_ID, limit: 50 });
 
     await open();
-    await vi.waitFor(() => expect(host.commits).toHaveLength(1));
+    await answered();
     now += 1;
     await open();
 
-    await vi.waitFor(() => expect(host.commits).toHaveLength(2));
     expect(host.commits.map((commit) => commit.touchedAtMs)).toEqual([
+      1_000, 1_001,
+    ]);
+  });
+
+  it('marks a channel opened in a new session while the old session still sends its mark', async () => {
+    const { host } = countingHost(() => devicePage([keyOf(newer)]), {
+      records: [newer],
+    });
+    const oldSession = cacheSessionGeneration.capture();
+    const oldMark = Promise.withResolvers<never>();
+    const commit = host.channelTimelineCommit;
+    host.channelTimelineCommit = (args, generation) => {
+      if (generation !== oldSession) return commit(args, generation);
+      host.commits.push(args);
+      return oldMark.promise;
+    };
+    const answered = sentCommits(host);
+    let now = 1_000;
+    const deps = { host, touches: createChannelTouches(), now: () => now };
+    const open = () =>
+      loadChannelPage(deps, { channelId: CHANNEL_ID, limit: 50 });
+
+    await open();
+    await cacheSessionGeneration.transition(async () => {}, 'test');
+    now += 1;
+    await open();
+    oldMark.reject(new StaleCacheAuthorityError());
+    await answered();
+    now += 1;
+    await open();
+
+    expect(host.commits.map((sent) => sent.touchedAtMs)).toEqual([
       1_000, 1_001,
     ]);
   });
