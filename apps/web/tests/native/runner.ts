@@ -6,7 +6,7 @@ import { type Browser, remote } from 'webdriverio';
 import {
   assertNativeRecords,
   checkpoints,
-  clippedEmailHeaderControls,
+  clippedHeaderControls,
   expectAccountInitials,
   expectRows,
   nativeHttpReachable,
@@ -125,9 +125,10 @@ async function capture(prefix = 'webview') {
   }
 }
 
-/** Fails with the cut-off controls unless the Email header settles showing all of them. */
-async function expectEmailHeaderFits(
+/** Fails with the cut-off controls unless the header settles showing all of them. */
+async function expectHeaderFits(
   session: Browser,
+  search: string,
   prefix: string,
   width: string
 ) {
@@ -135,7 +136,7 @@ async function expectEmailHeaderFits(
   try {
     await session.waitUntil(
       async () => {
-        clipped = await clippedEmailHeaderControls(session);
+        clipped = await clippedHeaderControls(session, search);
         return clipped.length === 0;
       },
       { timeout: 5000 }
@@ -143,7 +144,7 @@ async function expectEmailHeaderFits(
   } catch (error) {
     await capture(prefix);
     throw new Error(
-      `Email header controls cut off at ${width}: ${clipped.join('; ')}`,
+      `Header controls beside ${search} cut off at ${width}: ${clipped.join('; ')}`,
       { cause: error }
     );
   }
@@ -260,13 +261,14 @@ try {
   // comes back once there is room.
   const windowSize = await browser.getWindowSize();
   await browser.setWindowSize(400, 900);
-  await expectEmailHeaderFits(browser, 'narrow-header', '400px');
+  await expectHeaderFits(browser, 'Search email', 'narrow-header', '400px');
   await browser.setWindowSize(windowSize.width, windowSize.height);
   await browser
     .$('button[aria-label$="reading pane"]')
     .waitForDisplayed({ timeout: 5000 });
-  await expectEmailHeaderFits(
+  await expectHeaderFits(
     browser,
+    'Search email',
     'restored-header',
     'the restored window'
   );
@@ -288,8 +290,9 @@ try {
   }
   for (const width of [1000, 900]) {
     await session.setWindowSize(width, 900);
-    await expectEmailHeaderFits(
+    await expectHeaderFits(
       session,
+      'Search email',
       `split-header-${width}`,
       `a third of a ${width}px window`
     );
@@ -311,10 +314,39 @@ try {
   await session
     .$('button[aria-label$="reading pane"]')
     .waitForDisplayed({ timeout: 5000 });
-  await expectEmailHeaderFits(session, 'single-split-header', 'one split');
+  await expectHeaderFits(
+    session,
+    'Search email',
+    'single-split-header',
+    'one split'
+  );
   console.log(
     'PASS: Email header fits a third of a 900px window and restores its labels'
   );
+
+  // Calendar's header wraps its controls onto a second row in a narrow pane;
+  // Search events must stay inside it there too.
+  await browser.$('[data-sidebar-next-item="calendar"]').click();
+  await browser
+    .$('button[aria-label="Search events"]')
+    .waitForDisplayed({ timeout: 30_000 });
+  for (const width of [440, 400]) {
+    await browser.setWindowSize(width, 900);
+    await expectHeaderFits(
+      browser,
+      'Search events',
+      `narrow-calendar-header-${width}`,
+      `${width}px`
+    );
+  }
+  await browser.setWindowSize(windowSize.width, windowSize.height);
+  await expectHeaderFits(
+    browser,
+    'Search events',
+    'restored-calendar-header',
+    'the restored window'
+  );
+  console.log('PASS: Calendar header fits 440px and 400px windows');
 
   assert.equal(await nativeHttpReachable(browser, fixture.origin), true);
   assert(

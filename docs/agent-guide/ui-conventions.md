@@ -59,7 +59,8 @@ tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
 iconOnly`, then a menu). Decide those steps from whether the row fits with the
 shared mechanisms, `createLabelCollapse` (`@core/signal/create-label-collapse`;
 Reviews' list header, Email's list header, which hides its view options
-and then its inbox tabs' labels before Search would leave the pane, Email's phone reply buttons) or the split header's
+and then its inbox tabs' labels before Search would leave the pane, Calendar's
+period controls, which show Today as its icon first, Email's phone reply buttons) or the split header's
 `PriorityCollapse`, never a new measurement. Preserve specialized editor toolbars. A touch header
 belongs to its view's mobile view, which lists every island it shows. A new one
 shows Back, the title (tap it for the title menu), and Info, with other actions
