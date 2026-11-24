@@ -88,6 +88,14 @@ pub fn entity_filters_from_include(
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, JsonSchema)]
 pub struct UnifiedSearchRequest {
     /// The search query string. Must not be empty; one character is enough.
+    /// When the search reaches email it also reads Gmail's operators:
+    /// `subject:`, `from:`, `to:`, `cc:`, `bcc:`, `in:` a Mail view (`inbox`,
+    /// `signal`, `noise`, `archived`, `sent`, `drafts`, `calendar`, `shared`,
+    /// `favorites`) or a tag or label name, `label:`, `is:unread`, `is:read`,
+    /// `is:starred`, `is:shared`, `has:attachment`, `after:`/`before:` a day
+    /// (`2017/06/01`), `newer_than:`/`older_than:` a span (`3d`, `2w`, `1m`,
+    /// `1y`), and a minus before an operator, word or quoted phrase to leave
+    /// matching mail out. A query that types any searches email only.
     pub query: String,
 
     /// How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field.

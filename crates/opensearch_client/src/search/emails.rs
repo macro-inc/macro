@@ -9,7 +9,8 @@ use crate::{
 
 use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{
-    BoolQuery, BoolQueryBuilder, QueryType, SimpleQueryStringQuery, WildcardQuery,
+    BoolQuery, BoolQueryBuilder, QueryType, Script, ScriptQuery, SimpleQueryStringQuery,
+    WildcardQuery,
 };
 
 pub(crate) struct EmailSearchConfig;
@@ -124,6 +125,34 @@ pub struct EmailLabelCondition {
     pub labels: Vec<String>,
     pub tag_option_ids: Vec<String>,
     pub exclude: bool,
+}
+
+/// A message's sent time, read as the unified sort reads it.
+const SENT_AT_MILLIS: &str = "doc['sent_at_millis'].value.toInstant().toEpochMilli()";
+
+/// Messages sent at or after `after_millis` and before `before_millis`; mail
+/// with no sent time never matches. A range query on a date field fails the
+/// whole request under the plain highlighter unified search uses (OpenSearch
+/// 3.5), indexed or not, so the bounds are a script over the doc values.
+fn sent_between_query<'a>(
+    after_millis: Option<i64>,
+    before_millis: Option<i64>,
+) -> Option<QueryType<'a>> {
+    if after_millis.is_none() && before_millis.is_none() {
+        return None;
+    }
+    let mut conditions = vec!["doc['sent_at_millis'].size() > 0".to_string()];
+    let mut params = serde_json::Map::new();
+    if let Some(after) = after_millis {
+        conditions.push(format!("{SENT_AT_MILLIS} >= params.after"));
+        params.insert("after".to_string(), after.into());
+    }
+    if let Some(before) = before_millis {
+        conditions.push(format!("{SENT_AT_MILLIS} < params.before"));
+        params.insert("before".to_string(), before.into());
+    }
+    let script = Script::new(conditions.join(" && ")).params(serde_json::Value::Object(params));
+    Some(ScriptQuery::new(script).into())
 }
 
 /// Matches `terms`, all of them, against the address fields by segment or
@@ -456,15 +485,8 @@ impl EmailQueryBuilder {
             ));
         }
 
-        if self.sent_after_millis.is_some() || self.sent_before_millis.is_some() {
-            let mut sent = QueryType::range("sent_at_millis");
-            if let Some(after) = self.sent_after_millis {
-                sent.gte(after);
-            }
-            if let Some(before) = self.sent_before_millis {
-                sent.lt(before);
-            }
-            content_bool_query.filter(sent.build().into());
+        if let Some(sent) = sent_between_query(self.sent_after_millis, self.sent_before_millis) {
+            content_bool_query.filter(sent);
         }
 
         // CUSTOM ATTRIBUTES SECTION

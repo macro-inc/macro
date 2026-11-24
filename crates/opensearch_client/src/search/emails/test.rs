@@ -749,8 +749,41 @@ fn a_search_of_conditions_alone_keeps_the_access_filter() -> anyhow::Result<()> 
     );
     let filters = json["bool"]["filter"].as_array().unwrap();
     assert!(filters.contains(&json!({
-        "range": { "sent_at_millis": { "gte": 1_000, "lt": 2_000 } }
+        "script": {
+            "script": {
+                "source": "doc['sent_at_millis'].size() > 0 \
+                    && doc['sent_at_millis'].value.toInstant().toEpochMilli() >= params.after \
+                    && doc['sent_at_millis'].value.toInstant().toEpochMilli() < params.before",
+                "lang": "painless",
+                "params": { "after": 1_000, "before": 2_000 }
+            }
+        }
     })));
+    Ok(())
+}
+
+#[test]
+fn one_sent_bound_checks_only_that_bound() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .sent_between(None, Some(2_000));
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let script = json["bool"]["filter"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|filter| filter.get("script"))
+        .expect("the sent bound is a script filter");
+
+    assert_eq!(script["script"]["params"], json!({ "before": 2_000 }));
+    assert!(
+        !script["script"]["source"]
+            .as_str()
+            .unwrap()
+            .contains("params.after")
+    );
     Ok(())
 }
 

@@ -12,6 +12,7 @@ mod match_query;
 mod nested;
 mod range;
 mod regexp;
+mod script;
 mod simple_query_string;
 mod term;
 mod terms;
@@ -31,6 +32,7 @@ pub use match_query::MatchQuery;
 pub use nested::NestedQuery;
 pub use range::{RangeQuery, RangeQueryBuilder};
 pub use regexp::{RegexpQuery, RegexpQueryFlags};
+pub use script::ScriptQuery;
 use serde_json::Value;
 pub use simple_query_string::SimpleQueryStringQuery;
 pub use term::TermQuery;
@@ -71,6 +73,8 @@ pub enum QueryType<'a> {
     Nested(NestedQuery<'a>),
     /// Match documents with an indexed value for this field.
     Exists(Cow<'a, str>),
+    /// script query (matches documents its script returns true for)
+    Script(ScriptQuery<'a>),
 }
 
 impl<'a> ToOpenSearchJson for QueryType<'a> {
@@ -91,6 +95,7 @@ impl<'a> ToOpenSearchJson for QueryType<'a> {
             QueryType::HasChild(has_child) => has_child.to_json(),
             QueryType::Nested(nested) => nested.to_json(),
             QueryType::Exists(field) => serde_json::json!({ "exists": { "field": field } }),
+            QueryType::Script(script) => script.to_json(),
         }
     }
 }
@@ -183,6 +188,7 @@ impl<'a> QueryType<'a> {
             QueryType::HasChild(has_child) => QueryType::HasChild(has_child.to_owned()),
             QueryType::Nested(nested) => QueryType::Nested(nested.to_owned()),
             QueryType::Exists(field) => QueryType::Exists(Cow::Owned(field.to_string())),
+            QueryType::Script(script) => QueryType::Script(script.to_owned()),
         }
     }
 }
