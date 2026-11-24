@@ -360,10 +360,35 @@ jobs:
             if ($expectSigned) { Assert-Signed $file }
           }
 
+          # What the runner offers WebView2, so a runtime that cannot start can be told
+          # apart from a fault in Macro. Never fails the check.
+          try {
+            $os = Get-CimInstance Win32_OperatingSystem
+            $installation = Get-ItemPropertyValue 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name InstallationType -ErrorAction SilentlyContinue
+            $runtime = foreach ($key in @(
+                'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+                'HKCU:\Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+              )) {
+              if (Test-Path $key) { "$key = $(Get-ItemPropertyValue $key -Name pv -ErrorAction SilentlyContinue)" }
+            }
+            $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $elevated = ([Security.Principal.WindowsPrincipal]$identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+            Write-Output "Runner: $($os.Caption) $($os.Version) ($installation), session $((Get-Process -Id $PID).SessionId), interactive $([Environment]::UserInteractive), elevated $elevated"
+            Write-Output "WebView2 runtime: $(if ($runtime) { $runtime -join '; ' } else { 'not registered' })"
+          } catch {
+            Write-Output "Could not describe the runner: $_"
+          }
+
           # WebView2 reads extra Chromium switches from the environment, so the page can
-          # be inspected over the DevTools protocol like any Chromium.
+          # be inspected over the DevTools protocol like any Chromium. The runner's
+          # account is an administrator, and an elevated WebView2 host normally starts
+          # its browser processes de-elevated through the desktop shell, which a runner
+          # service has none of (CreateCoreWebView2Environment fails with 0x80080005,
+          # "Server execution failed"); --do-not-de-elevate keeps them elevated instead.
+          # This is the runner's limit, not a user's: installs are per-user and Macro
+          # never runs elevated.
           $port = 9222
-          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$port"
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$port --do-not-de-elevate"
           $env:RUST_BACKTRACE = '1'
           # The app's log and any panic go to its standard streams; keep them to show
           # when the check fails.
