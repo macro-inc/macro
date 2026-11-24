@@ -17,6 +17,8 @@ const soup = vi.hoisted(() => ({
         onCacheGenerationChanged: () => () => void;
         readRecordsByKeys: (args: { keys: string[] }) => Promise<unknown>;
         readQuery: () => Promise<unknown>;
+        /** Retired, or paused. */
+        disabled?: boolean;
         /** Paused through an outage: not handed out, but serving again later. */
         paused?: boolean;
       }
@@ -177,7 +179,14 @@ function queueingHost() {
 
 /** An outage pauses the cache: the soup client stops handing the host out. */
 function pause(host: typeof soup.host) {
-  if (host) host.paused = true;
+  if (host) Object.assign(host, { disabled: true, paused: true });
+  soup.host = undefined;
+  soup.loginChanged();
+}
+
+/** The cache is retired (logout, a failure, or a replacement): it goes quiet. */
+function retire(host: typeof soup.host) {
+  if (host) Object.assign(host, { disabled: true, paused: false });
   soup.host = undefined;
   soup.loginChanged();
 }
@@ -973,8 +982,7 @@ describe('a waiting write when the login or the cache goes', () => {
     queueingHost();
     const added = outcomeOf(addPropertyOption('def-1', TAG));
     await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
-    soup.host = undefined;
-    soup.loginChanged();
+    retire(soup.host);
     expect(isCatalogErrorCode(await added, 'CACHE_STOPPED')).toBe(true);
   });
 
@@ -1013,8 +1021,7 @@ describe('a waiting write when the login or the cache goes', () => {
     }));
     const late = vi.fn();
     await updatePropertyOption('def-1', 'opt-1', { value: 'Renamed' }, late);
-    soup.host = undefined;
-    soup.loginChanged();
+    retire(soup.host);
     await settle.drained();
     expect(late).toHaveBeenCalledTimes(1);
     expect(isCatalogErrorCode(late.mock.calls[0]?.[0], 'CACHE_STOPPED')).toBe(
@@ -1033,8 +1040,12 @@ describe('a waiting write when the login or the cache goes', () => {
     pause(held);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(ended).toBe(false);
-    // The same host serves again and reports the write.
-    if (held) held.paused = false;
+    // The same host serves again, hidden until it proves its queue readable,
+    // then reports the write.
+    if (held) Object.assign(held, { disabled: false, paused: false });
+    soup.loginChanged();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(ended).toBe(false);
     soup.host = held;
     soup.loginChanged();
     settle({ transactionId: 'tx-1', status: 'committed' });
@@ -1047,8 +1058,7 @@ describe('a waiting write when the login or the cache goes', () => {
     const added = outcomeOf(addPropertyOption('def-1', TAG));
     await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
     pause(held);
-    if (held) held.paused = false;
-    soup.loginChanged();
+    retire(held);
     expect(isCatalogErrorCode(await added, 'CACHE_STOPPED')).toBe(true);
   });
 
@@ -1066,14 +1076,33 @@ describe('a waiting write when the login or the cache goes', () => {
     expect(late).not.toHaveBeenCalled();
   });
 
+  it('waits for an add queued while its cache resumes, hidden', async () => {
+    const settle = queueingHost();
+    const held = soup.host;
+    soup.optimistic.mockImplementation(() => ({
+      toPromise: async () => {
+        // Resumed, but not handed out until it proves its queue readable.
+        soup.host = undefined;
+        soup.loginChanged();
+        return { queued: 'tx-1' };
+      },
+    }));
+    const added = outcomeOf(addPropertyOption('def-1', TAG));
+    await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    soup.host = held;
+    soup.loginChanged();
+    settle({ transactionId: 'tx-1', status: 'committed' });
+    expect(await added).toMatchObject({ property_definition_id: 'def-1' });
+  });
+
   it('keeps a commit the cache reported before it stopped', async () => {
     const settle = queueingHost();
     soup.optimistic.mockImplementation(() => ({
       toPromise: async () => {
         settle({ transactionId: 'tx-1', status: 'committed' });
         // The cache is replaced under the same login before the wait begins.
-        soup.host = undefined;
-        soup.loginChanged();
+        retire(soup.host);
         return { queued: 'tx-1' };
       },
     }));
