@@ -15,7 +15,7 @@ import { createStampFloors } from './stamp-floors';
 const NOTIFIED_FLOOR_RETENTION_MS = 5 * 60 * 1000;
 // Reactive: a GraphQL notified list maps each row in its own computation and
 // has no cache record a notification patches, so a loaded row moves up only
-// when its mapping reads the risen floor again.
+// when its mapping, which tracks the floor, runs again.
 const notifiedFloors = createStampFloors({
   retainForMs: NOTIFIED_FLOOR_RETENTION_MS,
   reactive: true,
@@ -24,6 +24,15 @@ const notifiedFloors = createStampFloors({
 /** Record a delivered notification's time as the entity's floor. */
 export function raiseNotifiedFloor(entityId: string, notifiedAt: string): void {
   notifiedFloors.raise(entityId, notifiedAt);
+}
+
+/**
+ * Subscribe the running computation to the entity's floor: it runs again when
+ * a delivered notification raises it. `resolveNotifiedAt` alone never tracks,
+ * so only a row projection that places rows by the floor pays for it.
+ */
+export function trackNotifiedFloor(entityId: string): void {
+  notifiedFloors.track(entityId);
 }
 
 /**
