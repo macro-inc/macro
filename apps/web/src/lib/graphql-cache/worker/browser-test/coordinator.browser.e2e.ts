@@ -36,7 +36,7 @@ test('three pages fence graceful, abrupt, stale, and worker-only ownership', asy
     workerOnlyWiped: boolean;
     livenessPageStayedAlive: boolean;
     livenessTerminationReason: string;
-    livenessWiped: boolean;
+    livenessPreserved: boolean;
     staleMessageDrops: number;
     staleMessagePortResponseDropped: boolean;
     pushReachedAllTabs: boolean;
@@ -59,7 +59,7 @@ test('three pages fence graceful, abrupt, stale, and worker-only ownership', asy
     workerOnlyWiped: true,
     livenessPageStayedAlive: true,
     livenessTerminationReason: 'tab liveness lock was released',
-    livenessWiped: true,
+    livenessPreserved: true,
     staleMessageDrops: 1,
     staleMessagePortResponseDropped: true,
     pushReachedAllTabs: true,
@@ -68,7 +68,7 @@ test('three pages fence graceful, abrupt, stale, and worker-only ownership', asy
     replacementStorageOutcomes: [
       [2, 'opened-existing'],
       [3, 'reset-storage-uncertain'],
-      [4, 'reset-storage-uncertain'],
+      [4, 'opened-existing'],
     ],
     protocolErrors: [],
   });

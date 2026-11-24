@@ -957,10 +957,10 @@ export class CacheCoordinatorPageAdapter {
   }
 
   private engineFailed(ownerEpoch: number, reason: string): void {
+    this.terminateEngine(ownerEpoch, reason, true);
     // A page that is leaving takes its engine with it either way.
-    const leaving = this.disposeMode === 'graceful';
-    this.terminateEngine(ownerEpoch, reason, !leaving);
-    if (leaving && !this.closed) this.departForNavigation(reason);
+    if (this.disposeMode === 'graceful' && !this.closed)
+      this.departForNavigation(reason);
   }
 
   private terminateEngine(

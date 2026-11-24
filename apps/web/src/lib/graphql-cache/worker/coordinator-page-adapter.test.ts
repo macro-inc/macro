@@ -1270,12 +1270,12 @@ describe('CacheCoordinatorPageAdapter', () => {
   it.each([
     {
       ends: 'the drain timed out',
-      departure: 'navigation-departure',
+      departure: ['navigation-departure'],
       end: () => vi.advanceTimersByTimeAsync(11),
     },
     {
       ends: 'the engine crashed',
-      departure: 'disconnect-tab',
+      departure: ['engine-lost', 'disconnect-tab'],
       end: (worker: FakeWorker) =>
         worker.onerror?.call(
           {} as AbstractWorker,
@@ -1287,7 +1287,7 @@ describe('CacheCoordinatorPageAdapter', () => {
     },
     {
       ends: 'the coordinator ended its epoch first',
-      departure: 'disconnect-tab',
+      departure: ['disconnect-tab'],
       end: (_worker: FakeWorker, port: FakeCoordinatorPort) =>
         port.receive({
           ...version,
@@ -1325,7 +1325,9 @@ describe('CacheCoordinatorPageAdapter', () => {
 
     expect(worker.terminated).toBe(true);
     expect(coordinatorPort.closed).toBe(true);
-    expect(coordinatorPort.events).toContain(`post:${departure}`);
+    expect(coordinatorPort.events).toEqual(
+      expect.arrayContaining(departure.map((kind) => `post:${kind}`))
+    );
     expect(onTerminalError).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });

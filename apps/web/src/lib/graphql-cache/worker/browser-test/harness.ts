@@ -312,7 +312,7 @@ const run = async (): Promise<Record<string, unknown>> => {
   );
   expectMiss(await command(third.tabId, { kind: 'read' }));
 
-  await command(third.tabId, { kind: 'write', value: 'liveness-wipe' });
+  await command(third.tabId, { kind: 'write', value: 'liveness-keep' });
   const thirdPage = popups.get(third.tabId);
   assert(thirdPage && !thirdPage.closed, 'liveness owner page closed early');
   await command(third.tabId, { kind: 'release-liveness-lock' });
@@ -324,20 +324,19 @@ const run = async (): Promise<Record<string, unknown>> => {
     )
   );
   assert(!thirdPage.closed, 'liveness lock release closed its page');
-  await waitUntil(
-    'epoch 4 wipe and ready',
-    () =>
-      telemetry.some(
-        (event) => event.kind === 'wipe-completed' && event.ownerEpoch === 4
-      ) &&
-      telemetry.some(
-        (event) => event.kind === 'ready' && event.ownerEpoch === 4
-      )
+  await waitUntil('epoch 4 ready', () =>
+    telemetry.some((event) => event.kind === 'ready' && event.ownerEpoch === 4)
+  );
+  assert(
+    !telemetry.some(
+      (event) => event.kind === 'wipe-completed' && event.ownerEpoch === 4
+    ),
+    'a page that left had its database wiped'
   );
   const fourth = latestOwner(4);
   assert(fourth, 'missing epoch 4 owner');
   await verifyOwnerLock(4);
-  expectMiss(await command(fourth.tabId, { kind: 'read' }));
+  expectHit(await command(fourth.tabId, { kind: 'read' }), 'liveness-keep');
 
   const result = {
     passed: true,
@@ -361,7 +360,7 @@ const run = async (): Promise<Record<string, unknown>> => {
     livenessTerminationReason: terminated.find(
       (event) => event.ownerEpoch === 3
     )?.reason,
-    livenessWiped: true,
+    livenessPreserved: true,
     staleMessageDrops: Math.max(
       0,
       ...telemetry.map((event) => event.snapshot?.staleMessageDrops ?? 0)

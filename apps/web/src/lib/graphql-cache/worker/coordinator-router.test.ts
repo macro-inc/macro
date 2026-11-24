@@ -2129,7 +2129,8 @@ describe('CoordinatorRouter', () => {
     ready(engine, 'tab-b', 2, 'wiped-before-open');
     await vi.advanceTimersByTimeAsync(6);
     expect(messagesOfKind(engine, 'heartbeat')).toHaveLength(1);
-    await vi.advanceTimersByTimeAsync(8);
+    // The missed heartbeat, then the time its page has to be found gone.
+    await vi.advanceTimersByTimeAsync(8 + 5);
     expect(messagesOfKind(tabB, 'terminate-engine')).toContainEqual(
       expect.objectContaining({
         ownerEpoch: 2,
@@ -2140,14 +2141,12 @@ describe('CoordinatorRouter', () => {
     expect(router.snapshot()?.ownerEpoch).toBe(3);
   });
 
-  it('keeps the database when the released owner lock is that of a page that left', async () => {
+  it('keeps the database when the opening deadline finds the page gone', async () => {
     vi.useFakeTimers();
     let pageAlive = true;
     const router = new CoordinatorRouter({
-      heartbeatIntervalMs: 5,
-      heartbeatTimeoutMs: 7,
+      activationTimeoutMs: 10,
       verifyTabLockHeld: async () => pageAlive,
-      verifyOwnerLockHeld: async () => pageAlive,
       watchTabLock: () => () => {},
     });
     const tabA = new FakePort();
@@ -2156,10 +2155,12 @@ describe('CoordinatorRouter', () => {
     await register(router, tabB, 'tab-b');
     const engine = new FakePort();
     await attach(router, tabA, 'tab-a', 1, engine);
-    ready(engine, 'tab-a', 1, 'opened-existing');
+    const owner = { ...version, tabId: 'tab-a', ownerEpoch: 1 };
+    engine.receive({ ...owner, kind: 'engine-assets-ready' });
+    engine.receive({ ...owner, kind: 'owner-lock-acquired' });
 
     pageAlive = false;
-    await vi.advanceTimersByTimeAsync(14);
+    await vi.advanceTimersByTimeAsync(11);
 
     expect(messagesOfKind(tabB, 'become-owner')).toEqual([
       expect.objectContaining({
@@ -2167,8 +2168,78 @@ describe('CoordinatorRouter', () => {
         databaseAction: 'open-existing',
       }),
     ]);
-    expect(router.snapshot()?.tabIds).toEqual(['tab-b']);
   });
+
+  it('keeps an owner that becomes ready while its deadline looks for its page', async () => {
+    vi.useFakeTimers();
+    const page = Promise.withResolvers<boolean>();
+    let registered = false;
+    const router = new CoordinatorRouter({
+      activationTimeoutMs: 10,
+      verifyTabLockHeld: () =>
+        registered ? page.promise : Promise.resolve(true),
+      watchTabLock: () => () => {},
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a');
+    registered = true;
+    const engine = new FakePort();
+    await attach(router, tab, 'tab-a', 1, engine);
+    const owner = { ...version, tabId: 'tab-a', ownerEpoch: 1 };
+    engine.receive({ ...owner, kind: 'engine-assets-ready' });
+    engine.receive({ ...owner, kind: 'owner-lock-acquired' });
+    await vi.advanceTimersByTimeAsync(11);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    page.resolve(true);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'active',
+      ownerEpoch: 1,
+    });
+    expect(messagesOfKind(tab, 'terminate-engine')).toEqual([]);
+  });
+
+  it.each([
+    ['before its page', 1],
+    ['along with its page', 0],
+  ])(
+    'keeps the database when the owner lock of a page that leaves is released %s',
+    async (_order, pageLagMs) => {
+      vi.useFakeTimers();
+      let pageAlive = true;
+      let engineAlive = true;
+      const router = new CoordinatorRouter({
+        heartbeatIntervalMs: 5,
+        heartbeatTimeoutMs: 7,
+        verifyTabLockHeld: async () => pageAlive,
+        verifyOwnerLockHeld: async () => engineAlive,
+        watchTabLock: () => () => {},
+      });
+      const tabA = new FakePort();
+      const tabB = new FakePort();
+      await register(router, tabA, 'tab-a');
+      await register(router, tabB, 'tab-b');
+      const engine = new FakePort();
+      await attach(router, tabA, 'tab-a', 1, engine);
+      ready(engine, 'tab-a', 1, 'opened-existing');
+
+      engineAlive = false;
+      // The probe of the missed heartbeat finds the lock free.
+      await vi.advanceTimersByTimeAsync(12);
+      await vi.advanceTimersByTimeAsync(pageLagMs);
+      pageAlive = false;
+      await vi.advanceTimersByTimeAsync(6);
+
+      expect(messagesOfKind(tabB, 'become-owner')).toEqual([
+        expect.objectContaining({
+          ownerEpoch: 2,
+          databaseAction: 'open-existing',
+        }),
+      ]);
+      expect(router.snapshot()?.tabIds).toEqual(['tab-b']);
+    }
+  );
 
   it('fails its owner without arming a watchdog when heartbeat send fails', async () => {
     vi.useFakeTimers();

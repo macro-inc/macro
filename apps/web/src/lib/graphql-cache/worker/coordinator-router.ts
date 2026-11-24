@@ -1193,26 +1193,23 @@ export class CoordinatorRouter {
     // it. Resume the phase budget when there is a visible consumer again.
     if (!this.coreValue?.hasVisibleTab) return;
     const { phase, timeoutMs } = progress;
-    this.activationTimer = this.setTimeoutFn(() => {
-      this.failOwner(
+    const reason = match(phase)
+      .with('loading-assets', () => 'engine asset loading watchdog timed out')
+      .with('awaiting-owner-lock', () => 'engine owner lock watchdog timed out')
+      .with(
+        'opening-database',
+        () => 'engine database opening watchdog timed out'
+      )
+      .exhaustive(() => 'engine startup watchdog timed out');
+    const timer = this.setTimeoutFn(() => {
+      this.endSilentOwner(
         tabId,
         ownerEpoch,
-        match(phase)
-          .with(
-            'loading-assets',
-            () => 'engine asset loading watchdog timed out'
-          )
-          .with(
-            'awaiting-owner-lock',
-            () => 'engine owner lock watchdog timed out'
-          )
-          .with(
-            'opening-database',
-            () => 'engine database opening watchdog timed out'
-          )
-          .exhaustive(() => 'engine startup watchdog timed out')
-      );
+        reason,
+        () => this.activationTimer === timer
+      ).catch(reportCoordinatorTaskFailure);
     }, timeoutMs);
+    this.activationTimer = timer;
   }
 
   /** Tab ids holding this scope's liveness locks without registering here,
@@ -1733,44 +1730,62 @@ export class CoordinatorRouter {
     // recovery while the page is still suspended. Only a released physical
     // owner lock confirms silent worker death (terminate() emits no error).
     let lockHeld: boolean;
-    let pageGone = false;
     try {
       lockHeld = await this.verifyOwnerLockHeld(
         databaseOwnerLockName(core.scope)
       );
-      // A page that is gone took its worker along, and the news of it may
-      // not have arrived yet. That is a page leaving, not an engine failing.
-      pageGone =
-        !lockHeld &&
-        !(await this.verifyTabLockHeld(
-          tabLivenessLockName(core.scope, route.tabId)
-        ));
     } catch {
       // A failed probe is not proof of owner loss either. Retry later.
       lockHeld = true;
     }
     // The ack, a graceful drain, or another failure may have won the race
     // while the lock probe was pending. Never act on that stale observation.
-    if (
-      this.engineRoute !== route ||
-      this.pendingHeartbeat?.ownerEpoch !== route.ownerEpoch ||
-      this.pendingHeartbeat.heartbeatId !== heartbeatId
-    ) {
+    const silent = () =>
+      this.engineRoute === route &&
+      this.pendingHeartbeat?.ownerEpoch === route.ownerEpoch &&
+      this.pendingHeartbeat.heartbeatId === heartbeatId;
+    if (!silent()) return;
+    if (lockHeld) {
+      this.scheduleHeartbeat(route.ownerEpoch);
       return;
     }
-    if (pageGone) {
-      this.loseTab(route.tabId, 'tab liveness lock was released');
-      return;
-    }
-    if (!lockHeld) {
-      this.failOwner(
+    // A page that is leaving frees its engine's lock, frees its own and says
+    // goodbye, and these can arrive in any order. Give the rest time.
+    this.heartbeatTimeoutTimer = this.setTimeoutFn(() => {
+      this.endSilentOwner(
         route.tabId,
         route.ownerEpoch,
-        'engine owner lock was released'
-      );
-      return;
+        'engine owner lock was released',
+        silent
+      ).catch(reportCoordinatorTaskFailure);
+    }, this.heartbeatIntervalMs);
+  }
+
+  /**
+   * Ends an owner whose engine went silent. A page that is gone took its engine
+   * along, and the news of it may not have arrived yet: that is a page leaving,
+   * not an engine failing.
+   */
+  private async endSilentOwner(
+    tabId: string,
+    ownerEpoch: number,
+    reason: string,
+    silent: () => boolean
+  ): Promise<void> {
+    const core = this.coreValue;
+    if (!core) return;
+    let pageGone: boolean;
+    try {
+      pageGone = !(await this.verifyTabLockHeld(
+        tabLivenessLockName(core.scope, tabId)
+      ));
+    } catch {
+      pageGone = false;
     }
-    this.scheduleHeartbeat(route.ownerEpoch);
+    // An answer or another failure may have won the race.
+    if (!silent()) return;
+    if (pageGone) this.loseTab(tabId, 'tab liveness lock was released');
+    else this.failOwner(tabId, ownerEpoch, reason);
   }
 
   private acceptHeartbeat(ownerEpoch: number, heartbeatId: number): void {
