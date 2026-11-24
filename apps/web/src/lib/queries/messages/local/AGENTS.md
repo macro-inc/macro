@@ -82,7 +82,11 @@ TanStack path in `../` runs untouched. A host whose database is away for now
 - Write: `channel-writes.ts` enqueues the `*ChannelMessage` mutations on the
   durable cache mutation queue and waits for their settlement; a retired host
   (`graphql-soup.ts` cleanup, or recovery given up until a reload) ends the
-  writes still waiting, `CACHE_RETIRED`. When the cache session changes (the
+  writes still waiting, `CACHE_RETIRED`, and the one being handed over, after
+  `RETIRED_ANSWER_BUDGET_MS` once it was acknowledged. A write goes out only
+  under the sign-in it was asked for under (`signIn`): one still waiting its
+  turn as another replaces it on the same host ends `CACHE_RETIRED`. When the
+  cache session changes (the
   engine returned from the back/forward cache, or reset), a waiting write asks
   the queue whether it still holds the write: if not, an
   edit, delete or reaction resolves only when the device copy shows it
@@ -104,9 +108,8 @@ TanStack path in `../` runs untouched. A host whose database is away for now
   failed reply back through the thread's stored draft, which every open reply
   input holds (`features/channel/Thread/reply-drafts.ts`): a view opened later
   shows it, a newer draft in any view is kept (a quote builds on it too), and
-  nothing is written back by a composer that was open before or during a
-  sign-out, or before a sign-in replaced its session
-  (`composerStorageWritable`). A queue that
+  a reply sent before or during a sign-out, or before a sign-in replaced its
+  session, is not written back (`composerStorageWritable`). A queue that
   cannot be read is asked again with backoff, except after a reset, which ends
   the write with `CACHE_RESET`. A reset and a retired host fail only edits,
   deletes and reactions: a send already handed to the queue may have left it, so
@@ -116,8 +119,9 @@ TanStack path in `../` runs untouched. A host whose database is away for now
   (`graphql-mutation-retry.ts`): the server dedupes them by message id, while a
   replayed edit or reaction could undo a newer one; every write is still sent
   again after a transport failure. A send the queue stops retrying, or whose
-  commit the device could not store, answers the same way, from the device copy
-  first; one that never reached the queue (`write-not-admitted`) is a refusal.
+  answer the device could not store (`LOCAL_COMMIT_FAILED`), answers the same
+  way, from the device copy first; an edit, delete or reaction it could not
+  store is on the server and resolves. One that never reached the queue (`write-not-admitted`) is a refusal.
   A write whose enqueue lost its
   answer (`ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE`) looks for its mutation id in
   the queue: it waits for the one it finds, answers as a write that left the
@@ -129,7 +133,7 @@ TanStack path in `../` runs untouched. A host whose database is away for now
   and each read of it again run in one `channel.load_page` span.
 - Outage: while the host is `paused` (or being proven readable again after it
   answered, or was away, before: `sessionChannelHost` in `channel-flag.ts`),
-  open channels stay as they are, new ones load from the server unheld, and
+  open channels keep what they show, new ones load from the server unheld, and
   writes wait (`channel.write.await_cache`) for the queue. A channel's writes
   reach it in the order they were asked for, each once the one before has been
   handed over (`takeTurn`), and only a host the session serves from takes them
@@ -137,8 +141,11 @@ TanStack path in `../` runs untouched. A host whose database is away for now
   (`holdWhilePaused`, `CachePausedError`) instead of sent straight out, and
   handed over again. `restartCache` in `graphql-soup.ts` ends the outage by
   calling `resumed()` on the host's runtime, which catches up the channels on
-  screen and reloads what they could not hold, and on its writes. A window that
-  was still storing a page then is loaded again if the store fails. A host the
+  screen and reloads what they could not hold, and on its writes. An engine
+  replaced over its storage without a pause resumes them too
+  (`channel-sync.ts`). A window that was still loading or storing a page then
+  is loaded again if that fails, as far as the reader had paged, and replaced
+  only once all of it is read. A host the
   page stops trying to prove (`recovery-required`) is retired, and channels go
   over REST until a reload.
 - Ahead: `channel-prewarm.ts` fetches unread then recent channels while the

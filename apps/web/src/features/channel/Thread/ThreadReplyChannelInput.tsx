@@ -78,10 +78,6 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
 
   const userId = useUserId();
   const sendMessageMutation = useSendMessageMutation();
-  // Taken as the input mounts, not as it sends: sign-out clears composer
-  // storage before it signs the user out, and a send in between must not
-  // write its draft back.
-  const storageGeneration = composerStorageGeneration();
   const typingMutation = usePostTypingUpdateMutation();
   const channelBotMentionUsers = useMessageBotMentionUsers(() => props.parent);
 
@@ -186,6 +182,10 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         };
         const optimisticId = UNCERTAIN_REPLIES.idFor(uncertainKey);
         const keys = draftKeys();
+        // Taken as it sends: an input can outlive a sign-in, and a send after
+        // it may restore its draft. One during a sign-out's clear may not,
+        // which `composerStorageWritable` refuses.
+        const storageGeneration = composerStorageGeneration();
         // Awaited, not `mutate`'s per-call `onError`: the input unmounts as
         // it sends, and TanStack drops a call's callbacks once its observer
         // is gone, which would lose the draft.

@@ -2111,7 +2111,8 @@ fails and the composer is still empty, its text, mentions, and attachments retur
 A new draft typed during delivery stays intact if the earlier send fails. A
 reply composer that closed as it sent puts a failed reply back in the thread's
 stored draft, so reopening the thread shows it, and a newer draft typed in
-another view of the thread is kept. Verify this with both the Send button on a
+another view of the thread is kept. A send that fails after a sign-out, or after
+a sign-in replaced the session it was sent under, restores nothing. Verify this with both the Send button on a
 phone and the desktop composer, and for a reply by closing and reopening the
 thread while the reply is pending.
 
