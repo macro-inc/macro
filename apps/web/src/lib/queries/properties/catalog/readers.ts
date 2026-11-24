@@ -51,7 +51,7 @@ type ReaderVariant =
         scope: 'USER' | 'TEAM';
         definitionId: string;
       }>;
-      /** The sets the list shows now. */
+      /** The sets the list shows now, unless the server refused the list. */
       sets: () => readonly TagSetResponse[];
     };
 
