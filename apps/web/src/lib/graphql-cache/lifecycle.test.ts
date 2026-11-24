@@ -294,6 +294,39 @@ describe('clearRegisteredCaches', () => {
     vi.useRealTimers();
   });
 
+  it('leaves no rejection unhandled when a wipe fails after its logout', async () => {
+    vi.useFakeTimers();
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    const {
+      clearRegisteredCaches,
+      LOGOUT_CLEAR_TIMEOUT_MS,
+      registerCacheHost,
+    } = await import('./lifecycle');
+    const wipes: ((error: Error) => void)[] = [];
+    const recover = vi.fn();
+    registerCacheHost(
+      {
+        ...createNoopCacheHost(),
+        disabled: false,
+        clear: () => new Promise<never>((_, reject) => wipes.push(reject)),
+      },
+      recover,
+      LOGOUT_CLEAR_TIMEOUT_MS
+    );
+    const clearing = clearRegisteredCaches();
+    await vi.advanceTimersByTimeAsync(LOGOUT_CLEAR_TIMEOUT_MS);
+    await clearing;
+    vi.useRealTimers();
+
+    wipes[0]?.(new Error('owner lost'));
+    // Node reports one a turn after the rejection.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    process.off('unhandledRejection', unhandled);
+    expect(recover).toHaveBeenCalledOnce();
+    expect(unhandled).not.toHaveBeenCalled();
+  });
+
   it('waits for a cache registered without a limit, and keeps its scope', async () => {
     vi.useFakeTimers();
     localStorage.setItem('graphql-cache:scope', 'current-scope');
