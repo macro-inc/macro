@@ -275,6 +275,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/initiative/<uuid>` | Shared project link; opens the project in Tasks |
 | `/app/component/initiative-view~<uuid>~overview` | Compatibility link that opens the project in Tasks |
 | `/app/agents/<uuid>` | Chat agent session with the Agents sidebar |
+| `/app/screen/<harnessId>` | An agent teammate's computer screen: watch, and take over as an owner or admin ([agent-screen.md](agent-screen.md)) |
 | `/app/coders/<uuid>` | Code session with the Agents sidebar |
 | `/app/agents/chat/<uuid>` | Legacy AI chat opened in the Agents workspace (`/app/agent-chats/<uuid>` remains a compatibility alias) |
 | `/app/calls` | Calls list |

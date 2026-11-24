@@ -1,5 +1,11 @@
+import {
+  useOpenAgentScreen,
+  useOpenAgentScreenInPlace,
+} from '@app/features/agent-screen/screen-user-action';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
+import { useSettingsState } from '@core/constant/SettingsState';
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
@@ -147,6 +153,9 @@ function ManagedComputerRow(props: {
       : undefined
   );
   const power = useSetComputerPowerMutation();
+  const openScreen = useOpenAgentScreen();
+  const openScreenInPlace = useOpenAgentScreenInPlace();
+  const { closeSettings } = useSettingsState();
   const cancel = useCancelComputerMutation();
   const undoCancel = useUndoCancelComputerMutation();
   const restore = useRestoreComputerMutation();
@@ -334,6 +343,25 @@ function ManagedComputerRow(props: {
     const canPower =
       canTogglePower(computer) &&
       (computer.poweredOn || computer.billing !== 'ended');
+    // Any team member may watch a running computer's screen.
+    const harnessId = computer.harnessId;
+    if (harnessId && computer.poweredOn) {
+      items.push({
+        label: t('agentScreen.viewScreen'),
+        icon: 'screen',
+        onSelect: () => {
+          // Phones show Settings as a sheet over the page: close it and open
+          // the screen there. Elsewhere the screen takes Settings' split, so
+          // it is in front and Back returns to Machines.
+          if (isMobile()) {
+            closeSettings();
+            openScreen(harnessId);
+            return;
+          }
+          openScreenInPlace(harnessId);
+        },
+      });
+    }
     // Retry setup is the row's action; the menu keeps the rest.
     if (props.canManage && computer.status === 'failed' && !primary()) {
       items.push({
