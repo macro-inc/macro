@@ -57,6 +57,17 @@ fn gpt_6_cache_write_lifetimes_count_only_at_the_default_lifetime() {
         TrustedTokenUsage::from_inclusive_totals(100, 16, 40, 20, 9).ok()
     );
     assert!(normalize(WireProtocol::Responses, &usage(0, 20)).is_none());
+    // A breakdown that does not sum to the total leaves neither count trusted.
+    for total in [json!(0), json!(19), Value::Null] {
+        let mut mismatched = usage(20, 0);
+        let details = mismatched["input_tokens_details"].as_object_mut().unwrap();
+        if total.is_null() {
+            details.remove("cache_write_tokens");
+        } else {
+            details.insert("cache_write_tokens".to_owned(), total);
+        }
+        assert!(normalize(WireProtocol::Responses, &mismatched).is_none());
+    }
     let mut malformed = usage(20, 0);
     malformed["input_tokens_details"]["cache_write_tokens_details"]["ttl_30m_tokens"] = json!("20");
     assert!(normalize(WireProtocol::Responses, &malformed).is_none());
