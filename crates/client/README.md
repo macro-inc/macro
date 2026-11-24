@@ -110,10 +110,10 @@ entry not held) the watermark is dropped, so answers may arrive in any order.
 A page, a run of changes or a push is one write: its `channelCommit` names what
 the response proves (coverage, how the watermark moves, removed ids, a reset),
 and records, rows, coverage and watermark are stored in one transaction. A page
-lowers the watermark, unless it is 1,000 changes behind; changes advance it only when they continue it, and the
-outcome (`applied`, `stale`, `gap`, `unheld`) tells the host what to ask next. A
-bound of a covered stretch counts only when the page lists it or the device's
-coverage already reaches it. A response without a `seq` never adds a row. A row
+lowers the watermark, unless it is 1,000 changes behind; changes advance it only
+when they continue it, and the outcome (`applied`, `stale`, `gap`, `unheld`)
+tells the host what to ask next. A bound of a covered stretch counts only when
+the page lists it or the device's coverage already reaches it. A response without a `seq` never adds a row. A row
 has one `seq` for the whole record, so every selection of a message under a `seq`
 uses the same fragment, and one response selects a message under a `seq` or not.
 The removal of an entry a queued write changes is kept until the write settles.
