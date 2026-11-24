@@ -52,10 +52,11 @@ async fn claim(repo: &PgMailboxSync) -> StreamLease {
         .unwrap()
 }
 
-/// Seconds from now until the stream is due again.
-async fn due_in_seconds(db: &PgPool, stream: Uuid) -> f64 {
+/// Seconds from the checkpoint until the stream is due again; the commit
+/// sets both from the same `now()`.
+async fn poll_interval_seconds(db: &PgPool, stream: Uuid) -> f64 {
     sqlx::query_scalar!(
-        r#"SELECT EXTRACT(EPOCH FROM next_run_at - now())::float8 AS "seconds!" FROM email_sync_streams WHERE id = $1"#,
+        r#"SELECT EXTRACT(EPOCH FROM next_run_at - last_completed_at)::float8 AS "seconds!" FROM email_sync_streams WHERE id = $1"#,
         stream
     )
     .fetch_one(db)
@@ -75,8 +76,7 @@ async fn a_mailbox_with_a_working_subscription_is_polled_every_ten_minutes(db: P
         .unwrap();
 
     assert_eq!(committed.next_poll_seconds, Some(600));
-    let due = due_in_seconds(&db, lease.id).await;
-    assert!((590.0..=600.0).contains(&due), "due in {due} s");
+    assert_eq!(poll_interval_seconds(&db, lease.id).await, 600.0);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -123,10 +123,10 @@ async fn a_mailbox_without_a_working_subscription_is_polled_every_two_minutes(db
             Some(120),
             "a subscription {case}"
         );
-        let due = due_in_seconds(&db, lease.id).await;
-        assert!(
-            (110.0..=120.0).contains(&due),
-            "a subscription {case}: due in {due} s"
+        assert_eq!(
+            poll_interval_seconds(&db, lease.id).await,
+            120.0,
+            "a subscription {case}"
         );
     }
 }
@@ -150,7 +150,7 @@ async fn a_notification_during_the_read_leaves_a_subscribed_folder_due(db: PgPoo
         .unwrap();
 
     assert_eq!(committed.next_poll_seconds, None);
-    assert!(due_in_seconds(&db, lease.id).await <= 0.0);
+    assert_eq!(poll_interval_seconds(&db, lease.id).await, 0.0);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

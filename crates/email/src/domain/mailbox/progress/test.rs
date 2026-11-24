@@ -79,6 +79,7 @@ impl MailboxProgressRepository for LineUnavailable {
             oldest_waiting_seconds: 0,
             parked_until_max_seconds: 0,
             streams_incomplete: 0,
+            import_round_wait_seconds: 0,
             imported_5m: 0,
             seconds_since_last_import: None,
             sync_active: true,
