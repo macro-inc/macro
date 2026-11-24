@@ -463,3 +463,10 @@ async fn whether_hubspot_is_connected_is_known_without_reading_it() {
     let (_, service) = connected(Vec::new());
     assert!(connections(service).connected(&user()).await.unwrap());
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_page_without_results_fails_instead_of_reading_as_empty() {
+    let (_, service) = connected(vec![fixture("account"), answer(StatusCode::OK, "{}")]);
+    let result = connections(service).inventory(&user(), &|_| {}).await;
+    assert!(matches!(result, Err(HubspotError::Decode(_))), "{result:?}");
+}

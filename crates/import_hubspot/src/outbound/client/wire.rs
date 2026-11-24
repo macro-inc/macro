@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer};
 
 #[derive(Debug, Deserialize)]
 pub(super) struct Page<T> {
-    #[serde(default = "Vec::new")]
+    /// Required: a page without it is not an empty page.
     pub results: Vec<T>,
     pub paging: Option<Paging>,
 }
