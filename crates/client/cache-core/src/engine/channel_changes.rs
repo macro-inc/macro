@@ -100,7 +100,7 @@ impl<S: Storage> Engine<S> {
         &self,
         keys: &[EntityKey<'static>],
     ) -> Result<(Vec<EntityKey<'static>>, ChannelChanges), EngineError<S::Error>> {
-        let mut keys = without_metadata(keys).into_owned();
+        let mut keys = without_metadata(keys);
         let query = ChannelGuardQuery {
             keys: keys
                 .iter()

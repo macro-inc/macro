@@ -78,7 +78,6 @@ use predicate_index::{
     OptimisticProjectionMutation, RecordKey as PredicateRecordKey, ValidatedIndexQuery,
 };
 use serde_json::Value as Json;
-use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::num::NonZeroUsize;
 use thiserror::Error;
@@ -475,20 +474,11 @@ const METADATA_KEY_PREFIX: &str = "__meta:";
 /// while its records stay would let the next account bind over them, and the
 /// engine keeps the witness and authority in memory besides; only a reset or
 /// clear removes them.
-fn without_metadata<'k>(keys: &'k [EntityKey<'static>]) -> Cow<'k, [EntityKey<'static>]> {
-    if keys
-        .iter()
-        .any(|key| key.0.starts_with(METADATA_KEY_PREFIX))
-    {
-        Cow::Owned(
-            keys.iter()
-                .filter(|key| !key.0.starts_with(METADATA_KEY_PREFIX))
-                .cloned()
-                .collect(),
-        )
-    } else {
-        Cow::Borrowed(keys)
-    }
+fn without_metadata(keys: &[EntityKey<'static>]) -> Vec<EntityKey<'static>> {
+    keys.iter()
+        .filter(|key| !key.0.starts_with(METADATA_KEY_PREFIX))
+        .cloned()
+        .collect()
 }
 
 /// Hydration/binding state of the session identity tag for this cache.
