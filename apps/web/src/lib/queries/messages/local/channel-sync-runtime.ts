@@ -560,6 +560,8 @@ export function createChannelSyncRuntime(
     let after = repair !== undefined && repair < from ? repair : from;
     let changes = 0;
     let rereads = 0;
+    // Pages a read lowered the device under, read again without counting.
+    let lowered = 0;
     // Frames that stored while a page was out: each later page that lands
     // covers those it commits through.
     const covering: bigint[] = [];
@@ -570,7 +572,7 @@ export function createChannelSyncRuntime(
     // reaches that frame, and raises it to itself before then.
     let pageRepair: bigint | undefined;
     let pageRepairUntil: bigint | undefined;
-    for (let page = 0; page < MAX_CHANGE_PAGES + rereads; page += 1) {
+    for (let page = 0; page < MAX_CHANGE_PAGES + rereads + lowered; page += 1) {
       // The page carries the records changed after this cursor, as they are
       // when it is read.
       const asked = after;
@@ -602,6 +604,9 @@ export function createChannelSyncRuntime(
         yield* release;
         state.current = false;
         after = state.seq;
+        // Not this catch-up's own reading: it does not spend the page budget
+        // (bounded, since reads that lower the device are finite).
+        if (lowered < MAX_CHANGE_PAGES) lowered += 1;
         continue;
       }
       const stored = state.seq ?? from;
@@ -728,30 +733,34 @@ export function createChannelSyncRuntime(
     noteChannelReset(deps.host, channelId);
     // Once no fill in any tab is between its store and its coverage; one
     // that holds the fence too long cannot keep the channel from resetting.
-    yield* inCommitSpan(span, 'reset', MAX_CHANGE_PAGES + rereads, (child) =>
-      Effect.tryPromise(() =>
-        whileNoFills(
-          () => {
-            const pending = child.run(() =>
-              deps.host.channelTimelineCommit(
-                { channelId, reset: true },
-                generation
-              )
-            );
-            // Counted again once it answers, for a fill that read after the
-            // fence let it go.
-            fireAndForget(
-              whenAnswered(pending, () =>
-                noteChannelReset(deps.host, channelId)
-              ),
-              'channel-sync'
-            );
-            // Bounded like any commit, so an unanswered one frees the channel.
-            return run(bounded(channelId, pending));
-          },
-          { orRun: true, waitMs: RESET_FENCE_WAIT_MS }
+    yield* inCommitSpan(
+      span,
+      'reset',
+      MAX_CHANGE_PAGES + rereads + lowered,
+      (child) =>
+        Effect.tryPromise(() =>
+          whileNoFills(
+            () => {
+              const pending = child.run(() =>
+                deps.host.channelTimelineCommit(
+                  { channelId, reset: true },
+                  generation
+                )
+              );
+              // Counted again once it answers, for a fill that read after the
+              // fence let it go.
+              fireAndForget(
+                whenAnswered(pending, () =>
+                  noteChannelReset(deps.host, channelId)
+                ),
+                'channel-sync'
+              );
+              // Bounded like any commit, so an unanswered one frees the channel.
+              return run(bounded(channelId, pending));
+            },
+            { orRun: true, waitMs: RESET_FENCE_WAIT_MS }
+          )
         )
-      )
     );
     state.seq = null;
     state.held.clear();
@@ -998,7 +1007,7 @@ export function createChannelSyncRuntime(
         // Nothing stored, or the device kept rows the server has since
         // changed or deleted: only a catch-up replays those.
         state.current = false;
-        if (state.seq !== null && isConnected)
+        if (state.seq !== null && isConnected && !state.pending)
           scheduleCatchUp(channelId, 'gap');
         return;
       }
@@ -1008,7 +1017,7 @@ export function createChannelSyncRuntime(
         // applied, which only another catch-up replays.
         if (state.seq !== before) {
           state.current = false;
-          if (isConnected) scheduleCatchUp(channelId, 'gap');
+          if (isConnected && !state.pending) scheduleCatchUp(channelId, 'gap');
         }
         return;
       }

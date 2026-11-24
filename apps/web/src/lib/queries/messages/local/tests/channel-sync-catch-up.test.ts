@@ -1795,3 +1795,105 @@ it('catches up when a read finds the device below what it read', async () => {
     test.stop();
   }
 });
+
+type CatchUpTest = ReturnType<typeof setup>;
+const settle = () => vi.advanceTimersByTimeAsync(550);
+
+async function fillAt(test: CatchUpTest, read: string, epoch: number) {
+  const loaded = await test.host.channelTimelineCommit({
+    channelId: CHANNEL_ID,
+    seq: { kind: 'lower', seq: read },
+  });
+  test.runtime.noteServerRead(CHANNEL_ID, loaded.channelSeq, epoch, read);
+}
+
+it('does not spend the page budget on pages a read lowered the device under', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('fetch', () => {
+    throw new Error('review forbids external fetch');
+  });
+  const test = setup();
+  try {
+    const oldEpoch = test.runtime.epoch();
+    await settle();
+    test.requests[0].answer(delta('15', { messages: [graphqlMessage(15)] }));
+    await settle();
+    expect(test.seq()).toBe('15');
+
+    test.reconnect();
+    await settle();
+    expect(cursors(test)).toEqual(['5', '15']);
+
+    await fillAt(test, '10', oldEpoch);
+    test.requests[1].answer(
+      delta('215', { hasMore: true, messages: [graphqlMessage(215)] })
+    );
+    await settle();
+    expect(cursors(test)).toEqual(['5', '15', '10']);
+
+    await fillAt(test, '5', oldEpoch);
+    test.requests[2].answer(
+      delta('210', { hasMore: true, messages: [graphqlMessage(210)] })
+    );
+    await settle();
+
+    // The head is 905 throughout. The final rewind needs just five pages,
+    // within the server's 1,000-change replay window.
+    const head = 905;
+    for (const [index, after] of [5, 205, 405, 605, 805].entries()) {
+      const request = test.requests[3 + index];
+      if (!request) break;
+      expect(request.after).toBe(String(after));
+      const to = Math.min(after + 200, head);
+      request.answer(
+        delta(String(to), {
+          hasMore: to < head,
+          messages: [graphqlMessage(to)],
+        })
+      );
+      await settle();
+    }
+    expect({
+      cursors: cursors(test).slice(3),
+      resets: test.commits.filter(({ reset }) => reset).length,
+      seq: test.seq(),
+    }).toEqual({
+      cursors: ['5', '205', '405', '605', '805'],
+      resets: 0,
+      seq: '905',
+    });
+  } finally {
+    test.stop();
+    vi.unstubAllGlobals();
+  }
+});
+
+it('keeps the retry wait when reads find the device behind during an outage', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('fetch', () => {
+    throw new Error('review forbids external fetch');
+  });
+  const test = setup();
+  try {
+    await settle();
+    expect(cursors(test)).toEqual(['5']);
+    test.requests[0].fail();
+    await vi.advanceTimersByTimeAsync(0);
+    const epoch = test.runtime.epoch();
+
+    // Three server pages load and cache normally. The replay endpoint keeps
+    // returning 503, so the stored sequence remains 5 across the fills.
+    for (let load = 0; load < 3; load += 1) {
+      const seen = test.requests.length;
+      await fillAt(test, '7', epoch);
+      await settle();
+      for (const request of test.requests.slice(seen)) request.fail();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(test.seq()).toBe('5');
+    }
+    expect(cursors(test)).toEqual(['5']);
+  } finally {
+    test.stop();
+    vi.unstubAllGlobals();
+  }
+});
