@@ -122,6 +122,8 @@ type Pending = {
   startedAt: number;
   /** Waiting for an owner, which a hidden page may do for as long as it likes. */
   waiting: boolean;
+  /** Kept through a blocked handoff, with the time left for the whole of it. */
+  keptForOwner: boolean;
   stopTimeout?: () => void;
 };
 
@@ -571,7 +573,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       if (isInitializationRequest(entry.kind)) {
         entry.stopTimeout?.();
         entry.stopTimeout = undefined;
-      } else if (isReadOnlyCacheRequest(entry.kind) && !entry.waiting) {
+      } else if (
+        isReadOnlyCacheRequest(entry.kind) &&
+        !entry.waiting &&
+        !entry.keptForOwner
+      ) {
         armRequestTimeout(id, entry, requestTimeoutMs, true);
       }
     }
@@ -601,7 +607,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       // drop its place in line and leave the caller to ask again behind the
       // rest. A host on its way out keeps nothing waiting.
       if (entry.typedSearch && state !== 'disposing') {
-        // An owner change that never completes must still end the wait.
+        // An owner change that never completes must still end the wait, and so
+        // must candidates that leave one after another.
+        if (entry.keptForOwner) continue;
+        entry.keptForOwner = true;
         entry.stopTimeout?.();
         const timer = setTimeout(() => {
           if (!pending.delete(id)) return;
@@ -1253,6 +1262,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   ): void {
     entry.stopTimeout?.();
     entry.waiting = waiting;
+    entry.keptForOwner = false;
     const expire = () => {
       if (!pending.delete(id)) return;
       const error = new CacheRequestTimeoutError(entry.kind);
@@ -1325,6 +1335,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         opKey,
         admitted: false,
         waiting: false,
+        keptForOwner: false,
         startedAt: now(),
       };
       boundRequest(id, entry);

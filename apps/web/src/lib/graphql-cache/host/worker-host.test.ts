@@ -983,6 +983,9 @@ describe('createWorkerCacheHost', () => {
     await dropped;
     adapter.options.onCacheReadAvailabilityChanged?.('blocked');
     await vi.advanceTimersByTimeAsync(9);
+    // Another candidate left, which starts no new wait.
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    adapter.options.onCacheReadAvailabilityChanged?.('blocked');
     await vi.advanceTimersByTimeAsync(1);
     await expired;
 
