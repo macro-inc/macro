@@ -9,6 +9,7 @@ import {
   OWNER_EPOCH_LOST_ERROR_CODE,
   OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
 } from '../protocol';
+import type { CacheUnavailableReason } from '../telemetry';
 import {
   CacheChangeBatch,
   type CoalescedCacheChange,
@@ -21,7 +22,6 @@ import type {
   OwnerEpoch,
   RouteId,
 } from './coordinator-protocol';
-import type { CacheUnavailableReason } from '../telemetry';
 
 /** Why an owner lock stayed with another context. */
 export type OwnerLockUnavailableReason = Extract<

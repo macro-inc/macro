@@ -1275,7 +1275,8 @@ export class CoordinatorRouter {
     // pending recovery wipe carries over to the next attempt exactly as after
     // a navigation departure.
     const wipePending =
-      state.kind === 'activating' && state.databaseAction === 'wipe-before-open';
+      state.kind === 'activating' &&
+      state.databaseAction === 'wipe-before-open';
     const interruptedResetReason = wipePending
       ? this.pendingRecoveryResetEpochs.get(ownerEpoch)
       : undefined;

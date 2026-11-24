@@ -151,7 +151,9 @@ describe('CoordinatorCore', () => {
     expect(core.request('tab-b', init(3))).toEqual([
       { ...unavailable, tabId: 'tab-b', requestId: 3 },
     ]);
-    expect(core.ownerLockUnavailable('tab-a', 1, 'owner-lock-timeout')).toEqual([]);
+    expect(core.ownerLockUnavailable('tab-a', 1, 'owner-lock-timeout')).toEqual(
+      []
+    );
     expect(action(core.registerTab('tab-c'), 'elect-owner')).toEqual({
       kind: 'elect-owner',
       tabId: 'tab-c',
@@ -166,7 +168,9 @@ describe('CoordinatorCore', () => {
     core.registerTab('tab-a');
     grantStorage(core, 'tab-a', 1);
 
-    expect(core.ownerLockUnavailable('tab-a', 1, 'owner-lock-timeout')).toEqual([]);
+    expect(core.ownerLockUnavailable('tab-a', 1, 'owner-lock-timeout')).toEqual(
+      []
+    );
     expect(core.state).toMatchObject({
       kind: 'activating',
       phase: 'opening-database',

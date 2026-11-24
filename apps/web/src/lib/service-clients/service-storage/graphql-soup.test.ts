@@ -1889,9 +1889,8 @@ describe('GraphQL Soup browser cache session gate', () => {
 
     expect(soup.graphqlCacheRecoveryState()).toBe('recovery-required');
     expect(
-      mocks.spans.find(
-        ({ name }) => name === 'graphql.cache_recovery_stopped'
-      )?.attrs
+      mocks.spans.find(({ name }) => name === 'graphql.cache_recovery_stopped')
+        ?.attrs
     ).toMatchObject({
       'cache.error_code': 'superseded',
       'cache.unavailable_reason': 'superseded',
