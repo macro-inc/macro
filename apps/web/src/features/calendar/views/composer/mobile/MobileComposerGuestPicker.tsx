@@ -20,8 +20,8 @@ export function MobileComposerGuestPicker(props: {
     <>
       <PhoneMenuTrigger
         menu="people"
-        title={t('calendar.addPeople')}
-        value={t('calendar.addPeople')}
+        title={t('calendar.addGuests')}
+        value={t('calendar.addGuests')}
         placeholder
         icon={
           <Show when={props.showIcon}>

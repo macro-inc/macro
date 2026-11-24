@@ -2,14 +2,17 @@ import { formatLocale, t } from '@app/lib/i18n';
 import { formatLocalDate, parseLocalDate } from '@core/util/local-date';
 import RepeatIcon from '@icon/system/regular/repeat.svg';
 import { Button, Input, RadioGroup } from '@ui';
-import { batch, createSignal, For, Show } from 'solid-js';
+import { batch, createMemo, createSignal, For, Show } from 'solid-js';
 import { PhoneMenu } from '../../../components/composer/phone-menu/PhoneMenu';
 import { PhoneMenuChoice } from '../../../components/composer/phone-menu/PhoneMenuChoice';
 import { PhoneMenuPage } from '../../../components/composer/phone-menu/PhoneMenuPage';
+import { RECURRENCE_END_LABELS } from '../../../components/composer/recurrence/RecurrenceEnds';
+import { RECURRENCE_FREQUENCIES } from '../../../components/composer/recurrence/RecurrenceFrequency';
 import { WhenMonth } from '../../../components/composer/when/WhenMonth';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import { usePhoneComposerMenu } from '../../../context/phone-composer-menu-context';
 import { createCustomRecurrence } from '../../../primitives/create-custom-recurrence';
+import { useCalendarPreferences } from '../../../utils/preferences';
 import {
   isValidRecurrenceConfig,
   recurrencePresetsFor,
@@ -17,6 +20,7 @@ import {
 } from '../../../utils/recurrence';
 
 function CustomRepeatPage() {
+  const [preferences] = useCalendarPreferences();
   const composer = useCalendarComposer();
   const menus = usePhoneComposerMenu();
   const seed =
@@ -25,6 +29,16 @@ function CustomRepeatPage() {
     )?.config ?? composer.controller.customConfig();
   const [value, setValue] = createSignal(seed);
   const [dateOpen, setDateOpen] = createSignal(false);
+  const weekdays = createMemo(() => {
+    const long = new Intl.DateTimeFormat(formatLocale(), { weekday: 'long' });
+    const short = new Intl.DateTimeFormat(formatLocale(), {
+      weekday: 'narrow',
+    });
+    return WEEKDAY_CODES.map((code, index) => {
+      const date = new Date(2026, 10, 1 + index);
+      return { code, label: long.format(date), shortLabel: short.format(date) };
+    });
+  });
   const model = createCustomRecurrence({
     get value() {
       return value();
@@ -41,12 +55,6 @@ function CustomRepeatPage() {
     onChange: setValue,
   });
   const back = () => menus.when.open('repeat');
-  const frequencies = () => [
-    { value: 'DAILY', label: t('calendar.recurrenceDay') },
-    { value: 'WEEKLY', label: t('calendar.recurrenceWeek') },
-    { value: 'MONTHLY', label: t('calendar.recurrenceMonth') },
-    { value: 'YEARLY', label: t('calendar.recurrenceYear') },
-  ];
   const done = () => {
     if (model.input.disabled || !isValidRecurrenceConfig(value())) return;
     batch(() => {
@@ -75,10 +83,10 @@ function CustomRepeatPage() {
           onInput={(event) => model.interval(event.currentTarget.valueAsNumber)}
         />
       </label>
-      <For each={frequencies()}>
+      <For each={RECURRENCE_FREQUENCIES}>
         {(frequency) => (
           <PhoneMenuChoice
-            label={frequency.label}
+            label={t(frequency.label)}
             selected={value().frequency === frequency.value}
             onChoose={() => model.frequency(frequency.value)}
           />
@@ -86,21 +94,17 @@ function CustomRepeatPage() {
       </For>
       <Show when={value().frequency === 'WEEKLY'}>
         <div class="grid grid-cols-7 gap-1">
-          <For each={WEEKDAY_CODES}>
-            {(day, index) => (
+          <For each={weekdays()}>
+            {(day) => (
               <Button
                 variant="value"
                 size="sheet-row"
                 class="px-0"
-                aria-label={new Intl.DateTimeFormat(formatLocale(), {
-                  weekday: 'long',
-                }).format(new Date(2026, 10, 2 + index()))}
-                aria-pressed={value().byDay.includes(day)}
-                onClick={() => model.toggleDay(day)}
+                aria-label={day.label}
+                aria-pressed={value().byDay.includes(day.code)}
+                onClick={() => model.toggleDay(day.code)}
               >
-                {new Intl.DateTimeFormat(formatLocale(), {
-                  weekday: 'narrow',
-                }).format(new Date(2026, 10, 2 + index()))}
+                {day.shortLabel}
               </Button>
             )}
           </For>
@@ -111,17 +115,11 @@ function CustomRepeatPage() {
         value={value().ends.kind}
         onChange={model.ends}
       >
-        <For
-          each={[
-            { value: 'never', label: t('calendar.recurrenceNever') },
-            { value: 'on', label: t('calendar.recurrenceOn') },
-            { value: 'after', label: t('calendar.recurrenceAfter') },
-          ]}
-        >
-          {(end) => (
-            <RadioGroup.Item value={end.value} class="min-h-11">
+        <For each={Object.entries(RECURRENCE_END_LABELS)}>
+          {([kind, label]) => (
+            <RadioGroup.Item value={kind} class="min-h-11">
               <RadioGroup.ItemControl />
-              <RadioGroup.ItemLabel>{end.label}</RadioGroup.ItemLabel>
+              <RadioGroup.ItemLabel>{t(label)}</RadioGroup.ItemLabel>
             </RadioGroup.Item>
           )}
         </For>
@@ -150,6 +148,7 @@ function CustomRepeatPage() {
         </Button>
         <Show when={dateOpen()}>
           <WhenMonth
+            weekStartsOn={preferences.weekStartsOn}
             size="phone"
             value={parseLocalDate(model.endDate()) ?? model.input.start}
             minimum={parseLocalDate(formatLocalDate(model.input.start))}

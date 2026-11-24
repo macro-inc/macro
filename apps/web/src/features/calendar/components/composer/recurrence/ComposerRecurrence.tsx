@@ -4,15 +4,12 @@ import { createWritableMemo } from '@solid-primitives/memo';
 import { Dropdown, Tooltip } from '@ui';
 import { batch, For, on, Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
-import { useComposerWhenOptional } from '../../../context/composer-when-context';
 import { recurrencePresetsFor } from '../../../utils/recurrence';
 import { CustomRecurrenceDialog } from './CustomRecurrenceDialog';
 
-export function ComposerRecurrence(
-  props: { fullWidth?: boolean; size?: 'sm' | 'md' } = {}
-) {
+export function ComposerRecurrence(props: { size?: 'sm' | 'md' } = {}) {
   const model = useCalendarComposer();
-  const when = useComposerWhenOptional();
+  const when = model.when;
   const reason = model.recurrenceScopeReason;
   const disabled = () =>
     model.fieldIsDisabled('recurrence') || Boolean(reason());
@@ -28,38 +25,23 @@ export function ComposerRecurrence(
     <>
       <Dropdown
         placement="bottom-start"
-        open={when ? when.state.active === 'repeat' : undefined}
+        open={when.state.active === 'repeat'}
         onOpenChange={(open) => {
-          if (!when) return;
           if (open) when.open('repeat');
           else when.close('repeat');
         }}
       >
-        <Tooltip
-          label={reason() ?? ''}
-          disabled={!reason()}
-          class={props.fullWidth ? 'w-full' : undefined}
-        >
+        <Tooltip label={reason() ?? ''} disabled={!reason()}>
           <Dropdown.Trigger
-            variant={props.fullWidth ? 'row' : 'value'}
+            variant="value"
             finish="flat"
-            size={props.fullWidth ? 'sheet-row' : (props.size ?? 'sm')}
-            fullWidth={props.fullWidth}
-            class={props.fullWidth ? 'justify-between' : undefined}
+            size={props.size ?? 'sm'}
             aria-label={t('calendar.composerRepeats')}
             aria-readonly={Boolean(reason()) || undefined}
             aria-describedby={model.recurrenceDescribedBy()}
             disabled={model.fieldIsDisabled('recurrence')}
           >
-            <span
-              class={
-                props.fullWidth
-                  ? 'min-w-0 flex-1 truncate text-left'
-                  : undefined
-              }
-            >
-              {model.controller.selectedRecurrenceOption().label}
-            </span>
+            <span>{model.controller.selectedRecurrenceOption().label}</span>
             <CaretDownIcon class="size-3.5" />
           </Dropdown.Trigger>
         </Tooltip>

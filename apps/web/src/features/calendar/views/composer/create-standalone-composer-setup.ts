@@ -1,6 +1,6 @@
 import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { Accessor } from 'solid-js';
+import type { StandaloneComposerProps } from '../../CalendarComposerEditor';
 import { useDayDraftRange } from '../../context/day-draft-range-context';
 import {
   useCalendarGuestInvitesFlag,
@@ -12,12 +12,9 @@ import { createCalendarComposerSetup } from '../../primitives/create-calendar-co
 import { createComposerSuggestions } from '../../primitives/create-composer-suggestions';
 import { defaultComposerValues } from '../../primitives/default-composer-values';
 import { useCalendarPreferences } from '../../utils/preferences';
-import type { StandaloneComposerProps } from './StandaloneComposer';
 
 /** Construct one editor model for either layout; views retain DOM and placement ownership. */
-export function createStandaloneComposerSetup(
-  props: StandaloneComposerProps & { macroCallsEnabled: Accessor<boolean> }
-) {
+export function createStandaloneComposerSetup(props: StandaloneComposerProps) {
   const dayDraftRange = useDayDraftRange();
   const [preferences] = useCalendarPreferences();
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
@@ -28,7 +25,7 @@ export function createStandaloneComposerSetup(
   };
   const editor = useEventEditor({
     event: () => props.event,
-    macroCallsEnabled: props.macroCallsEnabled,
+    macroCallsEnabled: () => true,
     guestInvitesEnabled,
     invitationForwardEnabled: forwardEnabled,
     syncedEvent: useSyncedCalendarEvent(() => props.event),
@@ -40,15 +37,11 @@ export function createStandaloneComposerSetup(
   const initial =
     editor.initialValues() ??
     props.initialValues ??
-    defaultComposerValues(new Date(), props.macroCallsEnabled());
-  const initialValue =
-    !isEdit() && initial.conference === 'macro' && !props.macroCallsEnabled()
-      ? { ...initial, conference: 'none' as const }
-      : initial;
+    defaultComposerValues(new Date(), true);
   const { controller, model } = createCalendarComposerSetup(
     {
       form: {
-        initialValue,
+        initialValue: initial,
         isEdit: isEdit(),
         calendarOptions: editor.calendarOptions,
         guestOptions: editor.guestOptions,

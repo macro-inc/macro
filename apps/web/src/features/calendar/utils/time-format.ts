@@ -1,22 +1,12 @@
 import {
+  CLOCK_FORMAT_OPTIONS,
   formatClockRange,
   formatClockTime,
-} from '@app/components/date-time-range/primitives/clock-format';
+} from '@app/components/date-time-range/clock-format';
 import type { CalendarTimeFormat } from '../types';
 
 /** FullCalendar and Intl options for the supported calendar time formats. */
-export const CALENDAR_TIME_FORMAT_OPTIONS = {
-  '12-hour': {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  },
-  '24-hour': {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  },
-} satisfies Record<CalendarTimeFormat, Intl.DateTimeFormatOptions>;
+export const CALENDAR_TIME_FORMAT_OPTIONS = CLOCK_FORMAT_OPTIONS;
 
 /** Returns the time format that matches the user's current locale. */
 export function getDefaultCalendarTimeFormat(): CalendarTimeFormat {

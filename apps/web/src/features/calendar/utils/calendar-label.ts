@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from '@app/lib/i18n';
+import { formatLocale, type TranslationKey, t } from '@app/lib/i18n';
 import type { VisibleCalendar } from '@queries/calendar/calendars';
 import type { CalendarPeriodView, CalendarSource } from '../types';
 
@@ -40,4 +40,12 @@ export function spansMultipleInboxes(
   calendars: readonly Pick<VisibleCalendar, 'emailAddress'>[]
 ): boolean {
   return new Set(calendars.map((calendar) => calendar.emailAddress)).size > 1;
+}
+
+/** Localized month/year heading shared by calendar navigation controls. */
+export function calendarMonthLabel(date: Date): string {
+  return new Intl.DateTimeFormat(formatLocale(), {
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
 }

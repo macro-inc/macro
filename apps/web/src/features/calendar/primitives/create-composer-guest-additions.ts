@@ -1,6 +1,7 @@
 import type { Accessor } from 'solid-js';
 import type { SelectedEventEditorGuest } from '../components/composer/event-form-model';
 import { composerGuestKey } from '../core/composer-guests';
+import type { CalendarComposerModel } from './create-calendar-composer';
 
 export function createComposerGuestAdditions(options: {
   current: Accessor<SelectedEventEditorGuest[]>;
@@ -44,4 +45,26 @@ export function createComposerGuestAdditions(options: {
       );
     },
   };
+}
+
+/** Shared projection for fixed guests and editable additions across composer layouts. */
+export function createComposerGuestSelection(
+  guests: CalendarComposerModel['guests']
+) {
+  const current = () => guests.currentGuests ?? [];
+  const added = () =>
+    guests.selected.filter(
+      (guest) =>
+        !current().some(
+          (fixed) => composerGuestKey(fixed) === composerGuestKey(guest)
+        )
+    );
+  const disabled = () => guests.disabled || guests.readOnly;
+  const selection = createComposerGuestAdditions({
+    current,
+    added,
+    disabled,
+    onChange: (next) => guests.onChange([...current(), ...next]),
+  });
+  return { current, added, disabled, selection };
 }

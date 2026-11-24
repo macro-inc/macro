@@ -20,7 +20,6 @@ export function MonthPickerHeader() {
         aria-label={t('calendar.chooseYear')}
         aria-expanded={years()}
         aria-controls={picker.gridId}
-        classList={{ 'inset-ring-[1.5px] inset-ring-accent': years() }}
         onClick={() => {
           picker.toggleYears();
           picker.focusGrid();

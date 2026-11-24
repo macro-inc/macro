@@ -8,9 +8,8 @@ export function ComposerHeaderKind() {
   const model = useCalendarComposer();
   return (
     <Button
-      variant="value"
-      size="sm"
-      class="h-8 rounded-full bg-button-secondary-bg pl-3 pr-2.5 text-xs font-medium"
+      variant="secondary"
+      size="md"
       aria-label={t('calendar.eventKind')}
       disabled
     >

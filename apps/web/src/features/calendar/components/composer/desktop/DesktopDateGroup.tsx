@@ -6,17 +6,18 @@ import { Popover } from '@kobalte/core/popover';
 import { ToggleSwitch } from '@ui';
 import { Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
-import { useComposerWhen } from '../../../context/composer-when-context';
+import { useCalendarPreferences } from '../../../utils/preferences';
+import { ComposerTimeZone } from '../parts/ComposerTimeZone';
 import { ComposerRecurrence } from '../recurrence/ComposerRecurrence';
-import { ComposerTimeZone } from '../time-zone/ComposerTimeZone';
 import { ComposerRangeFeedback } from '../when/ComposerRangeFeedback';
 import { WhenDate } from '../when/WhenDate';
 import { WhenMonth } from '../when/WhenMonth';
 import { WhenTime } from '../when/WhenTime';
 
 function DatePicker(props: { endpoint: 'start' | 'end' }) {
+  const [preferences] = useCalendarPreferences();
   const model = useCalendarComposer();
-  const when = useComposerWhen();
+  const when = useCalendarComposer().when;
   let anchor: HTMLDivElement | undefined;
   const key = () => (props.endpoint === 'start' ? 'start-date' : 'end-date');
   return (
@@ -42,6 +43,7 @@ function DatePicker(props: { endpoint: 'start' | 'end' }) {
               {t('common.chooseDateRange')}
             </Popover.Title>
             <WhenMonth
+              weekStartsOn={preferences.weekStartsOn}
               size="desktop"
               value={
                 parseLocalDate(model.state()[props.endpoint].slice(0, 10)) ??
@@ -61,7 +63,7 @@ function DatePicker(props: { endpoint: 'start' | 'end' }) {
 
 export function DesktopDateGroup(props: { pinned?: boolean }) {
   const model = useCalendarComposer();
-  const when = useComposerWhen();
+  const when = useCalendarComposer().when;
   const differentDay = () =>
     model.state().start.slice(0, 10) !== model.state().end.slice(0, 10);
   return (
@@ -91,9 +93,7 @@ export function DesktopDateGroup(props: { pinned?: boolean }) {
           disabled={model.fieldIsDisabled('allDay')}
           onChange={when.allDay}
         />
-        <Show when={!model.state().allDay}>
-          <ComposerTimeZone size="md" />
-        </Show>
+        <ComposerTimeZone size="md" />
       </div>
       <div>
         <ComposerRecurrence size="md" />

@@ -1,10 +1,12 @@
 import { formatLocale } from '@app/lib/i18n';
 import CorvuCalendar from '@corvu/calendar';
 import { createSignal, Show } from 'solid-js';
+import type { CalendarWeekStart } from '../../../types';
 import { WhenMonthGrid } from './WhenMonthGrid';
 
 export interface WhenMonthProps {
   size: 'desktop' | 'phone';
+  weekStartsOn?: CalendarWeekStart;
   value: Date;
   end?: Date;
   range?: boolean;
@@ -19,19 +21,28 @@ export function WhenMonth(props: WhenMonthProps) {
   }>();
   const disabled = (date: Date) =>
     Boolean(props.disabled || (props.minimum && date < props.minimum));
+  const shared = {
+    required: true,
+    fixedWeeks: true,
+    get startOfWeek() {
+      return props.weekStartsOn ?? 0;
+    },
+    get initialMonth() {
+      return props.value;
+    },
+    get initialFocusedDay() {
+      return props.value;
+    },
+    disabled,
+  };
   return (
     <Show
       when={props.range}
       fallback={
         <CorvuCalendar
           mode="single"
-          required
-          fixedWeeks
-          startOfWeek={1}
+          {...shared}
           value={props.value}
-          initialMonth={props.value}
-          initialFocusedDay={props.value}
-          disabled={disabled}
           onValueChange={(date) => {
             if (date) props.onChange(date);
           }}
@@ -42,12 +53,7 @@ export function WhenMonth(props: WhenMonthProps) {
     >
       <CorvuCalendar
         mode="range"
-        required
-        fixedWeeks
-        startOfWeek={1}
-        initialMonth={props.value}
-        initialFocusedDay={props.value}
-        disabled={disabled}
+        {...shared}
         value={pending() ?? { from: props.value, to: props.end ?? props.value }}
         onValueChange={(value) => {
           const first = pending()?.from;

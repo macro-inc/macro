@@ -1,7 +1,7 @@
+import { t } from '@app/lib/i18n';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
-import { type Duration, formatDuration } from 'date-fns';
 import { daysInWeek, minutesInDay, minutesInHour } from 'date-fns/constants';
 
 /** The reminder method that fires Macro notifications. */
@@ -24,21 +24,22 @@ export const REMINDER_PRESET_MINUTES = [
   minutesInWeek,
 ];
 
-/**
- * The largest whole unit expressing an offset — Google's pickers display a
- * single unit, never a composite like "1 hour 30 minutes".
- */
-function offsetAsDuration(minutes: number): Duration {
-  if (minutes % minutesInWeek === 0) return { weeks: minutes / minutesInWeek };
-  if (minutes % minutesInDay === 0) return { days: minutes / minutesInDay };
-  if (minutes % minutesInHour === 0) return { hours: minutes / minutesInHour };
-  return { minutes };
-}
-
-/** "At time of event", "10 minutes before", "1 hour before", … */
+/** A translated label for a single reminder offset. */
 export function formatReminderOffset(minutes: number): string {
-  if (minutes === 0) return 'At time of event';
-  return `${formatDuration(offsetAsDuration(minutes))} before`;
+  if (minutes === 0) return t('calendar.reminderAtStart');
+  if (minutes % minutesInWeek === 0)
+    return t('calendar.reminderWeeksBefore', {
+      count: minutes / minutesInWeek,
+    });
+  if (minutes % minutesInDay === 0)
+    return t('calendar.reminderDaysBefore', {
+      count: minutes / minutesInDay,
+    });
+  if (minutes % minutesInHour === 0)
+    return t('calendar.reminderHoursBefore', {
+      count: minutes / minutesInHour,
+    });
+  return t('calendar.reminderMinutesBefore', { count: minutes });
 }
 
 /** The popup offsets in a reminder list, sorted ascending. */

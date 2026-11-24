@@ -445,8 +445,7 @@ export function useEventEditor(props: UseEventEditorProps) {
     metadata: ComposerMetadataChanges = {}
   ): EventReplacementRequest | undefined => {
     const event = props.event();
-    if (!event || (scope === 'this_event' && metadata.visibility))
-      return undefined;
+    if (!event) return undefined;
     const { patch, recurrenceId } = editUpdate(
       event,
       values,
@@ -483,11 +482,6 @@ export function useEventEditor(props: UseEventEditorProps) {
     setSaveError(undefined);
 
     const event = props.event();
-    if (event && scope === 'this_event' && metadata.visibility) {
-      setSaveError('Changing visibility for one occurrence is not available.');
-      setPending(false);
-      return;
-    }
     const {
       existingMeetingUrl,
       cleanContent,

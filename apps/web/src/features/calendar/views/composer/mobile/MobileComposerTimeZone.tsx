@@ -1,8 +1,13 @@
-import { timezoneOptions } from '@app/components/timezone-select/timezone-options';
+import {
+  shortTimeZoneLabel,
+  timezoneOptions,
+  timezoneOptionsWithCurrent,
+} from '@app/components/timezone-select/timezone-options';
 import { formatLocale, t } from '@app/lib/i18n';
 import GlobeIcon from '@icon/system/regular/globe.svg';
 import { Input } from '@ui';
-import { createMemo, createSignal, For } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
+import { Virtualizer } from 'virtua/solid';
 import { PhoneMenu } from '../../../components/composer/phone-menu/PhoneMenu';
 import { PhoneMenuChoice } from '../../../components/composer/phone-menu/PhoneMenuChoice';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
@@ -12,15 +17,14 @@ function TimeZoneChoices() {
   const model = useCalendarComposer();
   const menus = usePhoneComposerMenu();
   const [search, setSearch] = createSignal('');
-  const options = timezoneOptions();
-  // An imported zone can be valid without appearing in the runtime's enumeration.
-  if (!options.some((option) => option.value === model.timeZone()))
-    options.unshift({
-      value: model.timeZone(),
-      label: model.timeZone().replaceAll('_', ' '),
-    });
+  const options = createMemo(() =>
+    timezoneOptionsWithCurrent(
+      timezoneOptions(undefined, formatLocale()),
+      model.timeZone()
+    )
+  );
   const filtered = createMemo(() =>
-    options.filter((option) =>
+    options().filter((option) =>
       `${option.label} ${option.value} ${option.shortName ?? ''}`
         .toLowerCase()
         .includes(search().trim().toLowerCase())
@@ -35,8 +39,8 @@ function TimeZoneChoices() {
         value={search()}
         onInput={(event) => setSearch(event.currentTarget.value)}
       />
-      <div class="flex flex-col">
-        <For each={filtered()}>
+      <div class="h-[min(55dvh,22rem)] overflow-y-auto overscroll-contain scrollbar-hidden">
+        <Virtualizer data={filtered()} itemSize={56}>
           {(option) => (
             <PhoneMenuChoice
               label={option.label}
@@ -48,7 +52,7 @@ function TimeZoneChoices() {
               }}
             />
           )}
-        </For>
+        </Virtualizer>
       </div>
     </>
   );
@@ -56,13 +60,7 @@ function TimeZoneChoices() {
 
 export function MobileComposerTimeZone() {
   const model = useCalendarComposer();
-  const label = () =>
-    new Intl.DateTimeFormat(formatLocale(), {
-      timeZone: model.timeZone(),
-      timeZoneName: 'short',
-    })
-      .formatToParts(new Date())
-      .find((part) => part.type === 'timeZoneName')?.value ?? model.timeZone();
+  const label = () => shortTimeZoneLabel(model.timeZone(), formatLocale());
   return (
     <PhoneMenu
       menu="time-zone"

@@ -110,7 +110,6 @@ export default defineConfig({
       'team-ooo.html',
       'composer.html',
       'grid.html',
-      'snap-pager.html',
       'tool-preview.html',
     ],
     esbuildOptions: { target: 'esnext' },

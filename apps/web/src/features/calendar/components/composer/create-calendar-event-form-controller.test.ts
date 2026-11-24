@@ -84,49 +84,6 @@ it('never uses an imported point baseline to create a new zero-duration event', 
   expect(controller.submitValues()).toBeUndefined();
 });
 
-describe('duration choices', () => {
-  it('rolls a duration past midnight and keeps it when the start moves', () => {
-    const controller = controllerFor({
-      allDay: false,
-      start: '2026-10-10T23:30',
-      end: '2026-10-10T23:45',
-    });
-    controller.setEnd('2026-10-10T23:50');
-    controller.setDuration(90);
-    expect(controller.state().end).toBe('2026-10-11T01:00');
-
-    controller.setStart('2026-10-11T08:00');
-    expect(controller.state().end).toBe('2026-10-11T09:30');
-  });
-
-  it('converts an all-day event to the chosen duration', () => {
-    const controller = controllerFor({
-      allDay: true,
-      start: '2026-10-10',
-      end: '2026-10-10',
-    });
-    controller.setDuration(45);
-    expect(controller.state()).toMatchObject({
-      allDay: false,
-      start: '2026-10-10T01:00',
-      end: '2026-10-10T01:45',
-    });
-  });
-
-  it('ignores nonpositive and nonfinite durations', () => {
-    const controller = controllerFor({
-      allDay: false,
-      start: '2026-10-10T09:00',
-      end: '2026-10-10T10:00',
-    });
-    const original = controller.state();
-    for (const minutes of [0, -15, Number.NaN, Number.POSITIVE_INFINITY]) {
-      controller.setDuration(minutes);
-    }
-    expect(controller.state()).toEqual(original);
-  });
-});
-
 describe('calendar account selection', () => {
   it('waits for the primary account instead of silently using another inbox', () => {
     const [primary, setPrimary] = createSignal<string>();

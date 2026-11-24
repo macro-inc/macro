@@ -1,7 +1,7 @@
 import { Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import { DEFAULT_CALENDAR_SOURCE } from '../../../types';
-import { CalendarSwatch } from '../../calendar-swatch/CalendarSwatch';
+import { CalendarSwatch } from '../../CalendarSwatch';
 export function CalendarComposerIdentity() {
   const model = useCalendarComposer();
   return (

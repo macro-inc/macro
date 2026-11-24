@@ -1,4 +1,5 @@
 import { EventForwardInvitationAction } from '@app/features/calendar-view/components/EventGuests';
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import { type Accessor, Show } from 'solid-js';
@@ -45,7 +46,7 @@ export function StandaloneComposerActions(props: {
           disabled={props.disabled}
           onClick={startReplacement}
         >
-          Replace without meeting
+          {t('calendar.replaceWithoutMeeting')}
         </Button>
       </Show>
       <EventReplacement controller={replacement} onDone={props.onDone} />

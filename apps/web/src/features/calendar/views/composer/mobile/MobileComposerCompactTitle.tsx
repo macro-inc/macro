@@ -1,8 +1,7 @@
 import { t } from '@app/lib/i18n';
-import { SheetRow } from '@components/app/mobile/sheet-row/SheetRow';
-import { CalendarSwatch } from '../../../components/calendar-swatch/CalendarSwatch';
+import { SheetRow } from '@components/app/mobile/SheetRow';
+import { CalendarSwatch } from '../../../components/CalendarSwatch';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
-import { DEFAULT_CALENDAR_SOURCE } from '../../../types';
 
 export function MobileComposerCompactTitle(props: { progress: number }) {
   const model = useCalendarComposer();
@@ -17,16 +16,7 @@ export function MobileComposerCompactTitle(props: { progress: number }) {
       aria-hidden="true"
     >
       <div class="p-1">
-        <SheetRow
-          icon={
-            <CalendarSwatch
-              color={
-                model.controller.selectedCalendarOption()?.color ??
-                DEFAULT_CALENDAR_SOURCE.color
-              }
-            />
-          }
-        >
+        <SheetRow icon={<CalendarSwatch color={model.calendarColor()} />}>
           <span class="block truncate text-left text-xl font-semibold leading-[26px]">
             {model.state().title || t('calendar.newEvent')}
           </span>

@@ -3,37 +3,36 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
   createEffect,
+  createMemo,
   createSignal,
   on,
   onCleanup,
   type ParentProps,
 } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
-import { useComposerWhen } from '../../../context/composer-when-context';
 import { PhoneComposerMenuContext } from '../../../context/phone-composer-menu-context';
 import {
   PHONE_MENU_IDS,
   type PhoneMenuId,
   phoneMenuPattern,
 } from '../../../primitives/phone-menu-pattern';
-import { REMINDER_PRESET_MINUTES } from '../../../utils/event-reminders';
 
 export function PhoneComposerMenuRoot(
   props: ParentProps<{ scrollElement: Accessor<HTMLElement | undefined> }>
 ) {
   const model = useCalendarComposer();
-  const when = useComposerWhen();
+  const when = model.when;
   const [root, setRoot] = createSignal<HTMLElement>();
   const [mount, setMount] = createSignal<HTMLElement>();
   const size = createElementSize(root);
   const canvas = document.createElement('canvas');
   const measure = canvas.getContext('2d');
-  const pattern = (menu: PhoneMenuId) => {
+  const labelsFit = createMemo(() => {
     const calendars = model.controller.calendarOptions();
     const element = root();
     if (measure && element)
       measure.font = `16px ${getComputedStyle(element).fontFamily}`;
-    const labelsFit = Boolean(
+    return Boolean(
       measure &&
         size.width &&
         calendars.every(
@@ -41,15 +40,33 @@ export function PhoneComposerMenuRoot(
             measure.measureText(calendar.label).width <= (size.width ?? 0) - 96
         )
     );
-    return phoneMenuPattern(menu, {
-      count:
-        menu === 'calendar' ? calendars.length : REMINDER_PRESET_MINUTES.length,
-      labelsFit,
-    });
+  });
+  const permitted = (active: string | undefined) => {
+    const fields = [
+      ['call', 'conference'],
+      ['calendar', 'calendar'],
+      ['reminders', 'reminders'],
+      ['repeat', 'recurrence'],
+      ['custom-repeat', 'recurrence'],
+      ['people', 'guests'],
+      ['decline', 'outOfOffice'],
+    ] as const;
+    const key = fields.find(([menu]) => menu === active)?.[1];
+    if (key && model.fieldIsDisabled(key)) return false;
+    if (active === 'visibility') return !model.visibilityIsDisabled();
+    if (active === 'time-zone') return !model.timeZoneIsDisabled();
+    return true;
   };
+  const pattern = (menu: PhoneMenuId) =>
+    phoneMenuPattern(menu, {
+      count: model.controller.calendarOptions().length,
+      labelsFit: labelsFit(),
+    });
   const page = () => {
     const active = PHONE_MENU_IDS.find((menu) => menu === when.state.active);
-    return active !== undefined && pattern(active) === 'page';
+    return (
+      active !== undefined && permitted(active) && pattern(active) === 'page'
+    );
   };
   let trigger: HTMLButtonElement | undefined;
   let savedScroll = 0;
@@ -73,31 +90,6 @@ export function PhoneComposerMenuRoot(
       { defer: true }
     )
   );
-  // Permission loss dismisses the active editor and its staged page state.
-  createEffect(() => {
-    const active = when.state.active;
-    const fields = [
-      ['call', 'conference'],
-      ['calendar', 'calendar'],
-      ['reminders', 'reminders'],
-      ['repeat', 'recurrence'],
-      ['custom-repeat', 'recurrence'],
-      ['people', 'guests'],
-      ['decline', 'outOfOffice'],
-    ] as const;
-    const key = fields.find(([menu]) => menu === active)?.[1];
-    const disabled = key ? model.fieldIsDisabled(key) : false;
-    const metadataDisabled =
-      active === 'visibility'
-        ? model.visibilityIsDisabled()
-        : active === 'time-zone'
-          ? model.timeZoneIsDisabled()
-          : false;
-    if (disabled || metadataDisabled) {
-      when.close();
-      trigger?.blur();
-    }
-  });
   onCleanup(() => {
     if (frame !== undefined) cancelAnimationFrame(frame);
   });
@@ -126,13 +118,15 @@ export function PhoneComposerMenuRoot(
     if (when.state.active === 'custom-repeat') when.open('repeat');
     else close();
   };
-  window.addEventListener('keydown', handleEscape, true);
-  onCleanup(() => window.removeEventListener('keydown', handleEscape, true));
   return (
     <PhoneComposerMenuContext.Provider
       value={{ when, pattern, page, mount, open, close }}
     >
-      <div ref={setRoot} class="relative min-h-0 min-w-0">
+      <div
+        ref={setRoot}
+        class="relative min-h-0 min-w-0"
+        on:keydown={handleEscape}
+      >
         {props.children}
         <div
           ref={setMount}

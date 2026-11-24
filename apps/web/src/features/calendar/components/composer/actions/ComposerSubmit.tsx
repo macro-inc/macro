@@ -16,7 +16,6 @@ export function ComposerSubmit(
       form={model.ids.form}
       variant="primary"
       size={props.fullWidth ? 'sheet' : props.f3 ? 'field' : undefined}
-      class={props.f3 ? 'text-xs' : undefined}
       fullWidth={props.fullWidth}
       aria-label={label()}
       disabled={model.formIsDisabled() || !model.canSave()}

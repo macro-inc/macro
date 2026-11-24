@@ -7,9 +7,9 @@ import {
 import type { CalendarComposerOptions } from '../core/composer';
 import { createCalendarComposer } from './create-calendar-composer';
 
-export type ComposerSetupSource =
-  | { form: CreateCalendarEventFormControllerOptions }
-  | { controller: CalendarEventFormController };
+export type ComposerSetupSource = {
+  form: CreateCalendarEventFormControllerOptions;
+};
 /** Shared controller/model assembly; each host supplies its own transport and lifecycle. */
 export function createCalendarComposerSetup(
   source: ComposerSetupSource,
@@ -17,10 +17,7 @@ export function createCalendarComposerSetup(
     controller: CalendarEventFormController
   ) => Omit<CalendarComposerOptions, 'controller'>
 ) {
-  const controller =
-    'form' in source
-      ? createCalendarEventFormController(source.form)
-      : source.controller;
+  const controller = createCalendarEventFormController(source.form);
   const model = createCalendarComposer(
     mergeProps({ controller }, options(controller))
   );

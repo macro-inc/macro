@@ -3,7 +3,7 @@ import { beginInteraction } from '@app/observability/flow';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { Calendar, DatesSetArg } from '@fullcalendar/core';
-import { createSnapPager } from '@ui/components/SnapPager';
+import { createSnapPager } from '@ui/components/SnapPager/SnapPager';
 import {
   differenceInCalendarDays,
   differenceInCalendarMonths,
@@ -24,7 +24,7 @@ import type { CalendarEvent, CalendarGridPeriodView } from '../types';
 import { isSameLocalDate } from '../utils/calendar-date';
 import { timeGridScroller } from '../utils/time-grid-scroller';
 
-export const CALENDAR_PAGE_IDS = [0, 1, 2, 3, 4] as const;
+export const CALENDAR_PAGE_COUNT = 5;
 export type CalendarPageId = number;
 
 interface CalendarPageHandle {
@@ -106,9 +106,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   let scrollViewportSize: { width: number; height: number } | undefined;
 
   const pager = createSnapPager({
-    pageCount: CALENDAR_PAGE_IDS.length,
-    instantWheel: () => !isTouchDevice(),
-    rapidPressMs: isTouchDevice() ? undefined : 300,
+    discrete: () => !isTouchDevice(),
     onWheelNavigate: (direction) => preparePeriodNavigation(direction),
     onScrollStart() {
       renderQueue.clear();
@@ -120,25 +118,20 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
       if (pager.phase() === 'idle') synchronizePages();
     },
     onSettle(moved) {
-      const interaction = beginInteraction('calendar.page');
-      try {
-        if (moved !== 0) props.onNavigate();
-        const pending = pendingAnchor();
-        if (pending?.position === pager.position()) {
-          setAnchor(pending);
-          setPendingAnchor(undefined);
-        } else if (moved === 0) {
-          setPendingAnchor(undefined);
-          setRequestedDate(undefined);
-        }
-        const requested = requestedDate();
-        if (requested && isSameLocalDate(requested, activeDate()))
-          setRequestedDate(undefined);
-        synchronizePages();
-        if (todayTarget && !pendingAnchor()) queueTodayScroll(todayTarget);
-      } finally {
-        interaction.end();
+      if (moved !== 0) props.onNavigate();
+      const pending = pendingAnchor();
+      if (pending?.position === pager.position()) {
+        setAnchor(pending);
+        setPendingAnchor(undefined);
+      } else if (moved === 0) {
+        setPendingAnchor(undefined);
+        setRequestedDate(undefined);
       }
+      const requested = requestedDate();
+      if (requested && isSameLocalDate(requested, activeDate()))
+        setRequestedDate(undefined);
+      synchronizePages();
+      if (todayTarget && !pendingAnchor()) queueTodayScroll(todayTarget);
     },
   });
   const activePageId = pager.activePage;
@@ -223,11 +216,6 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   };
   const registerPage = (handle: CalendarPageHandle) => {
     handles.set(handle.id, handle);
-    // Direct callers can register an already-mounted grid without initialDateFor.
-    if (!rendered.has(handle.id)) {
-      const date = handle.api()?.getDate();
-      if (date) rendered.set(handle.id, signature(date));
-    }
     notifyRegistry();
     synchronizePages();
     return () => {
@@ -262,15 +250,20 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
 
   const gotoDate = (date: Date) => {
     if (pager.locked()) return;
-    todayTarget = undefined;
-    renderQueue.clear();
-    props.onNavigate();
-    setPendingAnchor({
-      date,
-      position: pager.targetPosition() + CALENDAR_PAGE_IDS.length,
-    });
-    setRequestedDate(date);
-    pager.goTo(CALENDAR_PAGE_IDS.length);
+    const interaction = beginInteraction('calendar.page');
+    try {
+      todayTarget = undefined;
+      renderQueue.clear();
+      props.onNavigate();
+      setPendingAnchor({
+        date,
+        position: pager.targetPosition() + CALENDAR_PAGE_COUNT,
+      });
+      setRequestedDate(date);
+      pager.goTo(CALENDAR_PAGE_COUNT);
+    } finally {
+      interaction.end();
+    }
   };
   function queueTodayScroll(now: Date) {
     renderQueue.enqueue('scroll-to-now', () => {
@@ -302,9 +295,14 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   }
   const navigatePeriod = (direction: 'previous' | 'next') => {
     if (!pager.canStep()) return;
-    preparePeriodNavigation(direction === 'previous' ? -1 : 1);
-    if (direction === 'previous') pager.previous();
-    else pager.next();
+    const interaction = beginInteraction('calendar.page');
+    try {
+      preparePeriodNavigation(direction === 'previous' ? -1 : 1);
+      if (direction === 'previous') pager.previous();
+      else pager.next();
+    } finally {
+      interaction.end();
+    }
   };
   const navigateToDate = (date: Date) => {
     const current = activeDate();
@@ -329,23 +327,30 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
       gotoDate(date);
       return;
     }
-    renderQueue.clear();
-    props.onNavigate();
-    setPendingAnchor({ date, position: pager.targetPosition() + offset });
-    setRequestedDate(date);
-    // Prepare only the hidden destination for an explicit adjacent date.
-    // Never re-date the visible page while it is still under the user's finger.
-    if (pager.phase() === 'idle') {
-      const destination = pager
-        .pages()
-        .find((page) => page.offset() === offset);
-      const api = destination ? handles.get(destination.key)?.api() : undefined;
-      if (api && destination) {
-        navigateCalendar(api, view, date);
-        rendered.set(destination.key, signature(date));
+    const interaction = beginInteraction('calendar.page');
+    try {
+      renderQueue.clear();
+      props.onNavigate();
+      setPendingAnchor({ date, position: pager.targetPosition() + offset });
+      setRequestedDate(date);
+      // Prepare only the hidden destination for an explicit adjacent date.
+      // Never re-date the visible page while it is still under the user's finger.
+      if (pager.phase() === 'idle') {
+        const destination = pager
+          .pages()
+          .find((page) => page.offset() === offset);
+        const api = destination
+          ? handles.get(destination.key)?.api()
+          : undefined;
+        if (api && destination) {
+          navigateCalendar(api, view, date);
+          rendered.set(destination.key, signature(date));
+        }
       }
+      pager.goTo(offset);
+    } finally {
+      interaction.end();
     }
-    pager.goTo(offset);
   };
   const changeView = (view: CalendarGridPeriodView) => {
     if (periodView() === view) return;
@@ -370,7 +375,6 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
 
   return {
     pager,
-    pageOrder,
     periodView,
     isChangingView,
     activePageId,

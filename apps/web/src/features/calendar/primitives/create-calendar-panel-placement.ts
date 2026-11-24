@@ -1,15 +1,16 @@
 import {
-  type Accessor,
-  createEffect,
-  createSignal,
-  onCleanup,
-  onMount,
-} from 'solid-js';
+  startUiOperation,
+  type UiOperation,
+} from '@app/observability/ui-operation';
+import { createEventListener } from '@solid-primitives/event-listener';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type { ComposerDragOutcome } from './create-composer-header-drag';
 import { createComposerHeaderDrag } from './create-composer-header-drag';
 
 /** One placement owner for pinned cards and composers; reanchoring never remounts content. */
 export function createCalendarPanelPlacement(options: {
+  kind: 'composer' | 'event-card';
   boundary: Accessor<HTMLElement | undefined>;
   dock: Accessor<HTMLElement | undefined>;
   surface: Accessor<HTMLElement | undefined>;
@@ -23,6 +24,17 @@ export function createCalendarPanelPlacement(options: {
   onFinish?: (outcome: ComposerDragOutcome) => void;
 }) {
   const [version, setVersion] = createSignal(0);
+  let operation: UiOperation | undefined;
+  const telemetry =
+    options.kind === 'composer'
+      ? {
+          name: 'calendar.composer.drag',
+          outcome: 'calendar.composer.drag_outcome',
+        }
+      : {
+          name: 'calendar.event_card.drag',
+          outcome: 'calendar.event_card.drag_outcome',
+        };
   let frame: number | undefined;
   const measure = () => {
     if (frame !== undefined) return;
@@ -46,27 +58,30 @@ export function createCalendarPanelPlacement(options: {
     pinned: options.pinned,
     onPin: options.onPin,
     onUnpin: options.onUnpin,
-    onStart: options.onStart,
-    onFinish: options.onFinish,
+    onStart: () => {
+      operation = startUiOperation(telemetry.name);
+      options.onStart?.();
+    },
+    onFinish: (outcome) => {
+      options.onFinish?.(outcome);
+      operation?.span.setAttr(telemetry.outcome, outcome);
+      if (outcome === 'cancelled') operation?.cancel();
+      else operation?.afterPaint();
+      operation = undefined;
+    },
   });
-  onMount(() => {
-    window.addEventListener('scroll', measure, true);
-    window.addEventListener('resize', measure);
-    onCleanup(() => {
-      window.removeEventListener('scroll', measure, true);
-      window.removeEventListener('resize', measure);
-      if (frame !== undefined) cancelAnimationFrame(frame);
-    });
-  });
-  createEffect(() => {
-    const observer = new ResizeObserver(measure);
-    const boundary = options.boundary();
-    const dock = options.dock();
-    if (boundary) observer.observe(boundary);
-    if (dock) observer.observe(dock);
-    const surface = options.surface();
-    if (surface) observer.observe(surface);
-    onCleanup(() => observer.disconnect());
+  createEventListener(() => window, 'scroll', measure, { capture: true });
+  createEventListener(() => window, 'resize', measure);
+  createResizeObserver(
+    () =>
+      [options.boundary(), options.dock(), options.surface()].filter(
+        (element): element is HTMLElement => element !== undefined
+      ),
+    measure
+  );
+  onCleanup(() => {
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    operation?.cancel();
   });
   const docked = () => options.pinned() && !drag.state.active;
   const dockRect = () => {

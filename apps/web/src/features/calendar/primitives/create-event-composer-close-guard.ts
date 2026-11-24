@@ -49,8 +49,6 @@ export function createEventComposerCloseGuard(
     needsConfirmation,
     confirmClose,
     completeClose,
-    requestClose: async (finishClose: () => void): Promise<boolean> =>
-      (await confirmClose()) && completeClose(finishClose),
     dispose: () => {
       state.disposed = true;
     },

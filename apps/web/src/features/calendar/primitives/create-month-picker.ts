@@ -1,13 +1,7 @@
 import { parseLocalDate } from '@core/util/local-date';
+import { set, startOfMonth } from 'date-fns';
 import { type Accessor, createEffect, on } from 'solid-js';
 import { createStore } from 'solid-js/store';
-
-function monthStart(year: number, month: number) {
-  const date = new Date(0);
-  date.setFullYear(year, month, 1);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
 
 /** Browsing stays local; only an explicit month or parsed date reaches the host. */
 export function createMonthPicker(options: {
@@ -49,7 +43,9 @@ export function createMonthPicker(options: {
   );
 
   const moveFocus = (offset: number) => {
-    const date = monthStart(state.year, state.focusedMonth + offset);
+    const date = startOfMonth(
+      set(new Date(), { year: state.year, month: state.focusedMonth + offset })
+    );
     setState({ year: date.getFullYear(), focusedMonth: date.getMonth() });
   };
   const moveYearFocus = (offset: number) => {
@@ -88,7 +84,9 @@ export function createMonthPicker(options: {
     state,
     today,
     chooseMonth: (month: number) =>
-      options.onChange(monthStart(state.year, month)),
+      options.onChange(
+        startOfMonth(set(new Date(), { year: state.year, month: month }))
+      ),
     moveFocus,
     moveYearFocus,
     toggleYears,

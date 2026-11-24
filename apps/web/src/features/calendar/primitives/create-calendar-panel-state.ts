@@ -69,9 +69,6 @@ export function createCalendarPanelState(options: {
     }
     return key;
   };
-  const leftPanelPinned = () =>
-    options.sessions.state.session
-      ? options.sessions.state.pinned
-      : cardPinned() && Boolean(options.event());
-  return { cardPinned, setCardPinned, pinCard, leftPanelPinned, open };
+  const leftPanelPinned = () => cardPinned() && Boolean(options.event());
+  return { cardPinned, setCardPinned, leftPanelPinned, open };
 }

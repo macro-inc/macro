@@ -8,7 +8,7 @@ import { useTeamAvailabilityQuery } from '@queries/calendar/team-availability';
 import { Button, Input } from '@ui';
 import * as EmailValidator from 'email-validator';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { BusyIndicator } from '../../../components/busy-indicator/BusyIndicator';
+import { BusyIndicator } from '../../../components/BusyIndicator';
 import type { SelectedEventEditorGuest } from '../../../components/composer/event-form-model';
 import { PhoneMenuChoice } from '../../../components/composer/phone-menu/PhoneMenuChoice';
 import { PhoneMenuPage } from '../../../components/composer/phone-menu/PhoneMenuPage';

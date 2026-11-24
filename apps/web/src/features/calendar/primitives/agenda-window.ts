@@ -1,23 +1,14 @@
 import { parseLocalDate } from '@core/util/local-date';
+import { addDays, startOfDay } from 'date-fns';
 import type { CalendarEvent } from '../types';
 
-export const AGENDA_WINDOW_DAYS = 14;
-export const AGENDA_MOUNTED_WINDOWS = 5;
-
-export function agendaDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-export function agendaShift(date: Date, days: number): Date {
-  const next = agendaDay(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
+const AGENDA_WINDOW_DAYS = 14;
+const AGENDA_MOUNTED_WINDOWS = 5;
 
 /** End-exclusive local-day window; date arithmetic follows DST. */
 export function agendaWindow(anchor: Date, index: number) {
-  const start = agendaShift(anchor, index * AGENDA_WINDOW_DAYS);
-  return { start, end: agendaShift(start, AGENDA_WINDOW_DAYS) };
+  const start = addDays(startOfDay(anchor), index * AGENDA_WINDOW_DAYS);
+  return { start, end: addDays(start, AGENDA_WINDOW_DAYS) };
 }
 
 /** Keep readable days at materialization boundaries instead of rejecting the whole window. */
@@ -50,7 +41,7 @@ export function agendaEventsByDay<T extends AgendaEvent>(
   dayCount = AGENDA_WINDOW_DAYS
 ): AgendaDay<T>[] {
   const days: AgendaDay<T>[] = Array.from({ length: dayCount }, (_, i) => ({
-    date: agendaShift(start, i),
+    date: addDays(startOfDay(start), i),
     events: [],
   }));
   for (const event of events) {
@@ -71,7 +62,7 @@ export function agendaEventsByDay<T extends AgendaEvent>(
     // Timed point imports occupy their start day; an empty all-day range does not.
     if (event.allDay && ending.getTime() === beginning.getTime()) continue;
     for (const day of days) {
-      const end = agendaShift(day.date, 1);
+      const end = addDays(day.date, 1);
       if (
         beginning < end &&
         ending >= day.date &&
@@ -105,7 +96,7 @@ export function groupAgendaDays<T extends AgendaEvent>(
   canGroup: (previous: Date, next: Date) => boolean = () => true
 ): AgendaDayGroup<T>[] {
   const groups: AgendaDayGroup<T>[] = [];
-  const todayKey = agendaDay(today).getTime();
+  const todayKey = startOfDay(today).getTime();
   for (const day of days) {
     const previous = groups[groups.length - 1];
     if (

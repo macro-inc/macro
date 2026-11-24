@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { CalendarCapabilities } from '@service-calendar/generated/schemas/calendarCapabilities';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EventEditorConferenceChoice } from '../components/composer/event-form-model';
@@ -14,26 +15,29 @@ const TEAMS: ConferenceChoice = {
 };
 const EXISTING: ConferenceChoice = {
   value: 'existing',
-  label: 'Current conferencing',
+  get label() {
+    return t('calendar.currentConferencing');
+  },
 };
-const NONE: ConferenceChoice = { value: 'none', label: 'No meeting link' };
+const NONE: ConferenceChoice = {
+  value: 'none',
+  get label() {
+    return t('calendar.noMeetingLink');
+  },
+};
 
 export function createComposerConference(options: {
   provider: Accessor<CalendarCapabilities['conferenceProvider'] | undefined>;
   value: Accessor<EventEditorConferenceChoice>;
-  macroCallsEnabled: Accessor<boolean>;
   canKeepExisting: Accessor<boolean>;
   disabled: Accessor<boolean>;
   onChange: (value: EventEditorConferenceChoice) => void;
 }) {
   const provider = createMemo(options.provider);
   const keepExisting = createMemo(options.canKeepExisting);
-  const includeMacro = createMemo(
-    () => options.macroCallsEnabled() || options.value() === 'macro'
-  );
   const choices = createMemo(() => {
     const choices: ConferenceChoice[] = [];
-    if (includeMacro()) choices.push(MACRO);
+    choices.push(MACRO);
     const currentProvider = provider();
     if (currentProvider === 'microsoft_teams') choices.push(TEAMS);
     else if (currentProvider !== null && currentProvider !== 'other')

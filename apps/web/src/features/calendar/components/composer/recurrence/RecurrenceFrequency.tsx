@@ -3,7 +3,7 @@ import { Dropdown, Input } from '@ui';
 import { For } from 'solid-js';
 import { useCustomRecurrence } from '../../../context/custom-recurrence-context';
 
-const FREQUENCIES = [
+export const RECURRENCE_FREQUENCIES = [
   { value: 'DAILY', label: 'calendar.recurrenceDay' },
   { value: 'WEEKLY', label: 'calendar.recurrenceWeek' },
   { value: 'MONTHLY', label: 'calendar.recurrenceMonth' },
@@ -13,7 +13,7 @@ const FREQUENCIES = [
 export function RecurrenceFrequency() {
   const model = useCustomRecurrence();
   const label = () => {
-    const frequency = FREQUENCIES.find(
+    const frequency = RECURRENCE_FREQUENCIES.find(
       (item) => item.value === model.input.value.frequency
     );
     return t(frequency?.label ?? 'calendar.recurrenceDay');
@@ -46,7 +46,7 @@ export function RecurrenceFrequency() {
               value={model.input.value.frequency}
               onChange={model.frequency}
             >
-              <For each={FREQUENCIES}>
+              <For each={RECURRENCE_FREQUENCIES}>
                 {(frequency) => (
                   <Dropdown.RadioItem value={frequency.value} closeOnSelect>
                     <span class="flex-1">{t(frequency.label)}</span>

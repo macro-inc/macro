@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import { For, Show } from 'solid-js';
-import { CalendarSwatch } from '../../../components/calendar-swatch/CalendarSwatch';
+import { CalendarSwatch } from '../../../components/CalendarSwatch';
 import { PhoneMenu } from '../../../components/composer/phone-menu/PhoneMenu';
 import { PhoneMenuChoice } from '../../../components/composer/phone-menu/PhoneMenuChoice';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';

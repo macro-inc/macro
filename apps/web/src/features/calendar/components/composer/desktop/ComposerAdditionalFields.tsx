@@ -4,12 +4,12 @@ import ShieldIcon from '@icon/system/regular/shield-check.svg';
 import DescriptionIcon from '@icon/system/regular/text-align-left.svg';
 import { type ComponentProps, Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
-import type { ComposerDescription } from '../description/ComposerDescription';
-import { ComposerFieldRow } from '../field-row/ComposerFieldRow';
-import { DesktopOptionalField } from '../optional-field/DesktopOptionalField';
-import { ComposerGuestPermissions } from '../permissions/ComposerGuestPermissions';
-import { ComposerReminders } from '../reminders/ComposerReminders';
-import { ComposerVisibility } from '../visibility/ComposerVisibility';
+import type { ComposerDescription } from '../parts/ComposerDescription';
+import { ComposerFieldRow } from '../parts/ComposerFieldRow';
+import { ComposerGuestPermissions } from '../parts/ComposerGuestPermissions';
+import { ComposerReminders } from '../parts/ComposerReminders';
+import { ComposerVisibility } from '../parts/ComposerVisibility';
+import { DesktopOptionalField } from '../parts/DesktopOptionalField';
 
 export function ComposerAdditionalFields(props: {
   resolveAppLink?: ComponentProps<typeof ComposerDescription>['resolveAppLink'];

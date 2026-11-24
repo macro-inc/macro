@@ -1,8 +1,9 @@
+import { t } from '@app/lib/i18n';
 import CorvuCalendar from '@corvu/calendar';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { Button, cn } from '@ui';
-import { Index } from 'solid-js';
+import { createMemo, Index } from 'solid-js';
 
 export function WhenMonthGrid(props: {
   size: 'desktop' | 'phone';
@@ -10,11 +11,17 @@ export function WhenMonthGrid(props: {
 }) {
   const calendar = CorvuCalendar.useContext();
   const compact = () => props.size === 'desktop';
-  const month = () =>
-    new Intl.DateTimeFormat(props.locale, {
-      month: 'long',
-      year: 'numeric',
-    }).format(calendar.month());
+  const monthFormatter = createMemo(
+    () =>
+      new Intl.DateTimeFormat(props.locale, { month: 'long', year: 'numeric' })
+  );
+  const longWeekdayFormatter = createMemo(
+    () => new Intl.DateTimeFormat(props.locale, { weekday: 'long' })
+  );
+  const narrowWeekdayFormatter = createMemo(
+    () => new Intl.DateTimeFormat(props.locale, { weekday: 'narrow' })
+  );
+  const month = () => monthFormatter().format(calendar.month());
   return (
     <div data-when-month="" class={compact() ? 'w-[252px]' : 'w-[266px]'}>
       <div
@@ -32,7 +39,7 @@ export function WhenMonthGrid(props: {
             variant="ghost"
             size={compact() ? 'icon-xs' : 'icon-md'}
             action="prev-month"
-            aria-label="Go to previous month"
+            aria-label={t('common.previousMonth')}
           >
             <CaretLeftIcon class="size-3" />
           </CorvuCalendar.Nav>
@@ -41,7 +48,7 @@ export function WhenMonthGrid(props: {
             variant="ghost"
             size={compact() ? 'icon-xs' : 'icon-md'}
             action="next-month"
-            aria-label="Go to next month"
+            aria-label={t('common.nextMonth')}
           >
             <CaretRightIcon class="size-3" />
           </CorvuCalendar.Nav>
@@ -57,13 +64,9 @@ export function WhenMonthGrid(props: {
                     'text-center text-xs text-ink-extra-muted',
                     compact() ? 'h-[22px]' : 'h-6'
                   )}
-                  abbr={new Intl.DateTimeFormat(props.locale, {
-                    weekday: 'long',
-                  }).format(day())}
+                  abbr={longWeekdayFormatter().format(day())}
                 >
-                  {new Intl.DateTimeFormat(props.locale, {
-                    weekday: 'narrow',
-                  }).format(day())}
+                  {narrowWeekdayFormatter().format(day())}
                 </CorvuCalendar.HeadCell>
               )}
             </Index>

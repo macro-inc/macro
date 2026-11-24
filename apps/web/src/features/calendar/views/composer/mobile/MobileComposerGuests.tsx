@@ -1,29 +1,19 @@
 import { t } from '@app/lib/i18n';
-import { SheetGroup } from '@components/app/mobile/sheet-group/SheetGroup';
+import { SheetGroup } from '@components/app/mobile/SheetGroup';
 import { For, Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
-import { composerGuestKey } from '../../../core/composer-guests';
-import { createComposerGuestAdditions } from '../../../primitives/create-composer-guest-additions';
+import { createComposerGuestSelection } from '../../../primitives/create-composer-guest-additions';
 import { MobileComposerGuestPicker } from './MobileComposerGuestPicker';
 import { MobileComposerGuestRow } from './MobileComposerGuestRow';
 
 export function MobileComposerGuests() {
   const model = useCalendarComposer();
-  const current = () => model.guests.currentGuests ?? [];
-  const added = () =>
-    model.guests.selected.filter(
-      (guest) =>
-        !current().some(
-          (fixed) => composerGuestKey(fixed) === composerGuestKey(guest)
-        )
-    );
-  const disabled = () => model.guests.disabled || model.guests.readOnly;
-  const additions = createComposerGuestAdditions({
+  const {
     current,
     added,
     disabled,
-    onChange: (guests) => model.guests.onChange([...current(), ...guests]),
-  });
+    selection: additions,
+  } = createComposerGuestSelection(model.guests);
 
   return (
     <SheetGroup aria-label={t('mobile.people')}>

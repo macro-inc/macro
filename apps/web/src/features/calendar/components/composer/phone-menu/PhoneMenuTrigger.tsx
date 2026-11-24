@@ -25,7 +25,6 @@ export function PhoneMenuTrigger(props: PhoneMenuTriggerProps) {
       class="grid grid-cols-[18px_minmax(0,1fr)_16px] gap-x-3 px-3 text-left font-normal"
       classList={{
         'text-ink-subtle': props.placeholder,
-        'inset-ring-[1.5px] inset-ring-accent': opened(),
       }}
       aria-label={props.title}
       aria-expanded={opened()}

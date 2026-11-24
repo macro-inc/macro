@@ -27,6 +27,13 @@ export type ComposerDragOutcome = 'pinned' | 'floating' | 'cancelled';
 const DRAG_THRESHOLD = 8;
 const MIN_FLOATING_HEIGHT = 144;
 
+const headerBounds = (surface: ComposerDragBounds) => ({
+  left: surface.left,
+  top: surface.top,
+  width: surface.width,
+  height: Math.min(MIN_FLOATING_HEIGHT, surface.height),
+});
+
 /** Own pointer capture and cancellation without moving or replacing the editor. */
 export function createComposerHeaderDrag(options: {
   boundary: Accessor<ComposerDragBounds | undefined>;
@@ -103,12 +110,7 @@ export function createComposerHeaderDrag(options: {
       position: clampComposerPosition(
         { x: current.surface.left + dx, y: current.surface.top + dy },
         // Keep the header reachable, but let a tall lifted panel follow both axes.
-        {
-          left: current.surface.left,
-          top: current.surface.top,
-          width: current.surface.width,
-          height: Math.min(MIN_FLOATING_HEIGHT, current.surface.height),
-        },
+        headerBounds(current.surface),
         boundary
       ),
     });
@@ -180,13 +182,7 @@ export function createComposerHeaderDrag(options: {
     if (!current || !boundary || !surface) return current;
     // Keep a lifted panel's header reachable during dragging. Its placement
     // owner fits the complete floating card into the viewport after release.
-    const size = {
-      left: surface.left,
-      top: surface.top,
-      width: surface.width,
-      height: Math.min(MIN_FLOATING_HEIGHT, surface.height),
-    };
-    return clampComposerPosition(current, size, boundary);
+    return clampComposerPosition(current, headerBounds(surface), boundary);
   };
   onCleanup(cancel);
   return {
@@ -194,7 +190,6 @@ export function createComposerHeaderDrag(options: {
     target,
     position,
     start,
-    cancel,
     reset: () => setState('position', undefined),
   };
 }

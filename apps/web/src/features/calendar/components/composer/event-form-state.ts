@@ -106,11 +106,29 @@ export function createEventForm(props: EventFormProps) {
     props.disabledFields?.[field] === true;
   const fieldIsDisabled = (field: keyof EventEditorDisabledFields) =>
     formIsDisabled() || fieldIsReadOnly(field);
+  // The legacy form keeps an explicitly picked end fixed when its start moves;
+  // direct controller commands still move the whole range for the new composer.
+  let endChosen = false;
+  let rangeRevision = controller.detailsRevision();
+  let rangeAllDay = state().allDay;
+  const refreshRangeIntent = () => {
+    if (
+      rangeRevision !== controller.detailsRevision() ||
+      rangeAllDay !== state().allDay
+    ) {
+      endChosen = false;
+      rangeRevision = controller.detailsRevision();
+      rangeAllDay = state().allDay;
+    }
+  };
   /** The event's start and end, bound for either range layout. */
   const range: DateTimeRangeProps = {
     subject: 'event',
+    // The main form retains native hour12 labels; calendar clocks stay compact.
     get timeFormat() {
-      return props.timeFormat;
+      return props.timeFormat === undefined
+        ? undefined
+        : props.timeFormat === '12-hour';
     },
     get start() {
       return state().start;
@@ -121,8 +139,16 @@ export function createEventForm(props: EventFormProps) {
     get allDay() {
       return state().allDay;
     },
-    onStartChange: controller.setStart,
-    onEndChange: controller.setEnd,
+    onStartChange: (start) => {
+      refreshRangeIntent();
+      if (endChosen) controller.setRange(start, state().end);
+      else controller.setStart(start);
+    },
+    onEndChange: (end) => {
+      refreshRangeIntent();
+      if (end !== state().end) endChosen = true;
+      controller.setEnd(end);
+    },
     get startDisabled() {
       return fieldIsDisabled('start');
     },

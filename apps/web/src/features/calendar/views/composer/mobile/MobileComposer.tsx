@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
-import { SheetFooter } from '@components/app/mobile/sheet-footer/SheetFooter';
-import { SheetGroup } from '@components/app/mobile/sheet-group/SheetGroup';
-import { SheetRow } from '@components/app/mobile/sheet-row/SheetRow';
+import { SheetFooter } from '@components/app/mobile/SheetFooter';
+import { SheetGroup } from '@components/app/mobile/SheetGroup';
+import { SheetRow } from '@components/app/mobile/SheetRow';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import LocationIcon from '@icon/system/regular/map-pin.svg';
@@ -11,18 +11,19 @@ import {
   type ComponentProps,
   createSignal,
   type JSX,
+  Match,
   type ParentProps,
   Show,
+  Switch,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { ComposerSubmit } from '../../../components/composer/actions/ComposerSubmit';
-import { ComposerDescription } from '../../../components/composer/description/ComposerDescription';
-import { ComposerLocation } from '../../../components/composer/location/ComposerLocation';
-import { ComposerNotices } from '../../../components/composer/notices/ComposerNotices';
-import { ComposerDeclineMessage } from '../../../components/composer/out-of-office/ComposerDeclineMessage';
+import { ComposerDeclineMessage } from '../../../components/composer/parts/ComposerDeclineMessage';
+import { ComposerDescription } from '../../../components/composer/parts/ComposerDescription';
+import { ComposerLocation } from '../../../components/composer/parts/ComposerLocation';
+import { ComposerNotices } from '../../../components/composer/parts/ComposerNotices';
+import { ComposerScope } from '../../../components/composer/parts/ComposerScope';
 import { PhoneComposerMenuRoot } from '../../../components/composer/phone-menu/PhoneComposerMenuRoot';
-import { ComposerScope } from '../../../components/composer/scope/ComposerScope';
-import { ComposerWhenRoot } from '../../../components/composer/when/ComposerWhenRoot';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import { usePhoneComposerMenu } from '../../../context/phone-composer-menu-context';
 import {
@@ -46,7 +47,6 @@ export interface MobileComposerProps {
   headerMount?: HTMLElement;
   footerMount?: HTMLElement;
   scrollElement: Accessor<HTMLElement | undefined>;
-  macroCallsEnabled: boolean;
   titleIcon?: JSX.Element;
   saveError?: string;
   resolveAppLink?: ComponentProps<typeof ComposerDescription>['resolveAppLink'];
@@ -151,22 +151,22 @@ function MobileComposerFields(props: ParentProps<MobileComposerProps>) {
           <MobileComposerGuests />
         </Show>
         <SheetGroup>
-          <Show when={!model.isOutOfOffice()}>
-            <MobileComposerConference
-              macroCallsEnabled={props.macroCallsEnabled}
-            />
-            <Show when={fields.initiallyVisible('location')}>
-              {optionalField('location')}
-            </Show>
-          </Show>
-          <Show when={model.isOutOfOffice()}>
-            <MobileComposerDecline />
-            <Show when={model.showsDeclineMessage()}>
-              <SheetRow class="py-2">
-                <ComposerDeclineMessage />
-              </SheetRow>
-            </Show>
-          </Show>
+          <Switch>
+            <Match when={!model.isOutOfOffice()}>
+              <MobileComposerConference />
+              <Show when={fields.initiallyVisible('location')}>
+                {optionalField('location')}
+              </Show>
+            </Match>
+            <Match when={model.isOutOfOffice()}>
+              <MobileComposerDecline />
+              <Show when={model.showsDeclineMessage()}>
+                <SheetRow class="py-2">
+                  <ComposerDeclineMessage />
+                </SheetRow>
+              </Show>
+            </Match>
+          </Switch>
           <MobileComposerCalendar />
           <MobileComposerReminders
             minutes={model.controller.reminderMinutes()}
@@ -210,10 +210,8 @@ function MobileComposerFields(props: ParentProps<MobileComposerProps>) {
 
 export function MobileComposer(props: ParentProps<MobileComposerProps>) {
   return (
-    <ComposerWhenRoot>
-      <PhoneComposerMenuRoot scrollElement={props.scrollElement}>
-        <MobileComposerFields {...props} />
-      </PhoneComposerMenuRoot>
-    </ComposerWhenRoot>
+    <PhoneComposerMenuRoot scrollElement={props.scrollElement}>
+      <MobileComposerFields {...props} />
+    </PhoneComposerMenuRoot>
   );
 }

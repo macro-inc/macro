@@ -13,25 +13,24 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { ComposerCalendar } from '../../components/composer/calendar/ComposerCalendar';
-import { ComposerConference } from '../../components/composer/conference/ComposerConference';
-import type { ComposerDescription } from '../../components/composer/description/ComposerDescription';
-import { ComposerFieldRow } from '../../components/composer/field-row/ComposerFieldRow';
 import { ComposerGuests } from '../../components/composer/guests/ComposerGuests';
-import { ComposerKind } from '../../components/composer/kind/ComposerKind';
-import { ComposerNotices } from '../../components/composer/notices/ComposerNotices';
-import { DesktopOptionalField } from '../../components/composer/optional-field/DesktopOptionalField';
-import { ComposerDecline } from '../../components/composer/out-of-office/ComposerDecline';
-import { ComposerDeclineMessage } from '../../components/composer/out-of-office/ComposerDeclineMessage';
+import { ComposerCalendar } from '../../components/composer/parts/ComposerCalendar';
+import { ComposerConference } from '../../components/composer/parts/ComposerConference';
+import { ComposerDecline } from '../../components/composer/parts/ComposerDecline';
+import { ComposerDeclineMessage } from '../../components/composer/parts/ComposerDeclineMessage';
+import type { ComposerDescription } from '../../components/composer/parts/ComposerDescription';
+import { ComposerFieldRow } from '../../components/composer/parts/ComposerFieldRow';
+import { ComposerKind } from '../../components/composer/parts/ComposerKind';
+import { ComposerNotices } from '../../components/composer/parts/ComposerNotices';
+import { ComposerTitle } from '../../components/composer/parts/ComposerTitle';
+import { DesktopOptionalField } from '../../components/composer/parts/DesktopOptionalField';
 import { ComposerRecurrence } from '../../components/composer/recurrence/ComposerRecurrence';
-import { ComposerTitle } from '../../components/composer/title/ComposerTitle';
 import { DesktopWhen } from '../../components/composer/when/DesktopWhen';
 import { useCalendarComposer } from '../../context/calendar-composer-context';
 
 export interface DesktopComposerProps {
   titleIcon?: JSX.Element;
   options?: JSX.Element;
-  macroCallsEnabled: boolean;
   saveError?: string;
   resolveAppLink?: ComponentProps<typeof ComposerDescription>['resolveAppLink'];
 }
@@ -44,12 +43,12 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
   return (
     <div class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 pt-1 pb-3">
       <ComposerFieldRow class="py-0" icon={props.titleIcon}>
-        <ComposerTitle />
-        <Show when={!model.isEdit()}>
-          <div class="mt-1.5">
+        <div class="flex flex-col gap-1.5">
+          <ComposerTitle />
+          <Show when={!model.isEdit()}>
             <ComposerKind />
-          </div>
-        </Show>
+          </Show>
+        </div>
       </ComposerFieldRow>
       <ComposerFieldRow icon={<ClockIcon class="size-4" />}>
         <DesktopWhen />
@@ -87,7 +86,6 @@ export function DesktopComposer(props: ParentProps<DesktopComposerProps>) {
               canKeepExisting={
                 controller.initialConferenceChoice() === 'existing'
               }
-              macroCallsEnabled={props.macroCallsEnabled}
               onChange={(value) => controller.setField('conference', value)}
               disabled={model.fieldIsDisabled('conference')}
             />

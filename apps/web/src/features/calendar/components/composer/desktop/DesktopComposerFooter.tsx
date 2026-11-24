@@ -1,22 +1,18 @@
 import { type JSX, Show } from 'solid-js';
-import { useCalendarComposer } from '../../../context/calendar-composer-context';
 import { ComposerCancel } from '../actions/ComposerCancel';
 import { ComposerSubmit } from '../actions/ComposerSubmit';
-import { ComposerScope } from '../scope/ComposerScope';
+import { ComposerScope } from '../parts/ComposerScope';
 
 export function DesktopComposerFooter(props: {
   leading?: JSX.Element;
   f3?: boolean;
   onCancel: () => void;
 }) {
-  const model = useCalendarComposer();
   return (
     <>
-      <Show when={model.options.showRecurringEditNotice}>
-        <div class="shrink-0 px-4 pb-2">
-          <ComposerScope />
-        </div>
-      </Show>
+      <div class="shrink-0 px-4 pb-2 empty:hidden">
+        <ComposerScope />
+      </div>
       <div
         class={
           props.f3

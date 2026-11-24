@@ -1,10 +1,10 @@
 import { t } from '@app/lib/i18n';
-import { SheetRow } from '@components/app/mobile/sheet-row/SheetRow';
+import { SheetRow } from '@components/app/mobile/SheetRow';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import type { ComposerOptionalField } from '../../../primitives/create-composer-optional-fields';
-import { MobileComposerAddRow } from './MobileComposerAddRow';
 
 export function MobileComposerOptionalField(
   props: ParentProps<{
@@ -25,12 +25,20 @@ export function MobileComposerOptionalField(
       <Show
         when={props.visible}
         fallback={
-          <MobileComposerAddRow
-            label={props.label}
-            icon={props.icon}
+          <Button
+            variant="ghost"
+            size="sheet-row"
+            fullWidth
+            class="grid grid-cols-[18px_minmax(0,1fr)_16px] gap-3 px-3 text-left"
             disabled={props.disabled}
-            onClick={props.onReveal}
-          />
+            onClick={(event) => props.onReveal(event.currentTarget)}
+          >
+            <span aria-hidden="true" class="flex justify-center">
+              {props.icon}
+            </span>
+            <span class="text-ink-subtle">{props.label}</span>
+            <PlusIcon class="size-4 shrink-0" />
+          </Button>
         }
       >
         <SheetRow

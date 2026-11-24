@@ -7,9 +7,7 @@ import { useCalendarComposer } from '../../../context/calendar-composer-context'
 import { usePhoneComposerMenu } from '../../../context/phone-composer-menu-context';
 import { createComposerConference } from '../../../primitives/create-composer-conference';
 
-export function MobileComposerConference(props: {
-  macroCallsEnabled: boolean;
-}) {
+export function MobileComposerConference() {
   const model = useCalendarComposer();
   const menus = usePhoneComposerMenu();
   const conference = createComposerConference({
@@ -17,7 +15,6 @@ export function MobileComposerConference(props: {
     value: () => model.state().conference,
     canKeepExisting: () =>
       model.controller.initialConferenceChoice() === 'existing',
-    macroCallsEnabled: () => props.macroCallsEnabled,
     disabled: () => model.fieldIsDisabled('conference'),
     onChange: (value) => model.controller.setField('conference', value),
   });

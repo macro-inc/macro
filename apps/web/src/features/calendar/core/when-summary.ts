@@ -2,15 +2,15 @@ import {
   type ClockFormat,
   formatClockRange,
   formatClockTime,
-} from '@app/components/date-time-range/primitives/clock-format';
+} from '@app/components/date-time-range/clock-format';
 import { timeRangeFromValue } from '@app/components/date-time-range/time-range';
 import { parseLocalDate } from '@core/util/local-date';
 
-export function whenDateLabel(value: string, locale?: string) {
+export function whenDateLabel(value: string, locale?: string, short = false) {
   const date = parseLocalDate(value.slice(0, 10));
   if (!date) return '';
   return new Intl.DateTimeFormat(locale, {
-    weekday: 'short',
+    weekday: short ? undefined : 'short',
     month: 'short',
     day: 'numeric',
   }).format(date);

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { EventTransparency } from '@service-calendar/generated/schemas/eventTransparency';
 import type { EventVisibility } from '@service-calendar/generated/schemas/eventVisibility';
 import type { CalendarUpdateScope } from '@service-email/client';
@@ -8,13 +9,16 @@ import {
   createSignal,
   createUniqueId,
   on,
+  onCleanup,
 } from 'solid-js';
 import type { EventEditorDisabledFields } from '../components/composer/event-form-model';
 import { outOfOfficeNoticeFor } from '../components/composer/out-of-office';
 import type { CalendarComposerOptions } from '../core/composer';
+import { DEFAULT_CALENDAR_SOURCE } from '../types';
 import { isTimedPointEvent } from '../utils/calendar-date';
 import { rezoneRecurrenceUntil } from '../utils/recurrence';
 import { createComposerMetadata } from './create-composer-metadata';
+import { createComposerWhen } from './create-composer-when';
 
 /** Conformance-backed behavior for the new UI; no component or service ownership. */
 export function createCalendarComposer(options: CalendarComposerOptions) {
@@ -53,7 +57,7 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
   };
   const recurrenceScopeReason = () => {
     if (editScope() !== 'this_event' || detailsLocked()) return undefined;
-    return 'The repeat rule applies to all events. Choose All events to change it.';
+    return t('calendar.recurrenceScopeReason');
   };
   const capabilities = () => controller.selectedCalendarOption()?.capabilities;
   const conferenceLocked = () => {
@@ -191,7 +195,7 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     },
     get disabledReason() {
       if (editScope() !== 'this_event') return undefined;
-      return 'Guest permissions apply to all events. Choose All events to change them.';
+      return t('calendar.guestPolicyScopeReason');
     },
   };
 
@@ -237,7 +241,15 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     }
   };
 
+  const when = createComposerWhen({
+    range,
+    setRange: controller.setRange,
+    setAllDay: controller.setAllDay,
+    detailsRevision: controller.detailsRevision,
+  });
+  onCleanup(() => when.close());
   return {
+    when,
     options,
     controller,
     state,
@@ -269,6 +281,9 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     recurrenceDescribedBy: () =>
       recurrenceScopeReason() ? ids.recurrenceReason : undefined,
     capabilities,
+    calendarColor: () =>
+      controller.selectedCalendarOption()?.color ??
+      DEFAULT_CALENDAR_SOURCE.color,
     conferenceLocked,
     isOutOfOffice,
     outOfOfficeNotice,

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { addMonths, format } from 'date-fns';
 import { createMemo } from 'solid-js';
 import {
@@ -41,7 +42,7 @@ export function createCustomRecurrence(input: CustomRecurrenceInput) {
       () =>
         formatRecurrenceDescription(
           buildRecurrenceLines(input.value, input.allDay)
-        ) ?? 'Recurring event'
+        ) ?? t('calendar.recurringEvent')
     ),
     interval: (value: number) => patch({ interval: value }),
     frequency: (value: string) => {

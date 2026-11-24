@@ -1,20 +1,19 @@
-import { mobileClockValue } from '@app/components/date-time-range/primitives/mobile-clock-value';
+import { mobileClockValue } from '@app/components/date-time-range/mobile-clock-value';
+import { TimeWheel } from '@app/components/date-time-range/TimeWheel';
 import {
   formatDuration,
   splitLocalDateTime,
 } from '@app/components/date-time-range/time-options';
-import { TimeWheel } from '@app/components/date-time-range/time-wheel/TimeWheel';
 import { formatLocale, t } from '@app/lib/i18n';
 import { Button } from '@ui';
 import { differenceInMinutes, parseISO } from 'date-fns';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
-import { useComposerWhen } from '../../../context/composer-when-context';
 
 type Endpoint = 'start' | 'end';
 
 export function PhoneTimePill(props: { endpoint: Endpoint; controls: string }) {
   const model = useCalendarComposer();
-  const when = useComposerWhen();
+  const when = useCalendarComposer().when;
   const key = () => (props.endpoint === 'start' ? 'start-time' : 'end-time');
   const display = () =>
     mobileClockValue(
@@ -27,9 +26,6 @@ export function PhoneTimePill(props: { endpoint: Endpoint; controls: string }) {
       variant="value"
       size="field"
       class="w-[110px] justify-start px-3 font-normal"
-      classList={{
-        'inset-ring-[1.5px] inset-ring-accent': when.state.active === key(),
-      }}
       data-phone-time-control={props.endpoint}
       aria-label={t(
         props.endpoint === 'start' ? 'calendar.startTime' : 'calendar.endTime'
@@ -49,7 +45,7 @@ export function PhoneTimePill(props: { endpoint: Endpoint; controls: string }) {
 
 export function PhoneTimeWheels(props: { endpoint: Endpoint }) {
   const model = useCalendarComposer();
-  const when = useComposerWhen();
+  const when = useCalendarComposer().when;
   const duration = () => {
     if (props.endpoint !== 'end') return undefined;
     const minutes = differenceInMinutes(

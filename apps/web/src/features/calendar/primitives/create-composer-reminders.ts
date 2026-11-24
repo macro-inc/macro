@@ -1,6 +1,13 @@
 import { createMemo } from 'solid-js';
-import type { ComposerReminderOptions } from '../core/composer-reminders';
 import { REMINDER_PRESET_MINUTES } from '../utils/event-reminders';
+
+export interface ComposerReminderOptions {
+  minutes: number[];
+  canAdd: boolean;
+  preservedCount: number;
+  disabled?: boolean;
+  onChange: (minutes: number[]) => void;
+}
 
 /** Keep preset editing and non-popup preservation shared across both layouts. */
 export function createComposerReminders(options: ComposerReminderOptions) {

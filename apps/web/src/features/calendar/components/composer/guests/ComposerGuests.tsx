@@ -6,11 +6,8 @@ import { Popover } from '@kobalte/core/popover';
 import { Button, Layer } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
-import {
-  composerGuestKey,
-  composerGuestName,
-} from '../../../core/composer-guests';
-import { createComposerGuestAdditions } from '../../../primitives/create-composer-guest-additions';
+import { composerGuestName } from '../../../core/composer-guests';
+import { createComposerGuestSelection } from '../../../primitives/create-composer-guest-additions';
 import { ComposerGuestChip } from './ComposerGuestChip';
 import { ComposerGuestCollection } from './ComposerGuestCollection';
 import { ComposerGuestPicker } from './ComposerGuestPicker';
@@ -18,21 +15,12 @@ import { ComposerGuestPicker } from './ComposerGuestPicker';
 export function ComposerGuests() {
   const model = useCalendarComposer();
   const [open, setOpen] = createSignal(false);
-  const fixed = () => model.guests.currentGuests ?? [];
-  const added = () =>
-    model.guests.selected.filter(
-      (guest) =>
-        !fixed().some(
-          (current) => composerGuestKey(current) === composerGuestKey(guest)
-        )
-    );
-  const disabled = () => model.guests.disabled || model.guests.readOnly;
-  const selection = createComposerGuestAdditions({
+  const {
     current: fixed,
     added,
     disabled,
-    onChange: (guests) => model.guests.onChange([...fixed(), ...guests]),
-  });
+    selection,
+  } = createComposerGuestSelection(model.guests);
   const isOpen = () => open() && !disabled();
   return (
     <div class="flex flex-col gap-1">

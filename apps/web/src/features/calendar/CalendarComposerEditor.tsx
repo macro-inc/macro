@@ -3,18 +3,33 @@ import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Spinner } from '@ui';
-import { type Accessor, Show } from 'solid-js';
-import { ComposerRoot } from './components/composer/root/ComposerRoot';
+import { type JSX, Show } from 'solid-js';
+import type { EventEditorInitialValues } from './components/composer/event-form-model';
+import { ComposerRoot } from './components/composer/parts/ComposerRoot';
+import type { CreatedCalendarEvent } from './core/composer';
+import type { CalendarEvent } from './types';
 import { CalendarDesktopPlacement } from './views/composer/CalendarDesktopPlacement';
 import { createStandaloneComposerSetup } from './views/composer/create-standalone-composer-setup';
 import { PhoneSheetComposer } from './views/composer/mobile/PhoneSheetComposer';
-import type { StandaloneComposerProps } from './views/composer/StandaloneComposer';
 import { StandaloneComposerActions } from './views/composer/StandaloneComposerActions';
 
+export interface StandaloneComposerProps {
+  event?: CalendarEvent;
+  initialValues?: EventEditorInitialValues;
+  suggestedValues?: Promise<Partial<EventEditorInitialValues>>;
+  initialDrawerHeight?: number;
+  pinned?: boolean;
+  onTogglePin?: () => void;
+  onHeaderPointerDown?: JSX.EventHandler<HTMLDivElement, PointerEvent>;
+  onCalendarChange?: (calendarId: string, color: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  onCreated?: (created: CreatedCalendarEvent) => void;
+  onSaved?: () => void;
+  onClose: () => void;
+}
+
 /** One data owner beneath the readiness gate; layouts only compose its model. */
-export function CalendarComposerEditor(
-  props: StandaloneComposerProps & { macroCallsEnabled: Accessor<boolean> }
-) {
+export function CalendarComposerEditor(props: StandaloneComposerProps) {
   const resolveAppLink = useMacroMentionLinkResolver();
   const [attachHotkeys] = useHotkeyDOMScope('event-composer', true);
   const setup = createStandaloneComposerSetup(props);
@@ -52,7 +67,6 @@ export function CalendarComposerEditor(
               onTogglePin={props.onTogglePin}
               onHeaderPointerDown={props.onHeaderPointerDown}
               onClose={props.onClose}
-              macroCallsEnabled={props.macroCallsEnabled()}
               saveError={setup.saveError()}
               resolveAppLink={resolveAppLink}
             >
@@ -62,7 +76,6 @@ export function CalendarComposerEditor(
         >
           <PhoneSheetComposer
             initialHeight={props.initialDrawerHeight}
-            macroCallsEnabled={props.macroCallsEnabled()}
             saveError={setup.saveError()}
             resolveAppLink={resolveAppLink}
           >

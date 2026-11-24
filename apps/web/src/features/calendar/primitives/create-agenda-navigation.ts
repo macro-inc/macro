@@ -1,14 +1,9 @@
 import { beginInteraction } from '@app/observability/flow';
-import { startOfWeek } from 'date-fns';
+import { addDays, startOfDay, startOfWeek } from 'date-fns';
 import { type Accessor, createSignal } from 'solid-js';
 import type { CalendarPeriodView, CalendarWeekStart } from '../types';
 import { getCalendarSupportedRange } from '../utils/calendar-supported-range';
-import {
-  agendaDay,
-  agendaShift,
-  agendaWindow,
-  clipAgendaWindow,
-} from './agenda-window';
+import { agendaWindow, clipAgendaWindow } from './agenda-window';
 
 interface AgendaNavigationOptions {
   initialDate: Date;
@@ -16,17 +11,16 @@ interface AgendaNavigationOptions {
   onNavigate: () => void;
   onDateChange: (date: Date) => void;
   onViewChange: (period: CalendarPeriodView) => void;
-  now?: () => Date;
 }
 
 /** Agenda owns its selected day; only explicit actions transfer it to another host. */
 export function createAgendaNavigation(options: AgendaNavigationOptions) {
-  const [date, setDate] = createSignal(agendaDay(options.initialDate));
+  const [date, setDate] = createSignal(startOfDay(options.initialDate));
   const jump = (next: Date) => {
     const interaction = beginInteraction('calendar.agenda.navigate');
     try {
       options.onNavigate();
-      const day = agendaDay(next);
+      const day = startOfDay(next);
       setDate(day);
       options.onDateChange(day);
     } finally {
@@ -37,23 +31,20 @@ export function createAgendaNavigation(options: AgendaNavigationOptions) {
     periodView: () => 'agenda' as const,
     activeDate: date,
     navigationDate: date,
-    displayRange: () => ({ start: date(), end: agendaShift(date(), 7) }),
+    displayRange: () => ({ start: date(), end: addDays(date(), 7) }),
     weekRange: () => {
       const start = startOfWeek(date(), {
         weekStartsOn: options.weekStartsOn(),
       });
-      return { start, end: agendaShift(start, 7) };
+      return { start, end: addDays(start, 7) };
     },
     visibleRange: () =>
-      clipAgendaWindow(
-        agendaWindow(date(), 0),
-        getCalendarSupportedRange(options.now?.())
-      ),
+      clipAgendaWindow(agendaWindow(date(), 0), getCalendarSupportedRange()),
     gotoDate: jump,
     navigateToDate: jump,
-    navigateToToday: () => jump(options.now?.() ?? new Date()),
-    previousPeriod: () => jump(agendaShift(date(), -7)),
-    nextPeriod: () => jump(agendaShift(date(), 7)),
+    navigateToToday: () => jump(new Date()),
+    previousPeriod: () => jump(addDays(date(), -7)),
+    nextPeriod: () => jump(addDays(date(), 7)),
     changeView: (period: CalendarPeriodView) => {
       if (period === 'agenda') return;
       options.onNavigate();

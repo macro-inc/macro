@@ -104,10 +104,7 @@ export function createComposerWhen(options: {
     if (endpoint === 'start') start(value);
     else end(value);
   };
-  const timeOptions = (
-    endpoint: 'start' | 'end',
-    inline: boolean
-  ): TimeOption[] => {
+  const timeOptions = (endpoint: 'start' | 'end'): TimeOption[] => {
     const range = options.range;
     if (endpoint === 'start') return dayTimeOptions(range.timeFormat);
     const from = splitLocalDateTime(range.start);
@@ -116,7 +113,7 @@ export function createComposerWhen(options: {
     const toDate = parseLocalDate(to.date);
     if (!fromDate || !toDate) return [];
     const days = differenceInCalendarDays(toDate, fromDate);
-    if (!inline && withinEndTimeWindow(range.start, range.end))
+    if (withinEndTimeWindow(range.start, range.end))
       return endTimeOptions(from.time, range.timeFormat);
     const startMinutes =
       Number(from.time.slice(0, 2)) * 60 + Number(from.time.slice(3));

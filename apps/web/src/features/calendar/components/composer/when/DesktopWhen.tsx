@@ -6,16 +6,17 @@ import { Popover } from '@kobalte/core/popover';
 import { Button, ToggleSwitch } from '@ui';
 import { batch, Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
-import { useComposerWhen } from '../../../context/composer-when-context';
 import { whenSummary } from '../../../core/when-summary';
-import { ComposerTimeZone } from '../time-zone/ComposerTimeZone';
+import { useCalendarPreferences } from '../../../utils/preferences';
+import { ComposerTimeZone } from '../parts/ComposerTimeZone';
 import { ComposerRangeFeedback } from './ComposerRangeFeedback';
 import { WhenMonth } from './WhenMonth';
 import { WhenTime } from './WhenTime';
 
 export function DesktopWhen() {
+  const [preferences] = useCalendarPreferences();
   const model = useCalendarComposer(),
-    when = useComposerWhen();
+    when = useCalendarComposer().when;
   let content: HTMLDivElement | undefined;
   const open = () =>
     when.state.active === 'when' ||
@@ -43,7 +44,7 @@ export function DesktopWhen() {
             variant="value"
             size="sm"
             class="max-w-full whitespace-normal text-left font-normal"
-            aria-label="When"
+            aria-label={t('calendar.when')}
             disabled={
               model.fieldIsDisabled('start') && model.fieldIsDisabled('end')
             }
@@ -60,7 +61,7 @@ export function DesktopWhen() {
             <ScopedPortal scope="local">
               <Popover.Content
                 ref={content}
-                class="menu-surface z-action-menu w-[268px] max-h-[calc(100dvh-32px)] overflow-y-auto rounded-xl p-2 outline-none"
+                class="menu-surface z-action-menu flex w-[268px] max-h-[calc(100dvh-32px)] flex-col gap-2 overflow-y-auto rounded-xl p-2 outline-none"
                 onOpenAutoFocus={(event) => {
                   event.preventDefault();
                   queueMicrotask(() =>
@@ -79,6 +80,7 @@ export function DesktopWhen() {
                   {t('common.chooseDateRange')}
                 </Popover.Title>
                 <WhenMonth
+                  weekStartsOn={preferences.weekStartsOn}
                   size="desktop"
                   value={
                     parseLocalDate(model.state().start.slice(0, 10)) ??
@@ -94,14 +96,14 @@ export function DesktopWhen() {
                   }}
                 />
                 <Show when={!model.state().allDay}>
-                  <div class="mt-2 flex items-center gap-1.5 px-1 pt-1">
+                  <div class="flex items-center gap-1.5 px-1 pt-1">
                     <WhenTime endpoint="start" />
                     <ArrowIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
                     <WhenTime endpoint="end" />
                   </div>
                 </Show>
                 <ToggleSwitch
-                  class="mt-2 flex h-8 w-full flex-row-reverse justify-between px-2"
+                  class="flex h-8 w-full flex-row-reverse justify-between px-2"
                   size="compact"
                   label={t('calendar.allDay')}
                   labelClass="text-sm text-ink-muted"

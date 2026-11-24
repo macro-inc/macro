@@ -1,5 +1,5 @@
 import { t } from '@app/lib/i18n';
-import { SheetRow } from '@components/app/mobile/sheet-row/SheetRow';
+import { SheetRow } from '@components/app/mobile/SheetRow';
 import { UserIcon } from '@core/component/UserIcon';
 import UsersIcon from '@icon/system/regular/users.svg';
 import CloseIcon from '@icon/system/regular/x.svg';

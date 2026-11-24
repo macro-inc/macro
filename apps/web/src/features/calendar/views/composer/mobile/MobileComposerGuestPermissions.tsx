@@ -1,6 +1,6 @@
 import { t } from '@app/lib/i18n';
-import { SheetGroup } from '@components/app/mobile/sheet-group/SheetGroup';
-import { SheetRow } from '@components/app/mobile/sheet-row/SheetRow';
+import { SheetGroup } from '@components/app/mobile/SheetGroup';
+import { SheetRow } from '@components/app/mobile/SheetRow';
 import ShieldIcon from '@icon/system/regular/shield-check.svg';
 import { Checkbox } from '@ui';
 import { For, Show } from 'solid-js';

@@ -5,32 +5,20 @@ import { Popover } from '@kobalte/core/popover';
 import { Button, Checkbox, Layer } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { useCalendarComposer } from '../../../context/calendar-composer-context';
-import {
-  composerGuestKey,
-  composerGuestName,
-} from '../../../core/composer-guests';
-import { createComposerGuestAdditions } from '../../../primitives/create-composer-guest-additions';
+import { composerGuestName } from '../../../core/composer-guests';
+import { createComposerGuestSelection } from '../../../primitives/create-composer-guest-additions';
 import { ComposerGuestPicker } from '../guests/ComposerGuestPicker';
 
 /** Full-width guest selector for the desktop composer. */
 export function ComposerGuestSelect() {
   const model = useCalendarComposer();
   const [open, setOpen] = createSignal(false);
-  const fixed = () => model.guests.currentGuests ?? [];
-  const added = () =>
-    model.guests.selected.filter(
-      (guest) =>
-        !fixed().some(
-          (current) => composerGuestKey(current) === composerGuestKey(guest)
-        )
-    );
-  const disabled = () => model.guests.disabled || model.guests.readOnly;
-  const selection = createComposerGuestAdditions({
+  const {
     current: fixed,
     added,
     disabled,
-    onChange: (guests) => model.guests.onChange([...fixed(), ...guests]),
-  });
+    selection,
+  } = createComposerGuestSelection(model.guests);
   const isOpen = () => open() && !disabled();
 
   return (
@@ -45,10 +33,9 @@ export function ComposerGuestSelect() {
           as={Button}
           variant="value"
           finish="flat"
-          size="md"
+          size="select"
           fullWidth
           disabled={disabled()}
-          class="h-8 min-w-0 justify-between rounded-lg px-3 text-sm"
           aria-label={t('calendar.guests')}
         >
           <span class="min-w-0 flex-1 truncate text-left">

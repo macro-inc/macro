@@ -10,16 +10,7 @@ export const PHONE_MENU_IDS = [
   'people',
 ] as const;
 
-export type PhoneMenuId =
-  | 'call'
-  | 'decline'
-  | 'calendar'
-  | 'visibility'
-  | 'reminders'
-  | 'time-zone'
-  | 'repeat'
-  | 'custom-repeat'
-  | 'people';
+export type PhoneMenuId = (typeof PHONE_MENU_IDS)[number];
 
 export type PhoneMenuPattern = 'inline' | 'page';
 
@@ -34,7 +25,5 @@ export function phoneMenuPattern(
     return (options.count ?? 0) <= 5 && options.labelsFit === true
       ? 'inline'
       : 'page';
-  if (menu === 'reminders')
-    return (options.count ?? 6) <= 5 ? 'inline' : 'page';
   return 'page';
 }

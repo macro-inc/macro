@@ -7,7 +7,7 @@ import { PhoneMenuChoice } from '../../../components/composer/phone-menu/PhoneMe
 import { PhoneMenuPage } from '../../../components/composer/phone-menu/PhoneMenuPage';
 import { PhoneMenuTrigger } from '../../../components/composer/phone-menu/PhoneMenuTrigger';
 import { usePhoneComposerMenu } from '../../../context/phone-composer-menu-context';
-import type { ComposerReminderOptions } from '../../../core/composer-reminders';
+import type { ComposerReminderOptions } from '../../../primitives/create-composer-reminders';
 import { createComposerReminders } from '../../../primitives/create-composer-reminders';
 import { formatReminderOffset } from '../../../utils/event-reminders';
 
@@ -83,20 +83,15 @@ export function MobileComposerReminders(props: ComposerReminderOptions) {
         onOpen={() => setEditing(undefined)}
       />
       <Show when={menus.when.state.active === 'reminders' && !props.disabled}>
-        <Show
-          when={menus.pattern('reminders') === 'page'}
-          fallback={<div class="pb-2 pl-[42px] pr-3">{choices()}</div>}
+        <PhoneMenuPage
+          title={
+            editing() === undefined
+              ? t('calendar.addReminder')
+              : t('calendar.reminder')
+          }
         >
-          <PhoneMenuPage
-            title={
-              editing() === undefined
-                ? t('calendar.addReminder')
-                : t('calendar.reminder')
-            }
-          >
-            {choices()}
-          </PhoneMenuPage>
-        </Show>
+          {choices()}
+        </PhoneMenuPage>
       </Show>
       <Show when={props.preservedCount > 0}>
         <p class="px-3 pb-2 text-xs text-ink-muted">

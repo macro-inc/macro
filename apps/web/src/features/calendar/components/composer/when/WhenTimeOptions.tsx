@@ -14,7 +14,6 @@ export function WhenTimeOptions(props: {
   options: TimeOption[];
   selectedId: string;
   highlightedId?: string;
-  inline: boolean;
   onChoose: (option: TimeOption) => void;
   ref: (element: HTMLDivElement) => void;
 }) {
@@ -30,18 +29,13 @@ export function WhenTimeOptions(props: {
       id={props.id}
       role="listbox"
       aria-label={props.label}
-      class={
-        props.inline
-          ? 'h-[220px] overflow-y-auto overscroll-auto'
-          : 'max-h-56 overflow-y-auto py-1'
-      }
+      class="max-h-56 overflow-y-auto py-1"
     >
       <For each={props.options}>
         {(option, index) => (
           <>
             <Show
               when={
-                !props.inline &&
                 option.dayOffset > 0 &&
                 props.options[index() - 1]?.dayOffset !== option.dayOffset
               }
@@ -58,16 +52,12 @@ export function WhenTimeOptions(props: {
               }
               class={cn(
                 'flex items-center justify-between gap-3',
-                props.inline && 'h-11 rounded-[20px] px-3 text-base',
                 option.id === props.selectedId && 'bg-selected! text-accent'
               )}
               onPointerDown={(event) => event.preventDefault()}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => props.onChoose(option)}
             >
-              <Show when={props.inline}>
-                <span class="w-[30px] shrink-0" />
-              </Show>
               <span class="flex-1">
                 {option.label.replace(/(\d)(am|pm)$/, '$1 $2')}
               </span>

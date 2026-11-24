@@ -3,7 +3,7 @@ import { cn } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { Transition } from 'solid-transition-group';
 import { useCalendarNavigation } from '../context/calendar-navigation-context';
-import { getCalendarSupportedRange } from '../utils/calendar-supported-range';
+import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
 
 /** Announces when the visible viewport is outside backend occurrence coverage. */
 export function RangeUnavailableBanner(props: {
@@ -14,13 +14,7 @@ export function RangeUnavailableBanner(props: {
   const isUnavailable = createMemo(() => {
     const range = navigation.visibleRange();
     if (!range) return false;
-    const supported = getCalendarSupportedRange();
-    return (
-      Number.isNaN(range.start.getTime()) ||
-      Number.isNaN(range.end.getTime()) ||
-      range.start < supported.start ||
-      range.end > supported.end
-    );
+    return !isCalendarRangeSupported(range);
   });
 
   return (

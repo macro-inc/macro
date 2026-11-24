@@ -34,8 +34,7 @@ export function ComposerReminderSelect() {
   };
   const addCustom = () => {
     const offset = customOffset();
-    if (offset === undefined || disabled() || !controller.canAddReminder())
-      return;
+    if (offset === undefined) return;
     reminders.add(offset);
     setCustom({ open: false, minutes: '' });
   };
@@ -52,9 +51,8 @@ export function ComposerReminderSelect() {
         <Dropdown.Trigger
           variant="value"
           finish="flat"
-          size="md"
+          size="select"
           fullWidth
-          class="h-8 min-w-0 justify-between rounded-lg px-3 text-sm"
           aria-label={t('calendar.reminder')}
           disabled={disabled()}
         >

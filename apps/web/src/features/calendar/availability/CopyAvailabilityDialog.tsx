@@ -26,37 +26,14 @@ import {
   getPersistedCalendarTimeFormat,
   useAvailabilitySettings,
 } from './settings';
+import { availabilityTimeOptions } from './time-options';
 import { useAvailabilityRanges } from './use-availability-ranges';
 
-interface TimeOption {
-  value: string;
-  label: string;
-}
-
-const timeLabelFormatter = new Intl.DateTimeFormat(undefined, {
-  hour: 'numeric',
-  minute: '2-digit',
-});
-
-/** Half-hour choices between two local hours (inclusive). */
-function timeOptions(fromHour: number, toHour: number): TimeOption[] {
-  const options: TimeOption[] = [];
-  for (let minutes = fromHour * 60; minutes <= toHour * 60; minutes += 30) {
-    const hour = Math.floor(minutes / 60);
-    const minute = minutes % 60;
-    options.push({
-      value: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
-      label: timeLabelFormatter.format(new Date(2000, 0, 1, hour, minute)),
-    });
-  }
-  return options;
-}
-
-const START_TIME_OPTIONS = timeOptions(
+const START_TIME_OPTIONS = availabilityTimeOptions(
   AVAILABILITY_TIME_BOUNDS.start.min / 60,
   AVAILABILITY_TIME_BOUNDS.start.max / 60
 );
-const END_TIME_OPTIONS = timeOptions(
+const END_TIME_OPTIONS = availabilityTimeOptions(
   AVAILABILITY_TIME_BOUNDS.end.min / 60,
   AVAILABILITY_TIME_BOUNDS.end.max / 60
 );

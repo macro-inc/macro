@@ -10,7 +10,7 @@ import {
   type CalendarAccountGroup,
   groupCalendarSourcesByAccount,
 } from '../utils/calendar-source-groups';
-import { CalendarSwatch } from './calendar-swatch/CalendarSwatch';
+import { CalendarSwatch } from './CalendarSwatch';
 
 interface SourceControlsProps {
   ref?: (element: HTMLUListElement) => void;

@@ -5,14 +5,16 @@ import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { MonthYearPicker, type MonthYearPickerProps } from './MonthPicker';
 
-export interface MonthYearPickerPopoverProps
-  extends Omit<MonthYearPickerProps, 'children' | 'onCancel' | 'initialFocus'> {
+export type MonthYearPickerPopoverProps = Omit<
+  MonthYearPickerProps,
+  'children' | 'onCancel' | 'initialFocus'
+> & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   focusGoToDate?: boolean;
   triggerSize: 'md' | 'sm';
   children: JSX.Element;
-}
+};
 
 /** The same picker parts work here or directly in an inline host. */
 export function MonthYearPickerPopover(props: MonthYearPickerPopoverProps) {

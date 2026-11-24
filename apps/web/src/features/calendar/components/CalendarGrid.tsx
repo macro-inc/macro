@@ -58,7 +58,7 @@ import {
 } from '../utils/time-format';
 import { TIME_GRID_OPENING_SCROLL_TIME } from '../utils/time-grid-scroller';
 import { mergeWorkingLocationEvents } from '../utils/working-location-events';
-import { DayDraftContent } from './day-draft/DayDraftContent';
+import { DayDraftContent } from './DayDraftContent';
 import { EventContent } from './EventContent';
 import '../calendar.css';
 

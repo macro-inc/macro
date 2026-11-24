@@ -9,10 +9,7 @@ import {
 const TITLE_FADE_DISTANCE = 24;
 
 /** The first title line crosses the viewport over a reversible 24px ramp. */
-export function composerTitleProgress(
-  scrollOffset: number,
-  titleOffset: number
-) {
+function composerTitleProgress(scrollOffset: number, titleOffset: number) {
   return Math.max(
     0,
     Math.min(1, (scrollOffset - titleOffset) / TITLE_FADE_DISTANCE)

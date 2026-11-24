@@ -2,6 +2,11 @@ import { t } from '@app/lib/i18n';
 import { DatePicker, Input, RadioGroup } from '@ui';
 import { useCustomRecurrence } from '../../../context/custom-recurrence-context';
 
+export const RECURRENCE_END_LABELS = {
+  never: 'calendar.recurrenceNever',
+  on: 'calendar.recurrenceOn',
+  after: 'calendar.recurrenceAfter',
+} as const;
 export function RecurrenceEnds() {
   const model = useCustomRecurrence();
   return (
@@ -15,14 +20,14 @@ export function RecurrenceEnds() {
       <RadioGroup.Item value="never" class="gap-2">
         <RadioGroup.ItemControl />
         <RadioGroup.ItemLabel>
-          {t('calendar.recurrenceNever')}
+          {t(RECURRENCE_END_LABELS.never)}
         </RadioGroup.ItemLabel>
       </RadioGroup.Item>
       <div class="flex flex-wrap items-center gap-2">
         <RadioGroup.Item value="on" class="gap-2">
           <RadioGroup.ItemControl />
           <RadioGroup.ItemLabel>
-            {t('calendar.recurrenceOn')}
+            {t(RECURRENCE_END_LABELS.on)}
           </RadioGroup.ItemLabel>
         </RadioGroup.Item>
         <DatePicker
@@ -37,7 +42,7 @@ export function RecurrenceEnds() {
         <RadioGroup.Item value="after" class="gap-2">
           <RadioGroup.ItemControl />
           <RadioGroup.ItemLabel>
-            {t('calendar.recurrenceAfter')}
+            {t(RECURRENCE_END_LABELS.after)}
           </RadioGroup.ItemLabel>
         </RadioGroup.Item>
         <Input

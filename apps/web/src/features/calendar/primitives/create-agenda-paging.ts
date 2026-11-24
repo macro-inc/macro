@@ -3,11 +3,25 @@ import {
   restoreScrollAnchor,
   type ScrollAnchor,
 } from '@core/util/scrollAnchor';
+import { startOfDay } from 'date-fns';
 import { createEffect, createSignal, on, onCleanup } from 'solid-js';
-import { agendaDay, agendaWindowIndices } from './agenda-window';
+import { agendaWindowIndices } from './agenda-window';
 
 const DAY_SELECTOR = '[data-agenda-day]';
 const EDGE_TOUCH_DISTANCE = 12;
+const WINDOW_LOAD_DISTANCE = 320;
+
+function nearEdge(element: HTMLElement, direction: -1 | 1) {
+  const distance =
+    direction < 0
+      ? element.scrollTop
+      : element.scrollHeight - element.clientHeight - element.scrollTop;
+  return distance < WINDOW_LOAD_DISTANCE;
+}
+
+function dayTop(element: HTMLElement, day: HTMLElement) {
+  return day.getBoundingClientRect().top - element.getBoundingClientRect().top;
+}
 
 function isLayoutClamp(element: HTMLElement, previousScrollTop: number) {
   const max = Math.max(0, element.scrollHeight - element.clientHeight);
@@ -15,19 +29,18 @@ function isLayoutClamp(element: HTMLElement, previousScrollTop: number) {
 }
 
 /** A requested empty date belongs to its visible collapsed group, not a zero-height marker. */
-export function findAgendaDayAnchor(
+function findAgendaDayAnchor(
   viewport: HTMLElement,
   date: Date
 ): HTMLElement | undefined {
-  const requested = agendaDay(date).getTime();
+  const requested = startOfDay(date).getTime();
   return Array.from(viewport.querySelectorAll<HTMLElement>(DAY_SELECTOR)).find(
     (day) => {
-      if (day.dataset.agendaDay === date.toDateString()) return true;
+      if (Number(day.dataset.agendaDay) === requested) return true;
       const end = day.dataset.agendaGroupEnd;
       if (!end || !day.dataset.agendaDay) return false;
       return (
-        requested >= new Date(day.dataset.agendaDay).getTime() &&
-        requested <= new Date(end).getTime()
+        requested >= Number(day.dataset.agendaDay) && requested <= Number(end)
       );
     }
   );
@@ -77,19 +90,15 @@ export function createAgendaPaging(
       anchor = undefined;
       return;
     }
-    const date = new Date(key);
+    const date = new Date(Number(key));
     anchor = {
-      top:
-        day.getBoundingClientRect().top - element.getBoundingClientRect().top,
+      top: dayTop(element, day),
       measure: () => {
         // Query projection can replace the row, or merge it into an empty range.
         // Resolve the logical date instead of retaining the detached element.
         const current = findAgendaDayAnchor(element, date);
         if (!current) return undefined;
-        return (
-          current.getBoundingClientRect().top -
-          element.getBoundingClientRect().top
-        );
+        return dayTop(element, current);
       },
     };
   };
@@ -201,11 +210,7 @@ export function createAgendaPaging(
       element,
       target ? new Date(target.date) : date
     );
-    if (day)
-      element.scrollTop +=
-        day.getBoundingClientRect().top -
-        element.getBoundingClientRect().top -
-        (target?.top ?? 0);
+    if (day) element.scrollTop += dayTop(element, day) - (target?.top ?? 0);
     updateActiveWindow(element);
     captureAnchor(element);
   };
@@ -220,18 +225,14 @@ export function createAgendaPaging(
     updateActiveWindow(element);
     const key = day.dataset.agendaDay;
     if (!key) return;
-    const targetDate = new Date(key);
+    const targetDate = new Date(Number(key));
     pendingMove = {
       scrollTop: element.scrollTop,
       anchor: {
-        top:
-          day.getBoundingClientRect().top - element.getBoundingClientRect().top,
+        top: dayTop(element, day),
         measure: () => {
           const current = findAgendaDayAnchor(element, targetDate);
-          return current
-            ? current.getBoundingClientRect().top -
-                element.getBoundingClientRect().top
-            : undefined;
+          return current ? dayTop(element, current) : undefined;
         },
       },
     };
@@ -249,12 +250,7 @@ export function createAgendaPaging(
       interaction = undefined;
       const queued = queuedDirection;
       queuedDirection = undefined;
-      if (queued === -1 && element.scrollTop < 320) move(-1);
-      else if (
-        queued === 1 &&
-        element.scrollHeight - element.clientHeight - element.scrollTop < 320
-      )
-        move(1);
+      if (queued !== undefined && nearEdge(element, queued)) move(queued);
     });
   };
 
@@ -275,15 +271,7 @@ export function createAgendaPaging(
         if (clamped) return;
         if (element.scrollTop !== previous) {
           const direction = element.scrollTop < previous ? -1 : 1;
-          if (
-            direction < 0
-              ? element.scrollTop < 320
-              : element.scrollHeight -
-                  element.clientHeight -
-                  element.scrollTop <
-                320
-          )
-            queuedDirection = direction;
+          if (nearEdge(element, direction)) queuedDirection = direction;
         }
       }
       return;
@@ -299,12 +287,7 @@ export function createAgendaPaging(
     captureAnchor(element);
     // When both edges are close, the reader's direction determines which window to load.
     const direction = element.scrollTop < previousScrollTop ? -1 : 1;
-    if (
-      direction < 0
-        ? element.scrollTop < 320
-        : element.scrollHeight - element.clientHeight - element.scrollTop < 320
-    )
-      move(direction);
+    if (nearEdge(element, direction)) move(direction);
   };
 
   onCleanup(() => {
@@ -320,9 +303,8 @@ export function createAgendaPaging(
     if (!day || !key) return;
     return {
       first: first(),
-      date: new Date(key).getTime(),
-      top:
-        day.getBoundingClientRect().top - element.getBoundingClientRect().top,
+      date: Number(key),
+      top: dayTop(element, day),
     };
   };
   return {
@@ -330,7 +312,6 @@ export function createAgendaPaging(
     activeWindow,
     positionInitial,
     onScroll,
-    move,
     capturePosition,
   };
 }

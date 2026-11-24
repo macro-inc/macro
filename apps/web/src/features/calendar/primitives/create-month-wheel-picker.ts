@@ -1,15 +1,9 @@
+import { set, startOfMonth } from 'date-fns';
 import { createStore } from 'solid-js/store';
 
 // Proposed year bounds; keep the month wheel independent and looping.
 export const MONTH_WHEEL_FIRST_YEAR = 1970;
 export const MONTH_WHEEL_LAST_YEAR = 2100;
-
-function monthStart(year: number, month: number) {
-  const date = new Date(0);
-  date.setFullYear(year, month, 1);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
 
 /** One open sheet session. Navigation is committed whenever either wheel settles. */
 export function createMonthWheelPicker(
@@ -34,9 +28,13 @@ export function createMonthWheelPicker(
       return;
     if (nextYear < MONTH_WHEEL_FIRST_YEAR || nextYear > MONTH_WHEEL_LAST_YEAR)
       return;
-    const date = monthStart(nextYear, nextMonth);
+    const date = startOfMonth(
+      set(new Date(), { year: nextYear, month: nextMonth })
+    );
     if (weekStart) {
-      const lastDay = monthStart(nextYear, nextMonth + 1);
+      const lastDay = startOfMonth(
+        set(new Date(), { year: nextYear, month: nextMonth + 1 })
+      );
       lastDay.setDate(0);
       date.setDate(Math.min(1 + weekIndex * 7, lastDay.getDate()));
     }

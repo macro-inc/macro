@@ -1,4 +1,3 @@
-/* Provisional phone layout values; grid-line rules remain in calendar.css. */
 @media (max-width: 639px) {
   html[data-touch-device="true"] .calendar-view-content {
     --calendar-phone-axis-width: 46px;
