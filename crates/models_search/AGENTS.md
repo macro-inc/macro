@@ -12,7 +12,8 @@ cross-entity response.
   search item into one ranked response; the best map of what's indexed.
 - `src/document.rs`, `src/chat.rs`, `src/channel.rs`, `src/email.rs`,
   `src/call_record.rs`, `src/crm_company.rs`, `src/calendar_event.rs`,
-  `src/agent_session.rs`, `src/project.rs`: per-entity response item types.
+  `src/agent_session.rs`, `src/project.rs`, `src/database_row.rs`:
+  per-entity response item types.
 - `src/score.rs`: relevance scoring types.
 - `src/simple.rs`: the simpler "goto" search response variants.
 

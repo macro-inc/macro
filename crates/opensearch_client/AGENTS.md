@@ -103,6 +103,10 @@ projects, and database rows.
   its own version, never by query: delete-by-query bumps the tombstone's
   version, and the same row written again at its unchanged table version (a
   database restored right after its trash) would be refused.
+- The database rows search (`src/search/database_rows.rs`) is its own
+  request, never a clause of the unified query: it takes the database ids to
+  search, returns only row ids and sort positions (no totals, aggregations or
+  highlights), and the search service decides in Postgres what to show.
 - Put `instrument(err)` on the public method, not the inner function it
   retries, so a recovered attempt does not record an error span.
 - Requests time out after five minutes (`REQUEST_TIMEOUT`). A delete that can

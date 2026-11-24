@@ -34,7 +34,8 @@ per-entity-type search plus a unified search across them — mounted into
 - Depends on: `opensearch_client`, `models_opensearch`, `macro_db_client`,
   `entity_access`, `properties`, `crm`, `item_filters`, `calendar_events`
   (domain only, no features, for its Macro call rule and label port),
-  `rate_limit` (its token bucket, for the API-key search allowance).
+  `rate_limit` (its token bucket, for the API-key search allowance),
+  `database_row_search` (the searchable text of database rows).
 - Used by: `document_storage_service` (mounts `search_router`); called
   through `search_service_client`.
 
@@ -101,6 +102,23 @@ per-entity-type search plus a unified search across them — mounted into
   agents, routines, services, Macro API tokens and account-manager
   credentials never draw on it, and neither does `/search/channel`, which
   takes no lane turn either.
+- Database rows (`include_database_rows` on `/search`, never `/search/simple`)
+  are their own source beside CRM, on only while `DATABASE_ROW_SEARCH_FLAG`
+  (`enable-database-row-search`) is on for the caller and the search has no
+  tag filter, email operator, or regexp/query matching. The `database_rows`
+  index only proposes rows, narrowed to the databases the caller reaches now;
+  `domain::database_rows` shows a row only after the primary database says,
+  uncached, that the caller views its database through their current
+  memberships (`CurrentDatabaseAccess`), the database is a live untrashed
+  entity (not CRM or forms storage), the row and table exist, and the row's
+  current text (`database_row_search::read_row_search_text`, the indexer's own
+  reader) still matches every term. Title and snippet come from that text,
+  never the index. A page reads proposals until it holds one more shown row
+  than it returns, the proposals end, or `MAX_ROUNDS`; the row cursor slot
+  only ever names the last row shown, and absent reads as done. Rows match
+  their title and cells under every `search_on`. The span records
+  `search.database_rows` and the rounds, proposals and rows shown, never ids
+  of rows left out.
 - Search never returns an item in the Trash. The documents and chats indexes
   keep trashed items until a purge (projects leave the index on trash).
   Enrichment drops a document, chat or project hit whose row has `deletedAt`,
