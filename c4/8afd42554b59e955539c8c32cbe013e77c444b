@@ -1,0 +1,37 @@
+apps/web/src/lib/core/component/AI/component/tool/handler.tsx
+  s_8c8123a52748fa::t_fc8bccd3f71e47 124
+  s_8c8123a52748fa::t_6f203573476465 274
+apps/web/src/features/block-agent/state/tool-approval-wording.ts
+  s_8c8123a52748fa::t_6f203573476465 90
+apps/web/src/features/connector-import/core/agent-handoff.test.ts
+  s_8c8123a52748fa::t_848663c9518c17 34
+apps/web/src/lib/core/component/AI/component/tool/ImportTools.tsx
+  s_8c8123a52748fa::t_6f203573476465 18,177-216
+  s_8c8123a52748fa::t_2d77c31da1e903 217-218
+docs/agent-guide/files.md
+  s_8c8123a52748fa::t_738e7bc05e81a8 278,281-283,285-287
+apps/web/src/features/connector-import/core/agent-handoff.ts
+  s_8c8123a52748fa::t_5ee27bc7ed2b74 69
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_8c8123a52748fa::t_675c708a06aa89 11287-11471
+apps/web/src/lib/service-clients/service-cognition/generated/tools/tool.ts
+  s_8c8123a52748fa::t_0632f1c4232d4d 246-249,830-833,1458-1461
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_8c8123a52748fa::t_e83274da701976 3719-3830,11303-11402
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c48afd42554b59e955539c8c32cbe013e77c444b",
+  "prompts": {},
+  "sessions": {
+    "s_8c8123a52748fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e3ebe64b-e3f3-41de-91c9-1dffbc9d884d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
