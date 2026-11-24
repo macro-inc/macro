@@ -48,7 +48,7 @@ const captureAttributionParams = (): URLSearchParams => {
   }
 };
 
-let attributionParams = captureAttributionParams();
+const attributionParams = captureAttributionParams();
 
 /** App URL (e.g. `/app/welcome`) with any captured attribution params appended. */
 export const buildAppUrl = (path: string): string => {

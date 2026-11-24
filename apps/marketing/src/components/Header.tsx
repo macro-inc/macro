@@ -1,5 +1,5 @@
 import { analytics } from '../app/utils/utilAnalytic';
-import { ctaHref } from '../app/utils/utilCta';
+import { ctaHref, leaveInAppBrowser } from '../app/utils/utilCta';
 import DesignIcon from '../assets/designs/design-icon.svg';
 
 export function Header() {
@@ -120,7 +120,8 @@ export function Header() {
               page_location: window.location.href,
               button_name: 'header_connect_google',
             });
-            window.location.href = ctaHref();
+            const href = ctaHref();
+            if (!leaveInAppBrowser(href)) window.location.href = href;
           }}
           style={{
             'align-items': 'center',

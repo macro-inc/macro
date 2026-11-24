@@ -271,7 +271,7 @@ the authenticated `/app/*` routes. In standalone dev and preview servers,
 GET/HEAD navigation to `/app` or `/app/*` redirects to the same path and query
 on `VITE_APP_BASE_URL` (default `https://macro.com`), where signup and the real
 app run. Set it to the separate `apps/web` origin for local signup testing. This prevents Vite's
-website fallback from rendering an empty shell for app links. Keep `target="_self"` on the hero and header signup links so the website router cannot intercept the app handoff; phones open `/app/signup` too. The retired `/mobile-signup` and `/mobile-signup-sent` paths only forward to `/app/signup` with their query. Verify a real document navigation, not only a changed URL. Production routing
+website fallback from rendering an empty shell for app links. Keep `target="_self"` on the hero and header signup links so the website router cannot intercept the app handoff; phones open `/app/signup` too. The retired `/mobile-signup` and `/mobile-signup-sent` paths only forward to `/app/signup` with their query. In Instagram, Facebook and Threads in-app browsers, signup links go through `leaveInAppBrowser` (`utilCta`): iOS hands the page to Safari (`x-safari-https://`, iOS 17+), Android to the default browser (`intent://`), each with the ad parameters appended and loading in place if the page is still showing after 1.5 seconds; an unknown platform opens a new tab. Route new signup links through `handleCtaClick` or `handleSignupLinkClick`, never a bare `href`. Verify a real document navigation, not only a changed URL. Production routing
 is unchanged; run `apps/web` separately when testing local signup changes.
 
 `/download` is headed “Download Macro Alpha” and says “Available for macOS and

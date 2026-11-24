@@ -1,5 +1,9 @@
 import { lazy, Show, Suspense } from 'solid-js';
-import { demoHref, handleDemoClick } from '../../app/utils/utilCta';
+import {
+  demoHref,
+  handleDemoClick,
+  handleSignupLinkClick,
+} from '../../app/utils/utilCta';
 import { setPageSeo } from '../../app/utils/utilSeo';
 import { FeatureUiStyles } from '../marketing/components/FeaturePage';
 import { HomepageResources } from '../marketing/components/HomepageResources';
@@ -70,6 +74,7 @@ export function Homepage(props: { embedded?: boolean } = {}) {
                 class="site-nav-start homepage-hero-cta"
                 target="_self"
                 href="/app/signup"
+                onClick={(event) => handleSignupLinkClick(event, '/app/signup')}
               >
                 Get Macro
               </a>
