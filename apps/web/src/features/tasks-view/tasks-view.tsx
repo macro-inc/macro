@@ -47,11 +47,7 @@ import {
 } from './core/task-navigation';
 import { TasksContent, TasksLoading } from './tasks-content';
 import { TasksViewProvider, useTasksView } from './tasks-view-context';
-import {
-  openTaskBesideTime,
-  returnToTime,
-  useTasksTimeView,
-} from './time-view';
+import { openTaskFromTime, returnToTime, useTasksTimeView } from './time-view';
 import { tasksTour } from './tour';
 import type { TaskDetailTarget, TasksViewStateOptions } from './types';
 import {
@@ -334,18 +330,18 @@ export function TasksView(props: TasksViewProps) {
   const teamQuery = useCurrentTeamQuery();
   const timeView = useTasksTimeView();
   const navigate = useNavigate();
-  const openBesideTime = (
+  const openFromTime = (
     task: TaskDetailTarget,
     options?: EntityDetailNavigationOptions
   ) => {
     const view = timeView();
-    return view ? openTaskBesideTime(navigate, view, task.id, options) : false;
+    return view ? openTaskFromTime(navigate, view, task.id, options) : false;
   };
   return (
     <ListEntityMetadataQueryProvider>
       <TasksViewProvider
         initialState={props.initialState}
-        onOpenTask={timeView() ? openBesideTime : undefined}
+        onOpenTask={timeView() ? openFromTime : undefined}
         savedViewsSource={() =>
           useSavedViews({
             viewerId,

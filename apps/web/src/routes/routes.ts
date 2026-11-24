@@ -766,7 +766,7 @@ export const tasksTimeRoute = defineRoute({
   params: z.object({ timeView: z.enum(['week', 'team']) }),
 });
 
-/** A task opened from My week or Team, shown beside them. */
+/** A task opened from My week or Team, shown in their place. */
 export const tasksTimeTaskRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'tasks-time-task',

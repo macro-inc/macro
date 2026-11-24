@@ -498,8 +498,8 @@ Below are three figures: the period's total ("Logged in November"), this
 week's total whatever the period, and Tasks with time out of the project's
 tasks the viewer can see. Rows open to what is underneath: a person to their
 tasks, a task to its people, a day to its tasks; a task row (or a task's
-Open task button) opens the task, beside the project or, with Shift, in a new
-split. Totals are summed on the server (`GraphqlUser.timeSummary`, which reads
+Open task button) opens the task in the project's place, with the project in
+its breadcrumb, or, with Shift, in a new split. Totals are summed on the server (`GraphqlUser.timeSummary`, which reads
 the primary) and read again after the viewer logs time anywhere. Export
 downloads the period's entries as the server's CSV (`GET /time/export`), and
 says so when it left entries out. A project past the report's task
@@ -526,9 +526,12 @@ and phone, counts only the days shown.
   in a task's Time popover). A task the viewer can only view lists its
   entries without the length field. **Add task** puts a task on the sheet
   before it has time; **Start timer** asks for a task and starts the timer on
-  it. A task name opens the task beside the week
+  it. A task name opens the task in the week's place
   (`tasks/time/week/task/<id>`); its breadcrumb reads My week and, like
-  closing the task, returns to the week. Shift-click opens it in a new split.
+  closing the task, returns to the week. Shift-click opens it in a new split,
+  and a task already open in another split is brought forward there. Below
+  about 830px the grid scrolls sideways rather than squeeze out the task
+  names.
 - **Team** is the same grid by person: every current member of the viewer's
   team, read-only, counting only tasks the viewer can see.
 - Phones show **My week** as the week's days, each with its total and tasks;

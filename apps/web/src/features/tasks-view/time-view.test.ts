@@ -25,11 +25,7 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
 
 import type { SplitNavigate } from '@app/lib/split-router';
 import { tasksTimeRoute, tasksTimeTaskRoute } from '@app/routes/routes';
-import {
-  openTaskBesideTime,
-  returnToTime,
-  useTasksTimeView,
-} from './time-view';
+import { openTaskFromTime, returnToTime, useTasksTimeView } from './time-view';
 
 afterEach(() => {
   fixtures.timeView = undefined;
@@ -59,11 +55,11 @@ it('keeps a Time link while the flag loads and drops it when the flag is off', (
   expect(read()).toBeUndefined();
 });
 
-it('opens a task beside the week, and leaves Shift, modifier and touch opens to a split', () => {
+it('opens a task in the week’s place, and leaves Shift, modifier and touch opens to a split', () => {
   const navigate = vi.fn(() => Promise.resolve());
   const asNavigate = navigate as unknown as SplitNavigate;
 
-  expect(openTaskBesideTime(asNavigate, 'week', 'task-1')).toBe(true);
+  expect(openTaskFromTime(asNavigate, 'week', 'task-1')).toBe(true);
   expect(navigate).toHaveBeenCalledWith({
     route: tasksTimeTaskRoute,
     params: { timeView: 'week', taskId: 'task-1' },
@@ -74,11 +70,11 @@ it('opens a task beside the week, and leaves Shift, modifier and touch opens to 
     new MouseEvent('click', { shiftKey: true }),
     new MouseEvent('click', { metaKey: true }),
   ])
-    expect(openTaskBesideTime(asNavigate, 'week', 'task-1', { event })).toBe(
+    expect(openTaskFromTime(asNavigate, 'week', 'task-1', { event })).toBe(
       false
     );
   fixtures.touch = true;
-  expect(openTaskBesideTime(asNavigate, 'team', 'task-1')).toBe(false);
+  expect(openTaskFromTime(asNavigate, 'team', 'task-1')).toBe(false);
   expect(navigate).not.toHaveBeenCalled();
 });
 

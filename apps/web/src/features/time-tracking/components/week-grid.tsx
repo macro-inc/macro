@@ -72,7 +72,7 @@ export function WeekGrid(props: {
   return (
     <table
       aria-label={props.label}
-      class="w-full table-fixed border-collapse text-sm"
+      class="w-full min-w-[52rem] table-fixed border-collapse text-sm"
     >
       <thead>
         <tr class="border-b border-edge-muted">

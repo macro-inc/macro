@@ -25,10 +25,11 @@ export function useTasksTimeView(): Accessor<TasksTimeView | undefined> {
 }
 
 /**
- * Opens a task beside My week or Team, as a project's task opens beside its
- * section. Touch and modifier clicks answer false, so the caller opens a split.
+ * Opens a task in the place of My week or Team, with the week in its
+ * breadcrumb, as a project's task opens within its section. Touch and
+ * modifier clicks answer false, so the caller opens a split.
  */
-export function openTaskBesideTime(
+export function openTaskFromTime(
   navigate: SplitNavigate,
   view: TasksTimeView,
   taskId: string,
@@ -50,7 +51,7 @@ export function openTaskBesideTime(
   return true;
 }
 
-/** Back to My week or Team from a task opened beside it. */
+/** Back to My week or Team from a task opened from it. */
 export function returnToTime(navigate: SplitNavigate, view: TasksTimeView) {
   fireAndForget(
     navigate({ route: tasksTimeRoute, params: { timeView: view } }),
