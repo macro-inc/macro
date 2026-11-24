@@ -306,7 +306,10 @@ function ScrollSheetFrame(
         onClosed = done;
         const current = metrics();
         if (!current || reducedMotion() || offset() <= 1) {
-          finishClosing();
+          // Nothing to slide. Still finish after the current task, as
+          // Corvu's presence did, so a reopen in the same tick keeps the
+          // mounted sheet.
+          queueMicrotask(finishClosing);
           return;
         }
         scrollTo(sheetOffset(current, 0), true);
