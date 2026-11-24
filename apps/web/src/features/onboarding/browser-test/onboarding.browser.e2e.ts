@@ -875,4 +875,31 @@ test.describe('a phone browser finishing onboarding', () => {
         .map((e) => e.data)
     ).toEqual([{ action: 'viewed' }, { action: 'continue_in_browser' }]);
   });
+  test('ends there after Continue with Free too', async ({ page }) => {
+    await openFixture(page, '/?view=flow&step=plan&handoff');
+    await page
+      .getByRole('button', { name: 'Continue with Free' })
+      .last()
+      .click();
+    await expect(heading(page, 'Macro is better on desktop.')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue in browser' }).click();
+    await expectLanded(page, 'Entered Macro at /home');
+  });
+
+  test('ends there after the routines step, once the plan is chosen', async ({
+    page,
+  }) => {
+    await openFixture(page, '/?view=flow&step=plan&handoff', {
+      routineSuggestionsEnabled: true,
+      routineSuggestions: { status: 'none', suggestions: [] },
+    });
+    await page.getByRole('button', { name: 'Start 30 day trial' }).click();
+    await expect(
+      heading(page, 'Put your busywork on autopilot.')
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Continue to workspace' }).click();
+    await expect(heading(page, 'Macro is better on desktop.')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue in browser' }).click();
+    await expectLanded(page, 'Entered Macro at /home');
+  });
 });
