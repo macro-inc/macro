@@ -113,7 +113,7 @@ export function ThinkingSlider(props: {
                   right: 'auto',
                   width: `calc(${ratio() * 100}% + ${inset() * 2}px)`,
                 }}
-                class="rounded-full bg-accent"
+                class="rounded-full bg-ink-muted"
               />
               <For each={props.effort?.options}>
                 {(_, index) => (
