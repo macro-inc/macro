@@ -174,6 +174,9 @@ export interface WorkerHostOptions {
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
+/** How often a ready owner may leave an authority read unanswered before the
+ * read fails and its page can start over on a new host. */
+export const UNANSWERED_AUTHORITY_READS = 3;
 const DEFAULT_STORAGE_HEALTH_INTERVAL_MS = 5 * 60_000;
 const MIN_STORAGE_HEALTH_INTERVAL_MS = 1_000;
 const MAX_STORAGE_HEALTH_INTERVAL_MS = 15 * 60_000;
@@ -1567,10 +1570,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   /**
    * Answers once there is an owner to ask, however many are lost or however
-   * often the page is suspended or an owner does not answer: a page waits on it
-   * to start, and its host says if that ends.
+   * often the page is suspended: a page waits on it to start, and its host says
+   * if that ends. Only a ready owner that never answers ends it here.
    */
   async function currentAuthority(): Promise<CacheAuthority> {
+    let unanswered = 0;
     for (;;) {
       try {
         return await askAuthority();
@@ -1580,6 +1584,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           error instanceof CacheNavigationError ||
           error instanceof CacheRequestTimeoutError;
         if (!interrupted || !isServing()) throw error;
+        if (error instanceof CacheRequestTimeoutError && state === 'ready')
+          unanswered += 1;
+        if (unanswered === UNANSWERED_AUTHORITY_READS) throw error;
         await transportReady();
       }
     }

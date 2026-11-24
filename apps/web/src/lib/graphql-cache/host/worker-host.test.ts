@@ -32,7 +32,10 @@ import {
   COORDINATOR_CONNECT_TIMEOUT_MS,
 } from '../worker/startup';
 import { CacheNavigationError } from './navigation-error';
-import { createWorkerCacheHost } from './worker-host';
+import {
+  createWorkerCacheHost,
+  UNANSWERED_AUTHORITY_READS,
+} from './worker-host';
 
 const CLIENT_ID = '00000000-0000-4000-8000-000000000007';
 const STORAGE_GENERATION = '00000000-0000-7000-8000-000000000001';
@@ -1146,6 +1149,28 @@ describe('createWorkerCacheHost', () => {
       generation: TEST_AUTHORITY_GENERATION,
     });
     expect(requireAdapter()).toBe(adapter);
+    host.dispose();
+  });
+
+  it('ends an authority read a ready owner never answers', async () => {
+    vi.useFakeTimers();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+      initializationTimeoutMs: 10,
+    });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    const asked = adapter.authorityRequests.length;
+    adapter.ignoredKinds.add('current-authority');
+    const ended = expect(host.authority?.current()).rejects.toMatchObject({
+      errorCode: 'request-timeout',
+    });
+    await vi.advanceTimersByTimeAsync(11 * UNANSWERED_AUTHORITY_READS);
+    await ended;
+    expect(adapter.authorityRequests).toHaveLength(
+      asked + UNANSWERED_AUTHORITY_READS
+    );
     host.dispose();
   });
 
