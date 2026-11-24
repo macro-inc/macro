@@ -84,10 +84,12 @@ pub async fn write_page(
 /// Content the server sent without a sequence.
 pub async fn write_undated(engine: &mut TestEngine, entry: &Value) -> WriteResult {
     let query = format!(
-        "query One($c: ID!, $m: ID!) {{ user {{ __typename id channelMessage(channelId: $c, messageId: $m) {{ {FIELDS} }} }} }}"
+        "query One($c: ID!, $m: ID!) {{ user {{ __typename id channelMessage(channelId: $c, messageId: $m) {{ __typename message {{ {FIELDS} }} }} }} }}"
     );
     let variables = json!({"c": entry["channelId"], "m": entry["id"]});
-    let data = json!({"user": {"__typename": "GraphqlUser", "id": "u1", "channelMessage": entry}});
+    let data = json!({"user": {"__typename": "GraphqlUser", "id": "u1", "channelMessage": {
+        "__typename": "GraphqlChannelMessageRead", "message": entry,
+    }}});
     let input = NetworkWrite {
         query: &query,
         operation_name: None,

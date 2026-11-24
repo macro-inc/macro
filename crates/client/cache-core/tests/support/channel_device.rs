@@ -17,6 +17,7 @@ use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, LazyLock};
 
+const MESSAGE_READ: &str = "GraphqlChannelMessageRead";
 const FIELDS: &str = "__typename id channelId sortKey threadId deletedAt content";
 const SEND: &str = "mutation { sendMessage { __typename seq message { __typename id channelId \
      sortKey threadId deletedAt content } } }";
@@ -38,11 +39,18 @@ static PAGE: LazyLock<String> = LazyLock::new(|| {
     )
 });
 
+const MESSAGE: &str = "query Message($c: ID!, $m: ID!) { user { __typename id \
+     channelMessage(channelId: $c, messageId: $m)";
+
 static ONE: LazyLock<String> = LazyLock::new(|| {
     format!(
-        "query One($c: ID!, $m: ID!) {{ user {{ __typename id channelMessage(channelId: $c, messageId: $m) {{ {FIELDS} }} }} }}"
+        "{MESSAGE} {{ __typename seq message {{ {FIELDS} thread {{ __typename deletedAt replyCount \
+         preview {{ {FIELDS} }} }} }} }} }} }}"
     )
 });
+
+static UNDATED: LazyLock<String> =
+    LazyLock::new(|| format!("{MESSAGE} {{ __typename message {{ {FIELDS} }} }} }} }}"));
 
 fn key(id: &str) -> EntityKey<'static> {
     EntityKey::entity(MESSAGE_TYPENAME, &[id])
@@ -89,6 +97,17 @@ fn page_data(seq: u64, entries: &[Entry]) -> Value {
         "seq": seq.to_string(),
         "entries": entries.iter().map(message).collect::<Vec<_>>(),
     }}})
+}
+
+fn one_variables(channel: &str, entry: &Entry) -> Map<String, Value> {
+    Map::from_iter([
+        ("c".to_owned(), json!(channel)),
+        ("m".to_owned(), json!(entry.message.id)),
+    ])
+}
+
+fn one_data(read: Value) -> Value {
+    json!({"user": {"__typename": "GraphqlUser", "id": "u1", "channelMessage": read}})
 }
 
 /// One write into the engine.
@@ -163,23 +182,17 @@ fn write(answer: &Answer) -> Write {
             seq,
             entry,
         } => Write {
-            query: PAGE.as_str(),
-            variables: Map::from_iter([(
-                "input".to_owned(),
-                json!({"channelId": channel, "after": "one"}),
-            )]),
-            data: page_data(*seq, std::slice::from_ref(entry)),
+            query: ONE.as_str(),
+            variables: one_variables(channel, entry),
+            data: one_data(json!({
+                "__typename": MESSAGE_READ, "seq": seq.to_string(), "message": message(entry),
+            })),
             commit: None,
         },
         Answer::Undated(entry) => Write {
-            query: ONE.as_str(),
-            variables: Map::from_iter([
-                ("c".to_owned(), json!(entry.message.channel)),
-                ("m".to_owned(), json!(entry.message.id)),
-            ]),
-            data: json!({"user": {
-                "__typename": "GraphqlUser", "id": "u1", "channelMessage": flat(entry),
-            }}),
+            query: UNDATED.as_str(),
+            variables: one_variables(&entry.message.channel, entry),
+            data: one_data(json!({"__typename": MESSAGE_READ, "message": flat(entry)})),
             commit: None,
         },
     }
