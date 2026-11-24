@@ -108,7 +108,7 @@ async fn an_ordinary_prompt_runs_on_sol() {
         selector.select(&owner(), "Summarize this doc").await,
         MID_MODEL
     );
-    assert_eq!(MID_MODEL, "openai/gpt-6.1-sol");
+    assert_eq!(MID_MODEL, "openai/gpt-6.2-sol");
 }
 
 #[tokio::test]

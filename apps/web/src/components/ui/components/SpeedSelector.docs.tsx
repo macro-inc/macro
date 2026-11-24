@@ -13,7 +13,7 @@ import { For } from 'solid-js';
 
 // #region demo:speeds
 function SpeedsDemo() {
-  const models = [Model.gpt61Sol, Model.gpt6Astra, Model.opus55];
+  const models = [Model.gpt62Sol, Model.gpt6Astra, Model.opus55];
   return (
     <div class="flex flex-col gap-4">
       <For each={models}>
