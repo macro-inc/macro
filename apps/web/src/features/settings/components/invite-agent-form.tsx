@@ -328,7 +328,9 @@ export function InviteAgentForm(props: {
         >
           <Show
             when={adding()}
-            // A long name shortens; the price after it stays readable.
+            // A long name ends the label in an ellipsis instead of widening
+            // the button past the sheet; the label's word order is the
+            // translation's, so the whole label truncates.
             fallback={<span class="min-w-0 truncate">{submitLabel()}</span>}
           >
             <SpinnerIcon class="size-4 animate-spin" />

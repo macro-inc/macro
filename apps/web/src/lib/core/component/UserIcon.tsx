@@ -294,6 +294,7 @@ export function UserIcon(props: UserIconProps) {
                 email={props.email}
                 isDeleted={props.isDeleted}
                 photoUrl={props.photoUrl}
+                initials={props.initials}
               />
             </Avatar>
           }
