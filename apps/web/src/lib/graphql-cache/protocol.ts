@@ -373,12 +373,15 @@ export type ChannelTimelineCacheResult =
   | { kind: 'unsupported' };
 
 /**
- * `lower` records the sequence a fetched page was read at; `advance` applies
- * only when the stored sequence is exactly `from`, so a gap is never skipped.
+ * How a commit moves the channel's watermark, the sequence up to which its
+ * changes have been applied to what the device holds. `lower` is for a fetched
+ * page: what is held is only known current to the lower of the two. `advance`
+ * applies the changes after `from`, and only when the watermark is not below
+ * it, so a gap is never skipped.
  */
-export type ChannelSeqUpdateWire =
-  | { kind: 'lower'; seq: string }
-  | { kind: 'advance'; from: string; to: string };
+export type ChannelWatermarkWire =
+  | { kind: 'lower' }
+  | { kind: 'advance'; from: string };
 
 /** Inclusive stretch of sort keys that was fully fetched and written. */
 export type ChannelCoverageWire = {
@@ -388,19 +391,42 @@ export type ChannelCoverageWire = {
   end: string;
 };
 
-/** One atomic change to a channel's coverage, cached entries, and sync state. */
-export type ChannelTimelineCommitArgs = {
+/**
+ * What a response proves about a channel, stored in the transaction that
+ * stores the response. Entries need nothing here: the engine stamps every
+ * message and activity row with the `seq` of the response object above it.
+ */
+export type ChannelCommitArgs = {
   channelId: string;
+  /**
+   * The response's sequence (decimal). Required with everything but
+   * `touchedAtMs` and `droppedThreadRootIds`.
+   */
+  seq?: string;
+  watermark?: ChannelWatermarkWire;
+  /** Stretches the response lists in full; needs `lower` or `reset`. */
   coverage?: ChannelCoverageWire[];
-  /** Entries that no longer exist on the server at all. */
-  removedKeys?: string[];
+  /** Ids of entries that no longer exist on the server, as of `seq`. */
+  removedIds?: string[];
   /** Threads whose cached replies and coverage are dropped. */
   droppedThreadRootIds?: string[];
-  seq?: ChannelSeqUpdateWire;
+  /** Drops everything held for the channel first. */
+  reset?: boolean;
   /** When the channel was last opened or prewarmed; eviction orders by it. */
   touchedAtMs?: number;
-  /** Deletes everything held for the channel first. */
-  reset?: boolean;
+};
+
+export type ChannelCommitOutcome = {
+  channelId: string;
+  /** The watermark after the commit (decimal), null when none is set. */
+  seq: string | null;
+  /**
+   * `stale`: the watermark already covered the changes, which were taken where
+   * newer than what is held. `gap`: changes before these are missing; they
+   * were taken the same way and the watermark stayed. `unheld`: the device
+   * holds no state of the channel they continue, so nothing of it was stored.
+   */
+  outcome: 'applied' | 'stale' | 'gap' | 'unheld';
 };
 
 export type ChannelTimelineCommitCacheResult =
@@ -409,8 +435,7 @@ export type ChannelTimelineCommitCacheResult =
       revision: CacheRevision;
       /** Records the commit deleted. */
       changed: string[];
-      /** Applied change sequence after the commit; differs from `advance.to` on a gap. */
-      channelSeq: string | null;
+      channel: ChannelCommitOutcome;
     }
   | { kind: 'unsupported' };
 
@@ -663,15 +688,12 @@ const isChannelCoverageWire = (value: unknown): boolean =>
   (value.start === CHANNEL_TIMELINE_START || isChannelSortKey(value.start)) &&
   (value.end === CHANNEL_TIMELINE_HEAD || isChannelSortKey(value.end));
 
-const isChannelSeqUpdateWire = (value: unknown): boolean =>
+const isChannelWatermarkWire = (value: unknown): boolean =>
   isRecord(value) &&
-  ((value.kind === 'lower' &&
-    hasOnlyCalendarKeys(value, ['kind', 'seq']) &&
-    isChannelSeq(value.seq)) ||
+  ((value.kind === 'lower' && hasOnlyCalendarKeys(value, ['kind'])) ||
     (value.kind === 'advance' &&
-      hasOnlyCalendarKeys(value, ['kind', 'from', 'to']) &&
-      isChannelSeq(value.from) &&
-      isChannelSeq(value.to)));
+      hasOnlyCalendarKeys(value, ['kind', 'from']) &&
+      isChannelSeq(value.from)));
 
 /** Non-throwing channel page validation for wire ingress. */
 export function isValidChannelTimelineArgs(
@@ -707,30 +729,32 @@ export function isValidChannelTimelineArgs(
 
 /**
  * Non-throwing channel commit shape validation for wire ingress. The engine
- * still validates typenames, span order, and size bounds.
+ * still validates span order, size bounds and which parts need a sequence.
  */
-export function isValidChannelTimelineCommitArgs(
+export function isValidChannelCommitArgs(
   value: unknown
-): value is ChannelTimelineCommitArgs {
+): value is ChannelCommitArgs {
   return (
     isRecord(value) &&
     hasOnlyCalendarKeys(value, [
       'channelId',
-      'coverage',
-      'removedKeys',
-      'droppedThreadRootIds',
       'seq',
-      'touchedAtMs',
+      'watermark',
+      'coverage',
+      'removedIds',
+      'droppedThreadRootIds',
       'reset',
+      'touchedAtMs',
     ]) &&
     isChannelId(value.channelId) &&
+    (value.seq === undefined || isChannelSeq(value.seq)) &&
+    (value.watermark === undefined ||
+      isChannelWatermarkWire(value.watermark)) &&
     isOptionalWireArray(value.coverage, isChannelCoverageWire) &&
-    isOptionalWireArray(value.removedKeys, isValidNormalizedRecordKey) &&
+    isOptionalWireArray(value.removedIds, isChannelId) &&
     isOptionalWireArray(value.droppedThreadRootIds, isChannelId) &&
-    (value.seq === undefined || isChannelSeqUpdateWire(value.seq)) &&
-    (value.touchedAtMs === undefined ||
-      Number.isSafeInteger(value.touchedAtMs)) &&
-    (value.reset === undefined || typeof value.reset === 'boolean')
+    (value.reset === undefined || typeof value.reset === 'boolean') &&
+    (value.touchedAtMs === undefined || Number.isSafeInteger(value.touchedAtMs))
   );
 }
 
@@ -878,8 +902,9 @@ export type CacheChangeHints = {
 /** Previous name, kept until the cache worker adopts CacheChangeHints. */
 export type HydrationSearchChanges = CacheChangeHints;
 
-export type HydrationResult = CacheChangeHints &
-  (
+export type HydrationResult = CacheChangeHints & {
+  channel?: ChannelCommitOutcome;
+} & (
     | { kind: 'data'; data: unknown; revision: CacheRevision }
     | { kind: 'void'; revision: CacheRevision }
   );
@@ -920,6 +945,11 @@ export type WriteResult = CacheChangeHints & {
   reset: boolean;
   /** Recovery queries for terminal settlement; skip superseded outcomes. */
   revalidations?: QueryRevalidationWire[];
+  /**
+   * What the write's channel commit did. Absent without one, when the write
+   * reset the cache, and from a host without channel commits.
+   */
+  channel?: ChannelCommitOutcome;
 };
 
 /**
@@ -1095,6 +1125,8 @@ export type CacheRequest = {
        * wipes and rebinds the cache atomically (silent restart).
        */
       identity?: string;
+      /** Stored in the response's transaction. */
+      channelCommit?: ChannelCommitArgs;
     }
   | {
       /** Background cache warming; ordinary writes do not publish pushes. */
@@ -1105,6 +1137,8 @@ export type CacheRequest = {
       variables?: Record<string, unknown>;
       data: unknown;
       identity?: string;
+      /** Stored in the response's transaction. */
+      channelCommit?: ChannelCommitArgs;
     }
   /** Durably enqueue an optimistic mutation and claim the strict head. */
   | {
@@ -1190,10 +1224,10 @@ export type CacheRequest = {
       kind: 'channel-timeline';
       request: ChannelTimelineCacheArgs;
     }
-  /** Atomically apply channel coverage, deletions, and the change sequence. */
+  /** A channel commit that comes with no response. */
   | {
       kind: 'channel-timeline-commit';
-      commit: ChannelTimelineCommitArgs;
+      commit: ChannelCommitArgs;
     }
   | {
       kind: 'channel-timeline-evict';

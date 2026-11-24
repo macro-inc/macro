@@ -1716,11 +1716,52 @@ describe('createTauriCacheHost', () => {
       reset: false,
     };
 
+    const outcome = { channelId: 'c1', seq: '8', outcome: 'applied' as const };
+
+    it('sends a commit with the response it describes and returns what it did', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_write')
+          return { ...write, channel: outcome };
+        if (command === 'graphql_cache_hydrate')
+          return { kind: 'void', revision: '5', channel: outcome };
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'channel-native-write' });
+      const args = {
+        generation: TEST_AUTHORITY_GENERATION,
+        query: '{ user { id } }',
+        data: {},
+      };
+      const channelCommit = { channelId: 'c1', seq: '8' };
+      const sent = (command: string) =>
+        JSON.stringify(
+          invokeMock.mock.calls.findLast(([name]) => name === command)?.[1]
+        );
+      try {
+        await expect(
+          host.writeQuery({ ...args, channelCommit })
+        ).resolves.toMatchObject({ channel: outcome });
+        expect(sent('graphql_cache_write')).toContain(
+          JSON.stringify({ channelCommit }).slice(1, -1)
+        );
+        await expect(
+          host.hydrateQuery({ ...args, channelCommit })
+        ).resolves.toMatchObject({ channel: outcome });
+        expect(sent('graphql_cache_hydrate')).toContain(
+          JSON.stringify({ channelCommit }).slice(1, -1)
+        );
+        await host.hydrateQuery(args);
+        expect(sent('graphql_cache_hydrate')).not.toContain('channelCommit');
+      } finally {
+        host.dispose();
+      }
+    });
+
     it('reads pages, commits, evicts and counts through native commands', async () => {
       invokeMock.mockImplementation(async (command: string) => {
         if (command === 'graphql_cache_channel_timeline') return page;
         if (command === 'graphql_cache_channel_timeline_commit')
-          return { ...write, channelSeq: '8' };
+          return { ...write, channel: outcome };
         if (command === 'graphql_cache_channel_timeline_evict')
           return { ...write, channelIds: ['c1'], hasMore: false };
         if (command === 'graphql_cache_channel_timeline_stats')
@@ -1736,7 +1777,8 @@ describe('createTauriCacheHost', () => {
         );
         const commit = {
           channelId: 'c1',
-          seq: { kind: 'advance' as const, from: '7', to: '8' },
+          seq: '8',
+          watermark: { kind: 'advance' as const, from: '7' },
         };
         await expect(
           host.channelTimelineCommit(commit, TEST_AUTHORITY_GENERATION)
@@ -1744,7 +1786,7 @@ describe('createTauriCacheHost', () => {
           kind: 'committed',
           revision: '5',
           changed: ['GraphqlChannelMessage:m1'],
-          channelSeq: '8',
+          channel: outcome,
         });
         expect(invokeMock).toHaveBeenLastCalledWith(
           'graphql_cache_channel_timeline_commit',

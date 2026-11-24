@@ -25,8 +25,8 @@ import {
   isValidCacheSearchQuery,
   isValidCalendarCommitArgs,
   isValidCalendarRangeArgs,
+  isValidChannelCommitArgs,
   isValidChannelTimelineArgs,
-  isValidChannelTimelineCommitArgs,
   isValidChannelTimelineEvictArgs,
   isValidNormalizedRecordKey,
   isWorkerMessage,
@@ -603,6 +603,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'variables',
           'data',
           'identity',
+          'channelCommit',
         ]) &&
         isOptionalString(value.originOpId) &&
         isWriteRegistration(value.registration) &&
@@ -610,7 +611,9 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         isOptionalString(value.operationName) &&
         isOptionalRecord(value.variables) &&
         hasOwn(value, 'data') &&
-        isOptionalString(value.identity)
+        isOptionalString(value.identity) &&
+        (value.channelCommit === undefined ||
+          isValidChannelCommitArgs(value.channelCommit))
       );
     case 'hydrate':
       return (
@@ -634,12 +637,15 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'variables',
           'data',
           'identity',
+          'channelCommit',
         ]) &&
         isString(value.query) &&
         isOptionalString(value.operationName) &&
         isOptionalRecord(value.variables) &&
         hasOwn(value, 'data') &&
-        isOptionalString(value.identity)
+        isOptionalString(value.identity) &&
+        (value.channelCommit === undefined ||
+          isValidChannelCommitArgs(value.channelCommit))
       );
     case 'enqueue-optimistic-mutation':
       return (
@@ -942,7 +948,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
     case 'channel-timeline-commit':
       return (
         hasOnlyKeys(value, ['id', 'kind', 'commit']) &&
-        isValidChannelTimelineCommitArgs(value.commit)
+        isValidChannelCommitArgs(value.commit)
       );
     case 'channel-timeline-evict':
       return (
@@ -1601,7 +1607,7 @@ export function tabIdFromLivenessLockName(
 export const CACHE_STORAGE_VERSION = {
   schemaCompatibilityEpoch: 4,
   formatVersion: 4,
-  storageSchemaVersion: 13,
+  storageSchemaVersion: 14,
 } as const;
 
 /**

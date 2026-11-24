@@ -834,7 +834,8 @@ export class CacheWorkerCore {
         request.variables,
         request.data,
         request.identity,
-        request.hydrationScope
+        request.hydrationScope,
+        request.channelCommit
       );
     }
     await prepare(
@@ -843,7 +844,8 @@ export class CacheWorkerCore {
       request.variables,
       request.data,
       request.identity,
-      request.hydrationScope
+      request.hydrationScope,
+      request.channelCommit
     );
     await this.runReadsBeforeHydrateCommit();
     const step = engine.stepHydrate?.bind(engine);
@@ -1117,7 +1119,7 @@ export class CacheWorkerCore {
           : { ...result, revision: parseCacheRevision(result.revision) };
       })
       .with({ kind: 'channel-timeline-commit' }, async (request) => {
-        const { channelSeq, ...result } =
+        const { channel, ...result } =
           await this.requireEngine().channelTimelineCommit(request.commit);
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
@@ -1125,7 +1127,7 @@ export class CacheWorkerCore {
           kind: 'committed',
           revision: result.revision,
           changed: result.changed,
-          channelSeq,
+          channel,
         };
         return committed;
       })
@@ -1156,6 +1158,7 @@ export class CacheWorkerCore {
           {
             originOpId: request.originOpId,
             registration: request.registration,
+            channelCommit: request.channelCommit,
           },
           request.query,
           request.operationName,
@@ -1183,14 +1186,22 @@ export class CacheWorkerCore {
               : {}),
           });
         }
+        const channel =
+          result.channel === undefined ? {} : { channel: result.channel };
         const hydration: HydrationResult & Pick<WriteResult, 'reset'> =
           result.data === null
-            ? { kind: 'void', revision: result.revision, reset: result.reset }
+            ? {
+                kind: 'void',
+                revision: result.revision,
+                reset: result.reset,
+                ...channel,
+              }
             : {
                 kind: 'data',
                 data: result.data,
                 revision: result.revision,
                 reset: result.reset,
+                ...channel,
               };
         return hydration;
       })

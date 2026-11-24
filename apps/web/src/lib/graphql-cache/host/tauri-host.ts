@@ -31,9 +31,10 @@ import type {
   CalendarCommitCacheResult,
   CalendarRangeCacheArgs,
   CalendarRangeCacheResult,
+  ChannelCommitArgs,
+  ChannelCommitOutcome,
   ChannelTimelineCacheArgs,
   ChannelTimelineCacheResult,
-  ChannelTimelineCommitArgs,
   ChannelTimelineCommitCacheResult,
   ChannelTimelineEvictArgs,
   ChannelTimelineEvictCacheResult,
@@ -105,6 +106,15 @@ type CacheChangedPayload = {
 // Older native binaries omit the advancement bit and still receive OTA JS.
 import { createPeopleCache } from '../people/host';
 import { PEOPLE_UNSUPPORTED } from '../people/protocol';
+
+/** Only named when set: an older scoped hydrate rejects a field it lacks. */
+function channelCommitOf(
+  args: Pick<CacheWriteArgs, 'channelCommit'>
+): Pick<CacheWriteArgs, 'channelCommit'> {
+  return args.channelCommit === undefined
+    ? {}
+    : { channelCommit: args.channelCommit };
+}
 
 type NativeHydrationResult = HydrationResult & { revisionAdvanced?: boolean };
 const PEOPLE_CONTEXT_COMMAND = 'graphql_cache_people_context';
@@ -979,17 +989,17 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     async channelTimelineCommit(
-      args: ChannelTimelineCommitArgs,
+      args: ChannelCommitArgs,
       generation: string
     ): Promise<ChannelTimelineCommitCacheResult> {
       return channelTimelineRequest(
         CHANNEL_TIMELINE_COMMIT_COMMAND,
         { commit: args, generation },
-        (result: WriteResult & { channelSeq: string | null }) => ({
+        (result: WriteResult & { channel: ChannelCommitOutcome }) => ({
           kind: 'committed',
           revision: parseCacheRevision(result.revision),
           changed: result.changed,
-          channelSeq: result.channelSeq,
+          channel: result.channel,
         })
       );
     },
@@ -1045,6 +1055,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           data: args.data,
           generation: args.generation,
           identity: args.identity,
+          ...channelCommitOf(args),
         })
       );
     },
@@ -1082,6 +1093,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         variables: args.variables,
         data: args.data,
         identity: args.identity,
+        ...channelCommitOf(args),
       };
       const result = args.hydrationScope
         ? await request<NativeHydrationResult>('graphql_cache_hydrate_scoped', {

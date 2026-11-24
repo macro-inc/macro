@@ -383,34 +383,56 @@ describe('coordinator runtime protocol', () => {
     expect(pageRequest({ ...page, channelId: '' })).toBe(false);
     expect(pageRequest({ ...page, extra: true })).toBe(false);
 
-    const commitRequest = (commit: unknown) =>
-      isCacheRequest({ id: 1, kind: 'channel-timeline-commit', commit });
-    expect(commitRequest({ channelId: 'c1' })).toBe(true);
-    expect(
-      commitRequest({
-        channelId: 'c1',
-        coverage: [
-          { start: '', end: '\u{10FFFF}' },
-          { threadRootId: 'm1', start: 'k1', end: 'k2' },
-        ],
-        removedKeys: ['GraphqlChannelMessage:m2'],
-        droppedThreadRootIds: ['m3'],
-        seq: { kind: 'advance', from: '4', to: '5' },
-        touchedAtMs: 10,
-        reset: true,
-      })
-    ).toBe(true);
-    expect(commitRequest({})).toBe(false);
-    expect(
-      commitRequest({ channelId: 'c1', seq: { kind: 'lower', seq: '-1' } })
-    ).toBe(false);
-    expect(
-      commitRequest({ channelId: 'c1', seq: { kind: 'advance', from: '1' } })
-    ).toBe(false);
-    expect(
-      commitRequest({ channelId: 'c1', coverage: [{ start: 'a b', end: 'c' }] })
-    ).toBe(false);
-    expect(commitRequest({ channelId: 'c1', removedKeys: ['m2'] })).toBe(false);
+    const commit = {
+      channelId: 'c1',
+      seq: '5',
+      watermark: { kind: 'advance', from: '4' },
+      coverage: [
+        { start: '', end: '\u{10FFFF}' },
+        { threadRootId: 'm1', start: 'k1', end: 'k2' },
+      ],
+      removedIds: ['m2'],
+      droppedThreadRootIds: ['m3'],
+      touchedAtMs: 10,
+      reset: true,
+    };
+    const generation = '00000000-0000-4000-8000-000000000001';
+    // A commit is checked the same alone and beside the response it describes.
+    for (const request of [
+      (commit: unknown) => ({ kind: 'channel-timeline-commit', commit }),
+      (channelCommit: unknown) => ({ kind: 'write', data: {}, channelCommit }),
+      (channelCommit: unknown) => ({
+        kind: 'hydrate',
+        data: {},
+        channelCommit,
+      }),
+    ]) {
+      const accepts = (commit: unknown) =>
+        isCacheRequest({
+          id: 1,
+          generation,
+          ...request(commit),
+          ...(request(commit).kind === 'channel-timeline-commit'
+            ? {}
+            : { query: '{ user { id } }' }),
+        });
+      expect(accepts(commit)).toBe(true);
+      expect(accepts({ channelId: 'c1' })).toBe(true);
+      expect(accepts({ ...commit, watermark: { kind: 'lower' } })).toBe(true);
+      expect(accepts({})).toBe(false);
+      expect(accepts({ ...commit, extra: 1 })).toBe(false);
+      expect(accepts({ ...commit, seq: '-1' })).toBe(false);
+      expect(accepts({ ...commit, watermark: { kind: 'advance' } })).toBe(
+        false
+      );
+      expect(
+        accepts({ ...commit, watermark: { kind: 'lower', from: '1' } })
+      ).toBe(false);
+      expect(accepts({ ...commit, removedIds: [''] })).toBe(false);
+      expect(
+        accepts({ ...commit, coverage: [{ start: 'a b', end: 'c' }] })
+      ).toBe(false);
+    }
 
     const evictRequest = (eviction: unknown) =>
       isCacheRequest({ id: 1, kind: 'channel-timeline-evict', eviction });
@@ -986,10 +1008,10 @@ describe('coordinator runtime protocol', () => {
     // The current versions moved past the unversioned name, so the lock
     // names the versioned database that builds before them never held.
     expect(databaseOwnerLockName('scope')).toBe(
-      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v4.t13'
+      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v4.t14'
     );
     expect(databaseOwnerLockName('é')).toBe(
-      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v4.t13'
+      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v4.t14'
     );
   });
 

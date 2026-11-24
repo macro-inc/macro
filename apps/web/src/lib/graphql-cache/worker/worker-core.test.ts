@@ -6,6 +6,7 @@ import {
 } from '../authority-fixture';
 import {
   type CacheRequest,
+  type ChannelCommitArgs,
   INITIAL_CACHE_REVISION,
   parseCacheRevision,
 } from '../protocol';
@@ -1166,7 +1167,7 @@ describe('CacheWorkerCore', () => {
             ...write,
             revision: '2',
             changed: ['GraphqlChannelMessage:m1'],
-            channelSeq: '9',
+            channel: { channelId: 'c1', seq: '9', outcome: 'applied' as const },
           };
         }),
         channelTimelineEvict: vi.fn(async () => {
@@ -1217,7 +1218,8 @@ describe('CacheWorkerCore', () => {
       commit: {
         channelId: 'c1',
         coverage: [{ start: 'k1', end: '\u{10FFFF}' }],
-        seq: { kind: 'lower', seq: '9' },
+        seq: '9',
+        watermark: { kind: 'lower' },
       },
     });
     const read = core.handleRequest(port, {
@@ -1244,7 +1246,7 @@ describe('CacheWorkerCore', () => {
         kind: 'committed',
         revision: '2',
         changed: ['GraphqlChannelMessage:m1'],
-        channelSeq: '9',
+        channel: { channelId: 'c1', seq: '9', outcome: 'applied' },
       },
     });
     expect(messages).toContainEqual({
@@ -3246,6 +3248,56 @@ describe('CacheWorkerCore', () => {
     );
   });
 
+  it.each(['write', 'hydrate'] as const)(
+    'stores a channel commit with the %s it describes and answers what it did',
+    async (kind) => {
+      const channel = { channelId: 'c1', seq: '9', outcome: 'applied' };
+      const answer = {
+        revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        channel,
+      };
+      const writeQuery = vi.fn().mockResolvedValue(answer);
+      const hydrateQuery = vi.fn().mockResolvedValue(answer);
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ writeQuery, hydrateQuery }),
+      });
+      const port = { postMessage: vi.fn() };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      const channelCommit: ChannelCommitArgs = {
+        channelId: 'c1',
+        seq: '9',
+        watermark: { kind: 'lower' },
+      };
+      await core.handleRequest(port, {
+        generation: TEST_AUTHORITY_GENERATION,
+        id: 2,
+        kind,
+        query: '{ user { id } }',
+        data: {},
+        channelCommit,
+      });
+
+      const engineArgs = (kind === 'write' ? writeQuery : hydrateQuery).mock
+        .calls[0];
+      expect(
+        kind === 'write' ? engineArgs?.[0]?.channelCommit : engineArgs?.at(-1)
+      ).toEqual(channelCommit);
+      expect(port.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 2,
+          ok: true,
+          result: expect.objectContaining({ channel }),
+        })
+      );
+    }
+  );
+
   it('forwards a guarded hydration and publishes nothing on scope rejection', async () => {
     const hydrateQuery = vi
       .fn()
@@ -3277,7 +3329,8 @@ describe('CacheWorkerCore', () => {
       undefined,
       {},
       'viewer',
-      scope
+      scope,
+      undefined
     );
     expect(port.postMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'cache-hydrated' })

@@ -31,9 +31,9 @@ import {
   type CalendarCommitCacheResult,
   type CalendarRangeCacheArgs,
   type CalendarRangeCacheResult,
+  type ChannelCommitArgs,
   type ChannelTimelineCacheArgs,
   type ChannelTimelineCacheResult,
-  type ChannelTimelineCommitArgs,
   type ChannelTimelineCommitCacheResult,
   type ChannelTimelineEvictArgs,
   type ChannelTimelineEvictCacheResult,
@@ -1649,7 +1649,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     },
 
     async channelTimelineCommit(
-      args: ChannelTimelineCommitArgs,
+      args: ChannelCommitArgs,
       generation: string
     ): Promise<ChannelTimelineCommitCacheResult> {
       return (await initializedRequest({
@@ -1695,6 +1695,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           variables: args.variables,
           data: args.data,
           identity: args.identity,
+          channelCommit: args.channelCommit,
         },
         args.registerDependencies ? args.opKey : undefined
       )) as WriteResult;
@@ -1710,6 +1711,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         variables: args.variables,
         data: args.data,
         identity: args.identity,
+        channelCommit: args.channelCommit,
       })) as HydrationResult;
     },
 

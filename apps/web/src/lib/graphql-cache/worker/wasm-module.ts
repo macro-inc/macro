@@ -33,9 +33,10 @@ import type {
   CalendarCommitArgs,
   CalendarRangeCacheArgs,
   CalendarRangeCacheResult,
+  ChannelCommitArgs,
+  ChannelCommitOutcome,
   ChannelTimelineCacheArgs,
   ChannelTimelineCacheResult,
-  ChannelTimelineCommitArgs,
   ChannelTimelineEvictArgs,
   ClaimedMutation,
   CommitOptimisticWriteResult,
@@ -181,8 +182,8 @@ export interface CacheEngine {
   ): Promise<ChannelTimelineCacheResult>;
   /** Resolves like `writeQuery`, plus the channel's sequence after the commit. */
   channelTimelineCommit(
-    commit: ChannelTimelineCommitArgs
-  ): Promise<WriteResult & { channelSeq: string | null }>;
+    commit: ChannelCommitArgs
+  ): Promise<WriteResult & { channel: ChannelCommitOutcome }>;
   channelTimelineEvict(
     eviction: ChannelTimelineEvictArgs
   ): Promise<WriteResult & { channelIds: string[]; hasMore: boolean }>;
@@ -194,6 +195,7 @@ export interface CacheEngine {
         opId: string;
         entityResolvers?: readonly EntityResolverWire[];
       };
+      channelCommit?: ChannelCommitArgs;
     },
     query: string,
     operationName: string | undefined,
@@ -207,7 +209,8 @@ export interface CacheEngine {
     variables: Record<string, unknown> | undefined,
     data: unknown,
     identity: string | undefined,
-    hydrationScope?: HydrationScope
+    hydrationScope?: HydrationScope,
+    channelCommit?: ChannelCommitArgs
   ): Promise<CacheEngineHydrationResult>;
   /**
    * `hydrateQuery` in two halves: `prepareHydrate` reads what the response
@@ -220,7 +223,8 @@ export interface CacheEngine {
     variables: Record<string, unknown> | undefined,
     data: unknown,
     identity: string | undefined,
-    hydrationScope?: HydrationScope
+    hydrationScope?: HydrationScope,
+    channelCommit?: ChannelCommitArgs
   ): Promise<void>;
   /**
    * Optional, after `prepareHydrate`: runs the kept hydrate's next projection

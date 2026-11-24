@@ -46,6 +46,8 @@ import type {
 } from '../host/types';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
+  type ChannelCommitArgs,
+  type ChannelCommitOutcome,
   type ClaimedMutation,
   type CommitOptimisticWriteResult,
   type EnqueueOptimisticMutationResult,
@@ -1851,6 +1853,153 @@ describe('normalizedCacheExchange', () => {
     expect(normalizedCacheResultMetadata(results[0]!)).toEqual({
       source: 'live-network',
       cacheEffectsApplied: false,
+    });
+  });
+
+  describe('channel commits', () => {
+    const commit: ChannelCommitArgs = {
+      channelId: 'c1',
+      seq: '9',
+      watermark: { kind: 'lower' },
+    };
+    const outcome: ChannelCommitOutcome = {
+      channelId: 'c1',
+      seq: '9',
+      outcome: 'applied',
+    };
+    const withCommit = (
+      op: Operation,
+      channelCommit: (data: unknown) => ChannelCommitArgs | undefined
+    ) => makeOperation(op.kind, op, { ...op.context, channelCommit });
+    const answering = (channel: ChannelCommitOutcome | undefined) => {
+      const write = host.writeQuery;
+      host.writeQuery = vi.fn(async (args) => ({
+        ...(await write(args)),
+        channel,
+      }));
+      return vi.mocked(host.writeQuery);
+    };
+    const reported = (result: OperationResult | undefined) => {
+      const metadata = result && normalizedCacheResultMetadata(result);
+      return metadata?.source === 'live-network'
+        ? metadata.channelCommit
+        : undefined;
+    };
+
+    it.each([
+      ['query', () => makeOp(1, 'network-only'), { from: 'network' }],
+      ['subscription', () => makeSubscriptionOp(2), { update: { seq: '9' } }],
+    ])(
+      'stores it with the %s result and reports what it did',
+      async (_kind, operation, data) => {
+        const writeQuery = answering(outcome);
+        const channelCommit = vi.fn(() => commit);
+        const { ops, results } = harness(host, () => ({ data }));
+        ops.next(withCommit(operation(), channelCommit));
+        await tick();
+
+        expect(channelCommit).toHaveBeenCalledExactlyOnceWith(data);
+        expect(
+          writeQuery.mock.calls.map(([args]) => args.channelCommit)
+        ).toEqual([commit]);
+        await expect(reported(results[0])).resolves.toEqual(outcome);
+      }
+    );
+
+    it('stores it with a hydrate-only result and reports what it did', async () => {
+      host.hydrateQuery = vi.fn(async () => ({
+        kind: 'void' as const,
+        revision: INITIAL_CACHE_REVISION,
+        channel: outcome,
+      }));
+      const { ops, results } = harness(host);
+      ops.next(withCommit(makeHydrationOp(3), () => commit));
+      await tick();
+
+      expect(host.hydrateQuery).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ channelCommit: commit })
+      );
+      await expect(reported(results[0])).resolves.toEqual(outcome);
+    });
+
+    it.each([
+      ['the write fails', async () => Promise.reject(new Error('disk full'))],
+      ['the host has no channel commits', undefined],
+    ])('reports nothing stored when %s', async (_reason, writeQuery) => {
+      if (writeQuery) host.writeQuery = vi.fn(writeQuery);
+      const data = { update: { seq: '9' } };
+      const { ops, results } = harness(host, () => ({ data }), {
+        onCacheError: vi.fn(),
+      });
+      ops.next(withCommit(makeOp(1, 'network-only'), () => commit));
+      ops.next(withCommit(makeSubscriptionOp(2), () => commit));
+      await tick();
+
+      const reports = results.map(reported);
+      expect(reports).toEqual([expect.any(Promise), expect.any(Promise)]);
+      await expect(Promise.all(reports)).resolves.toEqual([
+        undefined,
+        undefined,
+      ]);
+    });
+
+    it('holds it back when an earlier effect of the frame was not stored', async () => {
+      const writeQuery = answering(undefined);
+      writeQuery.mockRejectedValueOnce(new Error('disk full'));
+      const item = (id: string) => ({
+        __typename: 'SoupUpdated',
+        item: { __typename: 'GraphqlSoupDocument', id, displayName: id },
+      });
+      const data = {
+        soupUpdates: [
+          item('a'),
+          {
+            __typename: 'GraphqlCacheDeletion',
+            graphqlTypeName: 'GraphqlSoupDocument',
+            entityId: 'b',
+          },
+          item('c'),
+        ],
+      };
+      const { ops, results } = harness(host, () => ({ data }), {
+        onCacheError: vi.fn(),
+      });
+      ops.next(withCommit(makeSubscriptionOp(2), () => commit));
+      await tick();
+
+      expect(writeQuery.mock.calls.map(([args]) => args.channelCommit)).toEqual(
+        [undefined, undefined]
+      );
+      await expect(reported(results[0])).resolves.toBeUndefined();
+    });
+
+    it('is not made from errors or mutations, and its failure keeps the result', async () => {
+      const channelCommit = vi.fn(() => {
+        throw new Error('unexpected shape');
+      });
+      const onCacheError = vi.fn();
+      const { ops, results } = harness(
+        host,
+        (op) =>
+          op.key === 2
+            ? { error: new CombinedError({ graphQLErrors: ['denied'] }) }
+            : {},
+        { onCacheError }
+      );
+      ops.next(withCommit(makeMutationOp(1), channelCommit));
+      ops.next(withCommit(makeOp(2, 'network-only'), channelCommit));
+      await tick();
+      expect(channelCommit).not.toHaveBeenCalled();
+
+      ops.next(withCommit(makeOp(3, 'network-only'), channelCommit));
+      await tick();
+      expect(onCacheError).toHaveBeenCalledExactlyOnceWith(
+        new Error('unexpected shape'),
+        expect.objectContaining({ key: 3 })
+      );
+      expect(results.at(-1)?.data).toEqual({ from: 'network' });
+      expect(reported(results.at(-1))).toBeUndefined();
+      expect(host.writes.at(-1)).toMatchObject({ data: { from: 'network' } });
     });
   });
 
