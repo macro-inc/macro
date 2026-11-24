@@ -569,7 +569,8 @@ describe('createChannelWrites', () => {
     const error = await sending.catch((thrown: unknown) => thrown);
     // The request may still commit: only the same id is safe to send again.
     expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
-    expect(fetched).toEqual([id]);
+    // An empty answer proves nothing either: it asks three times.
+    expect(fetched).toEqual([id, id, id]);
   });
 
   // A host back from the back/forward cache reports a reset without knowing
@@ -655,7 +656,7 @@ describe('createChannelWrites', () => {
     });
     const error = await sending.catch((thrown: unknown) => thrown);
     expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
-    expect(fetched).toEqual([id]);
+    expect(fetched).toEqual([id, id, id]);
   });
 
   it('answers a send the queue stopped retrying from the device copy', async () => {
@@ -965,7 +966,7 @@ describe('createChannelWrites', () => {
     const error = await sending.catch((thrown: unknown) => thrown);
     // The request may still commit: only the same id is safe to send again.
     expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
-    expect(fetched).toEqual([id]);
+    expect(fetched).toEqual([id, id, id]);
   });
 
   it('asks the queue again when it cannot answer after the page comes back', async () => {

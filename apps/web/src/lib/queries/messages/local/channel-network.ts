@@ -1,7 +1,9 @@
+import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
 import { firstOrAborted } from '@core/util/abort-signal';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { onlineManager } from '@tanstack/solid-query';
 import {
@@ -17,7 +19,9 @@ import { filter, pipe } from 'wonka';
  * and rejects when it never will, so nothing commits coverage or a sequence
  * for records the device does not hold. An abort leaves the query, which ends
  * its request (urql replaces a `fetchOptions.signal` with its own), and
- * rejects with the signal's reason.
+ * rejects with the signal's reason. Every request sent for it while it is
+ * awaited, one the cache sends again after a write included, runs in the
+ * caller's trace.
  */
 export async function queryChannelNetwork<
   TData,
@@ -30,16 +34,31 @@ export async function queryChannelNetwork<
   signal?.throwIfAborted();
   // The session the read is sent under, to tell a refusal it caused.
   const sentUnder = cacheSessionGeneration.capture();
-  const settled = await firstOrAborted(
-    pipe(
-      getGraphqlSoupClient().query(document, variables, {
-        requestPolicy: 'network-only',
-      }),
-      // The answer, as urql's own toPromise takes it.
-      filter((result) => !result.stale && !result.hasNext)
-    ),
-    signal
-  );
+  const parent = Telemetry.captureContext();
+  let answered = false;
+  // urql's own capture joins only the first request; the cache sends a read
+  // again when a write lands while it is out, and that one is ours too.
+  const flow: TraceContext = {
+    run: (work) => (answered ? work() : parent.run(work)),
+  };
+  const answer = async () => {
+    try {
+      return await firstOrAborted(
+        pipe(
+          getGraphqlSoupClient().query(document, variables, {
+            requestPolicy: 'network-only',
+            [TRACE_PARENT_CONTEXT_KEY]: flow,
+          }),
+          // The answer, as urql's own toPromise takes it.
+          filter((result) => !result.stale && !result.hasNext)
+        ),
+        signal
+      );
+    } finally {
+      answered = true;
+    }
+  };
+  const settled = await answer();
   if (settled.kind === 'aborted') {
     signal?.throwIfAborted();
     throw new Error('channel query was cancelled');

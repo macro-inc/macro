@@ -132,6 +132,9 @@ TanStack path in `../` runs untouched.
   `channel-prewarm.ts` and the tests that run their effects (FE-46).
 - Channel queries abort through `firstOrAborted`: urql replaces
   `fetchOptions.signal` with its own, so a signal passed there aborts nothing.
+  While awaited, `queryChannelNetwork` names its own trace for urql
+  (`TRACE_PARENT_CONTEXT_KEY`): urql's capture covers only the first request,
+  and the cache sends a read again when a write lands while it is out.
 - Start a request that follows an await inside its span with `span.run`, and
   capture a write's trace (`Telemetry.captureContext`) before any await.
 - A page's `stored` and a thread's store acknowledgements never reject: a

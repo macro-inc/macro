@@ -124,6 +124,33 @@ describe('asking the server about a lost send', () => {
     }
   });
 
+  it('asks again after the server had none, since a request in flight can still commit', async () => {
+    vi.useFakeTimers();
+    const none = () =>
+      new Response(
+        JSON.stringify({ data: { user: { channelMessage: null } } }),
+        {
+          headers: { 'content-type': 'application/json' },
+        }
+      );
+    const firstAnswer = Promise.withResolvers<Response>();
+    let committed = false;
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockReturnValueOnce(firstAnswer.promise)
+      .mockImplementation(async () => (committed ? serverHasIt() : none()));
+    const send = lostSend(fetcher);
+    await vi.advanceTimersByTimeAsync(0);
+    send.exhaust();
+    await vi.advanceTimersByTimeAsync(0);
+    // The send commits while the server's empty answer is on its way.
+    committed = true;
+    firstAnswer.resolve(none());
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(await send.outcome).toEqual({ id: message.id });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it.each(['the queue stopped retrying', 'the queue lost'])(
     'delivers a send another tab stored while asking, when %s it',
     async (how) => {

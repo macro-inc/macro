@@ -733,9 +733,10 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
 
   /**
    * A failed send restores its draft, and sending that again would post a
-   * second copy of one that arrived: ask the server more than once, and the
-   * device again after each answer that settled nothing, since a frame or
-   * another tab may store the send meanwhile.
+   * second copy of one that arrived: ask the server more than once, since a
+   * request still in flight can commit after the server said it had none, and
+   * the device again between questions, since a frame or another tab may store
+   * the send meanwhile.
    */
   async function askServer(
     write: Pick<Write<unknown, AnyVariables>, 'channelId' | 'messageId'>,
@@ -749,13 +750,13 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     };
     let delivered = await ask();
     for (const waitMs of SERVER_LOOKUP_RETRIES_MS) {
-      if (delivered !== undefined) break;
+      if (delivered) return delivered;
       const stored = await onDevice();
       if (stored) return stored;
       await new Promise((resolve) => setTimeout(resolve, waitMs));
       delivered = await ask();
     }
-    return delivered ?? (await onDevice());
+    return delivered || (await onDevice());
   }
 
   /**
