@@ -7,7 +7,6 @@ import type {
   AuthUser,
   SsoProvider,
 } from '../context/auth-context';
-import type { MobileWelcomeResult } from '../core/mobile-welcome';
 
 /** The fake auth backend's state. Plain JSON, so a harness can persist it. */
 export type FakeAuthWorld = {
@@ -33,7 +32,6 @@ export type FakeAuthWorld = {
   sessionTokens: Record<string, string>;
   /** Pending email login across a page reload. */
   pendingEmail: string | undefined;
-  mobileWelcome: MobileWelcomeResult['t'];
   failures: Partial<Record<'sendCode' | 'verify', string>>;
 };
 
@@ -51,7 +49,6 @@ export function defaultFakeAuthWorld(): FakeAuthWorld {
     autoCode: false,
     sessionTokens: {},
     pendingEmail: undefined,
-    mobileWelcome: 'sent',
     failures: {},
   };
 }
@@ -180,18 +177,10 @@ export function createFakeAuth(
     completeLogin: async () => {
       call('completeLogin');
     },
-    sendMobileWelcomeEmail: async (email) => {
-      call(`mobileWelcome:${email}`);
-      const outcome = world.mobileWelcome;
-      return outcome === 'sent'
-        ? { t: 'sent', alreadySent: false }
-        : { t: outcome };
-    },
     identify: (user) => {
       call(`identify:${user.id}`);
       setIdentifiedUsers((list) => [...list, user]);
     },
-    trackMobileSignupLead: (email) => call(`lead:${email}`),
     pageView: (name) => call(`pageView:${name}`),
     track: (event, data) => setEvents((list) => [...list, { event, data }]),
     notifyFailure: (message) => setNotifications((list) => [...list, message]),
