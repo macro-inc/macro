@@ -1,4 +1,5 @@
 use super::*;
+mod projection;
 
 #[sqlx::test(migrations = false)]
 async fn dependency_backfill_commits_multiple_batches_and_keeps_legacy_writers_consistent(

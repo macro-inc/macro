@@ -388,13 +388,17 @@ async fn retained_inaccessible_dependencies_do_not_prevent_unrelated_edits() {
             .returning(move |task, _, _, _| {
                 Box::pin(async move {
                     Ok(TaskDependencyLinkOutcome::Updated(
-                        models_properties::service::entity_property::EntityProperty {
-                            id: Uuid::now_v7(),
-                            entity_id: task.to_string(),
-                            entity_type: EntityType::Task,
-                            property_definition_id: key,
-                            created_at: chrono::Utc::now(),
-                            updated_at: chrono::Utc::now(),
+                        crate::domain::model::EntityPropertyMutationSnapshot {
+                            value: None,
+                            previous_value: None,
+                            property: models_properties::service::entity_property::EntityProperty {
+                                id: Uuid::now_v7(),
+                                entity_id: task.to_string(),
+                                entity_type: EntityType::Task,
+                                property_definition_id: key,
+                                created_at: chrono::Utc::now(),
+                                updated_at: chrono::Utc::now(),
+                            },
                         },
                         vec![],
                     ))
@@ -495,13 +499,17 @@ async fn oversized_dependency_snapshot_can_clear_after_authorizing_every_endpoin
             .returning(move |task, _, _, _| {
                 Box::pin(async move {
                     Ok(TaskDependencyLinkOutcome::Updated(
-                        models_properties::service::entity_property::EntityProperty {
-                            id: Uuid::now_v7(),
-                            entity_id: task.to_string(),
-                            entity_type: EntityType::Task,
-                            property_definition_id: key,
-                            created_at: chrono::Utc::now(),
-                            updated_at: chrono::Utc::now(),
+                        crate::domain::model::EntityPropertyMutationSnapshot {
+                            value: None,
+                            previous_value: None,
+                            property: models_properties::service::entity_property::EntityProperty {
+                                id: Uuid::now_v7(),
+                                entity_id: task.to_string(),
+                                entity_type: EntityType::Task,
+                                property_definition_id: key,
+                                created_at: chrono::Utc::now(),
+                                updated_at: chrono::Utc::now(),
+                            },
                         },
                         vec![],
                     ))

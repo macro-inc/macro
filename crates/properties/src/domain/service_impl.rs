@@ -789,7 +789,7 @@ where
             }
             self.publish_property_event(Self::entity_property_updated_event(
                 &change.property,
-                &property_value,
+                &change.value,
                 &change.previous_value,
                 access,
                 source.as_ref(),
@@ -799,7 +799,7 @@ where
                 property: EntityPropertyWithDefinition {
                     property: change.property,
                     definition: property_definition,
-                    value: property_value,
+                    value: change.value,
                     options: None,
                 },
                 affected_task_ids,

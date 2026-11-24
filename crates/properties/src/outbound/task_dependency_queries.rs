@@ -11,6 +11,7 @@ use sqlx::{PgConnection, Pool, Postgres};
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
+use crate::domain::model::TASK_DEPENDENCY_REFERENCE_LIMIT;
 use crate::domain::ports::TaskDependencyLinkOutcome;
 
 /// Read the endpoints of a task relationship from the indexed edge table.
@@ -71,7 +72,7 @@ async fn link_transaction(
     expected: Vec<Uuid>,
     desired: Vec<Uuid>,
 ) -> anyhow::Result<TaskDependencyLinkOutcome> {
-    if desired.len() > 1000 {
+    if desired.len() > TASK_DEPENDENCY_REFERENCE_LIMIT {
         anyhow::bail!("At most 1000 task relationships can be edited at once");
     }
     let forward = property_definition_id == SystemPropertyKey::DEPENDS_ON_UUID;
@@ -182,9 +183,10 @@ async fn link_transaction(
         sqlx::query_scalar!(
             r#"SELECT EXISTS (SELECT 1 FROM unnest($1::uuid[]) endpoint(id)
                 WHERE (SELECT count(*) FROM (
-                    SELECT 1 FROM task_dependency_edges WHERE blocker_task_id = endpoint.id LIMIT 1000
-                ) edges) >= 1000) AS "full!""#,
-            &added
+                    SELECT 1 FROM task_dependency_edges WHERE blocker_task_id = endpoint.id LIMIT $2
+                ) edges) >= $2) AS "full!""#,
+            &added,
+            TASK_DEPENDENCY_REFERENCE_LIMIT as i64
         )
         .fetch_one(&mut *tx)
         .await?
@@ -192,9 +194,10 @@ async fn link_transaction(
         sqlx::query_scalar!(
             r#"SELECT EXISTS (SELECT 1 FROM unnest($1::uuid[]) endpoint(id)
                 WHERE (SELECT count(*) FROM (
-                    SELECT 1 FROM task_dependency_edges WHERE dependent_task_id = endpoint.id LIMIT 1000
-                ) edges) >= 1000) AS "full!""#,
-            &added
+                    SELECT 1 FROM task_dependency_edges WHERE dependent_task_id = endpoint.id LIMIT $2
+                ) edges) >= $2) AS "full!""#,
+            &added,
+            TASK_DEPENDENCY_REFERENCE_LIMIT as i64
         )
         .fetch_one(&mut *tx)
         .await?
@@ -262,15 +265,55 @@ async fn link_transaction(
         &dependent_ids, &blocker_ids, &dependent_properties, &blocking_properties
     ).execute(&mut *tx).await?;
 
-    let property = sqlx::query_as!(
-        EntityProperty,
+    // Repair dirty historical JSON even when membership has no edge delta.
+    // Every desired endpoint is already validated and locked above.
+    let mut canonical_ids = desired.iter().copied().collect::<Vec<_>>();
+    canonical_ids.sort_unstable();
+    let canonical_value = if canonical_ids.is_empty() {
+        None
+    } else {
+        Some(serde_json::to_value(
+            models_properties::service::property_value::PropertyValue::EntityRef(
+                canonical_ids
+                    .into_iter()
+                    .map(|id| {
+                        models_properties::shared::EntityReference::new(
+                            id.to_string(),
+                            EntityType::Task,
+                        )
+                    })
+                    .collect(),
+            ),
+        )?)
+    };
+    sqlx::query!(
+        "UPDATE entity_properties SET values = $2 WHERE id = $1 AND values IS DISTINCT FROM $2",
+        assignment.id,
+        canonical_value
+    )
+    .execute(&mut *tx)
+    .await?;
+    // Capture the primary value under the same endpoint locks, before COMMIT.
+    let property = sqlx::query!(
         r#"SELECT id, entity_id, entity_type as "entity_type: EntityType",
-                  property_definition_id, created_at, updated_at
+                  property_definition_id, created_at, updated_at, values
            FROM entity_properties WHERE id = $1"#,
         assignment.id
     )
     .fetch_one(&mut *tx)
     .await?;
+    let primary = crate::domain::model::EntityPropertyMutationSnapshot {
+        value: super::entity_property_queries::decode_stored_property_value(property.values)?,
+        previous_value: None,
+        property: EntityProperty {
+            id: property.id,
+            entity_id: property.entity_id,
+            entity_type: property.entity_type,
+            property_definition_id: property.property_definition_id,
+            created_at: property.created_at,
+            updated_at: property.updated_at,
+        },
+    };
     let inverse_ids = current
         .symmetric_difference(&desired)
         .filter_map(|id| endpoint_properties.get(&id.to_string()).map(|row| row.id))
@@ -307,7 +350,7 @@ async fn link_transaction(
         });
     }
     tx.commit().await?;
-    Ok(TaskDependencyLinkOutcome::Updated(property, reciprocal))
+    Ok(TaskDependencyLinkOutcome::Updated(primary, reciprocal))
 }
 
 /// Acquire deduplicated endpoint locks in PostgreSQL signed-key order.

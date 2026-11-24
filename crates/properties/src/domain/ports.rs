@@ -33,7 +33,10 @@ use super::model::{
 #[derive(Debug)]
 pub enum TaskDependencyLinkOutcome {
     /// The requested property now reflects the persisted edges.
-    Updated(EntityProperty, Vec<EntityPropertyMutationSnapshot>),
+    Updated(
+        EntityPropertyMutationSnapshot,
+        Vec<EntityPropertyMutationSnapshot>,
+    ),
     /// The relationship changed after authorization; retry with fresh permissions.
     Stale,
     /// The requested edge forms a dependency cycle.

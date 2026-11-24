@@ -1,6 +1,8 @@
 use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
+mod canonical;
+
 async fn task(pool: &Pool<Postgres>, task_id: Uuid) -> anyhow::Result<()> {
     let entity_id = task_id.to_string();
     for property_definition_id in [
@@ -296,15 +298,31 @@ async fn inverse_capacity_is_atomic_and_oversized_snapshots_can_clear(
             "SELECT id FROM entity_properties WHERE entity_id = $1 AND entity_type = 'TASK' AND property_definition_id = $2",
             root.to_string(), root_property
         ).fetch_one(&pool).await?;
-        let seed = &leaves[..1000];
+        let seed = &leaves[..999];
         sqlx::query!(
             "INSERT INTO task_dependency_edges (dependent_task_id, blocker_task_id, dependent_property_id, blocking_property_id)
              SELECT CASE WHEN $1 THEN leaf ELSE $2 END, CASE WHEN $1 THEN $2 ELSE leaf END,
                     CASE WHEN $1 THEN assignment ELSE $3 END, CASE WHEN $1 THEN $3 ELSE assignment END
              FROM unnest($4::uuid[], $5::uuid[]) x(leaf, assignment)",
             forward, root, root_assignment, seed,
-            if forward { &depends_ids[..1000] } else { &blocking_ids[..1000] }
+            if forward { &depends_ids[..999] } else { &blocking_ids[..999] }
         ).execute(&pool).await?;
+        // The last permitted relationship succeeds in either direction.
+        assert!(matches!(
+            link(&pool, leaves[999], leaf_property, vec![], vec![root]).await?,
+            TaskDependencyLinkOutcome::Updated(_, _)
+        ));
+        assert!(matches!(
+            link(
+                &pool,
+                root,
+                root_property,
+                leaves[..1000].to_vec(),
+                leaves[..1000].to_vec()
+            )
+            .await?,
+            TaskDependencyLinkOutcome::Updated(_, _)
+        ));
         assert!(
             link(&pool, leaves[1000], leaf_property, vec![], vec![root])
                 .await

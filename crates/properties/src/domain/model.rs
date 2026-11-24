@@ -17,6 +17,10 @@ use uuid::Uuid;
 
 pub use system_properties::CRM_TEAM_STAGE_DEFINITION_NAME;
 
+/// Maximum authored dependency references and incoming references per assignment.
+/// Historical relationships remain readable and removable without truncation.
+pub const TASK_DEPENDENCY_REFERENCE_LIMIT: usize = 1000;
+
 /// A committed property assignment and its exact reciprocal task endpoints.
 #[derive(Debug)]
 pub struct EntityPropertyMutation {

@@ -19,6 +19,10 @@ VALUES
     ('00000001-0000-0000-0000-000000000017', NULL, NULL, 'Blocking', 'ENTITY', true, 'TASK', true)
 ON CONFLICT (id) DO NOTHING;
 
+-- One SQL capacity definition shared by both legacy directions.
+CREATE FUNCTION task_dependency_reference_limit() RETURNS INTEGER
+LANGUAGE SQL IMMUTABLE PARALLEL SAFE AS $$ SELECT 1000 $$;
+
 CREATE TABLE task_dependency_edges (
     dependent_task_id UUID NOT NULL,
     blocker_task_id UUID NOT NULL,
@@ -109,11 +113,16 @@ CREATE PROCEDURE backfill_task_dependency_edges() LANGUAGE plpgsql AS $$
 DECLARE
     cursor_id uuid := '00000000-0000-0000-0000-000000000000';
     next_id uuid;
+    projection_ids uuid[];
 BEGIN
 -- A retry after committed batches can reuse the same migration connection.
 CREATE TEMP TABLE IF NOT EXISTS task_dependency_batch (id uuid PRIMARY KEY, entity_id text, values jsonb);
 CREATE TEMP TABLE IF NOT EXISTS task_dependency_references (dependent_task_id uuid, blocker_task_id uuid,
     dependent_property_id uuid, PRIMARY KEY (dependent_task_id, blocker_task_id));
+-- Retain touched targets across source commits and same-session retries. A new
+-- session reconstructs them by rescanning sources, including conflict-skipped edges.
+CREATE TEMP TABLE IF NOT EXISTS task_dependency_projection (task_id uuid PRIMARY KEY)
+    ON COMMIT PRESERVE ROWS;
 
 
     LOOP
@@ -202,27 +211,58 @@ CREATE TEMP TABLE IF NOT EXISTS task_dependency_references (dependent_task_id uu
             AND p.property_definition_id = '00000001-0000-0000-0000-000000000017' LIMIT 1) p ON TRUE
         ON CONFLICT (dependent_task_id, blocker_task_id) DO NOTHING;
 
-        UPDATE entity_properties p SET values = (
-            SELECT jsonb_build_object('type', 'EntityReference', 'value',
-                jsonb_agg(jsonb_build_object('entity_type', 'TASK', 'entity_id', e.dependent_task_id::text)
-                    ORDER BY e.dependent_task_id))
-            FROM task_dependency_edges e WHERE e.blocker_task_id = changed.task_id)
-        FROM (SELECT DISTINCT blocker_task_id AS task_id FROM task_dependency_references) changed
-        CROSS JOIN LATERAL (SELECT id FROM entity_properties target
-            WHERE target.entity_id = changed.task_id::text AND target.entity_type = 'TASK'
-              AND target.property_definition_id = '00000001-0000-0000-0000-000000000017' LIMIT 1) target
-        WHERE p.id = target.id;
+        INSERT INTO task_dependency_projection
+        SELECT DISTINCT blocker_task_id FROM task_dependency_references ON CONFLICT DO NOTHING;
 
         cursor_id := next_id;
         COMMIT;
     END LOOP;
-    DROP TABLE task_dependency_references, task_dependency_batch;
+    -- Serialize each shared hub once after source discovery, not after every
+    -- source batch. Lock first, then aggregate current edges in a fresh snapshot.
+    LOOP
+        PERFORM set_config('lock_timeout', '5s', true);
+        PERFORM set_config('macro.task_dependency_backfill', 'on', true);
+        SELECT array_agg(task_id ORDER BY task_id) INTO projection_ids
+        FROM (SELECT task_id FROM task_dependency_projection ORDER BY task_id LIMIT 500) page;
+        EXIT WHEN projection_ids IS NULL;
+        PERFORM lock_task_dependency_endpoints(projection_ids);
+        BEGIN
+            PERFORM p.id FROM unnest(projection_ids) requested(task_id)
+            CROSS JOIN LATERAL (SELECT id FROM entity_properties target
+                WHERE target.entity_id = requested.task_id::text AND target.entity_type = 'TASK'
+                  AND target.property_definition_id = '00000001-0000-0000-0000-000000000017'
+                LIMIT 1) target
+            JOIN entity_properties p ON p.id = target.id
+            ORDER BY p.id FOR UPDATE OF p NOWAIT;
+        EXCEPTION WHEN lock_not_available THEN
+            RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'Task dependencies changed; retry';
+        END;
+        WITH canonical AS MATERIALIZED (
+            SELECT target.id, graph.values FROM unnest(projection_ids) requested(task_id)
+            CROSS JOIN LATERAL (SELECT id FROM entity_properties target
+                WHERE target.entity_id = requested.task_id::text AND target.entity_type = 'TASK'
+                  AND target.property_definition_id = '00000001-0000-0000-0000-000000000017'
+                LIMIT 1) target
+            CROSS JOIN LATERAL (SELECT CASE WHEN count(*) = 0 THEN NULL ELSE
+                jsonb_build_object('type', 'EntityReference', 'value',
+                    jsonb_agg(jsonb_build_object('entity_type', 'TASK', 'entity_id', e.dependent_task_id::text)
+                        ORDER BY e.dependent_task_id)) END AS values
+                FROM task_dependency_edges e WHERE e.blocker_task_id = requested.task_id) graph
+        )
+        UPDATE entity_properties p SET values = canonical.values, updated_at = now()
+        FROM canonical WHERE p.id = canonical.id AND p.values IS DISTINCT FROM canonical.values;
+        DELETE FROM task_dependency_projection WHERE task_id = ANY(projection_ids);
+        COMMIT;
+    END LOOP;
+    DROP TABLE task_dependency_projection, task_dependency_references, task_dependency_batch;
     PERFORM set_config('macro.task_dependency_backfill', 'off', true);
 END;
 $$;
 
 -- Keep deployed JSON property writers compatible while service instances roll.
 -- Nested edge-to-property updates already have their canonical graph write.
+-- Follow-up: drop task_dependency_json_changed and its function only after all
+-- legacy JSON writers drain. The bridge has no actor context for target authorization.
 CREATE FUNCTION sync_legacy_task_dependency_write() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
     source_id UUID;
@@ -230,6 +270,8 @@ DECLARE
     desired UUID[];
     dependent_ids UUID[];
     blocker_ids UUID[];
+    canonical_value jsonb;
+    current_targets UUID[];
 BEGIN
     IF pg_trigger_depth() > 1 OR current_setting('macro.task_dependency_backfill', true) = 'on' THEN
         RETURN NULL;
@@ -237,13 +279,10 @@ BEGIN
     IF TG_OP = 'INSERT' AND NEW.values IS NULL THEN
         RETURN NULL;
     END IF;
-    IF TG_OP = 'UPDATE' AND NEW.values IS NOT DISTINCT FROM OLD.values THEN
-        RETURN NULL;
-    END IF;
     IF NEW.entity_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
         RETURN NULL;
     END IF;
-    IF jsonb_array_length(COALESCE(NEW.values->'value', '[]'::jsonb)) > 1000 THEN
+    IF jsonb_array_length(COALESCE(NEW.values->'value', '[]'::jsonb)) > task_dependency_reference_limit() THEN
         RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'At most 1000 task relationships can be edited at once';
     END IF;
     source_id := NEW.entity_id::uuid;
@@ -252,7 +291,7 @@ BEGIN
            OR COALESCE(ref->>'entity_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') THEN
         RAISE EXCEPTION 'Task dependencies must reference tasks';
     END IF;
-    SELECT COALESCE(array_agg(DISTINCT (ref->>'entity_id')::uuid), '{}'::uuid[]) INTO desired
+    SELECT COALESCE(array_agg(DISTINCT (ref->>'entity_id')::uuid ORDER BY (ref->>'entity_id')::uuid), '{}'::uuid[]) INTO desired
     FROM jsonb_array_elements(COALESCE(NEW.values->'value', '[]'::jsonb)) ref;
     -- Include all old endpoints without a cap so historical oversized lists clear.
     PERFORM lock_task_dependency_endpoints(ARRAY[source_id] || desired || ARRAY(
@@ -268,6 +307,25 @@ BEGIN
     END IF;
     IF source_id = ANY(desired) THEN
         RAISE EXCEPTION 'A task cannot depend on itself';
+    END IF;
+
+    SELECT CASE WHEN cardinality(desired) = 0 THEN NULL ELSE
+        jsonb_build_object('type', 'EntityReference', 'value',
+            jsonb_agg(jsonb_build_object('entity_type', 'TASK', 'entity_id', id::text) ORDER BY id)) END
+    INTO canonical_value FROM unnest(desired) endpoint(id);
+    IF NEW.property_definition_id = '00000001-0000-0000-0000-000000000007' THEN
+        SELECT COALESCE(array_agg(blocker_task_id ORDER BY blocker_task_id), '{}'::uuid[])
+        INTO current_targets FROM task_dependency_edges WHERE dependent_task_id = source_id;
+    ELSE
+        SELECT COALESCE(array_agg(dependent_task_id ORDER BY dependent_task_id), '{}'::uuid[])
+        INTO current_targets FROM task_dependency_edges WHERE blocker_task_id = source_id;
+    END IF;
+    -- Only graph equality under endpoint locks permits this fast path. Comparing
+    -- OLD and NEW JSON before graph discovery loses stale NULL-to-NULL clears.
+    IF current_targets = desired THEN
+        UPDATE entity_properties SET values = canonical_value
+        WHERE id = NEW.id AND values IS DISTINCT FROM canonical_value;
+        RETURN NULL;
     END IF;
 
     IF NEW.property_definition_id = '00000001-0000-0000-0000-000000000007' THEN
@@ -287,7 +345,9 @@ BEGIN
     IF EXISTS (SELECT 1
         FROM unnest(dependent_ids, blocker_ids) input(dependent, blocker)
         JOIN task_dependency_edges edge ON edge.dependent_task_id = input.blocker
-            AND edge.blocker_task_id = input.dependent) THEN
+            AND edge.blocker_task_id = input.dependent
+        WHERE NOT EXISTS (SELECT 1 FROM task_dependency_edges retained
+            WHERE retained.dependent_task_id = input.dependent AND retained.blocker_task_id = input.blocker)) THEN
         RAISE EXCEPTION 'Task dependencies cannot contain a direct cycle';
     END IF;
 
@@ -298,7 +358,7 @@ BEGIN
             WHERE NOT EXISTS (SELECT 1 FROM task_dependency_edges
                 WHERE dependent_task_id = source_id AND blocker_task_id = endpoint.id)
             AND (SELECT count(*) FROM (SELECT 1 FROM task_dependency_edges
-                WHERE blocker_task_id = endpoint.id LIMIT 1000) edges) >= 1000) THEN
+                WHERE blocker_task_id = endpoint.id LIMIT task_dependency_reference_limit()) edges) >= task_dependency_reference_limit()) THEN
             RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'At most 1000 task relationships are allowed per property';
         END IF;
     ELSE
@@ -306,7 +366,7 @@ BEGIN
             WHERE NOT EXISTS (SELECT 1 FROM task_dependency_edges
                 WHERE blocker_task_id = source_id AND dependent_task_id = endpoint.id)
             AND (SELECT count(*) FROM (SELECT 1 FROM task_dependency_edges
-                WHERE dependent_task_id = endpoint.id LIMIT 1000) edges) >= 1000) THEN
+                WHERE dependent_task_id = endpoint.id LIMIT task_dependency_reference_limit()) edges) >= task_dependency_reference_limit()) THEN
             RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'At most 1000 task relationships are allowed per property';
         END IF;
     END IF;
@@ -325,6 +385,10 @@ BEGIN
         AND inverse.entity_type = 'TASK' AND inverse.property_definition_id = inverse_definition
         LIMIT 1) inverse ON TRUE
     ON CONFLICT (dependent_task_id, blocker_task_id) DO NOTHING;
+    -- Conflict-only edge inserts fire an empty transition table. Normalize the
+    -- authored source explicitly even when graph membership did not change.
+    UPDATE entity_properties SET values = canonical_value
+    WHERE id = NEW.id AND values IS DISTINCT FROM canonical_value;
     RETURN NULL;
 END;
 $$;

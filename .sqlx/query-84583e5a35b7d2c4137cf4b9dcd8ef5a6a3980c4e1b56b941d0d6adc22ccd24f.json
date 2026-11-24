@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE entity_properties SET values = $2 WHERE id = $1 AND values IS DISTINCT FROM $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "84583e5a35b7d2c4137cf4b9dcd8ef5a6a3980c4e1b56b941d0d6adc22ccd24f"
+}

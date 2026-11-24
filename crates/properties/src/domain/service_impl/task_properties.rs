@@ -18,7 +18,10 @@ use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use crate::domain::error::PropertiesErr;
-use crate::domain::model::{EditReceipt, PropertyAccessReceiptExt, TaskAssignedNotification};
+use crate::domain::model::{
+    EditReceipt, PropertyAccessReceiptExt, TASK_DEPENDENCY_REFERENCE_LIMIT,
+    TaskAssignedNotification,
+};
 use crate::domain::ports::{
     NotificationService, PermissionService, PropertiesRepo, TaskDependencyLinkOutcome,
 };
@@ -29,6 +32,8 @@ use crate::domain::service_impl::PropertiesServiceImpl;
 pub(crate) struct TaskRelationshipMutation {
     /// The edited task's persisted assignment.
     pub property: EntityProperty,
+    /// Value to publish; dependency writes retain their transactional snapshot.
+    pub value: Option<PropertyValue>,
     /// The complete pre-write graph snapshot.
     pub previous_value: Option<PropertyValue>,
     /// Canonical changed inverse assignments, read before commit.
@@ -188,6 +193,9 @@ where
 
         let mut previous_value = None;
         let mut reciprocal = Vec::new();
+        let mut canonical_value = value
+            .as_ref()
+            .map(super::convert_set_property_value_to_property_value);
         let property = match property_definition_id {
             SystemPropertyKey::PARENT_TASK_UUID => {
                 let parent_task_id = match &value {
@@ -261,7 +269,7 @@ where
                         ));
                     }
                 };
-                if references.len() > 1000 {
+                if references.len() > TASK_DEPENDENCY_REFERENCE_LIMIT {
                     return Err(PropertiesErr::Validation(
                         "At most 1000 task relationships can be edited at once".into(),
                     ));
@@ -315,9 +323,10 @@ where
                     .await
                     .map_err(anyhow::Error::from)?
                 {
-                    TaskDependencyLinkOutcome::Updated(property, effects) => {
+                    TaskDependencyLinkOutcome::Updated(snapshot, effects) => {
                         reciprocal = effects;
-                        property
+                        canonical_value = snapshot.value;
+                        snapshot.property
                     }
                     TaskDependencyLinkOutcome::Stale => {
                         return Err(PropertiesErr::DependencyContended);
@@ -343,6 +352,7 @@ where
 
         Ok(TaskRelationshipMutation {
             property,
+            value: canonical_value,
             previous_value,
             reciprocal,
         })

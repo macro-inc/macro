@@ -194,6 +194,13 @@ mod tests {
     fn test_all_system_property_keys_returns_all_uuids() {
         let all_keys = SystemPropertyKey::all_system_property_keys();
         assert_eq!(all_keys.len(), 23);
+        assert_eq!(
+            all_keys
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len(),
+            all_keys.len()
+        );
         assert!(all_keys.contains(&SystemPropertyKey::ASSIGNEES_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::STATUS_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::PRIORITY_UUID));

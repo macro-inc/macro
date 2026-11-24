@@ -43,6 +43,8 @@ for their fixed property catalogs.
 
 ## Gotchas
 
+- Keep catalog UUIDs unique: Start Date uses `0x15`, Time logged uses `0x16`, and Blocking uses `0x17`; mirror the migration, web identifiers, and cache recipe constants.
+
 - Time logged (`0x16`) is derived: the sum of a task's `time_entry` rows,
   written only by `crates/time_tracking` through `time_logged::write_task_time_logged`
   in its own transaction, under the task's advisory lock, with no property
