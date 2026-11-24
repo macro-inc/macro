@@ -47,6 +47,8 @@ export function createRunningTimerQuery(
       query.isPending ? undefined : (query.data?.runningTimer ?? undefined),
     serverNow: (): string | undefined =>
       query.isSuccess ? query.data?.serverNow : undefined,
+    /** Whether the data came from the server just now, not from the cache. */
+    fresh: () => query.isSuccess && !query.stale,
     pending: () => query.isPending,
     refetch: () => query.refetch({ requestPolicy: 'network-only' }),
   };
