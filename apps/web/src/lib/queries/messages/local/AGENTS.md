@@ -33,7 +33,8 @@ TanStack path in `../` runs untouched.
   failure on the way repairs from it; a channel with a repair left is not
   current, a server read included. A page is watched for frames until its
   commit is answered, and a commit that finds the sequence moved by a read
-  (removals only included) replays from it, the channel not current until
+  replays from it (a commit of removals only that finds it at or past the
+  page goes on from the page), the channel not current until
   then; this assumes the device answers commits in the order it applies
   them. A frame past a page's cursor that stored while it or an earlier
   page was out is covered by the first later page that lands through it

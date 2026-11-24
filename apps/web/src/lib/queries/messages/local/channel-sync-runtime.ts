@@ -605,12 +605,15 @@ export function createChannelSyncRuntime(
         // Gone meanwhile (evicted or reset): nothing to catch up.
         if (state.seq === null) return 'not-held' as const;
         // A read moved the sequence meanwhile, a commit of removals only
-        // included: replay from there, and the channel is not current until
-        // that replay holds.
+        // included: the channel is not current until a replay holds. It
+        // replays from the read's sequence, unless a commit of removals only
+        // finds it at or past the page: the pages from there on still run.
         if (state.seq !== (to > stored ? to : stored)) {
           state.current = false;
-          after = state.seq;
-          continue;
+          if (to > stored || state.seq < to) {
+            after = state.seq;
+            continue;
+          }
         }
       }
       after = to;

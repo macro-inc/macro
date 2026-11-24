@@ -1601,3 +1601,55 @@ it('rereads a page whose commit a frame written before it was acknowledged durin
     test.stop();
   }
 });
+
+it('repairs the whole range when a removals-only commit answers past its page', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  const first = graphqlMessage(6, { content: 'late copy of first record' });
+  const late = graphqlMessage(306, { content: 'late copy of second record' });
+  const latest = { ...late, content: 'second record as of 350' };
+  const removed = graphqlMessage(7);
+  const key = `GraphqlChannelMessage:${late.id}`;
+  try {
+    await test.host.channelTimelineCommit({
+      channelId: CHANNEL_ID,
+      seq: { kind: 'advance', from: '5', to: '605' },
+    });
+    test.runtime.noteStoredSeq(CHANNEL_ID, '605');
+    // Two delayed frames store records behind the stored cursor.
+    test.push('6', first);
+    await vi.advanceTimersByTimeAsync(20);
+    test.push('306', late);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(cursors(test)).toEqual(['5']);
+    // Another tab stores a window at 405 before the repair's first page.
+    await test.host.channelTimelineCommit({
+      channelId: CHANNEL_ID,
+      seq: { kind: 'lower', seq: '405' },
+    });
+    test.requests[0].answer(
+      delta('205', {
+        hasMore: true,
+        messages: [{ ...first, content: 'first repaired record' }],
+        removedIds: [removed.id],
+      })
+    );
+    await vi.advanceTimersByTimeAsync(20);
+    expect(cursors(test)).toEqual(['5', '205']);
+    test.requests[1].answer(
+      delta('405', { hasMore: true, messages: [latest] })
+    );
+    await vi.advanceTimersByTimeAsync(20);
+    expect(cursors(test)).toEqual(['5', '205', '405']);
+    test.requests[2].answer(delta('605', { messages: [graphqlMessage(605)] }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.seq()).toBe('605');
+    expect(test.records.get(key)).toBe(latest.content);
+    await expect(test.runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe(
+      'current'
+    );
+  } finally {
+    test.stop();
+  }
+});
