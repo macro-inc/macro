@@ -447,7 +447,8 @@ logged. On desktop it opens a popover: a length input that reads `1h 30m`,
 optional start and end, note) and the entries by day with day totals. An
 entry reads like a Discussion comment (`EntryList`, the same rows in the
 popover, the phone sheet and a My week cell): the person's picture and name,
-then muted the start–end span and "timer" when a timer made it, the length
+then muted the start–end span and "timer" when a timer made it (wrapped under
+the name when they do not fit beside it, never cut), the length
 and the author's ⋯ menu on that line (others' rows keep its space), and the
 note on its own line under the name, wrapped and cut to three lines with Show
 more. On

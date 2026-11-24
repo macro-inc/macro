@@ -113,19 +113,22 @@ function EntryRow(props: {
       .filter(Boolean)
       .join(' · ');
   return (
-    <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] content-center items-center gap-x-2 gap-y-1 px-2 py-1.5 text-sm touch:min-h-[44px]">
-      <div class="flex shrink-0">{props.person.avatar(props.entry.userId)}</div>
-      <div class="flex min-w-0 items-baseline gap-1">
+    <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] content-center items-start gap-x-2 gap-y-1 px-2 py-1.5 text-sm touch:min-h-[44px]">
+      <div class="flex h-7 shrink-0 items-center">
+        {props.person.avatar(props.entry.userId)}
+      </div>
+      {/* Details that do not fit beside the name wrap under it, never cut. */}
+      <div class="flex min-w-0 flex-wrap items-baseline gap-x-1 py-1">
         <span class="min-w-0 truncate font-medium text-ink">
           {props.person.name(props.entry.userId)}
         </span>
         <Show when={detail()}>
-          <span class="max-w-[calc(100%-3rem)] shrink-0 truncate text-xs text-ink-extra-muted tabular-nums">
+          <span class="text-xs text-ink-extra-muted tabular-nums">
             {detail()}
           </span>
         </Show>
       </div>
-      <div class="flex items-center gap-1">
+      <div class="flex h-7 items-center gap-1">
         <span class="shrink-0 tabular-nums text-ink">
           {formatLength(props.entry.minutes)}
         </span>

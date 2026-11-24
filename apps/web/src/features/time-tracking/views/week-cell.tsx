@@ -231,7 +231,7 @@ export function WeekCell(props: CellProps): JSX.Element {
         <GridLength minutes={props.minutes} />
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content class="menu-surface z-modal flex max-h-[min(480px,calc(100dvh-24px))] w-72 flex-col gap-1 overflow-y-auto p-1 outline-none">
+        <Popover.Content class="menu-surface z-modal flex max-h-[min(480px,calc(100dvh-24px))] w-80 flex-col gap-1 overflow-y-auto p-1 outline-none">
           <Popover.Title class="truncate px-2 pt-1 text-xs font-medium text-ink-muted">
             {t('timeTracking.cellTitle', {
               task: props.taskName,
