@@ -1,16 +1,24 @@
 import { createRoot, createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import { beforeEach, expect, it } from 'vitest';
 import {
   createEmailSearchSuggestions,
   type EmailSearchSuggestions,
 } from './create-email-search-suggestions';
+import { emailSearchCompletionText } from './email-search-operators';
 
 beforeEach(() => localStorage.clear());
 
 const recentListed = (suggestions: EmailSearchSuggestions) =>
-  suggestions
-    .listed()
-    .map((row) => (row.kind === 'recent' ? row.search : `view:${row.scope}`));
+  suggestions.listed().map((row) =>
+    match(row)
+      .with({ kind: 'recent' }, ({ search }) => search)
+      .with({ kind: 'view' }, ({ scope }) => `view:${scope}`)
+      .with({ kind: 'operator' }, { kind: 'value' }, (completion) =>
+        emailSearchCompletionText(completion)
+      )
+      .exhaustive()
+  );
 
 function setup(initialSearch = '') {
   const [search, setSearch] = createSignal(initialSearch);
@@ -164,6 +172,55 @@ it('remembers a search with its in: filter, and never the filter alone', () => {
     setSearch('');
     suggestions.setFocused(true);
     expect(recentListed(suggestions)).toEqual(['in:sent invoice']);
+    dispose();
+  });
+});
+
+it('offers the operators a typed word starts, above recent searches, and finishes one in place', () => {
+  createRoot((dispose) => {
+    const { search, setSearch, suggestions } = setup('budget subject:lunch');
+    suggestions.setFocused(true);
+    suggestions.setFocused(false);
+    setSearch('');
+    suggestions.setFocused(true);
+
+    setSearch('budget su');
+    expect(recentListed(suggestions)).toEqual([
+      'subject:',
+      'budget subject:lunch',
+    ]);
+
+    expect(suggestions.editsQuery?.(0)).toBe(true);
+    suggestions.pick(0);
+    expect(search()).toBe('budget subject:');
+    expect(suggestions.awaitsPickedResults()).toBe(false);
+    dispose();
+  });
+});
+
+it('offers the values of is: and keeps a minus typed before it', () => {
+  createRoot((dispose) => {
+    const { search, setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+
+    setSearch('invoice -is:un');
+    expect(recentListed(suggestions)).toEqual(['-is:unread ']);
+    suggestions.pick(0);
+    expect(search()).toBe('invoice -is:unread ');
+    dispose();
+  });
+});
+
+it('remembers a search without an operator still being typed', () => {
+  createRoot((dispose) => {
+    const { setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+    setSearch('invoice from:ana is:');
+    suggestions.setFocused(false);
+
+    setSearch('');
+    suggestions.setFocused(true);
+    expect(recentListed(suggestions)).toEqual(['invoice from:ana']);
     dispose();
   });
 });

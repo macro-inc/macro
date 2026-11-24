@@ -1,5 +1,12 @@
 import type { ListSearchSuggestions } from '@app/components/view-shell/list-search-keys';
+import { searchTextRuns } from '@app/components/view-shell/search-operator-text';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
+import {
+  completeEmailSearchOperator,
+  type EmailSearchOperatorCompletion,
+  emailSearchCompletionText,
+} from './email-search-operators';
 import {
   completeEmailSearch,
   type EmailSearchScopeId,
@@ -24,7 +31,15 @@ const TYPED_FILTER = /(?:^|\s)in:(\S*)$/i;
 /** A row under the search field. */
 export type EmailSearchSuggestion =
   | { kind: 'recent'; search: string }
-  | { kind: 'view'; scope: EmailSearchScopeId };
+  | { kind: 'view'; scope: EmailSearchScopeId }
+  | EmailSearchOperatorCompletion;
+
+/** The token typed at the end of the field, with the text before it. */
+function typedToken(text: string) {
+  const token = searchTextRuns(text).at(-1);
+  if (!token || /^\s/.test(token)) return undefined;
+  return { before: text.slice(0, text.length - token.length), token };
+}
 
 export type EmailSearchSuggestions = ListSearchSuggestions & {
   /** The header's search field is open, so it owns the header. */
@@ -32,7 +47,8 @@ export type EmailSearchSuggestions = ListSearchSuggestions & {
   setOpen: (open: boolean) => void;
   /**
    * Rows to list, only while the field has focus: the views an `in:` being
-   * typed can name, otherwise recent searches.
+   * typed can name; otherwise the operators that finish the token being
+   * typed (`sub` gives `subject:`, `is:` its values), then recent searches.
    */
   listed: Accessor<EmailSearchSuggestion[]>;
   setFocused: (focused: boolean) => void;
@@ -84,9 +100,14 @@ export function createEmailSearchSuggestions(options: {
         .map((scope) => ({ kind: 'view', scope }));
     }
 
-    return matchRecentSearches(recent.recent(), options.search())
-      .slice(0, MAX_LISTED)
-      .map((search) => ({ kind: 'recent', search }));
+    // Operators whose names or values finish what is typed come first.
+    const token = typedToken(options.search())?.token;
+    const completions = token ? completeEmailSearchOperator(token) : [];
+    const recentRows = matchRecentSearches(
+      recent.recent(),
+      options.search()
+    ).map((search): EmailSearchSuggestion => ({ kind: 'recent', search }));
+    return [...completions, ...recentRows].slice(0, MAX_LISTED);
   });
 
   return {
@@ -111,23 +132,34 @@ export function createEmailSearchSuggestions(options: {
     // Typing can shorten the list under the active row.
     active: () => Math.min(active(), listed().length - 1),
     setActive,
-    editsQuery: (index) => listed()[index]?.kind === 'view',
+    editsQuery: (index) => {
+      const kind = listed()[index]?.kind;
+      return kind !== undefined && kind !== 'recent';
+    },
     pick: (index) => {
       const suggestion = listed()[index];
       if (!suggestion) return;
 
-      // The view replaces the `in:` being typed, where it was typed.
-      if (suggestion.kind === 'view') {
-        const before = typedFilter()?.before ?? '';
-        options.setSearch(
-          `${before}${before ? ' ' : ''}in:${suggestion.scope} `
-        );
-        setActive(-1);
-        return;
-      }
-
-      options.setSearch(suggestion.search);
-      setAwaitsPickedResults(true);
+      match(suggestion)
+        .with({ kind: 'recent' }, ({ search }) => {
+          options.setSearch(search);
+          setAwaitsPickedResults(true);
+        })
+        // The view replaces the `in:` being typed, where it was typed.
+        .with({ kind: 'view' }, ({ scope }) => {
+          const before = typedFilter()?.before ?? '';
+          options.setSearch(`${before}${before ? ' ' : ''}in:${scope} `);
+          setActive(-1);
+        })
+        // An operator replaces the token it finishes.
+        .with({ kind: 'operator' }, { kind: 'value' }, (completion) => {
+          const before = typedToken(options.search())?.before ?? '';
+          options.setSearch(
+            `${before}${emailSearchCompletionText(completion)}`
+          );
+          setActive(-1);
+        })
+        .exhaustive();
     },
     awaitsPickedResults,
     pickedResultsTaken: () => setAwaitsPickedResults(false),

@@ -188,6 +188,10 @@ per-entity-type search plus a unified search across them — mounted into
   page, and the response's `query_filters` reports what the operators became.
   `-in:signal` and `-in:noise` stay a word left out: each view is two
   conditions, so leaving it out is an OR across the index and Postgres.
+  `email_operators/typed_operators.json` lists typed terms and whether each
+  is an operator; these tests and Mail's search field
+  (`apps/web/src/features/email-view/search/email-search-operators.ts`, which
+  draws and completes operators) both check it, so change it with the parser.
 - The typed conditions that are not thread states run in OpenSearch: text
   matches, labels and tags (`labels` terms or the nested tag filter, each name
   resolved for the caller in Postgres; a required name naming nothing matches
