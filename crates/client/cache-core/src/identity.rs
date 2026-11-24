@@ -138,8 +138,9 @@ pub fn resolve_stated(bindings: &[IdentityBinding], data: &Value) -> Result<Iden
 }
 
 /// Some normalized read models share the identity of the entity they preview.
-/// No key a binding names is inferred: that binding's own response object
-/// decides it, and nothing does when that failed.
+/// No key a binding reads from the response is inferred: that binding's own
+/// response object decides it, and nothing does when that failed. A
+/// reference-only binding, with no response path, is inferred as before.
 pub fn expand_reference_identities(bindings: &[IdentityBinding], identities: &mut IdentityMap) {
     for binding in bindings {
         let Some(target) = identities.get(&binding.local_key).cloned() else {
@@ -151,7 +152,10 @@ pub fn expand_reference_identities(bindings: &[IdentityBinding], identities: &mu
         for field in &binding.reference_fields {
             if let Some(typename) = field.strip_suffix(".id") {
                 let local = EntityKey::entity(typename, &[old_id]);
-                if !bindings.iter().any(|bound| bound.local_key == local) {
+                if !bindings
+                    .iter()
+                    .any(|bound| !bound.response_path.is_empty() && bound.local_key == local)
+                {
                     identities.insert(local, EntityKey::entity(typename, &[new_id]));
                 }
             }
@@ -529,7 +533,7 @@ mod tests {
     }
 
     #[test]
-    fn reference_fields_infer_no_key_a_binding_names() {
+    fn reference_fields_infer_no_key_a_binding_reads_from_the_response() {
         let mut draft = binding("Draft:local", &["save", "draft"]);
         draft.reference_fields = vec!["Message.id".into()];
         let message = binding("Message:local", &["save", "message"]);
@@ -560,13 +564,27 @@ mod tests {
             EntityKey::entity("Draft", &["local"]),
             EntityKey::entity("Draft", &["1"]),
         )]);
-        expand_reference_identities(&[draft, message], &mut identities);
+        expand_reference_identities(&[draft.clone(), message], &mut identities);
         assert_eq!(
             identities,
             IdentityMap::from([(
                 EntityKey::entity("Draft", &["local"]),
                 EntityKey::entity("Draft", &["1"]),
             )])
+        );
+        // A reference-only binding reads nothing from the response.
+        assert_eq!(
+            resolve(&[draft, binding("Message:local", &[])], &data),
+            Ok(IdentityMap::from([
+                (
+                    EntityKey::entity("Draft", &["local"]),
+                    EntityKey::entity("Draft", &["1"]),
+                ),
+                (
+                    EntityKey::entity("Message", &["local"]),
+                    EntityKey::entity("Message", &["1"]),
+                ),
+            ]))
         );
     }
 }
