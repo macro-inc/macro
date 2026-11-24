@@ -241,8 +241,8 @@ export function ModelSelectionList(props: {
               }
               onInput={(event) => nav.setQuery(event.currentTarget.value)}
               class={cn(
-                'min-w-0 flex-1 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 text-sm',
-                props.mobile && 'text-base leading-[22px]'
+                'h-full min-w-0 flex-1 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 text-sm leading-5',
+                props.mobile && 'text-base leading-6'
               )}
             />
             <Show when={nav.query()}>

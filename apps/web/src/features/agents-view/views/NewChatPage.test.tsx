@@ -1705,6 +1705,17 @@ describe('agent-led new conversation', () => {
             ? 'Search models'
             : 'Search agents and models',
       });
+      expect(search.classList.contains('h-full')).toBe(true);
+      expect(search.classList.contains('h-8')).toBe(false);
+      expect(search.classList.contains(touch ? 'text-base' : 'text-sm')).toBe(
+        true
+      );
+      expect(search.classList.contains(touch ? 'leading-6' : 'leading-5')).toBe(
+        true
+      );
+      expect(
+        search.parentElement?.classList.contains(touch ? 'h-11' : 'h-9')
+      ).toBe(true);
       if (touch) search.focus({ preventScroll: true });
       else await waitFor(() => expect(document.activeElement).toBe(search));
       fireEvent.input(search, { target: { value: 'no-such-choice' } });
