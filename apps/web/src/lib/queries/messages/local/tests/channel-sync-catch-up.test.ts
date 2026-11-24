@@ -1653,3 +1653,50 @@ it('repairs the whole range when a removals-only commit answers past its page', 
     test.stop();
   }
 });
+
+it('catches up again when a read from before the reconnect lowers the device after its catch-up', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  const older = graphqlMessage(6, { content: 'offline read' });
+  const newer = graphqlMessage(6, { content: 'edit seen after reconnect' });
+  const key = `GraphqlChannelMessage:${older.id}`;
+  try {
+    test.disconnect();
+    const offlineEpoch = test.runtime.epoch();
+    test.runtime.onConnected();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(cursors(test)).toEqual(['5']);
+    test.push('6', newer);
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[0].answer(delta('6', { messages: [newer] }));
+    await vi.advanceTimersByTimeAsync(600);
+    await expect(test.runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe(
+      'current'
+    );
+    expect(test.seq()).toBe('6');
+    expect(test.records.get(key)).toBe(newer.content);
+
+    // The timeline fetched at 5 while the subscription was down. Its
+    // normalized write and lower commit finish after the reconnect's replay.
+    test.records.set(key, older.content);
+    const lowered = await test.host.channelTimelineCommit({
+      channelId: CHANNEL_ID,
+      seq: { kind: 'lower', seq: '5' },
+    });
+    test.runtime.noteServerRead(
+      CHANNEL_ID,
+      lowered.channelSeq,
+      offlineEpoch,
+      '5'
+    );
+    const caughtUp = test.runtime.ensureCurrent(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(cursors(test)).toEqual(['5', '5']);
+    test.requests[1].answer(delta('6', { messages: [newer] }));
+    await caughtUp;
+    expect(test.records.get(key)).toBe(newer.content);
+  } finally {
+    test.stop();
+  }
+});

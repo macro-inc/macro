@@ -43,9 +43,10 @@ function lostSend(fetcher: typeof fetch) {
     disposition: { kind: 'queued', transactionId: '4' },
   }));
   const device = writeHost();
+  const notifyChanged = vi.fn();
   const writes = createChannelWrites({
     host: device.host,
-    runtime: { notifyChanged: vi.fn() },
+    runtime: { notifyChanged },
     client: () => client,
     now: () => NOW,
   });
@@ -62,6 +63,7 @@ function lostSend(fetcher: typeof fetch) {
   };
   return {
     outcome: outcome(),
+    notifyChanged,
     device,
     exhaust: () =>
       device.settle({
@@ -174,4 +176,22 @@ describe('asking the server about a lost send', () => {
       expect(await send.outcome).toEqual({ id: message.id });
     }
   );
+});
+
+it('tells the views again when a confirmed send stores after its answer', async () => {
+  vi.useFakeTimers();
+  const store = Promise.withResolvers<string>();
+  network.stored = store.promise;
+  const send = lostSend(async () => serverHasIt());
+  await vi.advanceTimersByTimeAsync(0);
+  send.exhaust();
+  await vi.advanceTimersByTimeAsync(5_001);
+  await expect(send.outcome).resolves.toEqual({ id: message.id });
+  expect(send.device.device.records.has(keyOf(message))).toBe(false);
+  send.notifyChanged.mockClear();
+
+  send.device.device.records.set(keyOf(message), message);
+  store.resolve('1');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(send.notifyChanged).toHaveBeenCalled();
 });

@@ -206,6 +206,53 @@ it('runs a catch-up and its requests in a span under the open that asked for it'
   });
 });
 
+it('times each catch-up commit in a child span the device call runs in', async () => {
+  let commitSpan: string | undefined;
+  const host = {
+    channelTimeline: async () => devicePage([], { covered: true, seq: '5' }),
+    channelTimelineCommit: async () => {
+      commitSpan = trace.getActiveSpan()?.spanContext().spanId;
+      return {
+        kind: 'committed' as const,
+        revision: '1' as CacheRevision,
+        changed: [],
+        channelSeq: '9',
+      };
+    },
+  };
+  const runtime = createChannelSyncRuntime({
+    host,
+    fetchChanges: async () => ({
+      resetRequired: false,
+      seq: '9',
+      hasMore: false,
+      removedIds: [],
+      messages: [],
+      activities: [],
+    }),
+    generation: () => 'generation-1',
+    random: () => 0,
+  });
+  runtime.onConnected();
+  try {
+    await runtime.ensureCurrent(CHANNEL_ID);
+  } finally {
+    runtime.dispose();
+  }
+
+  const spans = exporter.getFinishedSpans();
+  const catchUp = spans.findLast((span) => span.name === 'channel.catch_up');
+  const commit = spans.findLast(
+    (span) => span.name === 'channel.catch_up.commit'
+  );
+  expect(commit?.parentSpanContext?.spanId).toBe(catchUp?.spanContext().spanId);
+  expect(commitSpan).toBe(commit?.spanContext().spanId);
+  expect(commit?.attributes).toMatchObject({
+    'commit.kind': 'page',
+    'catch_up.page': 0,
+  });
+});
+
 it('lists the channels to prewarm in the pass span', async () => {
   const requestSpans: (string | undefined)[] = [];
   const fetchIds = vi.fn(async () => {

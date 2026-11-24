@@ -26,7 +26,10 @@ TanStack path in `../` runs untouched.
   start sooner, so a busy channel's frames cannot postpone it, and one already
   running finishes with the waiting one after it. A catch-up or read begun
   under an earlier connection never marks a channel current (`epoch`, which
-  moves on every drop and connect). A last page out while a newer frame stored records is
+  moves on every drop and connect); one that moved the device, storing an
+  older snapshot over what a later catch-up applied, makes it not current and
+  catches it up again. Each catch-up commit runs in a
+  `channel.catch_up.commit` span. A last page out while a newer frame stored records is
   read again (`MAX_PAGE_REREADS`); the repair is left in place until a reread
   holds (for an earlier page, until a later page reaches the frames that
   overtook it, rising to each page before then), so a drop or a
@@ -85,7 +88,8 @@ TanStack path in `../` runs untouched.
   device again between questions (another tab may store the send meanwhile);
   a request unanswered within `SERVER_LOOKUP_BUDGET_MS` is cancelled, so the
   next question sends a new one rather than joining it, and an answer waits
-  at most `SERVER_COPY_STORE_BUDGET_MS` for the device to store it. The composers
+  at most `SERVER_COPY_STORE_BUDGET_MS` for the device to store it (one stored
+  later tells the views again, since their reread came first). The composers
   send a restored draft of that message again, from the same person to the
   same place and from any view of it, under the same id
   (`features/channel/Input/utils/uncertain-sends.ts`, which ignores mention

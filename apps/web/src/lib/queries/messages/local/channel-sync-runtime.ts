@@ -328,17 +328,44 @@ export function createChannelSyncRuntime(
       Parameters<ChannelSyncHost['channelTimelineCommit']>[0],
       'channelId'
     >,
-    generation: string
+    generation: string,
+    within?: Span
   ) =>
     Effect.suspend(() => {
       // A commit runs uninterruptibly; one that would start after dispose
       // ends its fiber instead.
       if (disposed) return Effect.interrupt;
-      return bounded(
-        channelId,
-        deps.host.channelTimelineCommit({ channelId, ...args }, generation)
-      );
+      const send = () =>
+        deps.host.channelTimelineCommit({ channelId, ...args }, generation);
+      return bounded(channelId, within ? within.run(send) : send());
     });
+
+  /**
+   * A catch-up's commit in a `channel.catch_up.commit` child span, so the
+   * trace shows how long the device took to store each page or reset, and
+   * which one went unanswered.
+   */
+  const inCommitSpan = <A, E, R>(
+    parent: Span,
+    kind: 'page' | 'reset',
+    page: number,
+    use: (child: Span) => Effect.Effect<A, E, R>
+  ) =>
+    Effect.acquireUseRelease(
+      Effect.sync(() => {
+        const child = parent.span('channel.catch_up.commit');
+        child.setAttr('commit.kind', kind);
+        child.setAttr('catch_up.page', page);
+        return child;
+      }),
+      use,
+      (child, exit) =>
+        Effect.sync(() => {
+          if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause))
+            child.error(Cause.squash(exit.cause));
+          child.end();
+        })
+    );
 
   /**
    * Waits at most `COMMIT_BUDGET_MS` for the device to answer a commit. Left
@@ -571,19 +598,22 @@ export function createChannelSyncRuntime(
       const stored = state.seq ?? from;
       if (to <= stored && delta.removedIds.length === 0) yield* release;
       else {
-        const committed = yield* commit(
-          channelId,
-          {
-            removedKeys: delta.removedIds.flatMap(channelEntryKeys),
-            ...(to > stored && {
-              seq: {
-                kind: 'advance',
-                from: stored.toString(),
-                to: to.toString(),
-              },
-            }),
-          },
-          generation
+        const committed = yield* inCommitSpan(span, 'page', page, (child) =>
+          commit(
+            channelId,
+            {
+              removedKeys: delta.removedIds.flatMap(channelEntryKeys),
+              ...(to > stored && {
+                seq: {
+                  kind: 'advance',
+                  from: stored.toString(),
+                  to: to.toString(),
+                },
+              }),
+            },
+            generation,
+            child
+          )
         ).pipe(
           // Failed or unanswered, the commit may still have moved the device
           // to the page, whose records a newer frame's may lie under: the
@@ -689,23 +719,29 @@ export function createChannelSyncRuntime(
     noteChannelReset(deps.host, channelId);
     // Once no fill in any tab is between its store and its coverage; one
     // that holds the fence too long cannot keep the channel from resetting.
-    yield* Effect.tryPromise(() =>
-      whileNoFills(
-        () => {
-          const pending = deps.host.channelTimelineCommit(
-            { channelId, reset: true },
-            generation
-          );
-          // Counted again once it answers, for a fill that read after the
-          // fence let it go.
-          fireAndForget(
-            whenAnswered(pending, () => noteChannelReset(deps.host, channelId)),
-            'channel-sync'
-          );
-          // Bounded like any commit, so an unanswered one frees the channel.
-          return run(bounded(channelId, pending));
-        },
-        { orRun: true, waitMs: RESET_FENCE_WAIT_MS }
+    yield* inCommitSpan(span, 'reset', MAX_CHANGE_PAGES + rereads, (child) =>
+      Effect.tryPromise(() =>
+        whileNoFills(
+          () => {
+            const pending = child.run(() =>
+              deps.host.channelTimelineCommit(
+                { channelId, reset: true },
+                generation
+              )
+            );
+            // Counted again once it answers, for a fill that read after the
+            // fence let it go.
+            fireAndForget(
+              whenAnswered(pending, () =>
+                noteChannelReset(deps.host, channelId)
+              ),
+              'channel-sync'
+            );
+            // Bounded like any commit, so an unanswered one frees the channel.
+            return run(bounded(channelId, pending));
+          },
+          { orRun: true, waitMs: RESET_FENCE_WAIT_MS }
+        )
       )
     );
     state.seq = null;
@@ -946,6 +982,7 @@ export function createChannelSyncRuntime(
     },
     noteServerRead(channelId, seq, epoch, readSeq) {
       const state = stateOf(channelId);
+      const before = state.seq;
       state.seq = parseSeq(seq);
       const read = parseSeq(readSeq);
       if (state.seq === null || read === null || read > state.seq) {
@@ -954,7 +991,16 @@ export function createChannelSyncRuntime(
         state.current = false;
         return;
       }
-      if (!isConnected || epoch !== socketEpoch) return;
+      if (!isConnected || epoch !== socketEpoch) {
+        // Read under an earlier connection, it proves nothing; one that moved
+        // the device stored an older snapshot over what a catch-up since
+        // applied, which only another catch-up replays.
+        if (state.seq !== before) {
+          state.current = false;
+          if (isConnected) scheduleCatchUp(channelId, 'gap');
+        }
+        return;
+      }
       // Read while frames were flowing: every later change arrives as one,
       // unless one already went by while the device held nothing, or a
       // repair is left for records outside what the read covered.

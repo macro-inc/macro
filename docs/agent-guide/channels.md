@@ -2092,7 +2092,8 @@ thumbnail that opened it.
 Behind `enable-channel-local-sync` (`VITE_ENABLE_CHANNEL_LOCAL_SYNC=true` in a local
 bundle), a channel opens from the device: its history and threads show without a
 request once the device holds them, and opening the same channel again reads
-nothing from the server. Sends, edits, deletes and reactions go through the
+nothing from the server while the connection stays up (after a drop, it asks
+the server only for the changes since the device last heard). Sends, edits, deletes and reactions go through the
 durable cache mutation queue as `SendChannelMessage`, `EditChannelMessage`,
 `DeleteChannelMessage` and `ReactToChannelMessage`, and go out when the
 connection returns. Five seconds after start, while you leave the app alone,

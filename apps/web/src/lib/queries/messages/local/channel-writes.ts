@@ -67,13 +67,33 @@ const SERVER_COPY_STORE_BUDGET_MS = 5_000;
 
 /**
  * Reads one message from the server; null when the server does not have it.
- * `signal` cancels the request.
+ * `signal` cancels the request. `storedLate` runs once a copy that answered
+ * before the device stored it is stored after all.
  */
 export type FetchChannelMessage = (
   channelId: string,
   messageId: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  storedLate?: () => void
 ) => Promise<ChannelMessageFieldsFragment | null>;
+
+/** Whether the device stored a read; a failure is reported, not thrown. */
+async function storeOutcome(cached: Promise<void>): Promise<boolean> {
+  try {
+    await cached;
+    return true;
+  } catch (error) {
+    Telemetry.error(error, { surface: 'channel-writes' });
+    return false;
+  }
+}
+
+async function whenStoredLate(
+  storing: Promise<boolean>,
+  storedLate: (() => void) | undefined
+): Promise<void> {
+  if (await storing) storedLate?.();
+}
 
 type Settled<T> = { ok: true; value: T } | { ok: false; error: unknown };
 
@@ -88,7 +108,8 @@ async function settle<T>(promise: Promise<T>): Promise<Settled<T>> {
 const fetchServerMessage: FetchChannelMessage = async (
   channelId,
   messageId,
-  signal
+  signal,
+  storedLate
 ) => {
   // Cancelled when unanswered within the budget: urql would hand the next
   // question the same request rather than send a new one.
@@ -119,20 +140,20 @@ const fetchServerMessage: FetchChannelMessage = async (
   const { data, cached } = answer.value;
   // The views reread when the write ends, so the device should hold it then;
   // a copy that could not be stored, or is still storing after
-  // `SERVER_COPY_STORE_BUDGET_MS`, is still the answer.
-  const stored = Effect.promise(async () => {
-    try {
-      await cached;
-    } catch (error) {
-      Telemetry.error(error, { surface: 'channel-writes' });
-    }
-  });
-  await Effect.runPromise(
-    Effect.timeoutOrElse(stored, {
-      duration: SERVER_COPY_STORE_BUDGET_MS,
-      orElse: () => Effect.succeed(undefined),
-    })
+  // `SERVER_COPY_STORE_BUDGET_MS`, is still the answer; one stored after that
+  // tells the views again, since their reread came before it.
+  const storing = storeOutcome(cached);
+  const inTime = await Effect.runPromise(
+    Effect.timeoutOrElse(
+      Effect.promise(() => storing),
+      {
+        duration: SERVER_COPY_STORE_BUDGET_MS,
+        orElse: () => Effect.succeed(undefined),
+      }
+    )
   );
+  if (inTime === undefined)
+    fireAndForget(whenStoredLate(storing, storedLate), 'channel-writes');
   return data.user.channelMessage;
 };
 
@@ -693,7 +714,11 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       const message = await (deps.fetchMessage ?? fetchServerMessage)(
         write.channelId,
         write.messageId,
-        signal
+        signal,
+        () => {
+          deps.runtime.notifyChanged(write.channelId);
+          announceWritten(write.channelId);
+        }
       );
       return message && mapChannelMessage(message);
     } catch (error) {
