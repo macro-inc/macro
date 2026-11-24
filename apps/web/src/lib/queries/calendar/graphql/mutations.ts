@@ -112,6 +112,8 @@ const eventIdentitySelection = selectRecords(CalendarEventIdentityFragmentDoc);
 
 /** Events saved locally whose create the server has not confirmed yet. */
 const pendingCreates = new Set<string>();
+/** Creates whose own call still waits for the server's answer. */
+const answeringCreates = new Set<string>();
 /** The server id each confirmed create replaced its local id with. */
 const landedCreates = new Map<string, string>();
 const landedListeners = new Set<(localId: string, serverId: string) => void>();
@@ -193,7 +195,12 @@ export function trackCalendarCreateSettlements(
       return;
     }
     fireAndForget(
-      (async () => landCreate(localId, await settledEventId(host, localId)))(),
+      (async () => {
+        const serverId = await settledEventId(host, localId);
+        // A create still waiting on its own answer lands from that answer.
+        if (serverId || !answeringCreates.has(localId))
+          landCreate(localId, serverId);
+      })(),
       'calendar-create-settlement'
     );
   });
@@ -633,9 +640,27 @@ async function targetCalendar(client: Client, calendarId: string | undefined) {
  * canonical identity temporarily unavailable; callers close and refresh.
  */
 export async function executeGraphqlCreate(
-  { onAccepted, ...args }: CreateCalendarEventArgs,
+  args: CreateCalendarEventArgs,
   client: Client = getGraphqlSoupClient(),
   host?: Pick<CacheHost, 'readRecordsByKeys'>
+): Promise<{ outcome: CalendarMutationOutcome; event?: CalendarEvent }> {
+  const clientId = args.idempotencyKey ?? uuidv4();
+  answeringCreates.add(clientId);
+  try {
+    return await createThroughQueue(
+      { ...args, idempotencyKey: clientId },
+      client,
+      host
+    );
+  } finally {
+    answeringCreates.delete(clientId);
+  }
+}
+
+async function createThroughQueue(
+  { onAccepted, ...args }: CreateCalendarEventArgs,
+  client: Client,
+  host: Pick<CacheHost, 'readRecordsByKeys'> | undefined
 ): Promise<{ outcome: CalendarMutationOutcome; event?: CalendarEvent }> {
   const clientId = args.idempotencyKey ?? uuidv4();
   const calendar = await targetCalendar(client, args.calendarId ?? undefined);

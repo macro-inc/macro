@@ -42,7 +42,10 @@ const TIME = {
   timeZone: 'UTC',
 };
 
+/** Releases the held server answer; set once the request arrives. */
 let release: (() => void) | undefined;
+const requestArrived = () => release !== undefined;
+const answerRequest = () => release?.();
 let answer: Answer = 'create';
 let serverRequests = 0;
 
@@ -182,13 +185,13 @@ async function run(next: Answer) {
     async () => shows(await eventsOnTheDay(), localId),
     'the local event on the calendar'
   );
-  await until(async () => release !== undefined, 'the request');
+  await until(async () => requestArrived(), 'the request');
   const beforeAnswer = {
     settled,
     creating: isCalendarEventCreating(localId),
   };
 
-  release?.();
+  answerRequest();
   const outcome = await created;
   if ('error' in outcome) {
     await until(

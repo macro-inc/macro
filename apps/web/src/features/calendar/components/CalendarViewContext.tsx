@@ -64,22 +64,24 @@ export function createCalendarEventSelection(
       setAnchor(nextAnchor);
       setOrigin(nextOrigin);
     });
-    // A local id the server never issued names no event to navigate to; the
-    // selection reports the event once its create lands.
-    if (isCalendarEventCreating(nextEvent.eventId)) return;
-    // Opaque team projections have no direct-event navigation capability.
+    // Opaque team projections have no direct-event navigation capability,
+    // and a local id the server never issued names no event to navigate to;
+    // a created event is reported once it lands.
     onFocusedEventIdChange?.(
-      nextEvent.teamProjection ? undefined : nextEvent.eventId
+      nextEvent.teamProjection || isCalendarEventCreating(nextEvent.eventId)
+        ? undefined
+        : nextEvent.eventId
     );
   };
   const refresh = (nextEvent: CalendarEvent) => {
     if (event()?.id === nextEvent.id) setEvent(nextEvent);
   };
   /** Moves the selection from a created event's local id to its server id. */
-  const land = (nextEvent: CalendarEvent, nextAnchor?: HTMLElement) => {
+  const land = (nextEvent: CalendarEvent, nextChip?: HTMLElement) => {
     batch(() => {
       setEvent(() => nextEvent);
-      if (nextAnchor) setAnchor(nextAnchor);
+      // A list selection stays on its row, as in `reanchor`.
+      if (nextChip && origin() === 'grid') setAnchor(nextChip);
     });
     onFocusedEventIdChange?.(nextEvent.eventId);
   };
@@ -173,6 +175,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
               focusedEventId !== previousEventId &&
               selectedEvent &&
               !selectedEvent.teamProjection &&
+              !isCalendarEventCreating(selectedEvent.eventId) &&
               selectedEvent.eventId !== focusedEventId
             ) {
               selection.close(false);

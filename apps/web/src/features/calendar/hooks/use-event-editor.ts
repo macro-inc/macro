@@ -155,9 +155,8 @@ interface UseEventEditorProps {
   event: Accessor<CalendarEvent | undefined>;
   onSaved: () => void;
   /**
-   * Called with a new event once it exists, before `onSaved`: under its local
-   * id when it is saved locally ahead of the server, which the calendar
-   * follows to the server's id once the create lands.
+   * Called with a new event once it exists, under the id the server gave it.
+   * A create saved locally first closes the editor before this runs.
    */
   onCreated?: (created: CreatedCalendarEvent) => void;
   macroCallsEnabled: Accessor<boolean>;
@@ -504,7 +503,6 @@ export function useEventEditor(props: UseEventEditorProps) {
 
     try {
       if (!event) {
-        let accepted = false;
         // The server mints the call and writes its link into the event, so
         // the one invitation attendees receive already carries it.
         const created = await create.mutateAsync({
@@ -524,13 +522,9 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(values.reminders ? { reminders: values.reminders } : {}),
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
           ...(values.guestPolicy ? { guestPolicy: values.guestPolicy } : {}),
-          onAccepted: (local) => {
-            accepted = true;
-            props.onCreated?.({ eventId: local.id, time: values.time });
-            closeAccepted();
-          },
+          onAccepted: closeAccepted,
         });
-        if (created && !accepted)
+        if (created)
           props.onCreated?.({ eventId: created.id, time: values.time });
         closeAccepted();
         return;

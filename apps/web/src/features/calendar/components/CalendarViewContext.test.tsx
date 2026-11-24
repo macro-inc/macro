@@ -8,7 +8,7 @@ import {
   useCalendarFocus,
 } from '@app/features/calendar-view/calendar-focus-target';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarEvent } from '../types';
 import {
@@ -61,7 +61,8 @@ function withSelection(
 }
 
 function renderContexts(
-  onFocusedEventIdChange?: (eventId: string | undefined) => void
+  onFocusedEventIdChange?: (eventId: string | undefined) => void,
+  focusedEventId?: () => string | undefined
 ) {
   let focus!: ReturnType<typeof useCalendarFocus>;
   let view!: ReturnType<typeof useCalendarView>;
@@ -73,6 +74,7 @@ function renderContexts(
   render(() => (
     <CalendarFocusContextProvider>
       <CalendarViewContextProvider
+        focusedEventId={focusedEventId?.()}
         onFocusedEventIdChange={onFocusedEventIdChange}
       >
         <Probe />
@@ -182,15 +184,17 @@ describe('details opened on an event whose create has not landed', () => {
     cleanup();
   });
 
-  it('stays open under the local id without reporting it as a destination', () => {
-    const focused = vi.fn();
-    const { view } = renderContexts(focused);
+  it('stays open under the local id without naming it as a destination', () => {
+    // The details of another event were open, so the URL named it.
+    const [focused, setFocused] = createSignal<string | undefined>('other-1');
+    const { view } = renderContexts(setFocused, focused);
+    view().selectEvent(occurrence('other-1'), document.createElement('a'));
 
     view().selectEvent(local, document.createElement('a'));
     view().refreshSelectedEventFromPage(page(server), true);
 
     expect(view().selectedEvent()).toBe(local);
-    expect(focused).not.toHaveBeenCalled();
+    expect(focused()).toBeUndefined();
   });
 
   it('moves to the server id and its chip once the create lands', () => {
@@ -208,6 +212,21 @@ describe('details opened on an event whose create has not landed', () => {
     expect(view().selectedEvent()).toBe(server);
     expect(view().selectedEventAnchor()).toBe(chip);
     expect(focused).toHaveBeenLastCalledWith('server-1');
+  });
+
+  it('keeps a list selection on its row when the create lands', () => {
+    const { view } = renderContexts();
+    const row = document.createElement('button');
+    view().selectEvent(local, row, 'agenda');
+
+    creates.creating.delete('local-1');
+    creates.landed.set('local-1', 'server-1');
+    view().refreshSelectedEventFromPage(page(server), true, () =>
+      document.createElement('a')
+    );
+
+    expect(view().selectedEvent()).toBe(server);
+    expect(view().selectedEventAnchor()).toBe(row);
   });
 
   it('closes when the landed event is not on the page', () => {

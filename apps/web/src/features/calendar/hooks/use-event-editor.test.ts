@@ -1105,22 +1105,22 @@ describe('closing once a save is queued', () => {
     return { hook, dispose, saved, created };
   }
 
-  it('closes a new event before the server answers, under its local id', async () => {
+  it('closes a new event before the server answers, and reports it under the server’s id', async () => {
     const server = queuedMutation(mocks.createEvent, { id: 'local-1' });
     const { hook, dispose, saved, created } = editor();
     try {
       const saving = hook.save(values);
       await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce());
 
-      expect(created).toHaveBeenCalledExactlyOnceWith({
-        eventId: 'local-1',
-        time: values.time,
-      });
       expect(hook.pending()).toBe(false);
+      expect(created).not.toHaveBeenCalled();
 
       server.answer({ id: 'server-1' });
       await saving;
-      expect(created).toHaveBeenCalledOnce();
+      expect(created).toHaveBeenCalledExactlyOnceWith({
+        eventId: 'server-1',
+        time: values.time,
+      });
       expect(saved).toHaveBeenCalledOnce();
       expect(mocks.failure).not.toHaveBeenCalled();
     } finally {
@@ -1130,7 +1130,7 @@ describe('closing once a save is queued', () => {
 
   it('reports a create the server refuses after the editor closed', async () => {
     const server = queuedMutation(mocks.createEvent, { id: 'local-1' });
-    const { hook, dispose, saved } = editor();
+    const { hook, dispose, saved, created } = editor();
     try {
       const saving = hook.save(values);
       await vi.waitFor(() => expect(saved).toHaveBeenCalledOnce());
@@ -1142,6 +1142,7 @@ describe('closing once a save is queued', () => {
         { subtext: 'This calendar is read-only.' }
       );
       expect(saved).toHaveBeenCalledOnce();
+      expect(created).not.toHaveBeenCalled();
     } finally {
       dispose();
     }

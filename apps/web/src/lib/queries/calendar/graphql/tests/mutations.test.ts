@@ -878,6 +878,66 @@ describe('executeGraphqlCreate', () => {
     expect(isCalendarEventCreating(clientId)).toBe(false);
   });
 
+  it('leaves a create its own call still answers to that call when the alias is not readable yet', async () => {
+    let settle: ((settlement: MutationSettlement) => void) | undefined;
+    const untrack = trackCalendarCreateSettlements({
+      onMutationSettled: (callback) => {
+        settle = callback;
+        return () => {};
+      },
+      readRecordsByKeys: vi.fn(async () => ({
+        revision: '1' as never,
+        records: [],
+      })),
+    });
+    let answer = () => {};
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const { calls, client } = fakeClient('committed', {
+      event: graphqlEvent({ id: 'server-4', title: 'Offsite' }),
+    });
+    const held = {
+      ...client,
+      mutation: (...args: Parameters<Client['mutation']>) => {
+        const source = client.mutation(...args);
+        return {
+          toPromise: async () => {
+            await answered;
+            return source.toPromise();
+          },
+        };
+      },
+    } as unknown as Client;
+
+    const created = executeGraphqlCreate(
+      {
+        title: 'Offsite',
+        time: {
+          kind: 'allDay',
+          startDate: '2026-11-28',
+          endDate: '2026-11-29',
+        },
+      },
+      held
+    );
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    const clientId = calls[0]?.optimistic.uuid ?? '';
+    settle?.({
+      mutationUuid: clientId,
+      transactionId: 'tx-1',
+      status: 'committed',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(isCalendarEventCreating(clientId)).toBe(true);
+
+    answer();
+    await created;
+    expect(isCalendarEventCreating(clientId)).toBe(false);
+    expect(createdCalendarEventId(clientId)).toBe('server-4');
+    untrack();
+  });
+
   it('sends a write addressed to a created event’s local id to the id it landed under', async () => {
     const landed = vi.fn();
     const stop = onCalendarEventCreated(landed);
