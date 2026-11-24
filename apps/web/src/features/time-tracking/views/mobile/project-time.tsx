@@ -61,7 +61,7 @@ function MostTime(props: {
  * sheet stacking the period, its total, its people (each opening to their
  * tasks) and the tasks with the most time. Export stays on desktop.
  */
-export function MobileProjectTime(
+function MobileProjectTimeBody(
   props: Omit<ProjectTimeViewProps, 'save'>
 ): JSX.Element {
   const [open, setOpen] = createSignal(false);
@@ -176,5 +176,21 @@ export function MobileProjectTime(
         </MobileDrawer.Portal>
       </MobileDrawer>
     </>
+  );
+}
+
+/** Each project starts its reads afresh: one project's totals never show under another's name. */
+export function MobileProjectTime(
+  props: Omit<ProjectTimeViewProps, 'save'>
+): JSX.Element {
+  return (
+    <Show when={props.project.id} keyed>
+      {(projectId) => (
+        <MobileProjectTimeBody
+          {...props}
+          project={{ id: projectId, name: props.project.name }}
+        />
+      )}
+    </Show>
   );
 }

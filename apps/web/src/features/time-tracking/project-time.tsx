@@ -7,7 +7,7 @@ import { getDisplayName } from '@core/user/displayName';
 import { tryMacroId } from '@core/user/macroId';
 import { downloadFile } from '@filesystem/download';
 import { type JSX, Show, Suspense } from 'solid-js';
-import { localDay } from './core/entry-days';
+import { createLocalToday } from './primitives/create-local-today';
 import type { ProjectTimeClock } from './primitives/create-project-time';
 import { TimeTrackingProvider } from './time-tracking-provider';
 import { MobileProjectTime } from './views/mobile/project-time';
@@ -42,7 +42,7 @@ function ReportPerson(props: { userId: string }): JSX.Element {
 function useProjectTimeClock(): ProjectTimeClock {
   const [preferences] = useCalendarPreferences();
   return {
-    today: () => localDay(new Date()),
+    today: createLocalToday(),
     weekStartsOn: () => preferences.weekStartsOn,
   };
 }

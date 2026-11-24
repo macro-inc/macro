@@ -11,6 +11,7 @@ import {
 } from '@solidjs/testing-library';
 import type { Client } from '@urql/core';
 import { err, ok } from 'neverthrow';
+import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { TimeTrackingContextProvider } from '../context/time-tracking-context';
 import type { RunningTimerState } from '../primitives/running-timer';
@@ -19,6 +20,8 @@ import { ProjectTimeDesktop } from './project-time';
 const inputs = vi.hoisted(() => [] as TimeSummaryInput[]);
 /** Periods whose read fails; a failed read keeps the last answer, as urql does. */
 const failing = vi.hoisted(() => new Set<string>());
+/** Projects whose read has not answered; urql keeps the last answer meanwhile. */
+const loading = vi.hoisted(() => new Set<string>());
 const readTimeExport = vi.hoisted(() => vi.fn());
 const toast = vi.hoisted(() => ({ alert: vi.fn(), failure: vi.fn() }));
 
@@ -111,7 +114,8 @@ vi.mock('../queries/time-summary', () => ({
         const value = input();
         if (!value) return undefined;
         inputs.push(value);
-        if (failing.has(value.from)) return last;
+        if (failing.has(value.from) || loading.has(String(value.projectId)))
+          return last;
         last = summaryFor(value);
         return last;
       },
@@ -125,12 +129,13 @@ afterEach(() => {
   cleanup();
   inputs.length = 0;
   failing.clear();
+  loading.clear();
   readTimeExport.mockReset();
   toast.alert.mockReset();
   toast.failure.mockReset();
 });
 
-function renderTime() {
+function renderTime(projectId: () => string = () => 'project-1') {
   const onOpenTask = vi.fn();
   const save = vi.fn(() => Promise.resolve({ saved: true }));
   render(() => (
@@ -143,7 +148,7 @@ function renderTime() {
       }}
     >
       <ProjectTimeDesktop
-        project={{ id: 'project-1', name: 'Launch plans' }}
+        project={{ id: projectId(), name: 'Launch plans' }}
         clock={{ today: () => '2026-11-24', weekStartsOn: () => 1 }}
         person={(userId) => <span>{userId}</span>}
         onOpenTask={onOpenTask}
@@ -289,4 +294,16 @@ it('changes the period and says when the project held more tasks than a report c
       'This project has more tasks than one report can count, so these totals leave some of them out.'
     )
   ).toBeTruthy();
+});
+
+it('never shows the totals of one project while another one loads', () => {
+  const [projectId, setProjectId] = createSignal('project-1');
+  loading.add('project-2');
+  renderTime(projectId);
+  expect(screen.getByText('2h 15m')).toBeTruthy();
+
+  setProjectId('project-2');
+
+  expect(screen.queryByText('2h 15m')).toBeNull();
+  expect(screen.queryByText('alice')).toBeNull();
 });

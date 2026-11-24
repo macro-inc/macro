@@ -30,7 +30,7 @@ const UNAVAILABLE = '–';
  * A project's Time tab: the period, its three figures, and the breakdown by
  * person, task or day with what each row holds; export for the period.
  */
-export function ProjectTimeDesktop(props: ProjectTimeViewProps): JSX.Element {
+function ProjectTimeDesktopBody(props: ProjectTimeViewProps): JSX.Element {
   const projectId = () => props.project.id;
   const time = createProjectTime(projectId, props.clock);
   const week = createProjectWeekTime(projectId, props.clock);
@@ -133,5 +133,19 @@ export function ProjectTimeDesktop(props: ProjectTimeViewProps): JSX.Element {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Each project starts its reads afresh: one project's totals never show under another's name. */
+export function ProjectTimeDesktop(props: ProjectTimeViewProps): JSX.Element {
+  return (
+    <Show when={props.project.id} keyed>
+      {(projectId) => (
+        <ProjectTimeDesktopBody
+          {...props}
+          project={{ id: projectId, name: props.project.name }}
+        />
+      )}
+    </Show>
   );
 }
