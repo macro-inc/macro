@@ -27,7 +27,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let message = self.active_message(&parent, id, true).await?;
         tracing::Span::current().record("root", message.thread_id.is_none());
         if message.thread_id.is_some() {
-            return Ok(MessageRead::Reply(message));
+            return Ok(MessageRead::Reply(Box::new(message)));
         }
         self.root_entry(&parent, id).await.map(MessageRead::Root)
     }

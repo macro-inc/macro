@@ -127,7 +127,7 @@ impl GraphqlChannelQuery {
         let seq = reads.channel_seq(access.clone(), channel_id).await?;
         let message = match reads.messages.get_entry(access, message_id).await {
             Ok(MessageRead::Reply(message)) => {
-                Some(GraphqlChannelMessage::from_message(message, channel_id))
+                Some(GraphqlChannelMessage::from_message(*message, channel_id))
             }
             Ok(MessageRead::Root(MessageTimelineEntry::Message { message })) => {
                 Some(GraphqlChannelMessage::from_item(*message, channel_id, None))

@@ -160,7 +160,7 @@ pub struct MessageThreadPage {
 #[derive(Debug, Clone)]
 pub enum MessageRead {
     /// A reply, which carries no thread of its own.
-    Reply(Message),
+    Reply(Box<Message>),
     /// A root with its thread state, preview and call status.
     Root(MessageTimelineEntry),
 }
