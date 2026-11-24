@@ -23,6 +23,8 @@ mod lane;
 mod plan;
 mod request;
 mod runner;
+#[cfg(test)]
+mod test_support;
 mod turns;
 
 pub use active::{ActiveStreamGuard, ActiveStreams};
@@ -31,7 +33,8 @@ pub use catalog::{LANE_QUERIES, LaneQuery, Pass};
 pub use frame::{EndReason, Frame, LaneDoneReason};
 pub use lane::{InvalidLaneId, LaneError, LaneId, LaneKind, Paging};
 pub use request::{
-    MAX_COVERAGE_SPANS, MAX_LANES, MAX_SAVED_LANES, PROTOCOL_VERSIONS, RequestError, SyncPlan,
+    MAX_COVERAGE_SPANS, MAX_LANE_QUERIES, MAX_LANE_QUERY_BYTES, MAX_LANES, MAX_SAVED_LANES,
+    PROTOCOL_VERSIONS, RequestError, SyncPlan,
 };
 pub use runner::{PageExecutor, frames, ndjson_stream};
 pub use turns::{PageTurn, PageTurns, StreamTurns};

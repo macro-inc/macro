@@ -11,6 +11,7 @@ use async_graphql::parser::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::sync::Arc;
 
 const MAX_LANE_ID_LEN: usize = 64;
 /// The variable every lane pages through.
@@ -141,7 +142,8 @@ pub enum LaneError {
 #[derive(Debug)]
 pub(crate) struct LaneDraft {
     pub(crate) id: LaneId,
-    pub(crate) query: &'static str,
+    /// The client's document for the lane's operation.
+    pub(crate) query: Arc<str>,
     pub(crate) operation_name: &'static str,
     /// What the lane's first page runs.
     pub(crate) variables: Map<String, Value>,
@@ -161,7 +163,7 @@ pub(crate) struct LaneDraft {
 #[derive(Debug)]
 pub(crate) struct LanePlan {
     pub(crate) id: LaneId,
-    pub(crate) query: &'static str,
+    pub(crate) query: Arc<str>,
     pub(crate) operation_name: &'static str,
     /// Parsed once and reused for every page.
     pub(crate) document: ExecutableDocument,
@@ -178,7 +180,7 @@ pub(crate) struct LanePlan {
 impl LanePlan {
     /// Parses the draft's query and derives how its pages continue.
     pub(crate) fn new(draft: LaneDraft) -> Result<Self, LaneError> {
-        let document = parse_query(draft.query).map_err(LaneError::QueryParse)?;
+        let document = parse_query(&*draft.query).map_err(LaneError::QueryParse)?;
         if selected_operation(&document.operations, draft.operation_name)
             != Some(OperationType::Query)
         {

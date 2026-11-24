@@ -363,7 +363,6 @@ impl LaneRun {
     fn declaration(&self) -> Frame {
         Frame::Lane {
             lane: self.plan.id.clone(),
-            query: self.plan.query.to_owned(),
             operation_name: self.plan.operation_name.to_owned(),
             paging: self.plan.paging.wire(),
             kind: self.plan.kind.clone(),
@@ -372,7 +371,7 @@ impl LaneRun {
     }
 
     fn request(&self) -> Request {
-        let mut request = Request::new(self.plan.query)
+        let mut request = Request::new(&*self.plan.query)
             .variables(Variables::from_json(Value::Object(self.variables.clone())))
             .operation_name(self.plan.operation_name);
         request.set_parsed_query(self.plan.document.clone());

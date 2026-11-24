@@ -13,7 +13,9 @@ fn now() -> DateTime<Utc> {
 
 fn plan(body: Value) -> Vec<LanePlan> {
     SyncPlan::from_json(
-        body.to_string().as_bytes(),
+        crate::test_support::with_client_queries(body)
+            .to_string()
+            .as_bytes(),
         now(),
         MaterializedRange::around(now()),
     )

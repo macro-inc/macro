@@ -1,0 +1,205 @@
+# Operations only the streamed cache sync runs. The server plans which lanes
+# run them and with what input; the app sends these documents with each
+# stream request (`src/lib/queries/soup/sync/lane-queries.ts`).
+
+query SoupBackfillSyncChannels($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+        cacheProjection
+        notifications {
+          __typename
+          id
+          entityId
+          entityType
+          state
+        }
+        ... on GraphqlSoupChannel {
+          name
+          channelType
+          ownerId
+          organizationId
+          teamId
+          createdAt
+          updatedAt
+          viewedAt
+          interactedAt
+          isParticipant
+          autoJoinTeam
+          frecencyScore
+          agentDm {
+            botId
+            name
+            avatarUrl
+          }
+          participants {
+            channelId
+            userId
+            role
+            joinedAt
+            leftAt
+          }
+        }
+      }
+      nextCursor
+    }
+  }
+}
+
+query SoupSyncChannelIds($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+      }
+      nextCursor
+    }
+  }
+}
+
+query SoupBackfillSyncTasks($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+        cacheProjection
+        ... on GraphqlSoupDocument {
+          name
+          ownerId
+          fileType
+          projectId
+          createdAt
+          updatedAt
+          viewedAt
+          deletedAt
+          isFavorited
+          subType {
+            __typename
+            ... on GraphqlTaskSubType {
+              isCompleted
+            }
+          }
+          properties {
+            id
+            propertyDefinitionId
+            value {
+              ...SoupPropertyValueFields
+            }
+          }
+          notifications {
+            __typename
+            id
+            entityId
+            entityType
+            state
+          }
+        }
+      }
+      nextCursor
+    }
+  }
+}
+
+query SoupSyncTaskIds($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+      }
+      nextCursor
+    }
+  }
+}
+
+query SoupSyncTaskProjectIds($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+      }
+      nextCursor
+    }
+  }
+}
+
+query SoupBackfillSyncDocuments($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+        cacheProjection
+        ... on GraphqlSoupDocument {
+          name
+          ownerId
+          fileType
+          projectId
+          createdAt
+          updatedAt
+          viewedAt
+          deletedAt
+          isFavorited
+          subType {
+            __typename
+            ... on GraphqlTaskSubType {
+              isCompleted
+            }
+          }
+          properties {
+            id
+            propertyDefinitionId
+            value {
+              ...SoupPropertyValueFields
+            }
+          }
+          notifications {
+            __typename
+            id
+            entityId
+            entityType
+            state
+          }
+        }
+      }
+      nextCursor
+    }
+  }
+}
+
+query SoupSyncDocumentIds($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+      }
+      nextCursor
+    }
+  }
+}
+
+query SoupSyncSharedEmailIds($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+      }
+      nextCursor
+    }
+  }
+}

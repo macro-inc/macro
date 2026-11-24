@@ -60,7 +60,7 @@ fn decoder_splits_a_byte_at_a_time() {
 fn run_decodes_every_frame_type_and_counts_bytes() {
     let mut run = run();
     let stream = concat!(
-        r#"{"type":"lane","lane":"tasks","query":"query Q { user { id } }","operationName":"Q","paging":"soup","kind":{"kind":"hydrate"},"passStartedAt":"2026-11-01T00:00:00.000Z"}"#,
+        r#"{"type":"lane","lane":"tasks","operationName":"Q","paging":"soup","kind":{"kind":"hydrate"},"passStartedAt":"2026-11-01T00:00:00.000Z"}"#,
         "\n",
         r#"{"type":"page","lane":"tasks","page":0,"variables":{"input":{}},"response":{"data":{"user":{"id":"u"}}},"items":0,"resume":{"cursor":"c1"}}"#,
         "\n",
@@ -81,7 +81,7 @@ fn run_decodes_every_frame_type_and_counts_bytes() {
     let frames = run.pending.iter().cloned().collect::<Vec<_>>();
     assert!(matches!(
         &frames[0],
-        SyncFrame::Lane { lane, operation_name: Some(name), paging: SyncPaging::Soup, .. }
+        SyncFrame::Lane { lane, operation_name: name, paging: SyncPaging::Soup, .. }
             if lane == "tasks" && name == "Q"
     ));
     assert!(

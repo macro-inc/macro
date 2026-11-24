@@ -28,8 +28,9 @@ whose pages took the least time first.
 
 ## Start here
 
-- `src/catalog.rs`: each pass's lanes in load order, their queries
-  (`src/catalog/*.graphql`) and first inputs.
+- `src/catalog.rs`: each pass's lanes in load order, the operation each runs
+  (`LANE_QUERIES`) and their first inputs. The documents are the client's,
+  sent with each request (`queries`).
 - `src/plan.rs`: a stream's lanes from the saved lane state; `src/calendar.rs`
   the calendar windows, in the client's time zone, around its coverage.
 - `src/runner.rs`: the lane loop, paging rules, `maxItems` / `maxPages`, errors,
@@ -49,19 +50,21 @@ whose pages took the least time first.
 
 ## Recipes
 
-- Change a lane's query: edit its operation, in the app's GraphQL documents
-  (`apps/web/src/lib/service-clients/service-storage/graphql/`) or, for an
-  operation only the sync runs, `src/catalog/operations/`, then run
-  `bun run gen-sync-lane-queries` in `apps/web`. It writes
-  `src/catalog/*.graphql` from the operation and the app's fragments, without
-  the client-only directives; never edit those files by hand. A field the app
-  adds to a fragment a lane spreads reaches the lane the same way, and the web
-  test `scripts/generate-sync-lane-queries.test.ts` fails until it is
-  regenerated. A new lane query also needs an entry in that script's
-  `SYNC_LANE_QUERIES`.
+- Change what a lane selects: it is the app's document. Edit the operation in
+  the app's GraphQL documents
+  (`apps/web/src/lib/service-clients/service-storage/graphql/`;
+  `sync-lanes.graphql` holds the operations only the sync runs), and refresh
+  the fixture the catalog tests plan with:
+  `UPDATE_SYNC_LANE_QUERIES=1 bunx vitest run src/lib/queries/soup/sync/lane-queries.test.ts`
+  in `apps/web`, which writes `src/catalog/test/client_queries.json`.
+- Add a lane operation: add it to the app's documents and to
+  `LANE_DOCUMENTS` in `apps/web/src/lib/queries/soup/sync/lane-queries.ts`,
+  then to `LANE_QUERIES` here. Older clients do not send it, and the server
+  leaves their lane out.
 - Change a lane: `src/catalog.rs`, then
   `src/catalog/test/expected_lanes.json`. The catalog test validates every
-  lane's query and variables against `static_assets/schema.graphql`. Keep a
+  lane's document (from the fixture) and variables against
+  `static_assets/schema.graphql`. Keep a
   lane's id (the cache's saved state and members key on it) and its query's
   operation name: the cache, in native apps already shipped too, chooses what
   it requires of a page by that name. Each `LaneQuery` in `LANE_QUERIES`
@@ -72,8 +75,8 @@ whose pages took the least time first.
 ## Checks
 
 - `cargo test -p soup_sync_stream`
-- `bun run check-sync-lane-queries` in `apps/web`: the lane queries match the app's
-  documents.
+- `bunx vitest run src/lib/queries/soup/sync/lane-queries.test.ts` in
+  `apps/web`: the fixture matches what the app sends.
 
 ## Gotchas
 

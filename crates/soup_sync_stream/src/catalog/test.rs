@@ -21,7 +21,9 @@ fn now() -> DateTime<Utc> {
 
 fn plan(body: Value) -> SyncPlan {
     SyncPlan::from_json(
-        body.to_string().as_bytes(),
+        crate::test_support::with_client_queries(body)
+            .to_string()
+            .as_bytes(),
         now(),
         MaterializedRange::around(now()),
     )
@@ -174,8 +176,9 @@ fn queries_and_variables_are_valid_against_the_server_schema() {
     );
     for lane in &lanes {
         let id = lane.id.as_str();
-        let document = ExecutableDocument::parse_and_validate(&schema, lane.query, "lane.graphql")
-            .unwrap_or_else(|errors| panic!("{id}: {errors}"));
+        let document =
+            ExecutableDocument::parse_and_validate(&schema, &*lane.query, "lane.graphql")
+                .unwrap_or_else(|errors| panic!("{id}: {errors}"));
         let operation = document
             .operations
             .get(Some(lane.operation_name))
@@ -216,7 +219,7 @@ fn queries_carry_no_client_only_directives() {
 fn lane_query(lane: &LanePlan) -> &'static LaneQuery {
     LANE_QUERIES
         .iter()
-        .find(|query| query.operation == lane.operation_name && query.document == lane.query)
+        .find(|query| query.operation == lane.operation_name)
         .unwrap_or_else(|| panic!("{} runs a query missing from LANE_QUERIES", lane.id))
 }
 
@@ -224,5 +227,17 @@ fn lane_query(lane: &LanePlan) -> &'static LaneQuery {
 fn every_lane_runs_a_listed_query() {
     for lane in every_planned_lane() {
         lane_query(&lane);
+    }
+}
+
+#[test]
+fn the_web_app_sends_every_lane_query() {
+    let queries = crate::test_support::client_queries();
+    for query in LANE_QUERIES {
+        assert!(
+            queries.get(query.operation).is_some(),
+            "the web app sends no {} document",
+            query.operation
+        );
     }
 }

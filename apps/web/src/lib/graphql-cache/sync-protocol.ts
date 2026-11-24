@@ -14,6 +14,11 @@ export type SyncStartArgs = {
   /** Extra request headers (mail cache profile, bearer token). */
   headers: Record<string, string>;
   pass: SyncPass;
+  /**
+   * Each lane operation's document by name: the app's own field selection.
+   * The server leaves out a lane whose operation is missing.
+   */
+  queries: Readonly<Record<string, string>>;
   /** End the stream after this many pages; the next run resumes. */
   maxPages?: number;
   /** Sync calendar windows in the app's IANA time zone; absent while calendars read REST. */

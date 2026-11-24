@@ -4117,6 +4117,7 @@ describe('CacheWorkerCore', () => {
       url: 'https://api.example.test/items/soup/graphql/stream',
       headers: {},
       pass: 'first' as const,
+      queries: {},
     };
     const result = {
       reason: 'complete',

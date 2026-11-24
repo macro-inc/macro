@@ -365,6 +365,7 @@ it('never holds hydration hints behind a streamed sync run that stays in flight'
         url: 'https://api.example.test/stream',
         headers: {},
         pass: 'first',
+        queries: {},
       },
     },
     { id: 2, kind: 'read', query: 'query Viewer { user { id } }' },

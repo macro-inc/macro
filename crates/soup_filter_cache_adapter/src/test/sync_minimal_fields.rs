@@ -308,6 +308,7 @@ async fn sync(fields: &[(&str, &str)]) -> Result<Engine<TursoStorage>, String> {
         "url": "https://api.example.test/items/soup/graphql/stream",
         "headers": {},
         "pass": "first",
+        "queries": {"SoupBackfillSyncTasks": query(fields)},
     }))
     .unwrap();
     let mut run = engine.sync_begin(&args, 0.0).await.unwrap();

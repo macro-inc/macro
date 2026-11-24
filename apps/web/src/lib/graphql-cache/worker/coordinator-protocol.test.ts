@@ -373,12 +373,19 @@ describe('coordinator runtime protocol', () => {
       calendar: { timeZone: 'Europe/Berlin' },
       completedSince: '2026-11-01T00:00:00.000Z',
       skipLanes: ['email-older'],
+      queries: { SoupBackfill: 'query SoupBackfill { user { id } }' },
     };
     const valid = (value: unknown) =>
       isCacheRequest({ id: 1, kind: 'sync-start', args: value });
     expect(valid(args)).toBe(true);
     expect(
-      valid({ url: args.url, headers: {}, pass: 'first', maxPages: 0 })
+      valid({
+        url: args.url,
+        headers: {},
+        pass: 'first',
+        maxPages: 0,
+        queries: {},
+      })
     ).toBe(true);
     expect(isCacheRequest({ id: 1, kind: 'sync-stop' })).toBe(true);
     expect(isCacheRequest({ id: 1, kind: 'sync-state' })).toBe(true);
@@ -395,6 +402,14 @@ describe('coordinator runtime protocol', () => {
       { ...args, completedSince: 5 },
       { ...args, skipLanes: ['Tasks'] },
       { ...args, skipLanes: Array(257).fill('tasks') },
+      { ...args, queries: undefined },
+      { ...args, queries: { SoupBackfill: 1 } },
+      {
+        ...args,
+        queries: Object.fromEntries(
+          Array.from({ length: 65 }, (_, index) => [`Q${index}`, 'query'])
+        ),
+      },
     ]) {
       expect(valid(invalid)).toBe(false);
     }

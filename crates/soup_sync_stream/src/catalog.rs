@@ -92,18 +92,18 @@ struct EmailWindow {
     days: i64,
 }
 
-/// A lane query: its document, its operation, and what the client's cache
-/// requires of that operation's pages.
+/// A lane query: the operation a lane runs and what the client's cache
+/// requires of its pages.
 ///
-/// The cache chooses those requirements by operation name
-/// (`soup_filter_cache_adapter::backfill_requirements`), native apps already
-/// shipped included, so an operation keeps its name once a lane runs it. The
-/// adapter's tests compare every query here with what the cache does.
+/// The client sends the operation's document with the request (its own
+/// field selection, which its cache schema knows); the server picks the
+/// lanes, their inputs and their order. The cache chooses its requirements
+/// by operation name (`soup_filter_cache_adapter::backfill_requirements`),
+/// native apps already shipped included, so an operation keeps its name once
+/// a lane runs it. The adapter's tests compare every query here with what the
+/// cache does.
 #[derive(Debug)]
 pub struct LaneQuery {
-    /// The query document, generated from the app's GraphQL documents by
-    /// `apps/web/scripts/generate-sync-lane-queries.ts`.
-    pub document: &'static str,
     /// The operation the lane runs.
     pub operation: &'static str,
     /// The cache refuses a page with a row lacking a required projection.
@@ -113,9 +113,8 @@ pub struct LaneQuery {
 }
 
 impl LaneQuery {
-    const fn new(document: &'static str, operation: &'static str) -> Self {
+    const fn new(operation: &'static str) -> Self {
         Self {
-            document,
             operation,
             complete_projections: false,
             complete_properties: false,
@@ -139,57 +138,23 @@ impl LaneQuery {
     }
 }
 
-const CHANNELS_QUERY: LaneQuery = LaneQuery::new(
-    include_str!("catalog/channels.graphql"),
-    "SoupBackfillSyncChannels",
-)
-.complete_rows();
-const CHANNEL_IDS_QUERY: LaneQuery = LaneQuery::new(
-    include_str!("catalog/channel_ids.graphql"),
-    "SoupSyncChannelIds",
-);
-const MINIMAL_TASKS_QUERY: LaneQuery = LaneQuery::new(
-    include_str!("catalog/minimal_tasks.graphql"),
-    "SoupBackfillSyncTasks",
-)
-.complete_rows();
-const MINIMAL_DOCUMENTS_QUERY: LaneQuery = LaneQuery::new(
-    include_str!("catalog/minimal_documents.graphql"),
-    "SoupBackfillSyncDocuments",
-)
-.complete_rows();
-const SOUP_BACKFILL_QUERY: LaneQuery = LaneQuery::new(
-    include_str!("catalog/soup_backfill.graphql"),
-    "SoupBackfill",
-)
-.complete_rows()
-.complete_properties();
-const SOUP_MAIL_BACKFILL_QUERY: LaneQuery = LaneQuery::new(
-    include_str!("catalog/soup_mail_backfill.graphql"),
-    "SoupMailBackfill",
-)
-.complete_properties();
-const CRM_CONTACTS_QUERY: LaneQuery =
-    LaneQuery::new(include_str!("catalog/crm_contacts.graphql"), "CrmContacts");
-const TASK_IDS_QUERY: LaneQuery =
-    LaneQuery::new(include_str!("catalog/task_ids.graphql"), "SoupSyncTaskIds");
-const TASK_PROJECT_IDS_QUERY: LaneQuery = LaneQuery::new(
-    include_str!("catalog/task_project_ids.graphql"),
-    "SoupSyncTaskProjectIds",
-);
-const DOCUMENT_IDS_QUERY: LaneQuery = LaneQuery::new(
-    include_str!("catalog/document_ids.graphql"),
-    "SoupSyncDocumentIds",
-);
-const SHARED_EMAIL_IDS_QUERY: LaneQuery = LaneQuery::new(
-    include_str!("catalog/shared_email_ids.graphql"),
-    "SoupSyncSharedEmailIds",
-);
+const CHANNELS_QUERY: LaneQuery = LaneQuery::new("SoupBackfillSyncChannels").complete_rows();
+const CHANNEL_IDS_QUERY: LaneQuery = LaneQuery::new("SoupSyncChannelIds");
+const MINIMAL_TASKS_QUERY: LaneQuery = LaneQuery::new("SoupBackfillSyncTasks").complete_rows();
+const MINIMAL_DOCUMENTS_QUERY: LaneQuery =
+    LaneQuery::new("SoupBackfillSyncDocuments").complete_rows();
+const SOUP_BACKFILL_QUERY: LaneQuery = LaneQuery::new("SoupBackfill")
+    .complete_rows()
+    .complete_properties();
+const SOUP_MAIL_BACKFILL_QUERY: LaneQuery =
+    LaneQuery::new("SoupMailBackfill").complete_properties();
+const CRM_CONTACTS_QUERY: LaneQuery = LaneQuery::new("CrmContacts");
+const TASK_IDS_QUERY: LaneQuery = LaneQuery::new("SoupSyncTaskIds");
+const TASK_PROJECT_IDS_QUERY: LaneQuery = LaneQuery::new("SoupSyncTaskProjectIds");
+const DOCUMENT_IDS_QUERY: LaneQuery = LaneQuery::new("SoupSyncDocumentIds");
+const SHARED_EMAIL_IDS_QUERY: LaneQuery = LaneQuery::new("SoupSyncSharedEmailIds");
 /// Calendar windows' query.
-pub(crate) const CALENDAR_QUERY: LaneQuery = LaneQuery::new(
-    include_str!("catalog/calendar_occurrences.graphql"),
-    "CalendarOccurrences",
-);
+pub(crate) const CALENDAR_QUERY: LaneQuery = LaneQuery::new("CalendarOccurrences");
 
 /// Every query a lane runs.
 pub const LANE_QUERIES: &[&LaneQuery] = &[

@@ -553,6 +553,14 @@ const isValidSyncCalendar = (value: unknown): boolean =>
     typeof value.timeZone === 'string' &&
     value.timeZone.length > 0);
 
+/** Lane documents one sync request may carry; the server refuses more. */
+const MAX_SYNC_LANE_QUERIES = 64;
+
+const isValidSyncLaneQueries = (value: unknown): boolean =>
+  isRecord(value) &&
+  Object.keys(value).length <= MAX_SYNC_LANE_QUERIES &&
+  Object.values(value).every((query) => typeof query === 'string');
+
 const isValidSkipLanes = (value: unknown): boolean =>
   value === undefined ||
   (Array.isArray(value) &&
@@ -571,6 +579,7 @@ export function isValidSyncStartArgs(value: unknown): value is SyncStartArgs {
       'calendar',
       'completedSince',
       'skipLanes',
+      'queries',
     ]) &&
     typeof value.url === 'string' &&
     /^https?:\/\//.test(value.url) &&
@@ -585,7 +594,8 @@ export function isValidSyncStartArgs(value: unknown): value is SyncStartArgs {
     isValidSyncCalendar(value.calendar) &&
     (value.completedSince === undefined ||
       typeof value.completedSince === 'string') &&
-    isValidSkipLanes(value.skipLanes)
+    isValidSkipLanes(value.skipLanes) &&
+    isValidSyncLaneQueries(value.queries)
   );
 }
 

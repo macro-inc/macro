@@ -11,7 +11,10 @@ use crate::plan::plan_lanes;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::Value;
-use std::{collections::HashSet, ops::RangeInclusive};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::RangeInclusive,
+};
 
 /// Sync protocol versions this server speaks. A version names what the
 /// client's cache engine sends and decodes: the request, the lines, their
@@ -26,6 +29,10 @@ pub const MAX_LANES: usize = 32;
 pub const MAX_SAVED_LANES: usize = 256;
 /// Most calendar coverage spans a request may carry.
 pub const MAX_COVERAGE_SPANS: usize = 10_000;
+/// Most lane query documents a request may carry.
+pub const MAX_LANE_QUERIES: usize = 64;
+/// Most bytes a request's lane query documents may hold together.
+pub const MAX_LANE_QUERY_BYTES: usize = 512 * 1024;
 
 /// The body's protocol, read before anything else in it, so a body of another
 /// protocol's shape is refused for its protocol rather than as malformed.
@@ -52,6 +59,11 @@ pub(crate) struct SyncRequest {
     pub(crate) skip_lanes: Vec<LaneId>,
     /// End the stream after this many pages.
     pub(crate) max_pages: Option<u32>,
+    /// The client's document for each lane operation it runs, by operation
+    /// name: its own field selection, which its cache schema knows. A lane
+    /// whose operation is missing is left out.
+    #[serde(default)]
+    pub(crate) queries: HashMap<String, String>,
 }
 
 /// One lane's saved state in the client's cache.
@@ -109,6 +121,21 @@ pub enum RequestError {
     /// More than [`MAX_COVERAGE_SPANS`] calendar coverage spans.
     #[error("a request carries at most {MAX_COVERAGE_SPANS} coverage spans, got {0}")]
     TooManyCoverageSpans(usize),
+    /// More than [`MAX_LANE_QUERIES`] lane query documents.
+    #[error("a request carries at most {MAX_LANE_QUERIES} lane queries, got {0}")]
+    TooManyLaneQueries(usize),
+    /// Lane query documents over [`MAX_LANE_QUERY_BYTES`] together.
+    #[error("a request's lane queries hold at most {MAX_LANE_QUERY_BYTES} bytes, got {0}")]
+    LaneQueriesTooLarge(usize),
+    /// A lane query document the client sent does not run its lane.
+    #[error("sync lane `{lane}` cannot run the query sent for it: {source}")]
+    LaneQuery {
+        /// The lane.
+        lane: String,
+        /// Why the query does not run it.
+        #[source]
+        source: LaneError,
+    },
     /// A lane of the server's own catalog does not build: a server bug.
     #[error("sync lane `{lane}` does not build: {source}")]
     Catalog {
@@ -157,6 +184,17 @@ impl SyncPlan {
             .map_or(0, |calendar| calendar.coverage.len());
         if spans > MAX_COVERAGE_SPANS {
             return Err(RequestError::TooManyCoverageSpans(spans));
+        }
+        if request.queries.len() > MAX_LANE_QUERIES {
+            return Err(RequestError::TooManyLaneQueries(request.queries.len()));
+        }
+        let query_bytes = request
+            .queries
+            .iter()
+            .map(|(operation, query)| operation.len() + query.len())
+            .sum::<usize>();
+        if query_bytes > MAX_LANE_QUERY_BYTES {
+            return Err(RequestError::LaneQueriesTooLarge(query_bytes));
         }
         let mut seen = HashSet::new();
         if let Some(lane) = request.lanes.iter().find(|lane| !seen.insert(&lane.id)) {

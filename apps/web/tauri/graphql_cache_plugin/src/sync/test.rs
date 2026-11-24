@@ -152,6 +152,7 @@ fn args() -> SyncStartArgs {
         // The run's own content negotiation replaces the app's.
         "headers": {"x-macro-mail-cache-profile": "v5", "Accept": "text/plain"},
         "pass": "first",
+        "queries": {"SyncTasks": TASKS, "SyncTaskIds": TASK_IDS},
     }))
     .unwrap()
 }
@@ -307,7 +308,12 @@ fn a_run_writes_every_page_natively_and_publishes_it_like_hydration() {
     let body: Json = serde_json::from_slice(&requests[0].body).unwrap();
     assert_eq!(
         body,
-        json!({"protocol": cache_core::sync::SYNC_PROTOCOL, "pass": "first", "lanes": []})
+        json!({
+            "protocol": cache_core::sync::SYNC_PROTOCOL,
+            "pass": "first",
+            "lanes": [],
+            "queries": {"SyncTasks": TASKS, "SyncTaskIds": TASK_IDS},
+        })
     );
 
     // Every page's records are in the native cache.

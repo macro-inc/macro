@@ -130,6 +130,12 @@ pub struct SyncStartArgs {
     /// Lanes the server leaves out of this stream.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub skip_lanes: Vec<String>,
+    /// Each lane operation's document by name: the app's own field
+    /// selection, which this cache's schema knows. The server runs a lane
+    /// only with the document sent for its operation, and the run writes the
+    /// lane's pages with it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub queries: BTreeMap<String, String>,
 }
 
 /// Saved per-lane state, read from the cache database.
@@ -246,11 +252,9 @@ pub enum SyncFrame {
     Lane {
         /// Lane id.
         lane: String,
-        /// The query every page of the lane runs.
-        query: String,
-        /// The query's operation.
-        #[serde(default)]
-        operation_name: Option<String>,
+        /// The operation every page of the lane runs; its document is the
+        /// one the request sent.
+        operation_name: String,
         /// Where the pages keep their items.
         paging: SyncPaging,
         /// What the cache does with the pages.
@@ -401,6 +405,8 @@ pub struct SyncRun {
     bytes: u64,
     started_at_ms: f64,
     pub(crate) end: Option<SyncEndReason>,
+    /// The lane documents the request sent, by operation.
+    queries: BTreeMap<String, String>,
 }
 
 impl SyncRun {
@@ -438,6 +444,20 @@ impl SyncRun {
             bytes: 0,
             started_at_ms,
             end: None,
+            queries: args.queries.clone(),
+        })
+    }
+
+    /// The document the request sent for a lane's `operation`.
+    pub(crate) fn lane_query(
+        &self,
+        lane: &str,
+        operation: &str,
+    ) -> Result<String, SyncStreamError> {
+        self.queries.get(operation).cloned().ok_or_else(|| {
+            SyncStreamError::Stream(format!(
+                "lane `{lane}` runs `{operation}`, which the request sent no document for"
+            ))
         })
     }
 
@@ -608,6 +628,12 @@ fn request_body(args: &SyncStartArgs, saved: &[SyncLaneState], coverage: &[Calen
         serde_json::to_value(args.pass).unwrap_or(Json::Null),
     );
     body.insert("lanes".into(), Json::Array(lanes));
+    if !args.queries.is_empty() {
+        body.insert(
+            "queries".into(),
+            serde_json::to_value(&args.queries).unwrap_or(Json::Null),
+        );
+    }
     if let Some(calendar) = &args.calendar {
         let mut request = Map::new();
         request.insert("timeZone".into(), Json::String(calendar.time_zone.clone()));

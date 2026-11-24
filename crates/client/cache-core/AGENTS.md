@@ -42,8 +42,10 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `src/page_retention.rs`: shared Soup/database/contact snapshot budget; hydration drops viewer page/lookup wrappers, not normalized descendants. Public profiles do not prove contact membership; only `GraphqlContact` projects into `person`.
 - `src/queue.rs`: the optimistic mutation queue.
 - `src/sync.rs` + `src/engine/sync.rs`: streamed sync runs (`Engine::sync_begin`
-  builds the request from the pass, every lane's saved state and the calendar
-  coverage; the server plans the lanes and declares each on a `lane` line),
+  builds the request from the pass, every lane's saved state, the calendar
+  coverage and the app's lane documents (`SyncStartArgs::queries`); the server
+  plans the lanes and declares each on a `lane` line, and a lane's pages are
+  written with the document the request sent for its operation),
   the NDJSON frame decoder, and `Engine::sync_apply_next` (host-neutral; hosts
   open the stream and supply `SyncHooks`). A lane's `resume` checkpoint is the
   server's, stored and sent back unread. `SYNC_PROTOCOL` is the version every

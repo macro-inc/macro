@@ -209,16 +209,16 @@ where
         let applied = match frame {
             SyncFrame::Lane {
                 lane,
-                query,
                 operation_name,
                 paging,
                 kind,
                 pass_started_at,
             } => {
+                let query = run.lane_query(&lane, &operation_name)?;
                 run.declare(SyncLane {
                     id: lane,
                     query,
-                    operation_name,
+                    operation_name: Some(operation_name),
                     paging,
                     kind,
                     pass_started_at,

@@ -1828,6 +1828,7 @@ describe('createTauriCacheHost', () => {
       url: 'https://example.test/items/soup/graphql/stream',
       headers: { 'x-macro-mail-cache-profile': 'v5' },
       pass: 'first',
+      queries: {},
     };
     const completed: SyncRunOutcome = {
       ok: true,

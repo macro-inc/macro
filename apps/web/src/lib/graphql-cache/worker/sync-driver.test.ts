@@ -11,6 +11,7 @@ const ARGS: SyncStartArgs = {
   url: 'https://api.example.test/items/soup/graphql/stream',
   headers: { 'x-macro-mail-cache-profile': 'v2' },
   pass: 'first',
+  queries: {},
 };
 
 const RESULT: SyncRunResult = {

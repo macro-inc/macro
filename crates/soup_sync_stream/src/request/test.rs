@@ -7,7 +7,9 @@ fn now() -> DateTime<Utc> {
 
 fn parse(body: Value) -> Result<SyncPlan, RequestError> {
     SyncPlan::from_json(
-        body.to_string().as_bytes(),
+        crate::test_support::with_client_queries(body)
+            .to_string()
+            .as_bytes(),
         now(),
         MaterializedRange::around(now()),
     )
@@ -147,4 +149,43 @@ fn keeps_the_protocol_it_accepted() {
     let plan = parse(json!({ "protocol": 1, "pass": "second" })).unwrap();
     assert_eq!(plan.protocol, 1);
     assert_eq!(plan.pass, Pass::Second);
+}
+
+#[test]
+fn leaves_out_a_lane_whose_query_was_not_sent() {
+    let mut queries = crate::test_support::client_queries();
+    queries
+        .as_object_mut()
+        .unwrap()
+        .remove("SoupBackfillSyncTasks");
+    let plan = parse(json!({ "protocol": 1, "pass": "first", "queries": queries })).unwrap();
+    assert!(plan.lanes.iter().all(|lane| lane.id.as_str() != "tasks"));
+    assert!(plan.lanes.iter().any(|lane| lane.id.as_str() == "channels"));
+}
+
+#[test]
+fn refuses_a_query_that_does_not_run_its_lane() {
+    let mut queries = crate::test_support::client_queries();
+    queries["SoupBackfillSyncTasks"] = json!("mutation SoupBackfillSyncTasks { x }");
+    let error = parse(json!({ "protocol": 1, "pass": "first", "queries": queries })).unwrap_err();
+    assert!(
+        matches!(&error, RequestError::LaneQuery { lane, .. } if lane == "tasks"),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn bounds_the_lane_queries() {
+    let many = (0..=MAX_LANE_QUERIES)
+        .map(|index| (format!("Query{index}"), json!("query Q { user { id } }")))
+        .collect::<serde_json::Map<_, _>>();
+    assert!(matches!(
+        parse(json!({ "protocol": 1, "pass": "first", "queries": many })),
+        Err(RequestError::TooManyLaneQueries(_))
+    ));
+    let large = json!({ "SoupBackfill": "#".repeat(MAX_LANE_QUERY_BYTES) });
+    assert!(matches!(
+        parse(json!({ "protocol": 1, "pass": "first", "queries": large })),
+        Err(RequestError::LaneQueriesTooLarge(_))
+    ));
 }

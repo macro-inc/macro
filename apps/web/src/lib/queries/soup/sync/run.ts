@@ -1,8 +1,9 @@
 /**
  * Starts one streamed sync run on a cache host. The server plans the pass's
  * lanes from the cache's saved lane state, which the host sends with the
- * request; the host opens the stream and writes it. This module only names
- * the pass and reads the outcome.
+ * request along with this build's lane documents (`lane-queries.ts`); the
+ * host opens the stream and writes it. This module only names the pass and
+ * reads the outcome.
  */
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
@@ -13,6 +14,7 @@ import type {
 } from '@graphql-cache/sync-protocol';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { mailCacheProfile } from '@service-storage/mail-cache-profile';
+import { syncLaneQueries } from './lane-queries';
 
 /** Sibling of the `/items/soup/graphql` endpoint the GraphQL transport uses. */
 export function syncStreamUrl(): string {
@@ -67,6 +69,7 @@ export async function runSyncPass(
     url: syncStreamUrl(),
     headers: { ...(await syncRequestHeaders()), ...traceHeaders },
     pass,
+    queries: syncLaneQueries(),
     ...(options.calendar === false
       ? {}
       : { calendar: { timeZone: appTimeZone() } }),

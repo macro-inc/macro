@@ -18,7 +18,10 @@ use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 /// What a resumable lane's page carries as `resume`, and the client sends
 /// back: where the pass continues, and what it has sent so far.
@@ -41,6 +44,7 @@ enum Slot {
     Calendar {
         id_prefix: &'static str,
         months: u32,
+        query: Arc<str>,
     },
 }
 
@@ -61,21 +65,42 @@ pub(crate) fn plan_lanes(
         .iter()
         .map(LaneId::as_str)
         .collect::<HashSet<_>>();
+    // A lane runs the client's document for its operation; one the client
+    // did not send (a lane newer than the client) is left out.
+    let queries = request
+        .queries
+        .iter()
+        .map(|(operation, query)| (operation.as_str(), Arc::<str>::from(query.as_str())))
+        .collect::<HashMap<_, _>>();
     let mut slots = Vec::new();
     for spec in lane_specs(request.pass) {
         match spec {
             LaneSpec::Calendar { id_prefix, months } => {
-                if request.calendar.is_some() {
-                    slots.push(Slot::Calendar { id_prefix, months });
+                if let (Some(_), Some(query)) =
+                    (&request.calendar, queries.get(CALENDAR_QUERY.operation))
+                {
+                    slots.push(Slot::Calendar {
+                        id_prefix,
+                        months,
+                        query: query.clone(),
+                    });
                 }
             }
             LaneSpec::Soup(spec) => {
+                let Some(query) = queries.get(spec.query.operation) else {
+                    continue;
+                };
                 let state = saved.get(spec.id).copied();
                 if completed_during_run(state, request.completed_since) || skipped.contains(spec.id)
                 {
                     continue;
                 }
-                slots.push(Slot::Lane(Box::new(soup_lane(&spec, state, now)?)));
+                slots.push(Slot::Lane(Box::new(soup_lane(
+                    &spec,
+                    query.clone(),
+                    state,
+                    now,
+                )?)));
             }
         }
     }
@@ -88,7 +113,11 @@ pub(crate) fn plan_lanes(
     for slot in slots {
         match slot {
             Slot::Lane(draft) => drafts.push(*draft),
-            Slot::Calendar { id_prefix, months } => {
+            Slot::Calendar {
+                id_prefix,
+                months,
+                query,
+            } => {
                 let Some(calendar) = &request.calendar else {
                     continue;
                 };
@@ -103,7 +132,7 @@ pub(crate) fn plan_lanes(
                     calendar_windows(zone, &calendar.coverage, now, materialized, months, budget);
                 budget = budget.saturating_sub(windows.len());
                 for (index, window) in windows.into_iter().enumerate() {
-                    drafts.push(calendar_lane(id_prefix, index, window, now)?);
+                    drafts.push(calendar_lane(id_prefix, index, window, query.clone(), now)?);
                 }
             }
         }
@@ -112,7 +141,13 @@ pub(crate) fn plan_lanes(
         .into_iter()
         .map(|draft| {
             let lane = draft.id.to_string();
-            LanePlan::new(draft).map_err(|source| RequestError::Catalog { lane, source })
+            LanePlan::new(draft).map_err(|source| match source {
+                // The client's document: a bad request.
+                LaneError::QueryParse(_) | LaneError::OperationNotSelected(_) => {
+                    RequestError::LaneQuery { lane, source }
+                }
+                _ => RequestError::Catalog { lane, source },
+            })
         })
         .collect()
 }
@@ -130,6 +165,7 @@ fn completed_during_run(state: Option<&SavedLane>, since: Option<DateTime<Utc>>)
 /// always start fresh.
 fn soup_lane(
     spec: &SoupLaneSpec,
+    query: Arc<str>,
     state: Option<&SavedLane>,
     now: DateTime<Utc>,
 ) -> Result<LaneDraft, RequestError> {
@@ -138,7 +174,7 @@ fn soup_lane(
     let draft = |variables: Value, items_before: u32, pass_started_at: String| {
         Ok(LaneDraft {
             id: catalog_id(spec.id)?,
-            query: spec.query.document,
+            query: query.clone(),
             operation_name: spec.query.operation,
             variables: Map::from_iter([(INPUT_VARIABLE.to_owned(), variables)]),
             paging: Paging::Soup,
@@ -195,13 +231,14 @@ fn calendar_lane(
     id_prefix: &str,
     index: usize,
     window: CalendarWindow,
+    query: Arc<str>,
     now: DateTime<Utc>,
 ) -> Result<LaneDraft, RequestError> {
     let mut input = window.input;
     input.insert("first".to_owned(), Value::from(CALENDAR_PAGE));
     Ok(LaneDraft {
         id: catalog_id(&format!("{id_prefix}-{index}"))?,
-        query: CALENDAR_QUERY.document,
+        query,
         operation_name: CALENDAR_QUERY.operation,
         variables: Map::from_iter([(INPUT_VARIABLE.to_owned(), Value::Object(input))]),
         paging: Paging::Calendar,

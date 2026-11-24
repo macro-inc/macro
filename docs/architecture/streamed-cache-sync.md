@@ -42,7 +42,11 @@ Request body:
   },
   "completedSince": "2026-11-02T11:00:00.000Z",
   "skipLanes": ["email-older"],
-  "maxPages": 20
+  "maxPages": 20,
+  "queries": {
+    "SoupBackfillSyncTasks": "query SoupBackfillSyncTasks($input: SoupInput!) {…}",
+    "SoupBackfill": "query SoupBackfill($input: SoupInput!) {…} fragment …"
+  }
 }
 ```
 
@@ -63,6 +67,15 @@ Request body:
   pass's start.
 - `skipLanes` (optional): Soup lanes to leave out of this stream.
 - `maxPages` (optional): stop the stream after this many pages.
+- `queries`: the document of every lane operation the client runs, by
+  operation name, without client-only directives
+  (`apps/web/src/lib/queries/soup/sync/lane-queries.ts`). The server picks the
+  lanes, their inputs and their order; the field selection is the client's
+  own, so a page never holds a field the client's cache schema does not know,
+  and a field the app adds to a fragment reaches synced records with the build
+  that adds it. A lane whose operation is missing is left out (a lane newer
+  than the client); a document that does not parse or names no query
+  operation of that name is a 400. At most 64 documents and 512 KiB.
 
 ### Planning
 
@@ -145,7 +158,7 @@ Pages run like this:
 `200`, `content-type: application/x-ndjson`, one JSON object per line:
 
 ```
-{"type":"lane","lane":"tasks","query":"query SoupBackfillSyncTasks(…) {…}","operationName":"SoupBackfillSyncTasks","paging":"soup","kind":{"kind":"hydrate"},"passStartedAt":"2026-11-02T12:00:00.000Z"}
+{"type":"lane","lane":"tasks","operationName":"SoupBackfillSyncTasks","paging":"soup","kind":{"kind":"hydrate"},"passStartedAt":"2026-11-02T12:00:00.000Z"}
 {"type":"page","lane":"tasks","page":0,"variables":{...},"response":{"data":{...}},"items":500,"resume":{...}}
 {"type":"laneDone","lane":"tasks","pages":12,"items":5800,"reason":"complete"}
 {"type":"laneError","lane":"tasks","message":"..."}
@@ -155,8 +168,9 @@ Pages run like this:
 
 - `lane`: a lane the stream runs, sent before anything else of it (a page, or
   the `laneError` of a lane whose first page failed); a lane the stream never
-  reaches is not declared. It carries the query every page runs and its
-  operation, the paging, what the cache does with the pages (`kind`:
+  reaches is not declared. It carries the operation every page runs (the
+  cache writes the pages with the document the request sent for it), the
+  paging, what the cache does with the pages (`kind`:
   `hydrate`, `membership { scopes }` or `calendar { coverage }`), and when its
   pass started.
 - `page.variables`: exactly what the server executed for the page.
@@ -189,8 +203,11 @@ the version it sent. Version 1 is the only one so far.
 
 - Lanes are the server's: adding, removing or changing one needs no new
   version while it uses the existing kinds and paging. Keep a lane's id (the
-  cache's saved state and members key on it). A changed lane's old `resume`
-  checkpoints keep their cursor until that pass ends.
+  cache's saved state and members key on it) and its operation's name. A
+  changed lane's old `resume` checkpoints keep their cursor until that pass
+  ends. A lane with a new operation runs only for clients that send its
+  document, so it waits for the app build that adds it; the documents
+  themselves (the fields) are the app's and change with it.
 - A new line type that an older engine may skip needs no new version: engines
   skip line types they do not know (`SyncFrame::Unrecognized`), as they skip
   `waiting`. A new field on an existing line needs none either.
@@ -279,14 +296,14 @@ when it has `cacheProjection`, `ownerId`, `fileType`, `projectId`,
 `isFavorited`. Without one of them, rows are written but silently stay out of
 local filtering; `soup_filter_cache_adapter/src/test/sync_minimal_fields.rs`
 pins the selection, and `soup_sync_stream`'s catalog test checks the lanes
-select it. The selections live in the server's lane queries
-(`crates/soup_sync_stream/src/catalog/minimal_*.graphql`, `channels.graphql`).
-Every lane query is generated from its operation and the app's own fragments
-(`apps/web/scripts/generate-sync-lane-queries.ts`), so a field the app adds
-to a fragment a lane spreads reaches synced records once the queries are
-regenerated, which a web test enforces. The minimal lanes select their fields
-inline, so a field the app starts filtering on needs adding to their
-operations in `crates/soup_sync_stream/src/catalog/operations/`. A
+select it. The selections are the app's: the minimal lanes' operations live in
+`apps/web/src/lib/service-clients/service-storage/graphql/sync-lanes.graphql`
+and select their fields inline, so a field the app starts filtering on needs
+adding there; the other lanes run the app's own backfill operations and
+fragments. The server's catalog tests plan and validate every lane with the
+documents the app sends, from a fixture its
+`src/lib/queries/soup/sync/lane-queries.test.ts` writes
+(`crates/soup_sync_stream/src/catalog/test/client_queries.json`). A
 channel row carries what the channel list renders plus what the filter index
 needs. Property definitions are not sent with
 every item.

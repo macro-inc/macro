@@ -21,9 +21,8 @@ pub enum Frame {
     Lane {
         /// The lane; also the key of its saved state in the cache.
         lane: LaneId,
-        /// The query every page of the lane runs.
-        query: String,
-        /// The query's operation.
+        /// The operation every page of the lane runs, whose document the
+        /// client sent with the request.
         operation_name: String,
         /// Where the pages keep their items.
         paging: Paging,

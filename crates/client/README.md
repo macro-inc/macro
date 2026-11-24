@@ -119,10 +119,12 @@ does not depend on observing a notification.
 and `apps/web/src/lib/graphql-cache/sync-protocol.ts`). The server plans each
 pass's lanes. Hosts own the network: they start a run with
 `Engine::sync_begin`, whose request (`SyncRun::request_body`) carries the pass,
-every lane's saved state and, for calendars, the cache's coverage; they feed
+every lane's saved state, the app's lane documents and, for calendars, the
+cache's coverage; they feed
 response bytes to `SyncRun::push_bytes` and apply each decoded frame with
 `Engine::sync_apply_next`, one engine write per frame, so foreground reads can
-go first. A lane's `lane` line declares its query and kind before its pages. The engine stays I/O-free: a host `SyncHooks` supplies the same Soup
+go first. A lane's `lane` line declares its operation and kind before its pages, and its
+pages are written with the document the request sent for that operation. The engine stays I/O-free: a host `SyncHooks` supplies the same Soup
 projection composition it uses for hydration and server deletions, and the
 clocks. Hydrate lanes record delivered keys as lane members; a completed
 membership listing deletes unlisted members like a server deletion; calendar

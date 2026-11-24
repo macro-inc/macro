@@ -11,7 +11,6 @@ fn encodes_each_frame_as_one_ndjson_line() {
     let frames = [
         Frame::Lane {
             lane: lane.clone(),
-            query: "query Tasks {\n  user { id }\n}".to_owned(),
             operation_name: "Tasks".to_owned(),
             paging: Paging::Soup,
             kind: LaneKind::Hydrate,
@@ -46,7 +45,7 @@ fn encodes_each_frame_as_one_ndjson_line() {
     assert_eq!(
         lines,
         [
-            "{\"type\":\"lane\",\"lane\":\"tasks\",\"query\":\"query Tasks {\\n  user { id }\\n}\",\"operationName\":\"Tasks\",\"paging\":\"soup\",\"kind\":{\"kind\":\"hydrate\"},\"passStartedAt\":\"2026-11-02T12:00:00.000Z\"}\n",
+            "{\"type\":\"lane\",\"lane\":\"tasks\",\"operationName\":\"Tasks\",\"paging\":\"soup\",\"kind\":{\"kind\":\"hydrate\"},\"passStartedAt\":\"2026-11-02T12:00:00.000Z\"}\n",
             "{\"type\":\"page\",\"lane\":\"tasks\",\"page\":0,\"variables\":{\"input\":{\"initial\":{\"limit\":2}}},\"response\":{\"data\":{\"user\":{\"soup\":{\"nextCursor\":\"c1\\nc2\"}}}},\"items\":2,\"resume\":{\"cursor\":\"c1\\nc2\",\"items\":2}}\n",
             "{\"type\":\"laneDone\",\"lane\":\"tasks\",\"pages\":12,\"items\":5800,\"reason\":\"maxItems\"}\n",
             "{\"type\":\"laneError\",\"lane\":\"tasks\",\"message\":\"page response has GraphQL errors\"}\n",
@@ -59,7 +58,6 @@ fn encodes_each_frame_as_one_ndjson_line() {
 fn a_calendar_lane_declares_its_coverage_and_no_lane_coverage() {
     let frame = Frame::Lane {
         lane: LaneId::try_from("calendar-near-0".to_owned()).unwrap(),
-        query: "query CalendarOccurrences { user { id } }".to_owned(),
         operation_name: "CalendarOccurrences".to_owned(),
         paging: Paging::Calendar,
         kind: LaneKind::Calendar {
@@ -73,7 +71,7 @@ fn a_calendar_lane_declares_its_coverage_and_no_lane_coverage() {
     };
     assert_eq!(
         frame.to_line().unwrap().as_ref(),
-        b"{\"type\":\"lane\",\"lane\":\"calendar-near-0\",\"query\":\"query CalendarOccurrences { user { id } }\",\"operationName\":\"CalendarOccurrences\",\"paging\":\"calendar\",\"kind\":{\"kind\":\"calendar\",\"coverage\":[{\"kind\":\"timed\",\"start\":0,\"end\":86400000}]},\"passStartedAt\":\"2026-11-02T12:00:00.000Z\"}\n"
+        b"{\"type\":\"lane\",\"lane\":\"calendar-near-0\",\"operationName\":\"CalendarOccurrences\",\"paging\":\"calendar\",\"kind\":{\"kind\":\"calendar\",\"coverage\":[{\"kind\":\"timed\",\"start\":0,\"end\":86400000}]},\"passStartedAt\":\"2026-11-02T12:00:00.000Z\"}\n"
     );
 }
 

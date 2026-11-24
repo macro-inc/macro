@@ -6,7 +6,7 @@ const QUERY: &str = "query Tasks($input: SoupInput!) { user { id soup(input: $in
 fn draft(query: &'static str, operation_name: &'static str, input: Value) -> LaneDraft {
     LaneDraft {
         id: LaneId::try_from("tasks".to_owned()).unwrap(),
-        query,
+        query: query.into(),
         operation_name,
         variables: Map::from_iter([(INPUT_VARIABLE.to_owned(), input)]),
         paging: Paging::Soup,

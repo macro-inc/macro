@@ -72,15 +72,39 @@ fn task_key(n: u128) -> EntityKey<'static> {
     EntityKey::entity("GraphqlSoupDocument", &[&id(n)])
 }
 
-/// A lane as the server declares it (its `lane` line without the type).
+/// The name of a test query's operation (`query Name(...`).
+fn operation_name(query: &str) -> &str {
+    let rest = query.trim_start_matches("query ");
+    let end = rest.find(['(', ' ', '{']).unwrap_or(rest.len());
+    &rest[..end]
+}
+
+/// A lane as the server declares it (its `lane` line without the type), with
+/// the document its run sends under `query`, which the line itself does not
+/// carry and the client ignores.
 fn lane(id: &str, query: &str, paging: &str, kind: Json) -> Json {
     json!({
         "lane": id,
         "query": query,
+        "operationName": operation_name(query),
         "paging": paging,
         "kind": kind,
         "passStartedAt": PASS,
     })
+}
+
+/// The lane documents a run sends for `lanes`.
+fn queries(lanes: &[Json]) -> Json {
+    lanes
+        .iter()
+        .map(|lane| {
+            (
+                lane["operationName"].as_str().unwrap().to_owned(),
+                lane["query"].clone(),
+            )
+        })
+        .collect::<serde_json::Map<_, _>>()
+        .into()
 }
 
 /// A run's arguments and the lanes its stream declares.
@@ -95,6 +119,7 @@ fn args(lanes: Vec<Json>) -> Plan {
             "url": "https://example.test/items/soup/graphql/stream",
             "headers": {},
             "pass": "first",
+            "queries": queries(&lanes),
         }))
         .unwrap(),
         lanes,

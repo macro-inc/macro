@@ -96,7 +96,7 @@ fn test_plan(body: Value) -> SyncPlan {
             };
             LanePlan::new(LaneDraft {
                 id: LaneId::try_from(lane["id"].as_str().unwrap().to_owned()).unwrap(),
-                query,
+                query: query.into(),
                 operation_name,
                 variables: object(lane["variables"].clone()),
                 paging,
@@ -886,8 +886,7 @@ async fn ndjson_stream_writes_one_line_per_frame() {
     assert_eq!(
         text[0],
         format!(
-            "{{\"type\":\"lane\",\"lane\":\"tasks\",\"query\":{},\"operationName\":\"SoupBackfillSyncTasks\",\"paging\":\"soup\",\"kind\":{{\"kind\":\"hydrate\"}},\"passStartedAt\":\"{PASS_STARTED_AT}\"}}\n",
-            Value::String(SOUP_QUERY.to_owned())
+            "{{\"type\":\"lane\",\"lane\":\"tasks\",\"operationName\":\"SoupBackfillSyncTasks\",\"paging\":\"soup\",\"kind\":{{\"kind\":\"hydrate\"}},\"passStartedAt\":\"{PASS_STARTED_AT}\"}}\n",
         )
     );
     assert_eq!(
@@ -964,7 +963,6 @@ async fn declares_each_lane_once_before_anything_else_of_it() {
         frames[0],
         Frame::Lane {
             lane: LaneId::try_from("tasks".to_owned()).unwrap(),
-            query: SOUP_QUERY.to_owned(),
             operation_name: "SoupBackfillSyncTasks".to_owned(),
             paging: Paging::Soup,
             kind: LaneKind::Hydrate,
