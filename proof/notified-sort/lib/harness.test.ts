@@ -10,6 +10,7 @@ import { closureOf } from './closed.ts';
 import { authRefreshTimeoutClass, compareSnapshots, refCheck, type Snapshot } from './compare.ts';
 import { channelNameRest, heldApartFromShared, homeCheckClosure, onlyStaleTimeLabels, withoutChannelNameSnapshots, withoutDayRollover } from './dom-held.ts';
 import { compareHomeDom, parseRowId } from './dom.ts';
+import { emptyReloads } from './empty-reload.ts';
 import { generateReads } from './gen.ts';
 import { MUTANTS } from './mutants.ts';
 import { discrepancies, instant, pastLoadedPages, project, REST_DEADLINE, sameRows, staleSlotPastPages, type Row } from './project.ts';
@@ -527,5 +528,25 @@ describe('load closures', () => {
     // document: both its reads passed; email: read 3 was never checked.
     expect(tabStampClasses(reads, [ok, { ...ok, read: 2 }])).toEqual(['field:document.notifiedAt']);
     expect(tabStampClasses(reads, [ok, { ...ok, read: 2, latest: 4 }])).toEqual([]);
+  });
+
+  it('close a reload read the branch answered empty only when the same list and document read alike otherwise', () => {
+    expect(closureOf('reload spec0 empty-read:new')?.id).toBe('R2');
+    for (const open of ['reload spec0 membership:missing-in-new:document', 'raw spec0 empty-read:new', 'reload spec0 empty-read:old']) expect(closureOf(open), open).toBeUndefined();
+    const step = {
+      raw0: { classes: ['raw spec0 field:document.viewedAt'], rows: [30, 30] },
+      reload0: ['reload spec0 membership:missing-in-new:document', 'reload spec0 membership:missing-in-new:chat'],
+      reload1: ['same-instant:reload spec1 field:email.createdAt', 'reload spec1 field:email.viewedAt'],
+    };
+    expect(emptyReloads(step)).toEqual([{ spec: 0, missing: step.reload0, qualifies: true }]);
+    // A reader that drops rows drops them in the raw read too.
+    expect(emptyReloads({ ...step, raw0: { classes: ['raw spec0 membership:missing-in-new:document'] } })[0].qualifies).toBe(false);
+    // Another list of the reloaded document differed.
+    expect(emptyReloads({ ...step, reload1: ['reload spec1 membership:missing-in-new:email'] }).map((r) => r.qualifies)).toEqual([false, false]);
+    // The branch's read had other rows or fields: it was not empty.
+    expect(emptyReloads({ ...step, reload0: [...step.reload0, 'reload spec0 field:document.notifiedAt'] })[0].qualifies).toBe(false);
+    expect(emptyReloads({ ...step, reload0: [...step.reload0, 'reload spec0 membership:missing-in-old:document'] })[0].qualifies).toBe(false);
+    // No raw read of that list in the step.
+    expect(emptyReloads({ reload0: step.reload0 })[0].qualifies).toBe(false);
   });
 });

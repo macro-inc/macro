@@ -8,6 +8,7 @@ import { CLOSURES, closureOf } from './lib/closed.ts';
 import { channelNameRest, homeCheckClosure, type CompactDom } from './lib/dom-held.ts';
 import { authRefreshTimeoutClass, TRANSPORT_FAILURE } from './lib/compare.ts';
 import { pastLoadedPages, REST_DEADLINE, staleSlotPastPages, type Row } from './lib/project.ts';
+import { emptyReloads } from './lib/empty-reload.ts';
 import { tabStampClasses, type StampRead, type StampVerdict } from './lib/stamp-check.ts';
 
 type ClassEntry = { n: number; example: unknown };
@@ -307,6 +308,40 @@ function reclassifyStamps(run: string, classes: Record<string, ClassEntry>): { f
   });
 }
 
+/**
+ * A reload check whose one read on the branch came back with none of main's
+ * rows and nothing else, while in the same step the same list read on a page
+ * that mounts nothing else (raw) and the reloaded document's other lists all
+ * matched main: the branch's probe reader read that document's cache before it
+ * filled again (closure R2). Moves `reload specN membership:missing-in-new:*`
+ * to `reload specN empty-read:new` only when every step carrying the class is
+ * such a read; any other missing row (a reader that drops rows drops them in
+ * the raw read too) leaves it open.
+ */
+function reclassifyEmptyReloads(run: string, classes: Record<string, ClassEntry>): { lane: string; step: number; spec: number; rows: unknown; moved: string[] }[] {
+  const path = join(outDir, run, 'steps.jsonl');
+  if (!existsSync(path)) return [];
+  const verdicts = new Map<string, boolean[]>();
+  const found: { lane: string; step: number; spec: number; rows: unknown; moved: string[] }[] = [];
+  for (const line of readFileSync(path, 'utf8').split('\n').filter(Boolean)) {
+    const step = JSON.parse(line) as { lane: string; step: number; checks?: Record<string, unknown> };
+    for (const { spec, missing, qualifies } of emptyReloads(step.checks ?? {})) {
+      for (const cls of missing) verdicts.set(cls, [...(verdicts.get(cls) ?? []), qualifies]);
+      const raw = step.checks?.[`raw${spec}`] as { rows?: unknown } | undefined;
+      if (qualifies) found.push({ lane: step.lane, step: step.step, spec, rows: raw?.rows, moved: missing });
+    }
+  }
+  for (const [from, all] of verdicts) {
+    const entry = classes[from];
+    if (!entry || !all.every(Boolean)) continue;
+    delete classes[from];
+    const to = from.replace(/ membership:missing-in-new:\w+$/, ' empty-read:new');
+    classes[to] ??= { n: 0, example: entry.example };
+    classes[to].n += entry.n;
+  }
+  return found.filter((f) => f.moved.every((cls) => !(cls in classes)));
+}
+
 const outDir
 
  = join(import.meta.dirname, 'out');
@@ -337,6 +372,7 @@ for (const run of runs.sort()) {
   const liveSlots = summary.sequences?.classes ? reclassifyLiveSlots(run, summary.sequences.classes) : [];
   const network = summary.sequences?.classes ? reclassifyNetwork(run, summary.sequences.classes) : [];
   const tabStamps = summary.reads?.classes ? reclassifyStamps(run, summary.reads.classes) : [];
+  const emptyReloads = summary.sequences?.classes ? reclassifyEmptyReloads(run, summary.sequences.classes) : [];
   const superseded: Record<string, number> = {};
   for (const phase of ['reads', 'dom', 'sequences']) {
     const classes: Record<string, ClassEntry> = summary[phase]?.classes ?? {};
@@ -372,6 +408,7 @@ for (const run of runs.sort()) {
     liveSlots,
     network,
     tabStamps,
+    emptyReloads,
     supersededBy: SUPERSEDED[run]?.by,
     supersededPhases: SUPERSEDED[run]?.phases,
     superseded,

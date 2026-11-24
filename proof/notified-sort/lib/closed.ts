@@ -296,6 +296,15 @@ export const CLOSURES: Closure[] = [
     outcome:
       "Visible under load on whichever tab is further behind (an older or missing time on a grouped row, so it can sit under an older date header), through code the PR does not change, on reads that are REST on both sides; the tab catches up as it works through its feed, and the next notification for the row or a reload stamps it. Never seen in the quiet run.",
   },
+  {
+    id: 'R2',
+    match: /^reload spec\d+ empty-read:new$/,
+    title: "One reload check's first read on the branch came back empty with no error, while every other read of the same list and document matched main",
+    cause:
+      "report.ts gives a reload check this name only when the branch's read of one list had none of main's rows and nothing else differed, while in the same step the same list read on a page that mounts nothing else (raw) and the reloaded document's other lists all matched main (reclassifyEmptyReloads). Instance: load seed 3702, lane v8, sequence 0, step 0 (team-share): reload of Home Signal, one page, main 30 rows, the branch 0 and no error; in the same step the raw read of that list had 30 rows on each side, and the same reloaded document's Home Noise and filtered Signal reads matched main. The reload took 218 s under load (page loads retried). The probe's reader sits outside the app's tree and returns the first settled snapshot (proof probe.ts:110-114); a storage reset of the GraphQL cache (lib/graphql-cache/host/worker-host.ts:332, :1373) empties the cache and the list reads again (lib/queries/soup/graphql/create-soup-live-query.ts:442-447), so a read settled in between returns no rows (R1). Main's reader for this list is REST, which the GraphQL cache reset does not touch, so only the branch shows it. Repro dbg-reset-read.ts (v8 of the load world, reload, then the reset 150 ms into the reload check's read): the branch's read came back empty with no error once in 10, main's never; with the reset at 1000 ms, never. Not reproduced without a forced reset in 80 reloads, quiet or with the CPU slowed 6 times. No reset was recorded for the 3702 read itself: that run predates per-read reset recording, so this cause rests on the signature and the repro; run.ts now records resets per read and reads again after one (run.ts:839-849).",
+    outcome:
+      "Not visible to callers: in the repro, after each reset the Home the viewer sees and a fresh read had rows on both sides, 10 times in 10, and in the 3702 step the list's other read and the document's other lists matched main. Seen once in 5,760 loaded reload reads and never in 7,200 quiet ones.",
+  },
 ];
 
 export function closureOf(cls: string): Closure | undefined {
