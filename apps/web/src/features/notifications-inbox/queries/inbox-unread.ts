@@ -68,20 +68,22 @@ export function createInboxUnread(options: {
     let stopStream: (() => void) | undefined;
 
     const openStream = (document: UnreadUpdatesDocument) => {
-      clearTimeout(retry);
-      stopStream?.();
       const { unsubscribe } = pipe(
         client.subscription(document, {}),
         subscribe((result) => {
           if (result.error) {
-            unsubscribe();
             if (
               document === NotificationInboxUnreadUpdatesDocument &&
               refusesChatCount(result.error)
             ) {
+              // Before the refused stream goes: it can be the last one
+              // holding the socket open, and a new socket counts as a
+              // reconnect, which would ask for `chatCount` again.
               openStream(NotificationInboxUnreadUpdatesWithoutChatDocument);
+              unsubscribe();
               return;
             }
+            unsubscribe();
             retry = setTimeout(startStream, RESUBSCRIBE_DELAY_MS);
             return;
           }
@@ -99,8 +101,11 @@ export function createInboxUnread(options: {
       );
       stopStream = unsubscribe;
     };
-    const startStream = () =>
+    const startStream = () => {
+      clearTimeout(retry);
+      stopStream?.();
       openStream(NotificationInboxUnreadUpdatesDocument);
+    };
 
     startStream();
     const stopListening = options.onReconnected(startStream);

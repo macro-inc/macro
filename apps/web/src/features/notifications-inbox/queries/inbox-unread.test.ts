@@ -5,18 +5,24 @@ import {
 import { type Client, CombinedError } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { makeSubject } from 'wonka';
+import { makeSubject, onEnd, onStart, pipe } from 'wonka';
 import { createInboxUnread } from './inbox-unread';
 
 function setup() {
   const streams: ReturnType<typeof makeSubject<unknown>>[] = [];
   const documents: unknown[] = [];
+  // How many streams hold the socket open, after each one opens or stops.
+  const open: number[] = [0];
   const client = {
     subscription: (document: unknown) => {
       const stream = makeSubject<unknown>();
       streams.push(stream);
       documents.push(document);
-      return stream.source;
+      return pipe(
+        stream.source,
+        onStart(() => open.push((open.at(-1) ?? 0) + 1)),
+        onEnd(() => open.push((open.at(-1) ?? 0) - 1))
+      );
     },
   } as unknown as Client;
   const reconnectListeners = new Set<() => void>();
@@ -39,6 +45,7 @@ function setup() {
     counts,
     streams,
     documents,
+    open,
     send,
     reconnectListeners,
     setEnabled,
@@ -158,16 +165,25 @@ describe('createInboxUnread', () => {
     'Cannot query field "chatCount" on type "NotificationInboxUnreadCount".',
   ])('keeps counting against a server from before chatCount: %s', (message) => {
     vi.useFakeTimers();
-    const { counts, streams, documents, send, reconnectListeners, dispose } =
-      setup();
+    const {
+      counts,
+      streams,
+      documents,
+      open,
+      send,
+      reconnectListeners,
+      dispose,
+    } = setup();
     expect(documents).toEqual([NotificationInboxUnreadUpdatesDocument]);
 
-    // Asked again at once, not after the delay, so no dot goes dark.
+    // Asked again at once, not after the delay, so no dot goes dark, and
+    // without letting go of the socket.
     streams[0].next(refusal(message));
     expect(documents).toEqual([
       NotificationInboxUnreadUpdatesDocument,
       NotificationInboxUnreadUpdatesWithoutChatDocument,
     ]);
+    expect(open).toEqual([0, 1, 2, 1]);
     send(1, [{ rowType: 'CHANNEL_THREAD', count: 2 }]);
     expect(counts()).toEqual([
       { type: 'channel_thread', passwordRequests: false, count: 2 },
