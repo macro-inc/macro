@@ -614,3 +614,24 @@ export async function editMailboxDraft(
   if (!response.ok)
     throw new Error(`Outlook refused the edit: ${await response.text()}`);
 }
+
+/**
+ * Sets a category on the Outlook draft with this subject, which changes its
+ * version and none of its content.
+ */
+export async function categorizeMailboxDraft(
+  mailbox: Mailbox,
+  subject: string,
+  category: string
+): Promise<void> {
+  const draft = await mailboxDraft(mailbox, subject);
+  if (!draft) throw new Error(`no draft "${subject}" in the mailbox`);
+  const { control } = await outlookMailbox(mailbox);
+  const response = await fetch(`${control}/messages/${draft.id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ categories: [category] }),
+  });
+  if (!response.ok)
+    throw new Error(`the emulator refused: ${await response.text()}`);
+}

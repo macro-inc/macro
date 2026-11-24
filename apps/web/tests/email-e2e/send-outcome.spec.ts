@@ -131,10 +131,12 @@ for (const provider of PROVIDERS) {
 
       const sends = page.getByLabel('Queued email sends');
       const failed = sends.getByText(
-        'Send failed before delivery. Cancel to recover this draft.'
+        provider === 'GMAIL'
+          ? 'Send failed before delivery. Cancel to recover this draft.'
+          : 'Send failed before delivery. Your mail provider rejected this send. Cancel to recover this draft.'
       );
       await expect(failed).toBeVisible();
-      saw('STC-105');
+      saw(provider === 'GMAIL' ? 'STC-105' : 'STC-985');
       await sends.getByRole('button', { name: 'Cancel', exact: true }).click();
       did('AC-104', 'F-136');
       await expect(failed).toHaveCount(0);
