@@ -23,8 +23,6 @@ const LOCK_TIMEOUT =
   'A coordinator that cannot get the database lock within its retries turns the cache off in its tabs until reload.';
 const FILES_BUSY =
   "A coordinator whose database files another context keeps open past the engine's wait turns the cache off in its tabs.";
-const DRAIN_UNBOUNDED =
-  'An owner that is frozen, or whose engine died, never finishes its drain, and nothing bounds how long the handover waits for it.';
 const OPEN_ATTEMPTS =
   'Six failed opens in a row stop the coordinator for every tab until reload.';
 
@@ -64,12 +62,6 @@ const CONTENDING: InjectedFault[] = [
   'hold-files',
 ];
 
-const STUCK_DRAINS: InjectedFault[][] = [
-  ['freeze owner', 'hide owner'],
-  ['crash-engine owner', 'hide owner'],
-  ['crash-engine owner', 'hide'],
-];
-
 export const KNOWN_VIOLATIONS: KnownViolation[] = [
   ...known(WIPE, ['crash-engine owner'], [WIPED]),
   ...known(
@@ -101,12 +93,15 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
       ]
     )
   ),
-  ...STUCK_DRAINS.flatMap((faults) =>
-    known(DRAIN_UNBOUNDED, faults, [
-      'L1:cache not back (ready, probe read CacheResponseError:owner-handoff-blocked)',
-      'L2:no active engine (draining)',
-      'L3:draft never settled',
-    ])
+  // A frozen owner is ended, but keeps its lock until it thaws or goes.
+  ...known(
+    LOCK_TIMEOUT,
+    ['freeze owner', 'hide owner'],
+    [
+      'S2:host retired on CacheUnavailableError:owner-lock-unavailable:owner-lock-timeout',
+      UNAVAILABLE,
+      'L2:no active engine (activating)',
+    ]
   ),
   ...known(
     OPEN_ATTEMPTS,

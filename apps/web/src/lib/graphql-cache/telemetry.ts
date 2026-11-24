@@ -137,6 +137,7 @@ export const CACHE_OWNER_EVENTS = [
   'elected',
   'activated',
   'graceful-drain-started',
+  'drain-timed-out',
   'graceful-drain-completed',
   'visibility-handoff-started',
   'visibility-handoff-blocked',

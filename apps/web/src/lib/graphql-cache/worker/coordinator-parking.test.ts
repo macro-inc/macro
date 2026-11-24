@@ -50,7 +50,12 @@ it('closes on last-visible exit, keeps clients, and routes an old settlement bef
   expect(core.state.kind).toBe('draining');
   expect(core.engineDrained('a', 1)).toEqual([
     { kind: 'close-engine-route', tabId: 'a', ownerEpoch: 1 },
-    { kind: 'release-owner', tabId: 'a', ownerEpoch: 1 },
+    {
+      kind: 'release-owner',
+      tabId: 'a',
+      ownerEpoch: 1,
+      reason: 'visibility handoff drained',
+    },
   ]);
   expect(core.state).toEqual({
     kind: 'parked',

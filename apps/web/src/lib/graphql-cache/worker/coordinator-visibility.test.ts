@@ -90,7 +90,12 @@ describe('visibility ownership', () => {
     const drained = core.engineDrained('a', 1);
     expect(drained).toEqual([
       { kind: 'close-engine-route', tabId: 'a', ownerEpoch: 1 },
-      { kind: 'release-owner', tabId: 'a', ownerEpoch: 1 },
+      {
+        kind: 'release-owner',
+        tabId: 'a',
+        ownerEpoch: 1,
+        reason: 'visibility handoff drained',
+      },
       {
         kind: 'elect-owner',
         tabId: 'b',

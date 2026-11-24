@@ -2285,6 +2285,145 @@ describe('CoordinatorRouter', () => {
     }
   );
 
+  describe('when a drain does not end', () => {
+    async function drainOwner(
+      options: {
+        lockHeld?: () => Promise<boolean>;
+        successor?: boolean;
+        wait?: () => Promise<void>;
+      } = {}
+    ) {
+      vi.useFakeTimers();
+      const router = new CoordinatorRouter({
+        heartbeatIntervalMs: 5,
+        heartbeatTimeoutMs: 7,
+        verifyTabLockHeld: async () => true,
+        verifyOwnerLockHeld: options.lockHeld ?? (async () => true),
+        watchTabLock: () => () => {},
+      });
+      const tabA = new FakePort();
+      const tabB = new FakePort();
+      await register(router, tabA, 'tab-a');
+      if (options.successor !== false) await register(router, tabB, 'tab-b');
+      const engine = new FakePort();
+      await attach(router, tabA, 'tab-a', 1, engine);
+      ready(engine, 'tab-a', 1, 'opened-existing');
+      const show = (tabId: string, port: FakePort, visible: boolean) =>
+        router.handleTabMessage(port as CoordinatorMessagePort, {
+          ...version,
+          kind: 'tab-visibility',
+          tabId,
+          visible,
+        });
+      await options.wait?.();
+      await show('tab-a', tabA, false);
+      expect(router.snapshot()?.state.kind).toBe('draining');
+      return { router, tabA, tabB, engine, show };
+    }
+
+    it('ends a stuck engine as a leaving page ends one', async () => {
+      const { router, tabA, tabB } = await drainOwner();
+      await vi.advanceTimersByTimeAsync(20);
+      expect(messagesOfKind(tabA, 'terminate-engine')).toEqual([]);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(messagesOfKind(tabA, 'terminate-engine')).toEqual([
+        expect.objectContaining({
+          ownerEpoch: 1,
+          reason: 'engine drain timed out',
+        }),
+      ]);
+      expect(messagesOfKind(tabB, 'become-owner')).toEqual([
+        expect.objectContaining({
+          ownerEpoch: 2,
+          databaseAction: 'open-existing',
+        }),
+      ]);
+      // The page only lost its engine.
+      expect(router.snapshot()?.tabIds).toEqual(['tab-a', 'tab-b']);
+    });
+
+    it('lets a drain that ends in time end by itself', async () => {
+      const { router, tabA, engine } = await drainOwner();
+      await vi.advanceTimersByTimeAsync(20);
+      engine.receive({
+        ...version,
+        kind: 'engine-drained',
+        tabId: 'tab-a',
+        ownerEpoch: 1,
+      });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(messagesOfKind(tabA, 'terminate-engine')).toEqual([
+        expect.objectContaining({ reason: 'visibility handoff drained' }),
+      ]);
+      expect(router.snapshot()?.ownerEpoch).toBe(2);
+    });
+
+    it('ends an engine that died before its drain', async () => {
+      const { tabB } = await drainOwner({ lockHeld: async () => false });
+      // One look at its lock, then the time a leaving page gets.
+      await vi.advanceTimersByTimeAsync(11);
+      expect(messagesOfKind(tabB, 'become-owner')).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(messagesOfKind(tabB, 'become-owner')).toEqual([
+        expect.objectContaining({
+          ownerEpoch: 2,
+          databaseAction: 'wipe-before-open',
+        }),
+      ]);
+    });
+
+    it('ends an engine that died, hidden while its lock was looked for', async () => {
+      const heartbeatProbe = Promise.withResolvers<boolean>();
+      const lockHeld = vi
+        .fn<() => Promise<boolean>>()
+        .mockReturnValueOnce(heartbeatProbe.promise)
+        .mockResolvedValue(false);
+      const { tabB } = await drainOwner({
+        lockHeld,
+        wait: async () => {
+          await vi.advanceTimersByTimeAsync(12);
+          expect(lockHeld).toHaveBeenCalledTimes(1);
+        },
+      });
+      heartbeatProbe.resolve(false);
+      await vi.advanceTimersByTimeAsync(12);
+      expect(messagesOfKind(tabB, 'become-owner')).toEqual([
+        expect.objectContaining({ ownerEpoch: 2 }),
+      ]);
+    });
+
+    it('takes a lock query that fails for a held lock', async () => {
+      const { tabB } = await drainOwner({
+        lockHeld: async () => {
+          throw new Error('locks unavailable');
+        },
+      });
+      await vi.advanceTimersByTimeAsync(21);
+      expect(messagesOfKind(tabB, 'become-owner')).toEqual([
+        expect.objectContaining({ databaseAction: 'open-existing' }),
+      ]);
+    });
+
+    it('counts no time while no page is shown', async () => {
+      const { router, tabA, show } = await drainOwner({ successor: false });
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(router.snapshot()?.state.kind).toBe('draining');
+
+      // Being hidden now and then adds to it, but does not start it over.
+      for (let shown = 0; shown < 5; shown += 1) {
+        await show('tab-a', tabA, true);
+        await vi.advanceTimersByTimeAsync(4);
+        await show('tab-a', tabA, false);
+        await vi.advanceTimersByTimeAsync(100);
+      }
+      expect(router.snapshot()?.state.kind).toBe('draining');
+      await show('tab-a', tabA, true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(messagesOfKind(tabA, 'become-owner')).toHaveLength(2);
+    });
+  });
+
   it.each(['a late answer', 'its page being hidden', 'a departure'] as const)(
     'ends an owner whose lock was released in spite of %s',
     async (event) => {

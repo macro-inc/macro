@@ -117,10 +117,22 @@ type EngineRoute = {
   transport: EffectWorkerTransport<CoordinatorToEngineEnvelope>;
 };
 
+/** How far a drain is in the time it gets. `timer` is set while time counts. */
+type DrainWatch = {
+  ownerEpoch: number;
+  checks: number;
+  remainingMs: number;
+  startedAt: number;
+  timer: ReturnType<typeof setTimeout> | undefined;
+};
+
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 2_000;
 /** How often to look for a silent owner's page when looking fails. */
 const MAX_PAGE_PROBES = 3;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
+/** How often a drain's engine is looked for, a heartbeat timeout apart, before
+ * the drain is cut short. */
+const MAX_DRAIN_CHECKS = 3;
 /** How many departed tab ids a long-lived coordinator remembers. */
 const DEPARTED_TAB_MEMORY = 256;
 const RECOVERY_RETRY_LIMIT = 5;
@@ -238,6 +250,7 @@ export class CoordinatorRouter {
   private activationTimer: ReturnType<typeof setTimeout> | undefined;
   private heartbeatIntervalTimer: ReturnType<typeof setTimeout> | undefined;
   private heartbeatTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  private drain: DrainWatch | undefined;
   private nextHeartbeatId = 1;
   private pendingHeartbeat:
     | { ownerEpoch: number; heartbeatId: number }
@@ -1018,7 +1031,7 @@ export class CoordinatorRouter {
           this.postTerminateEngine(
             action.tabId,
             action.ownerEpoch,
-            'visibility handoff drained'
+            action.reason
           );
           break;
         case 'retire-tab':
@@ -1149,6 +1162,7 @@ export class CoordinatorRouter {
           this.handoff.start(ownerEpoch, core.hasVisibleTab);
       })
       .with({ kind: 'draining' }, ({ ownerEpoch }) => {
+        this.watchDrain(ownerEpoch);
         if (this.handoff.transitioning)
           this.handoff.start(ownerEpoch, core.hasVisibleTab);
       })
@@ -1738,15 +1752,7 @@ export class CoordinatorRouter {
     // crash: revoking ownership here wipes healthy storage and can exhaust
     // recovery while the page is still suspended. Only a released physical
     // owner lock confirms silent worker death (terminate() emits no error).
-    let lockHeld: boolean;
-    try {
-      lockHeld = await this.verifyOwnerLockHeld(
-        databaseOwnerLockName(core.scope)
-      );
-    } catch {
-      // A failed probe is not proof of owner loss either. Retry later.
-      lockHeld = true;
-    }
+    const lockHeld = await this.ownerLockHeld(core.scope);
     // The ack, a graceful drain, or another failure may have won the race
     // while the lock probe was pending. Never act on that stale observation.
     if (
@@ -1762,8 +1768,98 @@ export class CoordinatorRouter {
     // Nothing that arrives now keeps this engine: an answer it sent before it
     // died, or a drain asked of it.
     this.clearHeartbeatTimers();
-    // A page that is leaving frees its engine's lock, frees its own and says
-    // goodbye, and these can arrive in any order. Give the rest time.
+    this.endUnlockedOwner(route);
+  }
+
+  /**
+   * Bounds a drain. A stuck engine never ends it, and a dead one cannot: hiding
+   * its page stops the heartbeat that would have missed it. Time counts only
+   * while somebody waits, as a hidden engine may be suspended.
+   */
+  private watchDrain(ownerEpoch: number): void {
+    const core = this.coreValue;
+    if (!core) return;
+    this.drain ??= {
+      ownerEpoch,
+      checks: 0,
+      remainingMs: this.heartbeatTimeoutMs,
+      startedAt: this.now(),
+      timer: undefined,
+    };
+    const drain = this.drain;
+    if (core.hasVisibleTab || core.handingOver) {
+      if (drain.timer === undefined) this.scheduleDrainCheck(drain);
+      return;
+    }
+    if (drain.timer === undefined) return;
+    this.clearTimeoutFn(drain.timer);
+    drain.timer = undefined;
+    drain.remainingMs -= this.now() - drain.startedAt;
+  }
+
+  private scheduleDrainCheck(drain: DrainWatch): void {
+    drain.startedAt = this.now();
+    const timer = this.setTimeoutFn(
+      () => {
+        const route = this.engineRoute;
+        if (route?.ownerEpoch !== drain.ownerEpoch) return;
+        this.checkDrain(
+          route,
+          drain,
+          () =>
+            this.drain === drain &&
+            drain.timer === timer &&
+            this.engineRoute === route
+        ).catch(reportCoordinatorTaskFailure);
+      },
+      Math.max(0, drain.remainingMs)
+    );
+    drain.timer = timer;
+  }
+
+  private async checkDrain(
+    route: EngineRoute,
+    drain: DrainWatch,
+    draining: () => boolean
+  ): Promise<void> {
+    const core = this.coreValue;
+    if (!core) return;
+    const { tabId, ownerEpoch } = route;
+    const lockHeld = await this.ownerLockHeld(core.scope);
+    if (!draining()) return;
+    if (!lockHeld) {
+      this.endUnlockedOwner(route);
+      return;
+    }
+    drain.checks += 1;
+    if (drain.checks < MAX_DRAIN_CHECKS) {
+      drain.remainingMs = this.heartbeatTimeoutMs;
+      this.scheduleDrainCheck(drain);
+      return;
+    }
+    this.recordOwnerLeft(ownerEpoch, {
+      outcome: 'error',
+      ownerEvent: 'drain-timed-out',
+      errorCode: 'timeout',
+    });
+    this.applyActions(
+      core.drainExpired(tabId, ownerEpoch, 'engine drain timed out')
+    );
+  }
+
+  /** Whether anyone holds the owner lock; a failed probe is no sign of a loss. */
+  private async ownerLockHeld(scope: string): Promise<boolean> {
+    try {
+      return await this.verifyOwnerLockHeld(databaseOwnerLockName(scope));
+    } catch {
+      return true;
+    }
+  }
+
+  /** The engine of a page that is leaving frees its lock, the page frees its
+   * own and says goodbye, and these can arrive in any order. Give the rest
+   * time. */
+  private endUnlockedOwner(route: EngineRoute): void {
     this.setTimeoutFn(() => {
       this.endSilentOwner(
         route.tabId,
@@ -1838,6 +1934,11 @@ export class CoordinatorRouter {
     }
   }
 
+  private clearDrainWatch(): void {
+    if (this.drain?.timer !== undefined) this.clearTimeoutFn(this.drain.timer);
+    this.drain = undefined;
+  }
+
   private clearHeartbeatTimers(): void {
     if (this.heartbeatIntervalTimer !== undefined) {
       this.clearTimeoutFn(this.heartbeatIntervalTimer);
@@ -1853,6 +1954,7 @@ export class CoordinatorRouter {
   private clearEngineWatchdogs(): void {
     this.clearActivationTimer();
     this.clearHeartbeatTimers();
+    this.clearDrainWatch();
     this.clearTakeover();
   }
 

@@ -103,7 +103,12 @@ export type CoordinatorAction =
       ownerEpoch: OwnerEpoch;
       handoff?: true;
     }
-  | { kind: 'release-owner'; tabId: string; ownerEpoch: OwnerEpoch }
+  | {
+      kind: 'release-owner';
+      tabId: string;
+      ownerEpoch: OwnerEpoch;
+      reason: string;
+    }
   | { kind: 'handoff-pending'; ownerEpoch: OwnerEpoch }
   | { kind: 'close-engine-route'; tabId: string; ownerEpoch: OwnerEpoch }
   | { kind: 'drop-tab'; tabId: string }
@@ -586,10 +591,38 @@ export class CoordinatorCore {
         `unexpected engine-drained from ${tabId} at epoch ${ownerEpoch}`
       );
     }
+    return this.endDrain(
+      state,
+      'engine drained before delivering its response',
+      'visibility handoff drained'
+    );
+  }
 
+  /** The drain is cut short the way a page that leaves cuts its engine off:
+   * the database recovers from it, so it calls for no wipe. */
+  drainExpired(
+    tabId: string,
+    ownerEpoch: OwnerEpoch,
+    reason: string
+  ): CoordinatorAction[] {
+    const state = this.stateValue;
+    if (
+      state.kind !== 'draining' ||
+      state.tabId !== tabId ||
+      state.ownerEpoch !== ownerEpoch
+    )
+      return [];
+    return this.endDrain(state, reason, reason);
+  }
+
+  private endDrain(
+    { tabId, ownerEpoch }: Extract<CoordinatorState, { kind: 'draining' }>,
+    error: string,
+    releaseReason: string
+  ): CoordinatorAction[] {
     const actions = this.rejectEpochRequests(
       ownerEpoch,
-      'engine drained before delivering its response',
+      error,
       OWNER_EPOCH_LOST_ERROR_CODE
     );
     actions.push({ kind: 'close-engine-route', tabId, ownerEpoch });
@@ -599,7 +632,12 @@ export class CoordinatorCore {
     } else {
       // The engine closed storage, not the page. Its host and subscriptions
       // remain connected and the usual replacement broadcast refreshes them.
-      actions.push({ kind: 'release-owner', tabId, ownerEpoch });
+      actions.push({
+        kind: 'release-owner',
+        tabId,
+        ownerEpoch,
+        reason: releaseReason,
+      });
     }
     this.stateValue = {
       kind: 'waiting-for-tab',
