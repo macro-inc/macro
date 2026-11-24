@@ -287,7 +287,7 @@ it('pins the assignment once the server names it, not its temporary id', async (
   await fireEvent.click(screen.getByRole('button', { name: 'Add property' }));
   await mocks.open.mock.lastCall?.[3]?.onPropertyAdded?.(['definition']);
 
-  mocks.setProperties([
+  mocks.setProperties?.([
     {
       ...property,
       propertyId: 'optimistic-property:DOCUMENT:doc:definition',
@@ -295,7 +295,7 @@ it('pins the assignment once the server names it, not its temporary id', async (
   ]);
   expect(editor.getEditorState().read($getPinnedProperties)).toEqual([]);
 
-  mocks.setProperties([property]);
+  mocks.setProperties?.([property]);
   await waitFor(() =>
     expect(editor.getEditorState().read($getPinnedProperties)).toEqual([
       'assignment',

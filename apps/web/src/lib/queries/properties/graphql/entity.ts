@@ -426,9 +426,9 @@ async function sendAdd<T>(slot: string, send: () => Promise<T>): Promise<T> {
   }
 }
 
-async function holdForAdds(slot: string): Promise<void> {
-  const deadline = Date.now() + ADD_HOLD_LIMIT_MS;
+type AddHold = { slot: string; deadline: number };
 
+async function holdForAdds({ slot, deadline }: AddHold): Promise<void> {
   while (pendingAdds.has(slot)) {
     const remaining = deadline - Date.now();
     if (remaining <= 0) return;
@@ -454,27 +454,33 @@ async function executeGraphqlEntityPropertyMutation(
   authorizationEpoch = cacheSessionGeneration.capture()
 ) {
   const { input } = execution;
-  const send = () =>
+  const send = (hold?: AddHold) =>
     sendEntityPropertyMutation(
       execution,
       onEnqueued,
       prepareGrouped,
-      authorizationEpoch
+      authorizationEpoch,
+      hold
     );
-  if (input.kind === 'add') return sendAdd(entityPropertySlot(input), send);
-
   const slot = entityPropertySlot(input);
-  if (pendingAdds.has(slot)) await holdForAdds(slot);
-  return send();
+  if (input.kind === 'add') return sendAdd(slot, () => send());
+
+  const hold = { slot, deadline: Date.now() + ADD_HOLD_LIMIT_MS };
+  await holdForAdds(hold);
+  return send(hold);
 }
 
 async function sendEntityPropertyMutation(
   { client, mutation, input, context }: EntityPropertyExecution,
   onEnqueued: (() => void) | undefined,
   prepareGrouped: PrepareGroupedPropertyUpdates | undefined,
-  authorizationEpoch: ReturnType<typeof cacheSessionGeneration.capture>
+  authorizationEpoch: ReturnType<typeof cacheSessionGeneration.capture>,
+  hold: AddHold | undefined
 ) {
   const args = await prepareMutationArgs(input, prepareGrouped);
+  // Preparing awaits the cache, and an add can start meanwhile.
+  if (hold) await holdForAdds(hold);
+
   const variables: SetEntityPropertyMutationVariables = {
     input: {
       entityType: args.entityType,

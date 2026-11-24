@@ -469,6 +469,102 @@ describe('GraphQL entity property mutations', () => {
     expect(sent).toEqual([null, null, { string: 'hello' }]);
   });
 
+  it('holds a save for an add that starts while the save is being prepared', async () => {
+    makeSettlementHost();
+    const reading = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const input = {
+      initial: {
+        groupBy: {
+          field: 'PROPERTY' as const,
+          propertyDefinitionId: 'priority',
+        },
+      },
+    };
+    onTestFinished(
+      registerGraphqlSoupRevalidations(() => [
+        { document: GroupSoupDocument, variables: { input } },
+      ])
+    );
+    const readQuery = vi.fn(async () => {
+      reading.resolve();
+      await release.promise;
+      return { kind: 'miss' as const };
+    });
+    graphqlClientState.host = {
+      ...graphqlClientState.host,
+      readQuery,
+    } as unknown as CacheHost;
+    let answerAdd: () => void = () => {};
+    const sent: unknown[] = [];
+    const mutation = vi.fn(
+      (
+        _document: unknown,
+        variables: { input: { value: unknown } },
+        context: Record<string, unknown>
+      ) => ({
+        toPromise: () => {
+          const { value } = variables.input;
+          sent.push(value);
+          const result = {
+            operation: { kind: 'mutation', context } as Operation,
+            data: { setEntityProperty: { id: 'assignment-1' } },
+            stale: false,
+            hasNext: false,
+          };
+          if (value === null) {
+            return new Promise((resolve) => {
+              answerAdd = () => resolve(result);
+            });
+          }
+          (context.normalizedCacheOptimisticEnqueued as () => void)();
+          return Promise.resolve(result);
+        },
+      })
+    );
+    graphqlClientState.current = { mutation } as unknown as Client;
+    let add!: ReturnType<typeof createGraphqlAddEntityPropertyMutation>;
+    let save!: ReturnType<typeof createGraphqlBulkSaveEntityPropertiesMutation>;
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      add = createGraphqlAddEntityPropertyMutation();
+      save = createGraphqlBulkSaveEntityPropertiesMutation();
+    });
+
+    const saving = save.mutateAsync({
+      properties: [
+        {
+          entityType: 'TASK',
+          entityId: 'task-3',
+          property: {
+            propertyId: 'assignment-task-3',
+            propertyDefinitionId: 'priority',
+            displayName: 'Priority',
+            valueType: 'SELECT_STRING',
+            value: ['low'],
+            isMultiSelect: false,
+          } as Property,
+          apiValues: { valueType: 'SELECT_STRING', values: ['urgent'] },
+        },
+      ],
+    });
+    await reading.promise;
+    const adding = add.mutateAsync({
+      entityType: 'TASK',
+      entityId: 'task-3',
+      propertyDefinitionId: 'priority',
+    });
+    await vi.waitFor(() => expect(sent).toEqual([null]));
+
+    release.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sent).toEqual([null]);
+
+    answerAdd();
+    await Promise.all([adding, saving]);
+    expect(sent).toEqual([null, { selectOption: 'urgent' }]);
+  });
+
   it('sends a save when its add stays unanswered for too long', async () => {
     vi.useFakeTimers();
     const sent: unknown[] = [];
