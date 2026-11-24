@@ -1,9 +1,18 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
+import { impactFeedback } from '@tauri-apps/plugin-haptics';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SwipableRow, SwipableRowProvider } from './SwipableRow';
 
+vi.mock('@tauri-apps/plugin-haptics', () => ({
+  impactFeedback: vi.fn(async () => {}),
+}));
+vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
+  isNativeMobilePlatform: () => true,
+}));
+
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.useFakeTimers();
   // jsdom has no layout; give rows a phone's width so a short drag does not
   // count as dragging most of the way across.
@@ -96,4 +105,33 @@ it('asks whether a row can swipe once per gesture, not on every move', () => {
 
   expect(onSwipeRight).toHaveBeenCalledOnce();
   expect(canSwipeRight).toHaveBeenCalledOnce();
+});
+
+it('taps a light impact as a swipe crosses the mark done threshold and as it backs off', () => {
+  const { onSwipeLeft } = renderRow();
+  const row = screen.getByText('Row');
+
+  touch(row, 'touchstart', 300);
+  touch(row, 'touchmove', 260);
+  expect(impactFeedback).not.toHaveBeenCalled();
+  touch(row, 'touchmove', 210);
+  touch(row, 'touchmove', 200);
+  expect(impactFeedback).toHaveBeenCalledExactlyOnceWith('light');
+  touch(row, 'touchmove', 260);
+  expect(impactFeedback).toHaveBeenCalledTimes(2);
+  expect(impactFeedback).toHaveBeenLastCalledWith('light');
+  touch(row, 'touchend');
+  vi.runAllTimers();
+
+  expect(onSwipeLeft).not.toHaveBeenCalled();
+});
+
+it('taps one light impact for a swipe that marks the row done', () => {
+  const { onSwipeLeft } = renderRow();
+
+  swipe(300, 150);
+  vi.runAllTimers();
+
+  expect(onSwipeLeft).toHaveBeenCalledWith('thread');
+  expect(impactFeedback).toHaveBeenCalledExactlyOnceWith('light');
 });

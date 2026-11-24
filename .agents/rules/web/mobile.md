@@ -66,9 +66,13 @@ read their code, and follow that pattern rather than inventing a new one.
   handles instead drag after a small movement with no hold delay and reserve
   scrolling for the rest of the row. Horizontal swipes ignore the left edge
   (iOS back swipe).
-- Add no haptics and no native-only press animation: the iOS and Android apps
-  look and respond like a mobile browser, with normal tap feedback. Navigation
-  acts on click so held or cancelled touches do nothing. Touch `glass` and
+- Add no native-only press animation: the iOS and Android apps look and
+  respond like a mobile browser, with normal tap feedback. The only haptics are
+  `hapticImpact('medium')` when a long press fires (`touchHandler`, the mobile
+  canvas) and `hapticImpact('light')` as a swipe row crosses its action
+  threshold and backs off it (`SwipableRow`); taps, sends, drags, and pull to
+  refresh stay silent. Navigation acts on click so held or cancelled touches do
+  nothing. Touch `glass` and
   `island` surfaces draw a flat hairline edge; tune floating chrome through the
   theme tokens (`--color-chrome-glass`, `--raised-glass-lift`, `--raised-glass-alpha`), not per component.
 
