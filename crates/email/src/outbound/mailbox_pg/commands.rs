@@ -1,7 +1,9 @@
 use super::*;
 use crate::domain::mailbox::commands::*;
+use crate::domain::models::label::LabelsGained;
 use crate::domain::models::mailbox_action::{MailboxAction, PendingMailboxState};
 use email_api_client::domain::models::MailboxOrganization;
+use email_db_client::labels::thread_gain;
 
 impl PgMailboxSync {
     async fn lock_command(
@@ -38,6 +40,7 @@ impl PgMailboxSync {
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         lease: &CommandLease,
         message_id: Uuid,
+        labels_gained: Option<LabelsGained>,
     ) -> Result<(), MailboxError> {
         let row = sqlx::query!(r#"
             UPDATE email_messages m SET
@@ -53,7 +56,8 @@ impl PgMailboxSync {
             )
             .await
             .map_err(db_error)?;
-            let payload = serde_json::json!({"kind":"organization","thread_id":row.thread_id});
+            let payload = serde_json::json!({"kind":"organization","thread_id":row.thread_id,
+                "labels_gained":labels_gained,"traceparent":crate::trace_context::current()});
             sqlx::query!("INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,$3,$4)",macro_uuid::generate_uuid_v7(),lease.mailbox.link_id,lease.mailbox.sync_generation,payload).execute(&mut **tx).await.map_err(db_error)?;
         }
         Ok(())
@@ -193,12 +197,16 @@ impl MailboxCommandRepository for PgMailboxSync {
     ) -> Result<(), MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_command(&mut tx, lease).await?;
-        let retired=sqlx::query_scalar!(r#"SELECT (COALESCE((m.mailbox_state->>'provider_missing')::bool,false)
+        let stored=sqlx::query!(r#"SELECT m.thread_id,(COALESCE((m.mailbox_state->>'provider_missing')::bool,false)
             OR EXISTS(SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id=m.id AND (d.delete_requested OR d.state='deleted'))
             OR EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.source_id=m.id AND t.state<>'preparing')) AS "retired!"
             FROM email_messages m WHERE m.id=$1 AND m.link_id=$2 FOR UPDATE"#,target.message_id,lease.mailbox.link_id)
-            .fetch_optional(&mut *tx).await.map_err(db_error)?.unwrap_or(true);
-        if retired {
+            .fetch_optional(&mut *tx).await.map_err(db_error)?;
+        let thread_id = stored
+            .as_ref()
+            .filter(|message| !message.retired)
+            .map(|message| message.thread_id);
+        let Some(thread_id) = thread_id else {
             sqlx::query!(
                 "DELETE FROM email_pending_mailbox_state WHERE command_id=$1 AND message_id=$2",
                 lease.id,
@@ -208,9 +216,24 @@ impl MailboxCommandRepository for PgMailboxSync {
             .await
             .map_err(db_error)?;
             sqlx::query!("UPDATE email_mailbox_command_targets SET status='failed' WHERE command_id=$1 AND message_id=$2",lease.id,target.message_id).execute(&mut *tx).await.map_err(db_error)?;
-            Self::update_command_projection(&mut tx, lease, target.message_id).await?;
+            Self::update_command_projection(&mut tx, lease, target.message_id, None).await?;
             return tx.commit().await.map_err(db_error);
+        };
+        // While this command's own category still overlays the message, so only
+        // categories someone set in Outlook in the meantime count as gained.
+        let tags: &[String] = snapshot.map_or(&[], |snapshot| &snapshot.tags);
+        let mut label_ids = Vec::with_capacity(tags.len());
+        for tag in tags {
+            let label = sqlx::query_scalar!(r#"
+                INSERT INTO email_labels (id,link_id,provider_label_id,name,type) VALUES ($1,$2,$3::text,$3::text,'User')
+                ON CONFLICT (link_id,provider_label_id) DO UPDATE SET name = EXCLUDED.name RETURNING id
+            "#,macro_uuid::generate_uuid_v7(),lease.mailbox.link_id,tag).fetch_one(&mut *tx).await.map_err(db_error)?;
+            label_ids.push(label);
         }
+        let absent =
+            thread_gain::absent_from_thread(&mut tx, lease.mailbox.link_id, thread_id, tags)
+                .await
+                .map_err(db_error)?;
         let state = match snapshot {
             Some(snapshot) => serde_json::to_value(&snapshot.state),
             None => serde_json::to_value(&target.pending),
@@ -237,7 +260,7 @@ impl MailboxCommandRepository for PgMailboxSync {
         .execute(&mut *tx)
         .await
         .map_err(db_error)?;
-        if let Some(snapshot) = snapshot {
+        if snapshot.is_some() {
             sqlx::query!(
                 "DELETE FROM email_message_labels WHERE message_id = $1",
                 target.message_id
@@ -245,11 +268,7 @@ impl MailboxCommandRepository for PgMailboxSync {
             .execute(&mut *tx)
             .await
             .map_err(db_error)?;
-            for tag in &snapshot.tags {
-                let label = sqlx::query_scalar!(r#"
-                    INSERT INTO email_labels (id,link_id,provider_label_id,name,type) VALUES ($1,$2,$3::text,$3::text,'User')
-                    ON CONFLICT (link_id,provider_label_id) DO UPDATE SET name = EXCLUDED.name RETURNING id
-                "#,macro_uuid::generate_uuid_v7(),lease.mailbox.link_id,tag).fetch_one(&mut *tx).await.map_err(db_error)?;
+            for label in label_ids {
                 sqlx::query!("INSERT INTO email_message_labels (message_id,label_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",target.message_id,label).execute(&mut *tx).await.map_err(db_error)?;
             }
         } else if let MailboxAction::Category { name, present } = &lease.action {
@@ -275,7 +294,14 @@ impl MailboxCommandRepository for PgMailboxSync {
         .execute(&mut *tx)
         .await
         .map_err(db_error)?;
-        Self::update_command_projection(&mut tx, lease, target.message_id).await?;
+        let gained = thread_gain::carried_by_messages(&mut tx, &[target.message_id], &absent)
+            .await
+            .map_err(db_error)?;
+        let labels_gained = LabelsGained::from_provider(
+            gained.into_iter().map(|label| label.label_id).collect(),
+            target.message_id,
+        );
+        Self::update_command_projection(&mut tx, lease, target.message_id, labels_gained).await?;
         tx.commit().await.map_err(db_error)
     }
 
@@ -303,7 +329,7 @@ impl MailboxCommandRepository for PgMailboxSync {
         .execute(&mut *tx)
         .await
         .map_err(db_error)?;
-        Self::update_command_projection(&mut tx, lease, target.message_id).await?;
+        Self::update_command_projection(&mut tx, lease, target.message_id, None).await?;
         tx.commit().await.map_err(db_error)
     }
 
@@ -335,7 +361,7 @@ impl MailboxCommandRepository for PgMailboxSync {
         .await
         .map_err(db_error)?;
         for message in messages {
-            Self::update_command_projection(&mut tx, lease, message).await?;
+            Self::update_command_projection(&mut tx, lease, message, None).await?;
         }
         let status = match completion {
             CommandCompletion::Succeeded => "succeeded",

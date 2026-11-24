@@ -8,6 +8,7 @@ mod claim_order;
 mod crm_cleanup;
 mod import_pacing;
 mod import_reads;
+mod label_gains;
 mod live_pass;
 mod lock_timeouts;
 mod no_mailbox;

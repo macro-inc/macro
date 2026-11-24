@@ -177,3 +177,212 @@ fn refused_attachments_stop_sooner_and_worker_failures_never_count() {
         assert_eq!(attachment_failure_limit(&error), None);
     }
 }
+
+/// Serves one event and records what projecting it publishes.
+struct OneEvent {
+    event: std::sync::Mutex<Option<ProjectionEvent>>,
+    context: std::sync::Mutex<Option<ProjectionContext>>,
+    current_generation: bool,
+}
+
+impl MailboxProjectionRepository for OneEvent {
+    async fn renew_projection(&self, _: &ProjectionLease) -> Result<(), MailboxError> {
+        Ok(())
+    }
+    async fn claim_projection(
+        &self,
+        lease_id: Uuid,
+    ) -> Result<Option<ProjectionLease>, MailboxError> {
+        Ok(self
+            .event
+            .lock()
+            .unwrap()
+            .take()
+            .map(|event| ProjectionLease {
+                id: Uuid::now_v7(),
+                lease_id,
+                mailbox: MailboxKey {
+                    link_id: Uuid::nil(),
+                    sync_generation: 1,
+                    grant_generation: 1,
+                },
+                event,
+                from_current_generation: self.current_generation,
+                attempts: 1,
+                unfinished_claims: 0,
+            }))
+    }
+    async fn projection_context(
+        &self,
+        _: &ProjectionLease,
+    ) -> Result<Option<ProjectionContext>, MailboxError> {
+        Ok(self.context.lock().unwrap().take())
+    }
+    async fn finish_projection(
+        &self,
+        _: &ProjectionLease,
+        retry: Option<MessageRetry>,
+    ) -> Result<(), MailboxError> {
+        assert!(retry.is_none());
+        Ok(())
+    }
+}
+
+#[derive(Default, Clone)]
+struct Published(std::sync::Arc<std::sync::Mutex<Vec<macro_event_broker::Event<EmailTopicEvent>>>>);
+
+impl MailboxProjectionEffects for Published {
+    async fn publish(&self, event: EmailMacroEvent) -> Result<(), MailboxError> {
+        use macro_event_broker::MacroEvent;
+        self.0.lock().unwrap().push(event.event().clone());
+        Ok(())
+    }
+    async fn refresh(
+        &self,
+        _: Uuid,
+        _: &HashSet<MacroUserIdStr<'static>>,
+    ) -> Result<(), MailboxError> {
+        Ok(())
+    }
+    async fn notify(&self, _: MailboxNotification) -> Result<(), MailboxError> {
+        Ok(())
+    }
+    async fn contacts(&self, _: CorrespondenceProjection) -> Result<(), MailboxError> {
+        Ok(())
+    }
+    async fn attachments(
+        &self,
+        _: MailboxKey,
+        _: &ProjectionContext,
+        _: bool,
+    ) -> Result<(), MailboxError> {
+        Ok(())
+    }
+    async fn invitations(&self, _: Uuid, _: &[CalendarInvitation]) -> Result<(), MailboxError> {
+        Ok(())
+    }
+}
+
+/// The events that report labels a thread gained, and those labels.
+async fn gains(
+    event: serde_json::Value,
+    context: ProjectionContext,
+    current_generation: bool,
+) -> Vec<(macro_event_broker::Event<EmailTopicEvent>, Vec<Uuid>)> {
+    let published = Published::default();
+    let repository = OneEvent {
+        event: std::sync::Mutex::new(Some(serde_json::from_value(event).unwrap())),
+        context: std::sync::Mutex::new(Some(context)),
+        current_generation,
+    };
+    MailboxProjectionService::new(repository, published.clone())
+        .project_once()
+        .await
+        .unwrap();
+    let events = published.0.lock().unwrap().clone();
+    events
+        .into_iter()
+        .filter_map(|event| {
+            let gained = match &event.event {
+                EmailTopicEvent::MessageReceived(metadata) => metadata.labels_gained.clone(),
+                EmailTopicEvent::ThreadLabelsUpdated(metadata) => metadata.labels_gained.clone(),
+                _ => Vec::new(),
+            };
+            (!gained.is_empty()).then_some((event, gained))
+        })
+        .collect()
+}
+
+fn gained(event_id: Uuid, automated: bool) -> serde_json::Value {
+    serde_json::json!({
+        "event_id": event_id, "label_ids": [Uuid::from_u128(9)],
+        "message_id": null, "automated": automated,
+    })
+}
+
+fn message_event(
+    is_import: bool,
+    is_new: bool,
+    labels_gained: serde_json::Value,
+) -> serde_json::Value {
+    serde_json::json!({
+        "kind": "message", "message_id": Uuid::now_v7(), "thread_id": Uuid::now_v7(),
+        "provider_id": "message", "is_import": is_import, "is_new": is_new, "was_draft": false,
+        "is_draft": false, "is_sent": false, "calendar_parts": [], "labels_gained": labels_gained,
+    })
+}
+
+#[tokio::test]
+async fn arriving_mail_reports_its_categories_on_its_received_event() {
+    let reported = gains(
+        message_event(false, true, gained(Uuid::now_v7(), false)),
+        context(),
+        true,
+    )
+    .await;
+    assert_eq!(reported.len(), 1);
+    assert!(matches!(
+        reported[0].0.event,
+        EmailTopicEvent::MessageReceived(_)
+    ));
+    assert_eq!(reported[0].1, [Uuid::from_u128(9)]);
+}
+
+#[tokio::test]
+async fn a_stored_message_reports_its_new_categories_under_their_own_id() {
+    let id = Uuid::now_v7();
+    let reported = gains(
+        message_event(false, false, gained(id, false)),
+        context(),
+        true,
+    )
+    .await;
+    assert_eq!(reported.len(), 1);
+    assert_eq!(reported[0].0.event_id, id);
+    let EmailTopicEvent::ThreadLabelsUpdated(metadata) = &reported[0].0.event else {
+        unreachable!()
+    };
+    assert_eq!(metadata.origin, EmailEventOrigin::ProviderSync);
+    assert!(!metadata.automated);
+}
+
+#[tokio::test]
+async fn imports_and_older_generations_report_no_categories() {
+    for (case, event, current) in [
+        (
+            "import",
+            message_event(true, true, gained(Uuid::now_v7(), false)),
+            true,
+        ),
+        (
+            "older generation",
+            message_event(false, false, gained(Uuid::now_v7(), false)),
+            false,
+        ),
+        (
+            "nothing gained",
+            message_event(false, false, serde_json::Value::Null),
+            true,
+        ),
+    ] {
+        assert!(gains(event, context(), current).await.is_empty(), "{case}");
+    }
+}
+
+#[tokio::test]
+async fn a_category_written_in_macro_keeps_who_wrote_it() {
+    let routine = Uuid::now_v7();
+    let event = serde_json::json!({
+        "kind": "organization", "thread_id": Uuid::now_v7(), "actor": "macro|owner@example.com",
+        "action": {"kind": "category", "value": {"name": "Finance", "present": true}},
+        "routine_id": routine, "labels_gained": gained(Uuid::now_v7(), true),
+    });
+    let reported = gains(event, context(), true).await;
+    assert_eq!(reported.len(), 1);
+    assert_eq!(reported[0].0.routine_id, Some(routine));
+    let EmailTopicEvent::ThreadLabelsUpdated(metadata) = &reported[0].0.event else {
+        unreachable!()
+    };
+    assert!(metadata.automated);
+    assert_eq!(metadata.origin, EmailEventOrigin::UserAction);
+}

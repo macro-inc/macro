@@ -531,3 +531,39 @@ async fn reverse_provider_changes_publish_false_flags_and_the_removed_user_label
     );
     assert_eq!(events[5]["metadata"]["added"], serde_json::json!([]));
 }
+
+#[tokio::test]
+async fn labels_the_thread_gained_are_reported_on_the_label_event() {
+    let gained = Uuid::from_u128(0x99);
+    for (case, gained_labels) in [("gained", vec![gained]), ("already on the thread", vec![])] {
+        let (service, fake) = make_service(false);
+        {
+            let mut state = fake.0.lock().unwrap();
+            state.provider = Ok(Some(vec!["INBOX".into(), "Label_1".into()]));
+            state.gained_labels = gained_labels.clone();
+        }
+        service.process(Ok(input(operation()))).await;
+        let calls = fake.calls();
+        let updated: Vec<_> = events(&calls)
+            .into_iter()
+            .filter(|event| event["event_type"] == "email.thread_labels_updated")
+            .collect();
+        assert_eq!(updated.len(), 1, "{case}");
+        let metadata = &updated[0]["metadata"];
+        assert_eq!(metadata["origin"], "provider_sync", "{case}");
+        assert_eq!(
+            metadata.get("labels_gained").cloned().unwrap_or_default(),
+            if gained_labels.is_empty() {
+                serde_json::Value::Null
+            } else {
+                serde_json::json!(gained_labels)
+            },
+            "{case}"
+        );
+        assert_eq!(
+            metadata["message_id"],
+            serde_json::json!(super::fakes::MESSAGE),
+            "{case}"
+        );
+    }
+}
