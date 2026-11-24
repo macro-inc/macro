@@ -145,12 +145,8 @@ pub(crate) async fn run(
             "com.macro/interpretation": plan.interpretation,
         },
     });
-    if sink
-        .send("notifications/events/active", active)
-        .await
-        .is_err()
-    {
-        return (StreamEnd::ClientGone, stats);
+    if let Err(end) = send(sink, &cancel, "notifications/events/active", active).await {
+        return (end, stats);
     }
     let opened_at = sources.opened_at;
     let mut merged = stream::select_all(sources.groups.into_iter().map(|(group, opened)| {
@@ -193,12 +189,28 @@ pub(crate) async fn run(
                 json!({"cursor": null, "_meta": meta}),
             ),
         };
-        if sink.send(method, params).await.is_err() {
-            return (StreamEnd::ClientGone, stats);
+        if let Err(end) = send(sink, &cancel, method, params).await {
+            return (end, stats);
         }
         heartbeat
             .as_mut()
             .reset(tokio::time::Instant::now() + plan.heartbeat);
+    }
+}
+
+/// Sends one notification unless the request is cancelled first: a client
+/// that stops reading leaves a send pending, and the user's stream slot is
+/// released only when [`run`] returns.
+async fn send(
+    sink: &impl NotificationSink,
+    cancel: &CancellationToken,
+    method: &'static str,
+    params: Value,
+) -> Result<(), StreamEnd> {
+    tokio::select! {
+        biased;
+        () = cancel.cancelled() => Err(StreamEnd::Cancelled),
+        sent = sink.send(method, params) => sent.map_err(|_| StreamEnd::ClientGone),
     }
 }
 

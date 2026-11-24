@@ -1072,6 +1072,31 @@ fn the_reading_names_the_sender_only_where_the_actor_is_the_sender() {
 }
 
 #[test]
+fn a_choice_of_values_beside_another_condition_is_bracketed() {
+    let filter = McpEventFilter {
+        any_of: vec![McpFilterClause {
+            events: vec!["message.mentioned".to_owned()],
+            ids: None,
+            all_of: vec![
+                McpFieldCondition {
+                    field: McpFilterField::Actor,
+                    one_of: vec![literal("a"), literal("b")],
+                },
+                McpFieldCondition {
+                    field: McpFilterField::MentionedId,
+                    one_of: vec![McpFilterValue::Me],
+                },
+            ],
+        }],
+    };
+    assert_eq!(
+        super::describe::describe(&filter),
+        "`message.mentioned` events where (the sender is `\"a\"` or `\"b\"`) and the \
+         mentioned item is you."
+    );
+}
+
+#[test]
 fn a_value_reads_exactly_as_one_value() {
     let in_parent = |values: &[&str]| McpEventFilter {
         any_of: vec![McpFilterClause {
@@ -1771,11 +1796,22 @@ async fn other_clients_subscribe_with_the_mcp_profile() {
 #[tokio::test]
 async fn chatgpt_unsubscribes_idempotently() {
     let fixture = fixture();
+    call(
+        &fixture.events,
+        &chatgpt("events/subscribe"),
+        subscribe_params("message.posted", json!({})),
+        &no_extensions(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(fixture.store.stored.lock().unwrap().len(), 1);
     let params = json!({
         "name": "message.posted",
         "arguments": {},
         "delivery": {"mode": "webhook", "url": "https://agent.example/hook"},
     });
+    // The first removes the subscription; the second finds none and still
+    // answers as the first did.
     for _ in 0..2 {
         let CustomResult(result) = call(
             &fixture.events,
@@ -1786,7 +1822,9 @@ async fn chatgpt_unsubscribes_idempotently() {
         .await
         .unwrap();
         assert_eq!(result, json!({ "_meta": { PROFILE_META: "chatgpt" } }));
+        assert!(fixture.store.stored.lock().unwrap().is_empty());
     }
+    assert_eq!(fixture.store.unsubscribes.lock().unwrap().len(), 2);
 }
 
 #[tokio::test]
@@ -1850,4 +1888,44 @@ async fn an_unknown_profile_is_an_unknown_method() {
     .await
     .unwrap_err();
     assert_eq!(error.code, rmcp::model::ErrorCode::METHOD_NOT_FOUND);
+}
+
+/// A client that stopped reading: every send stays pending.
+struct StuckSink;
+
+impl NotificationSink for StuckSink {
+    async fn send(&self, _: &'static str, _: Value) -> Result<(), SinkClosed> {
+        std::future::pending().await
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_cancelled_stream_ends_while_a_send_is_pending() {
+    let fixture = fixture();
+    let cancel = CancellationToken::new();
+    let extensions = no_extensions();
+    let handler = handle(
+        &fixture.events,
+        "events/stream",
+        // The first send, the stream-active notice, never completes.
+        Some(json!({"name": "message.posted"})),
+        RequestScope {
+            user: me(),
+            request_id: json!(7),
+            extensions: &extensions,
+            sink: &StuckSink,
+            cancel: cancel.clone(),
+            span: tracing::Span::none(),
+        },
+    );
+    let stop = async {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        cancel.cancel();
+    };
+    let (result, ()) = tokio::time::timeout(Duration::from_secs(60), async {
+        tokio::join!(handler, stop)
+    })
+    .await
+    .expect("the stream ended once cancelled");
+    result.unwrap();
 }

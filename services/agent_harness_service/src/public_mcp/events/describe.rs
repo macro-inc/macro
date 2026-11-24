@@ -19,10 +19,20 @@ fn clause(clause: &McpFilterClause) -> String {
     if let Some(ids) = &clause.ids {
         text.push_str(&format!(" for {}", list(ids, "or", |id| quoted(id))));
     }
+    // Beside another condition, a choice of values is bracketed, so "or"
+    // never reads as joining two conditions.
+    let several = clause.all_of.len() > 1;
     let conditions: Vec<String> = clause
         .all_of
         .iter()
-        .map(|each| condition(each, &clause.events))
+        .map(|each| {
+            let text = condition(each, &clause.events);
+            if several && each.one_of.len() > 1 {
+                format!("({text})")
+            } else {
+                text
+            }
+        })
         .collect();
     if !conditions.is_empty() {
         text.push_str(" where ");
