@@ -22,6 +22,18 @@ export default defineConfig(({ command }) => ({
           return resolve(directory, 'people-list-order-adapters.ts');
       },
     },
+    {
+      // The calendar create harness brings its own client and cache host.
+      name: 'calendar-create-adapters',
+      enforce: 'pre',
+      resolveId(source, importer) {
+        if (
+          importer?.includes('/queries/calendar/graphql/') &&
+          source === '@service-storage/graphql-soup'
+        )
+          return resolve(directory, 'calendar-create-adapters.ts');
+      },
+    },
     tsconfigPaths({
       projects: [resolve(directory, '../../../../../tsconfig.json')],
     }),
@@ -52,6 +64,7 @@ export default defineConfig(({ command }) => ({
       input: Object.fromEntries(
         [
           'calendar-points.html',
+          'calendar-create.html',
           'index.html',
           'host.html',
           'cutover.html',
