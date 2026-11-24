@@ -77,6 +77,9 @@ export function installCacheCoordinatorWorker(
     stop();
   };
 
+  // Before Effect's own listener, which closes the port: while the router can
+  // still tell the page.
+  options.endpoint.addEventListener('messageerror', () => disconnectAll());
   runner = createEffectWorkerRunnerTransport<
     TabToCoordinatorEnvelope,
     CoordinatorToTabEnvelope
