@@ -7,6 +7,8 @@
 #   proof/notified-sort/run.sh load-reads # seed base+3, reads and Home cases under load, with write windows
 #   proof/notified-sort/run.sh load-seq  # seed base+4, one more sequence per lane under load
 #   proof/notified-sort/run.sh mutants   # seeds base+10.., one reduced run per planted mutant
+#   proof/notified-sort/run.sh latency   # seeds base+5 (quiet) and base+6 (load): live notification
+#                                        # latency on touch Home, main against the branch
 #   proof/notified-sort/run.sh test      # the harness unit tests, no stack
 #   proof/notified-sort/run.sh smoke     # a few cases, to check the setup
 #   proof/notified-sort/run.sh env       # one run configured by the PROOF_* environment
@@ -69,7 +71,12 @@ case "$mode" in
       i=$((i + 1))
     done ;;
   all)
-    "$0" quiet && "$0" load && "$0" load-reads && "$0" load-seq && "$0" mutants ;;
+    "$0" quiet && "$0" load && "$0" load-reads && "$0" load-seq && "$0" mutants && "$0" latency ;;
+  latency)
+    # latency.ts times one notification (or a burst of three) from the send
+    # until each side's Home lists it on top; out/latency{,-load}/summary.json.
+    env PROOF_SEED=$((seed_base + 5)) LAT_RUN=latency LAT_TRIALS=120 node "$here/latency.ts"
+    env PROOF_SEED=$((seed_base + 6)) LAT_RUN=latency-load LAT_LOAD=1 LAT_TRIALS=120 node "$here/latency.ts" ;;
   env)
     run ;;
   *) echo "unknown mode $mode" >&2; exit 2 ;;
