@@ -274,6 +274,38 @@ try {
     'PASS: Email header fits a 400px window and restores its view options'
   );
 
+  // Beside two more splits the Email pane is narrower than a 400px window
+  // leaves it (about 295px at 1000px, 263px at 900px); Search must still fit.
+  const closeSplit = 'button[aria-label="Close split"]';
+  await browser.$('button[aria-label="Email"]').click();
+  for (const splits of [2, 3]) {
+    await browser.keys('\\');
+    await browser.waitUntil(
+      async () => (await browser.$$(closeSplit).length) === splits,
+      { timeout: 10_000, timeoutMsg: `Expected ${splits} splits` }
+    );
+  }
+  for (const width of [1000, 900]) {
+    await browser.setWindowSize(width, 900);
+    await expectEmailHeaderFits(
+      browser,
+      `split-header-${width}`,
+      `a third of a ${width}px window`
+    );
+  }
+  // The Email split is the first; close the two opened beside it.
+  for (const splits of [2, 0]) {
+    const buttons = await browser.$$(closeSplit);
+    await buttons[buttons.length - 1]!.click();
+    await browser.waitUntil(
+      async () => (await browser.$$(closeSplit).length) === splits,
+      { timeout: 10_000, timeoutMsg: `Expected ${splits} close buttons` }
+    );
+  }
+  await browser.setWindowSize(windowSize.width, windowSize.height);
+  await expectEmailHeaderFits(browser, 'single-split-header', 'one split');
+  console.log('PASS: Email header fits a third of a 900px window');
+
   assert.equal(await nativeHttpReachable(browser, fixture.origin), true);
   assert(
     fixture.socketCount > 0,
