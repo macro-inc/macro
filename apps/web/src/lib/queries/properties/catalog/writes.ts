@@ -822,12 +822,17 @@ export function refreshTagSets(): void {
  * a tag can be created at once, offline included. A cache that cannot answer
  * answers nothing; a tag list on screen still shows the set it last read. A
  * flow that began under `session` finds nothing once another login took over.
+ * The shown sets are taken before the cache read: its answer reaches a tag
+ * list reading the same document, and a miss clears that list's error.
  */
 export async function cachedTagSet(
   scope: TagScope,
   session = queryAccountSession()
 ): Promise<TagSetResponse | undefined> {
   if (!usingCache()) return undefined;
+  const shown = catalogReaders()
+    .flatMap((reader) => (reader.kind === 'tags' ? reader.sets() : []))
+    .find((candidate) => candidate.scope === scope && candidate.definition);
   const cached = await getGraphqlSoupClient()
     .query(PropertyCatalogTagSetsDocument, {}, { requestPolicy: 'cache-only' })
     .toPromise();
@@ -839,7 +844,5 @@ export async function cachedTagSet(
     const mapped = set && toTagSet(set);
     return mapped?.definition ? mapped : undefined;
   }
-  return catalogReaders()
-    .flatMap((reader) => (reader.kind === 'tags' ? reader.sets() : []))
-    .find((shown) => shown.scope === scope && shown.definition);
+  return shown;
 }
