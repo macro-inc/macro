@@ -12,6 +12,7 @@ wasm_bindgen_test_configure!(run_in_dedicated_worker);
 mod hydration_scope;
 mod mail_projection;
 mod people;
+mod queue_salvage;
 
 /// The old way of reading a hydrate's data, which `json_value_from_js` must
 /// match.
