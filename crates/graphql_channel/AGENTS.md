@@ -23,7 +23,8 @@ separately from Soup's thread-root projection.
 - DSS inserts `ChannelGraphqlContext` for both HTTP and websocket requests, using
   the same primary-backed messages service as REST.
 - DSS inserts `ChannelTimelineSubscriptions` over its process-local
-  `ChannelTimelineFanout`; the subscription resolver reads no database.
+  `ChannelTimelineFanout`; the subscription resolver reads no database. It
+  answers `SERVICE_UNAVAILABLE` while the process is not receiving updates.
 
 ## Checks
 

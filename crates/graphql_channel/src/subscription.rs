@@ -5,7 +5,7 @@ mod test;
 
 use std::sync::Arc;
 
-use async_graphql::{Context, ID, SimpleObject, Subscription};
+use async_graphql::{Context, ErrorExtensions as _, ID, SimpleObject, Subscription};
 use broadcast::{BroadcastSubscription, ExitReason};
 use graphql_common::require_authenticated_user;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -59,8 +59,9 @@ impl GraphqlChannelTimelineUpdate {
     }
 }
 
-/// A user's subscription to shared, already mapped updates.
-type Subscribe = dyn Fn(MacroUserIdStr<'static>) -> BroadcastSubscription<Arc<GraphqlChannelTimelineUpdate>>
+/// A user's subscription to shared, already mapped updates; none while this
+/// process is not receiving them.
+type Subscribe = dyn Fn(MacroUserIdStr<'static>) -> Option<BroadcastSubscription<Arc<GraphqlChannelTimelineUpdate>>>
     + Send
     + Sync;
 
@@ -69,11 +70,12 @@ type Subscribe = dyn Fn(MacroUserIdStr<'static>) -> BroadcastSubscription<Arc<Gr
 pub struct ChannelTimelineSubscriptions(Arc<Subscribe>);
 
 impl ChannelTimelineSubscriptions {
-    /// Subscriptions drawn from `subscribe`, the process-local fan-out.
+    /// Subscriptions drawn from `subscribe`, the process-local fan-out, which
+    /// has none to give until it receives updates.
     pub fn new(
         subscribe: impl Fn(
             MacroUserIdStr<'static>,
-        ) -> BroadcastSubscription<Arc<GraphqlChannelTimelineUpdate>>
+        ) -> Option<BroadcastSubscription<Arc<GraphqlChannelTimelineUpdate>>>
         + Send
         + Sync
         + 'static,
@@ -91,7 +93,9 @@ impl ChannelTimelineSubscriptionRoot {
     /// Subscribe to committed changes in every channel the authenticated user
     /// participates in. Updates come from memory: subscribing reads nothing
     /// from the database. A subscription that falls behind ends with an error;
-    /// subscribe again and catch up each held channel with `channelChanges`.
+    /// subscribe again and catch up each held channel with `channelChanges`. A
+    /// server that is not receiving updates answers `SERVICE_UNAVAILABLE`
+    /// rather than leave the viewer waiting; subscribe again later.
     async fn channel_timeline_updates(
         &self,
         ctx: &Context<'_>,
@@ -100,7 +104,11 @@ impl ChannelTimelineSubscriptionRoot {
     > {
         let user_id = require_authenticated_user(ctx)?;
         let subscriptions = ctx.data::<ChannelTimelineSubscriptions>()?;
-        let (mut updates, exit_reason) = (subscriptions.0)(user_id).into_parts();
+        let subscription = (subscriptions.0)(user_id).ok_or_else(|| {
+            async_graphql::Error::new("live channel updates are unavailable; subscribe again")
+                .extend_with(|_, extensions| extensions.set("code", "SERVICE_UNAVAILABLE"))
+        })?;
+        let (mut updates, exit_reason) = subscription.into_parts();
 
         Ok(async_stream::stream! {
             while let Some(update) = updates.recv().await {

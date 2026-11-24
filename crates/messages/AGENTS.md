@@ -24,7 +24,9 @@ they need.
   `load_message_changes` and publishes it to the participants delivery read;
   `ChannelActivityUpdates` publishes sequenced activity the same way;
   `ChannelTimelineFanout` (feature `realtime`) hands each update to the
-  process's subscribers from memory, mapped once and shared.
+  process's subscribers from memory, mapped once and shared. It opens its topic
+  when it runs and refuses subscribers until then, so a missing topic neither
+  stops the process nor leaves a subscriber waiting in silence.
 - `src/outbound/channel_timeline.rs`: the `macro.channel_timeline` event, keyed
   by channel, its broker publisher, and the ungrouped consumer every serving
   process reads it with (feature `consumer`).

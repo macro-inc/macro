@@ -12,7 +12,10 @@ mod fanout;
 mod test;
 
 #[cfg(feature = "realtime")]
-pub use fanout::{ChannelTimelineFanout, ChannelTimelineUpdateSource};
+pub use fanout::{
+    ChannelTimelineFanout, ChannelTimelineFanoutError, ChannelTimelineNotReceiving,
+    ChannelTimelineUpdateSource, ChannelTimelineUpdates,
+};
 
 use std::collections::HashSet;
 

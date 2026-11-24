@@ -704,7 +704,9 @@ type CompleteSubscriptionRoot {
 	Subscribe to committed changes in every channel the authenticated user
 	participates in. Updates come from memory: subscribing reads nothing
 	from the database. A subscription that falls behind ends with an error;
-	subscribe again and catch up each held channel with `channelChanges`.
+	subscribe again and catch up each held channel with `channelChanges`. A
+	server that is not receiving updates answers `SERVICE_UNAVAILABLE`
+	rather than leave the viewer waiting; subscribe again later.
 	"""
 	channelTimelineUpdates: GraphqlChannelTimelineUpdate!
 }

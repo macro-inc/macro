@@ -5,7 +5,7 @@
 //! group and commits no offsets. A missed update is recovered by the client's
 //! catch-up read, not by redelivery.
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
 use macro_event_broker::{
@@ -16,7 +16,7 @@ use rootcause::prelude::{Report, ResultExt as _};
 
 use super::{ChannelTimelineMacroEvent, ChannelTimelineTopicEvent};
 use crate::domain::timeline_updates::{
-    AddressedChannelTimelineUpdate, ChannelTimelineUpdateSource,
+    AddressedChannelTimelineUpdate, ChannelTimelineUpdateSource, ChannelTimelineUpdates,
 };
 
 /// Maximum time to wait for topic metadata during partition assignment.
@@ -30,6 +30,43 @@ type ChannelTimelineEventConsumer =
 
 macro_event_broker::declare_topics!(DeclaredMacroEvent: ChannelTimelineMacroEvent);
 
+/// The channel timeline topic, read from its end once it exists.
+pub struct ChannelTimelineTopic {
+    brokers: Arc<str>,
+}
+
+impl ChannelTimelineTopic {
+    /// The topic on `brokers`. Connects to nothing until it is opened.
+    pub fn new(brokers: &str) -> Self {
+        Self {
+            brokers: brokers.into(),
+        }
+    }
+}
+
+/// The topic cannot be read: it does not exist or its brokers do not answer.
+#[derive(Debug, thiserror::Error)]
+#[error("failed to open the channel timeline topic: {0:?}")]
+pub struct ChannelTimelineOpenError(Report);
+
+impl ChannelTimelineUpdates for ChannelTimelineTopic {
+    type Source = ChannelTimelineTopicConsumer;
+    type Err = ChannelTimelineOpenError;
+
+    /// Assigns the topic's partitions on a blocking thread: reading their
+    /// metadata waits for the brokers.
+    async fn open(&self) -> Result<Self::Source, Self::Err> {
+        let brokers = Arc::clone(&self.brokers);
+        let span = tracing::Span::current();
+        tokio::task::spawn_blocking(move || {
+            span.in_scope(|| ChannelTimelineTopicConsumer::from_env(&brokers))
+        })
+        .await
+        .map_err(|error| ChannelTimelineOpenError(Report::new(error).into_dynamic()))?
+        .map_err(ChannelTimelineOpenError)
+    }
+}
+
 /// Independent consumer of the channel timeline topic, starting at its end.
 pub struct ChannelTimelineTopicConsumer {
     consumer: ChannelTimelineEventConsumer,
@@ -37,8 +74,8 @@ pub struct ChannelTimelineTopicConsumer {
 
 impl ChannelTimelineTopicConsumer {
     /// Create a consumer and assign every current topic partition.
-    #[tracing::instrument(fields(brokers), err)]
-    pub fn from_env(brokers: &str) -> Result<Self, Report> {
+    #[tracing::instrument(name = "channel_timeline.open_topic", err)]
+    fn from_env(brokers: &str) -> Result<Self, Report> {
         let consumer = KafkaEventConsumer::<Ungrouped>::from_env(brokers)
             .context("failed to create independent channel timeline consumer")?;
         let consumer =

@@ -143,6 +143,7 @@ use macro_service_urls::{
     SyncServiceUrl,
 };
 use macro_sha_count_client::Redis;
+use messages::domain::timeline_updates::{ChannelTimelineFanout, ChannelTimelineFanoutError};
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
     WebSocketNotificationConsumerService,
@@ -2249,18 +2250,15 @@ async fn run_server() -> anyhow::Result<()> {
     });
 
     // Every replica reads every live channel timeline update and hands it to its
-    // own subscribers from memory: no database read per subscriber.
-    let channel_timeline_fanout = Arc::new(
-        messages::domain::timeline_updates::ChannelTimelineFanout::new(
-            messages::outbound::channel_timeline::ChannelTimelineTopicConsumer::from_env(
-                config.kafka_brokers.as_ref(),
-            )
-            .map_err(|error| {
-                anyhow::anyhow!("failed to create channel timeline topic consumer: {error:?}")
-            })?,
-            graphql_channel::GraphqlChannelTimelineUpdate::shared,
+    // own subscribers from memory: no database read per subscriber. The topic is
+    // opened by the task, not here: this service starts and serves everything
+    // else while the topic cannot be read, and refuses its subscriptions.
+    let channel_timeline_fanout = Arc::new(ChannelTimelineFanout::new(
+        messages::outbound::channel_timeline::ChannelTimelineTopic::new(
+            config.kafka_brokers.as_ref(),
         ),
-    );
+        graphql_channel::GraphqlChannelTimelineUpdate::shared,
+    ));
     consumer_tracker.spawn({
         let service = Arc::clone(&channel_timeline_fanout);
         let cancellation_token = consumer_cancellation_token.clone();
@@ -2276,6 +2274,10 @@ async fn run_server() -> anyhow::Result<()> {
                     break;
                 }
 
+                let retry_after = match &result {
+                    Err(ChannelTimelineFanoutError::Open(_)) => CHANNEL_TIMELINE_REOPEN_INTERVAL,
+                    Err(ChannelTimelineFanoutError::Receive(_)) | Ok(()) => Duration::from_secs(1),
+                };
                 let _ = result.inspect_err(|error| {
                     tracing::error!(error = ?error, "channel timeline update consumer stopped");
                 });
@@ -2283,7 +2285,7 @@ async fn run_server() -> anyhow::Result<()> {
                 tokio::select! {
                     biased;
                     _ = cancellation_token.cancelled() => break,
-                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                    _ = tokio::time::sleep(retry_after) => {}
                 }
             }
         }
@@ -2926,7 +2928,7 @@ async fn run_server() -> anyhow::Result<()> {
             db.clone(),
         ),
         channel_timeline_subscriptions: graphql_channel::ChannelTimelineSubscriptions::new(
-            move |user_id| channel_timeline_fanout.subscribe(user_id),
+            move |user_id| channel_timeline_fanout.subscribe(user_id).ok(),
         ),
         graphql_notification_reader,
         graphql_notification_writer,
@@ -3124,3 +3126,7 @@ async fn run_server() -> anyhow::Result<()> {
 }
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long to wait before opening the channel timeline topic again, while it
+/// does not exist or its brokers do not answer.
+const CHANNEL_TIMELINE_REOPEN_INTERVAL: Duration = Duration::from_secs(10);

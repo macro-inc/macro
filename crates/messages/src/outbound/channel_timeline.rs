@@ -6,7 +6,7 @@ mod consumer;
 mod test;
 
 #[cfg(feature = "consumer")]
-pub use consumer::ChannelTimelineTopicConsumer;
+pub use consumer::ChannelTimelineTopic;
 
 use macro_event_broker::{Event, EventBrokerError, MacroEvent, TopicEvent};
 use macro_event_topics::MacroChannelTimelineTopic;

@@ -43,7 +43,7 @@ fn subscriptions() -> (
         let asked = Arc::clone(&asked);
         move |user_id| {
             asked.lock().unwrap().push(user_id.as_ref().to_owned());
-            prepared.lock().unwrap().take().unwrap()
+            prepared.lock().unwrap().take()
         }
     });
     (subscriptions, asked, (updates, exit))

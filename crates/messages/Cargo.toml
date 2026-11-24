@@ -33,7 +33,7 @@ inbound = [
 json-schema = ["dep:schemars"]
 outbound = ["dep:message_write_gate", "dep:channel_change_db_utils", "dep:initiative", "dep:macro_uuid", "dep:sqlx", "ports"]
 ports = ["dep:async-trait", "dep:entity_access", "dep:futures", "dep:rootcause", "entity_access/ports"]
-realtime = ["dep:broadcast", "ports"]
+realtime = ["dep:broadcast", "dep:tokio", "ports"]
 schema = ["channel_sender/schema", "dep:utoipa", "activity/schema"]
 test-utils = ["dep:mockall", "ports"]
 
@@ -80,6 +80,7 @@ serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 system_properties = { path = "../system_properties", optional = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
