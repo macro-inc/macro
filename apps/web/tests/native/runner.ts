@@ -125,13 +125,10 @@ async function capture(prefix = 'webview') {
   }
 }
 
-/**
- * Fails with the cut-off controls unless the list header holding Search
- * `searchLabel` settles showing all of them.
- */
+/** Fails with the cut-off controls unless the header settles showing all of them. */
 async function expectHeaderFits(
   session: Browser,
-  searchLabel: string,
+  search: string,
   prefix: string,
   width: string
 ) {
@@ -139,7 +136,7 @@ async function expectHeaderFits(
   try {
     await session.waitUntil(
       async () => {
-        clipped = await clippedHeaderControls(session, searchLabel);
+        clipped = await clippedHeaderControls(session, search);
         return clipped.length === 0;
       },
       { timeout: 5000 }
@@ -147,7 +144,7 @@ async function expectHeaderFits(
   } catch (error) {
     await capture(prefix);
     throw new Error(
-      `Header controls beside ${searchLabel} cut off at ${width}: ${clipped.join('; ')}`,
+      `Header controls beside ${search} cut off at ${width}: ${clipped.join('; ')}`,
       { cause: error }
     );
   }
@@ -367,6 +364,30 @@ try {
   await browser
     .$('[aria-label="Search email"]')
     .waitForDisplayed({ timeout: 30_000 });
+
+  // Calendar's header wraps its controls onto a second row in a narrow pane;
+  // Search events must stay inside it there too.
+  await browser.$('[data-sidebar-next-item="calendar"]').click();
+  await browser
+    .$('button[aria-label="Search events"]')
+    .waitForDisplayed({ timeout: 30_000 });
+  for (const width of [440, 400]) {
+    await browser.setWindowSize(width, 900);
+    await expectHeaderFits(
+      browser,
+      'Search events',
+      `narrow-calendar-header-${width}`,
+      `${width}px`
+    );
+  }
+  await browser.setWindowSize(windowSize.width, windowSize.height);
+  await expectHeaderFits(
+    browser,
+    'Search events',
+    'restored-calendar-header',
+    'the restored window'
+  );
+  console.log('PASS: Calendar header fits 440px and 400px windows');
 
   assert.equal(await nativeHttpReachable(browser, fixture.origin), true);
   assert(

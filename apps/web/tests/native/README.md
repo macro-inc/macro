@@ -41,6 +41,8 @@ They then open two more splits beside Email, resize the window to 1000px and
 They then open Tasks, narrow the window from 520px to 400px and expect every
 Tasks list header control, New and Search included, inside the header, then
 restore the size and expect the layout switch and Group by back.
+They then open Calendar and expect its header controls, Search events included,
+inside the header at 440px and 400px and at the restored size.
 The full suite checks native Soup predicate evaluation via
 `graphql_cache_entity_filter`, including filter combinations never fetched online,
 then reloads the webview with the API still down and expects All mail to render
