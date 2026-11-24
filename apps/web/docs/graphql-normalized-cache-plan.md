@@ -676,7 +676,8 @@ flushes it before it removes the database. The next open queues the copy again
 before it serves its first request, in one transaction that also records that this
 copy was taken, and then removes the side file. An engine may die between any two
 of these steps: the next one finds the old database, the copy, or both, and a copy
-already taken is never queued twice. Records, projections and index facts are not
+already taken is never queued twice. A wipe whose copy could not be written notes
+that in the side file, so an older copy there is never called whole. Records, projections and index facts are not
 carried; they are refetched. The copy is given up after three engines die reading
 the old database, three die taking the copy in, or eight wipes in two minutes, and
 a database bound to another account refuses it. Logout, an account switch, a
