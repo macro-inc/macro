@@ -1746,7 +1746,8 @@ async fn batch_permissions_answer_other_kinds_as_the_single_lookup_does() {
     let user_id = test_user_id();
     let entities = [
         entity(EntityType::Chat, Uuid::new_v4()),
-        // Not a UUID: a legacy document id, which the batch lookup does not take.
+        // Not a UUID: a legacy document id, which the batch lookup takes too
+        // (its adapter looks legacy ids up one at a time).
         entity(EntityType::Document, "doc-1"),
         entity(EntityType::Project, Uuid::new_v4()),
         entity(EntityType::EmailThread, "not-a-uuid"),
@@ -1768,8 +1769,9 @@ async fn batch_permissions_answer_other_kinds_as_the_single_lookup_does() {
             (batched, alone) => panic!("{entity:?}: batch {batched:?}, alone {alone:?}"),
         }
     }
-    // The legacy id once in the batch and once alone, then the UUID alone.
-    assert_eq!(single.load(Ordering::SeqCst), 3);
+    // Both documents settle in the batch; only the comparison loop looks each
+    // up alone.
+    assert_eq!(single.load(Ordering::SeqCst), 2);
 }
 
 #[tokio::test]
