@@ -10,11 +10,11 @@ use email_api_client::domain::models::{
     CalendarPart, ChangeBatch, EmailApiError, InboxChanges, MessageWithCalendarParts, SyncCursor,
 };
 use futures::future::BoxFuture;
-use models_email::service;
 use models_email::service::{
     attachment::{Attachment, AttachmentUploadArgs, AttachmentUploadMetadata},
     backfill::{BackfillJob, BackfillJobStatus},
 };
+use models_email::{db, service};
 use std::collections::{HashMap, VecDeque};
 
 pub(super) struct ImportState {
@@ -35,6 +35,9 @@ pub(super) struct ImportState {
     pub primaries: Vec<String>,
     pub previews: VecDeque<bool>,
     pub labels_during_fetch: Option<Vec<String>>,
+    /// The stored labels once the message is inserted.
+    pub labels_after_insert: Option<Vec<db::label::Label>>,
+    pub labelled_threads: Vec<Uuid>,
 }
 impl Default for ImportState {
     fn default() -> Self {
@@ -59,6 +62,8 @@ impl Default for ImportState {
             primaries: vec![],
             previews: VecDeque::new(),
             labels_during_fetch: None,
+            labels_after_insert: None,
+            labelled_threads: vec![],
         }
     }
 }
@@ -104,6 +109,10 @@ impl InboxSyncCatalog for Fake {
     async fn upsert_catalog(&self, labels: Vec<service::label::Label>) -> Result<(), Failure> {
         self.io("upsert_catalog", labels)
     }
+    async fn labelled_threads(&self, _: Uuid, labels: &[String]) -> Result<Vec<Uuid>, Failure> {
+        self.io("labelled_threads", labels)?;
+        Ok(self.0.lock().unwrap().import.labelled_threads.clone())
+    }
 }
 impl InboxSyncMessageStore for Fake {
     async fn thread_ids(&self, _: Uuid, provider: &str) -> Result<HashMap<String, Uuid>, Failure> {
@@ -127,7 +136,12 @@ impl InboxSyncMessageStore for Fake {
                 &message.provider_id,
                 resync.map(|r| (&r.stored_labels, &r.pending_labels)),
             ),
-        )
+        )?;
+        let mut state = self.0.lock().unwrap();
+        if let Some(labels) = state.import.labels_after_insert.take() {
+            state.labels = labels;
+        }
+        Ok(())
     }
     async fn insert_thread(&self, _: Uuid, thread: service::thread::Thread) -> Result<(), Failure> {
         self.io("insert_thread", thread)

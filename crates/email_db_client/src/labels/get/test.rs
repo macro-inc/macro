@@ -1,4 +1,6 @@
-use crate::labels::get::{fetch_message_labels_in_bulk, messages_changing_label};
+use crate::labels::get::{
+    fetch_message_labels_in_bulk, fetch_thread_ids_by_provider_label_ids, messages_changing_label,
+};
 use anyhow::Result;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_email::db::label::{LabelListVisibility, LabelType, MessageListVisibility};
@@ -158,6 +160,72 @@ async fn messages_changing_label_skips_messages_already_in_the_requested_state(
     assert_eq!(
         messages_changing_label(&pool, link_id, &messages, "INBOX", false).await?,
         vec![in_inbox]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("fetch_message_labels_in_bulk"))
+)]
+async fn threads_by_provider_label_are_distinct_and_limited_to_the_inbox(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000801")?;
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000008201")?;
+    let other_link = Uuid::parse_str("00000000-0000-0000-0000-000000000802")?;
+    let other_thread = Uuid::parse_str("00000000-0000-0000-0000-000000008202")?;
+
+    // Another inbox holds a label with the same provider id.
+    sqlx::query(
+        r#"
+        WITH link AS (
+            INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
+            VALUES ($1, 'macro|other_labels_user@example.com', $1, 'other_labels_user@example.com', 'GMAIL', true, NOW(), NOW())
+        ), thread AS (
+            INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+            VALUES ($2, $1, true, false, NOW(), NOW())
+        ), message AS (
+            INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+            VALUES ($3, $2, $1, 'provider-msg-8601', false, false, false, false, false, NOW(), NOW())
+        ), label AS (
+            INSERT INTO email_labels (id, link_id, provider_label_id, name, type)
+            VALUES ($4, $1, 'INBOX', 'INBOX', 'System')
+        )
+        INSERT INTO email_message_labels (message_id, label_id) VALUES ($3, $4)
+        "#,
+    )
+    .bind(other_link)
+    .bind(other_thread)
+    .bind(Uuid::parse_str("00000000-0000-0000-0000-000000008601")?)
+    .bind(Uuid::parse_str("00000000-0000-0000-0000-000000018101")?)
+    .execute(&pool)
+    .await?;
+
+    // Two messages of one thread carry one of the labels each.
+    assert_eq!(
+        fetch_thread_ids_by_provider_label_ids(
+            &pool,
+            link_id,
+            &["INBOX".to_string(), "IMPORTANT".to_string()]
+        )
+        .await?,
+        vec![thread_id]
+    );
+    assert_eq!(
+        fetch_thread_ids_by_provider_label_ids(&pool, other_link, &["INBOX".to_string()]).await?,
+        vec![other_thread]
+    );
+    assert!(
+        fetch_thread_ids_by_provider_label_ids(&pool, link_id, &["Label_Personal".to_string()])
+            .await?
+            .is_empty()
+    );
+    assert!(
+        fetch_thread_ids_by_provider_label_ids(&pool, link_id, &[])
+            .await?
+            .is_empty()
     );
 
     Ok(())

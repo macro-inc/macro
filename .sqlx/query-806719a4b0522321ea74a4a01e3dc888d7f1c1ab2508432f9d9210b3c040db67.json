@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT m.thread_id AS \"thread_id!\"\n        FROM email_labels l\n        CROSS JOIN LATERAL (\n            SELECT ml.message_id FROM email_message_labels ml WHERE ml.label_id = l.id OFFSET 0\n        ) ml\n        CROSS JOIN LATERAL (\n            SELECT em.thread_id FROM email_messages em WHERE em.id = ml.message_id OFFSET 0\n        ) m\n        WHERE l.link_id = $1 AND l.provider_label_id = ANY($2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "806719a4b0522321ea74a4a01e3dc888d7f1c1ab2508432f9d9210b3c040db67"
+}

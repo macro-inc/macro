@@ -7,6 +7,46 @@ use sqlx::PgPool;
 use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
 
+/// The threads of `link_id` with a message carrying any of these provider labels.
+#[tracing::instrument(skip(pool, provider_label_ids), err)]
+pub async fn fetch_thread_ids_by_provider_label_ids(
+    pool: &PgPool,
+    link_id: Uuid,
+    provider_label_ids: &[String],
+) -> anyhow::Result<Vec<Uuid>> {
+    if provider_label_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut tx = pool.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *tx)
+        .await?;
+
+    // The OFFSET 0 fences keep one index lookup per label and per message:
+    // with them joined, a generic plan scans every mailbox's messages.
+    let thread_ids = sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT m.thread_id AS "thread_id!"
+        FROM email_labels l
+        CROSS JOIN LATERAL (
+            SELECT ml.message_id FROM email_message_labels ml WHERE ml.label_id = l.id OFFSET 0
+        ) ml
+        CROSS JOIN LATERAL (
+            SELECT em.thread_id FROM email_messages em WHERE em.id = ml.message_id OFFSET 0
+        ) m
+        WHERE l.link_id = $1 AND l.provider_label_id = ANY($2)
+        "#,
+        link_id,
+        provider_label_ids,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(thread_ids)
+}
+
 /// retrieves a message label if it exists
 #[tracing::instrument(skip(pool), err)]
 pub async fn fetch_message_label(

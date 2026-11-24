@@ -74,6 +74,12 @@ pub trait InboxSyncCatalog: InboxSyncRepository {
         &self,
         labels: Vec<service::label::Label>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// The threads with a message carrying any of these provider labels.
+    fn labelled_threads(
+        &self,
+        link: Uuid,
+        labels: &[String],
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
 }
 
 /// Existing MessageStore capabilities for inbox imports.

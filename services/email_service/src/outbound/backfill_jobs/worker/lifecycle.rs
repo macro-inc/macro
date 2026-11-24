@@ -27,6 +27,19 @@ impl LabelCatalogRepository for PgBackfillWorker {
             .await
             .map_err(database_error)
     }
+    async fn labelled_threads(
+        &self,
+        link: Uuid,
+        labels: &[String],
+    ) -> Result<Vec<Uuid>, Self::CatalogError> {
+        email_db_client::labels::get::fetch_thread_ids_by_provider_label_ids(
+            &self.jobs.0,
+            link,
+            labels,
+        )
+        .await
+        .map_err(database_error)
+    }
 }
 impl BackfillInitRepository for PgBackfillWorker {
     async fn claim_init_lease(&self, job: Uuid) -> anyhow::Result<InitLeaseClaim> {

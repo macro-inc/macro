@@ -42,6 +42,15 @@ impl InboxSyncCatalog for PgInboxSync {
             .await
             .map_err(Into::into)
     }
+    async fn labelled_threads(
+        &self,
+        link: Uuid,
+        labels: &[String],
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        email_db_client::labels::get::fetch_thread_ids_by_provider_label_ids(&self.0, link, labels)
+            .await
+            .map_err(Into::into)
+    }
 }
 impl InboxSyncMessageStore for PgInboxSync {
     async fn thread_ids(

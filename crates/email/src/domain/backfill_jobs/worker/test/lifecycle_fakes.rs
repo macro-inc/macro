@@ -94,6 +94,18 @@ impl LabelCatalogRepository for Fake {
         self.0.lock().unwrap().lifecycle.stored_labels = labels;
         Ok(())
     }
+    async fn labelled_threads(
+        &self,
+        _: Uuid,
+        _: &[String],
+    ) -> Result<Vec<Uuid>, Self::CatalogError> {
+        self.lifecycle_call("labelled_threads")
+            .map_err(|source| BackfillDatabaseError {
+                source,
+                sqlstates: vec![],
+            })?;
+        Ok(vec![])
+    }
 }
 impl BackfillInitRepository for Fake {
     async fn claim_init_lease(&self, job: Uuid) -> anyhow::Result<InitLeaseClaim> {
