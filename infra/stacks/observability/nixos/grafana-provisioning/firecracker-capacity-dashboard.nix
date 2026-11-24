@@ -438,7 +438,9 @@ let
     description = "Telemetry coverage of the hosts seen in the last day. A host counts with a node_exporter sample in the last 2 minutes; it is covered when its cAdvisor (the VMs' parent cgroup) is fresh too. Red: nothing reaches Mimir, so panels are empty for lack of telemetry, not because hosts are idle. Orange: fleet totals leave the silent or uncovered hosts out.";
     inherit datasource;
     type = "stat";
-    gridPos = pos 0 0 24 3;
+    # One thin line: a solid colour bar whose red and orange states stay
+    # conspicuous at this size, while the healthy state takes little room.
+    gridPos = pos 0 0 24 2;
     targets = [
       {
         refId = "A";
@@ -465,17 +467,17 @@ let
           type = "value";
           options = {
             "0" = {
-              text = "No Firecracker host is reporting: no firecracker-host series in Mimir. Panels below are blank because telemetry is missing.";
+              text = "⚠ NO FIRECRACKER HOST IS REPORTING: no firecracker-host series in Mimir; panels below are blank because telemetry is missing";
               color = "red";
               index = 0;
             };
             "1" = {
-              text = "Partial telemetry: a host is silent or reports only node_exporter or only cAdvisor. Fleet totals count covered hosts only; see Hosts.";
+              text = "⚠ PARTIAL TELEMETRY: a host is silent or reports only node_exporter or only cAdvisor; fleet totals count covered hosts only (see Hosts)";
               color = "orange";
               index = 1;
             };
             "2" = {
-              text = "Every host seen today reports node_exporter and cAdvisor";
+              text = "✓ Every host seen today reports node_exporter and cAdvisor";
               color = "green";
               index = 2;
             };
@@ -485,9 +487,10 @@ let
     };
     options = {
       graphMode = "none";
-      colorMode = "background";
+      colorMode = "background_solid";
       textMode = "value";
       justifyMode = "center";
+      text.valueSize = 20;
       reduceOptions = {
         calcs = [ "lastNotNull" ];
         fields = "";
@@ -507,7 +510,7 @@ let
           tile
           // {
             id = 10 + i;
-            gridPos = pos (lib.mod i 6 * 4) (4 + builtins.div i 6 * 4) 4 4;
+            gridPos = pos (lib.mod i 6 * 4) (3 + builtins.div i 6 * 4) 4 4;
           }
         )
       )
@@ -613,7 +616,7 @@ let
     }
   ];
 
-  nodeRowY = 12;
+  nodeRowY = 11;
   psiSteps =
     orange: red:
     steps [
@@ -1136,7 +1139,7 @@ let
     ];
     panels = [
       banner
-      (row 5 3 "Fleet summary" { })
+      (row 5 2 "Fleet summary" { })
     ]
     ++ summary
     ++ nodes
