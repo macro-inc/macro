@@ -792,19 +792,22 @@ controls. CI runs it when
 cut `Gantt.BarTitle` (or the label itself overflowing) counts as a cramped bar,
 so wrap a bar's title in it.
 
-The database view toolbars (the real `MobileDatabaseToolbar`, `TablePicker`
-and `DatabaseToolbar` over tables and views kept in memory) have a
-phone/desktop regression in the same suite, `toolbar.browser.e2e.ts`: at 320,
-390 and 430px every control stays on screen at 36px or taller, also with search
-open, the table menu switches tables (focus follows to the redrawn menu
-button) and creates a named table, the selected view tab shows whole, and
-**View actions** creates, renames and deletes a view; desktop keeps one row
-with **New view**. Both toolbars draw their view tabs from
-`createViewControls`; `block-database/database-page-controls.tsx` is the
-one device switch. The database block pads itself by
-`--mobile-content-inset-top` on touch (its toolbar is in flow) and resets that
-inset for its children; phones drop the header's table tabs for the toolbar's
-table menu.
+The database page's toolbar (the real `DatabasePageToolbar` and
+`DatabasePageNoTables` over tables and views kept in memory, drawn again per
+table as the page does) has a phone/desktop regression in the same suite,
+`toolbar.browser.e2e.ts`: at 320, 390 and 430px every control stays on screen
+at 36px or taller, also with search open; the table menu switches tables and
+creates a named table, with focus following to the redrawn menu button; the
+selected view tab shows whole; and **View actions** creates, renames and
+deletes a view. Desktop keeps one row with **New view**. Both toolbars draw
+their view tabs from `createViewControls`;
+`block-database/database-page-controls.tsx` holds the page's device switches.
+A touch menu item that opens a dialog, starts a rename or switches tables does
+so from the menu's `onCloseAutoFocus`: a Kobalte menu closing over an open
+dialog leaves `body` with `pointer-events: none`. The database block pads
+itself by `--mobile-content-inset-top` on touch (its toolbar is in flow) and
+resets that inset for its children; phones drop the header's table tabs for
+the toolbar's table menu.
 
 Column renames have a backend-free desktop/phone regression using the real
 schema query and mutation adapter with delayed service responses:

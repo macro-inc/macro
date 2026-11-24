@@ -34,7 +34,8 @@ search, and the second row the view tabs, filter, sort and **View actions** (ren
 or delete the selected view, or create one). The selected view's tab is scrolled
 into view. On phones the split header has no table tabs: the first row starts with
 the table menu (the open table's name), which lists every table, **New table**
-(a dialog asks for its name) and the open table's forms. Rename, reorder and
+(a dialog asks for its name) and the open table's forms; a database with no
+tables shows **New table** in the page instead. Rename, reorder and
 delete tables on a tablet or desktop.
 
 **Database actions → Duplicate** (any grant, viewers included) copies the database

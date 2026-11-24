@@ -17,6 +17,7 @@ export function NewTableDialog(props: {
   onCreate: CreateTable;
   onOpenTable: (tableId: string) => void;
   onOpenChange: (open: boolean) => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   const [value, setValue] = createSignal('');
   const [pending, setPending] = createSignal(false);
@@ -47,8 +48,8 @@ export function NewTableDialog(props: {
           return;
         }
 
-        props.onOpenChange(false);
         props.onOpenTable(table.tableId);
+        props.onOpenChange(false);
       },
       (errors) => setError(tableCreateMessage(errors))
     );
@@ -60,6 +61,7 @@ export function NewTableDialog(props: {
       onOpenChange={(open) => {
         if (!pending()) props.onOpenChange(open);
       }}
+      onCloseAutoFocus={props.onCloseAutoFocus}
       position="center"
       class="w-110"
       visibleScrim
@@ -75,6 +77,7 @@ export function NewTableDialog(props: {
               <ActionDialogShell.Title>New table</ActionDialogShell.Title>
             </ActionDialogShell.Header>
             <TextField
+              validationState={error() ? 'invalid' : 'valid'}
               value={value()}
               onChange={(next) => {
                 setValue(next);
@@ -88,12 +91,8 @@ export function NewTableDialog(props: {
                 maxLength={200}
                 readOnly={pending() || !!createdTableId()}
               />
+              <TextField.ErrorMessage>{error()}</TextField.ErrorMessage>
             </TextField>
-            <Show when={error()}>
-              <p role="alert" class="text-sm text-failure">
-                {error()}
-              </p>
-            </Show>
           </ActionDialogShell.Body>
           <ActionDialogShell.Footer>
             <Button
@@ -109,7 +108,9 @@ export function NewTableDialog(props: {
               variant="primary"
               disabled={pending() || !name()}
             >
-              {pending() ? 'Creating…' : 'Create table'}
+              <Show when={!pending()} fallback="Creating…">
+                {createdTableId() ? 'Open table' : 'Create table'}
+              </Show>
             </Button>
           </ActionDialogShell.Footer>
         </form>

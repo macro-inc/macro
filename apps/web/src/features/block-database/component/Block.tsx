@@ -317,12 +317,15 @@ const Block: Component = () => {
       </Suspense>
     );
   };
-  const createTable = (): CreateTable | undefined => {
-    if (!canEdit()) return undefined;
-
-    return (name, existingTableId) =>
-      createTableWithName({ databaseId, name, existingTableId });
-  };
+  const createTableNamed: CreateTable = (name, existingTableId) =>
+    createTableWithName({ databaseId, name, existingTableId });
+  const createTable = () => (canEdit() ? createTableNamed : undefined);
+  const [focusTableMenu, setFocusTableMenu] = createSignal(false);
+  /** The toolbar is drawn again for the new table; its table menu takes focus back. */
+  function selectTableFromMenu(tableId: string) {
+    setFocusTableMenu(true);
+    selectTable(tableId);
+  }
   function selectTable(tableId: string) {
     setSelection((current) => ({ ...current, tableId }));
   }
@@ -462,7 +465,7 @@ const Block: Component = () => {
                   fallback={
                     <DatabasePageNoTables
                       onCreateTable={createTable()}
-                      onOpenTable={selectTable}
+                      onOpenTable={selectTableFromMenu}
                     />
                   }
                 >
@@ -547,8 +550,12 @@ const Block: Component = () => {
                                   name: entry.table.name,
                                 }))}
                                 activeTableId={activeTableId()}
-                                onSelectTable={selectTable}
+                                onSelectTable={selectTableFromMenu}
                                 onCreateTable={createTable()}
+                                focusTableMenu={focusTableMenu()}
+                                onTableMenuFocused={() =>
+                                  setFocusTableMenu(false)
+                                }
                                 tableMenuItems={tableMenuItems()}
                                 search={
                                   <DatabaseSearch

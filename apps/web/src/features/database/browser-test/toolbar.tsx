@@ -3,23 +3,24 @@ import '../../../index.css';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { okAsync } from 'neverthrow';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
+import {
+  DatabasePageNoTables,
+  DatabasePageToolbar,
+} from '../../block-database/database-page-controls';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import { themeCssVars } from '../../theme/utils/themeCssVars';
 import { DatabaseSearch } from '../components/database-search';
-import {
-  DatabaseToolbar,
-  type DatabaseToolbarProps,
-} from '../components/database-toolbar';
-import { MobileDatabaseToolbar } from '../views/mobile/database-toolbar';
-import { TablePicker } from '../views/mobile/table-picker';
+import type { DatabaseToolbarProps } from '../components/database-toolbar';
+import type { CreateTable } from '../core/table-creation';
 
 /**
- * The production view toolbars with the app's styles over tables and views
- * kept in memory. `?mobile` draws the touch view's toolbar with its table
- * switcher, the desktop toolbar otherwise; `?selected=<view id>` opens on
- * that view.
+ * The database page's toolbar, as the page draws it, with the app's styles
+ * over tables and views kept in memory: the touch view on a touch device, the
+ * desktop bar otherwise. `?selected=<view id>` opens on that view, `?empty`
+ * starts without tables, and `?unready` makes the first New table leave its
+ * table created but not loaded.
  */
 const params = new URLSearchParams(location.search);
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
@@ -62,8 +63,27 @@ function ToolbarFixture() {
   const [selected, setSelected] = createSignal(
     params.get('selected') ?? undefined
   );
-  const [tables, setTables] = createSignal(INITIAL_TABLES);
-  const [table, setTable] = createSignal('table-2');
+  const [tables, setTables] = createSignal(
+    params.has('empty') ? [] : INITIAL_TABLES
+  );
+  const [table, setTable] = createSignal(
+    params.has('empty') ? undefined : 'table-2'
+  );
+  const [focusTableMenu, setFocusTableMenu] = createSignal(false);
+  let createCalls = 0;
+  const createTable: CreateTable = (name, existingTableId) => {
+    createCalls += 1;
+    const id = existingTableId ?? `table-${tables().length + 1}`;
+    if (params.has('unready') && createCalls === 1)
+      return okAsync({
+        tableId: id,
+        ready: false,
+        message: 'Your table is ready, but could not be loaded.',
+      });
+
+    setTables((current) => [...current, { id, name }]);
+    return okAsync({ tableId: id, ready: true });
+  };
   const [term, setTerm] = createSignal('');
   const [searching, setSearching] = createSignal(false);
   const allRecords = storedView('all-records', 'All records');
@@ -126,31 +146,37 @@ function ToolbarFixture() {
 
   return (
     <main class="flex h-screen flex-col bg-canvas-base text-ink">
-      <Show
-        when={params.has('mobile')}
-        fallback={<DatabaseToolbar {...toolbar} />}
-      >
-        {/* The database page draws its toolbar again for each table. */}
-        <Show when={table()} keyed>
+      {/* The database page draws its toolbar again for each table, under
+          the records' loading boundary. */}
+      <Suspense>
+        <Show
+          when={table()}
+          keyed
+          fallback={
+            <DatabasePageNoTables
+              onCreateTable={createTable}
+              onOpenTable={setTable}
+            />
+          }
+        >
           {(activeTableId) => (
-            <MobileDatabaseToolbar
+            <DatabasePageToolbar
               {...toolbar}
-              tables={
-                <TablePicker
-                  tables={tables()}
-                  activeTableId={activeTableId}
-                  onSelect={setTable}
-                  onCreate={(name) => {
-                    const id = `table-${tables().length + 1}`;
-                    setTables((current) => [...current, { id, name }]);
-                    return okAsync({ tableId: id, ready: true });
-                  }}
-                />
-              }
+              tables={tables()}
+              activeTableId={activeTableId}
+              onSelectTable={(tableId) => {
+                setFocusTableMenu(true);
+                setTable(tableId);
+              }}
+              onCreateTable={createTable}
+              tableMenuItems={undefined}
+              focusTableMenu={focusTableMenu()}
+              onTableMenuFocused={() => setFocusTableMenu(false)}
             />
           )}
         </Show>
-      </Show>
+      </Suspense>
+      <output aria-label="Table creations">{tables().length}</output>
     </main>
   );
 }

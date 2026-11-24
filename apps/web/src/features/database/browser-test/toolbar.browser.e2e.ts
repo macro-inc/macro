@@ -37,7 +37,7 @@ for (const width of [320, 390, 430]) {
     test('keeps every control on screen at a tappable size', async ({
       page,
     }) => {
-      await open(page, 'mobile');
+      await open(page, '');
 
       const pageWidths = await page.evaluate(() => ({
         scroll: document.documentElement.scrollWidth,
@@ -78,7 +78,7 @@ for (const width of [320, 390, 430]) {
     });
 
     test('switches tables from the table menu', async ({ page }) => {
-      await open(page, 'mobile');
+      await open(page, '');
 
       await page.getByRole('button', { name: /^Table: / }).tap();
       await expect(
@@ -95,35 +95,78 @@ for (const width of [320, 390, 430]) {
     });
 
     test('names and creates a table from the table menu', async ({ page }) => {
-      await open(page, 'mobile');
+      await open(page, '');
 
-      await page.getByRole('button', { name: /^Table: / }).tap();
+      const tables = page.getByRole('button', { name: /^Table: / });
+      await tables.tap();
       await page.getByRole('menuitem', { name: 'New table' }).tap();
       const name = page.getByRole('textbox', { name: 'Name' });
       await expect(name).toBeFocused();
 
       await name.fill('Invoices');
       await page.getByRole('button', { name: 'Create table' }).tap();
-      await expect(page.getByRole('alert')).toHaveText(
-        'A table with this name already exists. Try another name.'
-      );
+      await expect(
+        page.getByText('A table with this name already exists.')
+      ).toBeVisible();
 
-      // When this fails, closing the dialog left the page ignoring taps.
+      // When this fails, closing the dialog dropped focus or left the page
+      // ignoring taps.
       await page.getByRole('button', { name: 'Cancel' }).tap();
-      await page.getByRole('button', { name: /^Table: / }).tap();
+      await expect(tables).toBeFocused();
+      await tables.tap();
       await page.getByRole('menuitem', { name: 'New table' }).tap();
       await name.fill('Risks');
       await page.getByRole('button', { name: 'Create table' }).tap();
+
       await expect(page.getByRole('dialog')).toHaveCount(0);
       await expect(
         page.getByRole('button', { name: 'Table: Risks' })
+      ).toBeFocused();
+    });
+
+    // When this fails, retrying a table that was created but not loaded
+    // creates it a second time.
+    test('opens a table that was created but not loaded, without creating it again', async ({
+      page,
+    }) => {
+      await open(page, 'unready');
+
+      await page.getByRole('button', { name: /^Table: / }).tap();
+      await page.getByRole('menuitem', { name: 'New table' }).tap();
+      await page.getByRole('textbox', { name: 'Name' }).fill('Risks');
+      await page.getByRole('button', { name: 'Create table' }).tap();
+      await expect(
+        page.getByText('Your table is ready, but could not be loaded.')
       ).toBeVisible();
+      await page.getByRole('button', { name: 'Open table' }).tap();
+
+      await expect(
+        page.getByRole('button', { name: 'Table: Risks' })
+      ).toBeVisible();
+      await expect(page.getByLabel('Table creations')).toHaveText('4');
+    });
+
+    test('creates the first table of a database without tables', async ({
+      page,
+    }) => {
+      await page.goto('/src/features/database/browser-test/toolbar.html?empty');
+
+      await page.getByRole('button', { name: 'New table' }).tap();
+      await page.getByRole('textbox', { name: 'Name' }).fill('Vendors');
+      await page.getByRole('button', { name: 'Create table' }).tap();
+
+      // When this fails, the dialog going with the empty state left the page
+      // ignoring taps.
+      await page.getByRole('button', { name: 'Table: Vendors' }).tap();
+      await expect(
+        page.getByRole('menuitemradio', { name: 'Vendors' })
+      ).toHaveAttribute('aria-checked', 'true');
     });
 
     // When this fails, the open view's tab is scrolled out of the rail, so the
     // toolbar no longer says which view is on screen.
     test('shows the selected view tab whole', async ({ page }) => {
-      await open(page, 'mobile&selected=view-8');
+      await open(page, 'selected=view-8');
       await expect.poll(() => selectedTabOverflow(page)).toBeLessThan(1);
 
       await page.getByRole('button', { name: 'All records' }).tap();
@@ -133,7 +176,7 @@ for (const width of [320, 390, 430]) {
     test('creates a view from the view actions menu with the keyboard', async ({
       page,
     }) => {
-      await open(page, 'mobile');
+      await open(page, '');
 
       await page.getByRole('button', { name: 'View actions' }).focus();
       await page.keyboard.press('Enter');
@@ -156,7 +199,7 @@ for (const width of [320, 390, 430]) {
     test('renames and deletes the selected view from the view actions menu', async ({
       page,
     }) => {
-      await open(page, 'mobile&selected=view-4');
+      await open(page, 'selected=view-4');
 
       await page.getByRole('button', { name: 'View actions' }).tap();
       await page.getByRole('menuitem', { name: 'Rename view' }).tap();
