@@ -283,6 +283,34 @@ impl messages::domain::ports::MessageReferenceAccess for AllReferences {
     }
 }
 
+/// `@here` reaches two people, one of whom is also mentioned by name.
+struct Members;
+impl messages::domain::ports::MessageGroupRecipients for Members {
+    fn channel_members<'s, 'f>(&'s self, _: Uuid) -> MembersFuture<'f>
+    where
+        's: 'f,
+        Self: 'f,
+    {
+        Box::pin(async {
+            Ok(["macro|a@example.com", "macro|b@example.com"]
+                .map(|id| MacroUserIdStr::parse_from_str(id).expect("valid member id"))
+                .to_vec())
+        })
+    }
+}
+/// What `MessageGroupRecipients` returns.
+type MembersFuture<'f> = std::pin::Pin<
+    Box<
+        dyn Future<
+                Output = Result<
+                    Vec<MacroUserIdStr<'static>>,
+                    messages::domain::ports::MessageError,
+                >,
+            > + Send
+            + 'f,
+    >,
+>;
+
 /// The channel's committed position.
 async fn channel_seq(pool: &PgPool) -> i64 {
     sqlx::query_scalar!(
@@ -303,7 +331,8 @@ async fn edit_twice(pool: PgPool, edit: &str) -> [(Value, i64); 2] {
             PgMessageRepository::new(pool.clone()),
             NoMessageEventPublisher,
         )
-        .with_references(AllReferences),
+        .with_references(AllReferences)
+        .with_group_recipients(Members),
     );
     let harness = harness();
     let context = writable(&harness, &reads);
@@ -347,6 +376,57 @@ async fn a_replayed_edit_does_not_attach_an_email_thread_again_under_its_editor_
         json!("email_thread")
     );
     assert_eq!(first.0["attachments"].as_array().map(Vec::len), Some(2));
+    assert_eq!(
+        replay, first,
+        "the replay changed the message or the channel"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_replayed_edit_with_group_repeated_and_unsorted_mentions_writes_nothing(pool: PgPool) {
+    let [first, replay] = edit_twice(
+        pool,
+        r#"content: "@here and others", mentions: [
+            { entityType: "user", entityId: "macro|b@example.com" },
+            { entityType: "group", entityId: "here" },
+            { entityType: "user", entityId: "macro|a@example.com" },
+            { entityType: "user", entityId: "macro|b@example.com" }
+        ]"#,
+    )
+    .await;
+    assert_eq!(
+        replay, first,
+        "the replay changed the message or the channel"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_replayed_edit_that_only_mentions_here_writes_nothing(pool: PgPool) {
+    let [first, replay] = edit_twice(
+        pool,
+        r#"content: "@here", mentions: [{ entityType: "group", entityId: "here" }]"#,
+    )
+    .await;
+    assert_eq!(
+        first.0["mentions"],
+        json!([{ "entityType": "group", "entityId": "here" }])
+    );
+    assert_eq!(
+        replay, first,
+        "the replay changed the message or the channel"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_replayed_edit_with_a_repeated_mention_writes_nothing(pool: PgPool) {
+    let [first, replay] = edit_twice(
+        pool,
+        r#"content: "twice", mentions: [
+            { entityType: "user", entityId: "macro|a@example.com" },
+            { entityType: "user", entityId: "macro|a@example.com" }
+        ]"#,
+    )
+    .await;
     assert_eq!(
         replay, first,
         "the replay changed the message or the channel"

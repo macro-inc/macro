@@ -734,7 +734,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         // A replayed edit whose first attempt committed finds nothing to change.
         if replay == Replay::Unchanged {
             let unchanged = input.content == current.content
-                && input.mentions == current.mentions
+                && same_mentions(&input.mentions, &current.mentions)
                 && input
                     .attachments
                     .as_deref()
@@ -1441,6 +1441,20 @@ enum Replay {
     Rewrite,
     /// An edit the message already shows is answered without a write.
     Unchanged,
+}
+
+/// Whether an edit mentions what the message already does. Stored mentions are
+/// read back sorted, not in the order they were authored.
+fn same_mentions(next: &[SimpleMention], current: &[SimpleMention]) -> bool {
+    fn sorted(mentions: &[SimpleMention]) -> Vec<(&str, &str)> {
+        let mut mentions: Vec<_> = mentions
+            .iter()
+            .map(|mention| (mention.entity_type.as_str(), mention.entity_id.as_str()))
+            .collect();
+        mentions.sort_unstable();
+        mentions
+    }
+    sorted(next) == sorted(current)
 }
 
 /// Whether an edit's attachment list is the one the message already holds.
