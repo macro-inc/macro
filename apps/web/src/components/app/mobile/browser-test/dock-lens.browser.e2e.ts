@@ -85,3 +85,17 @@ test('a drag onto a tab that selects nothing presses it once', async ({
   await page.waitForTimeout(400);
   await expect(presses(page)).toHaveText('More');
 });
+
+test('holding Search runs it into the dock like liquid glass', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  const goo = page.locator('[data-dock-goo]');
+  await expect(goo).not.toHaveAttribute('data-merging');
+  await touch(cdp, 'touchStart', await center(page, 'Search'));
+  await expect(goo).toHaveAttribute('data-merging', '');
+  await expect(goo).toHaveCSS('opacity', '1');
+  await touch(cdp, 'touchEnd');
+  await expect(goo).not.toHaveAttribute('data-merging');
+  await expect(presses(page)).toHaveText('Search');
+});

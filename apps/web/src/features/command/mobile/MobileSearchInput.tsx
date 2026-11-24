@@ -94,7 +94,7 @@ export function MobileSearchInput() {
       </Show>
       <div
         ref={setContainer}
-        class="island pointer-events-auto flex min-h-11 min-w-0 flex-1 items-end gap-1 rounded-[22px] py-1 pr-1 pl-4"
+        class="island mobile-search-grow pointer-events-auto flex min-h-11 min-w-0 flex-1 items-end gap-1 rounded-[22px] py-1 pr-1 pl-4"
       >
         <CommandMenuSearchInput
           as="textarea"

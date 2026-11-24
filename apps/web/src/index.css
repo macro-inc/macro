@@ -1117,6 +1117,27 @@ html:not([data-touch-device='true']) {
   to { opacity: 1; }
 }
 
+/* The dock's search field grows out of the Search button it replaces, as a
+   liquid-glass pill widening leftward from the right edge. Mounting it this
+   way, in the tap, keeps the keyboard (a view transition would update the
+   page after the tap). */
+@utility mobile-search-grow {
+  animation: mobile-search-grow 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes mobile-search-grow {
+  from {
+    clip-path: inset(0 0 0 calc(100% - var(--mobile-chrome-button-size)) round 999px);
+  }
+  to {
+    clip-path: inset(0 0 0 0 round 22px);
+  }
+}
+
 /* A bottom sheet's scroll container: offset 0 is closed, the end is open. */
 @utility mobile-sheet-scroller {
   scroll-timeline: --mobile-sheet block;

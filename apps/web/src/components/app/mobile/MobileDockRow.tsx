@@ -24,6 +24,7 @@ import {
   type NavigationUnread,
   useNavigationUnread,
 } from '../use-navigation-unread';
+import { DockGoo } from './DockGoo';
 import { DockTabLens } from './DockTabLens';
 import { MobileDockButton } from './MobileDockButton';
 import { MobileDockIsland } from './MobileDockIsland';
@@ -283,13 +284,20 @@ function MobileNavigationDockRow(props: { vertical?: boolean }) {
     </>
   );
 
+  // Held Search runs into the dock like liquid glass (DockGoo).
+  const [searchRef, setSearchRef] = createSignal<HTMLDivElement>();
+  const [merging, setMerging] = createSignal(false);
+
   return (
     <div
       class={cn(
-        'flex w-full justify-between gap-(--mobile-chrome-gutter)',
+        'relative flex w-full justify-between gap-(--mobile-chrome-gutter)',
         props.vertical && 'h-full min-h-0 flex-col justify-end'
       )}
     >
+      <Show when={!props.vertical}>
+        <DockGoo nav={navRef()} search={searchRef()} merging={merging()} />
+      </Show>
       <MobileDockIsland
         ref={setNavRef}
         class={cn(
@@ -309,7 +317,12 @@ function MobileNavigationDockRow(props: { vertical?: boolean }) {
           </DockTabLens>
         </Show>
       </MobileDockIsland>
-      <MobileDockIsland class="shrink-0">
+      <MobileDockIsland
+        ref={setSearchRef}
+        class="shrink-0"
+        onPointerDown={() => setMerging(true)}
+        onPointerEnd={() => setMerging(false)}
+      >
         <MobileDockButton
           icon={SearchIcon}
           ariaLabel={t('nav.search')}

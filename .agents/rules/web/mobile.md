@@ -70,7 +70,10 @@ read their code, and follow that pattern rather than inventing a new one.
   long press and use `hapticImpact('light')` for valid message/AI sends. Navigation
   acts on click so held or cancelled touches do nothing. `glass` and `island`
   controls and channel inputs get iOS-app-only press animation from
-  `installGlassPress`; reuse it and keep Android and web free of the effect.
+  `installGlassPress`; reuse it and keep Android and production web free of
+  the effect (`GLASS_EFFECTS_EVERYWHERE` turns it on in iOS Safari in dev and
+  on web previews). Holding the dock's Search runs it into the navigation
+  island through a goo filter (`DockGoo`).
 - Move touch chrome only with scrolling or `transform`/`scale`/`opacity`
   transitions: iOS runs those on the compositor at 120 Hz, while touch events,
   `requestAnimationFrame`, layout and custom-property transitions are capped
