@@ -27,8 +27,11 @@ use web_sys::{
     FileSystemRemoveOptions, FileSystemSyncAccessHandle, WorkerGlobalScope,
 };
 
+mod sidecar;
 #[cfg(test)]
 mod test;
+
+pub use sidecar::Sidecar;
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
@@ -218,6 +221,11 @@ impl OpfsOwner {
         &self.lock_name
     }
 
+    /// Returns this identity's side file, which a wipe or reset leaves alone.
+    pub fn sidecar(&self) -> Sidecar {
+        Sidecar::new(self.id, self.database_path())
+    }
+
     /// Physically wipes and recreates both approved paths before any open.
     ///
     /// This is the recovery path after abrupt worker loss or a pre-open entry
@@ -385,8 +393,9 @@ impl OpfsOwner {
         Ok(())
     }
 
-    /// Deletes both approved paths without recreating them, then releases the
-    /// lock. This discards a database that no context uses any more.
+    /// Deletes both approved paths and the side file without recreating them,
+    /// then releases the lock. This discards a database that no context uses
+    /// any more.
     ///
     /// Unlike [`Self::recovery_wipe`], a failed removal does not poison the
     /// registry: the lock is still released, the error is returned, and any
@@ -400,7 +409,10 @@ impl OpfsOwner {
                     .start_wipe(self.id, self.paths.clone())
             })
             .map_err(state_error)?;
-        let removed = remove_paths(&self.paths).await;
+        let removed = match remove_paths(&self.paths).await {
+            Ok(()) => self.sidecar().remove().await,
+            error => error,
+        };
         REGISTRY
             .with(|registry| registry.borrow_mut().machine.finish_wipe(self.id))
             .map_err(state_error)?;
@@ -1317,11 +1329,12 @@ fn approved_paths(database_name: &str) -> Result<Paths, OpfsError> {
         || database_name == "."
         || database_name == ".."
         || database_name.ends_with("-wal")
+        || database_name.ends_with(sidecar::SUFFIX)
         || database_name.contains(['/', '\\', '\0'])
     {
         return Err(OpfsError::new(
             OpfsErrorKind::InvalidName,
-            "database identity must be a direct child and must not use the reserved -wal suffix",
+            "database identity must be a direct child and must not use a reserved suffix",
         ));
     }
     let wal = format!("{database_name}-wal");
