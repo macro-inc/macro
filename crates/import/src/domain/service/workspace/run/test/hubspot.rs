@@ -1079,3 +1079,27 @@ async fn a_company_a_teammate_finishes_during_the_write_is_filed_under(pool: PgP
         "{contacts:?}"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_deal_entry_is_found_again_whatever_host_its_link_names(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "hubspot-host", team).await;
+    let crm = crm_for(team, &[&owner]);
+    // The entry is made with the EU host, then the process stops before the
+    // ledger records it.
+    crm.crash_after_create
+        .lock()
+        .unwrap()
+        .insert("Deal 31".to_owned());
+    let mut eu = portal("hubspot-host@example.com");
+    eu.portal.ui_domain = Some("app-eu1.hubspot.com".into());
+    import(&pool, eu.clone(), crm.clone(), &owner).await;
+
+    // The next plan names no host, so links use the default one.
+    let mut unnamed = eu;
+    unnamed.portal.ui_domain = None;
+    let report = import(&pool, unnamed, crm.clone(), &owner).await;
+
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    assert_eq!(crm.entries.lock().unwrap().len(), 2);
+}

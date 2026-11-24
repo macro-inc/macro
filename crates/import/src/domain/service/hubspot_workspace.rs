@@ -120,7 +120,8 @@ struct Known {
     targets: HashMap<String, Uuid>,
     /// Records a stopped write made, by ledger row.
     earlier: HashMap<Uuid, Uuid>,
-    /// Each company's entries per pipeline, by deal link, read once per write.
+    /// Each company's entries per pipeline, by the path of their deal link,
+    /// read once per write.
     deal_entries: HashMap<(Uuid, Uuid), HashMap<String, Uuid>>,
     /// Plan keys of objects the owner left out of this review.
     left_out: std::collections::HashSet<String>,
@@ -548,11 +549,16 @@ where
                     ))?;
                 let entries = match deal_entries.entry((pipeline, company)) {
                     std::collections::hash_map::Entry::Occupied(known) => known.into_mut(),
-                    std::collections::hash_map::Entry::Vacant(slot) => {
-                        slot.insert(writer.deal_entries(user, pipeline, company).await?)
-                    }
+                    std::collections::hash_map::Entry::Vacant(slot) => slot.insert(
+                        writer
+                            .deal_entries(user, pipeline, company)
+                            .await?
+                            .into_iter()
+                            .map(|(link, entry)| (record_path(&link).to_owned(), entry))
+                            .collect(),
+                    ),
                 };
-                if let Some(existing) = entries.get(link) {
+                if let Some(existing) = entries.get(record_path(link)) {
                     return Ok((*existing, false));
                 }
                 let entry = NewDealEntry {
@@ -567,7 +573,7 @@ where
                     link: link.to_owned(),
                 };
                 let added = writer.add_deal_entry(user, pipeline, &entry).await?;
-                entries.insert(link.to_owned(), added);
+                entries.insert(record_path(link).to_owned(), added);
                 Ok((added, true))
             }
         }
@@ -577,6 +583,14 @@ where
 /// The object's HubSpot URL, which a deal entry carries as its identity.
 fn link(row: &ImportEntity, meta: &HubspotMeta) -> String {
     meta.url.clone().unwrap_or_else(|| row.foreign_id.clone())
+}
+
+/// What identifies a deal entry's link: its path, which names the portal and
+/// the record. The host differs by region and can change between plans.
+fn record_path(link: &str) -> &str {
+    link.split_once("://")
+        .and_then(|(_, rest)| rest.find('/').map(|slash| &rest[slash..]))
+        .unwrap_or(link)
 }
 
 /// The review card's HubSpot section, from the current plan's rows.
