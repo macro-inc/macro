@@ -268,7 +268,8 @@ impl MicrosoftGrantRepository for PgMicrosoftGrants {
     ) -> Result<StoredGrant, MicrosoftAuthError> {
         let row = sqlx::query!(r#"
             SELECT g.grant_id AS "grant_id!", g.generation, g.revision, g.fusionauth_user_id, g.email_address,
-                g.refresh_token_ciphertext, g.encrypted_data_key, g.nonce, g.encryption_version, g.kms_key_id,g.scopes
+                g.refresh_token_ciphertext, g.encrypted_data_key, g.nonce, g.encryption_version, g.kms_key_id,g.scopes,
+                g.refresh_refused_at
             FROM microsoft_oauth_grant_versions g JOIN email_links l ON l.grant_id = g.grant_id
                 AND l.grant_generation = g.generation AND l.fusionauth_user_id = g.fusionauth_user_id
                 AND lower(l.email_address) = g.email_address
@@ -293,6 +294,7 @@ impl MicrosoftGrantRepository for PgMicrosoftGrants {
                     .map_err(|_| MicrosoftAuthError::Unavailable)?,
                 kms_key_id: row.kms_key_id,
             },
+            refresh_refused_at: row.refresh_refused_at,
         })
     }
 
@@ -304,7 +306,8 @@ impl MicrosoftGrantRepository for PgMicrosoftGrants {
     ) -> Result<StoredGrant, MicrosoftAuthError> {
         let row = sqlx::query!(r#"
             SELECT g.grant_id AS "grant_id!", g.generation, g.revision, g.fusionauth_user_id, g.email_address,
-                g.refresh_token_ciphertext, g.encrypted_data_key, g.nonce, g.encryption_version, g.kms_key_id,g.scopes
+                g.refresh_token_ciphertext, g.encrypted_data_key, g.nonce, g.encryption_version, g.kms_key_id,g.scopes,
+                g.refresh_refused_at
             FROM microsoft_oauth_grant_versions g JOIN email_links l ON l.grant_id = g.grant_id
                 AND l.grant_generation = g.generation AND l.fusionauth_user_id = g.fusionauth_user_id
                 AND lower(l.email_address) = g.email_address
@@ -330,6 +333,7 @@ impl MicrosoftGrantRepository for PgMicrosoftGrants {
                     .map_err(|_| MicrosoftAuthError::Unavailable)?,
                 kms_key_id: row.kms_key_id,
             },
+            refresh_refused_at: row.refresh_refused_at,
         })
     }
 
@@ -360,7 +364,7 @@ impl MicrosoftGrantRepository for PgMicrosoftGrants {
             UPDATE microsoft_oauth_grant_versions g SET refresh_token_ciphertext = $5, encrypted_data_key = $6,
                 nonce = $7, encryption_version = $8, kms_key_id = $9, scopes = $10,
                 revision = revision + 1, refresh_lease_id = NULL, refresh_lease_until = NULL,
-                updated_at = now(), last_refreshed_at = now()
+                refresh_refused_at = NULL, updated_at = now(), last_refreshed_at = now()
             WHERE grant_id = $1 AND generation = $2 AND revision = $3 AND refresh_lease_id = $4
                 AND revoked_at IS NULL AND refresh_lease_until > now()
                 AND EXISTS(SELECT 1 FROM email_links l WHERE l.grant_id=g.grant_id AND l.grant_generation=g.generation
@@ -376,19 +380,19 @@ impl MicrosoftGrantRepository for PgMicrosoftGrants {
         &self,
         grant: &StoredGrant,
         lease: Uuid,
-        revoke: bool,
+        refused: bool,
     ) -> Result<bool, MicrosoftAuthError> {
         let result = sqlx::query!(
             r#"
             UPDATE microsoft_oauth_grant_versions SET refresh_lease_id = NULL, refresh_lease_until = NULL,
-                revoked_at = CASE WHEN $5 THEN now() ELSE revoked_at END
+                refresh_refused_at = CASE WHEN $5 THEN now() ELSE refresh_refused_at END
             WHERE grant_id = $1 AND generation = $2 AND revision = $3 AND refresh_lease_id = $4
         "#,
             grant.id,
             grant.generation,
             grant.revision,
             lease,
-            revoke
+            refused
         )
         .execute(&self.db)
         .await

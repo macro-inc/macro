@@ -100,6 +100,9 @@ pub struct StoredGrant {
     pub owner: String,
     pub email: String,
     pub envelope: EncryptedMicrosoftToken,
+    /// When Microsoft last refused this grant's refresh; `None` once a
+    /// refresh works again.
+    pub refresh_refused_at: Option<DateTime<Utc>>,
 }
 
 /// Verified, non-secret mailbox binding for the email domain's initializer.
@@ -206,13 +209,15 @@ pub trait MicrosoftGrantRepository: Send + Sync {
         envelope: &EncryptedMicrosoftToken,
         scopes: &[String],
     ) -> Result<bool, MicrosoftAuthError>;
-    /// Whether the release matched the leased grant version: a lease that
-    /// expired, or a grant that moved on, changes nothing.
+    /// Gives the lease back. `refused` records that Microsoft refused the
+    /// refresh; the grant itself stays, so a later refresh can work again.
+    /// Answers whether the release matched the leased grant version: a lease
+    /// that expired, or a grant that moved on, changes nothing.
     async fn release_refresh(
         &self,
         grant: &StoredGrant,
         lease: Uuid,
-        revoke: bool,
+        refused: bool,
     ) -> Result<bool, MicrosoftAuthError>;
 }
 
@@ -298,6 +303,12 @@ pub trait MicrosoftAuth: Send + Sync {
         force_refresh: bool,
     ) -> Result<MicrosoftAccessGrant, MicrosoftAuthError>;
 }
+
+/// How long a grant whose refresh Microsoft refused is answered as needing a
+/// reconnect before Microsoft is asked again. A refusal can clear on its own
+/// (a sign-in policy, a consent an administrator grants later), so the grant
+/// is kept and retried at this pace rather than on every token request.
+const REFUSED_REFRESH_RETRY: Duration = Duration::hours(1);
 
 /// Credential retention must not depend on the owner signing in again.
 pub async fn collect_expired_grants(
@@ -604,6 +615,12 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
                 cached: true,
             });
         }
+        if grant
+            .refresh_refused_at
+            .is_some_and(|refused| Utc::now() - refused < REFUSED_REFRESH_RETRY)
+        {
+            return Err(MicrosoftAuthError::ReauthorizationRequired);
+        }
         let lease = macro_uuid::generate_uuid_v7();
         if !self.repo.acquire_refresh(&grant, lease).await? {
             return Err(MicrosoftAuthError::Busy);
@@ -613,7 +630,7 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
             microsoft.grant_id = %grant.id,
             microsoft.grant_generation = grant.generation,
             microsoft.outcome = tracing::field::Empty,
-            microsoft.grant_revoked = tracing::field::Empty,
+            microsoft.refresh_refused = tracing::field::Empty,
         );
         let result = async {
             let refresh = self
@@ -676,26 +693,26 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
         };
         span.record("microsoft.outcome", outcome);
         if let Err(error) = &result {
-            let revoke = matches!(
+            let refused = matches!(
                 error,
                 MicrosoftAuthError::ReauthorizationRequired
                     | MicrosoftAuthError::MissingPermissions
             );
             let released = self
                 .repo
-                .release_refresh(&grant, lease, revoke)
+                .release_refresh(&grant, lease, refused)
                 .instrument(span.clone())
                 .await?;
-            let revoked = revoke && released;
-            span.record("microsoft.grant_revoked", revoked);
-            if revoked {
+            let recorded = refused && released;
+            span.record("microsoft.refresh_refused", recorded);
+            if recorded {
                 tracing::warn!(
                     parent: &span,
                     grant_id = %grant.id,
                     grant_generation = grant.generation,
                     grant_revision = grant.revision,
                     outcome,
-                    "microsoft grant revoked after a refused refresh"
+                    "microsoft refused a grant's refresh; it is kept and retried in an hour"
                 );
             }
         }

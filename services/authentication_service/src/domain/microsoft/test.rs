@@ -152,6 +152,7 @@ async fn lost_rotation_fence_never_returns_or_caches_the_access_token() {
             owner: "owner".into(),
             email: "mailbox@example.com".into(),
             envelope: envelope(),
+            refresh_refused_at: None,
         })
     });
     repo.expect_acquire_refresh()
@@ -489,6 +490,7 @@ async fn tokens_report_whether_the_cache_served_them() {
                 owner: "owner".into(),
                 email: "mailbox@example.com".into(),
                 envelope: envelope(),
+                refresh_refused_at: None,
             })
         });
     repo.expect_acquire_refresh()
@@ -520,4 +522,106 @@ async fn tokens_report_whether_the_cache_served_them() {
     assert!(!refreshed.cached);
     assert!(cached.cached);
     assert_eq!(cached.as_str(), "fresh");
+}
+
+fn grant_refused(at: Option<DateTime<Utc>>) -> StoredGrant {
+    StoredGrant {
+        scopes: scopes(),
+        id: macro_uuid::generate_uuid_v7(),
+        generation: 1,
+        revision: 0,
+        owner: "owner".into(),
+        email: "mailbox@example.com".into(),
+        envelope: envelope(),
+        refresh_refused_at: at,
+    }
+}
+
+#[tokio::test]
+async fn a_refused_refresh_is_recorded_without_revoking_the_grant() {
+    let mut repo = MockMicrosoftGrantRepository::new();
+    repo.expect_active_grant()
+        .once()
+        .returning(|_, _, _| Ok(grant_refused(None)));
+    repo.expect_acquire_refresh()
+        .once()
+        .returning(|_, _| Ok(true));
+    repo.expect_release_refresh()
+        .once()
+        .withf(|_, _, refused| *refused)
+        .returning(|_, _, _| Ok(true));
+    let mut provider = MockMicrosoftIdentityProvider::new();
+    provider
+        .expect_refresh()
+        .once()
+        .returning(|_| Err(MicrosoftAuthError::ReauthorizationRequired));
+    let mut cipher = MockMicrosoftTokenCipher::new();
+    cipher
+        .expect_decrypt()
+        .once()
+        .returning(|_, _, _| Ok(MicrosoftRefreshToken::new("refresh".into())));
+    let service = Service::new(repo, provider, Arc::new(cipher));
+
+    assert!(matches!(
+        service
+            .access_token(macro_uuid::generate_uuid_v7(), 1, 1, false)
+            .await,
+        Err(MicrosoftAuthError::ReauthorizationRequired)
+    ));
+}
+
+#[tokio::test]
+async fn a_grant_refused_within_the_hour_needs_reconnecting_without_asking_microsoft() {
+    let mut repo = MockMicrosoftGrantRepository::new();
+    repo.expect_active_grant()
+        .times(2)
+        .returning(|_, _, _| Ok(grant_refused(Some(Utc::now() - Duration::minutes(10)))));
+    repo.expect_acquire_refresh().never();
+    let mut provider = MockMicrosoftIdentityProvider::new();
+    provider.expect_refresh().never();
+    let service = Service::new(repo, provider, Arc::new(MockMicrosoftTokenCipher::new()));
+    let link = macro_uuid::generate_uuid_v7();
+
+    // A forced refresh waits out the hour too.
+    for force_refresh in [false, true] {
+        assert!(matches!(
+            service.access_token(link, 1, 1, force_refresh).await,
+            Err(MicrosoftAuthError::ReauthorizationRequired)
+        ));
+    }
+}
+
+#[tokio::test]
+async fn a_grant_refused_over_an_hour_ago_refreshes_again_and_works() {
+    let mut repo = MockMicrosoftGrantRepository::new();
+    repo.expect_active_grant()
+        .once()
+        .returning(|_, _, _| Ok(grant_refused(Some(Utc::now() - Duration::minutes(61)))));
+    repo.expect_acquire_refresh()
+        .once()
+        .returning(|_, _| Ok(true));
+    repo.expect_finish_refresh()
+        .once()
+        .returning(|_, _, _, _| Ok(true));
+    let mut provider = MockMicrosoftIdentityProvider::new();
+    provider.expect_refresh().once().returning(|_| {
+        Ok(RefreshedGrant {
+            access_token: Zeroizing::new("working-again".into()),
+            refresh_token: None,
+            expires_in: 3600,
+            scopes: scopes(),
+        })
+    });
+    let mut cipher = MockMicrosoftTokenCipher::new();
+    cipher
+        .expect_decrypt()
+        .once()
+        .returning(|_, _, _| Ok(MicrosoftRefreshToken::new("refresh".into())));
+    let service = Service::new(repo, provider, Arc::new(cipher));
+
+    let token = service
+        .access_token(macro_uuid::generate_uuid_v7(), 1, 1, false)
+        .await
+        .unwrap();
+    assert_eq!(token.as_str(), "working-again");
 }
