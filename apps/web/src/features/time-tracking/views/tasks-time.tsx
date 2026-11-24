@@ -13,6 +13,7 @@ import { WeekGrid, type WeekGridRow } from '../components/week-grid';
 import { WeekStepper } from '../components/week-stepper';
 import { useTimeTracking } from '../context/time-tracking-context';
 import { weekDays, weekRows } from '../core/week';
+import { createSheetTask } from '../primitives/create-sheet-task';
 import { createWeekTime, type WeekTime } from '../primitives/create-week-time';
 import { BreakdownSkeleton, SummaryFailed } from './shared/project-time-parts';
 import type {
@@ -25,7 +26,7 @@ import { WeekCell } from './week-cell';
 
 const NO_EXTRA_ROWS: readonly TimeSummaryKey[] = [];
 
-/** A picked task has no summary of its own yet; its row shows the picked name. */
+/** A picked task has no summary of its own yet; its row reads the task itself. */
 function taskKey(task: PickedTask): TimeSummaryKey {
   return { by: 'TASK', userId: null, taskId: task.id, date: null, task: null };
 }
@@ -173,25 +174,31 @@ function MyWeekDesktop(props: TasksTimeViewProps): JSX.Element {
           days={weekDays(week.days(), props.showWeekends())}
           today={props.clock.today()}
           rows={rows()}
-          rowLabel={(taskId) => (
-            <div
-              class="flex min-w-0 items-center gap-2"
-              onClick={(event) => props.onOpenTask(taskId, { event })}
-            >
-              <Show when={taskOf(taskId)}>
-                {(task) => <props.task.Lead task={task()} />}
-              </Show>
-              <span class="flex min-w-0 items-center gap-1">
-                <button
-                  type="button"
-                  class="block min-w-0 truncate rounded-sm text-left not-touch:hover:underline"
-                >
-                  {nameOf(taskId)}
-                </button>
-                <props.task.Timer taskId={taskId} />
-              </span>
-            </div>
-          )}
+          rowLabel={(taskId) => {
+            const task = createSheetTask(
+              () => taskId,
+              () => taskOf(taskId)
+            );
+            return (
+              <div
+                class="flex min-w-0 items-center gap-2"
+                onClick={(event) => props.onOpenTask(taskId, { event })}
+              >
+                <Show when={task()}>
+                  {(task) => <props.task.Lead task={task()} />}
+                </Show>
+                <span class="flex min-w-0 items-center gap-1">
+                  <button
+                    type="button"
+                    class="block min-w-0 truncate rounded-sm text-left not-touch:hover:underline"
+                  >
+                    {nameOf(taskId)}
+                  </button>
+                  <props.task.Timer taskId={taskId} />
+                </span>
+              </div>
+            );
+          }}
           cell={(taskId, day, minutes) => (
             <WeekCell
               taskId={taskId}
