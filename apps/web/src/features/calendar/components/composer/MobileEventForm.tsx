@@ -1,11 +1,22 @@
 import { DateTimeRange } from '@app/components/date-time-range/date-time-range-fields';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { SheetRow } from '@components/app/mobile/sheet-row/SheetRow';
 import { cn, ToggleSwitch } from '@ui';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { EventFormParts } from './event-form-parts';
 import { createEventForm, type EventFormProps } from './event-form-state';
+
+/** A labelled row of a sheet section, its control on the right. */
+function SheetRow(props: { label: string; children: JSX.Element }) {
+  return (
+    <div class="flex min-h-11 items-center justify-between gap-3 px-3">
+      <span class="shrink-0 text-sm text-ink">{props.label}</span>
+      <div class="flex min-w-0 flex-1 items-center justify-end gap-1">
+        {props.children}
+      </div>
+    </div>
+  );
+}
 
 /**
  * The create/edit event form in the touch bottom sheet: what and when first,

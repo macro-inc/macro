@@ -26,8 +26,8 @@ vi.mock('@core/component/LexicalMarkdown/component/menu/SnippetsMenu', () => ({
   SnippetsMenu: () => null,
 }));
 
-import { EventForm } from '../../views/composer/EventForm';
 import { createCalendarEventFormController } from './create-calendar-event-form-controller';
+import { EventForm } from './EventForm';
 import type {
   EventEditorCalendarOption,
   EventEditorDisabledFields,

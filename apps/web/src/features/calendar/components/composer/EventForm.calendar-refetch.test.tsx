@@ -10,8 +10,8 @@ import userEvent from '@testing-library/user-event';
 import { ok } from 'neverthrow';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useEventEditor } from '../../hooks/use-event-editor';
-import { EventForm } from '../../views/composer/EventForm';
 import { createCalendarEventFormController } from './create-calendar-event-form-controller';
+import { EventForm } from './EventForm';
 
 const mocks = vi.hoisted(() => ({ listCalendars: vi.fn() }));
 

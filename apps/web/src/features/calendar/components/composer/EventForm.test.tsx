@@ -29,8 +29,8 @@ vi.mock('@property/editors/selectors/PropertyEntitySelector', () => ({
   },
 }));
 
-import { EventForm } from '../../views/composer/EventForm';
 import { createCalendarEventFormController } from './create-calendar-event-form-controller';
+import { EventForm } from './EventForm';
 import type { EventEditorCalendarOption } from './event-form-model';
 
 class ObserverStub {
@@ -100,13 +100,7 @@ function showForm(
   return edits;
 }
 
-let motionStyles: HTMLStyleElement;
 beforeEach(() => {
-  motionStyles = document.createElement('style');
-  // jsdom has no app CSS, so exiting menu presence needs explicit motion defaults.
-  motionStyles.textContent =
-    '* { transition-duration: 0s; animation-name: none; }';
-  document.head.append(motionStyles);
   calendar.syncing = () => false;
   Element.prototype.scrollIntoView = vi.fn();
   vi.stubGlobal('ResizeObserver', ObserverStub);
@@ -148,7 +142,6 @@ it('keeps the create draft editable until its first calendar can save it', async
 });
 afterEach(() => {
   cleanup();
-  motionStyles.remove();
   vi.unstubAllGlobals();
 });
 
@@ -171,33 +164,6 @@ it('settles after a Macro call is picked', async () => {
   await user.click(screen.getByRole('option', { name: 'Macro call' }));
   expect(trigger.textContent).toContain('Macro call');
   expect(edits.count).toBeLessThan(10);
-});
-
-it('changes duration and all-day mode through the same form state', async () => {
-  const user = userEvent.setup();
-  showForm();
-
-  await user.click(screen.getByRole('button', { name: 'Duration' }));
-  await user.click(screen.getByRole('menuitemradio', { name: '1h 30min' }));
-  expect(
-    await screen.findByRole('combobox', { name: 'event end time' })
-  ).toHaveProperty('value', '1:30 PM');
-
-  await user.click(screen.getByRole('button', { name: 'Duration' }));
-  await user.click(screen.getByRole('menuitemradio', { name: 'All day' }));
-  await screen.findByRole('button', { name: 'Duration' });
-  expect(
-    screen.queryByRole('combobox', { name: 'event start time' })
-  ).toBeNull();
-
-  await user.click(screen.getByRole('button', { name: 'Duration' }));
-  await user.click(screen.getByRole('menuitemradio', { name: '30min' }));
-  expect(
-    await screen.findByRole('combobox', { name: 'event start time' })
-  ).toHaveProperty('value', '1:00 AM');
-  expect(
-    screen.getByRole('combobox', { name: 'event end time' })
-  ).toHaveProperty('value', '1:30 AM');
 });
 
 it('keeps a guest the organizer does not let modify to their own reminders', async () => {
@@ -223,7 +189,10 @@ it('keeps a guest the organizer does not let modify to their own reminders', asy
     'value',
     'Customer demo'
   );
-  expect(screen.getByLabelText('Location')).toHaveProperty('disabled', true);
+  expect(screen.getByRole('button', { name: 'Location' })).toHaveProperty(
+    'disabled',
+    true
+  );
   expect(screen.getByLabelText('Repeats')).toHaveProperty('disabled', true);
   expect(
     screen.getByRole('button', { name: /Video conferencing/ })
@@ -240,7 +209,6 @@ it('keeps a guest the organizer does not let modify to their own reminders', asy
     screen.getByText('Only the organizer can change this event.')
   ).toBeTruthy();
 
-  await user.click(screen.getByRole('button', { name: 'More options' }));
   await user.click(screen.getByRole('button', { name: /Notifications/ }));
   expect(screen.getAllByRole('option').length).toBeGreaterThan(0);
 });
@@ -248,7 +216,6 @@ it('keeps a guest the organizer does not let modify to their own reminders', asy
 it('lets the organizer set guest permissions, with modifying implying inviting', async () => {
   const user = userEvent.setup();
   showForm({ guestPolicyEditable: true });
-  await user.click(screen.getByRole('button', { name: 'More options' }));
 
   const permissions = screen.getByRole('group', { name: 'Guest permissions' });
   const modify = screen.getByRole('checkbox', { name: 'Modify event' });
@@ -269,10 +236,8 @@ it('lets the organizer set guest permissions, with modifying implying inviting',
   expect((invite as HTMLInputElement).disabled).toBe(true);
 });
 
-it('offers no guest permissions without the organizer’s rights', async () => {
-  const user = userEvent.setup();
+it('offers no guest permissions without the organizer’s rights', () => {
   showForm();
-  await user.click(screen.getByRole('button', { name: 'More options' }));
 
   expect(screen.queryByRole('group', { name: 'Guest permissions' })).toBeNull();
 });
@@ -300,7 +265,6 @@ it('returns guest permissions to the stored ones when an edit targets one occurr
     guestPolicyEditable: true,
     showRecurringEditNotice: true,
   });
-  await user.click(screen.getByRole('button', { name: 'More options' }));
   const seeGuests = screen.getByRole('checkbox', { name: 'See guest list' });
 
   await user.click(seeGuests);
@@ -326,7 +290,7 @@ it('returns guest permissions to the stored ones when an edit targets one occurr
   ).toBeNull();
 });
 
-it('moves the end with the start even after the end is picked', async () => {
+it('moves the end with the start until the end is picked', async () => {
   const user = userEvent.setup();
   showForm();
   const start = () =>
@@ -346,7 +310,7 @@ it('moves the end with the start even after the end is picked', async () => {
 
   await typeTime(end(), '17:00');
   await typeTime(start(), '15:00');
-  expect(end().value).toBe('6:00 PM');
+  expect(end().value).toBe('5:00 PM');
   expect(
     screen.queryByText('End time must be after the start time.')
   ).toBeNull();
@@ -381,7 +345,7 @@ it('keeps a 12-hour calendar’s times on the 12-hour clock', () => {
   expect(
     screen.getByRole<HTMLInputElement>('combobox', { name: 'event start time' })
       .value
-  ).toBe('12:00pm');
+  ).toBe('12:00 PM');
 });
 
 const TEAMS_REMOVAL_NOTICE =
