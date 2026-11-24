@@ -8,6 +8,7 @@ import { CLOSURES, closureOf } from './lib/closed.ts';
 import { channelNameRest, homeCheckClosure, type CompactDom } from './lib/dom-held.ts';
 import { authRefreshTimeoutClass, TRANSPORT_FAILURE } from './lib/compare.ts';
 import { pastLoadedPages, REST_DEADLINE, staleSlotPastPages, type Row } from './lib/project.ts';
+import { tabStampClasses, type StampRead, type StampVerdict } from './lib/stamp-check.ts';
 
 type ClassEntry = { n: number; example: unknown };
 type RefEntry = { 'ref-agrees': number; 'ref-disagrees': number; 'ref-absent': number; example: unknown };
@@ -283,6 +284,29 @@ function reclassifyNetwork(run: string, classes: Record<string, ClassEntry>): { 
   return moved;
 }
 
+/**
+ * A loaded read whose notifiedAt differs because one tab had not stamped a row
+ * yet (closure M2). chk-stamp.ts checks such reads against the database into
+ * out/<run>/stamp-check.json; a `field:<kind>.notifiedAt` class whose every
+ * read passed (lib/stamp-check.ts) moves to `<class>:tab-stamp`. A run with no
+ * such file moves nothing.
+ */
+function reclassifyStamps(run: string, classes: Record<string, ClassEntry>): { from: string; to: string; n: number }[] {
+  const checkPath = join(outDir, run, 'stamp-check.json');
+  const readsPath = join(outDir, run, 'reads.jsonl');
+  if (!existsSync(checkPath) || !existsSync(readsPath)) return [];
+  const verdicts = (JSON.parse(readFileSync(checkPath, 'utf8')) as { reads: StampVerdict[] }).reads;
+  const reads = readFileSync(readsPath, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as StampRead);
+  return tabStampClasses(reads, verdicts).flatMap((from) => {
+    const entry = classes[from];
+    if (!entry) return [];
+    delete classes[from];
+    const to = `${from}:tab-stamp`;
+    classes[to] = entry;
+    return [{ from, to, n: entry.n }];
+  });
+}
+
 const outDir
 
  = join(import.meta.dirname, 'out');
@@ -312,6 +336,7 @@ for (const run of runs.sort()) {
   const pastPages = summary.sequences?.classes ? reclassifyPastPages(run, summary.sequences.classes) : [];
   const liveSlots = summary.sequences?.classes ? reclassifyLiveSlots(run, summary.sequences.classes) : [];
   const network = summary.sequences?.classes ? reclassifyNetwork(run, summary.sequences.classes) : [];
+  const tabStamps = summary.reads?.classes ? reclassifyStamps(run, summary.reads.classes) : [];
   const superseded: Record<string, number> = {};
   for (const phase of ['reads', 'dom', 'sequences']) {
     const classes: Record<string, ClassEntry> = summary[phase]?.classes ?? {};
@@ -346,6 +371,7 @@ for (const run of runs.sort()) {
     pastPages,
     liveSlots,
     network,
+    tabStamps,
     supersededBy: SUPERSEDED[run]?.by,
     supersededPhases: SUPERSEDED[run]?.phases,
     superseded,

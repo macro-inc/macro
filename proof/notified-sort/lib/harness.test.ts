@@ -15,6 +15,7 @@ import { MUTANTS } from './mutants.ts';
 import { discrepancies, instant, pastLoadedPages, project, REST_DEADLINE, sameRows, staleSlotPastPages, type Row } from './project.ts';
 import { domWithoutRaced, withoutRaced } from './race.ts';
 import { Rng } from './rng.ts';
+import { stampVerified, tabStampClasses, type StampVerdict } from './stamp-check.ts';
 import { buildWorld } from './world.ts';
 
 const snap = (entities: Record<string, unknown>[]): Snapshot => ({
@@ -509,5 +510,22 @@ describe('load closures', () => {
     expect(closureOf('error:old:network-under-storm')?.id).toBe('T13');
     expect(closureOf('home touch signal dom:old-empty-under-storm')?.id).toBe('M1');
     for (const open of ['error:new:network-under-stormy', 'error:new:deadline-under-storm', 'home touch signal dom:new-empty-under-storm', 'raced:extra', 'error:new', 'membership:missing-in-new:document']) expect(closureOf(open), open).toBeUndefined();
+  });
+
+  it('close a notification time one tab had not stamped only on reads the database check passed', () => {
+    expect(closureOf('field:document.notifiedAt:tab-stamp')?.id).toBe('M2');
+    for (const open of ['field:document.notifiedAt', 'raw spec0 field:document.notifiedAt', 'field:document.updatedAt:tab-stamp', 'field:document.notifiedAt:tab-stamped']) expect(closureOf(open), open).toBeUndefined();
+    const ok: StampVerdict = { read: 1, transport: 'rest->rest', grouped: 'date', rows: 5, latest: 5, pastCap: 0, pastRetention: 0 };
+    expect(stampVerified(ok)).toBe(true);
+    for (const bad of [{ transport: 'rest->graphql' }, { grouped: 'none' }, { rows: 0, latest: 0 }, { latest: 4 }, { pastCap: 1 }, { pastRetention: 1 }]) expect(stampVerified({ ...ok, ...bad }), JSON.stringify(bad)).toBe(false);
+    expect(stampVerified(undefined)).toBe(false);
+    const reads = [
+      { id: 1, classes: ['field:document.notifiedAt'] },
+      { id: 2, classes: ['field:document.notifiedAt', 'field:email.notifiedAt', 'raced'] },
+      { id: 3, classes: ['field:email.notifiedAt'] },
+    ];
+    // document: both its reads passed; email: read 3 was never checked.
+    expect(tabStampClasses(reads, [ok, { ...ok, read: 2 }])).toEqual(['field:document.notifiedAt']);
+    expect(tabStampClasses(reads, [ok, { ...ok, read: 2, latest: 4 }])).toEqual([]);
   });
 });

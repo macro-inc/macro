@@ -7,9 +7,10 @@
 // stamp-floors.ts). For each such entity it prints whether the one side's
 // value is the viewer's latest notification for it before the read, how long
 // before the read it was, and how many other entities the viewer was notified
-// about between it and the read (past 200, the floor is gone). Usage (inside
-// nix develop, env.sh sourced): node chk-stamp.ts out/load-reads
-import { readFileSync } from 'node:fs';
+// about between it and the read (past 200, the floor is gone). Writes the
+// verdict per read to <dir>/stamp-check.json, which report.ts reads (closure
+// M2). Usage (inside nix develop, env.sh sourced): node chk-stamp.ts out/load-reads
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { q, sql, stackFromEnv } from './lib/stack.ts';
 
@@ -22,14 +23,18 @@ const userOf = (viewer: string) => `macro|${world.users[viewer.replace(/^size:/,
 type Diff = { kind: string; entity?: string; path?: string; old?: unknown; new?: unknown; cls: string };
 type Read = { id: number; dims: Record<string, string>; open?: Diff[]; window?: { since: string } };
 const reads = readFileSync(join(dir, 'reads.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Read);
+const perRead: { read: number; transport: string; grouped: string; rows: number; latest: number; pastCap: number; pastRetention: number }[] = [];
 const tally = { reads: 0, rows: 0, latestBeforeRead: 0, oneSide: { old: 0, new: 0 }, pastCap: 0, pastRetention: 0 };
 for (const read of reads) {
   const stamps = (read.open ?? []).filter((d) => d.kind === 'field' && d.path === '.notifiedAt' && (d.old === '<absent>' || d.new === '<absent>'));
   if (!stamps.length || !read.window) continue;
   tally.reads += 1;
+  const verdict = { read: read.id, transport: read.dims.transport, grouped: read.dims.grouped, rows: 0, latest: 0, pastCap: 0, pastRetention: 0 };
+  perRead.push(verdict);
   const user = userOf(read.dims.viewer);
   for (const d of stamps) {
     tally.rows += 1;
+    verdict.rows += 1;
     const side = d.old === '<absent>' ? 'new' : 'old';
     tally.oneSide[side] += 1;
     const value = String(side === 'new' ? d.new : d.old);
@@ -43,11 +48,21 @@ for (const read of reads) {
       `SELECT count(DISTINCT un.event_item_id) AS entities, count(*) AS notifications FROM user_notification un WHERE un.user_id = ${q(user)} AND un.created_at > ${q(value)}::timestamptz AND un.created_at < ${q(read.window.since)}::timestamptz AND un.event_item_id <> ${q(id)}`
     );
     const isLatest = latest?.at != null && value.startsWith(latest.at);
-    if (isLatest) tally.latestBeforeRead += 1;
+    if (isLatest) {
+      tally.latestBeforeRead += 1;
+      verdict.latest += 1;
+    }
     const ageS = (Date.parse(read.window.since) - Date.parse(value)) / 1000;
-    if (Number(after.entities) > 200) tally.pastCap += 1;
-    if (ageS > 300) tally.pastRetention += 1;
+    if (Number(after.entities) > 200) {
+      tally.pastCap += 1;
+      verdict.pastCap += 1;
+    }
+    if (ageS > 300) {
+      tally.pastRetention += 1;
+      verdict.pastRetention += 1;
+    }
     console.log(`read ${read.id} ${read.dims.viewer} grouped=${read.dims.grouped} tab=${read.dims.tab} ${d.entity} stamped on ${side}: ${value} latest-before-read=${isLatest} age=${ageS.toFixed(0)}s other-entities-notified-since=${after.entities} (${after.notifications} notifications)`);
   }
 }
 console.log(JSON.stringify(tally));
+writeFileSync(join(dir, 'stamp-check.json'), JSON.stringify({ tally, reads: perRead }, null, 1));
