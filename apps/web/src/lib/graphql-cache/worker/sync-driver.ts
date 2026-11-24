@@ -45,12 +45,21 @@ export interface SyncEngine {
   syncState(): Promise<SyncLaneState[]>;
 }
 
+/**
+ * Which engine call a queued task makes: `apply` is the only one that writes
+ * records; `finish` and `abort` end the run and must run whatever happened.
+ */
+export type SyncStep = 'begin' | 'feed' | 'apply' | 'finish' | 'abort';
+
 export interface SyncDriverOptions {
   /**
    * Runs `task` on the engine through the worker's request queue at
    * background-hydration priority, so foreground reads go first.
    */
-  runTask<T>(task: (engine: SyncEngine) => Promise<T>): Promise<T>;
+  runTask<T>(
+    task: (engine: SyncEngine) => Promise<T>,
+    step: SyncStep
+  ): Promise<T>;
   /** Publishes one applied frame like the matching ordinary request. */
   publish(applied: SyncAppliedWire): void;
   /** Reports an engine failure (for reset-required latching). */
@@ -230,6 +239,11 @@ async function network<T>(request: Promise<T>): Promise<T> {
   }
 }
 
+/** A run stopped by its host: `stop`, an engine drain or a cache reset. */
+export function abortedError(message = 'the sync run was stopped'): Error {
+  return Object.assign(new Error(message), { cacheSyncFailure: 'aborted' });
+}
+
 const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
@@ -382,8 +396,9 @@ export class CacheSyncDriver {
     let began = false;
     let readAhead: ReadAhead | undefined;
     try {
-      const body = await runTask((engine) =>
-        engine.syncBegin(JSON.stringify(args))
+      const body = await runTask(
+        (engine) => engine.syncBegin(JSON.stringify(args)),
+        'begin'
       );
       began = true;
       if (signal.aborted) return await this.stopped(began, { kind: 'aborted' });
@@ -425,18 +440,23 @@ export class CacheSyncDriver {
       for (;;) {
         const chunk = await readAhead.next();
         if (!chunk) break;
-        let pending = await runTask((engine) => engine.syncFeed(chunk));
+        let pending = await runTask((engine) => engine.syncFeed(chunk), 'feed');
         for (; pending > 0; pending -= 1) {
           // Let body reads and foreground requests in before each write.
           await nextTask();
           if (signal.aborted) {
             return await this.stopped(began, { kind: 'aborted' });
           }
-          publisher.push(await runTask((engine) => engine.syncApplyNext()));
+          const applied = await runTask(async (engine) => {
+            // A stop that arrived while this write waited in the queue.
+            if (signal.aborted) throw abortedError();
+            return await engine.syncApplyNext();
+          }, 'apply');
+          publisher.push(applied);
         }
         readAhead.release(chunk.byteLength);
       }
-      const finished = await runTask((engine) => engine.syncFinish());
+      const finished = await runTask((engine) => engine.syncFinish(), 'finish');
       began = false;
       return finished.ok
         ? { ok: true, result: finished.result }
@@ -482,7 +502,10 @@ export class CacheSyncDriver {
     if (!began) return { ok: false, failure };
     let partial: SyncRunResult | null = null;
     try {
-      partial = await this.options.runTask((engine) => engine.syncAbort());
+      partial = await this.options.runTask(
+        (engine) => engine.syncAbort(),
+        'abort'
+      );
     } catch {
       // A closed or reset engine dropped its run already.
     }

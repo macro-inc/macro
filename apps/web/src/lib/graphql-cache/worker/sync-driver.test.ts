@@ -5,6 +5,7 @@ import {
   CacheSyncDriver,
   type SyncAppliedWire,
   type SyncEngine,
+  type SyncStep,
 } from './sync-driver';
 
 const ARGS: SyncStartArgs = {
@@ -132,11 +133,11 @@ function driver(
   } = {}
 ) {
   const published: SyncAppliedWire[] = [];
-  const tasks: string[] = [];
+  const steps: SyncStep[] = [];
   const nextTask = vi.fn(async () => {});
   const sync = new CacheSyncDriver({
-    runTask: async (task) => {
-      tasks.push('task');
+    runTask: async (task, step) => {
+      steps.push(step);
       return await task(engine);
     },
     publish: (applied) => published.push(applied),
@@ -146,7 +147,7 @@ function driver(
     publishIntervalMs: 0,
     ...options,
   });
-  return { sync, published, tasks, nextTask };
+  return { sync, published, steps, nextTask };
 }
 
 describe('CacheSyncDriver', () => {
@@ -155,7 +156,7 @@ describe('CacheSyncDriver', () => {
     const fetch = vi.fn(
       async () => new Response(body(['{"type":', '"page"}\n', 'x\ny\n']))
     );
-    const { sync, published, nextTask } = driver(engine, fetch);
+    const { sync, published, steps, nextTask } = driver(engine, fetch);
 
     await expect(sync.start(ARGS)).resolves.toEqual({
       ok: true,
@@ -163,6 +164,22 @@ describe('CacheSyncDriver', () => {
     });
 
     expect(engine.syncBegin).toHaveBeenCalledWith(JSON.stringify(ARGS));
+    // Each chunk reaches the engine as received, and each of its decoded
+    // frames is applied before the next chunk is fed.
+    const decoder = new TextDecoder();
+    expect(
+      engine.syncFeed.mock.calls.map(([bytes]) => decoder.decode(bytes))
+    ).toEqual(['{"type":', '"page"}\n', 'x\ny\n']);
+    expect(steps).toEqual([
+      'begin',
+      'feed',
+      'apply',
+      'feed',
+      'feed',
+      'apply',
+      'apply',
+      'finish',
+    ]);
     expect(fetch).toHaveBeenCalledOnce();
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(ARGS.url);
@@ -498,6 +515,45 @@ describe('CacheSyncDriver', () => {
     expect(state.cancelled).toBe(true);
     expect(engine.syncFinish).not.toHaveBeenCalled();
   });
+  it('drops a write that was still queued when the run stopped', async () => {
+    const engine = fakeEngine([1]);
+    let queued!: () => void;
+    const applyQueued = new Promise<void>((resolve) => {
+      queued = resolve;
+    });
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const sync = new CacheSyncDriver({
+      runTask: async (task, step) => {
+        // The write waits behind other work in the engine queue.
+        if (step === 'apply') {
+          queued();
+          await released;
+        }
+        return await task(engine);
+      },
+      publish: vi.fn(),
+      reportEngineError: vi.fn(),
+      fetch: vi.fn(async () => new Response(body(['{}\n']))),
+      nextTask: async () => {},
+    });
+
+    const run = sync.start(ARGS);
+    await applyQueued;
+    const stopped = sync.stop();
+    release();
+    await expect(run).resolves.toEqual({
+      ok: false,
+      failure: { kind: 'aborted' },
+      partial: { ...RESULT, reason: 'maxPages' },
+    });
+    await stopped;
+    expect(engine.syncApplyNext).not.toHaveBeenCalled();
+    expect(engine.syncAbort).toHaveBeenCalledOnce();
+  });
+
   it('coalesces hydrated pages into one publication per interval', async () => {
     const hydrated = (
       revision: string,
