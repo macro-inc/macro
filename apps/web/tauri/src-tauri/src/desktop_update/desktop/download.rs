@@ -188,11 +188,13 @@ impl Store {
             Ok::<_, Error>(())
         }
         .await;
-        // A tokio file finishes its last write in the background, so a failed
-        // transfer would return before its bytes are saved, and the next
-        // attempt could find fewer of them.
-        file.flush().await?;
+        // A tokio file finishes its last write in the background: without the
+        // flush a failed transfer returns before its bytes are saved, and a
+        // failed last write goes unreported (`sync_all` drops its error). The
+        // transfer's own error, when there is one, is the one reported.
+        let flushed = file.flush().await;
         transfer?;
+        flushed?;
         file.sync_all().await?;
         drop(file);
         tokio::fs::rename(&partial, self.directory.join(COMPLETE)).await?;
