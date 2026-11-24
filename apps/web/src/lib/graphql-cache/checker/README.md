@@ -28,8 +28,7 @@ fire timers for 60 virtual seconds, injecting faults. Then faults stop: every
 page that is not frozen comes online and is shown, six minutes pass (longer than
 any timeout in the cache; a stretch of nothing but answered heartbeats is
 skipped, so a fault in one of those heartbeats goes unseen), and each page makes
-one more draft and read. The properties are checked
-last.
+one more draft and read. The properties are checked last.
 
 ## What a bound covers
 
