@@ -72,6 +72,7 @@ import {
 import { readSoupPage } from './read-soup-page';
 import {
   materializeReconciledSoup,
+  isLocallySortable,
   soupItemKey,
   soupReconciliationBaseline,
   unreconciledServerRecords,
@@ -570,11 +571,7 @@ export function createSoupLiveQuery(
     )
       return;
     const initial = input.initial;
-    if (
-      initial.sortMethod !== 'CREATED_AT' &&
-      initial.sortMethod !== 'UPDATED_AT'
-    )
-      return;
+    if (!isLocallySortable(initial.sortMethod)) return;
     const withoutEmail = queryOptions.localReconciliation === 'without-email';
     const mailView =
       !withoutEmail && isCachedMailView(initial.emailView)
