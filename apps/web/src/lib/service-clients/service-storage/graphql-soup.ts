@@ -104,7 +104,8 @@ import {
 } from './cache-error-throttle';
 import {
   type CacheRecoveryStopReason,
-  canRetryCacheFailure,
+  CacheRecoverySupersededError,
+  canReopenCache,
   createCacheRecovery,
 } from './cache-recovery';
 import { channelMembershipReceiptExchange } from './channel-membership';
@@ -708,7 +709,7 @@ async function restartCache(span: Span): Promise<void> {
     host !== cachedCacheHost ||
     host.disabled
   )
-    throw new Error('Cache recovery was superseded.');
+    throw new CacheRecoverySupersededError();
   cacheInitializationFailed = false;
   setCacheAvailability((version) => version + 1);
 }
@@ -1145,7 +1146,7 @@ export function getGraphqlSoupClient(): Client {
       if (cacheRecovery.state() !== 'recovering')
         cacheInitializationFailed = false;
       unregisterHost = registerCacheHost(host, (error) =>
-        canRetryCacheFailure(error) ? createHost(false) : undefined
+        canReopenCache(error) ? createHost(false) : undefined
       );
       cachedCacheCleanup = cleanup;
       browserCacheClientActivated = !native;

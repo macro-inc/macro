@@ -15,7 +15,10 @@ import { createHash } from 'node:crypto';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { match } from 'ts-pattern';
 import { vi } from 'vitest';
-import { createCacheRecovery } from '../../service-clients/service-storage/cache-recovery';
+import {
+  CacheRecoverySupersededError,
+  createCacheRecovery,
+} from '../../service-clients/service-storage/cache-recovery';
 import { createRetirableCacheHost } from '../host/retirable-host';
 import type { CacheHost } from '../host/types';
 import { createWorkerCacheHost } from '../host/worker-host';
@@ -357,7 +360,7 @@ export class Page {
     await host.currentRevision();
     await host.inspectMutations?.();
     if (host !== this.host || host.disabled)
-      throw new Error('Cache recovery was superseded.');
+      throw new CacheRecoverySupersededError();
     this.cacheOff = false;
   }
 

@@ -1,7 +1,13 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  CacheHostDisposedError,
+  CacheRequestTimeoutError,
+} from '@graphql-cache/host/errors';
+import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
 import { CoordinatorRestartedError } from '@graphql-cache/host/worker-host';
 import {
   isCacheSupersededError,
+  isOwnerEpochLostError,
   isOwnerHandoffBlockedError,
   isOwnerLockUnavailableError,
 } from '@graphql-cache/protocol';
@@ -24,17 +30,42 @@ export const MAX_RECOVERY_RELAPSES = 10;
 /** How long a restarted cache must stay up before its failures count afresh. */
 export const RECOVERY_HEALTHY_MS = 60_000;
 
+/** The page replaced its host, or its session ended, during a restart. */
+export class CacheRecoverySupersededError extends Error {
+  constructor() {
+    super('Cache recovery was superseded.');
+    this.name = 'CacheRecoverySupersededError';
+  }
+}
+
 /** Only known untouched/bootstrap, owner-handoff, or coordinator-restart
  * failures permit reopening: each leaves the database preserved and its scope
  * unquarantined. A newer build that took the database over never hands it back
  * to this one. */
-export function canRetryCacheFailure(error: unknown): boolean {
+export function canReopenCache(error: unknown): boolean {
   if (isCacheSupersededError(error)) return false;
   return (
     error instanceof CacheBootstrapExhaustedError ||
     error instanceof CoordinatorRestartedError ||
     isOwnerLockUnavailableError(error) ||
     isOwnerHandoffBlockedError(error)
+  );
+}
+
+/** Whether a host that failed may be followed by another. A startup nobody
+ * answered also keeps the database and its scope. */
+export function canRetryCacheFailure(error: unknown): boolean {
+  return canReopenCache(error) || error instanceof CacheRequestTimeoutError;
+}
+
+/** Whether a restart only lost its request, so that its host can be asked
+ * again. A host that failed reports that itself. */
+function interruptedRestart(error: unknown): boolean {
+  return (
+    isOwnerEpochLostError(error) ||
+    error instanceof CacheNavigationError ||
+    error instanceof CacheHostDisposedError ||
+    error instanceof CacheRecoverySupersededError
   );
 }
 
@@ -55,9 +86,12 @@ export type CacheRecoveryOptions = {
   ) => void;
 };
 
-function stopReason(error: unknown): CacheRecoveryStopReason {
+function stopReason(
+  error: unknown,
+  retryable: boolean
+): CacheRecoveryStopReason {
   if (isCacheSupersededError(error)) return 'superseded';
-  return canRetryCacheFailure(error) ? 'relapses-exhausted' : 'unrecoverable';
+  return retryable ? 'relapses-exhausted' : 'unrecoverable';
 }
 
 /** Owns a page session's retry cycle, never the persisted cache or its scope. */
@@ -115,7 +149,7 @@ export function createCacheRecovery(
     const delay = Math.min(30_000, 1_000 * 2 ** Math.min(attempt, 5));
     timer = setTimeout(resume, delay * (0.8 + Math.random() * 0.4));
   };
-  const failed = (error: unknown) => {
+  const fail = (error: unknown, retryable: boolean) => {
     failure = error;
     if (healthyTimer !== undefined) {
       relapses += 1;
@@ -124,20 +158,22 @@ export function createCacheRecovery(
     clearHealthyTimer();
     // Only these typed errors prove restarting cannot bypass a quarantined
     // journal: nothing opened storage, a read was refused while the database
-    // moved between owners, or the coordinator kept restarting with storage
-    // preserved. Unknown storage/transport failures stay closed, and so does a
+    // moved between owners, the coordinator kept restarting or never answered
+    // with storage preserved, or a restart lost its request while its host
+    // lives on. Unknown storage/transport failures stay closed, and so does a
     // cache that kept failing after every restart.
-    const recoverable =
-      canRetryCacheFailure(error) && relapses < MAX_RECOVERY_RELAPSES;
+    const recoverable = retryable && relapses < MAX_RECOVERY_RELAPSES;
     const stopping = !recoverable && state() !== 'recovery-required';
     setState(recoverable ? 'unavailable' : 'recovery-required');
     if (recoverable) schedule();
     else {
       clearTimer();
       unlisten();
-      if (stopping) options.onStopped?.(stopReason(error), relapses, error);
+      if (stopping)
+        options.onStopped?.(stopReason(error, retryable), relapses, error);
     }
   };
+  const failed = (error: unknown) => fail(error, canRetryCacheFailure(error));
   async function run(epoch: number) {
     try {
       await rebuild();
@@ -154,7 +190,11 @@ export function createCacheRecovery(
       }, RECOVERY_HEALTHY_MS);
     } catch (error) {
       if (generation !== epoch) return;
-      failed(error);
+      // A host that failed meanwhile has said why, which decides; what the
+      // restart then rejects with is only a consequence.
+      if (state() === 'recovering')
+        fail(error, canRetryCacheFailure(error) || interruptedRestart(error));
+      else schedule();
       throw error;
     } finally {
       if (generation === epoch) pending = undefined;

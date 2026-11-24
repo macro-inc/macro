@@ -1,7 +1,13 @@
+import {
+  CacheHostDisposedError,
+  CacheRequestTimeoutError,
+} from '@graphql-cache/host/errors';
+import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
 import { CoordinatorRestartedError } from '@graphql-cache/host/worker-host';
 import { CacheBootstrapExhaustedError } from '@graphql-cache/worker/startup';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
+  CacheRecoverySupersededError,
   createCacheRecovery,
   MAX_RECOVERY_RELAPSES,
   RECOVERY_HEALTHY_MS,
@@ -132,6 +138,80 @@ it('keeps an engine transport failure closed even when it looks like a lost owne
   expect(recovery.state()).toBe('recovery-required');
   recovery.reset();
 });
+
+it('retries after startup went unanswered', async () => {
+  const rebuild = vi.fn(async () => {});
+  const recovery = createCacheRecovery(rebuild);
+  recovery.failed(new CacheRequestTimeoutError('init'));
+  expect(recovery.state()).toBe('unavailable');
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(rebuild).toHaveBeenCalledOnce();
+  expect(recovery.state()).toBe('ready');
+  recovery.reset();
+});
+
+it.each([
+  [
+    'its owner was lost',
+    Object.assign(new Error('owner epoch 2 was lost'), {
+      errorCode: 'owner-epoch-lost',
+    }),
+  ],
+  ['the page was suspended', new CacheNavigationError()],
+  ['its read timed out', new CacheRequestTimeoutError('current-revision')],
+  ['its host was disposed', new CacheHostDisposedError()],
+  ['the page replaced its host', new CacheRecoverySupersededError()],
+])('keeps retrying a restart cut short because %s', async (_why, error) => {
+  const rebuild = vi.fn(async (): Promise<void> => {
+    throw error;
+  });
+  const onStopped = vi.fn();
+  const recovery = createCacheRecovery(rebuild, { onStopped });
+  recovery.failed(new CacheBootstrapExhaustedError('Failed to fetch'));
+  await vi.advanceTimersByTimeAsync(30 * 60_000);
+  expect(rebuild.mock.calls.length).toBeGreaterThan(MAX_RECOVERY_RELAPSES * 2);
+  expect(recovery.state()).toBe('unavailable');
+  expect(onStopped).not.toHaveBeenCalled();
+  rebuild.mockResolvedValueOnce(undefined);
+  await recovery.retry();
+  expect(recovery.state()).toBe('ready');
+  recovery.reset();
+});
+
+it.each([
+  ['retries', new CacheBootstrapExhaustedError('Failed to fetch')],
+  ['stops', new Error('database recovery failed')],
+])(
+  '%s as the host that failed during a restart says, whatever the restart rejects with',
+  async (outcome, reported) => {
+    let restart = Promise.withResolvers<void>();
+    const rebuild = vi.fn(() => restart.promise);
+    const onStopped = vi.fn();
+    const recovery = createCacheRecovery(rebuild, { onStopped });
+    recovery.failed(new CacheBootstrapExhaustedError('Failed to fetch'));
+    const first = expect(recovery.retry()).rejects.toThrow('consequence');
+    recovery.failed(reported);
+    // Its own retry finds the restart still running.
+    await vi.advanceTimersByTimeAsync(60_000);
+    restart.reject(
+      outcome === 'stops'
+        ? Object.assign(new Error('consequence'), {
+            errorCode: 'owner-epoch-lost',
+          })
+        : new Error('consequence')
+    );
+    await first;
+    expect(rebuild).toHaveBeenCalledOnce();
+    restart = Promise.withResolvers<void>();
+    restart.resolve();
+    await vi.advanceTimersByTimeAsync(60_000);
+    const retries = outcome === 'retries';
+    expect(recovery.state()).toBe(retries ? 'ready' : 'recovery-required');
+    expect(rebuild).toHaveBeenCalledTimes(retries ? 2 : 1);
+    expect(onStopped).toHaveBeenCalledTimes(retries ? 0 : 1);
+    recovery.reset();
+  }
+);
 
 it('never retries after a newer build took the database over', async () => {
   const rebuild = vi.fn(async () => {});

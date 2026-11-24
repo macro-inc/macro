@@ -2015,6 +2015,34 @@ describe('GraphQL Soup browser cache session gate', () => {
     }
   });
 
+  it('asks the same host again when a restart only lost its request', async () => {
+    vi.useFakeTimers();
+    try {
+      const { CacheNavigationError } = await import(
+        '@graphql-cache/host/navigation-error'
+      );
+      const { CacheRequestTimeoutError } = await import(
+        '@graphql-cache/host/errors'
+      );
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      mocks.failInitialization(new CacheRequestTimeoutError('init'));
+      expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
+      mocks.host.currentRevision.mockRejectedValueOnce(
+        new CacheNavigationError()
+      );
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
+      expect(soup.graphqlDraftQueueBlocked()).toBe(true);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(soup.graphqlCacheRecoveryState()).toBe('ready');
+      expect(soup.graphqlDraftQueueBlocked()).toBe(false);
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('rejects drafts from both retired and uncached transports after recovery', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const soup = await import('./graphql-soup');

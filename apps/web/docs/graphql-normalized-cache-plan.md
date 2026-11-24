@@ -462,16 +462,18 @@ failures storage-safe. Engine recovery retains its bounded five retries.
 Exhausted bootstrap retries preserve the cache
 scope only when the coordinator explicitly proves storage was untouched, not from
 a page's last-seen phase. Missing/broken transports remain conservatively
-uncertain. Pages retry proven untouched bootstrap, owner-lock and coordinator-restart
-failures on reconnect,
-foregrounding, or explicit draft Retry, with jittered exponential backoff capped
+uncertain. Pages retry proven untouched bootstrap, owner-lock, coordinator-restart
+and unanswered-startup failures on reconnect, foregrounding, or explicit draft Retry, with jittered exponential backoff capped
 at thirty seconds. A newly registered host restarts an exhausted untouched
 coordinator at a new owner epoch with `open-existing`; failed hosts remain
 excluded. Draft writes stay blocked until the replacement opens and inspects
 the preserved mutation queue. A read refused because the database was moving
 between owners (`owner-handoff-blocked`) leaves the host running, so recovery
 proves that same host readable on its next attempt instead of registering
-another. Unknown storage failures still require explicit recovery or an update
+another. So does a restart that only lost its request: its owner was lost, the
+page was suspended, the read timed out, or the page replaced the host meanwhile.
+When a host fails during a restart, the failure it reports decides, not what the
+restart then rejects with. Unknown storage failures still require explicit recovery or an update
 (the compose banner offers Reload then); retry never rotates the scope or clears
 persisted data. A page whose build was superseded (`cache-superseded`) never
 retries: that coordinator never hands the database back, so the page waits for
