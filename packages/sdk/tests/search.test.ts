@@ -14,6 +14,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 const nil = '00000000-0000-0000-0000-000000000000';
+const runtimeTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const macro = () =>
   new Macro({
     token: 'test-token',
@@ -98,6 +99,7 @@ test('searches every type in one call and returns a typed handle per hit', async
     match_type: 'partial',
     search_on: 'name_content',
     filters: { agent_session_filters: { include: true } },
+    time_zone: runtimeTimeZone,
   });
   expect(results.map((result) => result.type)).toEqual([
     'document',
@@ -150,6 +152,7 @@ test('scopes to types, exact matching, an inbox and tags, and labels hit tags', 
         tag_filter_mode: 'all',
       },
       calendar_event_scope: 'shared_with_you',
+      time_zone: runtimeTimeZone,
     });
     return Response.json({
       results: [
@@ -199,6 +202,22 @@ test('agent session scope searches only those transcripts', async () => {
     agentSessions: [client.agentSessions.byId('session')],
     types: ['document'],
   });
+});
+
+test("typed dates are read in the asked-for time zone, else the runtime's", async () => {
+  const zones: unknown[] = [];
+  serve(async (request) => {
+    zones.push(((await request.json()) as { time_zone?: string }).time_zone);
+    return Response.json({ results: [] });
+  });
+  const client = macro();
+  await client.search.page('after:2025/01/31 lunch', {
+    timeZone: 'America/New_York',
+  });
+  await client.search.page('after:2025/01/31 lunch');
+  for await (const _ of client.email.search('after:2025/01/31 lunch')) break;
+
+  expect(zones).toEqual(['America/New_York', runtimeTimeZone, runtimeTimeZone]);
 });
 
 test('companies are searched only when asked for', async () => {

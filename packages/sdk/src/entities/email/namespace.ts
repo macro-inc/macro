@@ -310,6 +310,14 @@ export class EmailNamespace {
    * matches where that display name appears. Resolve the address first, for
    * example with `macro.users.search(name)`.
    *
+   * The query also takes Gmail's operators, ANDed with its words:
+   * `subject:lunch`, `from:ana@example.com`, `to:` (To, Cc and Bcc), `cc:`,
+   * `bcc:`, `in:sent` and the other Mail views, `in:` or `label:` a tag or
+   * label name, `is:unread`, `is:starred`, `is:shared`, `has:attachment`,
+   * `after:2025/01/31`, `before:`, `newer_than:3d`, `older_than:1m`, and a
+   * minus to leave matches out (`-in:inbox`). Dates are read in this
+   * runtime's time zone; for another, use `macro.search` with `timeZone`.
+   *
    * @readonly
    */
   search(query: string, opts?: SearchOpts): AsyncGenerator<EmailThread> {
