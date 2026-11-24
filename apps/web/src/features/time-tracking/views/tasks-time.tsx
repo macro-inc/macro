@@ -220,7 +220,7 @@ function MyWeekDesktop(props: TasksTimeViewProps): JSX.Element {
               day={day}
               today={props.clock.today()}
               minutes={minutes()}
-              person={props.person}
+              person={props.entryPerson}
               editAccess={props.editAccess}
               onWritten={() => written(taskId)}
             />

@@ -233,9 +233,18 @@ const bumpSummary = () =>
 
 beforeEach(() => {
   log.mockResolvedValue(ok({ kind: 'committed', data: undefined }));
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
 });
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   log.mockReset();
   update.mockReset();
   refetch.mockClear();
@@ -270,6 +279,7 @@ function renderWeek(
         clock={{ today: () => '2026-11-24', weekStartsOn: () => 1 }}
         showWeekends={() => options.showWeekends ?? false}
         person={(userId) => <span>{userId}</span>}
+        entryPerson={{ avatar: () => null, name: (userId) => userId }}
         task={TEST_TASK_PARTS}
         onOpenTask={onOpenTask}
         editAccess={(_taskId, render) =>

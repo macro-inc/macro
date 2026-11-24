@@ -444,9 +444,16 @@ showing Time logged, the sum of the task's entries, or "Time" when nothing is
 logged. On desktop it opens a popover: a length input that reads `1h 30m`,
 `1.5h`, `90m`, `1:30` or a bare number of hours and shows what it understood
 (Enter logs it for today), one-tap 15m/30m/1h/2h, Custom entry (length, day,
-optional start and end, note) and the entries by day with day totals. On
+optional start and end, note) and the entries by day with day totals. An
+entry reads like a Discussion comment (`EntryList`, the same rows in the
+popover, the phone sheet and a My week cell): the person's picture and name,
+then muted the start–end span and "timer" when a timer made it (wrapped under
+the name when they do not fit beside it, never cut), the length
+and the author's ⋯ menu on that line (others' rows keep its space), and the
+note on its own line under the name, wrapped and cut to three lines with Show
+more. On
 touch it opens a bottom sheet with the one-tap lengths, Custom entry and the
-entries; swipe one's own entry right to edit it, left to delete it. Only
+entries; tap one's own entry, or swipe it right, to edit it, left to delete it. Only
 people with edit access log; everyone who can see the task sees its entries;
 only an entry's author changes or deletes it. Time logged never shows as a
 generic property row or details row, and the Add property picker never offers

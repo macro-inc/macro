@@ -1,15 +1,32 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
-import { For, type JSX, Match, Show, Switch } from 'solid-js';
+import { Key } from '@solid-primitives/keyed';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { Button } from '@ui/components/Button';
+import {
+  createEffect,
+  createSignal,
+  type JSX,
+  Match,
+  on,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
 import { dayName, groupByDay } from '../core/entry-days';
 import { formatLength } from '../core/format-length';
+
+/** Who logged an entry, as the host shows people: a picture and a name. */
+export type EntryPerson = {
+  avatar: (userId: string) => JSX.Element;
+  name: (userId: string) => string;
+};
 
 type EntryListProps = {
   entries: readonly TimeEntryFieldsFragment[];
   /** The device's calendar day, `YYYY-MM-DD`. */
   today: string;
-  /** The person who logged an entry: avatar and name. */
-  person: (userId: string) => JSX.Element;
+  person: EntryPerson;
   /** Wraps one entry's row with the actions the view offers for it. */
   row?: (entry: TimeEntryFieldsFragment, content: JSX.Element) => JSX.Element;
   /** Controls placed at the end of an entry's row. */
@@ -36,9 +53,54 @@ function span(entry: TimeEntryFieldsFragment): string | undefined {
   return format.formatRange(new Date(entry.startedAt), new Date(entry.endedAt));
 }
 
+/**
+ * An entry's note, wrapped like a comment's body and cut to three lines, with
+ * Show more when it runs past them.
+ */
+function EntryNote(props: { text: string }): JSX.Element {
+  const [expanded, setExpanded] = createSignal(false);
+  const [overflowing, setOverflowing] = createSignal(false);
+  let ref: HTMLParagraphElement | undefined;
+  // Expanded, the box is as tall as its text and would always read as fitting.
+  const measure = () => {
+    if (ref && !expanded())
+      setOverflowing(ref.scrollHeight > ref.clientHeight + 1);
+  };
+  createEffect(on(() => props.text, measure));
+  onMount(() => createResizeObserver(() => ref, measure));
+  return (
+    <div class="flex min-w-0 flex-col items-start">
+      <p
+        ref={ref}
+        class="w-full whitespace-pre-wrap text-base text-ink wrap-anywhere"
+        classList={{ 'line-clamp-3': !expanded() }}
+      >
+        {props.text}
+      </p>
+      <Show when={overflowing()}>
+        {/* Above the phone sheet's row-wide edit button. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          class="relative z-1 -ml-1.5"
+          aria-expanded={expanded()}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded() ? t('common.showLess') : t('common.showMore')}
+        </Button>
+      </Show>
+    </div>
+  );
+}
+
+/**
+ * One entry, read like a comment: the person, then the name with when and how
+ * it was logged, its length and menu on that line, and the note under the name.
+ */
 function EntryRow(props: {
   entry: TimeEntryFieldsFragment;
-  person: (userId: string) => JSX.Element;
+  person: EntryPerson;
   actions?: (entry: TimeEntryFieldsFragment) => JSX.Element;
 }): JSX.Element {
   const detail = () =>
@@ -51,20 +113,40 @@ function EntryRow(props: {
       .filter(Boolean)
       .join(' · ');
   return (
-    <div class="flex w-full items-center gap-2 px-2 py-1.5 text-sm touch:min-h-[44px]">
-      <div class="shrink-0">{props.person(props.entry.userId)}</div>
-      <div class="flex min-w-0 flex-1 flex-col">
-        <Show when={props.entry.note}>
-          {(note) => <span class="truncate text-ink">{note()}</span>}
-        </Show>
+    <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] content-center items-start gap-x-2 gap-y-1 px-2 py-1.5 text-sm touch:min-h-[44px]">
+      <div class="flex h-7 shrink-0 items-center">
+        {props.person.avatar(props.entry.userId)}
+      </div>
+      {/* Details that do not fit beside the name wrap under it, never cut. */}
+      <div class="flex min-w-0 flex-wrap items-baseline gap-x-1 py-1">
+        <span class="min-w-0 truncate font-medium text-ink">
+          {props.person.name(props.entry.userId)}
+        </span>
         <Show when={detail()}>
-          <span class="truncate text-xs text-ink-muted">{detail()}</span>
+          <span class="text-xs text-ink-extra-muted tabular-nums">
+            {detail()}
+          </span>
         </Show>
       </div>
-      <span class="shrink-0 tabular-nums text-ink">
-        {formatLength(props.entry.minutes)}
-      </span>
-      <Show when={props.actions}>{(actions) => actions()(props.entry)}</Show>
+      <div class="flex h-7 items-center gap-1">
+        <span class="shrink-0 tabular-nums text-ink">
+          {formatLength(props.entry.minutes)}
+        </span>
+        <Show when={props.actions}>
+          {(actions) => (
+            <div class="flex size-7 shrink-0 items-center justify-center">
+              {actions()(props.entry)}
+            </div>
+          )}
+        </Show>
+      </div>
+      <Show when={props.entry.note}>
+        {(note) => (
+          <div class="col-start-2 col-end-4 min-w-0">
+            <EntryNote text={note()} />
+          </div>
+        )}
+      </Show>
     </div>
   );
 }
@@ -74,20 +156,20 @@ export function EntryList(props: EntryListProps): JSX.Element {
   const days = () => groupByDay(props.entries);
   return (
     <div class="flex flex-col gap-2">
-      <For each={days()}>
+      <Key each={days()} by={(day) => day.day}>
         {(day) => (
           <section class="flex flex-col">
             <h3 class="px-2 py-1 text-xs font-medium text-ink-muted">
               {t('timeTracking.dayTotal', {
-                day: dayLabel(day.day, props.today),
-                length: formatLength(day.minutes),
+                day: dayLabel(day().day, props.today),
+                length: formatLength(day().minutes),
               })}
             </h3>
-            <For each={day.entries}>
+            <Key each={day().entries} by={(entry) => entry.id}>
               {(entry) => {
                 const content = (
                   <EntryRow
-                    entry={entry}
+                    entry={entry()}
                     person={props.person}
                     actions={props.actions}
                   />
@@ -95,15 +177,15 @@ export function EntryList(props: EntryListProps): JSX.Element {
                 return (
                   <Switch fallback={content}>
                     <Match when={props.row}>
-                      {(row) => row()(entry, content)}
+                      {(row) => row()(entry(), content)}
                     </Match>
                   </Switch>
                 );
               }}
-            </For>
+            </Key>
           </section>
         )}
-      </For>
+      </Key>
     </div>
   );
 }

@@ -1,5 +1,11 @@
 /* Homepage product sections: the feature-page chapter layout with a captured app window. */
 .macro-homepage .feature-page-section { isolation: isolate; }
+.macro-homepage .feature-page[data-product-spacing=true] .feature-page-section {
+  padding-bottom: 64px;
+}
+.macro-homepage .feature-page[data-product-spacing=true] .homepage-testimonials {
+  margin-top: 0;
+}
 .macro-homepage .feature-page-section::after {
   --glow-width: min(1120px, 100vw);
   content: '';
@@ -102,6 +108,7 @@
   .macro-homepage #pricing { display: none; }
 }
 @media (max-width: 699px) {
+  .macro-homepage .feature-page[data-product-spacing=true] .feature-page-section { padding-bottom: 52px; }
   .macro-homepage .homepage-section-caption { margin-top: 16px; }
   .homepage-shortcuts { gap: 10px 20px; }
   .homepage-modules { width: calc(100% - 16px); column-gap: 24px; }

@@ -37,6 +37,7 @@ import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
 import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
 import { NativeCacheUpgradeRequiredError } from '@graphql-cache/host/tauri-host';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { CoordinatorRestartedError } from '@graphql-cache/host/worker-host';
 import {
   createTauriCacheHost,
   createWorkerCacheHost,
@@ -961,7 +962,9 @@ export function getGraphqlSoupClient(): Client {
       fallbackAfterInitializationFailure(error);
       if (error instanceof NativeCacheUpgradeRequiredError) {
         requireNativeUpdate(error.message);
-      } else {
+      } else if (!(error instanceof CoordinatorRestartedError)) {
+        // A restarting coordinator retries by itself, and can keep restarting
+        // on every new host: a toast per attempt would ask for nothing.
         toast.failure('Local cache unavailable', {
           subtext:
             cacheRecovery.state() === 'unavailable'
