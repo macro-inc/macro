@@ -12,6 +12,7 @@ import {
 import { createKeyedProjection } from '../create-keyed-projection';
 import { soupQueryExcludesDone } from '../excludes-done';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
+import { trackNotifiedFloor } from '../normalized-cache/notified-floor';
 import { soupEntityTimestamp } from '../page-timestamp';
 import {
   mapApiSoupItemToEntity,
@@ -192,16 +193,20 @@ export function createGraphqlSoupAstItemsQuery(
       const item = mapItem(record);
       const fetchedItem =
         fetched === record ? item : fetched ? mapItem(fetched) : undefined;
+      const entity = item
+        ? mapSoupPageToEntityList(
+            { items: [item], next_cursor: undefined },
+            { showSupportedForeignEntities }
+          )[0]
+        : undefined;
+      // A delivered notification moves a notified row before the re-read
+      // (`placeNotifiedRows`): map it again when its floor rises.
+      if (notifiedAt && entity) trackNotifiedFloor(entity.id);
       return {
         key: soupItemKey(record),
         pageNotifiedAt: notifiedAt,
         item: () => item,
-        entity: item
-          ? mapSoupPageToEntityList(
-              { items: [item], next_cursor: undefined },
-              { showSupportedForeignEntities }
-            )[0]
-          : undefined,
+        entity,
         timestamp: fetchedItem
           ? soupEntityTimestamp(mapApiSoupItemToEntity(fetchedItem), sort)
           : undefined,

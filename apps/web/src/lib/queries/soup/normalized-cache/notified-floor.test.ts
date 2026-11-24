@@ -4,6 +4,7 @@ import {
   clearNotifiedFloors,
   raiseNotifiedFloor,
   resolveNotifiedAt,
+  trackNotifiedFloor,
 } from './notified-floor';
 
 afterEach(() => {
@@ -63,12 +64,20 @@ describe('notified floors', () => {
     expect(resolveNotifiedAt('e-1', null)).toBeNull();
   });
 
-  it("re-runs a computation that read an entity's stamp when its floor rises", () => {
+  it("re-runs only a computation that tracks an entity's floor when it rises", () => {
     const seen: (string | null | undefined)[] = [];
+    let resolvedOnly = 0;
     const dispose = createRoot((dispose) => {
-      createComputed(() =>
-        seen.push(resolveNotifiedAt('e-1', '2026-09-02T00:00:00Z'))
-      );
+      createComputed(() => {
+        trackNotifiedFloor('e-1');
+        seen.push(resolveNotifiedAt('e-1', '2026-09-02T00:00:00Z'));
+      });
+      // A selector mapping a whole list resolves without tracking, so a
+      // delivery does not map the list again.
+      createComputed(() => {
+        resolveNotifiedAt('e-1', '2026-09-02T00:00:00Z');
+        resolvedOnly += 1;
+      });
       return dispose;
     });
     try {
@@ -77,6 +86,7 @@ describe('notified floors', () => {
       // An older delivery leaves the floor, and so the reader, alone.
       raiseNotifiedFloor('e-1', '2026-09-02T16:00:00Z');
       expect(seen).toEqual(['2026-09-02T00:00:00Z', '2026-09-02T17:00:00Z']);
+      expect(resolvedOnly).toBe(1);
     } finally {
       dispose();
     }
