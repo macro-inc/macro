@@ -423,6 +423,51 @@ fn a_copy_of_another_accounts_queue_goes_with_the_database() {
 }
 
 #[test]
+fn a_copy_the_database_outlived_never_comes_back() {
+    block_on(async {
+        let mut storage = fresh();
+        enqueue(&mut storage, "First").await;
+        let queue = carried(&storage);
+        assert_eq!(queue.source, None);
+        // The wipe never came, and the copy of what it would have wiped stays.
+        let held = storage.import_queue(&queue, 5).unwrap();
+        assert_eq!((held.kept, held.dropped, held.complete), (0, 0, true));
+        let (id, token) = claim(&mut storage, 0).await.unwrap();
+        storage.discard_mutation(id, token).await.unwrap();
+        assert_eq!(
+            storage.import_queue(&queue, 6).unwrap(),
+            QueueImport {
+                complete: true,
+                ..QueueImport::default()
+            }
+        );
+        let read = storage.salvage_queue(SCOPE, Some(queue), 7);
+        assert_eq!((read.queue, read.forget_pending), (None, true));
+        assert!(storage.load_mutation_queue().await.unwrap().is_empty());
+    });
+}
+
+#[test]
+fn a_queue_held_already_counts_no_round() {
+    block_on(async {
+        let mut storage = fresh();
+        enqueue(&mut storage, "First").await;
+        for _ in 0..2 * super::read::MAX_ROUNDS {
+            let queue = salvage(&storage).queue.unwrap();
+            assert_eq!(queue.rounds, 1);
+            storage.import_queue(&queue, 0).unwrap();
+        }
+        // Nor does it hide that an earlier import lost something.
+        let mut served = fresh();
+        enqueue(&mut served, "Second").await;
+        assert!(!served.import_queue(&carried(&storage), 0).unwrap().complete);
+        let queue = salvage(&served).queue.unwrap();
+        served.import_queue(&queue, 1).unwrap();
+        assert!(!salvage(&served).queue.unwrap().complete);
+    });
+}
+
+#[test]
 fn an_unreadable_write_leaves_the_others() {
     block_on(async {
         let mut storage = fresh();

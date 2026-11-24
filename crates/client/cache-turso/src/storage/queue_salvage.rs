@@ -139,7 +139,6 @@ impl SalvagedQueue {
             .map(|(_, value)| value.as_slice())
     }
 
-    /// Moves every write to an ID above `sequence`, in the same order. A moved
     /// This queue, once something queued after it was lost unread.
     pub fn after_loss(self) -> Self {
         Self {
@@ -148,6 +147,7 @@ impl SalvagedQueue {
         }
     }
 
+    /// Moves every write to an ID above `sequence`, in the same order. A moved
     /// write is nobody's any more, so its lease goes.
     fn renumbered_above(mut self, sequence: i64) -> Result<Self, TursoStorageError> {
         let mut next = sequence.max(self.sequence);
@@ -226,6 +226,34 @@ struct ImportMarker {
 }
 
 impl ImportMarker {
+    /// Of a database that imported nothing.
+    fn never(now_ms: i64) -> Self {
+        Self {
+            id: Uuid::nil(),
+            rounds: 0,
+            imported_at_ms: now_ms,
+            complete: true,
+        }
+    }
+
+    fn save(self, connection: &Db) -> Result<(), TursoStorageError> {
+        let Self {
+            id,
+            rounds,
+            imported_at_ms,
+            complete,
+        } = self;
+        driver::execute(
+            connection,
+            "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            vec![
+                text(IMPORT_MARKER_KEY),
+                text(&format!("{id} {rounds} {imported_at_ms} {complete}")),
+            ],
+        )
+        .map(drop)
+    }
+
     fn parse(value: &str) -> Option<Self> {
         let mut parts = value.split(' ');
         Some(Self {
@@ -269,11 +297,21 @@ fn import(
     queue: &SalvagedQueue,
     now_ms: i64,
 ) -> Result<QueueImport, TursoStorageError> {
-    let held = import_marker(connection)?.is_some_and(|marker| marker.id == queue.id)
+    let marker = import_marker(connection)?;
+    let marked = marker.is_some_and(|marker| marker.id == queue.id);
+    let held = marked
         || (queue.source.is_some()
             && queue.source == metadata_record(connection, STORAGE_GENERATION_META_KEY)?)
         || queues_any_of(connection, queue)?;
     if held {
+        if !marked {
+            // Still known when every write of it is settled.
+            ImportMarker {
+                id: queue.id,
+                ..marker.unwrap_or(ImportMarker::never(now_ms))
+            }
+            .save(connection)?;
+        }
         return Ok(QueueImport {
             complete: queue.complete,
             ..QueueImport::default()
@@ -321,17 +359,13 @@ fn import(
             ],
         )?;
     }
-    driver::execute(
-        connection,
-        "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-        vec![
-            text(IMPORT_MARKER_KEY),
-            text(&format!(
-                "{} {} {now_ms} {}",
-                queue.id, queue.rounds, imported.complete
-            )),
-        ],
-    )?;
+    ImportMarker {
+        id: queue.id,
+        rounds: queue.rounds,
+        imported_at_ms: now_ms,
+        complete: imported.complete,
+    }
+    .save(connection)?;
     Ok(imported)
 }
 
