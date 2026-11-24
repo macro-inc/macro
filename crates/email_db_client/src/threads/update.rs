@@ -179,16 +179,135 @@ pub async fn sync_thread_attachment_flags(
     Ok(())
 }
 
+/// What one block range of `email_attachments` left to flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AttachmentFlagBatch {
+    /// Threads missing at least one flag their attachments in the range call for.
+    pub missing: i64,
+    /// Threads this batch flagged; the rest were locked by another transaction.
+    pub flagged: i64,
+}
+
+/// Heap blocks of `email_attachments`, the positions a pass over it walks.
+#[tracing::instrument(skip(pool), err)]
+pub async fn email_attachments_block_count(pool: &sqlx::PgPool) -> anyhow::Result<i64> {
+    let blocks = sqlx::query_scalar!(
+        r#"
+        SELECT pg_relation_size('email_attachments'::regclass)
+            / current_setting('block_size')::bigint AS "blocks!"
+        "#
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok(blocks)
+}
+
+/// Sets the PDF, image and document flags of the threads whose attachments sit
+/// in heap blocks `first_block..end_block` of `email_attachments`. Reading the
+/// heap in block order costs one sequential pass over the table, where a pass
+/// per mailbox reads it again for every large one.
+///
+/// Only ever sets flags, so a range can be run again and an interrupted pass
+/// resumes at any block. A thread another transaction has locked (mail sync
+/// writing it) is left for the next run instead of waiting: `missing` counts
+/// it and `flagged` does not.
+#[tracing::instrument(skip(pool), err)]
+pub async fn backfill_attachment_kind_flags_in_blocks(
+    pool: &sqlx::PgPool,
+    first_block: i64,
+    end_block: i64,
+) -> anyhow::Result<AttachmentFlagBatch> {
+    let mut tx = pool.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '30s'")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("SET LOCAL lock_timeout = '2s'")
+        .execute(&mut *tx)
+        .await?;
+
+    let mut any_kind = like_prefixes(PDF_MIME_PREFIXES);
+    any_kind.extend(like_prefixes(IMAGE_MIME_PREFIXES));
+    any_kind.extend(like_prefixes(DOCUMENT_MIME_PREFIXES));
+
+    let batch = sqlx::query_as!(
+        AttachmentFlagBatch,
+        r#"
+        WITH page AS MATERIALIZED (
+            SELECT
+                a.message_id,
+                a.mime_type LIKE ANY($3::text[]) AS pdf,
+                a.mime_type LIKE ANY($4::text[]) AS image,
+                a.mime_type LIKE ANY($5::text[]) AS document
+            FROM email_attachments a
+            WHERE a.ctid >= $1::text::tid
+              AND a.ctid < $2::text::tid
+              AND a.mime_type LIKE ANY($6::text[])
+        ), kinds AS MATERIALIZED (
+            SELECT
+                m.thread_id,
+                bool_or(page.pdf) AS has_pdf,
+                bool_or(page.image) AS has_image,
+                bool_or(page.document) AS has_document
+            FROM page
+            JOIN email_messages m ON m.id = page.message_id
+            GROUP BY m.thread_id
+        ), wanted AS MATERIALIZED (
+            SELECT t.id, kinds.has_pdf, kinds.has_image, kinds.has_document
+            FROM kinds
+            JOIN email_threads t ON t.id = kinds.thread_id
+            WHERE (kinds.has_pdf AND NOT t.has_pdf_attachment)
+               OR (kinds.has_image AND NOT t.has_image_attachment)
+               OR (kinds.has_document AND NOT t.has_document_attachment)
+        ), free AS MATERIALIZED (
+            SELECT t.id, wanted.has_pdf, wanted.has_image, wanted.has_document
+            FROM wanted
+            JOIN email_threads t ON t.id = wanted.id
+            FOR NO KEY UPDATE OF t SKIP LOCKED
+        ), flagged AS (
+            UPDATE email_threads t
+            SET has_pdf_attachment = t.has_pdf_attachment OR free.has_pdf,
+                has_image_attachment = t.has_image_attachment OR free.has_image,
+                has_document_attachment = t.has_document_attachment OR free.has_document
+            FROM free
+            WHERE t.id = free.id
+            RETURNING t.id
+        )
+        SELECT
+            (SELECT count(*) FROM wanted) AS "missing!",
+            (SELECT count(*) FROM flagged) AS "flagged!"
+        "#,
+        format!("({first_block},0)"),
+        format!("({end_block},0)"),
+        &like_prefixes(PDF_MIME_PREFIXES),
+        &like_prefixes(IMAGE_MIME_PREFIXES),
+        &like_prefixes(DOCUMENT_MIME_PREFIXES),
+        &any_kind,
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(batch)
+}
+
 /// Sets the PDF, image and document attachment flags on every thread of one
 /// link that has a matching attachment, for threads ingested before the
 /// flags existed. Only ever sets flags; ingest and delete maintain them after.
-/// Returns the number of threads updated.
+/// One statement reads the whole mailbox, so it is for a mailbox small enough
+/// to check a run on; [`backfill_attachment_kind_flags_in_blocks`] covers the
+/// rest. Returns the number of threads updated.
 #[tracing::instrument(skip(pool), err)]
 pub async fn backfill_link_attachment_kind_flags(
     pool: &sqlx::PgPool,
     link_id: Uuid,
 ) -> anyhow::Result<u64> {
-    Ok(sqlx::query!(
+    let mut tx = pool.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '5min'")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!("SET LOCAL lock_timeout = '2s'")
+        .execute(&mut *tx)
+        .await?;
+    let flagged = sqlx::query!(
         r#"
         UPDATE email_threads t
         SET has_pdf_attachment = t.has_pdf_attachment OR kinds.has_pdf,
@@ -215,9 +334,11 @@ pub async fn backfill_link_attachment_kind_flags(
         &like_prefixes(IMAGE_MIME_PREFIXES),
         &like_prefixes(DOCUMENT_MIME_PREFIXES),
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?
-    .rows_affected())
+    .rows_affected();
+    tx.commit().await?;
+    Ok(flagged)
 }
 
 /// Recomputes the denormalized `email_threads.is_signal` flag: true iff the

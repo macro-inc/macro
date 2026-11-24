@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT pg_relation_size('email_attachments'::regclass)\n            / current_setting('block_size')::bigint AS \"blocks!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blocks!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e447665ae7d6c748b4caad74ee312fa6b3e5f13694a2a5ed59b64a23a53ce26b"
+}

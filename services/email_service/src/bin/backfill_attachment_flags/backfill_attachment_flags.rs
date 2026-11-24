@@ -2,18 +2,30 @@
 //!
 //! Backfills the denormalized `email_threads.has_pdf_attachment`,
 //! `has_image_attachment` and `has_document_attachment` columns behind the
-//! Attachment email filter: for each user, flags every thread with at least
-//! one attachment of that kind. Only ever sets flags to true — steady-state
+//! Attachment email filter. Only ever sets flags to true; steady-state
 //! maintenance (including clearing them on deletes) is handled by the ingest
 //! and delete paths in `email_db_client`. Safe to rerun.
+//!
+//! Without `MACRO_IDS` it walks `email_attachments` in heap order, one short
+//! transaction per batch, so the whole table is read once and a thread is
+//! never locked for longer than a batch. A batch that hits the statement
+//! timeout runs again as two halves. The progress lines name the block to
+//! resume at; a thread another transaction holds is skipped and counted, so a
+//! second run picks it up. With `MACRO_IDS` it flags the named users'
+//! mailboxes one statement each, to check a run on a small mailbox first; it
+//! is cancelled after five minutes and is not for a large one.
 //!
 //! ## Required Environment Variables:
 //! - `DATABASE_URL`: The connection string for the PostgreSQL database.
 //!
 //! ## Optional Environment Variables:
-//! - `MACRO_IDS`: Comma-separated macro IDs to backfill. When unset, every
-//!   user with an email link is processed.
-//! - `CONCURRENCY`: Number of users processed concurrently (defaults to 10).
+//! - `MACRO_IDS`: Comma-separated macro IDs to backfill, instead of the table.
+//! - `CONCURRENCY`: Number of users processed concurrently with `MACRO_IDS`
+//!   (defaults to 1).
+//! - `START_BLOCK`: Block of `email_attachments` to resume at (defaults to 0).
+//! - `BLOCKS_PER_BATCH`: Blocks each batch reads (defaults to 50, at most
+//!   2000).
+//! - `PAUSE_MS`: Pause between batches in milliseconds (defaults to 200).
 
 mod config;
 mod process;
@@ -37,28 +49,30 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Could not connect to db")?;
 
-    let macro_ids: Vec<String> = match &config.macro_ids {
-        Some(ids) => ids.split(',').map(|id| id.trim().to_string()).collect(),
-        None => process::fetch_all_macro_ids(&db_pool)
-            .await
-            .context("Failed to fetch macro IDs")?,
-    };
+    match &config.macro_ids {
+        None => process::run_pass(&db_pool, &config).await,
+        Some(macro_ids) => flag_mailboxes(&db_pool, macro_ids, config.concurrency).await,
+    }
+}
 
+async fn flag_mailboxes(
+    db_pool: &sqlx::PgPool,
+    macro_ids: &str,
+    concurrency: usize,
+) -> anyhow::Result<()> {
+    let macro_ids: Vec<String> = macro_ids
+        .split(',')
+        .map(|id| id.trim().to_string())
+        .collect();
     let total_users = macro_ids.len();
-    println!(
-        "Processing {total_users} macro IDs with concurrency {}",
-        config.concurrency
-    );
+    println!("Processing {total_users} macro IDs with concurrency {concurrency}");
 
     let results: Vec<(String, anyhow::Result<u64>)> = stream::iter(macro_ids)
-        .map(|macro_id| {
-            let db_pool = db_pool.clone();
-            async move {
-                let result = process::process_macro_id(&db_pool, &macro_id).await;
-                (macro_id, result)
-            }
+        .map(|macro_id| async move {
+            let result = process::process_macro_id(db_pool, &macro_id).await;
+            (macro_id, result)
         })
-        .buffer_unordered(config.concurrency)
+        .buffer_unordered(concurrency)
         .enumerate()
         .map(|(index, (macro_id, result))| {
             match &result {
