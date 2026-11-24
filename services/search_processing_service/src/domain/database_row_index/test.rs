@@ -42,6 +42,8 @@ struct SourceState {
     trash_after_reads: Option<usize>,
     /// A database whose reads fail.
     failing_database: Option<Uuid>,
+    /// Whether the reshaped-tables lookup times out.
+    reshape_lookup_fails: bool,
 }
 
 impl FakeSource {
@@ -281,6 +283,11 @@ impl DatabaseRowSource for FakeSource {
     }
 
     async fn reshaped_tables(&self, _limit: usize) -> Result<Vec<Uuid>, Report> {
+        if self.state.lock().unwrap().reshape_lookup_fails {
+            return Err(
+                Report::new_sendsync(std::io::Error::other("statement timeout")).into_dynamic(),
+            );
+        }
         Ok(std::mem::take(&mut self.state.lock().unwrap().reshaped))
     }
 
@@ -725,8 +732,7 @@ async fn a_sweep_catches_up_a_table_whose_event_was_lost() {
     assert_eq!(
         catch_up,
         CatchUp {
-            lagging: 1,
-            reshaped: 0,
+            tables: 1,
             failed: 0,
         }
     );
@@ -749,12 +755,12 @@ async fn a_sweep_reindexes_a_table_whose_tag_was_relabelled_elsewhere() {
     let index = FakeIndex::holding(&[(ROW_A, "urgent", 6)]);
     let service = DatabaseRowIndexService::new(source, index);
 
-    let catch_up = service
-        .catch_up(&BackfillGate::open(4), &CancellationToken::new())
+    let reindexed = service
+        .reindex_reshaped(&BackfillGate::open(4), &CancellationToken::new())
         .await
         .unwrap();
 
-    assert_eq!(catch_up.reshaped, 1);
+    assert_eq!(reindexed.tables, 1);
     assert_eq!(
         service.index.contents(),
         vec![(ROW_A, "critical".to_owned(), 6)]
@@ -905,4 +911,27 @@ async fn a_pass_past_its_deadline_is_stopped_and_releases_its_lock() {
     // The lock is free again for the retry.
     assert!(service.source.lock.try_lock().is_ok());
     assert_eq!(service.source.watermark_of(TABLE), None);
+}
+
+#[tokio::test]
+async fn a_failing_step_does_not_starve_the_rest_of_the_round() {
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    source.edit(|state| {
+        state.watermarks.insert(TABLE, (DATABASE, 6));
+        state.reshape_lookup_fails = true;
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "A at 6", 6), (ROW_B, "B at 4", 4)]);
+    let service = DatabaseRowIndexService::new(source, index);
+
+    let round = service
+        .sweep_once(true, &BackfillGate::open(4), &CancellationToken::new())
+        .await;
+
+    // The reshape lookup failed and the round says so, but the index scan
+    // still removed the gone row.
+    assert!(round.is_err());
+    assert_eq!(
+        service.index.contents(),
+        vec![(ROW_A, "A at 6".to_owned(), 6)]
+    );
 }

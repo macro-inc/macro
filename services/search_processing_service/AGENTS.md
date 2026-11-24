@@ -123,8 +123,9 @@ OpenSearch, and exposes backfill HTTP routes for each.
   never comes back, is cleaned up without it. The 15-minute sweep
   (`inbound/database_row_sweep.rs`) is the safety net for lost events and
   column or option changes outside the journal (column fingerprints on the
-  watermarks); keep it cheap, and keep the whole-index
-  scan on its slower cadence.
+  watermarks, checked every six hours); keep the 15-minute work cheap, and
+  keep whole-table reads (the index scan, the fingerprint check) on the
+  six-hour cadence.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
   already-deleted IDs — target specific IDs for those. Chat messages deleted
   without their delete reaching the index are removed by

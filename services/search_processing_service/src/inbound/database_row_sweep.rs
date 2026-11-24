@@ -1,10 +1,10 @@
 //! Periodically catches the database rows index up with what events missed.
 //!
 //! Live events cover writes through the databases service. Every round
-//! catches up tables whose events were lost and reindexes tables whose
-//! columns or options changed outside their journal; every
+//! catches up tables whose events were lost; every
 //! [`ROUNDS_PER_INDEX_SCAN`]th round also walks the whole index for documents
-//! whose rows or tables are gone. Every task runs the loop, and one at a time
+//! whose rows or tables are gone and reindexes tables whose columns or
+//! options changed outside their journal, both of which read whole tables. Every task runs the loop, and one at a time
 //! leads each round (`DatabaseRowIndexService::sweep_once`). Its passes wait
 //! on the backfill gate: the first round after a deploy reindexes every
 //! table, which is a backfill in all but name.

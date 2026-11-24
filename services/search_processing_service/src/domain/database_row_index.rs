@@ -280,14 +280,11 @@ pub struct StaleRemoval {
     pub gone_tables: usize,
 }
 
-/// What a catch-up round did.
+/// What a catch-up or reshape step did.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CatchUp {
-    /// Lagging tables passed over.
-    pub lagging: usize,
-    /// Tables reindexed because their columns or options changed outside
-    /// the journal.
-    pub reshaped: usize,
+    /// Tables passed over.
+    pub tables: usize,
     /// Passes that failed, retried next round.
     pub failed: usize,
 }
@@ -772,13 +769,10 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         Ok(removal)
     }
 
-    /// Catch up tables whose events were lost (a watermark missing or below
-    /// the table's version), and reindex tables whose columns or options
-    /// changed outside the journal (a definition deleted with its columns, a
-    /// tag set relabelled, pruned or merged through the properties service),
-    /// found by their column fingerprint. One table failing does not stop the
-    /// others; the next round retries it.
-    #[tracing::instrument(err, skip_all, fields(lagging, reshaped, failed, duration_ms))]
+    /// Catch up tables whose events were lost: a watermark missing or below
+    /// the table's version. One table failing does not stop the others; the
+    /// next round retries it.
+    #[tracing::instrument(err, skip_all, fields(lagging, failed, duration_ms))]
     pub async fn catch_up(
         &self,
         gate: &BackfillGate,
@@ -798,7 +792,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
             };
             after = Some(last);
             for table_id in tables {
-                catch_up.lagging += 1;
+                catch_up.tables += 1;
                 // The first round after a deploy finds every table without a
                 // watermark: it is a backfill, and waits on the same gate.
                 let _permit = gate.admit().await;
@@ -812,37 +806,61 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
             }
         }
 
-        if !cancel.is_cancelled() {
-            let reshaped = self
-                .source
-                .reshaped_tables(RESHAPED_TABLES_PER_ROUND)
-                .await?;
-            for table_id in reshaped {
-                catch_up.reshaped += 1;
-                let _permit = gate.admit().await;
-                // The table's version did not move, so only a full pass
-                // rereads it.
-                if self
-                    .reconcile_table(table_id, PassKind::Full)
-                    .await
-                    .is_err()
-                {
-                    catch_up.failed += 1;
-                }
-            }
-        }
-
         let span = tracing::Span::current();
-        span.record("lagging", catch_up.lagging);
-        span.record("reshaped", catch_up.reshaped);
+        span.record("lagging", catch_up.tables);
         span.record("failed", catch_up.failed);
         span.record("duration_ms", elapsed_ms(started));
         Ok(catch_up)
     }
 
-    /// One sweep round, unless another task is running one: [`Self::catch_up`],
-    /// then [`Self::remove_stale`] when `scan_index` (it walks the whole
-    /// index, so it runs less often).
+    /// Fully reindex tables whose columns or options changed outside the
+    /// journal (a definition deleted with its columns, a tag set relabelled,
+    /// pruned or merged through the properties service), found by their
+    /// column fingerprint. Finding them reads every column and option, so it
+    /// runs with the index scan, not every round; `lookup_ms` shows its growth.
+    #[tracing::instrument(err, skip_all, fields(reshaped, failed, lookup_ms, duration_ms))]
+    pub async fn reindex_reshaped(
+        &self,
+        gate: &BackfillGate,
+        cancel: &CancellationToken,
+    ) -> Result<CatchUp, Report> {
+        let started = Instant::now();
+        let mut reindexed = CatchUp::default();
+        let reshaped = self
+            .source
+            .reshaped_tables(RESHAPED_TABLES_PER_ROUND)
+            .await?;
+        let span = tracing::Span::current();
+        span.record("lookup_ms", elapsed_ms(started));
+
+        for table_id in reshaped {
+            if cancel.is_cancelled() {
+                break;
+            }
+            reindexed.tables += 1;
+            let _permit = gate.admit().await;
+            // The table's version did not move, so only a full pass rereads it.
+            if self
+                .reconcile_table(table_id, PassKind::Full)
+                .await
+                .is_err()
+            {
+                reindexed.failed += 1;
+            }
+        }
+
+        span.record("reshaped", reindexed.tables);
+        span.record("failed", reindexed.failed);
+        span.record("duration_ms", elapsed_ms(started));
+        Ok(reindexed)
+    }
+
+    /// One sweep round, unless another task is running one: [`Self::catch_up`]
+    /// every round; with `scan_index` (every six hours), also
+    /// [`Self::remove_stale`] and [`Self::reindex_reshaped`], which read
+    /// whole tables. Each step runs whether or not an earlier one failed, so
+    /// one that outgrows its timeout cannot starve the others; the round
+    /// reports the first failure.
     #[tracing::instrument(err, skip_all, fields(led, scan_index))]
     pub async fn sweep_once(
         &self,
@@ -854,14 +872,21 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         span.record("scan_index", scan_index);
         let lease = self.source.lead_stale_sweep().await?;
         span.record("led", lease.is_some());
-        if lease.is_some() {
-            self.catch_up(gate, cancel).await?;
-            if scan_index {
-                self.remove_stale(Some(gate), cancel).await?;
-            }
+        if lease.is_none() {
+            return Ok(());
         }
+
+        let caught_up = self.catch_up(gate, cancel).await.map(drop);
+        let (removed, reindexed) = if scan_index {
+            (
+                self.remove_stale(Some(gate), cancel).await.map(drop),
+                self.reindex_reshaped(gate, cancel).await.map(drop),
+            )
+        } else {
+            (Ok(()), Ok(()))
+        };
         drop(lease);
-        Ok(())
+        caught_up.and(removed).and(reindexed)
     }
 
     /// Reindex the requested databases, or every searchable one and then
