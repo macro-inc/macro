@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM \"DocumentInstance\" WHERE id = $1 AND \"documentId\" = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "813c9d7e3741f612f5649d1c920a090458b01b3c010875ef466ebc5f93069b37"
+}

@@ -4,7 +4,7 @@ import { parseProjectRoute, projectRouteId } from './route';
 const id = '01992d2f-8444-7000-8000-000000000001';
 
 describe('project navigation', () => {
-  it.each(['overview', 'tasks'] as const)(
+  it.each(['overview', 'tasks', 'time'] as const)(
     'restores project identity and the %s section independently of component params',
     (section) => {
       const route = { id, section };

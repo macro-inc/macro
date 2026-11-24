@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"DocumentInstance\" (\"documentId\", sha, \"createdAt\", \"updatedAt\")\n        SELECT $1, $2, next.stamp, next.stamp\n        FROM (\n            SELECT GREATEST(\n                LOCALTIMESTAMP(3),\n                (SELECT max(\"createdAt\") FROM \"DocumentInstance\" WHERE \"documentId\" = $1)\n                    + interval '1 millisecond'\n            ) AS stamp\n        ) AS next\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9f308b5c7ab42567ce55c27c0786e73c8339a8b625d6c9cf29f2fd88c471add4"
+}

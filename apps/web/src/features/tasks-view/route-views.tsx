@@ -1,3 +1,4 @@
+import type { ProjectSection } from '@app/features/projects/core/project';
 import { ProjectBreadcrumb } from '@app/features/projects/project-breadcrumb';
 import { ProjectDetail } from '@app/features/projects/project-detail';
 import { ProjectTasksProvider } from '@app/features/projects/project-tasks-provider';
@@ -70,7 +71,7 @@ export const TasksRouteView = withAuth(() => {
 export function ProjectTaskRouteView() {
   const params = useParams<{
     projectId: string;
-    section: 'overview' | 'tasks';
+    section: ProjectSection;
     taskId: string;
   }>();
   const navigate = useNavigate();
