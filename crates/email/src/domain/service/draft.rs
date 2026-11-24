@@ -138,7 +138,8 @@ where
             self.email_repo.scheduled_sends_by_message_ids(&message_ids),
             self.email_repo
                 .message_timestamps(draft.db_id, draft.link_id),
-            self.email_repo.labels_by_message_ids(&message_ids),
+            self.email_repo
+                .labels_by_message_ids(&message_ids, Some(&macro_id)),
             self.email_repo.message_operation_facts(&message_ids),
             self.email_repo.senders_by_message_ids(&message_ids),
         )

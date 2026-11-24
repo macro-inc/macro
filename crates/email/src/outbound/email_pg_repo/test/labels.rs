@@ -97,7 +97,9 @@ async fn test_labels_by_thread_ids_single_thread(pool: Pool<Postgres>) -> anyhow
     let repo = EmailPgRepo::new(pool);
 
     let thread_ids = vec![Uuid::parse_str("11111111-1111-1111-1111-111111111111")?];
-    let labels = repo.labels_by_thread_ids(&thread_ids).await?;
+    let labels = repo
+        .labels_by_thread_ids(&thread_ids, Some(&inbox_owner(&repo.pool).await))
+        .await?;
 
     assert_eq!(labels.len(), 2, "Thread 1 should have 2 labels");
 
@@ -121,7 +123,9 @@ async fn test_labels_by_thread_ids_multiple_threads(pool: Pool<Postgres>) -> any
         Uuid::parse_str("11111111-1111-1111-1111-111111111111")?,
         Uuid::parse_str("22222222-2222-2222-2222-222222222222")?,
     ];
-    let labels = repo.labels_by_thread_ids(&thread_ids).await?;
+    let labels = repo
+        .labels_by_thread_ids(&thread_ids, Some(&inbox_owner(&repo.pool).await))
+        .await?;
 
     // Thread 1 has 2 labels (INBOX, IMPORTANT)
     // Thread 2 has 2 labels (INBOX, SENT)
@@ -146,7 +150,9 @@ async fn test_labels_by_thread_ids_no_duplicate_labels_same_thread(
 
     // Thread 3 has multiple messages with the same label
     let thread_ids = vec![Uuid::parse_str("33333333-3333-3333-3333-333333333333")?];
-    let labels = repo.labels_by_thread_ids(&thread_ids).await?;
+    let labels = repo
+        .labels_by_thread_ids(&thread_ids, Some(&inbox_owner(&repo.pool).await))
+        .await?;
 
     assert_eq!(
         labels.len(),
@@ -168,7 +174,9 @@ async fn test_labels_by_thread_ids_thread_with_no_labels(
     let repo = EmailPgRepo::new(pool);
 
     let thread_ids = vec![Uuid::parse_str("44444444-4444-4444-4444-444444444444")?];
-    let labels = repo.labels_by_thread_ids(&thread_ids).await?;
+    let labels = repo
+        .labels_by_thread_ids(&thread_ids, Some(&inbox_owner(&repo.pool).await))
+        .await?;
 
     assert_eq!(
         labels.len(),
@@ -187,7 +195,9 @@ async fn test_labels_by_thread_ids_empty_input(pool: Pool<Postgres>) -> anyhow::
     let repo = EmailPgRepo::new(pool);
 
     let thread_ids: Vec<Uuid> = vec![];
-    let labels = repo.labels_by_thread_ids(&thread_ids).await?;
+    let labels = repo
+        .labels_by_thread_ids(&thread_ids, Some(&inbox_owner(&repo.pool).await))
+        .await?;
 
     assert_eq!(labels.len(), 0, "Empty input should return empty result");
 
@@ -204,7 +214,9 @@ async fn test_labels_by_thread_ids_different_label_types(
     let repo = EmailPgRepo::new(pool);
 
     let thread_ids = vec![Uuid::parse_str("55555555-5555-5555-5555-555555555555")?];
-    let labels = repo.labels_by_thread_ids(&thread_ids).await?;
+    let labels = repo
+        .labels_by_thread_ids(&thread_ids, Some(&inbox_owner(&repo.pool).await))
+        .await?;
 
     assert_eq!(labels.len(), 2, "Should have both system and user labels");
 
@@ -234,7 +246,7 @@ async fn test_labels_by_thread_ids_overlays_pending_tags(
     let second = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
 
     let mut labels: Vec<(Uuid, String)> = repo
-        .labels_by_thread_ids(&[first, second])
+        .labels_by_thread_ids(&[first, second], Some(&inbox_owner(&repo.pool).await))
         .await?
         .into_iter()
         .map(|label| (label.thread_id, label.provider_label_id))
@@ -268,7 +280,9 @@ async fn test_labels_by_message_ids_overlays_pending_tags(
     let first = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
     let second = Uuid::parse_str("22222222-aaaa-aaaa-aaaa-222222222222")?;
 
-    let labels = repo.labels_by_message_ids(&[first, second]).await?;
+    let labels = repo
+        .labels_by_message_ids(&[first, second], Some(&inbox_owner(&repo.pool).await))
+        .await?;
     let provider_ids = |message_id: Uuid| -> Vec<String> {
         labels[&message_id]
             .iter()
@@ -337,7 +351,10 @@ async fn test_labels_by_thread_ids_hides_queued_label_deletes(
     let fifth = Uuid::parse_str("55555555-5555-5555-5555-555555555555")?;
 
     let mut labels: Vec<(Uuid, String)> = repo
-        .labels_by_thread_ids(&[first, second, fifth])
+        .labels_by_thread_ids(
+            &[first, second, fifth],
+            Some(&inbox_owner(&repo.pool).await),
+        )
         .await?
         .into_iter()
         .map(|label| (label.thread_id, label.provider_label_id))
@@ -373,7 +390,12 @@ async fn test_labels_by_message_ids_hides_queued_label_deletes(
     let second = Uuid::parse_str("22222222-aaaa-aaaa-aaaa-222222222222")?;
     let fifth = Uuid::parse_str("55555555-aaaa-aaaa-aaaa-555555555555")?;
 
-    let labels = repo.labels_by_message_ids(&[first, second, fifth]).await?;
+    let labels = repo
+        .labels_by_message_ids(
+            &[first, second, fifth],
+            Some(&inbox_owner(&repo.pool).await),
+        )
+        .await?;
     let provider_ids = |message_id: Uuid| -> Vec<String> {
         labels[&message_id]
             .iter()
@@ -431,15 +453,27 @@ async fn test_labels_by_thread_ids_reads_labels_by_message_index(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let thread_ids = vec![Uuid::parse_str("11111111-1111-1111-1111-111111111111")?];
+    let reader = inbox_owner(&pool).await;
 
     let plan = sqlx::query_scalar!(
         r#"EXPLAIN (FORMAT JSON)
-        SELECT DISTINCT ON (l.id, m.thread_id) l.id, m.thread_id
-        FROM email_messages m
-        JOIN email_effective_message_labels ml ON m.id = ml.message_id
-        JOIN email_labels l ON ml.label_id = l.id
-        WHERE m.thread_id = ANY($1)"#,
+        SELECT labels.id, labels.thread_id
+        FROM (
+            SELECT DISTINCT ON (l.id, m.thread_id) l.id, m.thread_id, l.link_id, l.type
+            FROM email_messages m
+            JOIN email_effective_message_labels ml ON m.id = ml.message_id
+            JOIN email_labels l ON ml.label_id = l.id
+            WHERE m.thread_id = ANY($1)
+            OFFSET 0
+        ) labels
+        WHERE labels.type = 'System'
+            OR labels.link_id IN (
+                SELECT el.id FROM email_links el WHERE el.macro_id = $2
+                UNION ALL
+                SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = $2
+            )"#,
         &thread_ids,
+        reader.as_ref(),
     )
     .fetch_one(&pool)
     .await?

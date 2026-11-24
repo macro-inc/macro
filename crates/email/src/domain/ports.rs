@@ -177,9 +177,15 @@ pub trait EmailRepo: Send + Sync + 'static {
         thread_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<Contact>, Self::Err>> + Send;
 
+    /// The labels on each thread, as `reader` may see them: system labels,
+    /// which say what state a message is in, and the labels people made in
+    /// the inboxes `reader` owns or manages. Labels people make are theirs, so
+    /// no one else reading the thread gets them; `None` (a bot, a signed-out
+    /// reader or an internal caller) gets system labels alone.
     fn labels_by_thread_ids(
         &self,
         thread_ids: &[Uuid],
+        reader: Option<&MacroUserIdStr<'_>>,
     ) -> impl Future<Output = Result<Vec<Label>, Self::Err>> + Send;
 
     fn link_by_fusionauth_and_macro_id(
@@ -259,10 +265,12 @@ pub trait EmailRepo: Send + Sync + 'static {
         message_ids: &[Uuid],
     ) -> impl Future<Output = Result<RecipientsByMessageId, Self::Err>> + Send;
 
-    /// Fetch labels for a set of message IDs, keyed by message ID.
+    /// Fetch labels for a set of message IDs, keyed by message ID, as `reader`
+    /// may see them (see [`Self::labels_by_thread_ids`]).
     fn labels_by_message_ids(
         &self,
         message_ids: &[Uuid],
+        reader: Option<&MacroUserIdStr<'_>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, Vec<MessageLabel>>, Self::Err>> + Send;
 
     /// Fetch saved calendar invitation components, keyed by message ID.

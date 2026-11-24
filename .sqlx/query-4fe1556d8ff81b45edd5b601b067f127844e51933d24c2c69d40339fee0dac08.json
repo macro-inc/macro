@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n    SELECT DISTINCT ON (l.id, m.thread_id)\n        l.id,\n        m.thread_id as \"thread_id!\",\n        l.link_id,\n        l.provider_label_id,\n        l.name,\n        l.created_at,\n        l.message_list_visibility as \"message_list_visibility: _\",\n        l.label_list_visibility as \"label_list_visibility: _\",\n        l.type as \"type_: _\"\n    FROM\n         email_messages m\n    JOIN email_effective_message_labels ml ON m.id = ml.message_id\n    JOIN email_labels l ON ml.label_id = l.id\n    WHERE m.thread_id = ANY($1)\n    ",
+  "query": "\n    SELECT\n        labels.id,\n        labels.thread_id as \"thread_id!\",\n        labels.link_id,\n        labels.provider_label_id,\n        labels.name,\n        labels.created_at,\n        labels.message_list_visibility as \"message_list_visibility: _\",\n        labels.label_list_visibility as \"label_list_visibility: _\",\n        labels.type as \"type_: _\"\n    FROM (\n        SELECT DISTINCT ON (l.id, m.thread_id)\n            l.id,\n            m.thread_id,\n            l.link_id,\n            l.provider_label_id,\n            l.name,\n            l.created_at,\n            l.message_list_visibility,\n            l.label_list_visibility,\n            l.type\n        FROM\n             email_messages m\n        JOIN email_effective_message_labels ml ON m.id = ml.message_id\n        JOIN email_labels l ON ml.label_id = l.id\n        WHERE m.thread_id = ANY($1)\n        -- Read before the reader's inboxes are checked: checked inside, the\n        -- planner reads every label to check it first.\n        OFFSET 0\n    ) labels\n    WHERE labels.type = 'System'\n        OR labels.link_id IN (\n            SELECT el.id FROM email_links el WHERE el.macro_id = $2\n            UNION ALL\n            SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = $2\n        )\n    ",
   "describe": {
     "columns": [
       {
@@ -82,7 +82,8 @@
     ],
     "parameters": {
       "Left": [
-        "UuidArray"
+        "UuidArray",
+        "Text"
       ]
     },
     "nullable": [
@@ -97,5 +98,5 @@
       false
     ]
   },
-  "hash": "552533130df2690d76f5a3e6163361d6c231f380f9e4d5bf38cf40c4f6a26864"
+  "hash": "4fe1556d8ff81b45edd5b601b067f127844e51933d24c2c69d40339fee0dac08"
 }
