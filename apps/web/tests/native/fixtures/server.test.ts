@@ -10,6 +10,8 @@ import {
   type ItemPreviewsQuery,
   MailAccountsDocument,
   type MailAccountsQuery,
+  RunningTimerDocument,
+  type RunningTimerQuery,
   SoupBackfillDocument,
   SoupChannelDirectoryBackfillDocument,
   SoupDocument,
@@ -511,6 +513,24 @@ test('matrix fixtures validate against the production backfill selections', asyn
     expect(result.errors).toBeUndefined();
     expect(result.data.user.soup.items).toHaveLength(count);
   }
+});
+
+test('the startup running-timer read finds no timer', async () => {
+  server = startFixtureServer();
+  const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+    method: 'POST',
+    body: JSON.stringify({
+      query: transportQuery(RunningTimerDocument),
+      operationName: 'RunningTimer',
+    }),
+  });
+  const result: ExecutionResult<RunningTimerQuery> = await response.json();
+  expect(result.errors).toBeUndefined();
+  const timeTracking = result.data?.user.timeTracking;
+  expect(timeTracking?.id).toBe(USER_ID);
+  expect(timeTracking?.runningTimer).toBeNull();
+  expect(Number.isNaN(Date.parse(timeTracking?.serverNow ?? ''))).toBe(false);
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
 });
 
 test('startup notification settings have no overrides', async () => {

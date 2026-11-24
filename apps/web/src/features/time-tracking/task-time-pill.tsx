@@ -3,6 +3,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName } from '@core/user/displayName';
 import { tryMacroId } from '@core/user/macroId';
 import { type JSX, Show } from 'solid-js';
+import { TaskTimerCount } from './task-timer-count';
 import { TimeTrackingProvider } from './time-tracking-provider';
 import { TaskTimeSheet } from './views/mobile/task-time-sheet';
 import type { TaskTimeViewProps } from './views/shared/task-time-props';
@@ -44,6 +45,7 @@ export function TaskTimePill(props: {
       <Show when={isTouchDevice()} fallback={<TaskTimeDesktop {...view} />}>
         <TaskTimeSheet {...view} />
       </Show>
+      <TaskTimerCount taskId={props.taskId} />
     </TimeTrackingProvider>
   );
 }

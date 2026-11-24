@@ -383,6 +383,16 @@ impl CompaniesRepository for StubRepo {
         Err(CrmError::ContactNotFoundForTeam)
     }
 
+    async fn update_company_domains(
+        &self,
+        _team_id: &uuid::Uuid,
+        _company_id: &uuid::Uuid,
+        _update: &crate::domain::company_domains::CompanyDomainUpdate,
+        _editor: crate::domain::company_domains::CompanyDomainEditor,
+    ) -> Result<CrmCompanyWithContacts, CrmError> {
+        Err(CrmError::CompanyNotFoundForTeam)
+    }
+
     async fn set_contact_hidden(
         &self,
         _team_id: &uuid::Uuid,

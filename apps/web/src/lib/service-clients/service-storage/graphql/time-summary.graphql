@@ -1,0 +1,69 @@
+# Logged time over a period, totalled by person, task or day. The server
+# orders the groups and leaves out tasks the viewer cannot see.
+
+# A task as its row in the Tasks list shows it: status and priority are
+# properties. No viewerPermission: the server checks it one task at a time,
+# and a report can hold thousands, so time views show them read-only.
+fragment TimeSummaryTaskFields on GraphqlSoupDocument {
+  __typename
+  id
+  name
+  subType {
+    __typename
+    ... on GraphqlTaskSubType {
+      isCompleted
+    }
+  }
+  properties {
+    ...SoupPropertyFields
+  }
+}
+
+fragment TimeGroupKeyFields on GraphqlTimeGroupKey {
+  by
+  userId
+  taskId
+  date
+  task {
+    ...TimeSummaryTaskFields
+  }
+}
+
+fragment TimeTotalFields on GraphqlTimeTotal {
+  key {
+    ...TimeGroupKeyFields
+  }
+  minutes
+}
+
+fragment TimeSummaryFields on GraphqlTimeSummary {
+  from
+  to
+  totalMinutes
+  taskCount
+  scopeTaskCount
+  complete
+  groups {
+    key {
+      ...TimeGroupKeyFields
+    }
+    minutes
+    taskCount
+    rows {
+      ...TimeTotalFields
+    }
+  }
+  thenTotals {
+    ...TimeTotalFields
+  }
+}
+
+# timeSummary reads the primary, so a summary read right after a write has it.
+query TimeSummary($input: TimeSummaryInput!) {
+  user {
+    id
+    timeSummary(input: $input) {
+      ...TimeSummaryFields
+    }
+  }
+}

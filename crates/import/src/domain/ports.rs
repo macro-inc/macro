@@ -21,6 +21,12 @@ pub enum ImportError {
     /// Connected issue tracker read failed.
     #[error(transparent)]
     Tracker(#[from] import_tracker::domain::model::TrackerError),
+    /// The connected HubSpot portal could not be read.
+    #[error(transparent)]
+    Hubspot(#[from] import_hubspot::domain::HubspotError),
+    /// A CRM import needs a team whose CRM the user may use.
+    #[error("importing into the CRM needs a team with CRM access")]
+    CrmAccessRequired,
     /// AI work was refused or usage validation is temporarily unavailable.
     #[error(transparent)]
     Admission(#[from] ai_billing::AiAdmissionError),
@@ -1203,4 +1209,132 @@ pub trait WrittenObjects: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         objects: &[WrittenObject],
     ) -> impl Future<Output = Result<Vec<WrittenObject>>> + Send;
+}
+
+/// A team's CRM as a HubSpot import writes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmTeam {
+    /// The team whose CRM receives the records.
+    pub team_id: Uuid,
+    /// Its members, for matching HubSpot owners.
+    pub members: Vec<CrmMember>,
+}
+
+/// A team member HubSpot owners are matched against.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmMember {
+    /// Login email, lowercased; matched against the owner's email.
+    pub email: String,
+    /// The Macro user id the matched owner is stored as.
+    pub user_id: String,
+}
+
+/// A contact to create in the team's CRM.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewCrmContact {
+    /// Display name.
+    pub name: String,
+    /// Email addresses, primary first; may be empty.
+    pub emails: Vec<String>,
+    /// The CRM company to file it under, when its HubSpot company was imported.
+    pub company: Option<Uuid>,
+}
+
+/// Where a deal stands, as a Sales pipeline's Outcome records it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DealOutcome {
+    /// Still open.
+    Open,
+    /// Closed won.
+    Won,
+    /// Closed lost.
+    Lost,
+}
+
+/// A deal to add as an entry of an imported pipeline.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NewDealEntry {
+    /// The CRM company the entry tracks.
+    pub company: Uuid,
+    /// The deal's name.
+    pub name: String,
+    /// Stage label, one of the pipeline's stages.
+    pub stage: Option<String>,
+    /// Outcome.
+    pub outcome: DealOutcome,
+    /// Amount.
+    pub amount: Option<f64>,
+    /// ISO 4217 code Macro supports, for `amount`.
+    pub currency: Option<String>,
+    /// Close date, `YYYY-MM-DD`.
+    pub close_date: Option<String>,
+    /// The owning team member's Macro user id.
+    pub owner: Option<String>,
+    /// The deal's HubSpot URL; unique per deal, so it is the entry's
+    /// identity on resume.
+    pub link: String,
+}
+
+/// Writes a HubSpot import into the team's CRM through the CRM services,
+/// with the importing user's permissions. Object-safe so the import service
+/// holds it without a type parameter.
+#[async_trait::async_trait]
+pub trait CrmImportWriter: Send + Sync + 'static {
+    /// The user's team, when they may use its CRM.
+    async fn crm_team(&self, user: &MacroUserIdStr<'static>) -> anyhow::Result<Option<CrmTeam>>;
+    /// The domain CRM keys a company by, or `None` when CRM would not
+    /// accept `raw` as a company domain (a personal email provider, not a domain).
+    fn company_domain(&self, raw: &str) -> Option<String>;
+    /// Whether a Sales pipeline amount may carry this currency code.
+    fn supports_currency(&self, code: &str) -> bool;
+    /// The team's company for `domain`, including hidden ones.
+    async fn company_by_domain(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        domain: &str,
+    ) -> anyhow::Result<Option<Uuid>>;
+    /// Create a company; `domain` was accepted by [`Self::company_domain`].
+    async fn create_company(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        domain: Option<&str>,
+    ) -> anyhow::Result<Uuid>;
+    /// The team's contact holding `email` as any of its addresses.
+    async fn contact_by_email(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        email: &str,
+    ) -> anyhow::Result<Option<Uuid>>;
+    /// Create a contact with every address it can take.
+    async fn create_contact(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        contact: &NewCrmContact,
+    ) -> anyhow::Result<Uuid>;
+    /// Create a company-tracking pipeline with these stages, in order, and
+    /// the fields deal entries fill.
+    async fn create_deal_pipeline(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        stages: &[String],
+    ) -> anyhow::Result<Uuid>;
+    /// The entries of `pipeline` tracking `company`, by the deal link each
+    /// carries: deals a stopped write already added. Read once per company
+    /// and pipeline per write.
+    async fn deal_entries(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        pipeline: Uuid,
+        company: Uuid,
+    ) -> anyhow::Result<HashMap<String, Uuid>>;
+    /// Add a deal as a pipeline entry.
+    async fn add_deal_entry(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        pipeline: Uuid,
+        deal: &NewDealEntry,
+    ) -> anyhow::Result<Uuid>;
 }

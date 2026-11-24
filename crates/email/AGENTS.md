@@ -299,12 +299,16 @@ tools — hexagonal, heavily feature-gated.
   backfilled to the backfill, so no thread is classified twice at once. An inbox
   whose threads can't be read counts in `inboxes_failed` and the sweep goes on
   to the next, so one slow inbox can't stop the sweep for all. `stale_threads` reads one
-  inbox through its latest-inbound and latest-outbound indexes; keep its
-  `OFFSET 0` fence, or the per-thread calendar and contact checks run on every
-  thread in the window. It reads the owner's recent contacts once, from their
-  sent mail, and checks each thread's senders against that set: through
-  `email_message_recipients.contact_id` a list address, both the sender and a
-  recipient of all its mail, costs every thread the list's whole history.
+  inbox through its latest-inbound and latest-outbound indexes into a
+  materialized `stale` CTE; keep it materialized, or the per-thread calendar
+  and contact checks run on every thread in the window. Whether a sender is a
+  recent contact is decided once per distinct sender, never per thread: one
+  named on at most `ADDRESSED_PROBE_LIMIT` messages through those messages,
+  stopping at the first the owner sent lately; one named on more, a list
+  address being a recipient of all its mail, against the owner's recent
+  recipients, read only then. Reading the owner's sent mail on every page
+  costs thousands of cold pages in production, and probing a list per thread
+  costs its whole history.
 - A Focus thread's days (`due_on` and the day of the meeting it is about) are read
   in one call when new mail is classified, only for a thread
   with `is_focus` or `awaiting_reply`, never for a thread the backfill's second pass
@@ -412,6 +416,16 @@ tools — hexagonal, heavily feature-gated.
   when it belongs to an inbox in the reader’s Drafts scope. Apply the same
   rule to full and parsed thread reads.
 
+- Labels people make are theirs: a thread opened through a share, a folder, a
+  channel or a CRM Team view shows its reader the made labels of an inbox
+  they own or manage, and none from anyone else's inbox. Every label read
+  (`labels_by_thread_ids`, `labels_by_message_ids`) takes the reader and
+  returns made labels only from the inboxes that person owns or manages, and
+  system labels, which are message state, to everyone; a bot, a signed-out
+  reader and an internal receipt get system labels alone. Give a new read of
+  labels the same condition; `test/label_readers.rs` runs every receipt and row
+  read over two shared threads.
+
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - `domain/scheduled_delivery/{state,identity,deletion}.rs` owns claim
   classification, sent-identity adoption and retained-deletion sequencing.
@@ -448,7 +462,11 @@ tools — hexagonal, heavily feature-gated.
   fails is skipped. Subjects are cut to 200 characters and snippets to the
   caller's `snippet_chars` (the provider's 300 by default, at most 500, past
   the preview taken from the body) there, not in the adapters; each message
-  carries its label names.
+  carries its label names. `read_window` uses `WindowRead::folder` to read
+  the inbox (the default) or Sent from each mailbox over the last `days`
+  (at most 30). It keeps the newest `limit` messages across mailboxes (at
+  most 500) dated since the window's start, with snippets on only the newest
+  `texts`. The `email.recent_inbox` span records the folder.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
@@ -469,6 +487,17 @@ tools — hexagonal, heavily feature-gated.
 - Forwarded attachments register through `domain/draft_attachments.rs` and resolve
   bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
   source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.
+- Search indexes each message's label names, so any write that changes a
+  message's stored labels, or a label's name, must ask for its reindex: the
+  event of the change when it has one (`thread_labels_updated`,
+  `thread_read`, …), else `EmailMacroEvent::thread_reindex_requested`, as a
+  re-sync that changed labels (`upsert_message`) and a diff of only
+  IMPORTANT, SENT, DRAFT or category labels do. A rename (`sync_labels`)
+  queues its label's threads on the search event queue
+  (`ThreadReindexQueue`), the bulk lane backfills use, so a big label can't
+  delay new mail's events. It queues before it stores the name, and keeps the
+  old name when queueing fails, so the next sync finds the rename again: a
+  failed reindex must not stop a mailbox's sync. Label deletes ask for none.
 - A send with files staged before delivery goes through
   `StagedAttachmentSender` (`domain/service/attachments.rs`): draft, staged
   attachment rows, then the send. `DraftAttachmentSender` adds Macro documents
@@ -658,6 +687,13 @@ tools — hexagonal, heavily feature-gated.
   slots, which waits the 10 s pace too. `enumerate_once` then goes on to the
   next due stream (up to `PACED_CLAIMS_PER_TURN`); otherwise a large import's
   waiting rounds, due again within seconds, would take the polls' turns.
+  The discovery that creates a folder's stream makes its first round due a
+  little early by role (`import_round_lead_seconds`: Inbox, then Sent, then
+  the rest): the rounds that read an import's first pages stay ahead of those
+  paced behind them, so without it Graph's alphabetical order would import
+  Archive and Deleted Items before the Inbox. The health snapshot's
+  `import_round_wait_seconds` is how long the mailbox's longest-due round has
+  waited for a claim.
   A message released after a failed read is due at once when a newer
   revision arrived during the lease.
 - A folder's import round is a delta snapshot, so mail that arrives during it

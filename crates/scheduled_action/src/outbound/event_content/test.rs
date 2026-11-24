@@ -151,7 +151,28 @@ fn channel_messages_are_plain_text_from_their_sender() {
 }
 
 #[test]
-fn replies_go_to_the_root_of_the_message_thread() {
+fn a_message_says_whether_it_is_a_reply_and_which_post_started_its_thread() {
+    let mut root = message("Launch plan");
+    root.id = Uuid::now_v7();
+    let value = message_json(&root);
+    assert_eq!(value["is_reply"], false);
+    assert_eq!(value["root_id"], json!(root.id));
+
+    let mut reply = message("Looks good");
+    reply.id = Uuid::now_v7();
+    reply.thread_id = Some(root.id);
+    let value = message_json(&reply);
+    assert_eq!(value["is_reply"], true);
+    assert_eq!(value["root_id"], json!(root.id));
+
+    // A root stored with itself as its thread is still a top-level post.
+    root.thread_id = Some(root.id);
+    assert_eq!(message_json(&root)["is_reply"], false);
+}
+
+/// Routines written before `root_id` read `thread_id`, set on every message.
+#[test]
+fn thread_id_keeps_its_old_value_for_routines_that_read_it() {
     let mut root = message("Launch plan");
     root.id = Uuid::now_v7();
     assert_eq!(message_json(&root)["thread_id"], json!(root.id));
@@ -160,6 +181,86 @@ fn replies_go_to_the_root_of_the_message_thread() {
     reply.id = Uuid::now_v7();
     reply.thread_id = Some(root.id);
     assert_eq!(message_json(&reply)["thread_id"], json!(root.id));
+}
+
+fn channel() -> ChannelMetadata {
+    ChannelMetadata {
+        channel_type: ChannelType::Public,
+        channel_name: "design-feedback".into(),
+        named: true,
+    }
+}
+
+fn thread(root: &Message) -> MessageThread {
+    MessageThread {
+        state: messages::domain::models::ThreadState {
+            root_id: root.id,
+            user_id: "macro|sender@example.com".into(),
+            resolved: false,
+            anchor: None,
+            created_at: root.created_at,
+            updated_at: root.created_at,
+            deleted_at: None,
+        },
+        root: root.clone(),
+        replies: Vec::new(),
+    }
+}
+
+#[test]
+fn a_reply_carries_the_post_that_started_its_thread() {
+    let mut root = message("Launch plan");
+    root.id = Uuid::now_v7();
+    let mut reply = message("Looks good");
+    reply.id = Uuid::now_v7();
+    reply.thread_id = Some(root.id);
+    let event = event("channel.message_posted", Some(reply.id));
+    let content = |thread| EventContent::Channel {
+        channel: channel(),
+        message: Some(ChannelMessage {
+            message: reply.clone(),
+            thread,
+        }),
+    };
+
+    let value = content_json(&event, &content(Some(thread(&root))));
+    assert_eq!(value["message"]["is_reply"], true);
+    assert_eq!(value["thread_parent"]["text"], "Launch plan");
+    assert_eq!(value["thread_parent"]["is_reply"], false);
+    assert_eq!(value["thread_parent"]["root_id"], json!(root.id));
+
+    // Once the post that started the thread is deleted, the reply still says it is one.
+    root.deleted_at = Some(root.created_at);
+    let value = content_json(&event, &content(Some(thread(&root))));
+    assert!(value.get("thread_parent").is_none());
+    assert_eq!(value["message"]["is_reply"], true);
+}
+
+#[test]
+fn a_deleted_message_says_only_that_it_is_unavailable() {
+    let event = event("channel.message_posted", Some(Uuid::now_v7()));
+    let value = content_json(
+        &event,
+        &EventContent::Channel {
+            channel: channel(),
+            message: None,
+        },
+    );
+    assert!(value["message"]["unavailable"].is_string());
+    assert!(value["message"].get("is_reply").is_none());
+    assert!(value.get("thread_parent").is_none());
+}
+
+#[test]
+fn every_message_names_its_sender() {
+    let mut guest = message("Joining from the lobby");
+    guest.sender_id = "guest|01928f3e-6a2b-7c3d-8e4f-00000000e7a1"
+        .to_owned()
+        .try_into()
+        .unwrap();
+    assert!(message_json(&guest)["sender"].is_string());
+    guest.guest_name = Some("Visitor".into());
+    assert_eq!(message_json(&guest)["sender"], "Visitor");
 }
 
 fn task() -> DocumentBasic {

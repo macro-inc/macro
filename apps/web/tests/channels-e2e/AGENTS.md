@@ -54,9 +54,8 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   busy page (KEY-05): a test about something else reaches the message list
   with Escape.
 - A defect that shows on one machine in every run and on another in none
-  (a list read again before a write is in it: CHN-02, ACC-06, CHN-08, DM-01,
-  MEM-03) is intermittent, not known: CI and a developer's stack disagree
-  about it.
+  (a list read again before a write is in it: CHN-02, ACC-06, DM-01, MEM-03)
+  is intermittent, not known: CI and a developer's stack disagree about it.
 - Global setup empties each cast's favorite channels: the sidebar draws only
   the rows near its window, so leftovers push a new row out of the page.
 - A message sent, or a reaction changed, in the first second after a page

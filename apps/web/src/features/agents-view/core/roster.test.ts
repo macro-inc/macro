@@ -1,3 +1,4 @@
+import { Model } from '@core/component/AI/constant/model';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
@@ -107,6 +108,23 @@ describe('buildAgentRoster', () => {
     expect(saved[2]?.offline).toBe(true);
     expect(saved[1]?.offline).toBeFalsy();
     expect(saved[3]?.runtime.label).toBe('Disconnected machine');
+  });
+
+  it("starts a Macro agent saved on a retired model on that model's replacement", () => {
+    const roster = buildAgentRoster({
+      ...EMPTY,
+      agents: [
+        persisted({
+          harness: 'in-memory',
+          default_model: 'anthropic/claude-haiku-4-5',
+        }),
+        persisted({ harness: 'macrod', default_model: 'openai/gpt-5.6' }),
+      ],
+    });
+    expect(roster.slice(2).map((agent) => agent.defaultModel)).toEqual([
+      Model.haiku55,
+      'openai/gpt-5.6',
+    ]);
   });
 
   it('marks an agent on a turned-off Macro computer powered off, never reconnectable', () => {

@@ -6,7 +6,7 @@ import EmptyStateNoAccessGraphic from '@design/empty-state-no-access.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { Button, cn, EmptyStatePanel } from '@ui';
-import { type Component, For, type JSX } from 'solid-js';
+import { type Component, For, type JSX, Show } from 'solid-js';
 
 /** Presentational states for CRM lists; the caller owns the query and actions. */
 export function CrmListEmpty(props: {
@@ -72,7 +72,12 @@ export function CrmListError(props: {
   );
 }
 
-export function CrmListSkeleton(props: { label?: string; count?: number }) {
+/** `panel` draws the information panel's 32px item rows at its text edge. */
+export function CrmListSkeleton(props: {
+  label?: string;
+  count?: number;
+  panel?: boolean;
+}) {
   return (
     <ListSkeleton.Root
       label={props.label ?? 'Loading CRM list'}
@@ -80,23 +85,38 @@ export function CrmListSkeleton(props: { label?: string; count?: number }) {
     >
       <For each={Array.from({ length: props.count ?? 6 })}>
         {(_, index) => (
-          <ListSkeleton.Row class="h-10 gap-2 px-3">
-            <div class="size-4 shrink-0" />
-            <ListSkeleton.Bar class="size-4 shrink-0 rounded" />
-            <div class="min-w-0 flex-1">
-              <div
-                style={{ width: `${[10, 8, 12, 9, 11, 7][index() % 6]}rem` }}
-                class="max-w-full"
-              >
-                <ListSkeleton.Bar class="w-full" />
+          <Show
+            when={!props.panel}
+            fallback={
+              <ListSkeleton.Row class="h-8 gap-1.5">
+                <ListSkeleton.Bar class="size-4 shrink-0 rounded" />
+                <div
+                  style={{ width: `${[10, 8, 12, 9, 11, 7][index() % 6]}rem` }}
+                  class="max-w-full"
+                >
+                  <ListSkeleton.Bar class="w-full" />
+                </div>
+              </ListSkeleton.Row>
+            }
+          >
+            <ListSkeleton.Row class="h-10 gap-2 px-3">
+              <div class="size-4 shrink-0" />
+              <ListSkeleton.Bar class="size-4 shrink-0 rounded" />
+              <div class="min-w-0 flex-1">
+                <div
+                  style={{ width: `${[10, 8, 12, 9, 11, 7][index() % 6]}rem` }}
+                  class="max-w-full"
+                >
+                  <ListSkeleton.Bar class="w-full" />
+                </div>
               </div>
-            </div>
-            <ListSkeleton.Bar class="hidden w-20 shrink-0 @lg/crm-skeleton:block" />
-            <ListSkeleton.Bar class="hidden w-16 shrink-0 @3xl/crm-skeleton:block" />
-            <div class="flex w-12 shrink-0 justify-end @lg/crm-skeleton:w-20">
-              <ListSkeleton.Bar class="h-2 w-10 opacity-60" />
-            </div>
-          </ListSkeleton.Row>
+              <ListSkeleton.Bar class="hidden w-20 shrink-0 @lg/crm-skeleton:block" />
+              <ListSkeleton.Bar class="hidden w-16 shrink-0 @3xl/crm-skeleton:block" />
+              <div class="flex w-12 shrink-0 justify-end @lg/crm-skeleton:w-20">
+                <ListSkeleton.Bar class="h-2 w-10 opacity-60" />
+              </div>
+            </ListSkeleton.Row>
+          </Show>
         )}
       </For>
     </ListSkeleton.Root>

@@ -111,14 +111,15 @@ impl PgMailboxSync {
                 .execute(&mut *tx).await.map_err(db_error)?;
             sqlx::query!(
                 r#"
-                INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id)
-                VALUES ($1,$2,$3,'mail_folder',$4)
+                INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,next_run_at)
+                VALUES ($1,$2,$3,'mail_folder',$4,now() - make_interval(secs => $5))
                 ON CONFLICT (link_id,generation,kind,scope_id) DO NOTHING
             "#,
                 macro_uuid::generate_uuid_v7(),
                 lease.mailbox.link_id,
                 lease.mailbox.sync_generation,
-                folder.id.as_str()
+                folder.id.as_str(),
+                f64::from(import_round_lead_seconds(folder.role))
             )
             .execute(&mut *tx)
             .await

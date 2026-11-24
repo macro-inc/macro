@@ -143,11 +143,12 @@ impl<B> MakeSpan<B> for MakeHttpRequestSpan {
 }
 
 /// Path parameters that carry a bearer credential (a sign-in session code, a
-/// one-time login or merge code, a meeting join or read-receipt token).
+/// one-time login or merge code, a meeting join or read-receipt token) or
+/// personal data (a Macro user id, which holds the user's email address).
 /// `url.path` shows the route's placeholder in their place.
-const CREDENTIAL_PATH_PARAMS: &[&str] = &["{session_code}", "{code}", "{token}"];
+const REDACTED_PATH_PARAMS: &[&str] = &["{session_code}", "{code}", "{token}", "{user_id}"];
 
-/// The request path for `url.path`, with each credential segment replaced by
+/// The request path for `url.path`, with each redacted segment replaced by
 /// its route placeholder. Segments are matched from the end, because a nested
 /// router sees the path without its prefix while `MatchedPath` keeps it.
 /// Without a matched route nothing is replaced; a wildcard route that holds a
@@ -156,7 +157,7 @@ fn redacted_path<'a>(path: &'a str, route: Option<&'a str>) -> std::borrow::Cow<
     let Some(route) = route.filter(|route| {
         route
             .split('/')
-            .any(|segment| CREDENTIAL_PATH_PARAMS.contains(&segment))
+            .any(|segment| REDACTED_PATH_PARAMS.contains(&segment))
     }) else {
         return path.into();
     };
@@ -166,7 +167,7 @@ fn redacted_path<'a>(path: &'a str, route: Option<&'a str>) -> std::borrow::Cow<
         return route.into();
     }
     for (segment, route_segment) in segments.iter_mut().rev().zip(route_segments.iter().rev()) {
-        if CREDENTIAL_PATH_PARAMS.contains(route_segment) {
+        if REDACTED_PATH_PARAMS.contains(route_segment) {
             *segment = route_segment;
         }
     }

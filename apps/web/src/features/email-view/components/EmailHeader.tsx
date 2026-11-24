@@ -9,6 +9,7 @@ import {
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
@@ -22,11 +23,12 @@ import {
   canSearchEmailTab,
   EMAIL_INBOX_TAB_IDS,
   EMAIL_TAB_LABELS,
-  EMAIL_TABS,
-  isEmailInboxTab,
+  emailShownViewTitle,
 } from '../constants';
 import { useEmailView } from '../email-view-context';
 import type { EmailSearchSuggestions } from '../search/create-email-search-suggestions';
+import { emailSearchTextParts } from '../search/email-search-scope';
+import { EMAIL_TAB_ICONS } from '../tab-icons';
 import type { EmailTab } from '../tabs';
 import { EMAIL_TOUR } from '../tour';
 import { useVisibleEmailTab } from '../use-visible-email-tab';
@@ -38,8 +40,11 @@ import {
 } from '../views/email-saved-views';
 import { EmailControls } from './EmailControls';
 
-/** What the header gives up, in order, when its actions would overflow it. */
-const HEADER_COLLAPSE_ORDER = ['viewOptions'] as const;
+/**
+ * What the header gives up, in order, when its actions would overflow it:
+ * the view options, then the inbox tabs' labels (a narrow split pane).
+ */
+const HEADER_COLLAPSE_ORDER = ['viewOptions', 'tabs'] as const;
 
 export type EmailHeaderProps = {
   /** Moves the keyboard from the search field into the list. */
@@ -55,16 +60,20 @@ export type EmailHeaderProps = {
 };
 
 export function EmailViewBreadcrumbItem() {
-  const { state, tagViewTitle, savedViewActive, savedViews } = useEmailView();
+  const {
+    shownTab,
+    showsInboxTabs,
+    tagViewTitle,
+    savedViewActive,
+    savedViews,
+  } = useEmailView();
   const savedViewTitle = useEmailSavedViewTitle();
-  const inboxSelected = () =>
-    !isTouchDevice() && !savedViewActive() && isEmailInboxTab(state.tab);
+  // The title names the view the navigation shows, as the sidebar does.
+  const inboxSelected = () => !isTouchDevice() && showsInboxTabs();
   const tabTitle = () =>
     savedViewTitle() ??
     tagViewTitle() ??
-    (inboxSelected()
-      ? 'Inbox'
-      : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email'));
+    emailShownViewTitle(inboxSelected() ? 'inbox' : shownTab());
   const appearance = () => {
     const view = savedViews?.view();
     return view?.kind === 'saved' ? view.record.appearance : undefined;
@@ -117,28 +126,44 @@ export function EmailViewBreadcrumbItem() {
 export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
-  const { state, setState, setTab, tagViewTitle, savedViewActive, savedViews } =
-    useEmailView();
+  const {
+    state,
+    setState,
+    setTab,
+    shownTab,
+    showsInboxTabs,
+    registerSearchField,
+    tagViewTitle,
+    savedViewActive,
+    savedViews,
+  } = useEmailView();
   const savedViewTitle = useEmailSavedViewTitle();
   const [filterOpen, setFilterOpen] = createSignal(false);
+  const [searchFieldOpen, setSearchFieldOpen] = createSignal(false);
+  registerSearchField({
+    open: searchFieldOpen,
+    close: () => setSearchFieldOpen(false),
+  });
   let releaseSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
   const isVisible = useVisibleEmailTab();
-  const inboxSelected = () => !savedViewActive() && isEmailInboxTab(state.tab);
-  const inboxTabs = () =>
-    EMAIL_INBOX_TAB_IDS.filter(isVisible).map((id) => ({
-      value: id,
-      label: EMAIL_TAB_LABELS[id],
-    }));
   const [inboxTabsElement, setInboxTabsElement] = createSignal<HTMLElement>();
   // A narrow pane (the desktop window has no minimum width) hides the view
   // options, the Focus sort and the reading pane toggle, rather than push
   // Search past the header's edge. The reading pane has no room beside the
-  // list there anyway, and Shift+V still toggles it.
+  // list there anyway, and Shift+V still toggles it. A narrower one, such as
+  // a third of a small window, also shows the inbox tabs as icons alone.
   const [actions, setActions] = createSignal<HTMLDivElement>();
   const collapsed = createLabelCollapse(actions, () => HEADER_COLLAPSE_ORDER, {
     watchContent: true,
   });
+  // Icons only when the labels go: the tabs show an option's icon beside its label.
+  const inboxTabs = () =>
+    EMAIL_INBOX_TAB_IDS.filter(isVisible).map((id) => ({
+      value: id,
+      label: EMAIL_TAB_LABELS[id],
+      icon: collapsed('tabs') ? EMAIL_TAB_ICONS[id] : undefined,
+    }));
 
   useViewTabHotkeys<EmailTab>({
     scopeId: panel.splitHotkeyScope,
@@ -152,9 +177,7 @@ export function EmailHeader(props: EmailHeaderProps) {
   const selectedTabLabel = () =>
     savedViewTitle() ??
     tagViewTitle() ??
-    (inboxSelected()
-      ? 'Inbox'
-      : (EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email'));
+    emailShownViewTitle(showsInboxTabs() ? 'inbox' : shownTab());
 
   const canSearch = () => canSearchEmailTab(state.tab);
   const savedAppearance = () => {
@@ -180,7 +203,10 @@ export function EmailHeader(props: EmailHeaderProps) {
   // The filter menu is unmounted with the other actions, so the search only
   // takes the header while it is closed.
   const searchOwnsHeader = () =>
-    !!props.searchSuggestions?.open() && canSearch() && !filterOpen();
+    !!props.searchSuggestions &&
+    searchFieldOpen() &&
+    canSearch() &&
+    !filterOpen();
 
   return (
     <ListHeader
@@ -189,7 +215,7 @@ export function EmailHeader(props: EmailHeaderProps) {
         <div class="flex min-w-0 items-center gap-3">
           <div
             class={
-              inboxSelected()
+              showsInboxTabs()
                 ? 'min-w-0 @max-[640px]/split-header:hidden'
                 : 'min-w-0'
             }
@@ -213,7 +239,7 @@ export function EmailHeader(props: EmailHeaderProps) {
           <Show when={savedViewActive()}>
             <EmailSavedViewMenu />
           </Show>
-          <Show when={inboxSelected()}>
+          <Show when={showsInboxTabs()}>
             <Tabs
               ref={(element) => {
                 setInboxTabsElement(element);
@@ -222,6 +248,7 @@ export function EmailHeader(props: EmailHeaderProps) {
               aria-label="Inbox view"
               size="md"
               class="shrink-0"
+              iconOnly={collapsed('tabs')}
               options={inboxTabs()}
               value={state.tab}
               onChange={setTab}
@@ -251,11 +278,14 @@ export function EmailHeader(props: EmailHeaderProps) {
         <ListHeaderSearch
           ref={searchTarget}
           label="Search email"
+          placeholder={t('emailViews.searchAllMail')}
           value={state.search}
           onValueChange={(search) => setState('search', search)}
+          operators={emailSearchTextParts}
           focusResults={props.focusSearchResults}
           wide={!!props.searchSuggestions}
-          onOpenChange={props.searchSuggestions?.setOpen}
+          open={searchFieldOpen()}
+          onOpenChange={setSearchFieldOpen}
           onFocusChange={props.searchSuggestions?.setFocused}
           suggestions={props.searchSuggestions}
           registerFocus={(focus) => {

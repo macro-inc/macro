@@ -7,6 +7,7 @@ mod dynamic_query;
 mod folders;
 mod importance_pagination;
 mod inbox_viewed_sort;
+mod label_readers;
 mod labels;
 mod link;
 mod mail_tab_projection;
@@ -43,11 +44,26 @@ use filter_ast::Expr;
 use item_filters::ast::date::DateLiteral;
 use item_filters::ast::email::{Email, EmailLiteral};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Cursor, CursorVal, Query, SimpleSortMethod};
-use sqlx::{Pool, Postgres};
+use sqlx::{PgPool, Pool, Postgres};
 use uuid::Uuid;
+
+/// The person whose inbox most fixtures describe, read from the fixture, and
+/// whose labels that inbox holds.
+async fn inbox_owner(pool: &PgPool) -> MacroUserIdStr<'static> {
+    let owner = sqlx::query_scalar!(
+        "SELECT macro_id FROM email_links WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'"
+    )
+    .fetch_one(pool)
+    .await
+    .expect("the fixture has the first inbox");
+    MacroUserIdStr::parse_from_str(&owner)
+        .expect("the fixture's owner is a person")
+        .into_owned()
+}
 
 /// Recomputes `is_signal` for every fixture thread via the real sync
 /// function, so importance tests exercise the heuristic → flag → query chain

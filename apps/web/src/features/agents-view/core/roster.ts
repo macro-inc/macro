@@ -1,3 +1,4 @@
+import { currentModelId } from '@core/component/AI/constant/model';
 import {
   CURSOR_BOT_HANDLE,
   CURSOR_BOT_ID,
@@ -10,7 +11,12 @@ import {
   MACRO_HARNESS_NAME,
 } from '@core/constant/macroAgent';
 import { isMacroNewId } from '@core/constant/macroNew';
-import { type AgentKind, kindForHarness, systemBotKind } from './agent-kind';
+import {
+  type AgentKind,
+  isMacroHarness,
+  kindForHarness,
+  systemBotKind,
+} from './agent-kind';
 
 /**
  * Macro's own chat agent: the deployment's managed default. Started without a
@@ -207,7 +213,10 @@ function persistedAgent(
     avatarUrl: agent.bot.avatar_url ?? undefined,
     harness: agent.harness,
     harnessId,
-    defaultModel: agent.default_model,
+    // A Macro agent saved on a retired model runs on its replacement.
+    defaultModel: isMacroHarness(agent.harness)
+      ? currentModelId(agent.default_model)
+      : agent.default_model,
     share: agent.bot.owner?.type === 'team' ? 'team' : 'private',
     runtime: {
       label: runtimeLabel(agent.harness, harnessId, input.runtimes),

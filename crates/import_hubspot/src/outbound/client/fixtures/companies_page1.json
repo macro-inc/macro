@@ -1,0 +1,4 @@
+{"results": [
+  {"id": "5001", "properties": {"name": "Acme", "domain": "acme.example", "website": "https://acme.example", "hs_additional_domains": "acme-io.example; acme-labs.example", "hubspot_owner_id": "101", "hs_object_id": "5001"}, "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-02T00:00:00Z", "archived": false},
+  {"id": "5002", "properties": {"name": "  ", "domain": "", "website": "http://www.globex.example/about", "hs_additional_domains": null, "hubspot_owner_id": null}, "archived": false}
+], "paging": {"next": {"after": "5002"}}}

@@ -85,6 +85,7 @@ import {
   projectTimelineDates,
   projectTimelineTimed,
   projectTimelineWholeDay,
+  projectTimelineWholeDayEnd,
 } from '../queries/project-timeline';
 import {
   ProjectSavedViewActions,
@@ -970,6 +971,11 @@ export function ProjectsCollection(props: {
                       {...projectTimelineDates(entity(), startDatesEnabled())}
                       timed={
                         startDatesEnabled() && projectTimelineTimed(entity())
+                      }
+                      wholeDay={
+                        startDatesEnabled()
+                          ? projectTimelineWholeDayEnd(entity())
+                          : undefined
                       }
                       regroup={startDatesEnabled()}
                       onReschedule={

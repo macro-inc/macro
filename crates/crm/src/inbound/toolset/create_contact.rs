@@ -3,7 +3,7 @@
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
-use entity_access::domain::ports::EntityAccessService;
+use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use properties::PropertiesService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::domain::service::CrmService;
 
-use super::{CrmToolContext, caller_team_receipt, company_view_receipt, crm_error};
+use super::{CrmToolContext, caller_team_receipt, company_receipt, crm_error};
 
 /// The created contact.
 #[derive(Debug, Serialize, JsonSchema)]
@@ -75,7 +75,7 @@ where
         let email = self.email.as_deref();
         let contact = match self.company_id {
             Some(company_id) => {
-                let (company, _) = company_view_receipt(
+                let (company, _) = company_receipt::<ViewAccessLevel, _>(
                     &*service_context.entity_access_service,
                     &request_context,
                     company_id,
