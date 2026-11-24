@@ -136,6 +136,14 @@ word docs, Illustrator/Photoshop files).
   `NewDocumentMetadata::builder(..).created_at(..).updated_at(..)`. Its folder
   and every folder above it then widen to those dates (`extend_project_dates`)
   instead of being marked updated now.
+- Add a version to a file document (an import tracking upstream versions):
+  `DocumentCreator::add_file_version` (`src/domain/create/file_version.rs`)
+  with an edit receipt for the document. It is idempotent on the bytes'
+  SHA-256 against the newest `DocumentInstance` (`created: false`), refuses
+  Markdown, DOCX, PDF, image and sync-service documents and more than 100 MiB,
+  and deletes the new instance when the upload fails. Each new instance is
+  stamped after the newest, so it is the one served.
+  `CreatedDocument::document_version_id` is the version a creation wrote.
 - Change content storage/markdown lifecycle: `src/domain/content.rs` →
   `src/outbound/s3_markdown_source.rs` / `src/outbound/markdown_init.rs` →
   `src/bin/backfill_markdown_content_location.rs` if existing documents need

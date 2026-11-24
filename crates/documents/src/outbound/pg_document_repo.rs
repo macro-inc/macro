@@ -8,6 +8,7 @@ mod tests;
 mod copy;
 mod create;
 mod edit;
+mod file_version;
 mod legacy_upgrade;
 mod markdown_backfill;
 mod share;
@@ -26,9 +27,9 @@ use sqlx::Row;
 
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
-    BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, DocumentError,
-    DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome, ImportEmailAttachmentRepoArgs,
-    OwnerTeam, TeamTaskMetadata, TeamTaskNumber,
+    AddedFileVersion, BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
+    DocumentError, DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome,
+    ImportEmailAttachmentRepoArgs, OwnerTeam, TeamTaskMetadata, TeamTaskNumber,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -1422,6 +1423,25 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         copy::copy_pdf_parts(&mut transaction, new_document_id, original_document_id).await?;
         transaction.commit().await?;
         Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, sha))]
+    async fn add_document_instance(
+        &self,
+        document_id: &str,
+        file_type: model::document::FileType,
+        sha: &str,
+    ) -> Result<Option<AddedFileVersion>, Self::Err> {
+        file_version::add_document_instance(&self.pool, document_id, file_type, sha).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn remove_document_instance(
+        &self,
+        document_id: &str,
+        document_version_id: i64,
+    ) -> Result<(), Self::Err> {
+        file_version::remove_document_instance(&self.pool, document_id, document_version_id).await
     }
 }
 
