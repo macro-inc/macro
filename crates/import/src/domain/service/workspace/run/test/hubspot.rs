@@ -227,6 +227,9 @@ struct Crm {
     /// Creating the company with this name first settles this ledger row
     /// elsewhere, so the write finds it no longer importing.
     settle_on_create: Mutex<Option<(String, PgPool, String)>>,
+    /// Run once when the first pipeline is created: a teammate's write
+    /// changing the ledger while this one runs.
+    on_pipeline: Mutex<Option<(PgPool, String)>>,
 }
 
 impl Crm {
@@ -332,6 +335,10 @@ impl CrmImportWriter for Crm {
         name: &str,
         stages: &[String],
     ) -> anyhow::Result<Uuid> {
+        let hook = self.on_pipeline.lock().unwrap().take();
+        if let Some((pool, statement)) = hook {
+            sqlx::query(&statement).execute(&pool).await?;
+        }
         let id = Uuid::now_v7();
         self.pipelines
             .lock()
@@ -1026,6 +1033,49 @@ async fn a_record_the_ledger_did_not_take_is_not_linked_to(pool: PgPool) {
         contacts
             .iter()
             .all(|(_, contact)| contact.company != Some(acme)),
+        "{contacts:?}"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_company_a_teammate_finishes_during_the_write_is_filed_under(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "hubspot-late-company", team).await;
+    let crm = crm_for(team, &[&owner]);
+    let planned = plan(
+        &pool,
+        portal("hubspot-late-company@example.com"),
+        crm.clone(),
+        &owner,
+    )
+    .await;
+    let acme_row = row_id(&pool, &owner, "company:10").await;
+    let pipeline_row = row_id(&pool, &owner, "pipeline:default").await;
+    // Acme waits on a teammate's copy when the write starts...
+    sqlx::query("UPDATE import_entity SET waiting_on = $1 WHERE id = $2")
+        .bind(pipeline_row)
+        .bind(acme_row)
+        .execute(&pool)
+        .await
+        .unwrap();
+    // ...and the teammate's write links it while this one makes the pipeline.
+    let acme = Uuid::now_v7();
+    *crm.on_pipeline.lock().unwrap() = Some((
+        pool.clone(),
+        format!(
+            "UPDATE import_entity SET status = 'imported', entity_id = '{acme}', \
+             entity_type = 'crm_company', waiting_on = NULL WHERE id = '{acme_row}'"
+        ),
+    ));
+
+    finish(planned, &owner, NotionWriteChoices::default()).await;
+
+    // Its contacts are filed under the linked company, not failed.
+    let contacts = crm.contacts.lock().unwrap();
+    assert!(
+        contacts
+            .iter()
+            .any(|(_, contact)| contact.company == Some(acme)),
         "{contacts:?}"
     );
 }

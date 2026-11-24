@@ -436,6 +436,34 @@ where
         Ok(marked.map(|_| id))
     }
 
+    /// The CRM company `key` became. One a teammate's write linked after this
+    /// write read the ledger is read again, so it is not reported missing.
+    async fn company_target(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        key: &str,
+        targets: &mut HashMap<String, Uuid>,
+    ) -> Result<Option<Uuid>> {
+        if let Some(target) = targets.get(key) {
+            return Ok(Some(*target));
+        }
+        let Some(row) = self
+            .repo
+            .get_own_by_foreign_id(user, self.workspace_source, key)
+            .await?
+        else {
+            return Ok(None);
+        };
+        let target = (row.status == ImportStatus::Imported)
+            .then_some(row.entity_id)
+            .flatten()
+            .and_then(|id| id.parse().ok());
+        if let Some(target) = target {
+            targets.insert(key.to_owned(), target);
+        }
+        Ok(target)
+    }
+
     /// The CRM record for one object: an existing one by its natural key
     /// (domain, any address, the deal's link), or a new one. `true` when it
     /// was created.
@@ -486,9 +514,11 @@ where
                     // The owner left the company out: the contact stays
                     // without one, and the report counts it.
                     Some(key) if left_out.contains(key) => None,
-                    Some(key) => Some(targets.get(key).copied().ok_or(ImportError::NotReady(
-                        "Its company has not been imported. Plan again to retry this contact.",
-                    ))?),
+                    Some(key) => Some(self.company_target(user, key, targets).await?.ok_or(
+                        ImportError::NotReady(
+                            "Its company has not been imported. Plan again to retry this contact.",
+                        ),
+                    )?),
                 };
                 let contact = NewCrmContact {
                     name: meta.title.clone(),
@@ -510,13 +540,12 @@ where
                         "Its company was left out of the import, and a pipeline entry tracks a company.",
                     ));
                 }
-                let company =
-                    targets
-                        .get(deal.company.as_str())
-                        .copied()
-                        .ok_or(ImportError::NotReady(
-                            "Its company has not been imported. Plan again to retry this deal.",
-                        ))?;
+                let company = self
+                    .company_target(user, &deal.company, targets)
+                    .await?
+                    .ok_or(ImportError::NotReady(
+                        "Its company has not been imported. Plan again to retry this deal.",
+                    ))?;
                 let entries = match deal_entries.entry((pipeline, company)) {
                     std::collections::hash_map::Entry::Occupied(known) => known.into_mut(),
                     std::collections::hash_map::Entry::Vacant(slot) => {
