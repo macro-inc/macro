@@ -54,11 +54,12 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Keep custom-agent model pins browser-local per account and agent; preserve pinned overrides across sends, clear pins on the agent default or confirmed catalog retirement, and never mutate the agent's shared default.
 - Keep Suggested below Recent, using only fixed frontier matches, excluding Auto and Recent, with at most five models and no full-catalog fallback.
 - Use semantic hover, active, selected, overlay and shadow tokens throughout the selector; retain the shared Slider disabled treatment.
-- Keep logo-to-name spacing at `gap-1` and name-to-Thinking spacing at `gap-2` on both platforms; match name and Thinking value type sizes, inset only Model/Thinking label rows by 6px desktop or 10px phone, and keep the slider wrapper unpadded with its invisible 44px phone thumb hit area.
+- Keep logo-to-name spacing at `gap-1` and name-to-Thinking spacing at `gap-2` on both platforms; match name and Thinking value type sizes, inset only Model/Thinking label rows by 6px desktop or 10px phone, and keep the full-width slider surface's thumb-range inset in its own padding with an invisible 44px phone thumb hit area.
 - Keep model-selector cards and sheets in the composer's active interaction lifetime; dismiss them when navigation removes or hides their trigger, and unmount the card while a phone sheet owns focus.
 - Scope model discovery by account, preserve kept models while discovery is pending, and retire them only against a successful catalog for that account.
 - Reuse AgentAvatar for selector agent identities at the specified sizes; keep the agents-view circular surface-1 fill and muted glyph rather than the person-avatar treatment.
-- Give every More models row its provider logo and keep provider headings text-only; render matching Auto as a standalone row without a group wrapper on the main, More models, and agent-model pages, including search results.
+- Give every More models row its provider logo and keep provider headings text-only; render matching Auto in its own heading-free section on the main, More models, and agent-model pages, including search results.
+- Group selector headings and rows in ModelSelectionSection, keep card fields together, and use parent gaps and padding rather than child margins: 24px from agent names to Auto, 16px between model sections, and 32px from agent names to search-only model headings.
 - Keep focus on the stable popover before replacing a desktop page, and wait for the phone sheet's final focus callback before remounting the card.
 - Render search misses as the shared centered query/icon/Clear search state on every selector page; clearing refocuses the field without scrolling the page.
 - Use shared grouped Tabs for the compact phone accessory and Home's track tabs for full new-session views; keep the Auto gate and host mode state unchanged.

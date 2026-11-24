@@ -1673,21 +1673,27 @@ describe('agent-led new conversation', () => {
     ['all', true],
     ['agentModels', true],
   ] as const)(
-    'keeps Auto standalone and selectable on %s (touch: %s)',
+    'groups sections and keeps Auto selectable on %s (touch: %s)',
     async (target, touch) => {
       mocks.touch = touch;
       const user = userEvent.setup();
       const onModel = vi.fn();
+      localStorage.setItem(
+        'agent-model-recent-v1:user',
+        JSON.stringify(['openai/gpt-5.6'])
+      );
       const models = [
         { id: 'auto', label: 'Auto' },
         { id: 'openai/gpt-5.6', label: 'GPT-5.6' },
+        { id: 'anthropic/claude-sonnet-5-5', label: 'Sonnet 5.5' },
       ];
-      const agent = buildAgentRoster({
+      const roster = buildAgentRoster({
         agents: [],
         runtimes: [],
         cursorConnected: true,
         cursorNeedsConnection: false,
-      }).find((entry) => entry.id === CURSOR_BOT_ID);
+      });
+      const agent = roster.find((entry) => entry.id === CURSOR_BOT_ID);
       render(() => (
         <UnifiedModelSelector
           state={{
@@ -1695,6 +1701,19 @@ describe('agent-led new conversation', () => {
             models,
             suggestedModels: models,
             agent: target === 'agentModels' ? agent : undefined,
+            agents: roster,
+            effort: {
+              id: 'reasoning',
+              name: 'Thinking',
+              description: 'Reasoning level',
+              category: 'thought_level',
+              type: 'select',
+              currentValue: 'low',
+              options: [
+                { value: 'low', name: 'Low', description: null, group: null },
+                { value: 'high', name: 'High', description: null, group: null },
+              ],
+            },
             onModel,
             onEffort: () => {},
             onSpeed: () => {},
@@ -1704,6 +1723,19 @@ describe('agent-led new conversation', () => {
       fireEvent.click(
         screen.getByRole('button', { name: 'Choose an agent or model' })
       );
+      if (target === 'agentModels') {
+        const modelField =
+          screen.getByText('Model').parentElement!.parentElement!;
+        const thinkingField =
+          screen.getByText('Thinking').parentElement!.parentElement!;
+        expect(modelField.parentElement).toBe(thinkingField.parentElement);
+        expect(modelField.parentElement!.classList.contains('gap-2')).toBe(
+          true
+        );
+        for (const slider of screen.getAllByRole('slider')) {
+          expect(slider.closest('[style*="padding-inline"]')).not.toBeNull();
+        }
+      }
       fireEvent.click(await screen.findByRole('button', { name: 'GPT-5.6' }));
       if (target === 'all') {
         fireEvent.click(screen.getByRole('button', { name: 'More models' }));
@@ -1719,6 +1751,37 @@ describe('agent-led new conversation', () => {
         choices.getByRole('button', { name: 'Auto' }).closest('[role="group"]')
       ).toBeNull();
       expect(choices.queryByRole('group', { name: 'Automatic' })).toBeNull();
+      const autoSection = choices
+        .getByRole('button', { name: 'Auto' })
+        .closest('section')!;
+      expect(autoSection).not.toBeNull();
+      expect(within(autoSection).getAllByRole('button')).toHaveLength(1);
+      expect(autoSection.parentElement!.classList.contains('gap-4')).toBe(true);
+      if (target === 'list') {
+        const agentsSection = choices.getByRole('group', { name: 'Agents' });
+        expect(
+          within(agentsSection).getByRole('button', { name: 'Cursor' })
+        ).toBeTruthy();
+        expect(agentsSection.parentElement).toBe(
+          autoSection.parentElement!.parentElement
+        );
+        expect(agentsSection.parentElement!.classList.contains('gap-6')).toBe(
+          true
+        );
+        expect(
+          choices.getByRole('group', { name: 'Recent' }).parentElement
+        ).toBe(autoSection.parentElement);
+        expect(
+          choices.getByRole('group', { name: 'Suggested' }).parentElement
+        ).toBe(autoSection.parentElement);
+      }
+      for (const element of autoSection
+        .closest('.overflow-y-auto')!
+        .querySelectorAll('*')) {
+        expect(
+          [...element.classList].filter((name) => /^-?m[trblxyse]?-/.test(name))
+        ).toEqual([]);
+      }
       fireEvent.input(search, { target: { value: 'Automatic' } });
       expect(choices.queryByRole('status')).toBeNull();
       expect(
@@ -1729,7 +1792,11 @@ describe('agent-led new conversation', () => {
       expect(choices.queryByRole('button', { name: 'Auto' })).toBeNull();
       expect(choices.getByRole('button', { name: 'GPT-5.6' })).toBeTruthy();
       if (target !== 'list') {
-        expect(choices.getByRole('group', { name: 'OpenAI' })).toBeTruthy();
+        const provider = choices.getByRole('group', { name: 'OpenAI' });
+        expect(provider.tagName).toBe('SECTION');
+        expect(
+          within(provider).getByRole('button', { name: 'GPT-5.6' })
+        ).toBeTruthy();
       }
       fireEvent.input(search, { target: { value: 'not-a-model' } });
       expect(choices.getByRole('status')).toBeTruthy();

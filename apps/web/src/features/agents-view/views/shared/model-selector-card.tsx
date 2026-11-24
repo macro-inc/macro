@@ -54,21 +54,23 @@ export function ModelSelectorCard(props: {
           <SpeedButton mobile={props.mobile} />
         </Show>
       </div>
-      <Show when={custom() && state.model}>
-        <ModelSelectorModelRow
-          mobile={props.mobile}
-          onModels={props.onModels}
-        />
-      </Show>
-      <Show when={thinking()}>
-        <div>
-          <ThinkingSlider
-            effort={state.effort}
-            value={state.effortValue}
-            disabled={state.effortDisabled || state.disabled}
-            mobile={props.mobile}
-            onCommit={state.onEffort}
-          />
+      <Show when={(custom() && state.model) || thinking()}>
+        <div class="flex flex-col gap-2">
+          <Show when={custom() && state.model}>
+            <ModelSelectorModelRow
+              mobile={props.mobile}
+              onModels={props.onModels}
+            />
+          </Show>
+          <Show when={thinking()}>
+            <ThinkingSlider
+              effort={state.effort}
+              value={state.effortValue}
+              disabled={state.effortDisabled || state.disabled}
+              mobile={props.mobile}
+              onCommit={state.onEffort}
+            />
+          </Show>
         </div>
       </Show>
     </div>

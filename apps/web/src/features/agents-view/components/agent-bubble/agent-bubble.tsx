@@ -25,7 +25,7 @@ export function AgentBubble(props: {
       aria-pressed={props.selected}
       class={
         props.size
-          ? 'flex h-auto shrink-0 flex-col items-center gap-1.5 rounded-xl px-0 pb-1 pt-1.5 text-ink-muted not-touch:hover:bg-hover active:bg-active'
+          ? 'flex h-auto shrink-0 flex-col items-center gap-1.5 rounded-xl px-0 pb-0 pt-1.5 text-ink-muted not-touch:hover:bg-hover active:bg-active'
           : 'flex h-auto w-28 shrink-0 flex-col items-center gap-2 p-0 text-ink-muted'
       }
       classList={{

@@ -104,14 +104,9 @@ export function ThinkingSlider(props: {
         >
           <div
             class={cn('h-6 rounded-full bg-selected', props.mobile && 'h-10')}
+            style={{ 'padding-inline': `${inset()}px` }}
           >
-            <Slider.Track
-              class="my-0 h-full rounded-none bg-transparent before:inset-0"
-              style={{
-                'margin-inline': `${inset()}px`,
-                width: `calc(100% - ${inset() * 2}px)`,
-              }}
-            >
+            <Slider.Track class="m-0 h-full rounded-none bg-transparent before:inset-0">
               <Slider.Fill
                 style={{
                   left: `-${inset()}px`,

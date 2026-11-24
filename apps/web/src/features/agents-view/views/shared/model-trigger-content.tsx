@@ -33,7 +33,7 @@ export function UnifiedModelTriggerContent() {
     return effort.options.find((choice) => choice.value === value)?.name;
   };
   return (
-    <>
+    <span class="flex min-w-0 items-center gap-2">
       <span class="flex min-w-0 items-center gap-1">
         <Show
           when={custom()}
@@ -49,10 +49,12 @@ export function UnifiedModelTriggerContent() {
         <span class="min-w-0 truncate text-ink-muted">{label()}</span>
       </span>
       <Show when={showModel()}>
-        <span class="shrink-0 text-ink-extra-muted">{model()}</span>
-        <Show when={state.modelKept}>
-          <PinFill class="size-3.5 shrink-0 text-ink-extra-muted" />
-        </Show>
+        <span class="flex shrink-0 items-center gap-1 text-ink-extra-muted">
+          <span>{model()}</span>
+          <Show when={state.modelKept}>
+            <PinFill class="size-3.5 shrink-0" />
+          </Show>
+        </span>
       </Show>
       <Show when={thinking()}>
         <span class="shrink-0 text-ink-extra-muted">{thinking()}</span>
@@ -76,6 +78,6 @@ export function UnifiedModelTriggerContent() {
         </span>
       </Show>
       <CaretDown class="size-3.5 shrink-0 text-ink-extra-muted" />
-    </>
+    </span>
   );
 }

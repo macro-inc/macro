@@ -17,6 +17,7 @@ import {
   type SelectorActionResult,
   useUnifiedModelSelector,
 } from '../../components/unified-model-selector/root';
+import { ModelSelectionSection } from '../../components/unified-model-selector/selection-section';
 import { agentPickerGroups } from '../../core/agent-picker-groups';
 import { modelSelection } from '../../core/model-selection';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../../core/roster';
@@ -177,347 +178,397 @@ export function ModelSelectionList(props: {
         }
       }}
     >
-      <div class={cn('shrink-0 px-2 pt-2 pb-0', props.mobile && 'px-3 py-2')}>
-        <Button
-          variant="ghost"
-          appearance="bare"
-          onClick={props.onBack}
-          class={cn(
-            'my-0.5 flex h-8 items-center gap-1.5 rounded-full pl-1.5 pr-2.5 not-touch:hover:bg-hover active:bg-active text-sm',
-            props.mobile && 'h-10 gap-2 pl-2 pr-3.5 text-base leading-[22px]'
-          )}
-        >
-          <CaretLeft
-            class={
-              props.mobile
-                ? 'size-[18px] text-ink-muted'
-                : 'size-4 text-ink-muted'
-            }
-          />
-          <Show
-            when={nav.page() === 'list' || nav.page() === 'agentModels'}
-            fallback={
-              <span>
-                {nav.page() === 'all'
-                  ? t('agentControls.allModels')
-                  : t('nav.agents')}
-              </span>
-            }
+      <div
+        class={cn(
+          'flex shrink-0 flex-col',
+          props.mobile ? 'gap-0' : 'gap-1.5 pb-1'
+        )}
+      >
+        <div class={cn('px-2 pt-2.5', props.mobile && 'px-3 py-2.5')}>
+          <Button
+            variant="ghost"
+            appearance="bare"
+            onClick={props.onBack}
+            class={cn(
+              'flex h-8 items-center gap-1.5 rounded-full pl-1.5 pr-2.5 not-touch:hover:bg-hover active:bg-active text-sm',
+              props.mobile && 'h-10 gap-2 pl-2 pr-3.5 text-base leading-[22px]'
+            )}
           >
-            <ModelSelectorIdentity mobile={props.mobile} />
-          </Show>
-        </Button>
+            <CaretLeft
+              class={
+                props.mobile
+                  ? 'size-[18px] text-ink-muted'
+                  : 'size-4 text-ink-muted'
+              }
+            />
+            <Show
+              when={nav.page() === 'list' || nav.page() === 'agentModels'}
+              fallback={
+                <span>
+                  {nav.page() === 'all'
+                    ? t('agentControls.allModels')
+                    : t('nav.agents')}
+                </span>
+              }
+            >
+              <ModelSelectorIdentity mobile={props.mobile} />
+            </Show>
+          </Button>
+        </div>
+        <div class="px-3">
+          <div
+            class={cn(
+              'flex h-9 items-center gap-2.5 rounded-[10px] bg-active px-3 focus-within:ring-1 focus-within:ring-accent',
+              props.mobile && 'h-11 rounded-[22px] px-3.5'
+            )}
+          >
+            <Search
+              class={
+                props.mobile
+                  ? 'size-[18px] text-ink-extra-muted'
+                  : 'size-4 text-ink-extra-muted'
+              }
+            />
+            <Input
+              ref={search}
+              value={nav.query()}
+              aria-label={
+                nav.page() === 'agentModels'
+                  ? t('agentControls.searchModels')
+                  : t('agentControls.searchAgentsModels')
+              }
+              placeholder={
+                nav.page() === 'agentModels'
+                  ? t('agentControls.searchModels')
+                  : t('agentControls.searchAgentsModels')
+              }
+              onInput={(event) => nav.setQuery(event.currentTarget.value)}
+              class={cn(
+                'min-w-0 flex-1 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 text-sm',
+                props.mobile && 'text-base leading-[22px]'
+              )}
+            />
+            <Show when={nav.query()}>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t('entityActions.clear')}
+                onClick={clearSearch}
+              >
+                <X class="size-3.5" />
+              </Button>
+            </Show>
+          </div>
+        </div>
       </div>
       <div
         class={cn(
-          'mx-3 my-1 flex h-9 shrink-0 items-center gap-2.5 rounded-[10px] bg-active px-3 focus-within:ring-1 focus-within:ring-accent',
-          props.mobile && 'my-0 h-11 rounded-[22px] px-3.5'
+          'min-h-0 overflow-y-auto overscroll-contain px-2 pb-4',
+          props.mobile && 'px-3 pt-1.5',
+          !props.mobile && nav.page() === 'list' && 'pt-3',
+          !props.mobile && nav.page() !== 'list' && 'pt-2'
         )}
       >
-        <Search
-          class={
-            props.mobile
-              ? 'size-[18px] text-ink-extra-muted'
-              : 'size-4 text-ink-extra-muted'
-          }
-        />
-        <Input
-          ref={search}
-          value={nav.query()}
-          aria-label={
-            nav.page() === 'agentModels'
-              ? t('agentControls.searchModels')
-              : t('agentControls.searchAgentsModels')
-          }
-          placeholder={
-            nav.page() === 'agentModels'
-              ? t('agentControls.searchModels')
-              : t('agentControls.searchAgentsModels')
-          }
-          onInput={(event) => nav.setQuery(event.currentTarget.value)}
-          class={cn(
-            'min-w-0 flex-1 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 text-sm',
-            props.mobile && 'text-base leading-[22px]'
-          )}
-        />
-        <Show when={nav.query()}>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={t('entityActions.clear')}
-            onClick={clearSearch}
-          >
-            <X class="size-3.5" />
-          </Button>
-        </Show>
-      </div>
-      <div
-        class="min-h-0 overflow-y-auto overscroll-contain pb-2"
-        classList={{ 'px-1 pt-1': Boolean(props.mobile) }}
-      >
         <Show when={nav.page() === 'list'}>
-          <Show when={bubbles().length || (!searching() && state.onCreate)}>
-            <div class="mx-2 mt-1 flex items-center justify-between px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
-              <span>{t('nav.agents')}</span>
-              <Show when={!searching()}>
-                <Button
-                  variant="link"
-                  size="xs"
-                  class={cn(
-                    '-mr-1.5 -my-1 not-data-disabled:hover:no-underline',
-                    props.mobile && '-my-0.5 text-sm'
-                  )}
-                  onClick={() => {
-                    nav.setPage('agents');
-                    if (!props.mobile) search?.focus({ preventScroll: true });
-                  }}
+          <div
+            class={cn(
+              'flex flex-col',
+              searching() && !auto() ? 'gap-8' : 'gap-6'
+            )}
+          >
+            <Show when={bubbles().length || (!searching() && state.onCreate)}>
+              <ModelSelectionSection
+                title={t('nav.agents')}
+                mobile={props.mobile}
+                bubbles
+                action={
+                  <Show when={!searching()}>
+                    <Button
+                      variant="link"
+                      size="xs"
+                      class={cn(
+                        'h-4 min-h-0 gap-0.5 p-0 leading-4 touch:min-h-0 not-data-disabled:hover:no-underline',
+                        props.mobile && 'h-5 text-sm leading-5'
+                      )}
+                      onClick={() => {
+                        nav.setPage('agents');
+                        if (!props.mobile)
+                          search?.focus({ preventScroll: true });
+                      }}
+                    >
+                      {t('agentControls.seeAll')}
+                      <ArrowRight
+                        aria-hidden="true"
+                        class="size-3.5 shrink-0"
+                      />
+                    </Button>
+                  </Show>
+                }
+              >
+                <div
+                  class="flex items-start gap-1 px-1.5 pt-0.5"
+                  classList={{ 'justify-between': !searching() }}
                 >
-                  {t('agentControls.seeAll')}
-                  <ArrowRight aria-hidden="true" class="size-3.5 shrink-0" />
-                </Button>
-              </Show>
-            </div>
-            <div
-              class="flex items-start px-3.5 pt-0.5 pb-1"
-              classList={{
-                'justify-between': !searching(),
-                'gap-1': searching(),
-              }}
-            >
-              <For each={bubbles()}>
-                {(agent) => (
-                  <AgentBubble
-                    size={props.mobile ? 'selector-phone' : 'selector'}
-                    agent={agent}
-                    selected={state.agent?.id === agent.id}
-                    disabled={
-                      state.disabled ||
-                      Boolean(agent.unavailableReason && !agent.connectLabel)
-                    }
-                    onSelect={() => pickAgent(agent)}
-                  />
-                )}
-              </For>
-              <Show when={!searching() && state.onCreate}>
-                <AgentBubble
-                  size={props.mobile ? 'selector-phone' : 'selector'}
-                  disabled={state.disabled}
-                  onSelect={() => {
-                    props.onPick();
-                    state.onCreate?.();
-                  }}
-                />
-              </Show>
-            </div>
-          </Show>
-          <Show when={auto()}>
-            {(option) => (
-              <ModelRows
-                class="mx-2 mt-4 mb-2 w-[calc(100%-1rem)]"
-                models={[option()]}
-                mobile={props.mobile}
-                selected={
-                  state.suggestedSelected !== false ? state.model : undefined
-                }
-                disabled={state.disabled || state.suggestedDisabled}
-                onPick={pickModel}
-              />
-            )}
-          </Show>
-          <Show when={searching() && searchModels().length > 0}>
-            <div
-              class="px-2 pb-2"
-              classList={{ 'mt-4': bubbles().length > 0 }}
-              role="group"
-              aria-label={t('agentControls.models')}
-            >
-              <div class="px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
-                {t('agentControls.models')}
-              </div>
-              <ModelRows
-                models={searchModels()}
-                mobile={props.mobile}
-                selected={
-                  state.suggestedSelected !== false ? state.model : undefined
-                }
-                disabled={state.disabled || state.suggestedDisabled}
-                onPick={pickModel}
-              />
-            </div>
-          </Show>
-          <Show when={!searching()}>
-            <Show when={recent().length}>
-              <div class="px-2 pb-2" role="group" aria-label={t('nav.recent')}>
-                <div class="px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
-                  {t('nav.recent')}
+                  <For each={bubbles()}>
+                    {(agent) => (
+                      <AgentBubble
+                        size={props.mobile ? 'selector-phone' : 'selector'}
+                        agent={agent}
+                        selected={state.agent?.id === agent.id}
+                        disabled={
+                          state.disabled ||
+                          Boolean(
+                            agent.unavailableReason && !agent.connectLabel
+                          )
+                        }
+                        onSelect={() => pickAgent(agent)}
+                      />
+                    )}
+                  </For>
+                  <Show when={!searching() && state.onCreate}>
+                    <AgentBubble
+                      size={props.mobile ? 'selector-phone' : 'selector'}
+                      disabled={state.disabled}
+                      onSelect={() => {
+                        props.onPick();
+                        state.onCreate?.();
+                      }}
+                    />
+                  </Show>
                 </div>
-                <ModelRows
-                  models={recent()}
-                  mobile={props.mobile}
-                  selected={
-                    state.suggestedSelected !== false ? state.model : undefined
-                  }
-                  disabled={state.disabled || state.suggestedDisabled}
-                  onPick={pickModel}
-                />
-              </div>
+              </ModelSelectionSection>
             </Show>
-            <Show when={suggested().length}>
-              <div
-                class="px-2 pb-2"
-                role="group"
-                aria-label={t('agentControls.suggested')}
-              >
-                <div class="px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
-                  {t('agentControls.suggested')}
-                </div>
-                <ModelRows
-                  models={suggested()}
-                  mobile={props.mobile}
-                  selected={
-                    state.suggestedSelected !== false ? state.model : undefined
-                  }
-                  disabled={state.disabled || state.suggestedDisabled}
-                  onPick={pickModel}
-                />
-              </div>
-            </Show>
-            <div class="px-2 pb-2">
-              <Button
-                variant="ghost"
-                appearance="bare"
-                data-model-choice
-                class={cn(
-                  'flex min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-2 text-sm not-touch:hover:bg-hover focus-visible:bg-active',
-                  props.mobile && 'h-11 rounded-[22px] text-base leading-[22px]'
-                )}
-                onClick={() => {
-                  nav.setPage('all');
-                  if (!props.mobile) search?.focus({ preventScroll: true });
-                }}
-              >
-                <Squares class={props.mobile ? 'size-[18px]' : 'size-4'} />
-                <span class="flex-1 text-left">
-                  {t('agentControls.moreModels')}
-                </span>
-                <CaretRight
-                  class={
-                    props.mobile
-                      ? 'size-[18px] text-ink-extra-muted'
-                      : 'size-3.5 text-ink-extra-muted'
-                  }
-                />
-              </Button>
-            </div>
-          </Show>
-        </Show>
-        <Show when={nav.page() === 'all'}>
-          <Show when={auto()}>
-            {(option) => (
-              <ModelRows
-                class="mx-2 mb-2 w-[calc(100%-1rem)]"
-                models={[option()]}
-                mobile={props.mobile}
-                selected={
-                  state.suggestedSelected !== false ? state.model : undefined
-                }
-                disabled={state.disabled || state.suggestedDisabled}
-                onPick={pickModel}
-              />
-            )}
-          </Show>
-          <For each={filtered().allProviders}>
-            {(group) => (
-              <div class="px-2 pb-2" role="group" aria-label={group.label}>
-                <div class="px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
-                  {group.label}
-                </div>
-                <ModelRows
-                  models={group.options}
-                  mobile={props.mobile}
-                  selected={
-                    state.suggestedSelected !== false ? state.model : undefined
-                  }
-                  disabled={state.disabled || state.suggestedDisabled}
-                  onPick={pickModel}
-                />
-              </div>
-            )}
-          </For>
-        </Show>
-        <Show when={nav.page() === 'agents'}>
-          <For each={agentPickerGroups(filtered().agents)}>
-            {(group) => (
-              <div class="px-2 pb-2" role="group" aria-label={group.label}>
-                <div class="px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
-                  {group.label}
-                </div>
-                <For each={group.agents}>
-                  {(agent) => (
+            <Show when={auto() || searchModels().length || !searching()}>
+              <div class="flex flex-col gap-4">
+                <Show when={auto()}>
+                  {(option) => (
+                    <ModelSelectionSection mobile={props.mobile}>
+                      <ModelRows
+                        models={[option()]}
+                        mobile={props.mobile}
+                        selected={
+                          state.suggestedSelected !== false
+                            ? state.model
+                            : undefined
+                        }
+                        disabled={state.disabled || state.suggestedDisabled}
+                        onPick={pickModel}
+                      />
+                    </ModelSelectionSection>
+                  )}
+                </Show>
+                <Show when={searching() && searchModels().length > 0}>
+                  <ModelSelectionSection
+                    title={t('agentControls.models')}
+                    mobile={props.mobile}
+                  >
+                    <ModelRows
+                      models={searchModels()}
+                      mobile={props.mobile}
+                      selected={
+                        state.suggestedSelected !== false
+                          ? state.model
+                          : undefined
+                      }
+                      disabled={state.disabled || state.suggestedDisabled}
+                      onPick={pickModel}
+                    />
+                  </ModelSelectionSection>
+                </Show>
+                <Show when={!searching()}>
+                  <Show when={recent().length}>
+                    <ModelSelectionSection
+                      title={t('nav.recent')}
+                      mobile={props.mobile}
+                    >
+                      <ModelRows
+                        models={recent()}
+                        mobile={props.mobile}
+                        selected={
+                          state.suggestedSelected !== false
+                            ? state.model
+                            : undefined
+                        }
+                        disabled={state.disabled || state.suggestedDisabled}
+                        onPick={pickModel}
+                      />
+                    </ModelSelectionSection>
+                  </Show>
+                  <Show when={suggested().length}>
+                    <ModelSelectionSection
+                      title={t('agentControls.suggested')}
+                      mobile={props.mobile}
+                    >
+                      <ModelRows
+                        models={suggested()}
+                        mobile={props.mobile}
+                        selected={
+                          state.suggestedSelected !== false
+                            ? state.model
+                            : undefined
+                        }
+                        disabled={state.disabled || state.suggestedDisabled}
+                        onPick={pickModel}
+                      />
+                    </ModelSelectionSection>
+                  </Show>
+                  <ModelSelectionSection mobile={props.mobile}>
                     <Button
                       variant="ghost"
                       appearance="bare"
                       data-model-choice
                       class={cn(
-                        'flex min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-2 text-sm font-normal not-touch:hover:bg-hover',
+                        'flex min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-2 text-sm not-touch:hover:bg-hover focus-visible:bg-active',
                         props.mobile &&
                           'h-11 rounded-[22px] text-base leading-[22px]'
                       )}
-                      disabled={
-                        state.disabled ||
-                        Boolean(agent.unavailableReason && !agent.connectLabel)
-                      }
-                      onClick={() => pickAgent(agent)}
+                      onClick={() => {
+                        nav.setPage('all');
+                        if (!props.mobile)
+                          search?.focus({ preventScroll: true });
+                      }}
                     >
-                      <AgentAvatar
-                        agent={agent}
-                        coder={false}
-                        class="size-[18px]"
-                        iconClass="size-4"
+                      <Squares
+                        class={props.mobile ? 'size-[18px]' : 'size-4'}
                       />
-                      <span class="flex-1 text-left">{agent.name}</span>
-                      <span class="text-xs text-ink-extra-muted">
-                        {agent.connectLabel ?? agent.runtime.label}
+                      <span class="flex-1 text-left">
+                        {t('agentControls.moreModels')}
                       </span>
-                      <Show when={state.agent?.id === agent.id}>
-                        <Check class="size-3.5 text-accent" />
-                      </Show>
+                      <CaretRight
+                        class={
+                          props.mobile
+                            ? 'size-[18px] text-ink-extra-muted'
+                            : 'size-3.5 text-ink-extra-muted'
+                        }
+                      />
                     </Button>
-                  )}
-                </For>
+                  </ModelSelectionSection>
+                </Show>
               </div>
-            )}
-          </For>
+            </Show>
+          </div>
+        </Show>
+        <Show when={nav.page() === 'all'}>
+          <div class="flex flex-col gap-4">
+            <Show when={auto()}>
+              {(option) => (
+                <ModelSelectionSection mobile={props.mobile}>
+                  <ModelRows
+                    models={[option()]}
+                    mobile={props.mobile}
+                    selected={
+                      state.suggestedSelected !== false
+                        ? state.model
+                        : undefined
+                    }
+                    disabled={state.disabled || state.suggestedDisabled}
+                    onPick={pickModel}
+                  />
+                </ModelSelectionSection>
+              )}
+            </Show>
+            <For each={filtered().allProviders}>
+              {(group) => (
+                <ModelSelectionSection
+                  title={group.label}
+                  mobile={props.mobile}
+                >
+                  <ModelRows
+                    models={group.options}
+                    mobile={props.mobile}
+                    selected={
+                      state.suggestedSelected !== false
+                        ? state.model
+                        : undefined
+                    }
+                    disabled={state.disabled || state.suggestedDisabled}
+                    onPick={pickModel}
+                  />
+                </ModelSelectionSection>
+              )}
+            </For>
+          </div>
+        </Show>
+        <Show when={nav.page() === 'agents'}>
+          <div class="flex flex-col gap-4">
+            <For each={agentPickerGroups(filtered().agents)}>
+              {(group) => (
+                <ModelSelectionSection
+                  title={group.label}
+                  mobile={props.mobile}
+                >
+                  <For each={group.agents}>
+                    {(agent) => (
+                      <Button
+                        variant="ghost"
+                        appearance="bare"
+                        data-model-choice
+                        class={cn(
+                          'flex min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-2 text-sm font-normal not-touch:hover:bg-hover',
+                          props.mobile &&
+                            'h-11 rounded-[22px] text-base leading-[22px]'
+                        )}
+                        disabled={
+                          state.disabled ||
+                          Boolean(
+                            agent.unavailableReason && !agent.connectLabel
+                          )
+                        }
+                        onClick={() => pickAgent(agent)}
+                      >
+                        <AgentAvatar
+                          agent={agent}
+                          coder={false}
+                          class="size-[18px]"
+                          iconClass="size-4"
+                        />
+                        <span class="flex-1 text-left">{agent.name}</span>
+                        <span class="text-xs text-ink-extra-muted">
+                          {agent.connectLabel ?? agent.runtime.label}
+                        </span>
+                        <Show when={state.agent?.id === agent.id}>
+                          <Check class="size-3.5 text-accent" />
+                        </Show>
+                      </Button>
+                    )}
+                  </For>
+                </ModelSelectionSection>
+              )}
+            </For>
+          </div>
         </Show>
         <Show when={nav.page() === 'agentModels'}>
-          <Show when={agentModels().auto}>
-            {(option) => (
-              <ModelRows
-                class="mx-2 mb-2 w-[calc(100%-1rem)]"
-                models={[option()]}
-                mobile={props.mobile}
-                selected={state.model}
-                disabled={state.disabled}
-                onPick={(id) => pickModel(id, true)}
-              />
-            )}
-          </Show>
-          <For each={agentModels().allProviders}>
-            {(group) => (
-              <div class="px-2 pb-2" role="group" aria-label={group.label}>
-                <div class="px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
-                  {group.label}
-                </div>
-                <ModelRows
-                  models={group.options}
+          <div class="flex flex-col gap-4">
+            <Show when={agentModels().auto}>
+              {(option) => (
+                <ModelSelectionSection mobile={props.mobile}>
+                  <ModelRows
+                    models={[option()]}
+                    mobile={props.mobile}
+                    selected={state.model}
+                    disabled={state.disabled}
+                    onPick={(id) => pickModel(id, true)}
+                  />
+                </ModelSelectionSection>
+              )}
+            </Show>
+            <For each={agentModels().allProviders}>
+              {(group) => (
+                <ModelSelectionSection
+                  title={group.label}
                   mobile={props.mobile}
-                  selected={state.model}
-                  disabled={state.disabled}
-                  onPick={(id) => pickModel(id, true)}
-                />
-              </div>
-            )}
-          </For>
+                >
+                  <ModelRows
+                    models={group.options}
+                    mobile={props.mobile}
+                    selected={state.model}
+                    disabled={state.disabled}
+                    onPick={(id) => pickModel(id, true)}
+                  />
+                </ModelSelectionSection>
+              )}
+            </For>
+          </div>
         </Show>
         <Show when={noMatches()}>
           <div
