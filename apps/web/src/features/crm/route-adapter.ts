@@ -215,7 +215,7 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
       itemId: entity.id,
       ...(entity.type === 'document'
         ? {
-            itemFileType: fileTypeToResolvedBlockName(entity.fileType ?? 'md'),
+            itemFileType: fileTypeToResolvedBlockName(entity.fileType),
             itemSubType: entity.subType?.type,
           }
         : {}),

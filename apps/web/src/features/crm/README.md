@@ -333,7 +333,9 @@ the prefix. Modified clicks keep their existing split behavior.
 It opens notes, tasks, snippets and skills in `MarkdownDetail` and every other
 file (PDF, Word, image, video, canvas, code, CSV) through `EntityDetail`, by
 the shared `entityDetailOpensMarkdown`; `entityDetailHostsSplitHeader` is
-whether a detail hosts its touch header, not which viewer it uses.
+whether a detail hosts its touch header, not which viewer it uses. Item URLs,
+claims and the viewer take a document's type through `fileTypeToBlockName`, so
+a file stored without one opens as an unknown file (download), never as a note.
 Standalone record previews retain their normal navigation outside the workspace.
 Record-detail lists and activity membership remain unchanged.
 Sales Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt

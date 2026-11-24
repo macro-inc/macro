@@ -39,7 +39,7 @@ export function CrmItemDetail(props: { sourceName: string }) {
       return {
         type: 'document',
         id: current.itemId,
-        fileType: current.itemFileType ?? 'md',
+        fileType: current.itemFileType,
         ...(current.itemSubType
           ? { subType: { type: current.itemSubType } }
           : {}),
