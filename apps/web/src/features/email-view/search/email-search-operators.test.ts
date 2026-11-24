@@ -6,7 +6,9 @@ import {
   completeEmailSearchOperator,
   emailSearchCompletionText,
   isUnfinishedEmailSearchOperator,
+  matchEmailSearchLabels,
   readsAsEmailSearchOperator,
+  typedEmailSearchValue,
 } from './email-search-operators';
 
 type TypedOperator = { typed: string; operator: boolean };
@@ -110,5 +112,94 @@ describe('completeEmailSearchOperator', () => {
     expect(texts('"su')).toEqual([]);
     expect(texts('constructor:')).toEqual([]);
     expect(texts('__proto__:')).toEqual([]);
+  });
+});
+
+describe('typedEmailSearchValue', () => {
+  it('names the person or label typed after an operator that takes one', () => {
+    expect(typedEmailSearchValue('from:an')).toEqual({
+      kind: 'person',
+      key: 'from',
+      exclude: false,
+      value: 'an',
+    });
+    expect(typedEmailSearchValue('-Cc:')).toEqual({
+      kind: 'person',
+      key: 'cc',
+      exclude: true,
+      value: '',
+    });
+    expect(typedEmailSearchValue('label:"team off')).toEqual({
+      kind: 'label',
+      key: 'label',
+      exclude: false,
+      value: 'team off',
+    });
+    expect(typedEmailSearchValue('in:trav')?.kind).toBe('label');
+  });
+
+  it('names nothing for other operators or words', () => {
+    for (const token of ['subject:lunch', 'is:', 'from', 'lunch', '--from:x']) {
+      expect(typedEmailSearchValue(token), token).toBeUndefined();
+    }
+  });
+});
+
+describe('emailSearchCompletionText for people and labels', () => {
+  it('names a person by address and quotes a label with a space', () => {
+    expect(
+      emailSearchCompletionText({
+        kind: 'person',
+        key: 'from',
+        exclude: true,
+        person: { id: 'u1', email: 'ana@example.com', name: 'Ana Lopez' },
+      })
+    ).toBe('-from:ana@example.com ');
+    expect(
+      emailSearchCompletionText({
+        kind: 'label',
+        key: 'label',
+        exclude: false,
+        label: { name: 'Team offsite', kind: 'tag' },
+      })
+    ).toBe('label:"Team offsite" ');
+    expect(
+      emailSearchCompletionText({
+        kind: 'label',
+        key: 'in',
+        exclude: false,
+        label: { name: 'travel', kind: 'label' },
+      })
+    ).toBe('in:travel ');
+  });
+});
+
+describe('matchEmailSearchLabels', () => {
+  const labels = [
+    { name: 'Travel', kind: 'label' as const },
+    { name: 'travel', kind: 'tag' as const },
+    { name: 'Team offsite', kind: 'tag' as const },
+    { name: 'Receipts/Travel', kind: 'label' as const },
+    { name: 'Respond', kind: 'label' as const },
+  ];
+
+  it('lists each name once, those starting with the text first', () => {
+    expect(matchEmailSearchLabels(labels, 'tr').map((l) => l.name)).toEqual([
+      'Travel',
+      'Receipts/Travel',
+    ]);
+    expect(matchEmailSearchLabels(labels, '').map((l) => l.name)).toEqual([
+      'Receipts/Travel',
+      'Respond',
+      'Team offsite',
+      'Travel',
+    ]);
+  });
+
+  it('needs two letters before matching inside a name', () => {
+    expect(matchEmailSearchLabels(labels, 'r').map((l) => l.name)).toEqual([
+      'Receipts/Travel',
+      'Respond',
+    ]);
   });
 });

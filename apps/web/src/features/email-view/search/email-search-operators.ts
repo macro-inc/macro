@@ -213,6 +213,62 @@ export function isUnfinishedEmailSearchOperator(token: string): boolean {
   return false;
 }
 
+/** The operators that name a person, by name or address. */
+const PERSON_KEYS = ['from', 'to', 'cc', 'bcc'] as const;
+
+type EmailSearchPersonKey = (typeof PERSON_KEYS)[number];
+
+/** The operators that name a label or a tag. */
+const LABEL_KEYS = ['label', 'in'] as const;
+
+type EmailSearchLabelKey = (typeof LABEL_KEYS)[number];
+
+const isPersonKey = (key: string): key is EmailSearchPersonKey =>
+  (PERSON_KEYS as readonly string[]).includes(key);
+
+const isLabelKey = (key: string): key is EmailSearchLabelKey =>
+  (LABEL_KEYS as readonly string[]).includes(key);
+
+/** Someone `from:`, `to:`, `cc:` or `bcc:` can name. */
+export type EmailSearchPerson = { id: string; email: string; name?: string };
+
+/** A mailbox label or a Macro tag that `label:` and `in:` can name. */
+export type EmailSearchLabel = { name: string; kind: 'label' | 'tag' };
+
+/** The value being typed after an operator that names someone or a label. */
+export type TypedEmailSearchValue =
+  | {
+      kind: 'person';
+      key: EmailSearchPersonKey;
+      exclude: boolean;
+      value: string;
+    }
+  | {
+      kind: 'label';
+      key: EmailSearchLabelKey;
+      exclude: boolean;
+      value: string;
+    };
+
+/**
+ * What `token` names so far when it is an operator that takes a person
+ * (`from:an` gives `an`) or a label (`label:trav`), quotes dropped as the
+ * service drops them.
+ */
+export function typedEmailSearchValue(
+  token: string
+): TypedEmailSearchValue | undefined {
+  const exclude = token.startsWith('-') && !token.startsWith('--');
+  const parts = /^([A-Za-z_]+):(.*)$/s.exec(exclude ? token.slice(1) : token);
+  if (!parts) return undefined;
+
+  const key = (parts[1] ?? '').toLowerCase();
+  const value = (parts[2] ?? '').replaceAll('"', '');
+  if (isPersonKey(key)) return { kind: 'person', key, exclude, value };
+  if (isLabelKey(key)) return { kind: 'label', key, exclude, value };
+  return undefined;
+}
+
 /** A row that finishes the operator being typed at the end of the field. */
 export type EmailSearchOperatorCompletion =
   | { kind: 'operator'; key: EmailSearchOperatorKey; exclude: boolean }
@@ -221,6 +277,18 @@ export type EmailSearchOperatorCompletion =
       key: EmailSearchValueKey;
       value: EmailSearchOperatorValue;
       exclude: boolean;
+    }
+  | {
+      kind: 'person';
+      key: EmailSearchPersonKey;
+      exclude: boolean;
+      person: EmailSearchPerson;
+    }
+  | {
+      kind: 'label';
+      key: EmailSearchLabelKey;
+      exclude: boolean;
+      label: EmailSearchLabel;
     };
 
 /** Fewest letters typed before operator names are offered for a word. */
@@ -257,11 +325,53 @@ export function completeEmailSearchOperator(
     .map((value) => ({ kind: 'value', key, value, exclude }));
 }
 
+/** A value as the search reads it whole: quoted when it holds a space. */
+const searchValue = (value: string) =>
+  /\s/.test(value) ? `"${value.replaceAll('"', '')}"` : value;
+
 /** The text a picked completion puts in place of the token it finishes. */
 export function emailSearchCompletionText(
   completion: EmailSearchOperatorCompletion
 ): string {
   const minus = completion.exclude ? '-' : '';
-  if (completion.kind === 'operator') return `${minus}${completion.key}:`;
-  return `${minus}${completion.key}:${completion.value} `;
+  return match(completion)
+    .with({ kind: 'operator' }, ({ key }) => `${minus}${key}:`)
+    .with({ kind: 'value' }, ({ key, value }) => `${minus}${key}:${value} `)
+    .with(
+      { kind: 'person' },
+      ({ key, person }) => `${minus}${key}:${person.email} `
+    )
+    .with(
+      { kind: 'label' },
+      ({ key, label }) => `${minus}${key}:${searchValue(label.name)} `
+    )
+    .exhaustive();
+}
+
+/** Fewest letters typed before a label that only contains them is offered. */
+const MIN_INNER_MATCH = 2;
+
+/**
+ * The labels and tags whose names hold what is typed, one row per name,
+ * those that start with it first.
+ */
+export function matchEmailSearchLabels(
+  labels: readonly EmailSearchLabel[],
+  typed: string
+): EmailSearchLabel[] {
+  const wanted = typed.toLowerCase();
+  const seen = new Set<string>();
+  const starts: EmailSearchLabel[] = [];
+  const contains: EmailSearchLabel[] = [];
+  for (const label of labels) {
+    const name = label.name.toLowerCase();
+    if (seen.has(name)) continue;
+    seen.add(name);
+    if (name.startsWith(wanted)) starts.push(label);
+    else if (wanted.length >= MIN_INNER_MATCH && name.includes(wanted))
+      contains.push(label);
+  }
+  const byName = (a: EmailSearchLabel, b: EmailSearchLabel) =>
+    a.name.localeCompare(b.name);
+  return [...starts.sort(byName), ...contains.sort(byName)];
 }

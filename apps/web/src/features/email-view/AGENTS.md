@@ -43,11 +43,13 @@ the Soup-backed thread list, and saved email views.
   finishes one; its tests and the service's read
   `crates/search_service/src/api/search/email_operators/typed_operators.json`),
   recent searches (`recent-searches.ts`, per person in browser storage) and
-  the rows the search field lists: views while `in:` is typed, otherwise the
-  operators that finish the typed token and then recent searches
+  the rows the search field lists: views (then labels) while `in:` is typed,
+  people after `from:`/`to:`/`cc:`/`bcc:`, labels and tags after `label:`,
+  otherwise the operators that finish the typed token, then recent searches
   (`create-email-search-suggestions.ts`, drawn by
-  `components/EmailSearchSuggestionList.tsx`), behind
-  `enable-email-wide-search`. Operators are drawn by the shared
+  `components/EmailSearchSuggestionList.tsx`, fed people and labels by
+  `queries/use-email-search-values.ts`, which reads them only while such an
+  operator is typed), behind `enable-email-wide-search`. Operators are drawn by the shared
   `components/view-shell/search-operator-text.tsx`, which keeps a quoted
   value in its token.
 - `filters/email-saved-view.ts`: the `kind: "email"` definition codec: strict

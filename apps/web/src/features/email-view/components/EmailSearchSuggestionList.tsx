@@ -1,7 +1,10 @@
 import { SearchOperatorText } from '@app/components/view-shell/search-operator-text';
 import { t } from '@app/lib/i18n';
+import { UserIcon } from '@core/component/UserIcon';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import FunnelIcon from '@icon/system/regular/funnel-simple.svg';
+import LabelIcon from '@icon/system/regular/tag.svg';
+import TagIcon from '@icon/system/regular/tag-simple.svg';
 import { cn } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -12,13 +15,12 @@ import {
   searchSuggestionOptionId,
 } from '../search/create-email-search-suggestions';
 import {
+  type EmailSearchLabel,
   type EmailSearchOperatorCompletion,
+  type EmailSearchPerson,
   emailSearchCompletionText,
 } from '../search/email-search-operators';
-import {
-  emailSearchScopeLabel,
-  emailSearchTextParts,
-} from '../search/email-search-scope';
+import { emailSearchTextParts } from '../search/email-search-scope';
 
 /** A remembered search, its operators drawn as they are in the field. */
 function RecentSearch(props: { search: string }) {
@@ -32,55 +34,95 @@ function RecentSearch(props: { search: string }) {
   );
 }
 
-/** A row's name, saying so when the minus typed leaves its matches out. */
-const leftOutLabel = (label: string, exclude: boolean) =>
-  exclude ? t('emailViews.searchFilterNot', { filter: label }) : label;
+type OperatorRow = Extract<
+  EmailSearchOperatorCompletion,
+  { kind: 'operator' | 'value' }
+>;
 
-/** What an operator's name or value finds, as its row names it. */
-function completionLabel(completion: EmailSearchOperatorCompletion): string {
-  return leftOutLabel(operatorLabel(completion), completion.exclude);
+/**
+ * What a filter does that its text does not already say, if anything:
+ * `to:` also covers Cc and Bcc, and a date bound or span says how it counts.
+ * The minus typed before it shows as `Not:`.
+ */
+function filterDescription(row: OperatorRow): string | undefined {
+  const description =
+    row.kind === 'value'
+      ? row.value === 'shared'
+        ? t('emailViews.searchFilterShared')
+        : undefined
+      : match(row.key)
+          .with('to', () => t('emailViews.searchFilterTo'))
+          .with('label', () => t('emailViews.searchFilterLabel'))
+          .with('in', () => t('emailViews.searchFilterIn'))
+          .with('after', () => t('emailViews.searchFilterAfter'))
+          .with('before', () => t('emailViews.searchFilterBefore'))
+          .with('newer_than', () => t('emailViews.searchFilterNewerThan'))
+          .with('older_than', () => t('emailViews.searchFilterOlderThan'))
+          .with('from', 'subject', 'cc', 'bcc', 'is', 'has', () => undefined)
+          .exhaustive();
+  if (!description) return undefined;
+  return row.exclude
+    ? t('emailViews.searchFilterNot', { filter: description })
+    : description;
 }
 
-function operatorLabel(completion: EmailSearchOperatorCompletion): string {
-  if (completion.kind === 'value') {
-    return match(completion.value)
-      .with('unread', () => t('emailViews.searchFilterUnread'))
-      .with('read', () => t('emailViews.searchFilterRead'))
-      .with('starred', () => t('emailViews.searchFilterStarred'))
-      .with('shared', () => t('emailViews.searchFilterShared'))
-      .with('attachment', () => t('emailViews.searchFilterAttachment'))
-      .exhaustive();
-  }
-  return match(completion.key)
-    .with('from', () => t('emailViews.searchFilterFrom'))
-    .with('to', () => t('emailViews.searchFilterTo'))
-    .with('subject', () => t('emailViews.searchFilterSubject'))
-    .with('cc', () => t('emailViews.searchFilterCc'))
-    .with('bcc', () => t('emailViews.searchFilterBcc'))
-    .with('label', () => t('emailViews.searchFilterLabel'))
-    .with('in', () => t('emailViews.searchFilterIn'))
-    .with('is', () => t('emailViews.searchFilterIs'))
-    .with('has', () => t('emailViews.searchFilterHas'))
-    .with('after', () => t('emailViews.searchFilterAfter'))
-    .with('before', () => t('emailViews.searchFilterBefore'))
-    .with('newer_than', () => t('emailViews.searchFilterNewerThan'))
-    .with('older_than', () => t('emailViews.searchFilterOlderThan'))
-    .exhaustive();
-}
-
-/** A row that finishes the operator being typed. */
-function OperatorCompletion(props: {
-  completion: EmailSearchOperatorCompletion;
-}) {
+/** A filter's text, drawn as the field draws an operator. */
+function FilterRow(props: { text: string; description?: string }) {
   return (
     <>
       <FunnelIcon aria-hidden="true" class="size-4 shrink-0 text-ink-muted" />
+      <span class="min-w-0 flex-1 truncate whitespace-pre">
+        <SearchOperatorText parts={[{ text: props.text, operator: true }]} />
+      </span>
+      <Show when={props.description}>
+        {(description) => (
+          <span class="min-w-0 shrink truncate text-xs text-ink-extra-muted">
+            {description()}
+          </span>
+        )}
+      </Show>
+    </>
+  );
+}
+
+/** Someone to name after `from:` or another person filter. */
+function PersonRow(props: { person: EmailSearchPerson }) {
+  return (
+    <>
+      <UserIcon
+        id={props.person.id}
+        name={props.person.name ?? props.person.email}
+        size="sm"
+        isDeleted={false}
+      />
       <span class="min-w-0 flex-1 truncate">
-        {completionLabel(props.completion)}
+        {props.person.name ?? props.person.email}
       </span>
-      <span class="shrink-0 font-mono text-xs text-ink-extra-muted">
-        {emailSearchCompletionText(props.completion).trim()}
-      </span>
+      <Show when={props.person.name}>
+        <span class="min-w-0 shrink truncate text-xs text-ink-extra-muted">
+          {props.person.email}
+        </span>
+      </Show>
+    </>
+  );
+}
+
+/** A tag or mailbox label to name after `label:` or `in:`. */
+function LabelRow(props: { label: EmailSearchLabel }) {
+  return (
+    <>
+      <Show
+        when={props.label.kind === 'tag'}
+        fallback={
+          <LabelIcon
+            aria-hidden="true"
+            class="size-4 shrink-0 text-ink-muted"
+          />
+        }
+      >
+        <TagIcon aria-hidden="true" class="size-4 shrink-0 text-ink-muted" />
+      </Show>
+      <span class="min-w-0 flex-1 truncate">{props.label.name}</span>
     </>
   );
 }
@@ -94,6 +136,8 @@ const listLabel = (first: EmailSearchSuggestion | undefined) =>
         : t('emailViews.searchViews')
     )
     .with('operator', 'value', () => t('emailViews.searchFilters'))
+    .with('person', () => t('emailViews.searchPeople'))
+    .with('label', () => t('emailViews.searchLabels'))
     .with('recent', undefined, () => t('emailViews.recentSearches'))
     .exhaustive();
 
@@ -130,21 +174,9 @@ export function EmailSearchSuggestionList(props: {
               <Switch>
                 <Match when={suggestion.kind === 'view' && suggestion}>
                   {(view) => (
-                    <>
-                      <FunnelIcon
-                        aria-hidden="true"
-                        class="size-4 shrink-0 text-ink-muted"
-                      />
-                      <span class="min-w-0 flex-1 truncate">
-                        {leftOutLabel(
-                          emailSearchScopeLabel(view().scope),
-                          view().exclude
-                        )}
-                      </span>
-                      <span class="shrink-0 font-mono text-xs text-ink-extra-muted">
-                        {view().exclude ? '-' : ''}in:{view().scope}
-                      </span>
-                    </>
+                    <FilterRow
+                      text={`${view().exclude ? '-' : ''}in:${view().scope}`}
+                    />
                   )}
                 </Match>
                 <Match when={suggestion.kind === 'recent' && suggestion}>
@@ -157,9 +189,18 @@ export function EmailSearchSuggestionList(props: {
                     suggestion
                   }
                 >
-                  {(completion) => (
-                    <OperatorCompletion completion={completion()} />
+                  {(row) => (
+                    <FilterRow
+                      text={emailSearchCompletionText(row()).trim()}
+                      description={filterDescription(row())}
+                    />
                   )}
+                </Match>
+                <Match when={suggestion.kind === 'person' && suggestion}>
+                  {(row) => <PersonRow person={row().person} />}
+                </Match>
+                <Match when={suggestion.kind === 'label' && suggestion}>
+                  {(row) => <LabelRow label={row().label} />}
                 </Match>
               </Switch>
             </div>

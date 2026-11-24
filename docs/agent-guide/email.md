@@ -141,12 +141,19 @@ result. A search is remembered when the field is left with words in it, with
 its `in:` filter, at most eight per person, in this browser only and not per
 inbox. Typing `in:` lists the views instead (only those the person has, so
 Focus only with its flag), narrowed as the name is typed, and `-in:` lists the
-views a search can leave out; `Enter` or a click finishes the `in:` where it
-was typed, and the keyboard stays in the field. Two or more letters of an
-operator's name list that operator above the recent searches (`su` gives
-`subject:`, `-fr` gives `-from:`), and `is:` and `has:` list their values;
-picking one finishes it the same way. Typing changes the rows, so it also
-clears the row the arrow keys picked out. Operators stay ordinary text (caret,
+views a search can leave out, then the labels and tags whose names hold what
+follows `in:`; `Enter` or a click finishes the `in:` where it was typed, and
+the keyboard stays in the field. Two or more letters of an operator's name
+list that operator above the recent searches (`su` gives `subject:`, `-fr`
+gives `-from:`); `is:` and `has:` list their values; `from:`, `to:`, `cc:` and
+`bcc:` list the people matching what follows, found and ranked as the
+composer's recipient picker finds them, and finish with their address;
+`label:` lists the person's tags and their inboxes' own labels (not system
+labels such as Inbox), quoting a name with a space. Picking one finishes it
+the same way. A row is the filter's text, drawn as an operator, with a few
+words beside it only when they say something the text does not (`to:` also
+covers Cc and Bcc; `after:` counts its day, `before:` does not). Typing
+changes the rows, so it also clears the row the arrow keys picked out. Operators stay ordinary text (caret,
 selection, `Backspace`, paste), and every one the search service would read,
 once complete and valid (`in:sent`, `subject:"team lunch"`, `-from:ana`,
 `newer_than:7d`, `in:travel`), is drawn as an operator token: accent ink on a

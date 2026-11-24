@@ -17,11 +17,26 @@ const recentListed = (suggestions: EmailSearchSuggestions) =>
         { kind: 'view' },
         ({ scope, exclude }) => `view:${exclude ? '-' : ''}${scope}`
       )
-      .with({ kind: 'operator' }, { kind: 'value' }, (completion) =>
-        emailSearchCompletionText(completion)
+      .with(
+        { kind: 'operator' },
+        { kind: 'value' },
+        { kind: 'person' },
+        { kind: 'label' },
+        (completion) => emailSearchCompletionText(completion)
       )
       .exhaustive()
   );
+
+const PEOPLE = [
+  { id: 'u1', email: 'ana@example.com', name: 'Ana Lopez' },
+  { id: 'u2', email: 'bo@example.com' },
+];
+
+const LABELS = [
+  { name: 'Travel', kind: 'label' as const },
+  { name: 'Team offsite', kind: 'tag' as const },
+  { name: 'Sent', kind: 'label' as const },
+];
 
 function setup(initialSearch = '') {
   const [search, setSearch] = createSignal(initialSearch);
@@ -30,6 +45,8 @@ function setup(initialSearch = '') {
     search,
     setSearch,
     scopeAvailable: (scope) => scope !== 'focus',
+    people: () => PEOPLE,
+    labels: () => LABELS,
   });
   return { search, setSearch, suggestions };
 }
@@ -277,6 +294,51 @@ it('lists no views for an in: inside a quoted phrase', () => {
     expect(recentListed(suggestions)).toEqual([]);
     setSearch('subject:"team lunch" -in:se');
     expect(recentListed(suggestions)).toEqual(['view:-sent']);
+    dispose();
+  });
+});
+
+it('lists people after from: and finishes the filter with an address', () => {
+  createRoot((dispose) => {
+    const { search, setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+
+    setSearch('invoice -from:a');
+    expect(recentListed(suggestions)).toEqual([
+      '-from:ana@example.com ',
+      '-from:bo@example.com ',
+    ]);
+    expect(suggestions.editsQuery?.(0)).toBe(true);
+    suggestions.pick(0);
+    expect(search()).toBe('invoice -from:ana@example.com ');
+    dispose();
+  });
+});
+
+it('lists labels and tags after label:, and after the views once in: names one', () => {
+  createRoot((dispose) => {
+    const { search, setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+
+    setSearch('label:t');
+    expect(recentListed(suggestions)).toEqual([
+      'label:"Team offsite" ',
+      'label:Travel ',
+    ]);
+    suggestions.pick(0);
+    expect(search()).toBe('label:"Team offsite" ');
+
+    setSearch('invoice in:');
+    expect(recentListed(suggestions)).not.toContain('in:Travel ');
+    setSearch('invoice in:s');
+    // Sent is a view, so a label named Sent is not offered as one.
+    expect(recentListed(suggestions)).toEqual([
+      'view:signal',
+      'view:sent',
+      'view:shared',
+    ]);
+    setSearch('invoice in:tr');
+    expect(recentListed(suggestions)).toEqual(['in:Travel ']);
     dispose();
   });
 });

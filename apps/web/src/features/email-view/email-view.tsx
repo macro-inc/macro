@@ -54,6 +54,7 @@ import { focusEmailSearchResults } from './email-search-focus';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
 import { createEmailMobileSearch } from './primitives/create-email-mobile-search';
+import { useEmailSearchValues } from './queries/use-email-search-values';
 import type { EmailListPane } from './reader-pane';
 import { createEmailSearchSuggestions } from './search/create-email-search-suggestions';
 import { useEmailSearchScopeAvailability } from './tab-availability';
@@ -125,11 +126,14 @@ function DesktopEmailPanes(props: {
   const { state, setState, list, source } = useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
+  const searchValues = useEmailSearchValues(() => state.search);
   const recentSearches = createEmailSearchSuggestions({
     userId,
     search: () => state.search,
     setSearch: (query) => setState('search', query),
     scopeAvailable: useEmailSearchScopeAvailability(),
+    people: searchValues.people,
+    labels: searchValues.labels,
   });
   const pickedResultsArrived = () =>
     recentSearches.awaitsPickedResults() &&
@@ -318,11 +322,14 @@ function EmailMobileLayout(props: ParentProps) {
   const { state, setState } = useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
+  const searchValues = useEmailSearchValues(() => state.search);
   const suggestions = createEmailSearchSuggestions({
     userId,
     search: () => state.search,
     setSearch: (query) => setState('search', query),
     scopeAvailable: useEmailSearchScopeAvailability(),
+    people: searchValues.people,
+    labels: searchValues.labels,
   });
   let searchInput: HTMLInputElement | undefined;
   const mobileSearch = createEmailMobileSearch({
