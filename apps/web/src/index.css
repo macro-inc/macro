@@ -1271,9 +1271,10 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
    compositor at 120 Hz; only the sheen's brightness fades on the main thread.
    Keep this scope in sync with glassPress.ts's surface selection.
    Only iOS WebKit knows -webkit-touch-callout, so other browsers drop the block
-   instead of testing every element against it on each restyle. */
+   instead of testing every element against it on each restyle. iOS Safari gets
+   it too while GLASS_EFFECTS_EVERYWHERE is on (dev and web previews). */
 @supports (-webkit-touch-callout: none) {
-  html[data-platform='ios'][data-touch-device='true'] :is(
+  html:is([data-platform='ios'], [data-glass-everywhere])[data-touch-device='true'] :is(
     [data-glass-input],
     [data-input] [data-composer-collapsed],
     [data-mobile-dock-island],

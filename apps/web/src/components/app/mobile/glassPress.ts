@@ -1,3 +1,4 @@
+import { GLASS_EFFECTS_EVERYWHERE } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isPlatform } from '@core/util/platform';
 
@@ -67,7 +68,7 @@ export function installGlassPress() {
   };
   const down = (event: PointerEvent) => {
     if (
-      !isPlatform('ios') ||
+      !(isPlatform('ios') || GLASS_EFFECTS_EVERYWHERE) ||
       !isTouchDevice() ||
       !event.isPrimary ||
       event.button !== 0
@@ -144,6 +145,9 @@ export function installGlassPress() {
       if (pressed) positionHighlight(pressed.element.getBoundingClientRect());
     });
   };
+  // The press styles in index.css match this, besides the iOS app.
+  if (GLASS_EFFECTS_EVERYWHERE)
+    document.documentElement.dataset.glassEverywhere = '';
   document.addEventListener('pointerdown', down, true);
   document.addEventListener('pointerup', up, true);
   document.addEventListener('pointercancel', up, true);
@@ -151,6 +155,7 @@ export function installGlassPress() {
   window.addEventListener('blur', release);
   return () => {
     release();
+    delete document.documentElement.dataset.glassEverywhere;
     document.removeEventListener('pointerdown', down, true);
     document.removeEventListener('pointerup', up, true);
     document.removeEventListener('pointercancel', up, true);

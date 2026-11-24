@@ -125,6 +125,21 @@ export const showDatabaseSql = defineFlag({
   default: false,
 });
 
+/** A deploy preview (`<branch>-<id>-preview.macro.com`), built like production. */
+const PREVIEW_HOST =
+  typeof window !== 'undefined' &&
+  window.location.hostname.endsWith('.preview.macro.com');
+
+/**
+ * Runs the iOS app's glass press effect in iOS Safari too, so a web preview
+ * can try it. On in dev and on preview hosts, off in production; set
+ * VITE_GLASS_EFFECTS_EVERYWHERE to override.
+ */
+export const GLASS_EFFECTS_EVERYWHERE = defineFlag({
+  env: 'GLASS_EFFECTS_EVERYWHERE',
+  default: DEV_MODE_ENV || PREVIEW_HOST,
+}).enabled;
+
 /**
  * This constant reflects whether the app is running in production mode with prod backend environment
  *

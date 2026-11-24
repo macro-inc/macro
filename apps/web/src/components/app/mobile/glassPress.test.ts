@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const device = vi.hoisted(() => ({ platform: 'ios', touch: true }));
+const device = vi.hoisted(() => ({
+  platform: 'ios',
+  touch: true,
+  everywhere: false,
+}));
+vi.mock('@core/constant/featureFlags', () => ({
+  get GLASS_EFFECTS_EVERYWHERE() {
+    return device.everywhere;
+  },
+}));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => device.touch,
 }));
@@ -43,6 +52,7 @@ function surface(width = 300, height = 46) {
 beforeEach(() => {
   device.platform = 'ios';
   device.touch = true;
+  device.everywhere = false;
   vi.useFakeTimers();
   dispose = installGlassPress();
 });
@@ -77,6 +87,18 @@ describe('mobile glass surface press', () => {
       expect(event.defaultPrevented).toBe(false);
     }
   );
+  it('presses on a touch browser while GLASS_EFFECTS_EVERYWHERE is on', () => {
+    dispose();
+    device.platform = 'web';
+    device.everywhere = true;
+    dispose = installGlassPress();
+    expect(document.documentElement.hasAttribute('data-glass-everywhere')).toBe(
+      true
+    );
+    const group = surface();
+    pointer(group.querySelector('button')!, 'pointerdown');
+    expect(group.dataset.glassPress).toBe('wide');
+  });
   it('leaves non-touch input unchanged', () => {
     device.touch = false;
     const group = surface();
