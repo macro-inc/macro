@@ -1,0 +1,29 @@
+crates/ai_tools/src/connectors_config.rs
+  s_8631497025cd75::t_f17b10f682a0c2 41-52,112,197-207,223-244
+  s_8631497025cd75::t_61b5a645990b23 7-9,208-222
+  s_8631497025cd75::t_6099d99d29405a 245
+services/agent_harness_service/src/cognition/api/context/test.rs
+  s_8631497025cd75::t_4e25e8938e110a 831
+services/agent_harness_service/src/cognition/config.rs
+  s_8631497025cd75::t_9ed03f7bb4b3b0 237-238
+crates/ai_tools/Cargo.toml
+  s_8631497025cd75::t_9ed03f7bb4b3b0 40,130
+services/agent_harness_service/src/lib.rs
+  s_8631497025cd75::t_9ed03f7bb4b3b0 529-530,532
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1b257bb5787a7cf7854ab28628d599362706bcb1",
+  "prompts": {},
+  "sessions": {
+    "s_8631497025cd75": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "98447833-e739-47e2-9551-6c274bcec5ff",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
