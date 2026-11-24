@@ -47,8 +47,8 @@ export function ToolCallPart(props: {
   // (see `settledToolStatus`).
   const status = () =>
     settledToolStatus(props.part.status, props.context.inFlight);
-  // The chat block's failed-tool treatment: the same row, faded, with a quiet
-  // trailing label — not a separate error card.
+  // A failed call's row looks like any other; the agent explains what went
+  // wrong in its reply.
   const stopped = () =>
     (props.part.status === 'pending' || props.part.status === 'running') &&
     status() === 'completed';
@@ -56,9 +56,9 @@ export function ToolCallPart(props: {
     id: props.part.id,
     label: toolLabel(props.part.name),
     status: status(),
-    muted: failed(),
+    unsuccessful: failed(),
     stopped: stopped(),
-    trailing: failed() ? 'Failed' : stopped() ? 'Stopped' : undefined,
+    trailing: stopped() ? 'Stopped' : undefined,
   });
 
   // Non-keyed matches preserve the disclosure when a streamed update replaces

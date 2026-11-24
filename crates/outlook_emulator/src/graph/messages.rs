@@ -37,6 +37,12 @@ fn matches(message: &Message, filter: &Filter) -> Result<bool, GraphError> {
             }
             _ => Err(unsupported(name)),
         },
+        Filter::Since { name, since } if name == "receivedDateTime" => {
+            Ok(since.admits(message.received))
+        }
+        Filter::Since { name, since } if name == "sentDateTime" => {
+            Ok(message.sent.is_some_and(|sent| since.admits(sent)))
+        }
         Filter::Since { name, .. } => Err(unsupported(name)),
     }
 }

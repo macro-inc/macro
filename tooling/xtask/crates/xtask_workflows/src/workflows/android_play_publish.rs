@@ -119,8 +119,10 @@ const PICK_FILES: StepHandle<PickFilesOutputs> = StepHandle::new(
     },
 );
 
-/// The [`upload_internal`] step.
+/// The first [`upload_internal`] step.
 const UPLOAD: StepHandle<()> = StepHandle::new("upload", ());
+/// The second [`upload_internal`] step, run when the first failed.
+const UPLOAD_RETRY: StepHandle<()> = StepHandle::new("upload_retry", ());
 /// The [`mark_promotion_pending`] step.
 const PENDING: StepHandle<()> = StepHandle::new("pending", ());
 /// The [`promote_production`] step.
@@ -280,7 +282,11 @@ fn publish_job() -> Job {
         .add_step(download_artifact())
         .add_step(pick_files())
         .add_step(steps::google_play_auth(true))
-        .add_step(upload_internal())
+        .add_step(upload_internal(UPLOAD, "Upload to internal testing").continue_on_error(true))
+        .add_step(
+            upload_internal(UPLOAD_RETRY, "Retry the upload to internal testing")
+                .if_condition(UPLOAD.outcome().eq("failure")),
+        )
         .add_step(head_guard("promote"))
         .add_step(mark_promotion_pending())
         .add_step(promote_production())
@@ -365,8 +371,14 @@ fn pick_files() -> Step<Run> {
     .id(PICK_FILES.id())
 }
 
-fn upload_internal() -> Step<Use> {
-    R0adkllUploadGooglePlay::new("Upload to internal testing", "com.macro.workspace.mobile")
+/// Play keeps one open edit per app, and opening another (Play Console, a
+/// manual publish) invalidates it: the upload then fails with "This edit has
+/// expired". The action opens a fresh edit each time, so the upload runs
+/// twice at most. A second attempt cannot release twice: the first one
+/// failed before its commit, or committed and the second is refused for
+/// reusing the version code.
+fn upload_internal(handle: StepHandle<()>, name: &str) -> Step<Use> {
+    R0adkllUploadGooglePlay::new(name, "com.macro.workspace.mobile")
         .service_account_json(steps::GOOGLE_PLAY_AUTH.outputs.credentials_file_path.read())
         .release_files(PICK_FILES.outputs.bundle.read())
         .mapping_file(PICK_FILES.outputs.mapping.read())
@@ -375,7 +387,7 @@ fn upload_internal() -> Step<Use> {
         .status("completed")
         .whats_new_directory(format!("{}/whatsnew", runner().temp()))
         .step()
-        .id(UPLOAD.id())
+        .id(handle.id())
 }
 
 /// Set before the promotion starts, so a drift check running meanwhile
@@ -453,5 +465,11 @@ fn pr_comment() -> Step<Use> {
     .add_env(("BUILD_URL", github().event::<Str>("workflow_run.html_url")))
     .add_env(("RELEASE_NAME", CHECK.outputs.release_name.read()))
     .add_env(("JOB_STATUS", job_status()))
-    .add_env(("UPLOAD_OUTCOME", UPLOAD.outcome()))
+    .add_env((
+        "UPLOADED",
+        UPLOAD
+            .outcome()
+            .eq("success")
+            .or(UPLOAD_RETRY.outcome().eq("success")),
+    ))
 }

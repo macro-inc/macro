@@ -71,6 +71,8 @@ export function NotificationRow(props: NotificationRowProps) {
       data-notification-row=""
       data-stack={isStack() ? '' : undefined}
       data-unfolded={isOpen() ? '' : undefined}
+      // Paints its own pressed grey below, so the avatar's cutout matches it.
+      data-press-surface="self"
       class={cn(
         'group/notification relative w-full min-w-0 flex-1',
         // The list's hover and active tints laid over the panel, opaque so the
@@ -80,7 +82,10 @@ export function NotificationRow(props: NotificationRowProps) {
           ? '[--inbox-row-surface:color-mix(in_srgb,var(--color-panel),var(--color-content-0)_6%)]'
           : 'not-touch:hover:[--inbox-row-surface:color-mix(in_srgb,var(--color-panel),var(--color-content-0)_3%)]',
         // A tap leaves the row focused, which mustn't look chosen on a phone.
-        'mobile:[--inbox-row-surface:var(--color-panel)]'
+        'mobile:[--inbox-row-surface:var(--color-panel)]',
+        // Pressed on touch (rowPress.ts): the shared press grey, the hover
+        // tint twice over the panel, as one opaque color.
+        '[&.touch-highlight]:[--inbox-row-surface:color-mix(in_srgb,color-mix(in_srgb,var(--color-panel),var(--color-content-0)_3%),var(--color-content-0)_3%)]'
       )}
       onMouseMove={() => props.onHover()}
       onClick={(event) => props.onClick(event)}

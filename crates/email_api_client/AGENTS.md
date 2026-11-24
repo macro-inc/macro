@@ -94,6 +94,9 @@ Outlook (Microsoft Graph) outbound adapters.
   the link for reauthorization. Contact listings use `retry_with_fresh_token`
   to keep their WARN-level logging. Writes use `call_with_token` and do not
   retry.
+- Outlook's `recent_inbox_messages` reads the requested well-known folder,
+  `inbox` or `sentitems`, newest first: the inbox by `receivedDateTime`, sent
+  items by `sentDateTime`, which is also what a window read filters on.
 - `SendRequest::build_mime` (Gmail sends) turns an inline `text/calendar`
   attachment with no Content-ID into the message's calendar body, the last
   alternative after the text and HTML, which is how an answerable invitation
@@ -155,7 +158,10 @@ Outlook (Microsoft Graph) outbound adapters.
   replacement carrying an edited description (`without_meeting`) removes the
   top-level run around the join link whose texts, ignoring whitespace, match
   the saved block's (textless parts only between them), and refuses one with
-  the link or a part of the block anywhere else.
+  the link or a part of the block anywhere else. An ordinary description
+  edit (`preserve_meeting_details`) removes that run the same way and writes
+  Outlook's own block from the current body back in its place, so the block
+  keeps its markers; a description it cannot separate is written as given.
 - A replacement lays the editor's unsaved changes over the copied event
   with the same `patch_body` an Outlook update sends, so its create body holds
   no field the copy or an update does not already send. A series that moves

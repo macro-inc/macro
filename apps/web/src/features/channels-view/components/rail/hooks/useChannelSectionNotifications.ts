@@ -1,14 +1,23 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
+import { useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { Telemetry } from '@macro-inc/observability';
 import { markChannelsAsRead } from '@notifications/notification-helpers';
 import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
+import { queryAccountSession } from '@queries/auth/account-scope';
 import { useBulkNotificationPreferencesMutation } from '@queries/notification/unsubscribes';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { type Accessor, createSignal, type Owner, onCleanup } from 'solid-js';
-import { fetchChannelGroupIds } from '../../../queries';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  type Owner,
+  on,
+  onCleanup,
+} from 'solid-js';
+import { channelGroupIds } from '../../../queries';
 import type { ChannelSectionKey } from '../../../types';
 
 type SectionNotificationOptions = {
@@ -23,18 +32,29 @@ export function useChannelSectionNotifications(
   options: SectionNotificationOptions
 ) {
   const userId = useUserId();
+  const directory = useChannelDirectory();
   const notificationPreferences = useBulkNotificationPreferencesMutation();
   const [pending, setPending] = createSignal<{ actorId: string }>();
-  const requests = new Set<AbortController>();
+  // Each action's read of the section's members, ended when the rail goes:
+  // a full read pages every joined channel.
+  const reads = new Set<AbortController>();
   let disposed = false;
 
   onCleanup(() => {
     disposed = true;
-
-    for (const request of requests) {
-      request.abort();
-    }
+    for (const read of reads) read.abort();
   });
+  // A new sign-in, even to the same account, ends them too: the rail can
+  // outlive it, and a read under way pages on with the new credentials.
+  createEffect(
+    on(
+      queryAccountSession,
+      () => {
+        for (const read of reads) read.abort();
+      },
+      { defer: true }
+    )
+  );
 
   const favoriteIds = () =>
     options
@@ -83,8 +103,8 @@ export function useChannelSectionNotifications(
       section === 'team_channels' ||
       section === 'direct_messages'
     ) {
-      return Telemetry.span('channels.section.members', () =>
-        fetchChannelGroupIds(section, [], signal)
+      return Telemetry.span('channels.section.members', async () =>
+        channelGroupIds(section, [], await directory.readComplete(signal))
       );
     }
 
@@ -104,30 +124,33 @@ export function useChannelSectionNotifications(
     }
 
     const request = { actorId };
-    const controller = new AbortController();
+    // A new sign-in, even to the same account, ends the action: the rail
+    // can outlive it.
+    const session = queryAccountSession();
 
     const isCurrent = () =>
       !disposed &&
       options.enabled() &&
       userId() === actorId &&
+      queryAccountSession() === session &&
       options.dialogOwner() === owner;
 
     setPending(request);
-    requests.add(controller);
+    const read = new AbortController();
+    reads.add(read);
 
     try {
       await Telemetry.span('channels.section.notifications', async (span) => {
         span.setAttr('section.id', section);
         span.setAttr('notification.action', action);
 
-        const ids = channelIdsFor(section, controller.signal);
+        const ids = channelIdsFor(section, read.signal);
         const channelIds = Array.isArray(ids) ? ids : await ids;
 
         if (!isCurrent() || channelIds.length === 0) {
           return;
         }
 
-        span.setAttr('channel.ids', channelIds);
         span.setAttr('notification.count', channelIds.length);
 
         if (action === 'read') {
@@ -188,13 +211,16 @@ export function useChannelSectionNotifications(
         );
       });
     } catch (error) {
+      // The rail went, or the viewer signed in again, while the members were
+      // read: nothing is left to tell.
+      if (read.signal.aborted) return;
       if (isCurrent()) {
         toast.failure(t('channelSections.notificationsFailed'));
       }
 
       throw error;
     } finally {
-      requests.delete(controller);
+      reads.delete(read);
       setPending((current) => (current === request ? undefined : current));
     }
   };

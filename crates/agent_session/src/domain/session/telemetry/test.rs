@@ -379,6 +379,49 @@ fn time_to_first_output_dates_the_first_streamed_chunk() {
     );
 }
 
+/// A prompt whose `_meta` withholds its content records none of its turn,
+/// though the process's policy captures content: the same frames as
+/// `a_turn_becomes_an_agent_span_with_a_tool_span_per_call`, with the flag.
+#[test]
+fn a_prompt_that_withholds_content_records_none_of_its_turn() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let mut projector = projector(ContentPolicy::enabled());
+    let mut flagged = 0;
+    for mut entry in parse_log(fixtures::TURN) {
+        match &mut entry.content {
+            Message::Notification(message) | Message::ToRuntime(message) => {
+                if let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) =
+                    message
+                    && PromptRequest::matches_method(&request.method)
+                    && let Some(RawJsonRpcParams::Object(params)) = &mut request.params
+                {
+                    params.insert(
+                        "_meta".to_owned(),
+                        json!({ agent_runtime_protocol::domain::action::WITHHOLD_CONTENT_META: true }),
+                    );
+                    flagged += 1;
+                }
+                projector.on_outbound(message, None)
+            }
+            Message::ToServer(message) => projector.on_inbound(message),
+        }
+    }
+    assert_eq!(flagged, 1, "the fixture has one prompt");
+    let spans = finished(&exporter, &provider);
+
+    let agent = spans_named(&spans, "invoke_agent")[0];
+    assert!(attribute(agent, attr::INPUT_MESSAGES).is_none());
+    assert!(attribute(agent, attr::OUTPUT_MESSAGES).is_none());
+    assert_eq!(int_attribute(agent, attr::USAGE_OUTPUT_TOKENS), Some(8));
+    let bash = spans_named(&spans, "execute_tool Bash")[0];
+    assert!(attribute(bash, attr::TOOL_CALL_ARGUMENTS).is_none());
+    assert!(attribute(bash, attr::TOOL_CALL_RESULT).is_none());
+    assert_eq!(
+        string_attribute(bash, attr::TOOL_NAME).as_deref(),
+        Some("Bash")
+    );
+}
+
 #[test]
 fn content_is_not_recorded_when_capture_is_off() {
     let (exporter, provider, _guard) = otel_test_pipeline();

@@ -262,9 +262,123 @@ pub struct IndexDocument {
     pub sort_facts: Vec<IntegerFact>,
 }
 
+/// A sort fact computed from other facts of the same document: `target` copies
+/// the `source` sort value of a document of one of `profiles` that has every `required`
+/// exact fact. A projection applies it with [`SortFactDerivation::derive`], and
+/// storage applies the same rule to the documents it already holds, so adding
+/// one needs no reprojection of existing records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SortFactDerivation {
+    /// Profile tokens of the documents it applies to: every profile a
+    /// document holding these facts can be stored under.
+    pub profiles: &'static [&'static str],
+    /// Sort attribute whose value is copied.
+    pub source: &'static str,
+    /// Sort attribute written.
+    pub target: &'static str,
+    /// Exact facts, as attribute and value, the document must have.
+    pub required: &'static [(&'static str, &'static [u8])],
+}
+
+impl SortFactDerivation {
+    /// The derived fact for `document`, if the rule applies to it.
+    pub fn derive(&self, document: &IndexDocument) -> Option<IntegerFact> {
+        if !self.profiles.contains(&document.profile.token().as_str()) {
+            return None;
+        }
+        let has_required = self.required.iter().all(|(attribute, value)| {
+            document.exact_facts.iter().any(|fact| {
+                fact.attribute.as_str() == *attribute && fact.value.as_bytes() == *value
+            })
+        });
+        if !has_required {
+            return None;
+        }
+        let source = document
+            .sort_facts
+            .iter()
+            .find(|fact| fact.attribute.as_str() == self.source)?;
+        Some(IntegerFact {
+            attribute: Token::new(self.target).ok()?,
+            value: source.value,
+        })
+    }
+
+    /// Replace `document`'s target fact with the one its other facts derive,
+    /// returning whether that changed it. Documents of other profiles keep
+    /// what they have.
+    pub fn apply(&self, document: &mut IndexDocument) -> bool {
+        if !self.profiles.contains(&document.profile.token().as_str()) {
+            return false;
+        }
+        let derived = self.derive(document);
+        let current = document
+            .sort_facts
+            .iter()
+            .find(|fact| fact.attribute.as_str() == self.target);
+        if current == derived.as_ref() {
+            return false;
+        }
+        document
+            .sort_facts
+            .retain(|fact| fact.attribute.as_str() != self.target);
+        document.sort_facts.extend(derived);
+        document.sort_facts.sort();
+        true
+    }
+
+    /// Make the target exactly as uncertain as the facts it is derived from.
+    pub fn apply_uncertainty(&self, profile: &Profile, uncertainty: &mut OptimisticUncertainty) {
+        if !self.profiles.contains(&profile.token().as_str()) {
+            return;
+        }
+        let Ok(target) = Token::new(self.target) else {
+            return;
+        };
+        let uncertain_input = std::iter::once(self.source)
+            .chain(self.required.iter().map(|(attribute, _)| *attribute))
+            .filter_map(|attribute| Token::new(attribute).ok())
+            .any(|attribute| uncertainty.affects(&attribute));
+        if uncertain_input {
+            uncertainty.mark(std::slice::from_ref(&target));
+        } else {
+            uncertainty.clear([target]);
+        }
+    }
+
+    /// A stable description of the rule, which storage records to know
+    /// whether its documents already carry the derived facts.
+    pub fn fingerprint(&self) -> String {
+        let required = self
+            .required
+            .iter()
+            .map(|(attribute, value)| {
+                let hex = value
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect::<String>();
+                format!("{attribute}={hex}")
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(
+            "{}:{}->{}[{required}]",
+            self.profiles.join("|"),
+            self.source,
+            self.target
+        )
+    }
+}
+
+/// `facts` is how many attributes `attributes` yields, duplicates included: no
+/// more facts than the limit can name more distinct attributes than it.
 fn validate_attribute_count<'a>(
+    facts: usize,
     attributes: impl IntoIterator<Item = &'a Token>,
 ) -> Result<(), ValidationError> {
+    if facts <= MAX_ATTRIBUTES_PER_DOCUMENT {
+        return Ok(());
+    }
     let mut distinct = HashSet::new();
     for attribute in attributes {
         distinct.insert(attribute);
@@ -273,6 +387,20 @@ fn validate_attribute_count<'a>(
         }
     }
     Ok(())
+}
+
+/// Whether two items share an attribute. A document has a few sort facts, so
+/// short lists compare pairs instead of hashing.
+fn has_duplicate<T>(items: &[T], attribute: impl Fn(&T) -> &Token) -> bool {
+    if items.len() <= 16 {
+        return items.iter().enumerate().any(|(index, item)| {
+            items[..index]
+                .iter()
+                .any(|earlier| attribute(earlier) == attribute(item))
+        });
+    }
+    let mut seen = HashSet::new();
+    items.iter().any(|item| !seen.insert(attribute(item)))
 }
 
 impl IndexDocument {
@@ -288,18 +416,14 @@ impl IndexDocument {
     /// Validate bounded attribute counts and unique sort attributes.
     pub fn validate(&self) -> Result<(), ValidationError> {
         validate_attribute_count(
+            self.exact_facts.len() + self.integer_facts.len() + self.sort_facts.len(),
             self.exact_facts
                 .iter()
                 .map(|fact| &fact.attribute)
                 .chain(self.integer_facts.iter().map(|fact| &fact.attribute))
                 .chain(self.sort_facts.iter().map(|fact| &fact.attribute)),
         )?;
-        let mut sort_attributes = HashSet::new();
-        if self
-            .sort_facts
-            .iter()
-            .any(|fact| !sort_attributes.insert(&fact.attribute))
-        {
+        if has_duplicate(&self.sort_facts, |fact| &fact.attribute) {
             return Err(ValidationError::DuplicateSortFact);
         }
         Ok(())
@@ -761,6 +885,7 @@ impl OptimisticProjectionMutation {
                 Self::Replace(document) => document.validate(),
                 Self::Delete { .. } | Self::Unknown { .. } => Ok(()),
                 Self::PatchExact { remove, insert, .. } => validate_attribute_count(
+                    remove.len() + insert.len(),
                     remove.iter().chain(insert).map(|fact| &fact.attribute),
                 ),
                 Self::Patch { .. } => unreachable!(),
@@ -768,6 +893,7 @@ impl OptimisticProjectionMutation {
         };
 
         validate_attribute_count(
+            exact.len() + integers.len() + sorts.len(),
             exact
                 .iter()
                 .map(|patch| &patch.attribute)

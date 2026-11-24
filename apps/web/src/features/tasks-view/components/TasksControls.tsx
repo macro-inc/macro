@@ -10,10 +10,11 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import GanttIcon from '@icon/system/regular/chart-gantt.svg';
 import BoardIcon from '@icon/system/regular/kanban.svg';
 import ListIcon from '@icon/system/regular/list-bullets.svg';
+import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { ButtonGroup } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
-import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
+import { taskGroupOptions, taskSortOptions } from '../constants';
 import { TASK_BOARD_GROUP_OPTIONS } from '../core/task-board';
 import { useTaskFilters } from '../filters/use-task-filters';
 import { useTasksView } from '../tasks-view-context';
@@ -34,6 +35,7 @@ export function TasksControls(props: { inline?: boolean }) {
 }
 
 function DesktopTasksControls() {
+  const startDates = useStartDateEnabled();
   const panel = useSplitPanelOrThrow();
   const { state, setPrimarySort, setState, ganttEnabled } = useTasksView();
   const filters = useTaskFilters();
@@ -78,7 +80,7 @@ function DesktopTasksControls() {
 
   const groupOptions = () => {
     if (state.layout !== 'board') {
-      return TASK_GROUP_OPTIONS;
+      return taskGroupOptions(startDates());
     }
 
     return TASK_BOARD_GROUP_OPTIONS;
@@ -149,7 +151,7 @@ function DesktopTasksControls() {
             size="icon-md"
             label="Sort tasks"
             value={primarySort()}
-            options={TASK_SORT_OPTIONS}
+            options={taskSortOptions(startDates())}
             open={openMenu() === 'sort'}
             onChange={setPrimarySort}
             onOpenChange={handleMenuOpenChange('sort')}

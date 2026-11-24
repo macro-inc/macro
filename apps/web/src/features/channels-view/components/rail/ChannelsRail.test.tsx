@@ -17,10 +17,40 @@ import type { ChannelsSources } from '../../queries';
 import type { ChannelSectionKey, ChannelSectionPreferences } from '../../types';
 import type { ChannelRailRow } from './ChannelsRailContext';
 
+// Tracked by the mocked `queryAccountSession`, so a sign-in reaches what
+// follows the session.
+const [sessionChanges, setSessionChanges] = createSignal(0);
+const signInAgain = () => {
+  mocks.session += 1;
+  setSessionChanges((changes) => changes + 1);
+};
+
+vi.mock('@core/context/channels', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/context/channels')>()),
+  useChannelDirectory: () => ({
+    channels: () => [],
+    complete: () => true,
+    lookup: () => ({ status: 'missing' }),
+    readComplete: mocks.readComplete,
+    failed: () => false,
+    retry: () => {},
+    recordView: () => {},
+    viewsCurrent: () => true,
+  }),
+}));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => mocks.userId,
 }));
+vi.mock('@queries/auth/account-scope', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/auth/account-scope')>()),
+  queryAccountSession: () => {
+    // Read through a signal, as the real one is.
+    sessionChanges();
+    return mocks.session;
+  },
+}));
 const mocks = vi.hoisted(() => ({
+  session: 0,
   fetchChannel: vi.fn<(id: string) => Promise<ChannelEntity>>(),
   bulkPreferences: vi.fn(),
   createSection: vi.fn(),
@@ -43,8 +73,8 @@ const mocks = vi.hoisted(() => ({
   actualRows: (): ChannelRailRow[] => [],
   activityChannels: (): readonly ChannelEntity[] => [],
   additionalActivityChannels: (): readonly ChannelEntity[] => [],
-  fetchGroupIds:
-    vi.fn<typeof import('../../queries')['fetchChannelGroupIds']>(),
+  readComplete:
+    vi.fn<(signal?: AbortSignal) => Promise<readonly { id: string }[]>>(),
   hydrate:
     vi.fn<
       (
@@ -273,11 +303,6 @@ vi.mock('@queries/notification/unsubscribes', () => ({
 }));
 vi.mock('@queries/channel-labels/channel-labels', () => ({
   useChannelLabelsQuery: () => ({ isSuccess: false }),
-  useAvailableSectionChannelsQuery: () => ({
-    isPending: false,
-    isError: false,
-    data: [],
-  }),
   useCreateChannelLabelMutation: () => ({ mutateAsync: mocks.createSection }),
   useDeleteChannelLabelMutation: () => ({}),
   useRenameChannelLabelMutation: () => ({ mutateAsync: mocks.updateSection }),
@@ -349,7 +374,11 @@ vi.mock('../../channels-view-context', () => ({
   }),
 }));
 vi.mock('../../queries', () => ({
-  fetchChannelGroupIds: mocks.fetchGroupIds,
+  channelGroupIds: (
+    _group: unknown,
+    _excluded: unknown,
+    channels: readonly { id: string }[]
+  ) => channels.map(({ id }) => id),
   deduplicateChannels: (collections: ChannelEntity[][]) => [
     ...new Map(
       collections.flat().map((channel) => [channel.id, channel])
@@ -595,6 +624,7 @@ beforeEach(() => {
   mocks.sectionPreferences = {};
   mocks.listRows = undefined;
   mocks.hotkeys.clear();
+  mocks.session = 0;
   mocks.userId = 'viewer';
   mocks.source.muteEntity.mockResolvedValue(undefined);
   mocks.source.unmuteEntity.mockResolvedValue(undefined);
@@ -621,8 +651,8 @@ beforeEach(() => {
       };
     }
   );
-  mocks.fetchGroupIds.mockReset();
-  mocks.fetchGroupIds.mockResolvedValue(['one', 'unloaded']);
+  mocks.readComplete.mockReset();
+  mocks.readComplete.mockResolvedValue([{ id: 'one' }, { id: 'unloaded' }]);
   mocks.row = channel;
   mocks.favoriteId = undefined;
   mocks.tab = 'browse';
@@ -1546,8 +1576,8 @@ describe('section notification actions', () => {
   });
 
   it('discards a mark-read action when the account changes during membership lookup', async () => {
-    let finish!: (ids: string[]) => void;
-    mocks.fetchGroupIds.mockImplementationOnce(
+    let finish!: (channels: { id: string }[]) => void;
+    mocks.readComplete.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           finish = resolve;
@@ -1556,7 +1586,23 @@ describe('section notification actions', () => {
     const actions = mountActions();
     const pending = actions.markSectionRead('team_channels');
     mocks.userId = 'another-viewer';
-    finish(['one']);
+    finish([{ id: 'one' }]);
+    await pending;
+    expect(mocks.markChannelsAsRead).not.toHaveBeenCalled();
+  });
+
+  it('discards a mark-read action when the same viewer signs in again during membership lookup', async () => {
+    let finish!: (channels: { id: string }[]) => void;
+    mocks.readComplete.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const actions = mountActions();
+    const pending = actions.markSectionRead('team_channels');
+    signInAgain();
+    finish([{ id: 'one' }]);
     await pending;
     expect(mocks.markChannelsAsRead).not.toHaveBeenCalled();
   });
@@ -1740,7 +1786,7 @@ describe('section notification actions', () => {
       [{ item_type: 'channel', item_id: 'unloaded' }],
       { owner: expect.anything() }
     );
-    expect(mocks.fetchGroupIds).not.toHaveBeenCalled();
+    expect(mocks.readComplete).not.toHaveBeenCalled();
   });
 
   it.each(['channels', 'team_channels', 'direct_messages'] as const)(
@@ -1749,11 +1795,7 @@ describe('section notification actions', () => {
       const actions = mountActions();
       await actions.muteSection(section, false);
 
-      expect(mocks.fetchGroupIds).toHaveBeenCalledExactlyOnceWith(
-        section,
-        [],
-        expect.any(AbortSignal)
-      );
+      expect(mocks.readComplete).toHaveBeenCalledOnce();
       expect(mocks.source.unmuteEntity.mock.calls).toEqual([
         [{ type: 'channel', id: 'one' }],
         [{ type: 'channel', id: 'unloaded' }],
@@ -1764,8 +1806,8 @@ describe('section notification actions', () => {
   it.each(['account', 'unmount'] as const)(
     'discards membership resolved after %s changes',
     async (change) => {
-      let resolve!: (ids: string[]) => void;
-      mocks.fetchGroupIds.mockImplementationOnce(
+      let resolve!: (channels: { id: string }[]) => void;
+      mocks.readComplete.mockImplementationOnce(
         () =>
           new Promise((done) => {
             resolve = done;
@@ -1781,7 +1823,7 @@ describe('section notification actions', () => {
         cleanup();
       }
 
-      resolve(['unloaded']);
+      resolve([{ id: 'unloaded' }]);
       await pending;
 
       expect(mocks.snooze).not.toHaveBeenCalled();
@@ -1789,9 +1831,51 @@ describe('section notification actions', () => {
     }
   );
 
+  it('ends the membership read when the rail goes, without reporting a failure', async () => {
+    let read: AbortSignal | undefined;
+    mocks.readComplete.mockImplementationOnce(
+      (signal) =>
+        new Promise((_, reject) => {
+          read = signal;
+          signal?.addEventListener('abort', () => reject(signal.reason));
+        })
+    );
+    const actions = mountActions();
+    const pending = actions.muteSection('team_channels', true);
+    expect(read?.aborted).toBe(false);
+
+    cleanup();
+
+    expect(read?.aborted).toBe(true);
+    await expect(pending).resolves.toBeUndefined();
+    expect(mocks.failure).not.toHaveBeenCalled();
+    expect(mocks.source.muteEntity).not.toHaveBeenCalled();
+  });
+
+  it('ends the membership read when the viewer signs in again, though the rail stays', async () => {
+    let read: AbortSignal | undefined;
+    mocks.readComplete.mockImplementationOnce(
+      (signal) =>
+        new Promise((_, reject) => {
+          read = signal;
+          signal?.addEventListener('abort', () => reject(signal.reason));
+        })
+    );
+    const actions = mountActions();
+    const pending = actions.muteSection('team_channels', true);
+    expect(read?.aborted).toBe(false);
+
+    signInAgain();
+
+    await waitFor(() => expect(read?.aborted).toBe(true));
+    await expect(pending).resolves.toBeUndefined();
+    expect(mocks.failure).not.toHaveBeenCalled();
+    expect(mocks.source.muteEntity).not.toHaveBeenCalled();
+  });
+
   it('keeps the section retryable after membership lookup fails without applying partial updates', async () => {
     const error = new Error('offline');
-    mocks.fetchGroupIds.mockRejectedValueOnce(error);
+    mocks.readComplete.mockRejectedValueOnce(error);
     const actions = mountActions();
 
     await expect(actions.muteSection('team_channels', true)).rejects.toThrow(

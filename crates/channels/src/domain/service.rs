@@ -470,19 +470,30 @@ where
             }
         }
 
-        let channel_name = req.channel_name.clone();
-        self.repo
+        // The stored name after the patch: it keeps the old one unless renamed.
+        let channel_name = req.channel_name.clone().or_else(|| info.name.clone());
+        let auto_joined = self
+            .repo
             .patch_channel(channel_id, actor.as_ref().to_string(), team_id, req)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        if channel_name.is_some() {
-            self.events.dispatch(ChannelEvent::ChannelUpdated {
-                channel_id,
-                actor,
-                previous_name: info.name,
-                channel_name,
-            });
-        }
+        self.dispatch_members_auto_joined(
+            channel_id,
+            auto_joined
+                .into_iter()
+                .filter_map(|id| MacroUserIdStr::try_from(id).ok())
+                .collect(),
+        )
+        .await;
+        // Every patch is announced, not only renames, so members' cached copies
+        // follow a conversion or an auto-join change. An unchanged name tells
+        // consumers it was not a rename.
+        self.events.dispatch(ChannelEvent::ChannelUpdated {
+            channel_id,
+            actor,
+            previous_name: info.name,
+            channel_name,
+        });
         Ok(())
     }
 
@@ -829,6 +840,37 @@ where
             channel_id: ensured.id.to_string(),
             action,
         })
+    }
+
+    /// Tell contacts that team auto-join added these members to a channel.
+    /// The memberships are already stored, so a failed participant read is
+    /// logged rather than failing the mutation; the contacts backfill repairs
+    /// the missed pairs.
+    async fn dispatch_members_auto_joined(
+        &self,
+        channel_id: Uuid,
+        added_user_ids: Vec<MacroUserIdStr<'static>>,
+    ) {
+        if added_user_ids.is_empty() {
+            return;
+        }
+        let participants = match self.repo.get_participants(channel_id).await {
+            Ok(participants) => participants,
+            Err(error) => {
+                let error: anyhow::Error = error.into();
+                tracing::error!(
+                    error=?error,
+                    %channel_id,
+                    "unable to read participants after team auto-join"
+                );
+                return;
+            }
+        };
+        self.events.dispatch(ChannelEvent::MembersAutoJoined {
+            channel_id,
+            added_user_ids,
+            active_participant_user_ids: participant_ids(&participants),
+        });
     }
 
     async fn create_channel_record<'a>(
@@ -1211,10 +1253,16 @@ where
         team_id: &Uuid,
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<(), ChannelMutationErr> {
-        self.repo
+        let channel_ids = self
+            .repo
             .auto_join_by_team_id(team_id, user_id)
             .await
-            .map_err(|e| ChannelMutationErr::Repo(e.into()))
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+        for channel_id in channel_ids {
+            self.dispatch_members_auto_joined(channel_id, vec![user_id.clone().into_owned()])
+                .await;
+        }
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self, user_id))]
@@ -1251,6 +1299,40 @@ where
         req: GetOrCreateDmRequest,
     ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
         ChannelServiceImpl::get_or_create_dm(self, actor, req).await
+    }
+
+    #[tracing::instrument(err, skip_all, fields(found = tracing::field::Empty))]
+    async fn find_direct_message(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        recipient_id: MacroUserIdStr<'static>,
+    ) -> Result<Option<Uuid>, ChannelMessagesErr> {
+        // There is no DM with yourself; get-or-create refuses to make one.
+        if user_id == recipient_id {
+            return Ok(None);
+        }
+        let channel_id = self
+            .repo
+            .maybe_get_dm(user_id, recipient_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        tracing::Span::current().record("found", channel_id.is_some());
+        Ok(channel_id)
+    }
+
+    #[tracing::instrument(err, skip_all, fields(channel_id = %channel_id, viewed = tracing::field::Empty))]
+    async fn channel_viewed_at(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+    ) -> Result<Option<chrono::DateTime<chrono::Utc>>, ChannelMessagesErr> {
+        let viewed_at = self
+            .repo
+            .get_viewed_at(user_id, channel_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        tracing::Span::current().record("viewed", viewed_at.is_some());
+        Ok(viewed_at)
     }
 
     async fn get_or_create_private(

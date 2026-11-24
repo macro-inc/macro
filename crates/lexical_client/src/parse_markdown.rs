@@ -760,7 +760,9 @@ impl LexicalClient {
     /// Sanitizes an agent prompt and optionally composes it with why the
     /// agent was called via the lexical service, so internal nodes and
     /// escaping are handled by Lexical rather than by the caller.
-    #[tracing::instrument(skip(self, prompt_markdown, current_time, trigger), err)]
+    // Records nothing it is given: the people are addresses, and the prompt
+    // and instructions may carry what must stay off traces.
+    #[tracing::instrument(skip_all, err)]
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
