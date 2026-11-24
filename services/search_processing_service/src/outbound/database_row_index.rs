@@ -187,3 +187,6 @@ impl DatabaseRowIndex for OpenSearchDatabaseRows {
             .collect())
     }
 }
+
+#[cfg(test)]
+mod test;

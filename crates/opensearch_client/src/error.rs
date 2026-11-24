@@ -67,7 +67,7 @@ pub enum OpensearchOperation {
     DeleteCallRecordsByChannelId,
     DeleteAgentSession,
     WriteDatabaseRows,
-    DeleteDatabaseRowsByQuery,
+    DeleteDatabaseRowScope,
     PageDatabaseRows,
 }
 

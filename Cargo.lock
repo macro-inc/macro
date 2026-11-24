@@ -18763,6 +18763,7 @@ dependencies = [
  "psd_engine",
  "rand 0.9.4",
  "rdkafka",
+ "reqwest 0.13.4",
  "rootcause",
  "rust-embed",
  "s3_client",

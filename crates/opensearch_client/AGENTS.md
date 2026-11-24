@@ -99,8 +99,10 @@ projects, and database rows.
 - Database row writes (`src/database_row.rs`) carry the row's table version
   as an `external_gte` version, and a version conflict or a delete of a
   missing document counts as done, not failed: the index already holds a
-  newer state. Their delete-by-query runs with `conflicts=proceed`, so a
-  document written while it runs is skipped rather than failing the sweep.
+  newer state. Scoped deletes page the documents and delete each by id at
+  its own version, never by query: delete-by-query bumps the tombstone's
+  version, and the same row written again at its unchanged table version (a
+  database restored right after its trash) would be refused.
 - Put `instrument(err)` on the public method, not the inner function it
   retries, so a recovered attempt does not record an error span.
 - Requests time out after five minutes (`REQUEST_TIMEOUT`). A delete that can

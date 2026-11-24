@@ -47,7 +47,7 @@ pub struct IndexedDatabaseRow {
     pub table_version: i64,
 }
 
-/// Which documents a delete-by-query removes.
+/// Which documents a scoped delete removes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DatabaseRowScope {
     /// Every row of a database.
@@ -79,7 +79,7 @@ impl OpensearchClient {
     }
 
     /// Remove every document `scope` names, returning how many went. A
-    /// document written while the delete runs is left alone.
+    /// document written at a newer version while the delete runs stays.
     #[tracing::instrument(skip(self), err)]
     pub async fn delete_database_rows(&self, scope: DatabaseRowScope) -> Result<u64> {
         resend_on_lost_connection(|| delete_rows(&self.inner, INDEX.as_ref(), scope)).await
@@ -260,17 +260,21 @@ pub(crate) fn scope_query(scope: DatabaseRowScope) -> serde_json::Value {
     }
 }
 
-/// Delete-by-query that skips documents changed while it runs
-/// (`conflicts=proceed`) instead of failing: a document written meanwhile
-/// holds a newer state than the query saw. Refreshes first so the delete
-/// reaches documents written a moment ago.
+/// Delete every document `scope` matches, a page at a time, each by id
+/// with its own version as an `external_gte` version.
+///
+/// Not a delete-by-query: that deletes with internal versioning, which bumps
+/// the version the tombstone keeps, so the index would refuse the same row
+/// written again at its unchanged table version (a database restored right
+/// after it was trashed) until the tombstone expires. A document written at
+/// a newer version meanwhile is refused the delete and stays. Refreshes
+/// first so the search reaches documents written a moment ago.
 pub(crate) async fn delete_rows(
     client: &opensearch::OpenSearch,
     index: &str,
     scope: DatabaseRowScope,
 ) -> Result<u64> {
-    let operation = OpensearchOperation::DeleteDatabaseRowsByQuery;
-
+    let operation = OpensearchOperation::DeleteDatabaseRowScope;
     let refreshed = client
         .indices()
         .refresh(opensearch::indices::IndicesRefreshParts::Index(&[index]))
@@ -288,48 +292,27 @@ pub(crate) async fn delete_rows(
         });
     }
 
-    let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[index]))
-        .conflicts(opensearch::params::Conflicts::Proceed)
-        .refresh(true)
-        .body(json!({"query": scope_query(scope)}))
-        .send()
-        .await
-        .map_err(|error| OpensearchClientError::request_failed(operation, &error))?;
-
-    let status = response.status_code();
-    let body = response
-        .text()
-        .await
-        .map_err(|error| OpensearchClientError::deserialization_failed(operation, &error))?;
-    if !status.is_success() {
-        return Err(OpensearchClientError::Unknown {
-            details: body,
-            operation,
-        });
+    let mut deleted = 0;
+    let mut after = None;
+    loop {
+        let page = search_rows(client, index, scope_query(scope), after, DELETE_PAGE_SIZE).await?;
+        let Some(last) = page.last() else {
+            break;
+        };
+        after = Some(last.row_id);
+        let deletes: Vec<DatabaseRowWrite> = page
+            .iter()
+            .map(|row| DatabaseRowWrite::Delete {
+                row_id: row.row_id,
+                table_version: row.table_version,
+            })
+            .collect();
+        deleted += write_rows(client, index, &deletes).await?.applied;
     }
-
-    let answer: serde_json::Value = serde_json::from_str(&body).map_err(|error| {
-        OpensearchClientError::DeserializationFailed {
-            details: error.to_string(),
-            operation,
-        }
-    })?;
-    let failed = answer["failures"]
-        .as_array()
-        .is_some_and(|failures| !failures.is_empty());
-    let interrupted = answer["timed_out"].as_bool() == Some(true)
-        || answer["canceled"]
-            .as_str()
-            .is_some_and(|reason| !reason.is_empty());
-    if failed || interrupted {
-        return Err(OpensearchClientError::Unknown {
-            details: body,
-            operation,
-        });
-    }
-    Ok(answer["deleted"].as_u64().unwrap_or_default())
+    Ok(u64::try_from(deleted).unwrap_or(u64::MAX))
 }
+
+const DELETE_PAGE_SIZE: usize = 500;
 
 pub(crate) async fn page_rows(
     client: &opensearch::OpenSearch,
@@ -337,10 +320,21 @@ pub(crate) async fn page_rows(
     after_row_id: Option<Uuid>,
     size: usize,
 ) -> Result<Vec<IndexedDatabaseRow>> {
+    search_rows(client, index, json!({"match_all": {}}), after_row_id, size).await
+}
+
+/// One page of the documents `query` matches, in row id order.
+async fn search_rows(
+    client: &opensearch::OpenSearch,
+    index: &str,
+    query: serde_json::Value,
+    after_row_id: Option<Uuid>,
+    size: usize,
+) -> Result<Vec<IndexedDatabaseRow>> {
     let operation = OpensearchOperation::PageDatabaseRows;
     let mut body = json!({
         "size": size,
-        "query": {"match_all": {}},
+        "query": query,
         "sort": [{"row_id": "asc"}],
         "_source": ["row_id", "table_version"],
     });
