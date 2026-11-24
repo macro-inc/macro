@@ -2839,7 +2839,7 @@
     "/suggestions/{id}/restore": {
       "post": {
         "tags": ["suggestions"],
-        "summary": "The caller, or their own agent, takes back dismissing a suggestion, within\nfive minutes of it.",
+        "summary": "The caller, or their own agent, takes back dismissing a suggestion, or\ncompleting one by acting on it (not a finished run or an answered reply),\nwithin five minutes of it.",
         "operationId": "restore_suggestion",
         "parameters": [
           {
@@ -2887,7 +2887,7 @@
             }
           },
           "409": {
-            "description": "Not dismissed in the last five minutes, or a routine suggestion",
+            "description": "Not dismissed, or completed by acting on it, in the last five minutes; or a routine suggestion",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2978,6 +2978,69 @@
           },
           "404": {
             "description": "No such suggestion for the user, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/{id}/stop": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "The caller, or their own agent, stops an open suggestion's run without\ndismissing it.",
+        "operationId": "stop_suggestion_run",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Its run is being stopped, and the suggestion stays open: it shows running until the run settles, then can run again; with nothing under way, nothing changes"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A generation session may not stop a run",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No open suggestion with this id for the caller, or suggestions are off",
             "content": {
               "text/plain": {
                 "schema": {

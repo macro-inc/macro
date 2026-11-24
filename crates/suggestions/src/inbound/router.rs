@@ -99,6 +99,10 @@ where
             "/suggestions/{id}/restore",
             post(restore_suggestion::<S, Auth>),
         )
+        .route(
+            "/suggestions/{id}/stop",
+            post(stop_suggestion_run::<S, Auth>),
+        )
         .with_state(state)
 }
 
@@ -373,12 +377,13 @@ where
         (status = 401, body = String),
         (status = 403, body = String, description = "A generation session may not restore"),
         (status = 404, body = String, description = "No suggestion with this id for the caller, or suggestions are off"),
-        (status = 409, body = String, description = "Not dismissed in the last five minutes, or a routine suggestion"),
+        (status = 409, body = String, description = "Not dismissed, or completed by acting on it, in the last five minutes; or a routine suggestion"),
         (status = 500, body = String),
     )
 )]
-/// The caller, or their own agent, takes back dismissing a suggestion, within
-/// five minutes of it.
+/// The caller, or their own agent, takes back dismissing a suggestion, or
+/// completing one by acting on it (not a finished run or an answered reply),
+/// within five minutes of it.
 pub async fn restore_suggestion<S, Auth>(
     State(state): State<SuggestionRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
@@ -393,6 +398,40 @@ where
     state
         .service
         .restore(&user.authorization.macro_user_id, caller, id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    post,
+    path = "/suggestions/{id}/stop",
+    tag = "suggestions",
+    operation_id = "stop_suggestion_run",
+    params(("id" = String, Path, description = "ID of the suggestion")),
+    responses(
+        (status = 204, description = "Its run is being stopped, and the suggestion stays open: it shows running until the run settles, then can run again; with nothing under way, nothing changes"),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "A generation session may not stop a run"),
+        (status = 404, body = String, description = "No open suggestion with this id for the caller, or suggestions are off"),
+        (status = 500, body = String),
+    )
+)]
+/// The caller, or their own agent, stops an open suggestion's run without
+/// dismissing it.
+pub async fn stop_suggestion_run<S, Auth>(
+    State(state): State<SuggestionRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, SuggestionApiError>
+where
+    S: SuggestionApi,
+    Auth: MacroAuthorizationService,
+{
+    let caller = caller(&user.authorization, &headers);
+    state
+        .service
+        .stop_run(&user.authorization.macro_user_id, caller, id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

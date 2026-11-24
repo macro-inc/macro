@@ -1116,11 +1116,11 @@ impl SuggestionRepo for PgSuggestionRepo {
         Ok(moved)
     }
 
-    async fn undismiss(
+    async fn undo(
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
-        dismissed_since: DateTime<Utc>,
+        closed_since: DateTime<Utc>,
         now: DateTime<Utc>,
     ) -> Result<bool, Self::Err> {
         let moved = sqlx::query!(
@@ -1129,16 +1129,44 @@ impl SuggestionRepo for PgSuggestionRepo {
                WHERE user_id = $1 AND id = $2 AND state = ANY($3) AND state_changed_at >= $6"#,
             user.as_ref(),
             id,
-            &state_names(&lifecycle::sources(LifecycleEvent::Undismiss)),
+            &state_names(&lifecycle::sources(LifecycleEvent::Undo)),
             SuggestionState::Proposed.as_ref(),
             now,
-            dismissed_since,
+            closed_since,
         )
         .execute(&self.pool)
         .await?
         .rows_affected()
             == 1;
         Ok(moved)
+    }
+
+    async fn cancel_run(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        now: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        // The suggestion's row before its run's, as a finish takes them, so
+        // the two never deadlock; holding it keeps it open while the run is
+        // cancelled.
+        let mut tx = self.pool.begin().await?;
+        let open = sqlx::query_scalar!(
+            r#"SELECT id FROM suggestion
+               WHERE user_id = $1 AND id = $2 AND state = ANY($3)
+               FOR UPDATE"#,
+            user.as_ref(),
+            id,
+            &open_states(),
+        )
+        .fetch_optional(&mut *tx)
+        .await?
+        .is_some();
+        if open {
+            cancel_run(&mut tx, id, now).await?;
+        }
+        tx.commit().await?;
+        Ok(open)
     }
 
     async fn open_about(

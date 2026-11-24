@@ -3003,8 +3003,9 @@ export const attachSuggestionDraft = async (
 };
 
 /**
- * @summary The caller, or their own agent, takes back dismissing a suggestion, within
-five minutes of it.
+ * @summary The caller, or their own agent, takes back dismissing a suggestion, or
+completing one by acting on it (not a finished run or an answered reply),
+within five minutes of it.
  */
 export type restoreSuggestionResponse204 = {
   data: void;
@@ -3150,4 +3151,72 @@ export const retireSuggestion = async (
     status: res.status,
     headers: res.headers,
   } as retireSuggestionResponse;
+};
+
+/**
+ * @summary The caller, or their own agent, stops an open suggestion's run without
+dismissing it.
+ */
+export type stopSuggestionRunResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type stopSuggestionRunResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type stopSuggestionRunResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type stopSuggestionRunResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type stopSuggestionRunResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type stopSuggestionRunResponseSuccess = stopSuggestionRunResponse204 & {
+  headers: Headers;
+};
+export type stopSuggestionRunResponseError = (
+  | stopSuggestionRunResponse401
+  | stopSuggestionRunResponse403
+  | stopSuggestionRunResponse404
+  | stopSuggestionRunResponse500
+) & {
+  headers: Headers;
+};
+
+export type stopSuggestionRunResponse =
+  | stopSuggestionRunResponseSuccess
+  | stopSuggestionRunResponseError;
+
+export const getStopSuggestionRunUrl = (id: string) => {
+  return `/suggestions/${id}/stop`;
+};
+
+export const stopSuggestionRun = async (
+  id: string,
+  options?: RequestInit
+): Promise<stopSuggestionRunResponse> => {
+  const res = await fetch(getStopSuggestionRunUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: stopSuggestionRunResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as stopSuggestionRunResponse;
 };

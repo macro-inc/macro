@@ -531,6 +531,18 @@ fn moved_by(
 
 /// A problem when `content` changes the prompt or `sends` of `existing` while a
 /// run of it is going.
+/// Whether a suggestion of `kind` is done by the person acting on it (opening
+/// its item or the composer), which they may take back: not a background
+/// prompt, done by its run, a reply, done by the person's reply, or a
+/// routine suggestion, done by saving its routine.
+fn completed_by_acting(kind: &SuggestionKind) -> bool {
+    match kind {
+        SuggestionKind::Prompt { run_mode, .. } => *run_mode == RunMode::Composer,
+        SuggestionKind::Entity { action, .. } => *action != EntityAction::Reply,
+        SuggestionKind::Routine { .. } => false,
+    }
+}
+
 fn run_going(existing: &Suggestion, content: &SuggestionContent, problems: &mut Vec<String>) {
     let SuggestionKind::Prompt { prompt, sends, .. } = &existing.kind else {
         return;
@@ -857,6 +869,46 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(name = "suggestions.stop_run", skip_all, fields(
+        suggestion.id = %id,
+        suggestions.caller = tracing::field::Empty,
+        suggestion.run.stopped = tracing::field::Empty,
+    ), err)]
+    async fn stop_run(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        caller: SuggestionCaller,
+        id: Uuid,
+    ) -> Result<(), SuggestionError> {
+        self.require_flag(user).await?;
+        self.admit(caller).await?;
+        let suggestion = self
+            .repo
+            .suggestion(user, id)
+            .await
+            .map_err(SuggestionError::internal)?
+            .filter(|suggestion| suggestion.state.is_open())
+            .ok_or(SuggestionError::NotFound)?;
+        let open = self
+            .repo
+            .cancel_run(user, id, Utc::now())
+            .await
+            .map_err(SuggestionError::internal)?;
+        if !open {
+            return Err(SuggestionError::NotFound);
+        }
+        let going = suggestion
+            .run
+            .as_ref()
+            .is_some_and(|run| !run.state.is_settled());
+        tracing::Span::current().record("suggestion.run.stopped", going);
+        if going {
+            self.stop_cancelled_run(&suggestion).await;
+            tracing::info!(event = "suggestions.run_stopped");
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(name = "suggestions.restore", skip_all, fields(
         suggestion.id = %id,
         suggestions.caller = tracing::field::Empty,
@@ -880,10 +932,15 @@ where
         if suggestion.kind.name() == KindName::Routine {
             return Err(SuggestionError::NotRestorable);
         }
+        // Only what the person completed themself is theirs to undo: a
+        // finished run made something, and an answered reply was answered.
+        if suggestion.state == SuggestionState::Done && !completed_by_acting(&suggestion.kind) {
+            return Err(SuggestionError::NotRestorable);
+        }
         let now = Utc::now();
         let restored = self
             .repo
-            .undismiss(user, id, now - RESTORE_WITHIN, now)
+            .undo(user, id, now - RESTORE_WITHIN, now)
             .await
             .map_err(SuggestionError::internal)?;
         if !restored {

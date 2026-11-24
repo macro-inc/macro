@@ -342,6 +342,13 @@ async fn accepting_a_background_prompt_suggestion_runs_it_and_its_turn_ending_fi
         h.in_feed(suggestion.id).await.unwrap().status,
         SuggestionStatus::Done
     );
+    // What a run did isn't undone by bringing its suggestion back.
+    assert!(matches!(
+        h.service
+            .restore(&user(OWNER), SuggestionCaller::User, suggestion.id)
+            .await,
+        Err(SuggestionError::NotRestorable)
+    ));
     // A settled run takes no more events.
     assert_eq!(
         h.news(run, SessionNews::Deleted).await,
@@ -742,6 +749,46 @@ async fn dismissing_a_suggestion_cancels_its_run(pool: PgPool) {
     assert_eq!(dismissed.state, SuggestionState::Dismissed);
     assert_eq!(dismissed.status, SuggestionStatus::Closed);
     assert!(dismissed.produced.is_empty());
+}
+
+/// Stopping a run leaves its suggestion open: the run is cancelled and its
+/// session stopped, the card shows it running until that settles, and then
+/// it runs again. Stopping with nothing under way changes nothing.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn stopping_a_run_keeps_its_suggestion_open_to_run_again(pool: PgPool) {
+    let (h, runs) = run_harness(pool).await;
+    let suggestion = h.background("quotes:compare").await;
+    h.service
+        .stop_run(&user(OWNER), SuggestionCaller::User, suggestion.id)
+        .await
+        .unwrap();
+    assert!(runs.stopped.lock().unwrap().is_empty());
+
+    h.accept(&user(OWNER), suggestion.id).await.unwrap();
+    let run = runs.last().session;
+    assert!(matches!(
+        h.service
+            .stop_run(&user(OTHER), SuggestionCaller::User, suggestion.id)
+            .await,
+        Err(SuggestionError::NotFound)
+    ));
+    h.service
+        .stop_run(&user(OWNER), SuggestionCaller::User, suggestion.id)
+        .await
+        .unwrap();
+    assert_eq!(*runs.stopped.lock().unwrap(), [run]);
+    assert_eq!(h.run_state(run).await, RunStateName::Cancelling);
+    let stopping = h.in_feed(suggestion.id).await.unwrap();
+    assert_eq!(stopping.state, SuggestionState::Accepted);
+    assert_eq!(stopping.status, SuggestionStatus::Running);
+
+    // Its turn ended when stopped: open again, with nothing to show for it.
+    h.sweeps_to(run, RunStateName::Cancelled).await;
+    let stopped = h.in_feed(suggestion.id).await.unwrap();
+    assert_eq!(stopped.status, SuggestionStatus::Open);
+    assert_eq!(stopped.result, None);
+    h.accept(&user(OWNER), suggestion.id).await.unwrap();
+    assert_ne!(runs.last().session, run);
 }
 
 /// A run that finishes as its suggestion is dismissed records what it made,

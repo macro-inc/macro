@@ -3546,7 +3546,7 @@ export type RestoreSuggestionErrors = {
      */
     404: string;
     /**
-     * Not dismissed in the last five minutes, or a routine suggestion
+     * Not dismissed, or completed by acting on it, in the last five minutes; or a routine suggestion
      */
     409: string;
     500: string;
@@ -3599,3 +3599,39 @@ export type RetireSuggestionResponses = {
 };
 
 export type RetireSuggestionResponse = RetireSuggestionResponses[keyof RetireSuggestionResponses];
+
+export type StopSuggestionRunData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the suggestion
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/suggestions/{id}/stop';
+};
+
+export type StopSuggestionRunErrors = {
+    401: string;
+    /**
+     * A generation session may not stop a run
+     */
+    403: string;
+    /**
+     * No open suggestion with this id for the caller, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type StopSuggestionRunError = StopSuggestionRunErrors[keyof StopSuggestionRunErrors];
+
+export type StopSuggestionRunResponses = {
+    /**
+     * Its run is being stopped, and the suggestion stays open: it shows running until the run settles, then can run again; with nothing under way, nothing changes
+     */
+    204: void;
+};
+
+export type StopSuggestionRunResponse = StopSuggestionRunResponses[keyof StopSuggestionRunResponses];
