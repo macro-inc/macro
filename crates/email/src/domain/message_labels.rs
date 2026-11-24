@@ -350,6 +350,19 @@ where
                 )
                 .await
                 .map_err(MessageLabelError::Unqueued)?;
+
+            // The change is published above, so a reader may have seen the
+            // labels this undid.
+            for thread_id in &thread_ids {
+                let event = EmailMacroEvent::thread_reindex_requested(
+                    link.id,
+                    link.macro_id.clone(),
+                    *thread_id,
+                );
+                let _ = self.broker.send_event(&event).inspect_err(|e| {
+                    tracing::error!(error=?e, "failed to publish email macro event");
+                });
+            }
         }
 
         Ok(MessageLabelOutcome {
