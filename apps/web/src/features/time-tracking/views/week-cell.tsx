@@ -156,32 +156,44 @@ function CellEntries(props: CellProps): JSX.Element {
             </Show>
           </Show>
         ))}
-        <Show
-          when={!time.pending()}
-          fallback={
+        <Switch>
+          <Match when={time.pending()}>
             <p role="status" class="px-2 py-1 text-xs text-ink-muted">
               {t('timeTracking.loadingEntries')}
             </p>
-          }
-        >
-          <EntryList
-            entries={entries()}
-            today={props.today}
-            person={props.person}
-            actions={actions}
-          />
-          <Show when={time.hasOlder() && listed() < (props.minutes ?? 0)}>
-            <Button
-              variant="ghost"
-              size="sm"
-              class="self-start"
-              disabled={time.olderPending()}
-              onClick={() => time.showOlder()}
-            >
-              {t('timeTracking.showOlder')}
-            </Button>
-          </Show>
-        </Show>
+          </Match>
+          <Match when={time.failed() && time.entries().length === 0}>
+            <div class="flex items-center justify-between gap-2 px-2 py-1 text-xs text-ink-muted">
+              <span>{t('timeTracking.entriesFailed')}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => fireAndForget(time.refetch(), 'time-tracking')}
+              >
+                {t('timeTracking.retry')}
+              </Button>
+            </div>
+          </Match>
+          <Match when>
+            <EntryList
+              entries={entries()}
+              today={props.today}
+              person={props.person}
+              actions={actions}
+            />
+            <Show when={time.hasOlder() && listed() < (props.minutes ?? 0)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="self-start"
+                disabled={time.olderPending()}
+                onClick={() => time.showOlder()}
+              >
+                {t('timeTracking.showOlder')}
+              </Button>
+            </Show>
+          </Match>
+        </Switch>
       </Match>
     </Switch>
   );

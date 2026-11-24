@@ -24,6 +24,16 @@ export function weekDays(week: DayRange, showWeekends: boolean): string[] {
   return days;
 }
 
+/**
+ * The days a week's read covers: Monday to Friday when weekends are hidden.
+ * Weekdays are one run of days for a week starting Sunday or Monday, the
+ * calendar's only two starts.
+ */
+export function readRange(week: DayRange, showWeekends: boolean): DayRange {
+  const days = weekDays(week, showWeekends);
+  return { from: days[0] ?? week.from, to: days.at(-1) ?? week.to };
+}
+
 /** A week's name: its first and last days, `Nov 23 – 29`. */
 export function weekName(week: DayRange, locale: string): string {
   return new Intl.DateTimeFormat(locale, {

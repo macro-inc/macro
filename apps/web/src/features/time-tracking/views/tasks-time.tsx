@@ -120,6 +120,7 @@ function MyWeekDesktop(props: TasksTimeViewProps): JSX.Element {
     groupBy: 'TASK',
     thenBy: 'DAY',
     clock: props.clock,
+    showWeekends: props.showWeekends,
   });
   usePending('time.week', week.pending);
   const timerActions = createTimerActions(useTimeTracking());
@@ -218,6 +219,7 @@ function TeamWeekDesktop(props: TasksTimeViewProps): JSX.Element {
     groupBy: 'PERSON',
     thenBy: 'DAY',
     clock: props.clock,
+    showWeekends: props.showWeekends,
   });
   usePending('time.team_week', week.pending);
   const rows = (): WeekGridRow[] =>

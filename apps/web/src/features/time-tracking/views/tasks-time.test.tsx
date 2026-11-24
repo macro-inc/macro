@@ -21,8 +21,10 @@ import { TasksTimeDesktop } from './tasks-time';
 
 const taskTime = vi.hoisted(() => ({
   pending: false,
+  failed: false,
   hasOlder: false,
   showOlder: vi.fn(),
+  refetch: vi.fn(() => Promise.resolve()),
 }));
 const log = vi.hoisted(() => vi.fn());
 const update = vi.hoisted(() => vi.fn());
@@ -59,13 +61,15 @@ const entry = (
 vi.mock('../primitives/create-task-time', () => ({
   createTaskTime: (taskId: () => string | undefined) => ({
     entries: () =>
-      taskId() === 'task-a'
+      taskId() === 'task-a' && !taskTime.failed
         ? [
             entry('2026-11-23', 60),
             entry('2026-11-23', 120, 'bob', 'Bob reviewing'),
           ]
         : [],
     pending: () => taskTime.pending,
+    failed: () => taskTime.failed,
+    refetch: taskTime.refetch,
     hasOlder: () => taskTime.hasOlder,
     olderPending: () => false,
     showOlder: taskTime.showOlder,
@@ -198,6 +202,8 @@ afterEach(() => {
   startTimer.mockReset();
   taskTime.showOlder.mockReset();
   taskTime.pending = false;
+  taskTime.failed = false;
+  taskTime.refetch.mockClear();
   taskTime.hasOlder = false;
   summaryState.withoutTaskA = false;
   inputs.length = 0;
@@ -242,13 +248,13 @@ function renderWeek(
   return { onOpenTask };
 }
 
-it('reads My week by task and day, totalling only the days shown', () => {
+it('reads My week by task and day, Monday to Friday with weekends hidden', () => {
   renderWeek('week');
 
   expect(inputs.at(-1)).toEqual({
     scope: 'MINE',
     from: '2026-11-23',
-    to: '2026-11-29',
+    to: '2026-11-27',
     groupBy: 'TASK',
     thenBy: 'DAY',
   });
@@ -343,18 +349,18 @@ it('steps a week at a time and comes back to this week', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Previous week' }));
   expect(inputs.at(-1)).toMatchObject({
     from: '2026-11-16',
-    to: '2026-11-22',
+    to: '2026-11-20',
   });
   fireEvent.click(screen.getByRole('button', { name: 'Next week' }));
   fireEvent.click(screen.getByRole('button', { name: 'Next week' }));
   expect(inputs.at(-1)).toMatchObject({
     from: '2026-11-30',
-    to: '2026-12-06',
+    to: '2026-12-04',
   });
   fireEvent.click(screen.getByRole('button', { name: 'This week' }));
   expect(inputs.at(-1)).toMatchObject({
     from: '2026-11-23',
-    to: '2026-11-29',
+    to: '2026-11-27',
   });
   expect(screen.queryByRole('button', { name: 'This week' })).toBeNull();
 });
@@ -456,4 +462,18 @@ it('keeps a row written in on the sheet once its time is gone', async () => {
     within(grid).getByRole('row', { name: /Draft the plan/ })
   ).toBeTruthy();
   expect(screen.getByRole('textbox', { name: 'Length to log' })).toBe(input);
+});
+
+it('says when a cell’s entries could not be read and reads them again on Try again', async () => {
+  taskTime.failed = true;
+  renderWeek('week');
+
+  fireEvent.click(
+    screen.getByRole('button', { name: /^Draft the plan, Mon, Nov 23/ })
+  );
+  expect(
+    await screen.findByText('Could not load the time logged')
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  expect(taskTime.refetch).toHaveBeenCalled();
 });

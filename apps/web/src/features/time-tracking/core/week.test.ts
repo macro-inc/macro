@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { weekAt, weekDays, weekName, weekRows } from './week';
+import { readRange, weekAt, weekDays, weekName, weekRows } from './week';
 
 describe('weekAt', () => {
   it('steps whole weeks from the one holding today', () => {
@@ -69,5 +69,22 @@ describe('weekRows', () => {
       { key: 'b', minutes: 15, byDay: { '2026-11-25': 15 } },
       { key: 'c', minutes: 0, byDay: {} },
     ]);
+  });
+});
+
+describe('readRange', () => {
+  it('reads Monday to Friday with weekends hidden, for either week start', () => {
+    expect(readRange(weekAt('2026-11-24', 0, 0), false)).toEqual({
+      from: '2026-11-23',
+      to: '2026-11-27',
+    });
+    expect(readRange(weekAt('2026-11-24', 1, 0), false)).toEqual({
+      from: '2026-11-23',
+      to: '2026-11-27',
+    });
+    expect(readRange(weekAt('2026-11-24', 0, 0), true)).toEqual({
+      from: '2026-11-22',
+      to: '2026-11-28',
+    });
   });
 });

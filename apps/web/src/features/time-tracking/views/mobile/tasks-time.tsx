@@ -96,6 +96,7 @@ function MyWeekMobile(props: TasksTimeViewProps): JSX.Element {
     groupBy: 'DAY',
     thenBy: 'TASK',
     clock: props.clock,
+    showWeekends: props.showWeekends,
   });
   const [picking, setPicking] = createSignal(false);
   const [logging, setLogging] = createSignal<PickedTask>();
@@ -207,6 +208,7 @@ function TeamWeekMobile(props: TasksTimeViewProps): JSX.Element {
     groupBy: 'PERSON',
     thenBy: 'DAY',
     clock: props.clock,
+    showWeekends: props.showWeekends,
   });
   return (
     <div class="flex size-full min-h-0 flex-col overflow-y-auto pb-[calc(max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))+1rem)]">
