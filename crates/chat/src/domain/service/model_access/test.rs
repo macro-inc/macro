@@ -64,7 +64,10 @@ fn only_the_current_openai_generation_is_offered() {
 fn every_retired_model_is_replaced_by_an_offered_one() {
     for (retired, replacement) in RETIRED_MODELS {
         assert!(!CHAT_MODELS.contains(retired), "{retired} is still offered");
-        assert!(CHAT_MODELS.contains(replacement), "{replacement} is not offered");
+        assert!(
+            CHAT_MODELS.contains(replacement),
+            "{replacement} is not offered"
+        );
         assert_eq!(current_model(retired), *replacement);
     }
     assert_eq!(current_model(HAIKU_4_5), HAIKU_5_5);

@@ -252,7 +252,8 @@ fn luna_defaults_to_low_effort_like_the_mini_it_replaces() {
         panic!("GPT-6 Luna should use OpenAI Responses");
     };
     assert_eq!(
-        luna.thinking_params(Some(ReasoningEffort::Default)).unwrap()["reasoning"]["effort"],
+        luna.thinking_params(Some(ReasoningEffort::Default))
+            .unwrap()["reasoning"]["effort"],
         "low"
     );
     assert_eq!(

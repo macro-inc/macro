@@ -126,7 +126,11 @@ fn haiku_5_5_prices_prompts_over_100k_at_its_long_rate() {
     let events = recorder.0.lock().unwrap();
     assert_eq!(
         events.iter().map(|e| e.model.as_str()).collect::<Vec<_>>(),
-        ["claude-haiku-5-5", "claude-haiku-5-5:long", "claude-haiku-5-5"]
+        [
+            "claude-haiku-5-5",
+            "claude-haiku-5-5:long",
+            "claude-haiku-5-5"
+        ]
     );
 }
 
@@ -155,7 +159,10 @@ fn luna_and_sol_price_prompts_over_272k_at_their_long_rate() {
 
 #[test]
 fn other_claude_models_have_no_long_rate() {
-    assert_eq!(ModelSpeed::long_context_threshold("anthropic/claude-opus-5-5"), None);
+    assert_eq!(
+        ModelSpeed::long_context_threshold("anthropic/claude-opus-5-5"),
+        None
+    );
     assert_eq!(
         ModelSpeed::long_context_threshold("anthropic/claude-haiku-5-5"),
         Some(100_000)
