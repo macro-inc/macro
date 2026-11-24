@@ -18,9 +18,6 @@ declare const fbq: (
 /** GA4 measurement id. */
 const GA_ID = 'G-52HPEL3FTV';
 
-/** Meta Pixel id — same pixel the base code in index.html initializes. */
-const META_PIXEL_ID = '639142540393286';
-
 /**
  * Google Ads account id and Conversion Action labels, mirroring the app's
  * `apps/web/src/lib/analytics/googleConversions.ts`. The site fires these
