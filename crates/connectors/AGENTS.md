@@ -107,6 +107,10 @@ connection.
   `needs_reauth` (a dead grant); any other token failure leaves it. A call
   may go only to the app's API origin (`ApiApp::api_url`), and follows no
   redirect.
+- `AUTODESK_CLIENT_ID` and `AUTODESK_CLIENT_SECRET` are deliberately absent
+  from Doppler and have no `BootStubEnv` placeholder (a CS-18 exception):
+  unset or empty, they are the off switch, so no host composes Autodesk until
+  an APS app is registered. Don't add empty values to "fix" CS-18.
 - A native API app's callback stores the grant; `complete_connect` only
   finds the row, answering not found while it is missing or needs reauth so
   the web keeps polling.
