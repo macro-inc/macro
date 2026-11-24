@@ -119,6 +119,25 @@ async fn an_old_id_reads_and_writes_the_company_it_was_merged_into(
     .fetch_all(&pool)
     .await?;
     assert_eq!(stored, [survivor.to_string()]);
+    let tier_value = |body: &serde_json::Value| {
+        body["properties"]
+            .as_array()
+            .and_then(|properties| {
+                properties
+                    .iter()
+                    .find(|property| property["definition"]["id"] == tier.to_string())
+            })
+            .map(|property| property["value"]["value"].clone())
+    };
+    for company in [merged, survivor] {
+        let (status, body) = read(&app, OWNER, company).await;
+        assert_eq!(status, StatusCode::OK, "{company}");
+        assert_eq!(
+            tier_value(&body),
+            Some(serde_json::json!("Gold")),
+            "{company}"
+        );
+    }
     assert_eq!(
         read(&app, OWNER, merged).await,
         read(&app, OWNER, survivor).await

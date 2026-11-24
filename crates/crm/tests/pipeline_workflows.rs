@@ -602,8 +602,13 @@ async fn an_old_id_reaches_the_entries_of_the_company_it_was_merged_into(pool: P
         )
         .await
         .unwrap();
+    // Naming the company by both ids removes its one entry once.
     workflows
-        .remove(&owner, id, vec![EntryTarget::Record(merged)])
+        .remove(
+            &owner,
+            id,
+            vec![EntryTarget::Record(merged), EntryTarget::Record(acme)],
+        )
         .await
         .unwrap();
     assert!(

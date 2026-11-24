@@ -297,7 +297,7 @@ where
                 EntryTarget::Entry(id) => Err(WorkflowError::Invalid(format!(
                     "Pipeline \"{name}\" has no entry {id}. Find entry ids with FindPipelineEntries."
                 ))),
-                EntryTarget::Record(id) => match by_record.remove(&current[id]) {
+                EntryTarget::Record(id) => match by_record.get(&current[id]).cloned() {
                     None => Err(WorkflowError::Invalid(format!(
                         "Record {id} has no entry in pipeline \"{name}\". Add it with AddToPipeline."
                     ))),
