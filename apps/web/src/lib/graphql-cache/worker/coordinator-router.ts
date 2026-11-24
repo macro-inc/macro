@@ -323,6 +323,10 @@ export class CoordinatorRouter {
   private nextRecoveryResetReason: CacheResetReason | undefined;
   private readonly resetRequiredEpochs = new Set<number>();
   private recoveryAttemptCount = 0;
+  /** The last owner whose engine answered a request beyond the handshake. */
+  private answeringOwnerEpoch: number | undefined;
+  /** When the engine that now runs, or ran last, had opened the database. */
+  private openedAt: number | undefined;
   private recoveryRetryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now = (): number =>
     globalThis.performance?.now() ?? Date.now();
@@ -853,6 +857,7 @@ export class CoordinatorRouter {
               startedAt === undefined ? undefined : this.now() - startedAt,
           });
           this.clearActivationTimer();
+          this.openedAt = this.now();
           this.scheduleHeartbeat(message.ownerEpoch);
           this.allowStaleDatabaseRemoval(route).catch(
             reportCoordinatorTaskFailure
@@ -873,6 +878,8 @@ export class CoordinatorRouter {
               : classifyCacheError(message.response.error),
             durationMs: this.now() - timing.startedAt,
           });
+          if (message.response.ok && timing.category !== 'initialization')
+            this.answeringOwnerEpoch = timing.ownerEpoch;
         }
         this.applyActions(
           core.engineResponse(
@@ -2043,8 +2050,13 @@ export class CoordinatorRouter {
       this.heartbeatTimeoutTimer = undefined;
     }
     this.pendingHeartbeat = undefined;
-    // Open and still running: one that fails as it opens is another attempt.
-    this.resetRecoveryRetries();
+    // One that fails as it opens, or at its first request, is another attempt.
+    if (
+      this.answeringOwnerEpoch === ownerEpoch ||
+      (this.openedAt !== undefined &&
+        this.now() - this.openedAt >= RECOVERY_RETRY_MAX_DELAY_MS)
+    )
+      this.resetRecoveryRetries();
     this.scheduleHeartbeat(ownerEpoch);
   }
 

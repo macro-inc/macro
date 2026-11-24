@@ -503,8 +503,9 @@ separate from a repeated-ready restart.
 Retries are bounded in rate, never in number. The coordinator opens the database
 again after every failed attempt: at once after the first loss, then after
 100 ms, doubling to thirty seconds, each time with the open or wipe the last
-attempt still owed. An attempt counts as failed until its engine answers a
-heartbeat. Five failed attempts in a row, a busy owner lock, or busy
+attempt still owed. An attempt counts as failed until its engine,
+answering heartbeats, has also answered a request beyond the handshake or been
+open for thirty seconds. Five failed attempts in a row, a busy owner lock, or busy
 files start an **outage**: the coordinator tells every page `cache-unavailable`
 with a reason, refuses queued reads and writes with `owner-lock-unavailable`, and
 goes on. A page that is shown, or registers visible, starts the next attempt at

@@ -496,60 +496,93 @@ describe('CoordinatorRouter', () => {
     expect(messagesOfKind(late, 'cache-unavailable')).toEqual([]);
   });
 
-  it('backs off from an engine that opens and then fails, until one keeps running', async () => {
-    vi.useFakeTimers();
-    const router = new CoordinatorRouter({
-      verifyTabLockHeld: async () => true,
-      watchTabLock: () => () => {},
-    });
-    const tab = new FakePort();
-    await register(router, tab, 'tab-a');
-    const open = async (ownerEpoch: number) => {
-      const engine = new FakePort();
-      await attach(router, tab, 'tab-a', ownerEpoch, engine);
-      ready(engine, 'tab-a', ownerEpoch, 'opened-existing');
-      expect(router.snapshot()?.state.kind).toBe('active');
-      return engine;
-    };
-    const fail = (engine: FakePort, ownerEpoch: number) =>
-      engine.receive({
-        ...version,
-        kind: 'engine-fatal',
-        tabId: 'tab-a',
-        ownerEpoch,
-        reason: 'first request failed',
+  it.each([
+    { served: 'a request', heartbeats: 1, backsOff: false },
+    { served: 'nothing yet', heartbeats: 1, backsOff: true },
+    { served: 'nothing for thirty seconds', heartbeats: 15, backsOff: false },
+  ])(
+    'backs off from engines that open and fail, until one serves: $served',
+    async ({ served, heartbeats, backsOff }) => {
+      vi.useFakeTimers();
+      const router = new CoordinatorRouter({
+        verifyTabLockHeld: async () => true,
+        watchTabLock: () => () => {},
       });
+      const tab = new FakePort();
+      await register(router, tab, 'tab-a');
+      const open = async (ownerEpoch: number) => {
+        const engine = new FakePort();
+        await attach(router, tab, 'tab-a', ownerEpoch, engine);
+        ready(engine, 'tab-a', ownerEpoch, 'opened-existing');
+        expect(router.snapshot()?.state.kind).toBe('active');
+        return engine;
+      };
+      const fail = (engine: FakePort, ownerEpoch: number) =>
+        engine.receive({
+          ...version,
+          kind: 'engine-fatal',
+          tabId: 'tab-a',
+          ownerEpoch,
+          reason: 'first request failed',
+        });
 
-    for (let epoch = 1; epoch <= 5; epoch += 1) {
-      fail(await open(epoch), epoch);
-      await vi.advanceTimersByTimeAsync(epoch === 1 ? 0 : 100 * 2 ** epoch);
+      for (let epoch = 1; epoch <= 5; epoch += 1) {
+        fail(await open(epoch), epoch);
+        await vi.advanceTimersByTimeAsync(epoch === 1 ? 0 : 100 * 2 ** epoch);
+      }
+      expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([]);
+      fail(await open(6), 6);
+      expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([
+        expect.objectContaining({ unavailableReason: 'recovery-failed' }),
+      ]);
+      await vi.advanceTimersByTimeAsync(1_599);
+      expect(router.snapshot()?.state.kind).toBe('resetting-after-loss');
+      await vi.advanceTimersByTimeAsync(1);
+
+      const engine = await open(7);
+      const ask = async (id: number, kind: 'init' | 'clear') => {
+        await router.handleTabMessage(tab as CoordinatorMessagePort, {
+          ...version,
+          kind: 'cache-request',
+          tabId: 'tab-a',
+          request:
+            kind === 'init' ? { id, kind, scope: 'scope' } : { id, kind },
+        });
+        const route = messagesOfKind(engine, 'engine-request').at(
+          -1
+        ) as unknown as { routeId: number };
+        engine.receive({
+          ...version,
+          kind: 'engine-response',
+          ownerEpoch: 7,
+          routeId: route.routeId,
+          response: { id: route.routeId, ok: true, result: null },
+        });
+      };
+      await ask(1, 'init');
+      if (served === 'a request') await ask(2, 'clear');
+      for (let beat = 1; beat <= heartbeats; beat += 1) {
+        await vi.advanceTimersByTimeAsync(2_000);
+        engine.receive({
+          ...version,
+          kind: 'heartbeat-ack',
+          ownerEpoch: 7,
+          heartbeatId: messagesOfKind(engine, 'heartbeat').at(-1)?.heartbeatId,
+        });
+      }
+      fail(engine, 7);
+      // The first loss of an engine that served is replaced at once again.
+      await vi.advanceTimersByTimeAsync(0);
+      if (backsOff) {
+        expect(router.snapshot()?.state.kind).toBe('resetting-after-loss');
+        await vi.advanceTimersByTimeAsync(3_200);
+      }
+      expect(router.snapshot()?.state).toMatchObject({
+        kind: 'activating',
+        ownerEpoch: 8,
+      });
     }
-    expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([]);
-    fail(await open(6), 6);
-    expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([
-      expect.objectContaining({ unavailableReason: 'recovery-failed' }),
-    ]);
-    await vi.advanceTimersByTimeAsync(1_599);
-    expect(router.snapshot()?.state.kind).toBe('resetting-after-loss');
-    await vi.advanceTimersByTimeAsync(1);
-
-    const engine = await open(7);
-    await vi.advanceTimersByTimeAsync(2_000);
-    const [heartbeat] = messagesOfKind(engine, 'heartbeat');
-    engine.receive({
-      ...version,
-      kind: 'heartbeat-ack',
-      ownerEpoch: 7,
-      heartbeatId: heartbeat.heartbeatId,
-    });
-    fail(engine, 7);
-    // The first loss of an engine that ran is replaced at once again.
-    await vi.advanceTimersByTimeAsync(0);
-    expect(router.snapshot()?.state).toMatchObject({
-      kind: 'activating',
-      ownerEpoch: 8,
-    });
-  });
+  );
 
   it('registers only after independent liveness-lock contention succeeds', async () => {
     let releaseVerification: ((held: boolean) => void) | undefined;
