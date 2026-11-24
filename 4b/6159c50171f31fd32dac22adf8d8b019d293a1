@@ -1,0 +1,60 @@
+crates/fusion_import/src/lib.rs
+  s_8c8123a52748fa::t_62530e20b6a6ac 1-11
+.github/workspace-dep-closures.json
+  s_8c8123a52748fa::t_977baaf94612e8 8225-8266
+crates/fusion_import/src/domain/service/test.rs
+  s_8c8123a52748fa::t_9111db75ebc2b6 1-10,13-246,248-250,256-582,584-596,607-630,636-700,706-773,784-810,816-839,845-866,868-972,978-991,1080
+  s_8c8123a52748fa::t_78919c23ed4fb8 11,247,251-255,583,597-606,631-635,701-705,774-783,811-815,840-844,867,973-977,992-1079
+  s_8c8123a52748fa::t_7e349585da24f7 12
+crates/fusion_import/src/domain/models.rs
+  s_8c8123a52748fa::t_46b0c55bcc5cc6 1-595
+crates/fusion_import/src/domain/service.rs
+  s_8c8123a52748fa::t_a4853e1da88a9f 1-26,28-105,107-109,111-123,125,127,129,131,133-631,633-708,710,723-726,734-749,763-777,791-804
+  s_8c8123a52748fa::t_58ad19707cc4a1 124,126,128,130,132
+  s_8c8123a52748fa::t_4806272cdfc84c 27,106,110,709,711-722,727-729,731-733,750-762,778-790
+  s_8c8123a52748fa::t_662f1b2a10e46c 632,730
+crates/fusion_import/src/domain/ports.rs
+  s_8c8123a52748fa::t_1b8ab8c52bb742 1-280
+crates/fusion_import/src/domain.rs
+  s_8c8123a52748fa::t_62530e20b6a6ac 1-5
+Cargo.toml
+  s_8c8123a52748fa::t_a01edc0dd0e332 134
+crates/fusion_import/Cargo.toml
+  s_8c8123a52748fa::t_a01edc0dd0e332 1-39
+crates/fusion_import/src/domain/models/test.rs
+  s_87f3afa86ac8c1::t_46234f8ec04b94 1-47
+Cargo.lock
+  s_bfd6e0de8f0c61::t_d8de996f3bf742 9073-9106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4b6159c50171f31fd32dac22adf8d8b019d293a1",
+  "prompts": {},
+  "sessions": {
+    "s_87f3afa86ac8c1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80304950-74c2-466b-aa73-c3085432a4c6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8c8123a52748fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e3ebe64b-e3f3-41de-91c9-1dffbc9d884d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_bfd6e0de8f0c61": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a44f38bccc9affde0",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
