@@ -418,3 +418,22 @@ test('a wake whose schedule names no trace, or a malformed one, still runs, in a
   expect(wake?.attributes['agent.schedule.outcome']).toBe('done');
   await box.stop();
 });
+
+test('a failed task run marks its span failed with the category only', async () => {
+  const failed: string[] = [];
+  const recording = recordingTrace();
+  const trace: Trace = (name, run, parent) =>
+    recording.trace(
+      name,
+      (span) => run({ ...span, fail: (category) => failed.push(category) }),
+      parent
+    );
+  const box = setup(trace);
+  await box.schedules.set('later-2', { at: '2026-11-09T15:00:00Z' });
+  await box.fire('later-2', { wake: 'do it' });
+  await box.settle();
+  box.wakes[0]?.end({ kind: 'failed', error: 'the secret text of an error' });
+  await box.settle();
+  expect(failed).toEqual(['error']);
+  await box.stop();
+});

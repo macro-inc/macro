@@ -40,8 +40,15 @@ export const Queued = Entry.extend({
   mentioned: z.boolean(),
   /** The relevance screen's probabilities. */
   p: z.record(z.string(), z.number()),
-  /** The screen span that queued it (W3C `traceparent`): its reply joins that trace. */
-  traceparent: z.string().optional(),
+  /**
+   * The screen span that queued it (W3C `traceparent`): its reply joins that
+   * trace. Telemetry only: never part of a prompt. A malformed one is dropped.
+   */
+  traceparent: z
+    .string()
+    .regex(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/)
+    .optional()
+    .catch(undefined),
 });
 export type Queued = z.infer<typeof Queued>;
 

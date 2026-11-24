@@ -26,6 +26,8 @@ export type TraceSpan = {
   readonly set: (name: string, value: string | number | boolean) => void;
   /** This span's W3C trace context, for a child process. */
   readonly traceparent: () => string | undefined;
+  /** Marks the span failed (error status), with a category, never error text. */
+  readonly fail?: (category: string) => void;
 };
 
 /**

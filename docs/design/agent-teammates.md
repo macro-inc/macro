@@ -132,9 +132,11 @@ is an `agent.scheduled_wake`. The agent's Macro SDK clients send the active
 trace context (`traceContext`), through the relay too, so each service's
 `http.request` span joins the trace. That context is the agent's claim;
 who the request really was is the service's own finding, on the same span:
-`auth.credential` (`user_api_key` for an agent) and `auth.principal_id`, the
-SHA-256 of the verified account (the agent's `macro.agent.id` is its first
-16 digits). Nothing is sampled: every agent span is exported. Its
+`auth.credential` (`user_api_key` for an agent), `auth.principal_id` (the
+verified account's FusionAuth id) and, for an agent's account,
+`macro.agent.id` (the same value its runtime reports). A message queued
+before a restart keeps its trace context, so its reply joins that older
+trace. The trace context never enters a prompt. Nothing is sampled: every agent span is exported. Its
 environment is agent.env's `OTEL_DEPLOYMENT_ENVIRONMENT`, set by the
 authentication service beside the intake (`dev`, `prod`, `local`).
 Each message the listener screens is a `chat.screen` span (message and

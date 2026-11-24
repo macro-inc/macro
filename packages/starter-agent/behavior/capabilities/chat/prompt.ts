@@ -34,6 +34,9 @@ Your final reply is for the log, not for anyone in Macro: one line per message, 
 const section = (title: string, lines: readonly unknown[]): string =>
   [`## ${title}`, ...lines.map((line) => JSON.stringify(line))].join('\n');
 
+/** A message as the model sees it: without its trace context, which is telemetry only. */
+const promptMessage = ({ traceparent: _, ...message }: Queued) => message;
+
 /** The request for one conversation: what to do, the messages, and the conversation's recent history. */
 export const replyPrompt = (
   { messages }: Conversation,
@@ -41,7 +44,7 @@ export const replyPrompt = (
 ): string =>
   [
     replyRequest,
-    section('Messages to consider', messages),
+    section('Messages to consider', messages.map(promptMessage)),
     section('Recent history of this conversation', recent),
   ].join('\n\n');
 
@@ -49,5 +52,5 @@ export const replyPrompt = (
 export const rescueTask = ({ messages }: Conversation, why: string): string =>
   [
     `A reply run ${why} before answering the messages below, so nobody has heard back. Answer them in this conversation in a few plain lines, within a few minutes. Don't mention the failed run.`,
-    ...messages.map((message) => JSON.stringify(message)),
+    ...messages.map((message) => JSON.stringify(promptMessage(message))),
   ].join('\n');

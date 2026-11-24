@@ -120,6 +120,7 @@ export const trace: Trace = (name, run, parent) => {
       run({
         set: (key, value) => span.setAttr(key, value),
         traceparent: () => span.traceparent(),
+        fail: (category) => span.error(new Error(category)),
       })
     );
   return parent === undefined || parent === ''

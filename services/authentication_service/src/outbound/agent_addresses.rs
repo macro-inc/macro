@@ -26,8 +26,12 @@ pub const TELEMETRY_KEY: &str = "OTEL_EXPORTER_OTLP_ENDPOINT";
 /// the name this service's own spans carry, so they land in one environment.
 pub const TELEMETRY_ENVIRONMENT_KEY: &str = "OTEL_DEPLOYMENT_ENVIRONMENT";
 
-/// Resolves [`EnrollmentEnvironment`] from the service URL types.
-pub struct AgentAddresses;
+/// Resolves [`EnrollmentEnvironment`] from the service URL types, in the
+/// service's configured environment.
+pub struct AgentAddresses {
+    /// The deployment the agent's spans are tagged with.
+    pub environment: macro_service_urls::macro_env::Environment,
+}
 
 #[derive(Debug, thiserror::Error)]
 #[error("{name} must be a computer-reachable URL without credentials, query or fragment")]
@@ -88,7 +92,9 @@ fn telemetry(
     ])
 }
 
-fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
+fn resolve(
+    environment: macro_service_urls::macro_env::Environment,
+) -> Result<Vec<(&'static str, String)>, TeamAgentError> {
     let storage = DocumentStorageServiceUrl::new().map_err(TeamAgentError::internal)?;
     let auth = AuthServiceUrl::new().map_err(TeamAgentError::internal)?;
     let cognition = DocumentCognitionServiceUrl::new().map_err(TeamAgentError::internal)?;
@@ -100,10 +106,7 @@ fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
     let egress = AgentHarnessEgressUrl::new().map_err(TeamAgentError::internal)?;
     let egress = checked(AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME, &egress, false)?;
     let intake = TelemetryIntakeUrl::new().map_err(TeamAgentError::internal)?;
-    let telemetry = telemetry(
-        &intake,
-        macro_service_urls::macro_env::Environment::new_or_prod(),
-    )?;
+    let telemetry = telemetry(&intake, environment)?;
     Ok(vec![
         (
             DocumentStorageServiceUrl::OVERRIDE_ENV_VAR_NAME,
@@ -164,6 +167,6 @@ fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
 
 impl EnrollmentEnvironment for AgentAddresses {
     fn environment(&self) -> Result<Vec<(&'static str, String)>, TeamAgentError> {
-        resolve()
+        resolve(self.environment)
     }
 }

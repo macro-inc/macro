@@ -31,7 +31,11 @@ export const recordOutcome = (
 ): void => {
   const { outcome, category } = wakeOutcome(woke);
   span.set(`${prefix}.outcome`, outcome);
-  if (category !== undefined) span.set(`${prefix}.error_category`, category);
+  if (category !== undefined) {
+    span.set(`${prefix}.error_category`, category);
+    // Error status, so error filters find it; the category is all it says.
+    span.fail?.(category);
+  }
 };
 
 /** Milliseconds from an ISO instant to `now`, or undefined when `at` isn't one. */
