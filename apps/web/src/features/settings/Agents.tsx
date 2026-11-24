@@ -8,7 +8,11 @@ import { t } from '@app/lib/i18n';
 import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
-import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
+import {
+  currentModelId,
+  MODEL_PRETTYNAME,
+  Model,
+} from '@core/component/AI/constant/model';
 import {
   catalogModelLabel,
   modelLabel,
@@ -558,13 +562,22 @@ function summarizeAgent(
     defaultModel:
       agent.default_model === DEFAULT_HARNESS_MODEL
         ? catalogModelLabel(agent.default_model, catalogFor(harnessKey))
-        : (MODEL_PRETTYNAME[agent.default_model as Model] ??
-          agent.default_model),
+        : (MODEL_PRETTYNAME[savedModelId(agent) as Model] ??
+          savedModelId(agent)),
     channelSummary,
     share: agent.bot.owner?.type === 'team' ? 'Team' : 'Private',
     persistedAgent: agent,
     editable: true,
   };
+}
+
+/** An agent's saved model. A Macro agent saved on a retired model runs on its
+ * replacement, so it is shown and edited as that replacement. */
+function savedModelId(agent: AgentWithHarnessId): string {
+  const harness = agent.harness_id ?? agent.harness;
+  return harness === 'in-memory' || harness === 'macro-inmem'
+    ? currentModelId(agent.default_model)
+    : agent.default_model;
 }
 
 function whereItRunsLabel(id: string, harness?: ConnectedHarness): string {
@@ -797,7 +810,7 @@ function AgentEditorPage(props: {
     return data.models[0]?.id ?? '';
   };
   const [defaultModelId, setDefaultModelId] = createSignal(
-    props.agent?.default_model ?? ''
+    props.agent ? savedModelId(props.agent) : ''
   );
   const selectedDefaultModelId = () =>
     defaultModelId() || preferredModelId(harnessId());
@@ -808,9 +821,11 @@ function AgentEditorPage(props: {
     if (data?.status !== 'available') return [];
 
     const selected = selectedDefaultModelId();
+    const saved = props.agent;
     const savedModel =
-      props.agent?.default_model === selected &&
-      (props.agent.harness_id ?? props.agent.harness) === harnessId();
+      saved !== undefined &&
+      savedModelId(saved) === selected &&
+      (saved.harness_id ?? saved.harness) === harnessId();
     if (
       selected.length === 0 ||
       data.models.some((model) => model.id === selected)
