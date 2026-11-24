@@ -20,7 +20,8 @@ the Soup-backed thread list, and saved email views.
   row, and keeps the list mounted below it. The search pill and filter drawer
   stay to the right of the scrolling tabs while the sidebar toggle stays on
   the left. `primitives/create-email-mobile-search.ts` owns whether the page is
-  open, and ends its search whenever it closes.
+  open, and ends its search whenever it closes. `views/mobile/email-tabs.tsx`
+  is the pill row's tabs.
 - `components/EmailDetailView.tsx` and `components/EmailComposeRouteView.tsx`:
   entries for a thread and a new email inside Mail. They hold the state and
   switch between the desktop views (`views/email-detail.tsx`,
@@ -90,9 +91,16 @@ the Soup-backed thread list, and saved email views.
   Reminders hand their rows to the search while it runs. `setTab` during a
   search narrows it to the tab's view instead of leaving it, except
   Scheduled, Reminders, Spam and Trash, which have no view in the search
-  index and end the search; the sidebar and the header read `shownTab` (the
-  view a search runs in; `search`, which selects nothing, without an `in:`),
-  never `state.tab`.
+  index and end the search, as any tab does while no words are typed; the
+  sidebar and the header read `shownTab` (the view a search runs in;
+  `search`, which selects nothing, without an `in:`), never `state.tab`.
+- The Focus, Signal and Noise tabs read `showsInboxTabs`: they never show
+  while the search field holds a query, an `in:` of the Inbox included, on
+  desktop or phone.
+- Text with no words (`in:`, `in:se`, `in:sent `) runs no search of its own:
+  `parsedSearch` stays on the last search that had words, and the list, the
+  header, the sidebar and the empty state all read it, so they describe the
+  results on screen. Only what rewrites the field's text parses it directly.
 - Search inside a view intersects search hits with the view's own GraphQL
   predicate, as aliases do; local working copies are left out.
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the

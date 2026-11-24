@@ -23,10 +23,9 @@ import {
   canSearchEmailTab,
   EMAIL_INBOX_TAB_IDS,
   EMAIL_TAB_LABELS,
-  EMAIL_TABS,
-  isEmailInboxTab,
+  emailShownViewTitle,
 } from '../constants';
-import { type EmailShownView, useEmailView } from '../email-view-context';
+import { useEmailView } from '../email-view-context';
 import type { EmailSearchSuggestions } from '../search/create-email-search-suggestions';
 import { emailSearchTextParts } from '../search/email-search-scope';
 import type { EmailTab } from '../tabs';
@@ -56,28 +55,21 @@ export type EmailHeaderProps = {
   tabOnly?: boolean;
 };
 
-/** Whether the view shown belongs to the Inbox: Inbox itself, or one of its tabs. */
-const showsInbox = (tab: EmailShownView) =>
-  tab === 'inbox' || (tab !== 'search' && isEmailInboxTab(tab));
-
-/** A search of all mail names no view, so its title says Search. */
-const shownViewTitle = (tab: EmailShownView, inboxSelected: boolean) => {
-  if (tab === 'search') return t('common.search');
-  if (inboxSelected) return 'Inbox';
-  return EMAIL_TABS.find((entry) => entry.id === tab)?.label ?? 'Email';
-};
-
 export function EmailViewBreadcrumbItem() {
-  const { shownTab, tagViewTitle, savedViewActive, savedViews } =
-    useEmailView();
+  const {
+    shownTab,
+    showsInboxTabs,
+    tagViewTitle,
+    savedViewActive,
+    savedViews,
+  } = useEmailView();
   const savedViewTitle = useEmailSavedViewTitle();
   // The title names the view the navigation shows, as the sidebar does.
-  const inboxSelected = () =>
-    !isTouchDevice() && !savedViewActive() && showsInbox(shownTab());
+  const inboxSelected = () => !isTouchDevice() && showsInboxTabs();
   const tabTitle = () =>
     savedViewTitle() ??
     tagViewTitle() ??
-    shownViewTitle(shownTab(), inboxSelected());
+    emailShownViewTitle(inboxSelected() ? 'inbox' : shownTab());
   const appearance = () => {
     const view = savedViews?.view();
     return view?.kind === 'saved' ? view.record.appearance : undefined;
@@ -135,23 +127,16 @@ export function EmailHeader(props: EmailHeaderProps) {
     setState,
     setTab,
     shownTab,
+    showsInboxTabs,
     tagViewTitle,
     savedViewActive,
     savedViews,
   } = useEmailView();
   const savedViewTitle = useEmailSavedViewTitle();
   const [filterOpen, setFilterOpen] = createSignal(false);
-  // A search of the whole Inbox selects none of its tabs.
-  const shownInboxTab = () => {
-    const tab = shownTab();
-    return tab !== 'inbox' && tab !== 'search' && isEmailInboxTab(tab)
-      ? tab
-      : undefined;
-  };
   let releaseSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
   const isVisible = useVisibleEmailTab();
-  const inboxSelected = () => !savedViewActive() && showsInbox(shownTab());
   const inboxTabs = () =>
     EMAIL_INBOX_TAB_IDS.filter(isVisible).map((id) => ({
       value: id,
@@ -172,14 +157,14 @@ export function EmailHeader(props: EmailHeaderProps) {
     enabled: panel.isPanelActive,
     tabs: inboxTabsElement,
     ids: () => inboxTabs().map((tab) => tab.value),
-    activeId: shownInboxTab,
+    activeId: () => state.tab,
     setActiveId: setTab,
     label: (id) => EMAIL_TAB_LABELS[id],
   });
   const selectedTabLabel = () =>
     savedViewTitle() ??
     tagViewTitle() ??
-    shownViewTitle(shownTab(), inboxSelected());
+    emailShownViewTitle(showsInboxTabs() ? 'inbox' : shownTab());
 
   const canSearch = () => canSearchEmailTab(state.tab);
   const savedAppearance = () => {
@@ -214,7 +199,7 @@ export function EmailHeader(props: EmailHeaderProps) {
         <div class="flex min-w-0 items-center gap-3">
           <div
             class={
-              inboxSelected()
+              showsInboxTabs()
                 ? 'min-w-0 @max-[640px]/split-header:hidden'
                 : 'min-w-0'
             }
@@ -238,7 +223,7 @@ export function EmailHeader(props: EmailHeaderProps) {
           <Show when={savedViewActive()}>
             <EmailSavedViewMenu />
           </Show>
-          <Show when={inboxSelected()}>
+          <Show when={showsInboxTabs()}>
             <Tabs
               ref={(element) => {
                 setInboxTabsElement(element);
@@ -248,7 +233,7 @@ export function EmailHeader(props: EmailHeaderProps) {
               size="md"
               class="shrink-0"
               options={inboxTabs()}
-              value={shownInboxTab()}
+              value={state.tab}
               onChange={setTab}
             />
           </Show>

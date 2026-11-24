@@ -71,6 +71,18 @@ export const EMAIL_INBOX_TAB_IDS = [
 export const isEmailInboxTab = (tab: EmailTab) =>
   (EMAIL_INBOX_TAB_IDS as readonly EmailTab[]).includes(tab);
 
+/**
+ * What the navigation and the header show: a tab, the whole Inbox (an
+ * `in:inbox` search), or a search of all mail, which is no view.
+ */
+export type EmailShownView = EmailTab | 'inbox' | 'search';
+
+export const emailShownViewTitle = (view: EmailShownView): string => {
+  if (view === 'search') return t('common.search');
+  if (view === 'inbox') return t('viewMenus.inbox');
+  return EMAIL_TAB_LABELS[view];
+};
+
 /** How the Focus tab orders its threads. */
 export const EMAIL_FOCUS_SORT_IDS = ['recent', 'importance'] as const;
 

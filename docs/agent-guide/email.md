@@ -108,12 +108,18 @@ wins, an `in:` still being typed is left out of the words, and any other `in:`
 is searched as a word. Picking a tab while a search runs narrows it to that
 tab's view and keeps the words (All mail goes back to all mail, the sidebar's
 Inbox gives `in:inbox`); Scheduled, Reminders, Spam and Trash, which the index
-has no view of, end the search. While a search runs, the sidebar and the
-header show the view its `in:` filter names (the Inbox tabs only while it is
-in the Inbox); a search with no `in:` selects nothing, and the header says
-Search. Check from Inbox with a
+has no view of, end the search, and so does any tab picked before a word is
+typed. While a search runs, the sidebar and the header show the view its `in:`
+filter names (the header says Focus, and the sidebar selects Inbox, for
+`in:focus`); a search with no `in:` selects nothing, and the header says
+Search. The Focus, Signal and Noise tabs never show while the field holds a
+query, whatever it says, on desktop or phone; clearing it brings them back on
+the tab that was open. Text with no words yet (`in:`, `in:se`, or a view alone
+such as `in:focus`) runs no search of its own: the results, header and sidebar
+stay on the last search that had words. Check from Inbox with a
 term that only Noise or archived mail holds, then the same term with each
-`in:`, then pick Sent, Signal and All mail while it runs.
+`in:`, then pick Sent and All mail in the sidebar while it runs; then type
+`in`, `in:`, pick Focus and type a word, and clear the field.
 
 ### Wide search (flagged)
 

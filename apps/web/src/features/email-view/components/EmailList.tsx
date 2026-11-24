@@ -145,6 +145,7 @@ export function EmailList(props: EmailListProps) {
     openThread,
     selectedThread,
     filterByTag,
+    searchOpen,
     parsedSearch,
   } = useEmailView();
   const analytics = useAnalytics();
@@ -607,9 +608,7 @@ export function EmailList(props: EmailListProps) {
 
   const hasEmailRows = () => rows().some((row) => row.kind === 'entity');
   // The tutorial introduces the inbox; search results are not the inbox.
-  const showsTutorial = () =>
-    state.tab === 'important' &&
-    !(canSearchEmailTab(state.tab) && parsedSearch().query);
+  const showsTutorial = () => state.tab === 'important' && !searchOpen();
 
   function showsEmptyViewport() {
     return (
@@ -674,11 +673,7 @@ export function EmailList(props: EmailListProps) {
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
   createSearchScrollReset({
-    // A filter with no words, or an `in:` still being typed, runs no search.
-    query: () => {
-      const search = parsedSearch();
-      return search.query ? formatEmailSearch(search.scope, search.query) : '';
-    },
+    query: () => formatEmailSearch(parsedSearch().scope, parsedSearch().query),
     showsPreviousRows,
     reset: () =>
       setPersistedListState((current) => ({ ...current, scrollOffset: 0 })),
