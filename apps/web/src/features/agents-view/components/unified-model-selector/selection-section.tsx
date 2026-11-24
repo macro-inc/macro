@@ -1,31 +1,37 @@
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { Menu } from '@ui';
+import { cn } from '@ui/utils/classname';
 import { type JSX, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 
-/** Every selector section uses the app's normal menu group and label. */
+/** A selector section owns its heading, rows, and internal spacing. */
 export function ModelSelectionSection(props: {
   title?: string;
   action?: JSX.Element;
   mobile?: boolean;
+  bubbles?: boolean;
   children: JSX.Element;
 }) {
   return (
-    <Dynamic
-      component={props.mobile ? MobileDrawer.Section : Menu.Group}
-      role="group"
+    <section
+      class={cn(
+        'flex flex-col gap-1',
+        props.mobile && (props.bubbles ? 'gap-0.5' : 'gap-1.5')
+      )}
+      role={props.title ? 'group' : undefined}
       aria-label={props.title}
     >
       <Show when={props.title}>
-        <Dynamic
-          component={props.mobile ? MobileDrawer.Label : Menu.Label}
-          class="flex items-center justify-between gap-2"
+        <div
+          class={cn(
+            'flex items-center justify-between gap-2 px-2.5 text-xs leading-4 text-ink-extra-muted',
+            props.mobile && (props.bubbles ? 'px-2' : 'px-3')
+          )}
         >
           <span>{props.title}</span>
           {props.action}
-        </Dynamic>
+        </div>
       </Show>
-      {props.children}
-    </Dynamic>
+      <div class={cn('flex flex-col', props.mobile && 'gap-0.5')}>
+        {props.children}
+      </div>
+    </section>
   );
 }

@@ -1,7 +1,8 @@
 import { t } from '@app/lib/i18n';
 import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { Popover } from '@ui';
+import * as Popover from '@kobalte/core/popover';
+import { Button } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { createModelSelectorNavigation } from '../../primitives/model-selector-navigation';
@@ -52,8 +53,9 @@ export function MobileModelSelector() {
     >
       <Popover.Trigger
         ref={trigger}
+        as={Button}
         variant="ghost"
-        size="xs"
+        size="md"
         disabled={state.disabled}
         aria-label={t('agentControls.modelSelector')}
         class="min-w-0 max-w-full"
@@ -64,15 +66,22 @@ export function MobileModelSelector() {
       </Popover.Trigger>
       <Popover.Portal>
         <Show when={nav.open() && !sheetPresent()}>
-          <Popover.Overlay
+          <div
             data-model-selector-overlay
             onClick={() => nav.changeOpen(false)}
+            class="portal-scope fixed inset-0 z-modal"
+            style={{ 'background-color': 'var(--color-overlay)' }}
+            aria-hidden="true"
           />
         </Show>
         <Show when={!sheetPresent()}>
           <Popover.Content
             ref={card}
-            class="min-w-64 max-w-[calc(100vw-2rem)]"
+            class="portal-scope menu-surface z-modal w-[358px] max-w-[calc(100vw-var(--safe-left,0px)-var(--safe-right,0px)-32px)] rounded-[28px] p-0 outline-none"
+            style={{
+              'box-shadow':
+                'inset 0 0 0 1px var(--color-edge), var(--shadow-menu)',
+            }}
             onCloseAutoFocus={(event) => {
               if (disposed || sheetPresent() || nav.open())
                 event.preventDefault();
@@ -86,6 +95,7 @@ export function MobileModelSelector() {
               {t('agentControls.modelSelector')}
             </Popover.Title>
             <ModelSelectorCard
+              mobile
               onSelect={() => openSheet('list')}
               onModels={() => openSheet('agentModels')}
             />
@@ -125,14 +135,20 @@ export function MobileModelSelector() {
         }}
       >
         <MobileDrawer.Portal>
-          <MobileDrawer.Overlay />
+          <MobileDrawer.Overlay
+            style={{ 'background-color': 'var(--color-overlay)' }}
+          />
           <MobileDrawer.Content
             ref={sheet}
+            targetHeight={90}
             tabIndex={-1}
+            maxHeight={90}
+            opaque
+            class="rounded-[44px]"
             aria-label={t('agentControls.modelSelector')}
           >
-            <MobileDrawer.Handle />
-            <MobileDrawer.ScrollBody>
+            <MobileDrawer.Handle class="pt-3 pb-4" />
+            <MobileDrawer.ScrollBody class="gap-0 p-0">
               <ModelSelectionList
                 navigation={nav}
                 mobile

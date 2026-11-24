@@ -1,17 +1,17 @@
 import { t } from '@app/lib/i18n';
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import CaretLeft from '@icon/system/regular/caret-left.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import Check from '@icon/system/regular/check.svg';
 import Search from '@icon/system/regular/magnifying-glass.svg';
-import Plus from '@icon/system/regular/plus.svg';
 import Squares from '@icon/system/regular/squares-four.svg';
-import { Button, InputGroup, Menu } from '@ui';
+import X from '@icon/system/regular/x.svg';
+import { Button, Input } from '@ui';
+import { cn } from '@ui/utils/classname';
 import { createMemo, For, onCleanup, onMount, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { AgentAvatar } from '../../components/AgentGlyph';
+import { AgentBubble } from '../../components/agent-bubble/agent-bubble';
 import { ModelRows } from '../../components/unified-model-selector/model-rows';
 import {
   type SelectorActionResult,
@@ -89,7 +89,7 @@ export function ModelSelectionList(props: {
     if (nav.page() === 'agents') return filtered().agents.length === 0;
     return filtered().allModels.length === 0 && filtered().agents.length === 0;
   };
-  const quickAgents = () => {
+  const bubbles = () => {
     if (searching()) return filtered().agents;
     const ids = state.recentAgentIds ?? [];
     const ordered = [...agents()].filter(
@@ -147,7 +147,7 @@ export function ModelSelectionList(props: {
   return (
     <div
       ref={root}
-      class="flex min-h-0 flex-col gap-2"
+      class={cn('flex min-h-0 flex-col gap-6', props.mobile && 'gap-4')}
       onKeyDown={(event) => {
         if (event.key === 'Escape') return;
         if (event.target === search) {
@@ -178,68 +178,113 @@ export function ModelSelectionList(props: {
         }
       }}
     >
-      <Dynamic
-        component={props.mobile ? MobileDrawer.Section : Menu.Group}
-        class="gap-2"
+      <div
+        class={cn('flex shrink-0 flex-col', props.mobile ? 'gap-0' : 'gap-1.5')}
       >
-        <Button
-          variant="ghost"
-          size="xs"
-          onClick={props.onBack}
-          class="self-start min-w-0"
-        >
-          <CaretLeft class="size-4 shrink-0" />
-          <Show
-            when={nav.page() === 'list' || nav.page() === 'agentModels'}
-            fallback={
-              <span>
-                {nav.page() === 'all'
-                  ? t('agentControls.allModels')
-                  : t('nav.agents')}
-              </span>
-            }
+        <div class={cn('px-2 pt-2.5', props.mobile && 'px-3 py-2.5')}>
+          <Button
+            variant="ghost"
+            appearance="bare"
+            onClick={props.onBack}
+            class={cn(
+              'flex h-8 items-center gap-1.5 rounded-full pl-1.5 pr-2.5 not-touch:hover:bg-hover active:bg-active text-sm',
+              props.mobile && 'h-10 gap-2 pl-2 pr-3.5 text-base leading-[22px]'
+            )}
           >
-            <ModelSelectorIdentity />
-          </Show>
-        </Button>
-        <InputGroup data-corvu-no-drag>
-          <InputGroup.Input
-            ref={search}
-            value={nav.query()}
-            aria-label={
-              nav.page() === 'agentModels'
-                ? t('agentControls.searchModels')
-                : t('agentControls.searchAgentsModels')
-            }
-            placeholder={
-              nav.page() === 'agentModels'
-                ? t('agentControls.searchModels')
-                : t('agentControls.searchAgentsModels')
-            }
-            onInput={(event) => nav.setQuery(event.currentTarget.value)}
-          />
-          <InputGroup.Addon align="inline-start">
-            <Search class="size-4" />
-          </InputGroup.Addon>
-          <InputGroup.Addon align="inline-end">
-            <InputGroup.ClearButton />
-          </InputGroup.Addon>
-        </InputGroup>
-      </Dynamic>
-      <div class="min-h-0 overflow-y-auto overscroll-contain">
-        <Show when={nav.page() === 'list'}>
-          <div class="flex flex-col gap-2">
+            <CaretLeft
+              class={
+                props.mobile
+                  ? 'size-[18px] text-ink-muted'
+                  : 'size-4 text-ink-muted'
+              }
+            />
             <Show
-              when={quickAgents().length || (!searching() && state.onCreate)}
+              when={nav.page() === 'list' || nav.page() === 'agentModels'}
+              fallback={
+                <span>
+                  {nav.page() === 'all'
+                    ? t('agentControls.allModels')
+                    : t('nav.agents')}
+                </span>
+              }
             >
+              <ModelSelectorIdentity mobile={props.mobile} />
+            </Show>
+          </Button>
+        </div>
+        <div class="px-3" data-corvu-no-drag>
+          <div
+            class={cn(
+              'flex h-9 items-center gap-2.5 rounded-[10px] bg-active px-3 focus-within:ring-1 focus-within:ring-accent',
+              props.mobile && 'h-11 rounded-[22px] px-3.5'
+            )}
+          >
+            <Search
+              class={
+                props.mobile
+                  ? 'size-[18px] text-ink-extra-muted'
+                  : 'size-4 text-ink-extra-muted'
+              }
+            />
+            <Input
+              ref={search}
+              value={nav.query()}
+              aria-label={
+                nav.page() === 'agentModels'
+                  ? t('agentControls.searchModels')
+                  : t('agentControls.searchAgentsModels')
+              }
+              placeholder={
+                nav.page() === 'agentModels'
+                  ? t('agentControls.searchModels')
+                  : t('agentControls.searchAgentsModels')
+              }
+              onInput={(event) => nav.setQuery(event.currentTarget.value)}
+              class={cn(
+                'min-w-0 flex-1 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 text-sm',
+                props.mobile && 'text-base leading-[22px]'
+              )}
+            />
+            <Show when={nav.query()}>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t('entityActions.clear')}
+                onClick={clearSearch}
+              >
+                <X class="size-3.5" />
+              </Button>
+            </Show>
+          </div>
+        </div>
+      </div>
+      <div
+        class={cn(
+          'min-h-0 overflow-y-auto overscroll-contain px-2 pb-4',
+          props.mobile && 'px-3'
+        )}
+      >
+        <Show when={nav.page() === 'list'}>
+          <div
+            class={cn(
+              'flex flex-col',
+              searching() && !auto() ? 'gap-8' : 'gap-6'
+            )}
+          >
+            <Show when={bubbles().length || (!searching() && state.onCreate)}>
               <ModelSelectionSection
                 title={t('nav.agents')}
                 mobile={props.mobile}
+                bubbles
                 action={
                   <Show when={!searching()}>
                     <Button
                       variant="link"
                       size="xs"
+                      class={cn(
+                        'h-4 min-h-0 gap-0.5 p-0 leading-4 touch:min-h-0 not-data-disabled:hover:no-underline',
+                        props.mobile && 'h-5 text-sm leading-5'
+                      )}
                       onClick={() => {
                         nav.setPage('agents');
                         if (!props.mobile)
@@ -255,49 +300,41 @@ export function ModelSelectionList(props: {
                   </Show>
                 }
               >
-                <For each={quickAgents()}>
-                  {(agent) => (
-                    <Dynamic
-                      component={props.mobile ? MobileDrawer.Item : Menu.Item}
-                      data-model-choice
-                      aria-pressed={state.agent?.id === agent.id}
-                      disabled={
-                        state.disabled ||
-                        Boolean(agent.unavailableReason && !agent.connectLabel)
-                      }
-                      onClick={() => pickAgent(agent)}
-                    >
-                      <AgentAvatar
+                <div
+                  class="flex items-start gap-1 px-1.5 pt-0.5"
+                  classList={{ 'justify-between': !searching() }}
+                >
+                  <For each={bubbles()}>
+                    {(agent) => (
+                      <AgentBubble
+                        size={props.mobile ? 'selector-phone' : 'selector'}
                         agent={agent}
-                        coder={false}
-                        class="size-4"
-                        iconClass="size-4"
+                        selected={state.agent?.id === agent.id}
+                        disabled={
+                          state.disabled ||
+                          Boolean(
+                            agent.unavailableReason && !agent.connectLabel
+                          )
+                        }
+                        onSelect={() => pickAgent(agent)}
                       />
-                      <span class="min-w-0 flex-1 truncate">{agent.name}</span>
-                      <Show when={state.agent?.id === agent.id}>
-                        <Check class="size-4 shrink-0" />
-                      </Show>
-                    </Dynamic>
-                  )}
-                </For>
-                <Show when={!searching() && state.onCreate}>
-                  <Dynamic
-                    component={props.mobile ? MobileDrawer.Item : Menu.Item}
-                    data-model-choice
-                    disabled={state.disabled}
-                    onClick={() => {
-                      props.onPick();
-                      state.onCreate?.();
-                    }}
-                  >
-                    <Plus class="size-4 shrink-0" />
-                    <span>{t('create.new')}</span>
-                  </Dynamic>
-                </Show>
+                    )}
+                  </For>
+                  <Show when={!searching() && state.onCreate}>
+                    <AgentBubble
+                      size={props.mobile ? 'selector-phone' : 'selector'}
+                      disabled={state.disabled}
+                      onSelect={() => {
+                        props.onPick();
+                        state.onCreate?.();
+                      }}
+                    />
+                  </Show>
+                </div>
               </ModelSelectionSection>
             </Show>
             <Show when={auto() || searchModels().length || !searching()}>
-              <div class="flex flex-col gap-2">
+              <div class="flex flex-col gap-4">
                 <Show when={auto()}>
                   {(option) => (
                     <ModelSelectionSection mobile={props.mobile}>
@@ -371,21 +408,35 @@ export function ModelSelectionList(props: {
                     </ModelSelectionSection>
                   </Show>
                   <ModelSelectionSection mobile={props.mobile}>
-                    <Dynamic
-                      component={props.mobile ? MobileDrawer.Item : Menu.Item}
+                    <Button
+                      variant="ghost"
+                      appearance="bare"
                       data-model-choice
+                      class={cn(
+                        'flex min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-2 text-sm not-touch:hover:bg-hover focus-visible:bg-active',
+                        props.mobile &&
+                          'h-11 rounded-[22px] text-base leading-[22px]'
+                      )}
                       onClick={() => {
                         nav.setPage('all');
                         if (!props.mobile)
                           search?.focus({ preventScroll: true });
                       }}
                     >
-                      <Squares class="size-4 shrink-0" />
-                      <span class="flex-1">
+                      <Squares
+                        class={props.mobile ? 'size-[18px]' : 'size-4'}
+                      />
+                      <span class="flex-1 text-left">
                         {t('agentControls.moreModels')}
                       </span>
-                      <CaretRight class="size-4 shrink-0" />
-                    </Dynamic>
+                      <CaretRight
+                        class={
+                          props.mobile
+                            ? 'size-[18px] text-ink-extra-muted'
+                            : 'size-3.5 text-ink-extra-muted'
+                        }
+                      />
+                    </Button>
                   </ModelSelectionSection>
                 </Show>
               </div>
@@ -393,7 +444,7 @@ export function ModelSelectionList(props: {
           </div>
         </Show>
         <Show when={nav.page() === 'all'}>
-          <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-4">
             <Show when={auto()}>
               {(option) => (
                 <ModelSelectionSection mobile={props.mobile}>
@@ -434,7 +485,7 @@ export function ModelSelectionList(props: {
           </div>
         </Show>
         <Show when={nav.page() === 'agents'}>
-          <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-4">
             <For each={agentPickerGroups(filtered().agents)}>
               {(group) => (
                 <ModelSelectionSection
@@ -443,10 +494,15 @@ export function ModelSelectionList(props: {
                 >
                   <For each={group.agents}>
                     {(agent) => (
-                      <Dynamic
-                        component={props.mobile ? MobileDrawer.Item : Menu.Item}
+                      <Button
+                        variant="ghost"
+                        appearance="bare"
                         data-model-choice
-                        aria-pressed={state.agent?.id === agent.id}
+                        class={cn(
+                          'flex min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-2 text-sm font-normal not-touch:hover:bg-hover',
+                          props.mobile &&
+                            'h-11 rounded-[22px] text-base leading-[22px]'
+                        )}
                         disabled={
                           state.disabled ||
                           Boolean(
@@ -458,7 +514,7 @@ export function ModelSelectionList(props: {
                         <AgentAvatar
                           agent={agent}
                           coder={false}
-                          class="size-4"
+                          class="size-[18px]"
                           iconClass="size-4"
                         />
                         <span class="flex-1 text-left">{agent.name}</span>
@@ -466,9 +522,9 @@ export function ModelSelectionList(props: {
                           {agent.connectLabel ?? agent.runtime.label}
                         </span>
                         <Show when={state.agent?.id === agent.id}>
-                          <Check class="size-4 shrink-0" />
+                          <Check class="size-3.5 text-accent" />
                         </Show>
-                      </Dynamic>
+                      </Button>
                     )}
                   </For>
                 </ModelSelectionSection>
@@ -477,7 +533,7 @@ export function ModelSelectionList(props: {
           </div>
         </Show>
         <Show when={nav.page() === 'agentModels'}>
-          <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-4">
             <Show when={agentModels().auto}>
               {(option) => (
                 <ModelSelectionSection mobile={props.mobile}>
@@ -510,21 +566,39 @@ export function ModelSelectionList(props: {
           </div>
         </Show>
         <Show when={noMatches()}>
-          <div class="flex min-w-0 flex-col items-center gap-3 p-4">
-            <Search aria-hidden="true" class="size-5 text-ink-extra-muted" />
+          <div
+            class={cn(
+              'flex min-w-0 flex-col items-center gap-3 px-4 py-6',
+              props.mobile && 'py-8'
+            )}
+          >
+            <Search
+              aria-hidden="true"
+              class={cn(
+                'size-5 text-ink-extra-muted',
+                props.mobile && 'size-6'
+              )}
+            />
             <p
               role="status"
-              class="flex max-w-full min-w-0 text-sm text-ink-muted"
+              class={cn(
+                'flex max-w-full min-w-0 text-sm text-ink-muted',
+                props.mobile && 'text-base leading-[22px]'
+              )}
             >
               <span class="min-w-0 truncate">
                 {t('agentControls.noMatchesFor', { query: nav.query() })}
               </span>
             </p>
             <Button
-              variant="ghost"
-              size="xs"
+              variant="secondary"
+              size="sm"
               data-model-choice
               onClick={clearSearch}
+              class={cn(
+                'h-6 min-h-6 rounded-full px-2.5 text-xs text-ink-muted',
+                props.mobile && 'h-9 min-h-9 px-3.5 text-sm'
+              )}
             >
               {t('agentControls.clearSearch')}
             </Button>

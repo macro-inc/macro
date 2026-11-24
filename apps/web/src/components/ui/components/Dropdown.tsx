@@ -28,9 +28,8 @@ import {
 } from '../utils/selectionDismissal';
 import { Button, type ButtonProps } from './Button';
 import { CopyFeedback } from './CopyButton';
-import { Menu } from './Menu';
 import { MultiSelectItemContent } from './MultiSelectItemContent';
-import type { SurfaceProps } from './Surface';
+import { Surface, type SurfaceProps } from './Surface';
 import { Tooltip } from './Tooltip';
 
 /*
@@ -131,6 +130,11 @@ export type DropdownMultiSelectItemProps = Omit<
   onOnly: () => void;
 };
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
+
+// Text size is inherited from `Dropdown.Content` (defaults to `text-sm`) so a
+// menu can be resized by passing a `text-*` class to the content.
+const ROW_CLASS =
+  'group rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left font-normal cursor-default outline-none data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
 
 function resolvePortalMount(
   searchRef: HTMLElement | undefined,
@@ -267,9 +271,14 @@ function DropdownContent(props: DropdownContentProps) {
           />
         </Show>
         <KobalteDropdownMenu.Content
-          class={local.class}
+          class={cn(
+            // Paint the same surface as context menus, including custom
+            // contents (calendar month lists) without a Dropdown.Group.
+            'menu-surface rounded-xl size-auto z-action-menu menu-open-animation text-sm',
+            local.class
+          )}
           depth={local.depth ?? 2}
-          as={Menu.Surface}
+          as={Surface}
           hideBorder
           {...rest}
           onOpenAutoFocus={handleOpenAutoFocus}
@@ -307,9 +316,12 @@ function DropdownSubContent(props: DropdownSubContentProps) {
         mount={resolvePortalMount(searchRef, local.mount, local.portalScope)}
       >
         <KobalteDropdownMenu.SubContent
-          class={local.class}
+          class={cn(
+            'menu-surface rounded-xl size-auto z-action-menu menu-open-animation text-sm',
+            local.class
+          )}
           depth={local.depth ?? 2}
-          as={Menu.Surface}
+          as={Surface}
           hideBorder
           {...rest}
           ref={setContentRef}
@@ -326,10 +338,8 @@ function DropdownSubContent(props: DropdownSubContentProps) {
 function DropdownGroup(props: DropdownGroupProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
-    <Menu.Part
-      component={KobalteDropdownMenu.Group}
-      kind="group"
-      class={local.class}
+    <KobalteDropdownMenu.Group
+      class={cn('flex flex-col p-1.5', local.class)}
       {...rest}
     />
   );
@@ -338,10 +348,11 @@ function DropdownGroup(props: DropdownGroupProps) {
 function DropdownGroupLabel(props: DropdownGroupLabelProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
-    <Menu.Part
-      component={KobalteDropdownMenu.GroupLabel}
-      kind="label"
-      class={local.class}
+    <KobalteDropdownMenu.GroupLabel
+      class={cn(
+        'px-2 h-7 flex items-center text-xs text-ink-extra-muted',
+        local.class
+      )}
       {...rest}
     />
   );
@@ -364,12 +375,10 @@ function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
     'closeOnSelect',
   ]);
   return (
-    <Menu.Part
-      component={KobalteDropdownMenu.CheckboxItem}
-      kind="row"
-      class={local.class}
+    <KobalteDropdownMenu.CheckboxItem
+      class={cn(ROW_CLASS, local.class)}
       {...rest}
-      ref={(element: HTMLElement) => {
+      ref={(element) => {
         selection.track(element);
         callRef(local.ref, element);
       }}
@@ -387,7 +396,7 @@ function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
         </div>
       )}
       {local.children}
-    </Menu.Part>
+    </KobalteDropdownMenu.CheckboxItem>
   );
 }
 
@@ -411,17 +420,15 @@ function DropdownMultiSelectItem(props: DropdownMultiSelectItemProps) {
     'ref',
   ]);
   return (
-    <Menu.Part
-      component={KobalteDropdownMenu.Item}
-      kind="row"
+    <KobalteDropdownMenu.Item
       {...rest}
       role="menuitemcheckbox"
       aria-label={local.label}
       aria-checked={local.checked}
       textValue={local.label}
       aria-keyshortcuts="Space Enter Shift+Enter"
-      class={cn('relative pr-14 touch:min-h-11', local.class)}
-      ref={(element: HTMLElement) => {
+      class={cn(ROW_CLASS, 'relative pr-14 touch:min-h-11', local.class)}
+      ref={(element) => {
         selectionIntent.track(element);
         callRef(local.ref, element);
       }}
@@ -440,7 +447,7 @@ function DropdownMultiSelectItem(props: DropdownMultiSelectItemProps) {
       >
         {local.children}
       </MultiSelectItemContent>
-    </Menu.Part>
+    </KobalteDropdownMenu.Item>
   );
 }
 
@@ -451,10 +458,8 @@ function DropdownItemIndicator(props: DropdownItemIndicatorProps) {
 function DropdownSubTrigger(props: DropdownSubTriggerProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
-    <Menu.Part
-      component={KobalteDropdownMenu.SubTrigger}
-      kind="row"
-      class={cn('justify-between', local.class)}
+    <KobalteDropdownMenu.SubTrigger
+      class={cn(ROW_CLASS, 'justify-between', local.class)}
       {...rest}
     />
   );
@@ -463,10 +468,8 @@ function DropdownSubTrigger(props: DropdownSubTriggerProps) {
 function DropdownRadioItem(props: DropdownRadioItemProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
-    <Menu.Part
-      component={KobalteDropdownMenu.RadioItem}
-      kind="row"
-      class={local.class}
+    <KobalteDropdownMenu.RadioItem
+      class={cn(ROW_CLASS, local.class)}
       {...rest}
     />
   );
@@ -488,12 +491,10 @@ function DropdownItem(props: DropdownItemProps) {
     <Show
       when={local.disabledReason}
       fallback={
-        <Menu.Part
-          component={KobalteDropdownMenu.Item}
-          kind="row"
-          class={local.class}
+        <KobalteDropdownMenu.Item
+          class={cn(ROW_CLASS, local.class)}
           {...rest}
-          ref={(element: HTMLElement) => {
+          ref={(element) => {
             selection.track(element);
             callRef(local.ref, element);
           }}
@@ -561,15 +562,13 @@ function UnavailableItem(
       open={focused()}
       class="w-full"
     >
-      <Menu.Part
-        component={KobalteDropdownMenu.Item}
-        kind="row"
+      <KobalteDropdownMenu.Item
         {...rest}
-        class={cn('touch:flex-wrap touch:gap-y-0.5', local.class)}
+        class={cn(ROW_CLASS, 'touch:flex-wrap touch:gap-y-0.5', local.class)}
         closeOnSelect={false}
         aria-disabled="true"
         data-disabled=""
-        ref={(element: HTMLElement) => {
+        ref={(element) => {
           const show = () => setFocused(true);
           const hide = () => setFocused(false);
           element.addEventListener('focus', show);
@@ -585,7 +584,7 @@ function UnavailableItem(
         <KobalteDropdownMenu.ItemDescription class="sr-only touch:not-sr-only touch:basis-full touch:text-xs touch:text-ink-muted">
           {local.reason}
         </KobalteDropdownMenu.ItemDescription>
-      </Menu.Part>
+      </KobalteDropdownMenu.Item>
     </Tooltip>
   );
 }
