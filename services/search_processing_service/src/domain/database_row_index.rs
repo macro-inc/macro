@@ -291,7 +291,10 @@ pub struct CatchUp {
 
 const DATABASES_PER_PAGE: usize = 100;
 const LAGGING_TABLES_PER_PAGE: usize = 100;
-const RESHAPED_TABLES_PER_ROUND: usize = 500;
+/// Tables a reshape check reindexes per six-hourly round. The lookup costs the
+/// same at any limit, so the cap only bounds a round's reindexing: a relabel in
+/// a tag set placed by 30k tables takes six rounds.
+const RESHAPED_TABLES_PER_ROUND: usize = 5_000;
 const GONE_TABLES_PER_ROUND: usize = 100;
 
 /// How often a held database lock is shown to the server as in use; far
