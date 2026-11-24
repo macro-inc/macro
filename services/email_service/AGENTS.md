@@ -486,6 +486,10 @@ trigger covers new writes from old binaries. See the
 [routing runbook](../../docs/runbooks/email-provider-routing.md) for local
 migration compatibility.
 
+Mailbox command reconciliation uses LiveOrganization for fresh IMAP versions;
+category enumeration keeps the cache-only Organization read. The live read adds
+one bounded provider snapshot per target, recorded on `imap.organization.read`.
+
 IMAP category deletion lists Organization metadata (flags and keywords), never
 full MIME bodies. An oversized message must not prevent removing its keyword.
 

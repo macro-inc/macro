@@ -228,29 +228,27 @@ impl email::domain::mailbox::commands::MailboxCommandGateway for ImapMailboxGate
         let Some(source) = self.record(mailbox, result).await? else {
             return Ok(None);
         };
-        let folder = ProviderId::new(source.folder_id)?;
-        let role = MailFolder::effective_role(folders, Some(&folder));
-        let has_flag = |value: &str| {
-            source
-                .flags
-                .iter()
-                .any(|flag| flag.eq_ignore_ascii_case(value))
+        imap_organization_snapshot(source, folders).map(Some)
+    }
+    async fn live_organization(
+        &self,
+        mailbox: MailboxKey,
+        message: &ProviderId,
+        folders: &[MailFolder],
+    ) -> Result<Option<MailboxOrganization>, EmailApiError> {
+        let result: Result<Option<models::Message>, models::Error> = self
+            .client
+            .operation(
+                binding(mailbox),
+                &models::Operation::LiveOrganization {
+                    id: message.as_str().to_owned(),
+                },
+            )
+            .await;
+        let Some(source) = self.record(mailbox, result).await? else {
+            return Ok(None);
         };
-        Ok(Some(MailboxOrganization {
-            state: MailboxState {
-                is_read: has_flag("\\Seen"),
-                is_flagged: has_flag("\\Flagged"),
-                is_draft: has_flag("\\Draft"),
-                in_inbox: role == FolderRole::Inbox,
-                in_trash: role == FolderRole::Trash,
-                in_junk: role == FolderRole::Junk,
-                attention: Attention::Unknown,
-            },
-            folder_id: Some(folder),
-            tags: source.tags,
-            version: Some(source.version),
-            is_sent: source.is_sent,
-        }))
+        imap_organization_snapshot(source, folders).map(Some)
     }
     #[tracing::instrument(skip_all, fields(mailbox.link_id = %mailbox.link_id), err)]
     async fn apply(
@@ -357,4 +355,33 @@ pub(crate) fn error(error: models::Error) -> EmailApiError {
             message: "IMAP service rejected the request".into(),
         },
     }
+}
+
+fn imap_organization_snapshot(
+    source: models::Message,
+    folders: &[MailFolder],
+) -> Result<MailboxOrganization, EmailApiError> {
+    let folder = ProviderId::new(source.folder_id)?;
+    let role = MailFolder::effective_role(folders, Some(&folder));
+    let has_flag = |value: &str| {
+        source
+            .flags
+            .iter()
+            .any(|flag| flag.eq_ignore_ascii_case(value))
+    };
+    Ok(MailboxOrganization {
+        state: MailboxState {
+            is_read: has_flag("\\Seen"),
+            is_flagged: has_flag("\\Flagged"),
+            is_draft: has_flag("\\Draft"),
+            in_inbox: role == FolderRole::Inbox,
+            in_trash: role == FolderRole::Trash,
+            in_junk: role == FolderRole::Junk,
+            attention: Attention::Unknown,
+        },
+        folder_id: Some(folder),
+        tags: source.tags,
+        version: Some(source.version),
+        is_sent: source.is_sent,
+    })
 }

@@ -293,13 +293,21 @@ regression separately verifies NOWAIT and rollback with real concurrent transact
 
 ### Consistent reads during synchronization
 
-Changes, Message, Organization, Attachment, Folders and RecentInbox use a
+Changes, Message, Organization, LiveOrganization, Attachment, Folders and RecentInbox use a
 lease-free scoped snapshot. Scalar health and selected catalog/index rows share
 one repeatable-read, read-only transaction, committed before lazy MIME/provider
 IO. Reads therefore continue while synchronization holds its command lease.
 Before returning any provider result the engine rechecks the loaded owner,
 active link, reauth and both generations. Revision advances from concurrent sync
 alone do not revoke a consistent read.
+
+Organization returns cached metadata for catalog enumeration. Mailbox command
+reconciliation uses LiveOrganization once per target immediately before Apply:
+it refreshes one nonzero UID through the bounded command-session pool and returns
+the live organization version without publishing an unfenced cache update. Apply
+retains its independent live precondition check. A pending MOVE locator (UID zero)
+remains retryable until sync resolves it. The `imap.organization.read` span records
+`organization.live_snapshot_calls`; its fetch child measures the extra provider read.
 
 Read snapshots carry no command lease. Persistence, renewal and release reject
 that capability; only mutating operations obtain a lease. Draft access remains

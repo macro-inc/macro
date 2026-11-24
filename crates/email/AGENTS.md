@@ -890,6 +890,9 @@ tools — hexagonal, heavily feature-gated.
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.
+- Reconcile command targets with `MailboxCommandGateway::live_organization` before
+  Apply; retain `organization` for cached catalog reads. IMAP refreshes one UID
+  through the bounded provider pool so retries do not reuse a stale sync version.
 - Outlook organization commands only run in their link's current
   `sync_generation`. Anything that bumps it must rebind unfinished commands as
   `pending`, since claims skip `confirming` ones while those still block later

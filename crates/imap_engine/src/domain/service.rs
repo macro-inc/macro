@@ -689,6 +689,7 @@ impl Engine {
             }
             Operation::Message { id } => value(self.read_message(a, &id).await?),
             Operation::Organization { id } => value(a.state.messages.get(&id)),
+            Operation::LiveOrganization { id } => value(self.read_organization(a, &id).await?),
             // Batch contention retries retain completed bodies outside the
             // global slot; execute_in_class dispatches this separate use case.
             Operation::RecentInbox { .. } => Err(Error::Invalid),

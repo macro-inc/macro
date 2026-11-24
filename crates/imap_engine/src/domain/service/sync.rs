@@ -14,6 +14,7 @@ pub(super) fn selection(op: &Operation) -> Result<StateSelection, Error> {
         Operation::Folders => StateSelection::Catalog,
         Operation::Message { id }
         | Operation::Organization { id }
+        | Operation::LiveOrganization { id }
         | Operation::Attachment { id, .. } => StateSelection::Message(id.clone()),
         Operation::RecentInbox { limit } => StateSelection::Recent((*limit).min(100)),
         Operation::Changes { folder, position } => {

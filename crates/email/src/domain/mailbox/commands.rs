@@ -97,6 +97,16 @@ pub trait MailboxCommandGateway: MailboxGateway {
         folders: &[MailFolder],
     ) -> impl Future<Output = Result<Option<MailboxOrganization>, EmailApiError>> + Send;
 
+    /// Fresh provider facts used once per target before a conditional command write.
+    fn live_organization(
+        &self,
+        mailbox: MailboxKey,
+        message: &ProviderId,
+        folders: &[MailFolder],
+    ) -> impl Future<Output = Result<Option<MailboxOrganization>, EmailApiError>> + Send {
+        self.organization(mailbox, message, folders)
+    }
+
     fn apply(
         &self,
         mailbox: MailboxKey,
@@ -216,7 +226,7 @@ impl<R: MailboxCommandRepository, G: MailboxCommandGateway> MailboxCommandServic
         };
         let snapshot = self
             .provider
-            .organization(lease.mailbox, id, folders)
+            .live_organization(lease.mailbox, id, folders)
             .await?
             .ok_or(EmailApiError::NotFound)?;
         if let Some(action) = provider_action(&lease.action, &snapshot, folders)? {

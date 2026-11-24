@@ -66,6 +66,9 @@ accepts bearer access to a remote mail server.
 - Fetch recent-message locations through distinct-key equality probes on
   `(link_id, kind, message_id)`; the preceding message page caps input at 100.
   Keep the generic plan from scanning every location of a hot link.
+- Keep Organization cache-only for catalog enumeration; use LiveOrganization for
+  one bounded provider snapshot immediately before conditional mailbox commands.
+  Do not persist the read snapshot or weaken Apply's live version check.
 - Treat destination UID zero as pending MOVE reconciliation. Never issue a remote
   command or MIME fetch for that placeholder; IDLE sync resolves it when COPYUID
   was unavailable.

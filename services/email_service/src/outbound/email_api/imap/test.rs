@@ -120,3 +120,43 @@ async fn typed_busy_and_size_failures_survive_the_private_client_without_health_
         }
     }
 }
+
+#[tokio::test]
+async fn conditional_command_reads_live_organization_instead_of_the_catalog_cache() {
+    use email::domain::mailbox::commands::MailboxCommandGateway;
+
+    let server = MockServer::start().await;
+    let mailbox = MailboxKey {
+        link_id: Uuid::now_v7(),
+        sync_generation: 3,
+        grant_generation: 7,
+    };
+    Mock::given(method("POST"))
+        .and(path(format!(
+            "/internal/v1/accounts/{}/operations",
+            mailbox.link_id
+        )))
+        .and(header("x-mailbox-binding", "3.7"))
+        .and(wiremock::matchers::body_json(serde_json::json!({
+            "operation": "live_organization", "id": "m:source"
+        })))
+        .respond_with(
+            ResponseTemplate::new(404).set_body_json(serde_json::json!({"code":"not_found"})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let db = PgPool::connect_lazy("postgres://unused@127.0.0.1:1/unused").unwrap();
+    db.close().await;
+    let gateway = ImapMailboxGateway {
+        client: ImapServiceClient::new(server.uri(), "internal-test-key".into()).unwrap(),
+        health: email::outbound::mailbox_pg::PgMailboxSync::new(db)
+            .with_provider(UserProvider::Imap),
+    };
+    assert!(matches!(
+        gateway
+            .live_organization(mailbox, &ProviderId::new("m:source").unwrap(), &[])
+            .await,
+        Err(EmailApiError::NotFound)
+    ));
+}

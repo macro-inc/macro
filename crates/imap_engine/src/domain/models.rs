@@ -709,6 +709,11 @@ pub enum Operation {
         /// Message id.
         id: String,
     },
+    /// Live bounded provider facts for a command's conditional write.
+    LiveOrganization {
+        /// Message id.
+        id: String,
+    },
     /// Latest inbox snapshots.
     RecentInbox {
         /// Maximum count, capped at 100.
@@ -823,6 +828,7 @@ impl Operation {
             | Self::Changes { .. }
             | Self::Message { .. }
             | Self::Organization { .. }
+            | Self::LiveOrganization { .. }
             | Self::RecentInbox { .. }
             | Self::Attachment { .. } => OperationAccess::Read,
             Self::Apply { .. }

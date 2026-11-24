@@ -1,6 +1,55 @@
 //! Bounded organization writes: refresh one UID, acknowledge its exact destination when available.
 use super::*;
 impl Engine {
+    /// Conditional writers need the current provider version, not the sync cache's version.
+    #[tracing::instrument(skip_all, name = "imap.organization.read", fields(organization.live_snapshot_calls = tracing::field::Empty), err)]
+    pub(super) async fn read_organization(
+        &self,
+        a: &Account,
+        id: &str,
+    ) -> Result<Option<Message>, Error> {
+        let Some(mut message) = a.state.messages.get(id).cloned() else {
+            return Ok(None);
+        };
+        let location = a
+            .state
+            .locations
+            .iter()
+            .find(|location| {
+                location.message_id == id
+                    && location.folder_id == message.folder_id
+                    && location.uid > 0
+            })
+            // A MOVE awaiting its destination UID remains retryable until sync reconciles it.
+            .ok_or(Error::ConnectionUnavailable)?;
+        let folder = a
+            .state
+            .folders
+            .get(&location.folder_id)
+            .ok_or(Error::ConnectionUnavailable)?;
+        let credentials = self
+            .cipher
+            .decrypt(a.binding.link_id, &a.user_id, &a.ciphertext)
+            .await?;
+        tracing::Span::current().record("organization.live_snapshot_calls", 1);
+        let facts = self
+            .transport
+            .message(
+                &credentials,
+                &folder.path,
+                location.uid_validity,
+                location.uid,
+            )
+            .instrument(tracing::info_span!("imap.organization.fetch"))
+            .await?;
+        let Some(facts) = facts else {
+            return Ok(None);
+        };
+        apply_facts(&mut message, &facts)?;
+        // This is a read snapshot. Only the subsequent fenced write publishes state.
+        Ok(Some(message))
+    }
+
     pub(super) async fn apply_organization(
         &self,
         a: &mut Account,

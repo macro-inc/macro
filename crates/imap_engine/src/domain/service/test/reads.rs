@@ -237,6 +237,7 @@ async fn recent_inbox_defers_one_busy_body_without_restarting_the_batch() {
 #[tokio::test]
 async fn a_busy_followup_after_a_provider_write_never_replays_the_action() {
     let organization = Arc::new(OrganizationWorkControl {
+        reads: std::sync::atomic::AtomicU32::new(0),
         writes: std::sync::atomic::AtomicU32::new(0),
         seen: AtomicBool::new(false),
         busy_after_write: AtomicBool::new(true),
@@ -419,4 +420,77 @@ async fn oversized_snapshots_transfer_once_per_growing_durable_backoff_window() 
         Err(Error::SnapshotTooLarge)
     );
     assert!(observed.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn organization_reads_live_version_before_a_conditional_write() {
+    let organization = Arc::new(OrganizationWorkControl {
+        reads: std::sync::atomic::AtomicU32::new(0),
+        writes: std::sync::atomic::AtomicU32::new(0),
+        seen: AtomicBool::new(true),
+        busy_after_write: AtomicBool::new(false),
+    });
+    let ReadFixture {
+        engine,
+        repository,
+        binding,
+        message_id,
+        ..
+    } = read_fixture(
+        b"Message-ID: <synthetic@example.net>\r\n\r\nTest body".to_vec(),
+        BTreeMap::new(),
+        Some(organization.clone()),
+    );
+    let stale = repository.state.lock().unwrap().messages[&message_id].clone();
+    assert!(!stale.flags.iter().any(|flag| flag == "\\Seen"));
+    let cached: Option<Message> = serde_json::from_value(
+        engine
+            .execute(
+                binding,
+                Operation::Organization {
+                    id: message_id.clone(),
+                },
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(cached.unwrap().version, stale.version);
+    assert_eq!(organization.reads.load(Ordering::SeqCst), 0);
+    let current: Option<Message> = serde_json::from_value(
+        engine
+            .execute(
+                binding,
+                Operation::LiveOrganization {
+                    id: message_id.clone(),
+                },
+            )
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let current = current.unwrap();
+    assert!(current.flags.iter().any(|flag| flag == "\\Seen"));
+    assert_ne!(current.version, stale.version);
+    assert_eq!(organization.reads.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        serde_json::to_value(&repository.state.lock().unwrap().messages[&message_id]).unwrap(),
+        serde_json::to_value(&stale).unwrap(),
+        "fresh organization reads must not publish an unfenced snapshot"
+    );
+    engine
+        .execute(
+            binding,
+            Operation::Apply {
+                id: message_id,
+                request: ActionRequest {
+                    action: serde_json::to_value(MessageAction::SetRead(false)).unwrap(),
+                    expected_version: Some(current.version),
+                },
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(organization.writes.load(Ordering::SeqCst), 1);
+    assert!(!organization.seen.load(Ordering::SeqCst));
 }

@@ -247,6 +247,7 @@ impl CredentialCipher for TestCipher {
     }
 }
 pub(crate) struct OrganizationWorkControl {
+    pub(crate) reads: std::sync::atomic::AtomicU32,
     pub(crate) writes: std::sync::atomic::AtomicU32,
     pub(crate) seen: AtomicBool,
     pub(crate) busy_after_write: AtomicBool,
@@ -317,6 +318,7 @@ impl MailTransport for UncertainTransport {
             {
                 return Err(Error::AccountBusy);
             }
+            organization.reads.fetch_add(1, Ordering::SeqCst);
             let state = self.repository.state.lock().unwrap();
             let Some(message) = state.messages.values().next() else {
                 return Ok(None);
@@ -404,13 +406,17 @@ impl MailTransport for UncertainTransport {
         _: &str,
         _: u32,
         _: u32,
-        _: RemoteAction,
+        action: RemoteAction,
     ) -> Result<RemoteWriteReceipt, ApplyError> {
         if let Some(control) = &self.provider_work
             && let Some(organization) = &control.organization
         {
             organization.writes.fetch_add(1, Ordering::SeqCst);
-            organization.seen.store(true, Ordering::SeqCst);
+            let RemoteAction::Flag { flag, enabled } = action else {
+                panic!("expected organization flag fixture");
+            };
+            assert_eq!(flag, "\\Seen");
+            organization.seen.store(enabled, Ordering::SeqCst);
         }
         Ok(RemoteWriteReceipt::default())
     }

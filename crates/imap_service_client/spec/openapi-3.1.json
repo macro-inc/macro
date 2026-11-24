@@ -1509,6 +1509,26 @@
           },
           {
             "type": "object",
+            "description": "Live bounded provider facts for a command's conditional write.",
+            "required": [
+              "id",
+              "operation"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Message id."
+              },
+              "operation": {
+                "type": "string",
+                "enum": [
+                  "live_organization"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Latest inbox snapshots.",
             "required": [
               "limit",
