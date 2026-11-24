@@ -231,6 +231,13 @@ function mount(options: {
   };
 }
 
+const missingMessage = () =>
+  new CombinedError({
+    graphQLErrors: [
+      { message: 'no such message', extensions: { code: 'NOT_FOUND' } },
+    ],
+  });
+
 /**
  * A server paging `rows` (oldest first) without the device storing any. Once
  * `stall` is called, a page past a cursor answers that same cursor.
@@ -249,7 +256,7 @@ function serverOver(rows: () => Row[]) {
     let end = all.length;
     if (around != null) {
       const at = all.findIndex((row) => row.id === around);
-      if (at < 0) throw new Error('no such message');
+      if (at < 0) throw missingMessage();
       start = Math.max(0, at - Math.floor(limit / 2));
       end = Math.min(all.length, start + limit);
     } else if (before != null) {
@@ -964,6 +971,36 @@ describe('createLocalChannelTimeline', () => {
     const before = timeline.entries().length;
     await timeline.loadNewer();
     expect(timeline.entries().length).toBeGreaterThan(before);
+    mounted.dispose();
+  });
+
+  it('keeps its place when the pages around it cannot be read', async () => {
+    const rows = messages(120);
+    const server = serverOver(() => rows);
+    let failing = true;
+    const fetchPage = vi.fn<FetchChannelServerPage>(async (input, signal) => {
+      if (failing && input.around != null) throw new Error('connection lost');
+      return server.fetchPage(input, signal);
+    });
+    const mounted = mount({ rows, held: false, fetchPage });
+    const { timeline, runtime } = mounted;
+    await waitFor(() => timeline.entries().length === 50);
+    await settle();
+    await timeline.loadOlder();
+    const shown = ids(timeline);
+    expect(shown).toHaveLength(100);
+    for (let n = 121; n <= 3050; n += 1) rows.push(graphqlMessage(n));
+
+    const aroundReads = () =>
+      fetchPage.mock.calls.filter(([input]) => input.around != null).length;
+    runtime.resumed();
+    await waitFor(() => aroundReads() > 0 && !timeline.isLoadingOlder());
+    expect(ids(timeline)).toEqual(shown);
+
+    failing = false;
+    runtime.resumed();
+    await waitFor(() => aroundReads() > 1 && !timeline.isLoadingOlder());
+    expect(ids(timeline)).toEqual(expect.arrayContaining([shown[50]]));
     mounted.dispose();
   });
 

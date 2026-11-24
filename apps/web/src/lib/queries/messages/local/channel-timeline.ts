@@ -194,6 +194,12 @@ function graphqlErrorCode(error: unknown): string | undefined {
   return typeof code === 'string' ? code : undefined;
 }
 
+/** Whether the server said that the message a page was read around is gone. */
+function isMissingMessage(error: unknown): boolean {
+  const code = graphqlErrorCode(error);
+  return code === 'NOT_FOUND' || code === 'GONE';
+}
+
 function toLoadError(error: unknown): EntityLoadError {
   const code = graphqlErrorCode(error);
   return LOAD_ERROR_CODES.find((known) => known === code) ?? 'LOAD_FAILED';
@@ -508,8 +514,9 @@ export function createLocalChannelTimeline(
   ): Promise<ReadReach | 'unsupported'> => {
     try {
       return await readReach(messageId, reach, signal);
-    } catch {
+    } catch (error) {
       signal.throwIfAborted();
+      if (!isMissingMessage(error)) throw error;
       return latest;
     }
   };
@@ -1105,11 +1112,10 @@ export function createLocalChannelTimeline(
     olderFailed: () => state.pageFailed.older,
     loadError: () =>
       state.phase === 'failed' ? toLoadError(state.error) : undefined,
-    isMissingTarget: () => {
-      if (state.phase !== 'failed' || aroundMessageId() == null) return false;
-      const code = graphqlErrorCode(state.error);
-      return code === 'NOT_FOUND' || code === 'GONE';
-    },
+    isMissingTarget: () =>
+      state.phase === 'failed' &&
+      aroundMessageId() != null &&
+      isMissingMessage(state.error),
     loadOlder: () => loadMore('older'),
     loadNewer: () => loadMore('newer'),
     retry: () => load(untrack(() => aroundMessageId() ?? undefined)),
