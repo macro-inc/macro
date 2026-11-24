@@ -14,6 +14,10 @@ export default {
     one: 'Reading {{count}} issue',
     other: 'Reading {{count}} issues',
   },
+  scanningRecords: {
+    one: 'Reading {{count}} record',
+    other: 'Reading {{count}} records',
+  },
   findingChannels: 'Finding channels',
   deciding: {
     one: 'Deciding on {{count}} item',

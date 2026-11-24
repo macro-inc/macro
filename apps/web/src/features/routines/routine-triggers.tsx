@@ -16,6 +16,10 @@ import {
 import { createGithubConnection } from './queries/github-link';
 import { createGithubRepositoryOptions } from './queries/github-repositories';
 import {
+  RoutineInboxesLabel,
+  RoutineInboxPicker,
+} from './routine-event-inboxes';
+import {
   RoutineEventPropertyValues,
   RoutineEventValueLabel,
 } from './routine-event-property';
@@ -93,6 +97,12 @@ export function RoutineTriggers(props: {
         )}
         renderEventCondition={(trigger, onChange) => (
           <RoutineEventCondition trigger={trigger()} onChange={onChange} />
+        )}
+        renderInboxPicker={(inboxes, onChange) => (
+          <RoutineInboxPicker inboxes={inboxes} onChange={onChange} />
+        )}
+        renderInboxesLabel={(inboxes) => (
+          <RoutineInboxesLabel inboxes={inboxes} />
         )}
         renderEventSettings={(trigger, onChange) => (
           <>

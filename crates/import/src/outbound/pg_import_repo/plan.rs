@@ -354,6 +354,24 @@ impl NotionPlanRepo for PgImportRepo {
                 "#,
                 user.as_ref(), foreign_ids,
             ).fetch_all(&mut *transaction).await?,
+            ImportSource::Hubspot => sqlx::query_as!(
+                ImportEntityDbRow,
+                r#"
+                    SELECT id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,
+                           initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,
+                           updated_at
+                    FROM import_entity
+                    WHERE source = 'hubspot'
+                      -- Same leading-key bound as Jira, over the HubSpot team index.
+                      AND source = ANY(ARRAY(SELECT 'hubspot'::text))
+                      AND foreign_id = ANY($2::text[])
+                      AND status IN ('importing', 'imported')
+                      AND user_id <> $1
+                      AND team_id IS NOT NULL
+                      AND team_id = (SELECT team_id FROM team_user WHERE user_id = $1)
+                "#,
+                user.as_ref(), foreign_ids,
+            ).fetch_all(&mut *transaction).await?,
             ImportSource::Notion | ImportSource::Linear => sqlx::query_as!(
                 ImportEntityDbRow,
                 r#"

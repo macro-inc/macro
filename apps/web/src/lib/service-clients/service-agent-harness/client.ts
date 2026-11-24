@@ -1,10 +1,12 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { type ErrorResponseHandler, statusError } from '@core/util/safeFetch';
+import type { TraceContext } from '@macro-inc/observability';
 import {
   type AI_USAGE_LIMIT_ERROR,
   readAiUsageLimitError,
 } from '../ai-usage-limit';
+import { getCreateComputerScreenTicketUrl } from './generated/client';
 import type {
   AgentModeChoiceResponse,
   AgentRepositoriesResponse,
@@ -33,6 +35,8 @@ import type {
   PullRequestsSessionsResponse,
   SandboxSize,
   SandboxSizeBody,
+  ScreenTicket,
+  ScreenTicketRequest,
   SessionAutoArchiveResponse,
   SessionPullRequestsResponse,
   SharePermissionV2,
@@ -110,8 +114,88 @@ const providerProbeError: ErrorResponseHandler<
   return statusError(response.status);
 };
 
+type ScreenTicketErrorCode =
+  | 'ROLLOUT_DISABLED'
+  | 'TOO_MANY_TICKETS'
+  | 'TOO_MANY_SCREENS';
+
+/** The `code` the harness puts on a refused screen ticket, if any. */
+async function screenTicketBodyCode(
+  response: Response
+): Promise<string | undefined> {
+  try {
+    const body: unknown = await response.json();
+    if (typeof body === 'object' && body !== null && 'code' in body) {
+      return typeof body.code === 'string' ? body.code : undefined;
+    }
+  } catch {
+    // Not JSON: a proxy's error page. The status decides.
+  }
+  return undefined;
+}
+
+const screenTicketError: ErrorResponseHandler<ScreenTicketErrorCode> = async (
+  response
+) => {
+  if (
+    response.status === 403 &&
+    (await screenTicketBodyCode(response)) === 'rollout_disabled'
+  ) {
+    return {
+      code: 'ROLLOUT_DISABLED',
+      message: 'Computers are not enabled for this account',
+    };
+  }
+  // The computer's screens are all in use, or (also when the body says
+  // nothing) this person minted too many tickets lately.
+  if (response.status === 429) {
+    return (await screenTicketBodyCode(response)) === 'too_many_screens'
+      ? {
+          code: 'TOO_MANY_SCREENS',
+          message: 'Too many screens are open for this computer',
+        }
+      : {
+          code: 'TOO_MANY_TICKETS',
+          message: 'Too many screen tickets in a short time',
+        };
+  }
+  return statusError(response.status);
+};
+
 /** Authenticated client for controlling live agent sessions. */
 export const agentHarnessServiceClient = {
+  /**
+   * A single-use ticket (valid 60 s) to watch or drive an agent computer's
+   * screen; `screenSocketUrl` turns it into the socket that redeems it.
+   */
+  mintScreenTicket(
+    harnessId: string,
+    request: ScreenTicketRequest,
+    parentSpan: TraceContext
+  ) {
+    return fetchWithToken<ScreenTicket, ScreenTicketErrorCode>(
+      `${agentHarnessHost}${getCreateComputerScreenTicketUrl(encodeURIComponent(harnessId))}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        errorResponseHandler: screenTicketError,
+        trace: { parentSpan },
+      }
+    );
+  },
+
+  /** The absolute `ws(s)://` URL that redeems a screen ticket. */
+  screenSocketUrl(ticket: ScreenTicket): string {
+    const url = new URL(
+      `${agentHarnessHost}${ticket.url}`,
+      window.location.href
+    );
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    url.searchParams.set('ticket', ticket.ticket);
+    return url.toString();
+  },
+
   /** Voices an agent teammate can speak with on calls. Team admins only. */
   voices() {
     return fetchWithToken<Voice[]>(`${agentHarnessHost}/voices`);

@@ -1,3 +1,4 @@
+import { AGENT_SCREEN_ROUTE_ID } from '@app/features/agent-screen/core/route';
 import {
   AGENTS_ARCHIVE_ROUTE_ID,
   AGENTS_ARCHIVE_VIEW_ID,
@@ -872,6 +873,18 @@ export const callDetailRoute = defineRoute({
   externalSearch: [CALL_URL_PARAMS.transcriptId, CALL_URL_PARAMS.messageId],
   remountKey: ({ callId }) => callId,
   claim: ({ callId }) => ({ namespace: 'block', id: `call:${callId}` }),
+});
+
+/** An agent teammate's computer screen: watch it, and take over (`agent-screen`). */
+export const agentScreenRoute = defineRoute({
+  id: AGENT_SCREEN_ROUTE_ID,
+  path: 'screen/:harnessId',
+  params: z.object({ harnessId: z.string().min(1) }),
+  remountKey: ({ harnessId }) => harnessId,
+  claim: ({ harnessId }) => ({
+    namespace: 'component',
+    id: `${AGENT_SCREEN_ROUTE_ID}:${harnessId}`,
+  }),
 });
 
 export const companiesRoute = defineRoute({

@@ -17,6 +17,7 @@ import { devExternalSourcemaps } from './scripts/dev-sourcemaps';
 import { hostedDevProxy } from './scripts/hosted-dev-proxy';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
 import { localDevServer } from './scripts/local-dev-server';
+import { sandboxedFrameBundle } from './scripts/sandboxed-frame-bundle';
 
 function readShortSha(): string {
   try {
@@ -692,6 +693,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         posthogSourceMapLimit(),
         costlySelectorBudget(),
         acyclicStartupChunks(),
+        sandboxedFrameBundle({ root: __dirname, minify: !NO_MINIFY }),
       ],
       define: defineEnv(ENV_MODE, command),
       clearScreen: false,
