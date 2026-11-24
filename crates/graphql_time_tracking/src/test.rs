@@ -8,7 +8,7 @@ use async_graphql::{
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use entity_access::domain::models::{
     AccessError, AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType,
-    RequiredPermission,
+    RequiredPermission, ViewAccessLevel,
 };
 use graphql_soup::SoupEntityEdges;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -22,9 +22,19 @@ use time_tracking::domain::{
 };
 use uuid::Uuid;
 
+use time_tracking::domain::{
+    report::{
+        TimeBreakdown, TimeExport, TimeGroup, TimeGroupKey, TimeGrouping, TimePeriod, TimeScope,
+        TimeSummary, TimeTotal,
+    },
+    report_service::TimeReportService,
+};
+
 use crate::{
-    GraphqlTimeEntryPage, GraphqlTimeTracking, TimeTrackingAuthorizer, TimeTrackingGraphqlContext,
-    TimeTrackingMutationRoot, load_time_entries, resolve_time_tracking, time_entries_loader,
+    GraphqlTimeEntryPage, GraphqlTimeSummary, GraphqlTimeTracking, TimeReportAuthorizer,
+    TimeReportGraphqlContext, TimeSummaryInput, TimeTrackingAuthorizer, TimeTrackingGraphqlContext,
+    TimeTrackingMutationRoot, load_time_entries, resolve_time_summary, resolve_time_tracking,
+    time_entries_loader,
 };
 
 const AUTHOR: &str = "macro|author@example.com";
@@ -331,6 +341,15 @@ impl QueryRoot {
         let task_id = task_id.as_deref().unwrap_or(TASK).parse().unwrap();
         load_time_entries(ctx, task_id, limit, after).await
     }
+
+    async fn time_summary(
+        &self,
+        ctx: &Context<'_>,
+        input: TimeSummaryInput,
+    ) -> async_graphql::Result<GraphqlTimeSummary<TestEdges>> {
+        let user = graphql_common::require_authenticated_user(ctx)?;
+        resolve_time_summary(ctx, &user, input).await
+    }
 }
 
 type TestSchema = Schema<QueryRoot, TimeTrackingMutationRoot<TestEdges>, EmptySubscription>;
@@ -594,4 +613,245 @@ async fn an_edit_by_someone_else_is_refused_as_not_author() {
     )
     .await;
     assert_eq!(error_code(&response), Some(Value::from("NOT_AUTHOR")));
+}
+
+const PROJECT: &str = "01a1fa5b-0000-7000-8000-000000000001";
+
+/// What one summary request reached the domain with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AskedSummary {
+    user: String,
+    scope: &'static str,
+    project: Option<(String, EntityType)>,
+    period: TimePeriod,
+    breakdown: TimeBreakdown,
+}
+
+/// Answers one summary of each grouping kind and records each request.
+#[derive(Clone, Default)]
+struct ScriptedReports(Arc<Mutex<Vec<AskedSummary>>>);
+
+impl TimeReportService for ScriptedReports {
+    async fn summary(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        scope: TimeScope,
+        period: TimePeriod,
+        breakdown: TimeBreakdown,
+    ) -> Result<TimeSummary, TimeTrackingError> {
+        let project = match &scope {
+            TimeScope::Project(receipt) => Some((
+                receipt.entity().entity_id.clone(),
+                receipt.entity().entity_type,
+            )),
+            TimeScope::Mine | TimeScope::Team => None,
+        };
+        self.0.lock().unwrap().push(AskedSummary {
+            user: user_id.as_ref().to_string(),
+            scope: scope.name(),
+            project,
+            period,
+            breakdown,
+        });
+        Ok(TimeSummary {
+            from: period.from(),
+            to: period.to(),
+            total_minutes: 90,
+            task_count: 1,
+            scope_task_count: Some(3),
+            complete: false,
+            groups: vec![TimeGroup {
+                key: TimeGroupKey::Person {
+                    user_id: user(AUTHOR),
+                },
+                minutes: 90,
+                task_count: 1,
+                rows: vec![TimeTotal {
+                    key: TimeGroupKey::Day {
+                        date: period.from(),
+                    },
+                    minutes: 90,
+                }],
+            }],
+            then_totals: vec![TimeTotal {
+                key: TimeGroupKey::Task {
+                    task_id: TASK.to_string(),
+                },
+                minutes: 90,
+            }],
+        })
+    }
+
+    async fn export(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: TimeScope,
+        _: TimePeriod,
+    ) -> Result<TimeExport, TimeTrackingError> {
+        unimplemented!("the web downloads exports over REST")
+    }
+}
+
+/// The viewer may view the project; nobody else may.
+struct ViewerSeesProject;
+
+impl TimeReportAuthorizer for ViewerSeesProject {
+    async fn authorize_project(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        project_id: Uuid,
+    ) -> Result<EntityAccessReceipt<ViewAccessLevel>, AccessError> {
+        if user.as_ref() != VIEWER {
+            return Err(AccessError::NotFound("initiative"));
+        }
+        EntityAccessReceipt::try_new_authenticated_user(
+            user.clone(),
+            Entity {
+                entity_id: project_id.to_string(),
+                entity_type: EntityType::Initiative,
+            },
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::View,
+            },
+        )
+    }
+}
+
+async fn execute_report(
+    reports: &ScriptedReports,
+    viewer: &str,
+    query: &str,
+) -> async_graphql::Response {
+    schema()
+        .execute(
+            Request::new(query)
+                .data(user(viewer))
+                .data(TimeReportGraphqlContext::new(
+                    Arc::new(reports.clone()),
+                    Arc::new(ViewerSeesProject),
+                )),
+        )
+        .await
+}
+
+const SUMMARY_FIELDS: &str = "from to totalMinutes taskCount scopeTaskCount complete \
+    groups { key { by userId taskId date } minutes taskCount rows { key { by date } minutes } } \
+    thenTotals { key { by taskId } minutes }";
+
+#[tokio::test]
+async fn a_project_summary_reaches_the_domain_with_the_projects_receipt() {
+    let reports = ScriptedReports::default();
+
+    let response = execute_report(
+        &reports,
+        VIEWER,
+        &format!(
+            r#"{{ timeSummary(input: {{ scope: PROJECT, projectId: "{PROJECT}", from: "2026-11-01", to: "2026-11-30", groupBy: PERSON, thenBy: DAY }}) {{ {SUMMARY_FIELDS} }} }}"#
+        ),
+    )
+    .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data,
+        value!({ "timeSummary": {
+            "from": "2026-11-01",
+            "to": "2026-11-30",
+            "totalMinutes": 90,
+            "taskCount": 1,
+            "scopeTaskCount": 3,
+            "complete": false,
+            "groups": [{
+                "key": { "by": "PERSON", "userId": AUTHOR, "taskId": null, "date": null },
+                "minutes": 90,
+                "taskCount": 1,
+                "rows": [{ "key": { "by": "DAY", "date": "2026-11-01" }, "minutes": 90 }],
+            }],
+            "thenTotals": [{ "key": { "by": "TASK", "taskId": TASK }, "minutes": 90 }],
+        } })
+    );
+    let asked = reports.0.lock().unwrap().clone();
+    assert_eq!(asked.len(), 1);
+    assert_eq!(asked[0].user, VIEWER);
+    assert_eq!(
+        asked[0].project,
+        Some((PROJECT.to_string(), EntityType::Initiative))
+    );
+    assert_eq!(
+        asked[0].breakdown,
+        TimeBreakdown::new(TimeGrouping::Person, Some(TimeGrouping::Day)).unwrap()
+    );
+}
+
+#[tokio::test]
+async fn a_project_the_viewer_cannot_see_is_not_found() {
+    let reports = ScriptedReports::default();
+
+    let response = execute_report(
+        &reports,
+        AUTHOR,
+        &format!(
+            r#"{{ timeSummary(input: {{ scope: PROJECT, projectId: "{PROJECT}", from: "2026-11-01", to: "2026-11-30", groupBy: TASK }}) {{ totalMinutes }} }}"#
+        ),
+    )
+    .await;
+
+    assert_eq!(error_code(&response), Some(Value::from("NOT_FOUND")));
+    assert_eq!(response.errors[0].message, "project not found");
+    assert!(reports.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_summary_outside_its_bounds_is_bad_input() {
+    let reports = ScriptedReports::default();
+
+    for input in [
+        r#"scope: PROJECT, from: "2026-11-01", to: "2026-11-30", groupBy: TASK"#.to_string(),
+        format!(
+            r#"scope: TEAM, projectId: "{PROJECT}", from: "2026-11-01", to: "2026-11-30", groupBy: TASK"#
+        ),
+        r#"scope: MINE, from: "2026-01-01", to: "2027-01-02", groupBy: DAY"#.to_string(),
+        r#"scope: MINE, from: "2026-11-30", to: "2026-11-01", groupBy: DAY"#.to_string(),
+        r#"scope: MINE, from: "Nov 1", to: "2026-11-30", groupBy: DAY"#.to_string(),
+        r#"scope: MINE, from: "2026-11-01", to: "2026-11-30", groupBy: DAY, thenBy: DAY"#
+            .to_string(),
+    ] {
+        let response = execute_report(
+            &reports,
+            VIEWER,
+            &format!("{{ timeSummary(input: {{ {input} }}) {{ totalMinutes }} }}"),
+        )
+        .await;
+        assert_eq!(
+            error_code(&response),
+            Some(Value::from("BAD_USER_INPUT")),
+            "{input}"
+        );
+    }
+    assert!(reports.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn the_viewers_own_and_team_summaries_pass_no_project() {
+    let reports = ScriptedReports::default();
+
+    for scope in ["MINE", "TEAM"] {
+        let response = execute_report(
+            &reports,
+            VIEWER,
+            &format!(
+                r#"{{ timeSummary(input: {{ scope: {scope}, from: "2026-11-23", to: "2026-11-29", groupBy: TASK, thenBy: DAY }}) {{ totalMinutes }} }}"#
+            ),
+        )
+        .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+    }
+    let scopes: Vec<(&str, Option<(String, EntityType)>)> = reports
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|asked| (asked.scope, asked.project.clone()))
+        .collect();
+    assert_eq!(scopes, [("mine", None), ("team", None)]);
 }

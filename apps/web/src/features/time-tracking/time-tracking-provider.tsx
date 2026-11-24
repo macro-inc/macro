@@ -4,19 +4,27 @@ import {
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
 import type { JSX, ParentProps } from 'solid-js';
-import { TimeTrackingContextProvider } from './context/time-tracking-context';
+import {
+  type TimeTrackingCapabilities,
+  TimeTrackingContextProvider,
+} from './context/time-tracking-context';
+import { useRunningTimer } from './running-timer-root';
 
-/** Supplies time tracking with the app's GraphQL client, cache and viewer. */
-export function TimeTrackingProvider(props: ParentProps): JSX.Element {
+/** Time tracking's app capabilities: GraphQL client, cache, viewer and timer. */
+export function useTimeTrackingCapabilities(): TimeTrackingCapabilities {
   const userId = useUserId();
+  return {
+    client: getGraphqlSoupClient,
+    cacheHost: getGraphqlCacheHost,
+    viewerId: () => userId() ?? undefined,
+    runningTimer: useRunningTimer(),
+  };
+}
+
+/** Supplies time tracking with the app's capabilities. */
+export function TimeTrackingProvider(props: ParentProps): JSX.Element {
   return (
-    <TimeTrackingContextProvider
-      value={{
-        client: getGraphqlSoupClient,
-        cacheHost: getGraphqlCacheHost,
-        viewerId: () => userId() ?? undefined,
-      }}
-    >
+    <TimeTrackingContextProvider value={useTimeTrackingCapabilities()}>
       {props.children}
     </TimeTrackingContextProvider>
   );

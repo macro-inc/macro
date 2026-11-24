@@ -74,6 +74,9 @@ export default {
   tags: 'Tags',
   // Search
   searchEmail: 'Search email',
+  searchAllMail: 'Search all mail',
   clearSearch: 'Clear search',
   recentSearches: 'Recent searches',
+  searchViews: 'Views to search in',
+  archived: 'Archived',
 };

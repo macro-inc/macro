@@ -348,7 +348,64 @@ it('saves the due date first when a start day is picked after it, moving it by t
   );
 });
 
-it('keeps a newer start time on screen when an older due save fails', async () => {
+it('moves a timed due date to a first start time picked past it, showing what it saves', async () => {
+  const noStart = { ...start, value: null };
+  const timedDue = { ...due, value: new Date(2026, 10, 20, 2), hasTime: true };
+  const onSave = vi.fn(async () => {});
+  const saveOther = vi
+    .fn<StartDueEditorProps['saveOther']>()
+    .mockResolvedValue(undefined);
+  setup(onSave, saveOther, { start: noStart, due: timedDue });
+  fireEvent.click(screen.getByRole('button', { name: /^Start/ }));
+
+  fireEvent.click(screen.getByRole('option', { name: '1:00 PM' }));
+
+  await waitFor(() =>
+    expect(saveOther).toHaveBeenCalledWith(noStart, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 20, 13),
+      hasTime: true,
+    })
+  );
+  expect(onSave).toHaveBeenCalledWith(timedDue, {
+    valueType: 'DATE',
+    value: new Date(2026, 10, 20, 13),
+    hasTime: true,
+  });
+  expect(onSave.mock.invocationCallOrder[0]).toBeLessThan(
+    saveOther.mock.invocationCallOrder[0] ?? 0
+  );
+  expect(field('Start')).toBe('StartFri, Nov 201:00 PM');
+  expect(field('Due')).toBe('DueFri, Nov 201:00 PM');
+  expect(screen.getByText('0min')).toBeTruthy();
+  expect(screen.queryByText('1 day')).toBeNull();
+});
+
+it("puts a first start time on the due date's day, leaving an overdue due date", async () => {
+  const noStart = { ...start, value: null };
+  const overdue = { ...due, value: new Date(2026, 10, 18, 15), hasTime: true };
+  const onSave = vi.fn(async () => {});
+  const saveOther = vi
+    .fn<StartDueEditorProps['saveOther']>()
+    .mockResolvedValue(undefined);
+  setup(onSave, saveOther, { start: noStart, due: overdue });
+  fireEvent.click(screen.getByRole('button', { name: /^Start/ }));
+
+  fireEvent.click(screen.getByRole('option', { name: '9:00 AM' }));
+
+  await waitFor(() =>
+    expect(saveOther).toHaveBeenCalledWith(noStart, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 18, 9),
+      hasTime: true,
+    })
+  );
+  expect(onSave).not.toHaveBeenCalled();
+  expect(field('Start')).toBe('StartWed, Nov 189:00 AM');
+  expect(field('Due')).toBe('DueWed, Nov 183:00 PM');
+});
+
+it('keeps a newer start day on screen when an older due save fails, still a whole day', async () => {
   const timedDue = { ...due, value: new Date(2026, 10, 27, 15), hasTime: true };
   const dueSave = Promise.withResolvers<void>();
   const saveOther = vi
@@ -372,9 +429,166 @@ it('keeps a newer start time on screen when an older due save fails', async () =
     expect(saveOther).toHaveBeenCalledWith(start, {
       valueType: 'DATE',
       value: new Date(2026, 10, 24),
+    })
+  );
+  expect(field('Start')).toBe('StartTue, Nov 24');
+  expect(field('Due')).toBe('DueFri, Nov 273:00 PM');
+});
+
+it('moves a due date without a time with Change day and saves it without one', async () => {
+  const timedStart = {
+    ...start,
+    value: new Date(2026, 10, 25, 9),
+    hasTime: true,
+  };
+  const wholeDayDue = {
+    ...due,
+    value: new Date(2026, 10, 26, 23, 59, 59, 999),
+  };
+  const onSave = vi.fn(async () => {});
+  const saveOther = vi
+    .fn<StartDueEditorProps['saveOther']>()
+    .mockResolvedValue(undefined);
+  setup(onSave, saveOther, { start: timedStart, due: wholeDayDue });
+  fireEvent.click(screen.getByRole('button', { name: /^Start/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Change day' }));
+
+  fireEvent.click(screen.getByRole('button', { name: '28' }));
+
+  await waitFor(() =>
+    expect(saveOther).toHaveBeenCalledWith(timedStart, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 28, 9),
       hasTime: true,
     })
   );
-  expect(field('Start')).toBe('StartTue, Nov 2412:00 AM');
-  expect(field('Due')).toBe('DueFri, Nov 273:00 PM');
+  expect(onSave).toHaveBeenCalledWith(wholeDayDue, {
+    valueType: 'DATE',
+    value: new Date(2026, 10, 28, 23, 59, 59, 999),
+  });
+  expect(onSave.mock.invocationCallOrder[0]).toBeLessThan(
+    saveOther.mock.invocationCallOrder[0] ?? 0
+  );
+  expect(field('Due')).toBe('DueSat, Nov 28');
+});
+
+const optionNames = () =>
+  screen.getAllByRole('option').map((option) => option.textContent?.trim());
+
+it('offers no current time for a date without a time, and Up starts from the last time', async () => {
+  const wholeDayStart = { ...start, value: new Date(2026, 10, 27) };
+  const timedDue = { ...due, value: new Date(2026, 10, 27, 15), hasTime: true };
+  const saveOther = vi
+    .fn<StartDueEditorProps['saveOther']>()
+    .mockResolvedValue(undefined);
+  setup(
+    vi.fn(async () => {}),
+    saveOther,
+    {
+      start: wholeDayStart,
+      due: timedDue,
+    }
+  );
+  expect(screen.queryByText('15h')).toBeNull();
+  expect(screen.getByText('1 day')).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: /^Start/ }));
+  expect(
+    screen
+      .getAllByRole('option')
+      .filter((option) => option.getAttribute('aria-selected') === 'true')
+  ).toEqual([]);
+  const input = screen.getByPlaceholderText('Set start time...');
+  fireEvent.keyDown(input, { key: 'Enter' });
+  await Promise.resolve();
+  expect(saveOther).not.toHaveBeenCalled();
+  expect(field('Start')).toBe('StartFri, Nov 27');
+
+  fireEvent.keyDown(input, { key: 'ArrowUp' });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  await waitFor(() =>
+    expect(saveOther).toHaveBeenCalledWith(wholeDayStart, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 27, 23, 45),
+      hasTime: true,
+    })
+  );
+});
+
+it('lists due times on from the start beside a due date without a time, with no lengths', () => {
+  const timedStart = {
+    ...start,
+    value: new Date(2026, 10, 26, 9),
+    hasTime: true,
+  };
+  const wholeDayDue = {
+    ...due,
+    value: new Date(2026, 10, 26, 23, 59, 59, 999),
+  };
+  setup(
+    vi.fn(async () => {}),
+    vi.fn(async () => {}),
+    {
+      start: timedStart,
+      due: wholeDayDue,
+    }
+  );
+
+  const names = optionNames();
+  expect(names[0]).toBe('9:15 AM');
+  expect(names).toContain('12:30 AM');
+  expect(names.filter((name) => /\d(min|h)$/.test(name ?? ''))).toEqual([]);
+  expect(screen.getByText('1 day')).toBeTruthy();
+});
+
+it('shows a due date without a time again after a half-failed Add time', async () => {
+  const dueSave = Promise.withResolvers<void>();
+  setup(
+    vi.fn(() => dueSave.promise),
+    vi.fn<StartDueEditorProps['saveOther']>().mockResolvedValue(undefined)
+  );
+  fireEvent.click(screen.getByRole('button', { name: /^Add time/ }));
+  dueSave.reject(new Error());
+
+  await waitFor(() => expect(field('Due')).toBe('DueFri, Nov 27'));
+  expect(field('Start')).toBe('StartMon, Nov 2311:00 AM');
+});
+
+it('keeps a start made a whole day by Remove time a whole day when the due save fails', async () => {
+  const timedStart = {
+    ...start,
+    value: new Date(2026, 10, 23, 9),
+    hasTime: true,
+  };
+  const timedDue = { ...due, value: new Date(2026, 10, 27, 15), hasTime: true };
+  const dueSave = Promise.withResolvers<void>();
+  const saveOther = vi
+    .fn<StartDueEditorProps['saveOther']>()
+    .mockResolvedValue(undefined);
+  setup(
+    vi.fn(() => dueSave.promise),
+    saveOther,
+    { start: timedStart, due: timedDue }
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove time' }));
+  await waitFor(() =>
+    expect(saveOther).toHaveBeenCalledWith(timedStart, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 23),
+    })
+  );
+  dueSave.reject(new Error());
+
+  await waitFor(() => expect(field('Due')).toBe('DueFri, Nov 273:00 PM'));
+  expect(field('Start')).toBe('StartMon, Nov 23');
+  fireEvent.click(screen.getByRole('button', { name: /^Start/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Change day' }));
+  fireEvent.click(screen.getByRole('button', { name: '24' }));
+  await waitFor(() =>
+    expect(saveOther).toHaveBeenLastCalledWith(timedStart, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 24),
+    })
+  );
 });

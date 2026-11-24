@@ -1050,13 +1050,14 @@ they never show a toast, browser or desktop alert, or phone push. Opening one
 opens the routine. The routine's own agent turn sends no "agent finished"
 notification; its questions still notify.
 
-The routines list shows **Failed** in failure color in the Status column while a
-routine's latest finished run failed, whether it is active, paused, or done; a
-run in progress still shows **Running**. The legacy Agents list shows **Last run
+A routine's card on the Routines page reads **Failed <when> · <why>** in failure
+color while its latest finished run failed (a red dot and the reason under
+Last run in the touch table); a run in progress reads **Running now**, and a
+routine that is off reads **Off**. The legacy Agents list shows **Last run
 failed** for the same routine. Verify by running a routine whose required app is
-disconnected: the row turns **Failed** and a "failed" notification appears in the
+disconnected: the card turns **Failed** and a "failed" notification appears in the
 inbox without an alert; reconnect and run again: a "finished" notification
-appears and the row returns to its normal status.
+appears and the card shows the new run.
 
 ## Legacy chats are read-only
 
@@ -1592,17 +1593,21 @@ credential is never exposed to the browser. Unsupported recording environments
 show a disabled microphone. Every supported browser uses Whisper; there are
 no browser speech-recognition or language-pack installation flows.
 
-While dictating, a scrolling microphone-volume timeline and **Cancel dictation** / **Use dictation**
-replace the composer controls. Cancel (or Escape) preserves the original draft.
+While dictating, a row covers the composer: **Cancel dictation** where + was,
+an Aa mark, a scrolling microphone-volume timeline, the elapsed time, and **Use
+dictation** drawn like Send. The row takes focus, so Enter or Space confirms and
+Escape cancels at every step. Cancel preserves the original draft.
 Bars sample microphone volume on a fixed timer (every 80ms), independent of recording chunks: silence stays dotted, louder speech
 creates taller bars, and earlier levels move left without changing height.
 Volume analysis stays on-device and stops on confirm, cancel, error, or close.
 Use dictation stops recording, waits for Whisper, and appends plain text to
 the draft without sending it. Existing rich text and attachments remain intact.
-If the browser stops listening on its own, **Ready** waits for confirmation.
-While **Finishing…**, the checkmark is disabled and Cancel remains available.
-No provider name or transcription hint appears below the composer; only the
-recording limit and failures do.
+If the browser stops listening at the limit, the row says **Limit reached** and
+waits for confirmation. While **Transcribing…**, the checkmark shows a spinner
+and Cancel remains available. A failed transcription is stated in the row and
+the checkmark becomes **Try transcribing again**. No provider name or
+transcription hint appears below the composer; notes there (no speech, a
+capture failure) clear after a few seconds or when the draft changes.
 Starting dictation in another composer releases the previous session without
 moving focus back to it. Closing the composer releases the microphone. Capture failures
 appear below the composer.
@@ -1611,10 +1616,9 @@ Whisper dictation supports WebM, MP4, and Ogg recording depending on browser.
 Recordings stop just before five minutes or near 8 MB and wait for confirmation.
 Cancel discards the recording; cancel during transcription aborts the request and
 ignores any late result. If the service is temporarily at capacity, the composer
-stays in **Finishing…** while TanStack retries up to twice with exponential backoff,
+stays in **Transcribing…** while TanStack retries up to twice with exponential backoff,
 jitter, and the server's `Retry-After` delay. Cancel also cancels these retries.
-Other failures keep the recording in memory for an explicit retry with the
-checkmark. No audio or transcript is stored in the query cache or persisted by the dictation
+Other failures keep the recording in memory for an explicit retry. No audio or transcript is stored in the query cache or persisted by the dictation
 endpoint. Provider diagnostics exclude response content. The server detects
 the audio container and inspects its duration before contacting OpenAI, requires a
 signed-in user (bots and internal callers are refused), and rate limits each

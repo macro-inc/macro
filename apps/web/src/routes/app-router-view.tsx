@@ -64,7 +64,6 @@ import {
   HomeEntityDetailRouteView,
   MailRouteView,
   MeetingRouter,
-  NewHomeRouteView,
   NotFound,
   NotificationsCalendarRouteView,
   NotificationsRouteView,
@@ -79,6 +78,7 @@ import {
   SettingsRouteView,
   TasksDetailRouteView,
   TasksRouteView,
+  TasksTimeTaskRouteView,
 } from './lazy-route-views';
 import {
   BookingReceiptRoutePage,
@@ -162,7 +162,6 @@ import {
   loginRoute,
   meetRoute,
   mobileEmailSignupRoute,
-  newHomeRoute,
   notFoundRoute,
   notificationsCalendarRoute,
   notificationsRoute,
@@ -186,6 +185,8 @@ import {
   taskSlugRoute,
   tasksProjectsRoute,
   tasksSplitRoute,
+  tasksTimeRoute,
+  tasksTimeTaskRoute,
   teamInviteRoute,
   welcomeRoute,
 } from './routes';
@@ -389,7 +390,6 @@ export function appRouteElements(): JSX.Element {
             component={HomeDetailRouteView}
           />
         </Route>
-        <Route definition={newHomeRoute} component={NewHomeRouteView} />
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={forYouRoute} component={ForYouRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
@@ -437,6 +437,12 @@ export function appRouteElements(): JSX.Element {
             />
           </Route>
           <Route definition={tasksProjectsRoute} />
+          <Route definition={tasksTimeRoute}>
+            <Route
+              definition={tasksTimeTaskRoute}
+              component={TasksTimeTaskRouteView}
+            />
+          </Route>
           <Route
             definition={taskDetailRoute}
             component={TasksDetailRouteView}

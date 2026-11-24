@@ -57,6 +57,193 @@ impl agent_egress::domain::service::EgressService for NoAppEgress {
     }
 }
 
+/// A call marked withheld in its `_meta` gets its misfit arguments back
+/// without their value, through the handler that reads the mark; an
+/// unmarked call keeps serde's message.
+#[tokio::test]
+async fn a_marked_calls_misfit_arguments_come_back_without_their_value() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_agent_session(AgentSessionId::new());
+    repo.insert_session(session.clone());
+    repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
+        .await
+        .unwrap();
+    let tasks = FixedTasks::default();
+    let app = router(
+        Arc::new(repo.clone()),
+        Vec::new(),
+        InternalTools {
+            service: Arc::new(SessionPullRequestService::new(
+                repo.clone(),
+                RecordingRealtime::new(),
+                Arc::new(tasks.clone()),
+            )),
+            tasks: Arc::new(tasks),
+            code_mode: Some(Arc::new(SpanRecordingCodeMode::default())),
+            cognition: None,
+            reviews: Arc::new(OnceLock::new()),
+            gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+            app_url: "https://macro.com".into(),
+        },
+    );
+    for marked in [false, true] {
+        let mut params = serde_json::json!({
+            "name": "ExecuteCode",
+            "arguments": {
+                "turn_id": "00000000-0000-0000-0000-000000000003",
+                "source": "export async function main() { return {data: 1}; }",
+                "timeout_ms": "the private supplier list",
+            },
+        });
+        if marked {
+            params["_meta"] = serde_json::json!({ "macro.dev/withhold-content": true });
+        }
+        let (_, response) = rpc(app.clone(), Some("secret"), "tools/call", params).await;
+        let message = response["error"]["message"]
+            .as_str()
+            .unwrap_or_else(|| panic!("the call is refused: {response}"));
+        assert_eq!(message.contains("private supplier"), !marked, "{message}");
+        if marked {
+            assert!(message.contains("invalid type, expected u64"), "{message}");
+        }
+    }
+}
+
+/// Every event's fields, as text.
+#[derive(Clone, Default)]
+struct Events(Arc<std::sync::Mutex<Vec<String>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Events {
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        struct Text<'a>(&'a mut String);
+        impl tracing::field::Visit for Text<'_> {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                use std::fmt::Write as _;
+                let _ = write!(self.0, "{}={value:?} ", field.name());
+            }
+        }
+        let mut text = String::new();
+        event.record(&mut Text(&mut text));
+        self.0.lock().expect("events lock").push(text);
+    }
+}
+
+/// A withheld turn's misfit tool call, from the in-process agent's MCP
+/// client through the internal server and back: outside the scope the
+/// refused value shows in the events of the hops that log the error; inside
+/// it, in none of them. At INFO and above, the levels services log at: rmcp's
+/// DEBUG wire log of each request carries the arguments either way.
+#[tokio::test(flavor = "current_thread")]
+async fn a_withheld_turns_misfit_call_leaves_its_value_in_no_event() {
+    use tracing_subscriber::layer::SubscriberExt as _;
+    let events = Events::default();
+    let _guard = tracing::subscriber::set_default(
+        tracing_subscriber::registry()
+            .with(tracing_subscriber::filter::LevelFilter::INFO)
+            .with(events.clone()),
+    );
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_agent_session(AgentSessionId::new());
+    repo.insert_session(session.clone());
+    repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
+        .await
+        .unwrap();
+    let tasks = FixedTasks::default();
+    let app = router(
+        Arc::new(repo.clone()),
+        Vec::new(),
+        InternalTools {
+            service: Arc::new(SessionPullRequestService::new(
+                repo.clone(),
+                RecordingRealtime::new(),
+                Arc::new(tasks.clone()),
+            )),
+            tasks: Arc::new(tasks),
+            code_mode: Some(Arc::new(SpanRecordingCodeMode::default())),
+            cognition: None,
+            reviews: Arc::new(OnceLock::new()),
+            gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+            app_url: "https://macro.com".into(),
+        },
+    );
+    use agent_inmem::domain::mcp::McpToolConnector as _;
+    let connector = agent_inmem::outbound::acp_mcp::AcpMcpConnector::new(
+        agent_inmem::outbound::egress_mcp::EgressMcpClient::new(
+            Arc::new(NoAppEgress),
+            "http://localhost/agent-harness-egress",
+        )
+        .with_internal_mcp(crate::internal_mcp_handler(app)),
+    );
+    let tools = connector
+        .connect(vec![
+            agent_client_protocol::schema::v1::McpServerHttp::new(
+                "macro_internal",
+                "http://localhost/agent-harness-egress/mcp/internal",
+            )
+            .headers(vec![agent_client_protocol::schema::v1::HttpHeader::new(
+                "Authorization",
+                "Bearer secret",
+            )]),
+        ])
+        .await
+        .expect("the internal server connects");
+    let owner = session.owner_user().unwrap().clone();
+    let arguments = serde_json::json!({
+        "acting_as": "owner",
+        "turn_id": "00000000-0000-0000-0000-000000000003",
+        "source": "export async function main() { return {data: 1}; }",
+        "timeout_ms": "the private supplier list",
+    });
+    let call = || {
+        ai_toolset::ToolSet::<()>::dispatch_tool_call(
+            &tools,
+            (),
+            RequestContext::new(owner.clone()),
+            "mcp__macro_internal__ExecuteCode",
+            &arguments,
+        )
+    };
+    // Register the callsites, then recompute their interest on this thread:
+    // another test's thread can cache them as never wanted.
+    let _ = call().await;
+    let _ = genai_telemetry::withhold_content(call()).await;
+    tracing::callsite::rebuild_interest_cache();
+    let take = || std::mem::take(&mut *events.0.lock().expect("events lock"));
+    take();
+
+    let shown = call().await;
+    let shown_events = take();
+    let withheld = genai_telemetry::withhold_content(call()).await;
+    let withheld_events = take();
+    // The call fails either way; what the model is told keeps serde's
+    // message only outside the scope.
+    let told =
+        |result: &Result<ai_toolset::ToolResult<serde_json::Value>, ai_toolset::ToolSetError>| {
+            match result {
+                Ok(Err(error)) => error.description.clone(),
+                other => panic!("the call fails as a tool error: {other:?}"),
+            }
+        };
+    assert!(
+        told(&shown).contains("private supplier"),
+        "{}",
+        told(&shown)
+    );
+    assert!(!told(&withheld).contains("private"), "{}", told(&withheld));
+    assert!(
+        shown_events
+            .iter()
+            .any(|event| event.contains("private supplier")),
+        "the unmarked call's error is logged: {shown_events:#?}"
+    );
+    assert!(
+        withheld_events
+            .iter()
+            .all(|event| !event.contains("private")),
+        "{withheld_events:#?}"
+    );
+}
+
 /// The in-process agent's ExecuteCode reaches the internal MCP server with
 /// the turn's trace context, so the execution (and the sandbox and SDK spans
 /// under it) joins the session's trace instead of starting its own.

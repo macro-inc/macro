@@ -35,7 +35,7 @@ use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
 };
 use agent_code_mode::domain::ExecutionStatus;
-use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
+use agent_runtime_protocol::domain::action::{MODEL_CONFIG_ID, withholds_content};
 use agent_runtime_protocol::domain::turn::{FailureNotice, FailureNoticeKind};
 use agent_session::domain::model::AgentSessionId;
 use ai_billing::domain::AiAdmissionService;
@@ -79,6 +79,12 @@ const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// What a failed turn says to the person it answers, wherever its reply is
 /// read. The failure itself goes to the prompt's error, not to them.
 pub(crate) const TURN_FAILED_REPLY: &str = "I ran into an error and stopped before finishing.";
+
+/// A failed turn's error inside `genai_telemetry::withhold_content`: the
+/// model library's text can quote the prompt or the answer, and the ACP
+/// error a turn ends with is logged and recorded on its span.
+pub(crate) const WITHHELD_TURN_FAILURE: &str =
+    "the model call failed; its text is withheld with the turn's content";
 
 /// Whole milliseconds since `started`, saturating; a span field, not a clock.
 fn elapsed_ms(started: Instant) -> u64 {
@@ -774,6 +780,8 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         agent.turn.compaction_wait_ms = tracing::field::Empty,
                     );
                     genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
+                    // A prompt may ask that its turn record no content on traces.
+                    let withheld = withholds_content(request.meta.as_ref());
                     let prompt = UserPrompt::from_request(&request);
                     // The id the log keeps the request under, which the turn
                     // is known by from here on.
@@ -786,14 +794,17 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         connection.spawn({
                             let connection = connection.clone();
                             async move {
-                                let stop = run_ask(
-                                    &state,
-                                    &connection,
-                                    request.session_id,
-                                    request_id,
-                                    prompt,
-                                    question,
-                                    cancel,
+                                let stop = genai_telemetry::withhold_content_if(
+                                    withheld,
+                                    run_ask(
+                                        &state,
+                                        &connection,
+                                        request.session_id,
+                                        request_id,
+                                        prompt,
+                                        question,
+                                        cancel,
+                                    ),
                                 )
                                 .await;
                                 let _ = responder.respond(PromptResponse::new(stop));
@@ -808,13 +819,16 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     connection.spawn({
                         let connection = connection.clone();
                         async move {
-                            let result = run_turn(
-                                &state,
-                                &connection,
-                                request.session_id,
-                                request_id,
-                                prompt,
-                                cancel,
+                            let result = genai_telemetry::withhold_content_if(
+                                withheld,
+                                run_turn(
+                                    &state,
+                                    &connection,
+                                    request.session_id,
+                                    request_id,
+                                    prompt,
+                                    cancel,
+                                ),
                             )
                             .await;
                             // A closed connection is the only way responding fails.
@@ -1127,6 +1141,8 @@ async fn run_turn(
             Ok(Some(Err(error))) => {
                 if error.was_cancelled() {
                     was_cancelled = true;
+                } else if genai_telemetry::content_withheld() {
+                    failure = Some(WITHHELD_TURN_FAILURE.to_owned());
                 } else {
                     failure = Some(error.to_string());
                 }

@@ -105,3 +105,8 @@ async fn a_sub_routines_run_names_the_routine_that_created_it() {
         "Morning brief · from Weekly planning"
     );
 }
+
+#[tokio::test]
+async fn a_run_its_owner_stopped_sends_nothing() {
+    assert!(sent(RunEnd::Stopped).await.is_empty());
+}

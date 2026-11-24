@@ -3,6 +3,17 @@
  */
 import { z } from 'zod/v3';
 
+export const AddCompanyDomain = z.object({
+  companyId: z.string().uuid(),
+  domain: z.string(),
+});
+
+export const CompanyDomainsResponse = z.object({
+  companyId: z.string().uuid(),
+  name: z.union([z.string(), z.null()]).optional(),
+  domains: z.array(z.string()),
+});
+
 export const AddSharedCalendarEvent = z.object({
   eventId: z.string().uuid(),
   calendarId: z.union([z.string().uuid(), z.null()]).optional(),
@@ -1530,6 +1541,7 @@ export const SearchToolResponse = z.object({
                 snippet: z.union([z.string(), z.null()]).optional(),
                 is_read: z.boolean(),
                 inbox_visible: z.boolean(),
+                has_received_mail: z.boolean().optional(),
                 is_draft: z.boolean(),
                 is_important: z.boolean(),
                 id: z.string().uuid(),
@@ -18487,6 +18499,11 @@ export const ReadWordDocument = z.object({
   documentId: z.string(),
   start: z.union([z.number().int().gte(0), z.null()]).optional(),
   count: z.union([z.number().int().gte(0), z.null()]).optional(),
+});
+
+export const RemoveCompanyDomain = z.object({
+  companyId: z.string().uuid(),
+  domain: z.string(),
 });
 
 export const RemoveFromPipeline = z.object({

@@ -35,9 +35,12 @@ let view: EmailPolicyView = {
   revision: 1,
   rules: params.has('all-mail') ? null : fixtureRules,
   effect: '',
-  link_id: mailbox,
-  mailbox_email: 'member@example.com',
+  link_id: params.has('disconnected') ? null : mailbox,
+  mailbox_email: params.has('disconnected') ? null : 'member@example.com',
 };
+export function connectPolicyMailbox() {
+  view = { ...view, link_id: mailbox, mailbox_email: 'member@example.com' };
+}
 export const [policyCalls, setPolicyCalls] = createSignal<string[]>([]);
 function record(call: string) {
   setPolicyCalls((calls) => [...calls, call]);

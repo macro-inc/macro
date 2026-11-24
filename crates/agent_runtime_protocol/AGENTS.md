@@ -54,6 +54,11 @@ ExecuteCode stale-turn fencing; mark that block with `INVOCATION_CONTEXT_META`
 so the transcript fold omits it. Preserve existing prompt content and notification
 metadata; compaction must remain the single `/compact` block.
 
+A prompt with `withhold_content` (harness-authored only: `ControlEvent::authorized`
+refuses it from callers) carries `WITHHOLD_CONTENT_META` in its `_meta`; the
+session projector and the in-process runtime read it with `withholds_content` and
+record none of that turn's content on traces.
+
 ## Checks
 
 - `cargo test -p agent_runtime_protocol` (`SQLX_OFFLINE` unset).

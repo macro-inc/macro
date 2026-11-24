@@ -89,7 +89,6 @@ export default {
     'Mentions, replies, requests, and anything else that needs you will show up here.',
   noneSelectedTitle: 'No notification selected',
   noneSelectedDescription: 'Pick a notification to see it here.',
-  settings: 'Notification settings',
   settingsItem: 'Notification settings…',
   displayOptions: 'Display options',
   condensed: 'Condensed',

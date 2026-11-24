@@ -12,7 +12,7 @@ use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, Entity,
         EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission, TeamRole,
-        UserTeamInfo,
+        UserTeamInfo, ViewAccessLevel,
     },
     ports::EntityAccessService,
 };
@@ -314,13 +314,17 @@ impl TimeTrackingRepository for FakeRepo {
     }
 }
 
-/// Access levels per (user, task); anything else is not found.
+/// Access levels per (user, task); anything else is not found. Records the
+/// documents of each bulk view check.
 #[derive(Clone, Default)]
-pub(crate) struct FakeAccess(Arc<Mutex<HashMap<(String, String), AccessLevel>>>);
+pub(crate) struct FakeAccess {
+    grants: Arc<Mutex<HashMap<(String, String), AccessLevel>>>,
+    bulk_checks: Arc<Mutex<Vec<Vec<String>>>>,
+}
 
 impl FakeAccess {
     pub(crate) fn grant(self, user_id: &str, task_id: &str, level: AccessLevel) -> Self {
-        self.0
+        self.grants
             .lock()
             .unwrap()
             .insert((user_id.to_string(), task_id.to_string()), level);
@@ -338,9 +342,37 @@ impl FakeAccess {
         }
         access
     }
+
+    /// The documents of each bulk view check, in call order.
+    pub(crate) fn bulk_checks(&self) -> Vec<Vec<String>> {
+        self.bulk_checks.lock().unwrap().clone()
+    }
 }
 
 impl EntityAccessService for FakeAccess {
+    async fn generate_document_view_access_receipts(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        document_ids: &[String],
+    ) -> Result<HashMap<String, EntityAccessReceipt<ViewAccessLevel>>, AccessError> {
+        self.bulk_checks.lock().unwrap().push(document_ids.to_vec());
+        let mut receipts = HashMap::new();
+        for document_id in document_ids {
+            if let Ok(receipt) = self
+                .generate_entity_access_receipt::<ViewAccessLevel>(
+                    user_id,
+                    None,
+                    document_id,
+                    EntityType::Document,
+                )
+                .await
+            {
+                receipts.insert(document_id.clone(), receipt);
+            }
+        }
+        Ok(receipts)
+    }
+
     async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
@@ -349,7 +381,7 @@ impl EntityAccessService for FakeAccess {
         entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
         let level = self
-            .0
+            .grants
             .lock()
             .unwrap()
             .get(&(user_id.as_ref().to_string(), entity_id.to_string()))
@@ -521,5 +553,58 @@ impl TestClock {
 impl Clock for TestClock {
     fn now(&self) -> DateTime<Utc> {
         *self.0.lock().unwrap()
+    }
+}
+
+/// A bearer token is the user id it stands for.
+#[cfg(feature = "inbound")]
+#[derive(Clone)]
+pub(crate) struct BearerIsUser;
+
+#[cfg(feature = "inbound")]
+impl macro_authorization::MacroAuthorizationService for BearerIsUser {
+    async fn authorize(
+        &self,
+        jwt: &str,
+    ) -> Result<
+        model_user::UserContext,
+        rootcause::Report<macro_authorization::MacroAuthorizationError>,
+    > {
+        if !jwt.starts_with("macro|") {
+            return Err(rootcause::Report::new(
+                macro_authorization::MacroAuthorizationError::InvalidCredentials,
+            ));
+        }
+        Ok(model_user::UserContext {
+            user_id: jwt.to_string(),
+            fusion_user_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb".to_string(),
+            permissions: None,
+            organization_id: None,
+        })
+    }
+
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<
+        macro_authorization::ValidatedCredential,
+        rootcause::Report<macro_authorization::MacroAuthorizationError>,
+    > {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
+    async fn authorize_internal(
+        &self,
+        _provided_key: &str,
+        _claims: macro_authorization::InternalIdentityClaims,
+    ) -> Result<
+        Option<model_user::UserContext>,
+        rootcause::Report<macro_authorization::MacroAuthorizationError>,
+    > {
+        Err(rootcause::Report::new(
+            macro_authorization::MacroAuthorizationError::InvalidCredentials,
+        ))
     }
 }

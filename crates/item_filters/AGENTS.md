@@ -60,6 +60,10 @@ logically-combinable query form.
   notification states) also implicitly opts in — don't assume an empty
   `include` flag means "show everything".
 - `#![deny(missing_docs)]`: every new public field needs a doc comment.
+- `EmailFilters` fields that only search applies (`view`, `exclude_views`,
+  `text_matches`, `label_names`, `favorite`, `has_attachment`, `sent_after`,
+  `sent_before`) make expansion into a list filter an
+  `ExpandErr::SearchOnlyEmailFilter`; add a new one to `search_only_filter`.
 - `EmailLiteral::Subject` holds a `SubjectQuery`: trimmed, 1-200 characters;
   deserialization rejects anything else. `Attachment` kinds serialize as
   `pdf`, `image`, `document`.

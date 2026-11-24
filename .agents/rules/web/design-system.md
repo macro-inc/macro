@@ -56,7 +56,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   top-bar `Tabs` take Tab, Shift+Tab and 1–9 through `useViewTabHotkeys`,
   registered beside them on the split's own scope (`splitRootScope`, which an
   inline preview keeps); a sidebar's navigation and the rest of a view never
-  bind Tab. Tabs atop a list that is the sidebar (Chat, New Home) are that
+  bind Tab. Tabs atop a list that is the sidebar (Chat) are that
   pane's top bar.
 - **FE-63** Style controls only through their props (`variant`, `size`, `finish`,
   `fullWidth`); `class` on a control is for placement (margin,
