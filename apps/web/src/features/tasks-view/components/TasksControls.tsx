@@ -11,7 +11,7 @@ import GanttIcon from '@icon/system/regular/chart-gantt.svg';
 import BoardIcon from '@icon/system/regular/kanban.svg';
 import ListIcon from '@icon/system/regular/list-bullets.svg';
 import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
-import { ButtonGroup } from '@ui';
+import { ButtonGroup, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
 import { taskGroupOptions, taskSortOptions } from '../constants';
@@ -22,19 +22,32 @@ import { TASKS_TOUR } from '../tour';
 import { TasksFilterDrawer } from './TasksFilterDrawer';
 import { TaskDueDateRangeDialog } from './task-due-date-range-dialog';
 
-/** `inline`: on touch, the filter trigger sits in an in-flow header row. */
-export function TasksControls(props: { inline?: boolean }) {
+export type TasksControlsProps = {
+  /** On touch, the filter trigger sits in an in-flow header row. */
+  inline?: boolean;
+  /** Hides the layout switch (List, Board, Gantt) when the header has no room. */
+  hideLayout?: boolean;
+  /** Hides the view options (sort, group) when the header has no room. */
+  hideViewOptions?: boolean;
+};
+
+export function TasksControls(props: TasksControlsProps) {
   return (
     <Show
       when={!isTouchDevice()}
       fallback={<TasksFilterDrawer inline={props.inline} />}
     >
-      <DesktopTasksControls />
+      <DesktopTasksControls
+        hideLayout={props.hideLayout}
+        hideViewOptions={props.hideViewOptions}
+      />
     </Show>
   );
 }
 
-function DesktopTasksControls() {
+function DesktopTasksControls(
+  props: Pick<TasksControlsProps, 'hideLayout' | 'hideViewOptions'>
+) {
   const startDates = useStartDateEnabled();
   const panel = useSplitPanelOrThrow();
   const { state, setPrimarySort, setState, ganttEnabled } = useTasksView();
@@ -110,63 +123,68 @@ function DesktopTasksControls() {
           />
         </div>
       </HeaderActionGroup>
-      <HeaderActionGroup label="Task layout" size="md">
-        <ButtonGroup.Button
-          aria-label="List"
-          tooltip="List"
-          variant="ghost"
-          size="icon-md"
-          aria-pressed={state.layout === 'list'}
-          onClick={() => setState('layout', 'list')}
-        >
-          <ListIcon class="size-4" />
-        </ButtonGroup.Button>
-        <ButtonGroup.Button
-          aria-label="Board"
-          tooltip="Board"
-          variant="ghost"
-          size="icon-md"
-          aria-pressed={state.layout === 'board'}
-          onClick={() => setState('layout', 'board')}
-        >
-          <BoardIcon class="size-4" />
-        </ButtonGroup.Button>
-        <Show when={ganttEnabled()}>
+      {/* Wrappers the header's row keeps, so hiding a group never adds or removes a child. */}
+      <div class={cn('contents', props.hideLayout && 'hidden')}>
+        <HeaderActionGroup label="Task layout" size="md">
           <ButtonGroup.Button
-            aria-label="Gantt"
-            tooltip="Gantt"
+            aria-label="List"
+            tooltip="List"
             variant="ghost"
             size="icon-md"
-            aria-pressed={state.layout === 'gantt'}
-            onClick={() => setState('layout', 'gantt')}
+            aria-pressed={state.layout === 'list'}
+            onClick={() => setState('layout', 'list')}
           >
-            <GanttIcon class="size-4" />
+            <ListIcon class="size-4" />
           </ButtonGroup.Button>
-        </Show>
-      </HeaderActionGroup>
-      <HeaderActionGroup label="Task view options" size="md">
-        <Show when={!isSearching()}>
-          <ListSortDropdown
+          <ButtonGroup.Button
+            aria-label="Board"
+            tooltip="Board"
+            variant="ghost"
+            size="icon-md"
+            aria-pressed={state.layout === 'board'}
+            onClick={() => setState('layout', 'board')}
+          >
+            <BoardIcon class="size-4" />
+          </ButtonGroup.Button>
+          <Show when={ganttEnabled()}>
+            <ButtonGroup.Button
+              aria-label="Gantt"
+              tooltip="Gantt"
+              variant="ghost"
+              size="icon-md"
+              aria-pressed={state.layout === 'gantt'}
+              onClick={() => setState('layout', 'gantt')}
+            >
+              <GanttIcon class="size-4" />
+            </ButtonGroup.Button>
+          </Show>
+        </HeaderActionGroup>
+      </div>
+      <div class={cn('contents', props.hideViewOptions && 'hidden')}>
+        <HeaderActionGroup label="Task view options" size="md">
+          <Show when={!isSearching()}>
+            <ListSortDropdown
+              grouped
+              size="icon-md"
+              label="Sort tasks"
+              value={primarySort()}
+              options={taskSortOptions(startDates())}
+              open={openMenu() === 'sort'}
+              onChange={setPrimarySort}
+              onOpenChange={handleMenuOpenChange('sort')}
+              triggerRef={(element) => (sortTrigger = element)}
+            />
+          </Show>
+          <ListGroupDropdown
             grouped
             size="icon-md"
-            label="Sort tasks"
-            value={primarySort()}
-            options={taskSortOptions(startDates())}
-            open={openMenu() === 'sort'}
-            onChange={setPrimarySort}
-            onOpenChange={handleMenuOpenChange('sort')}
-            triggerRef={(element) => (sortTrigger = element)}
+            label="Group by"
+            value={state.groupBy}
+            options={groupOptions()}
+            onChange={(groupBy) => setState('groupBy', groupBy)}
           />
-        </Show>
-        <ListGroupDropdown
-          grouped
-          size="icon-md"
-          label="Group by"
-          value={state.groupBy}
-          options={groupOptions()}
-          onChange={(groupBy) => setState('groupBy', groupBy)}
-        />
-      </HeaderActionGroup>
+        </HeaderActionGroup>
+      </div>
       <TaskDueDateRangeDialog
         value={filters.customRange()}
         onChange={filters.setCustomRange}
