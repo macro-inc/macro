@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import type {
   CacheRevision,
@@ -1303,7 +1304,7 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       } as never,
       cached: Promise.reject(new StaleCacheAuthorityError()),
     });
-    const at = (sortKey: string | undefined) =>
+    const at = (sortKey: string | null | undefined) =>
       rows.findIndex((row) => row.sortKey === sortKey);
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
@@ -1403,13 +1404,237 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       onlineManager.setOnline(true);
       reload.reject(new TypeError('Failed to fetch'));
       await retrying.promise;
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await settle();
       expect(atLatest).toBe(false);
 
       const grown = [...rows, graphqlMessage(3)];
       retry.resolve(serverPage(grown, 0, 3));
       await latest;
       expect(mounted.timeline.entries()).toHaveLength(3);
+    } finally {
+      mounted.dispose();
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('leaves a failed older page to a scroll or the connection, not to paging whenever idle', async () => {
+    const rows = messages(70);
+    const refused = () =>
+      serverPage(rows, 0, 20, Promise.reject(new StaleCacheAuthorityError()));
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(refused())
+      .mockResolvedValueOnce(refused())
+      .mockResolvedValueOnce(refused())
+      .mockRejectedValue(new TypeError('Failed to fetch'));
+    const mounted = mount({ rows, fetchPage });
+    let dispose = () => {};
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      // Refused three times: the last page is left to read again.
+      await mounted.timeline.loadOlder();
+      expect(mounted.timeline.hasOlder()).toBe(true);
+      // As the call panel does while its call's row is not loaded.
+      createRoot((cleanup) => {
+        dispose = cleanup;
+        createEffect(
+          on(
+            () =>
+              mounted.timeline.hasOlder() &&
+              !mounted.timeline.isLoadingOlder() &&
+              !mounted.timeline.olderFailed(),
+            (idle) => {
+              if (idle)
+                fireAndForget(mounted.timeline.loadOlder(), 'channel-call');
+            }
+          )
+        );
+      });
+      await until(() => mounted.timeline.olderFailed());
+      expect(fetchPage).toHaveBeenCalledTimes(4);
+
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+      // Read again at once, and failed again.
+      expect(mounted.timeline.olderFailed()).toBe(false);
+      await until(() => mounted.timeline.olderFailed());
+      expect(fetchPage.mock.calls.map(([input]) => input.before)).toEqual(
+        Array.from({ length: 5 }, () => rows[20]!.sortKey)
+      );
+    } finally {
+      dispose();
+      mounted.dispose();
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('reads the window from the device only once a page it shows is stored', async () => {
+    const rows = messages(70);
+    const cached = Promise.withResolvers<void>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise));
+    const mounted = mount({ rows, fetchPage });
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      const loading = mounted.timeline.loadOlder();
+      await until(() => mounted.timeline.entries().length === 70);
+      mounted.setHeld(true);
+      const reads = mounted.host.reads.length;
+      // A change while the page is still storing reads nothing yet.
+      mounted.runtime.changed();
+      await settle();
+      expect(mounted.host.reads.length).toBe(reads);
+
+      cached.resolve();
+      await loading;
+      await until(() => mounted.host.reads.length > reads);
+      expect(mounted.timeline.entries()).toHaveLength(70);
+    } finally {
+      cached.resolve();
+      mounted.dispose();
+    }
+  });
+
+  it('keeps no window for the next mount while a page it shows is storing', async () => {
+    const rows = messages(70);
+    const windows = createChannelWindows();
+    const cached = Promise.withResolvers<void>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise));
+    const mounted = mount({ rows, fetchPage, windows });
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      const loading = mounted.timeline.loadOlder();
+      await until(() => mounted.timeline.entries().length === 70);
+      mounted.dispose();
+      cached.reject(new StaleCacheAuthorityError());
+      await loading;
+      expect(windows.take(CHANNEL_ID)).toBeUndefined();
+    } finally {
+      cached.resolve();
+      mounted.dispose();
+    }
+  });
+
+  it('keeps no window for the next mount when a page was given up while the window stored', async () => {
+    const rows = messages(70);
+    const opening = Promise.withResolvers<void>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(serverPage(rows, 20, 70, opening.promise))
+      .mockResolvedValueOnce(
+        serverPage(rows, 0, 20, Promise.reject(new StaleCacheAuthorityError()))
+      );
+    const windows = createChannelWindows();
+    const mounted = mount({ rows, held: false, fetchPage, windows });
+    try {
+      await until(() => mounted.timeline.entries().length === 50);
+      await mounted.timeline.loadOlder();
+      expect(mounted.timeline.entries()).toHaveLength(70);
+      opening.resolve();
+      await settle();
+      mounted.dispose();
+      expect(windows.take(CHANNEL_ID)).toBeUndefined();
+    } finally {
+      opening.resolve();
+      mounted.dispose();
+    }
+  });
+
+  it('goes to the live end from a window around a message only once its retry on reconnect has loaded', async () => {
+    const rows = messages(2);
+    const cached = Promise.withResolvers<void>();
+    const reloading = Promise.withResolvers<void>();
+    const reload = Promise.withResolvers<ServerPage>();
+    const retrying = Promise.withResolvers<void>();
+    const retry = Promise.withResolvers<ServerPage>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(serverPage(rows, 0, 2))
+      .mockResolvedValueOnce(serverPage(rows, 0, 2, cached.promise))
+      .mockImplementationOnce(() => {
+        reloading.resolve();
+        return reload.promise;
+      })
+      .mockImplementationOnce(() => {
+        retrying.resolve();
+        return retry.promise;
+      });
+    const mounted = mount({
+      rows,
+      held: false,
+      around: rows[0]!.id,
+      fetchPage,
+    });
+    try {
+      await until(() => mounted.timeline.entries().length === 2);
+      let atLatest = false;
+      const latest = (async () => {
+        await mounted.timeline.toLatest();
+        atLatest = true;
+      })();
+      // The live end's window was not stored: it is read again, and that
+      // read fails after the connection came back, so it is read at once.
+      cached.reject(new StaleCacheAuthorityError());
+      await reloading.promise;
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+      reload.reject(new TypeError('Failed to fetch'));
+      await retrying.promise;
+      await settle();
+      expect(atLatest).toBe(false);
+
+      retry.resolve(serverPage([...rows, graphqlMessage(3)], 0, 3));
+      await latest;
+      expect(mounted.timeline.entries()).toHaveLength(3);
+    } finally {
+      mounted.dispose();
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('does not read on reconnect a page given up in the other direction', async () => {
+    const rows = messages(250);
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockImplementation(async ({ before, after }) => {
+        const from =
+          before === undefined
+            ? rows.findIndex((row) => row.sortKey === after) + 1
+            : rows.findIndex((row) => row.sortKey === before) - 50;
+        const to = from + 50;
+        const page = serverPage(
+          rows,
+          from,
+          to,
+          Promise.reject(new StaleCacheAuthorityError())
+        );
+        if (after !== undefined)
+          (page.page as { newerCursor: string | null }).newerCursor =
+            rows[to - 1]!.sortKey;
+        return page;
+      });
+    const mounted = mount({ rows, around: rows[100]!.id, fetchPage });
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      // Each refused three times, so both are left to read again.
+      await mounted.timeline.loadNewer();
+      await mounted.timeline.loadOlder();
+      // Refused again: the older page is given up, and so is the newer one.
+      await mounted.timeline.loadOlder();
+      expect(fetchPage).toHaveBeenCalledTimes(8);
+      const reads = mounted.host.reads.length;
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+      await settle();
+      expect(mounted.host.reads.slice(reads)).toEqual([]);
+      expect(fetchPage).toHaveBeenCalledTimes(8);
     } finally {
       mounted.dispose();
       onlineManager.setOnline(true);

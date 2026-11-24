@@ -63,6 +63,12 @@ export interface ChannelTimelineSource {
   hasNewer: Accessor<boolean>;
   isLoadingOlder: Accessor<boolean>;
   isLoadingNewer: Accessor<boolean>;
+  /**
+   * The last older page failed and waits for a scroll or the connection's
+   * return, so code that pages whenever paging is idle leaves it be. The REST
+   * path retries its pages itself and never reports one.
+   */
+  olderFailed: Accessor<boolean>;
   loadOlder(): Promise<void>;
   loadNewer(): Promise<void>;
   retry(): Promise<void>;
@@ -98,6 +104,7 @@ function restSource(
     hasNewer: () => query.hasPreviousPage,
     isLoadingOlder: () => query.isFetchingNextPage,
     isLoadingNewer: () => query.isFetchingPreviousPage,
+    olderFailed: () => false,
     loadOlder: async () => {
       await query.fetchNextPage();
     },
@@ -136,6 +143,7 @@ function localSource(
     hasNewer: timeline.hasNewer,
     isLoadingOlder: timeline.isLoadingOlder,
     isLoadingNewer: timeline.isLoadingNewer,
+    olderFailed: timeline.olderFailed,
     loadOlder: timeline.loadOlder,
     loadNewer: timeline.loadNewer,
     retry: timeline.retry,
@@ -213,6 +221,7 @@ export function useChannelTimelineSource(
     hasNewer: () => active().hasNewer(),
     isLoadingOlder: () => active().isLoadingOlder(),
     isLoadingNewer: () => active().isLoadingNewer(),
+    olderFailed: () => active().olderFailed(),
     loadOlder: () => active().loadOlder(),
     loadNewer: () => active().loadNewer(),
     retry: () => active().retry(),

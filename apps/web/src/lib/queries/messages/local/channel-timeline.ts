@@ -119,6 +119,11 @@ type TimelineState = {
    * device did not store: the next page that way reads it again, not past it.
    */
   unstored: Record<PageDirection, string | null>;
+  /**
+   * The last page that way failed: a scroll or the connection's return reads
+   * it again, so nothing that pages whenever paging is idle asks at once.
+   */
+  pageFailed: Record<PageDirection, boolean>;
 };
 
 type PageDirection = 'older' | 'newer';
@@ -135,6 +140,8 @@ export interface LocalChannelTimeline {
   isLoading: Accessor<boolean>;
   isLoadingOlder: Accessor<boolean>;
   isLoadingNewer: Accessor<boolean>;
+  /** The last older page failed; see `ChannelTimelineSource.olderFailed`. */
+  olderFailed: Accessor<boolean>;
   /** The first load's failure; a failed page keeps what is shown. */
   loadError: Accessor<EntityLoadError | undefined>;
   /** The message the window was asked to centre on does not exist. */
@@ -289,14 +296,25 @@ export function createLocalChannelTimeline(
     loadingOlder: false,
     loadingNewer: false,
     unstored: { older: null, newer: null },
+    pageFailed: { older: false, newer: false },
   });
   // Every load bumps it; a result for an older load is dropped.
   let loadToken = 0;
   // The device holds the window it loaded and every page stored since.
   let held = false;
+  // Pages merged in whose store has not answered yet.
+  let storing = 0;
+  // Bumped when a page is given up, so a window still storing as one is
+  // given up does not then count as held.
+  let givenUp = 0;
+  // A change came while the window could not be read again.
+  let missedReread = false;
   // The device holds every page shown, so the window can be read again.
   const holds = () =>
-    held && state.unstored.older === null && state.unstored.newer === null;
+    held &&
+    storing === 0 &&
+    state.unstored.older === null &&
+    state.unstored.newer === null;
   let anchorId: string | undefined;
   let rereading: Promise<void> | undefined;
   let rereadAgain = false;
@@ -376,6 +394,7 @@ export function createLocalChannelTimeline(
     abort = new AbortController();
     const signal = abort.signal;
     held = false;
+    missedReread = false;
     anchorId = around;
     stopReconnects();
     const watch = watchReconnect();
@@ -390,6 +409,7 @@ export function createLocalChannelTimeline(
         loadingOlder: false,
         loadingNewer: false,
         unstored: { older: null, newer: null },
+        pageFailed: { older: false, newer: false },
       });
     // No page while the window is read again: its cursors are the old
     // window's, and a page from them could leave a gap beside the new one.
@@ -399,6 +419,7 @@ export function createLocalChannelTimeline(
         loadingOlder: true,
         loadingNewer: true,
         unstored: { older: null, newer: null },
+        pageFailed: { older: false, newer: false },
       });
     const epoch = deps.runtime.epoch();
     let loaded: LoadedChannelPage | 'unsupported';
@@ -446,6 +467,8 @@ export function createLocalChannelTimeline(
       loadingOlder: false,
       loadingNewer: false,
     });
+    // Pages can load from here on, while the window is still storing.
+    const givenUpBefore = givenUp;
     const settled = await settle(loaded, epoch, token);
     if (token !== loadToken) return;
     if (settled === 'session-changed' || settled === 'yielded') {
@@ -459,8 +482,10 @@ export function createLocalChannelTimeline(
       }
       return;
     }
-    held = settled === 'held';
+    // A page given up meanwhile left the device without what it shows.
+    held = settled === 'held' && givenUp === givenUpBefore;
     if (!held) return;
+    if (missedReread) scheduleReread();
     // Opening asks the server only when the channel is not proven current.
     fireAndForget(
       trace.run(() => deps.runtime.ensureCurrent(channelId)),
@@ -469,7 +494,13 @@ export function createLocalChannelTimeline(
   };
 
   const reread = async () => {
-    if (!holds() || state.phase !== 'ready') return;
+    if (state.phase !== 'ready') return;
+    if (!holds()) {
+      // Read once every page shown is stored, or the window reloaded.
+      missedReread = true;
+      return;
+    }
+    missedReread = false;
     const token = loadToken;
     const merged = merges;
     const live = state.newerCursor === null;
@@ -550,7 +581,15 @@ export function createLocalChannelTimeline(
         }
       })
     );
-    const settled = await settle(loaded, epoch, token);
+    // The device lacks the page until it answers: nothing reads the window
+    // from it meanwhile, nor keeps it for the next mount.
+    storing += 1;
+    let settled: Awaited<ReturnType<typeof settle>>;
+    try {
+      settled = await settle(loaded, epoch, token);
+    } finally {
+      storing -= 1;
+    }
     return token === loadToken ? settled : 'stale';
   };
 
@@ -582,6 +621,10 @@ export function createLocalChannelTimeline(
   /** The window stops following the device until it is loaded again. */
   const letGo = () => {
     held = false;
+    givenUp += 1;
+    // A failed read again of a page given up is not read on reconnect.
+    for (const direction of ['older', 'newer'] as const)
+      if (state.unstored[direction] !== null) pageReconnects[direction]?.stop();
     setState('unstored', { older: null, newer: null });
   };
 
@@ -611,7 +654,11 @@ export function createLocalChannelTimeline(
     } else {
       const first = await fetchMore(direction, cursor, token, signal);
       if (first === 'stale') return 'stale';
-      if (first === 'held') return 'done';
+      if (first === 'held') {
+        // A change that came while it stored was not read.
+        if (missedReread && holds()) scheduleReread();
+        return 'done';
+      }
       if (first === 'unheld' || !held) {
         letGo();
         return 'done';
@@ -651,6 +698,7 @@ export function createLocalChannelTimeline(
     const watch = watchReconnect();
     pageReconnects[direction] = watch;
     setState(flag, true);
+    setState('pageFailed', direction, false);
     let outcome: PageOutcome | 'stale';
     try {
       outcome = await pageIn(
@@ -670,7 +718,14 @@ export function createLocalChannelTimeline(
       watch.stop();
       return;
     }
-    setState(flag, false);
+    // One update, so a view watching both never sees paging idle and the
+    // failure not yet marked.
+    setState(
+      produce((draft) => {
+        draft[flag] = false;
+        draft.pageFailed[direction] = outcome === 'failed';
+      })
+    );
     if (outcome === 'done') {
       watch.stop();
       return;
@@ -726,6 +781,7 @@ export function createLocalChannelTimeline(
     isLoading: () => state.phase === 'loading',
     isLoadingOlder: () => state.loadingOlder,
     isLoadingNewer: () => state.loadingNewer,
+    olderFailed: () => state.pageFailed.older,
     loadError: () =>
       state.phase === 'failed' ? toLoadError(state.error) : undefined,
     isMissingTarget: () => {
@@ -738,16 +794,16 @@ export function createLocalChannelTimeline(
     retry: () => load(untrack(() => aroundMessageId() ?? undefined)),
     toLatest: async () => {
       // A reset target already started loading the live end.
-      if (anchorId !== undefined || state.newerCursor !== null) {
-        await load(undefined);
-      } else {
-        // A load that fails after the connection came back is replaced by
-        // its retry as it fails: wait for whichever load is current.
-        let awaited: Promise<void>;
-        do {
-          awaited = currentLoad;
-          await awaited;
-        } while (awaited !== currentLoad);
+      let awaited =
+        anchorId !== undefined || state.newerCursor !== null
+          ? load(undefined)
+          : currentLoad;
+      await awaited;
+      // A load that fails after the connection came back is replaced by its
+      // retry as it fails: wait for whichever load is current.
+      while (awaited !== currentLoad) {
+        awaited = currentLoad;
+        await awaited;
       }
       if (state.phase === 'failed') throw state.error;
     },

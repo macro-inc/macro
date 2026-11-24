@@ -376,7 +376,9 @@ export function Channel(props: ChannelProps) {
         !!callPanel &&
         !messageById().has(callPanel.rootId) &&
         timeline.hasOlder() &&
-        !timeline.isLoadingOlder(),
+        !timeline.isLoadingOlder() &&
+        // A failed page is read again on reconnect, not in a loop here.
+        !timeline.olderFailed(),
       (shouldLoadOlder) => {
         if (shouldLoadOlder) {
           fireAndForget(timeline.loadOlder(), 'channel-call');
