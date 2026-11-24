@@ -3,6 +3,7 @@
 use super::{ProviderId, SendRequest};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use uuid::Uuid;
 
 /// A draft created for one stable Macro message, with a searchable correlation ID.
@@ -35,6 +36,10 @@ pub struct ProviderDraft {
     /// A missing digest forbids advancing through an attachment edit to delivery.
     #[serde(default)]
     pub content_fingerprint: Option<String>,
+    /// Digest of each content field the fingerprint covers, by its provider
+    /// name, so a log can say which field an edit changed and nothing else.
+    #[serde(default)]
+    pub field_digests: BTreeMap<String, String>,
 }
 
 /// Attachment identity supplied by the provider and the app's stable content ID.

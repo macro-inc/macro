@@ -355,6 +355,13 @@ async fn small_attachments_keep_content_id_for_lost_response_reconciliation() {
     assert_eq!(result.content_id.as_deref(), Some("stable"));
 }
 
+fn read(draft: &Value) -> ProviderDraft {
+    serde_json::from_value::<Draft>(draft.clone())
+        .unwrap()
+        .try_into()
+        .unwrap()
+}
+
 #[test]
 fn fingerprints_detect_content_edits_but_ignore_attachment_and_flag_changes() {
     let original = draft();
@@ -363,16 +370,35 @@ fn fingerprints_detect_content_edits_but_ignore_attachment_and_flag_changes() {
     changed["@odata.etag"] = json!("new-attachment-version");
     changed["isRead"] = json!(true);
     assert_eq!(
-        content_fingerprint(original.as_object().unwrap()),
-        content_fingerprint(changed.as_object().unwrap())
+        read(&original).content_fingerprint,
+        read(&changed).content_fingerprint
     );
+    assert_eq!(read(&original).field_digests, read(&changed).field_digests);
+
     changed["body"]["content"] = json!("Changed in Outlook");
-    assert_ne!(
-        content_fingerprint(original.as_object().unwrap()),
-        content_fingerprint(changed.as_object().unwrap())
-    );
+    let (before, after) = (read(&original), read(&changed));
+    assert_ne!(before.content_fingerprint, after.content_fingerprint);
+    let differing: Vec<_> = before
+        .field_digests
+        .iter()
+        .filter(|(name, digest)| after.field_digests.get(*name) != Some(digest))
+        .map(|(name, _)| name.as_str())
+        .collect();
+    assert_eq!(differing, ["body"]);
+
     changed.as_object_mut().unwrap().remove("body");
-    assert!(content_fingerprint(changed.as_object().unwrap()).is_none());
+    assert!(read(&changed).content_fingerprint.is_none());
+    assert!(read(&changed).field_digests.is_empty());
+}
+
+#[test]
+fn a_fingerprint_keeps_its_value_across_releases() {
+    // Checkpoints hold fingerprints, and a draft waiting for its send time
+    // outlives a deploy: a digest computed differently would read as an edit.
+    assert_eq!(
+        read(&draft()).content_fingerprint.as_deref(),
+        Some("212a7e13ac85d73f1ce1a559317b12351bdc6d6a741f76c03bae88f858d15bcd")
+    );
 }
 
 #[tokio::test]

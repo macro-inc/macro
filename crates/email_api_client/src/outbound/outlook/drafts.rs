@@ -1,6 +1,6 @@
 //! Correlated drafts and attachment transfers. This adapter never retries writes.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use chrono::{DateTime, Utc};
@@ -52,8 +52,14 @@ impl TryFrom<Draft> for ProviderDraft {
     type Error = EmailApiError;
 
     fn try_from(value: Draft) -> Result<Self, Self::Error> {
+        let fields = content_fields(&value.content);
         Ok(Self {
-            content_fingerprint: content_fingerprint(&value.content),
+            content_fingerprint: fields.as_ref().and_then(content_fingerprint),
+            field_digests: fields
+                .iter()
+                .flatten()
+                .map(|(name, value)| ((*name).to_owned(), digest(value)))
+                .collect(),
             id: ProviderId::new(value.id)?,
             conversation_id: ProviderId::new(value.conversation_id)?,
             // changeKey is not an HTTP entity tag. Never manufacture If-Match.
@@ -70,7 +76,9 @@ impl TryFrom<Draft> for ProviderDraft {
 
 // Compare provider-normalized bodies to prior provider snapshots. Comparing to
 // the submitted HTML would confuse Microsoft normalization with a user edit.
-fn content_fingerprint(content: &serde_json::Map<String, Value>) -> Option<String> {
+fn content_fields(
+    content: &serde_json::Map<String, Value>,
+) -> Option<BTreeMap<&'static str, Value>> {
     let required = [
         "subject",
         "body",
@@ -81,30 +89,42 @@ fn content_fingerprint(content: &serde_json::Map<String, Value>) -> Option<Strin
     if required.iter().any(|key| !content.contains_key(*key)) {
         return None;
     }
-    let fields = required
-        .into_iter()
-        .chain(["from", "replyTo"])
-        .map(|key| (key, content.get(key).cloned().unwrap_or(Value::Null)))
-        .collect::<std::collections::BTreeMap<_, _>>();
     fn canonical(value: Value) -> Value {
         match value {
-            Value::Object(object) => {
-                let sorted = object
+            Value::Object(object) => Value::Object(
+                object
                     .into_iter()
-                    .collect::<std::collections::BTreeMap<_, _>>();
-                Value::Object(
-                    sorted
-                        .into_iter()
-                        .map(|(key, value)| (key, canonical(value)))
-                        .collect(),
-                )
-            }
+                    .collect::<BTreeMap<_, _>>()
+                    .into_iter()
+                    .map(|(key, value)| (key, canonical(value)))
+                    .collect(),
+            ),
             Value::Array(values) => Value::Array(values.into_iter().map(canonical).collect()),
             other => other,
         }
     }
-    let bytes = serde_json::to_vec(&canonical(serde_json::to_value(fields).ok()?)).ok()?;
-    Some(format!("{:x}", Sha256::digest(bytes)))
+    Some(
+        required
+            .into_iter()
+            .chain(["from", "replyTo"])
+            .map(|key| {
+                let value = content.get(key).cloned().unwrap_or(Value::Null);
+                (key, canonical(value))
+            })
+            .collect(),
+    )
+}
+
+fn content_fingerprint(fields: &BTreeMap<&'static str, Value>) -> Option<String> {
+    Some(sha256(&serde_json::to_vec(fields).ok()?))
+}
+
+fn digest(value: &Value) -> String {
+    sha256(value.to_string().as_bytes())
+}
+
+fn sha256(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 #[derive(Deserialize)]
