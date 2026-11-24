@@ -1,10 +1,16 @@
 use crate::api::search::simple::filter::{
     EmailSearch, FilterVariantToSearchArgs, ScopedCalendarEventFilters, email_search,
+    reject_unsupported_email_filters,
 };
 use crate::domain::email_search::ThreadStates;
+use crate::domain::search_allowance::{AllowanceDraw, draw_api_key_search};
+use crate::domain::search_lanes::{LaneTurn, SearchCaller, SearchLanes};
 
-use crate::api::search::caller::caller_label;
+use crate::api::search::caller::{caller_label, draws_api_key_allowance, search_caller};
 use crate::api::search::crm_company;
+use crate::api::search::email_operators::{
+    EmailQuery, QueryClock, apply_email_operators, reported_filters, time_zone,
+};
 use crate::api::search::simple::{simple_channel, simple_chat};
 use crate::api::{
     context::{SearchAuthorizationService, SearchHandlerState},
@@ -174,7 +180,9 @@ use crate::api::search::terms::{
 /// Per-request cap on whitespace-delimited search terms. Each term expands
 /// into its own `has_child` clause and is embedded in every clause's highlight
 /// query, so query-build cost is quadratic in the term count across the
-/// join-shape indices — an unbounded paste can OOM the service.
+/// join-shape indices — an unbounded paste can OOM the service. It also keeps
+/// an email search under the clauses OpenSearch accepts, so it counts the
+/// email text conditions the request sends with the ones typed.
 const MAX_SEARCH_TERMS: usize = 50;
 
 /// Per-term character cap. Body size also scales with summed term length; real
@@ -188,13 +196,50 @@ fn enforce_term_limits(terms: Vec<String>) -> Result<Vec<String>, SearchError> {
     if terms.len() > MAX_SEARCH_TERMS {
         return Err(SearchError::TooManyTerms);
     }
-    Ok(terms
-        .into_iter()
-        .map(|term| match term.char_indices().nth(MAX_TERM_CHARS) {
-            Some((byte_idx, _)) => term[..byte_idx].to_string(),
-            None => term,
-        })
-        .collect())
+    Ok(terms.into_iter().map(truncate_term).collect())
+}
+
+/// A search's terms with its email operators read out of them, then held to
+/// [`MAX_SEARCH_TERMS`] and [`MAX_TERM_CHARS`]. Operators are read before
+/// anything is cut to length, so a long label name is matched whole; the
+/// words left and every text condition the search applies are cut as terms
+/// are, and the typed conditions reported back are cut the same way.
+fn limited_terms(
+    filters: &mut SearchEntityFilters,
+    include_crm: bool,
+    terms: Vec<String>,
+    match_type: MatchType,
+    clock: QueryClock,
+) -> Result<(Vec<String>, Option<EmailQuery>), SearchError> {
+    if terms.len() > MAX_SEARCH_TERMS {
+        return Err(SearchError::TooManyTerms);
+    }
+    let (terms, mut email_query) =
+        apply_email_operators(filters, include_crm, terms, match_type, clock);
+    if terms.len() + filters.email_filters.text_matches.len() > MAX_SEARCH_TERMS {
+        return Err(SearchError::TooManyTerms);
+    }
+    let terms = enforce_term_limits(terms)?;
+    truncate_text_matches(&mut filters.email_filters);
+    if let Some(query) = &mut email_query {
+        truncate_text_matches(&mut query.filters);
+    }
+    Ok((terms, email_query))
+}
+
+/// Each text condition in `filters` cut to [`MAX_TERM_CHARS`].
+fn truncate_text_matches(filters: &mut item_filters::EmailFilters) {
+    for text_match in &mut filters.text_matches {
+        text_match.text = truncate_term(std::mem::take(&mut text_match.text));
+    }
+}
+
+/// `term` cut to [`MAX_TERM_CHARS`].
+fn truncate_term(term: String) -> String {
+    match term.char_indices().nth(MAX_TERM_CHARS) {
+        Some((byte_idx, _)) => term[..byte_idx].to_string(),
+        None => term,
+    }
 }
 
 /// Convert request property filters into OpenSearch property-filter args.
@@ -373,6 +418,7 @@ fn unified_search_span(
         search.entity_types = tracing::field::Empty,
         search.terms = tracing::field::Empty,
         search.dropped_terms = tracing::field::Empty,
+        search.email_operators = tracing::field::Empty,
         search.term_matching = tracing::field::Empty,
         search.term_matching_from_cursor = tracing::field::Empty,
         search.email_shared_capped = tracing::field::Empty,
@@ -381,6 +427,12 @@ fn unified_search_span(
         search.email_state_threads_checked = tracing::field::Empty,
         search.email_state_threads_kept = tracing::field::Empty,
         search.email_state_bound_reached = tracing::field::Empty,
+        search.lane = tracing::field::Empty,
+        search.lane_wait_ms = tracing::field::Empty,
+        search.lane_outcome = tracing::field::Empty,
+        search.rate_limit = tracing::field::Empty,
+        search.rate_limit_remaining = tracing::field::Empty,
+        search.rate_limit_wait_ms = tracing::field::Empty,
     )
 }
 
@@ -406,44 +458,114 @@ fn searched_entity_types(
         .join(",")
 }
 
+/// One page of unified search hits, with the CRM receipt the search ran
+/// under when it was asked to search CRM.
+pub(in crate::api::search) struct UnifiedSearchPage {
+    pub(in crate::api::search) hits: Vec<SearchHit>,
+    pub(in crate::api::search) next_cursor: Option<String>,
+    pub(in crate::api::search) crm_access: Option<CrmTeamReceipt<MemberTeamRole>>,
+    /// The email filters the query's typed operators became, if it typed any.
+    pub(in crate::api::search) query_filters: Option<item_filters::EmailFilters>,
+}
+
 /// Creates a unified search request and performs the search
 /// by calling individual simple search endpoints for each entity type
 pub(in crate::api::search) async fn perform_unified_search(
     ctx: &SearchHandlerState,
     user: &MacroUserAuthentication,
-    crm_access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+    include_crm: bool,
     query_params: SearchPaginationParams,
     req: UnifiedSearchRequest,
-) -> Result<
-    (
-        Vec<opensearch_client::search::model::SearchHit>,
-        Option<String>,
-    ),
-    SearchError,
-> {
+) -> Result<UnifiedSearchPage, SearchError> {
     let span = unified_search_span(user, &query_params, &req);
     async {
-        search_unified_sources(ctx, &user.user_context, crm_access, query_params, req)
-            .await
-            .inspect_err(|error| tracing::error!(error = %error))
+        search_unified_sources(
+            ctx,
+            &user.user_context,
+            search_caller(user),
+            draws_api_key_allowance(user),
+            include_crm,
+            query_params,
+            req,
+        )
+        .await
+        .inspect_err(|error| {
+            // A limited search is the allowance working, marked on the span
+            // by `search.rate_limit`, not a failure to report.
+            if !matches!(error, SearchError::RateLimited { .. }) {
+                tracing::error!(error = %error);
+            }
+        })
     }
     .instrument(span)
     .await
 }
 
+/// Wait for the caller's turn to search, recording on the current span which
+/// lane it waited in, how long, and whether it got a turn. Held until the
+/// search ends.
+async fn take_search_turn(
+    lanes: &SearchLanes,
+    caller: SearchCaller,
+) -> Result<LaneTurn, SearchError> {
+    tracing::Span::current().record("search.lane", caller.lane_kind());
+    let turn = lanes.take_turn(caller).await;
+    let (waited, outcome) = match &turn {
+        Ok(turn) if turn.queued => (turn.waited, "queued"),
+        Ok(turn) => (turn.waited, "immediate"),
+        Err(refusal) => (refusal.waited, "refused"),
+    };
+    let waited_ms = u64::try_from(waited.as_millis()).unwrap_or(u64::MAX);
+    let span = tracing::Span::current();
+    span.record("search.lane_wait_ms", waited_ms);
+    span.record("search.lane_outcome", outcome);
+    turn.map_err(|_| {
+        tracing::warn!(
+            waited_ms,
+            "search refused: the caller's searches kept every slot busy"
+        );
+        SearchError::Busy
+    })
+}
+
+/// Draw an API-key search from its account's allowance, recording on the
+/// current span how the draw ended, how many searches are left and how long
+/// the bucket took to answer. A limited search is refused before it waits for
+/// a turn.
+async fn draw_search_allowance(
+    ctx: &SearchHandlerState,
+    account: &MacroUserId<Lowercase<'_>>,
+) -> Result<(), SearchError> {
+    let started = tokio::time::Instant::now();
+    let draw = draw_api_key_search(ctx.api_key_search_buckets.as_ref(), account).await;
+    let waited_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    let span = tracing::Span::current();
+    span.record("search.rate_limit_wait_ms", waited_ms);
+    span.record("search.rate_limit", draw.label());
+    if let Some(remaining) = draw.remaining() {
+        span.record("search.rate_limit_remaining", remaining);
+    }
+
+    match draw {
+        AllowanceDraw::Limited { retry_after } => {
+            let retry_after_seconds = retry_after.as_millis().div_ceil(1000).max(1);
+            Err(SearchError::RateLimited {
+                retry_after_seconds: u64::try_from(retry_after_seconds).unwrap_or(u64::MAX),
+            })
+        }
+        AllowanceDraw::Allowed { .. } | AllowanceDraw::Unavailable => Ok(()),
+    }
+}
+
 async fn search_unified_sources(
     ctx: &SearchHandlerState,
     user_context: &UserContext,
-    crm_access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+    caller: SearchCaller,
+    draws_api_key_allowance: bool,
+    include_crm: bool,
     query_params: SearchPaginationParams,
     req: UnifiedSearchRequest,
-) -> Result<
-    (
-        Vec<opensearch_client::search::model::SearchHit>,
-        Option<String>,
-    ),
-    SearchError,
-> {
+) -> Result<UnifiedSearchPage, SearchError> {
     let user_id = user_context.user_id.clone();
 
     if user_id.is_empty() {
@@ -479,13 +601,19 @@ async fn search_unified_sources(
     let match_type = req.match_type;
     let split_terms = split_search_terms(&terms);
     let split_count = split_terms.len();
-    let search_terms = enforce_term_limits(drop_wordless_terms(split_terms, match_type))?;
-    record_term_counts(
-        &tracing::Span::current(),
-        search_terms.len(),
-        split_count - search_terms.len(),
-    );
+    let search_terms = drop_wordless_terms(split_terms, match_type);
     let requested_term_matching = req.term_matching;
+
+    // Typed dates are read in the caller's zone, and a later page reads
+    // relative ones against the first page's moment.
+    let clock = QueryClock {
+        now: cursor
+            .as_ref()
+            .and_then(|cursor| cursor.query_time_millis)
+            .and_then(chrono::DateTime::from_timestamp_millis)
+            .unwrap_or_else(chrono::Utc::now),
+        zone: time_zone(req.time_zone.as_deref()).ok_or(SearchError::InvalidTimeZone)?,
+    };
 
     // Property filters live at the top level of the request and only apply to
     // the OpenSearch documents index, so capture them before the conversion
@@ -504,10 +632,27 @@ async fn search_unified_sources(
     // (set only when `include_crm` is true and the user has a qualifying
     // membership). `crm_company_filters` scopes/selects within the team.
     let crm_company_filters = req.filters.crm_company_filters.clone();
-    let should_include_crm = crm_access.is_some() && !tags_active;
 
     let calendar_event_scope = req.calendar_event_scope;
-    let search_filters = SearchEntityFilters::from(req.filters);
+    let mut search_filters = SearchEntityFilters::from(req.filters);
+    let (search_terms, email_query) = limited_terms(
+        &mut search_filters,
+        include_crm,
+        search_terms,
+        match_type,
+        clock,
+    )?;
+    record_term_counts(
+        &tracing::Span::current(),
+        search_terms.len(),
+        split_count - search_terms.len(),
+    );
+    tracing::Span::current().record(
+        "search.email_operators",
+        email_query.as_ref().map_or(0, |query| query.operators),
+    );
+    // CRM companies cannot meet an email operator either.
+    let include_crm = include_crm && email_query.is_none();
     let requested_sessions = search_filters
         .agent_session_filters
         .ids
@@ -516,6 +661,26 @@ async fn search_unified_sources(
             uuid::Uuid::parse_str(id).map_err(|_| SearchError::InvalidAgentSessionId(id.clone()))
         })
         .collect::<Result<Vec<_>, _>>()?;
+    reject_unsupported_email_filters(&search_filters.email_filters)?;
+
+    // The request's own checks (query, paging, cursor, terms, sessions, email
+    // filters) have passed, so a malformed request fails at once instead of
+    // waiting behind the caller's other searches. Ids a source parses only
+    // when it runs (channel and CRM company ids) are checked in its turn, as
+    // they were before lanes: a caller the source doesn't apply to never
+    // fails on them.
+    if draws_api_key_allowance {
+        draw_search_allowance(ctx, &user_id).await?;
+    }
+    let _turn = take_search_turn(&ctx.search_lanes, caller).await?;
+
+    // CRM is opt-in: only when the caller asks for it does this resolve a
+    // team membership and mint a capability receipt. No membership → empty
+    // CRM slice, not a failed search. See `resolve_crm_team_receipt`. It is
+    // read after the caller's turn, so the membership is current when the
+    // search runs however long the turn took.
+    let crm_access = crm_company::resolve_crm_team_receipt(ctx, user_context, include_crm).await?;
+    let should_include_crm = crm_access.is_some() && !tags_active;
     let agent_sessions = ctx
         .agent_session_search()
         .scope(
@@ -897,7 +1062,7 @@ async fn search_unified_sources(
         async {
             // CRM companies are name/domain only — no content index — so
             // they only participate under Name / NameContent.
-            match (should_include_crm, crm_access, search_on) {
+            match (should_include_crm, crm_access.as_ref(), search_on) {
                 (true, Some(access), SearchOn::Name | SearchOn::NameContent) => {
                     crm_company::search_company_names(
                         ctx,
@@ -1044,6 +1209,10 @@ async fn search_unified_sources(
                     search_terms.len(),
                     document_term_matching,
                 ),
+                query_time_millis: email_query
+                    .as_ref()
+                    .filter(|query| query.reads_now)
+                    .map(|_| clock.now.timestamp_millis()),
             };
             cursor.encode()
         } else {
@@ -1054,7 +1223,12 @@ async fn search_unified_sources(
     // Extract final SearchHits from tagged results
     let final_results: Vec<SearchHit> = final_tagged.into_iter().map(|t| t.hit).collect();
 
-    Ok((final_results, next_cursor))
+    Ok(UnifiedSearchPage {
+        hits: final_results,
+        next_cursor,
+        crm_access,
+        query_filters: email_query.as_ref().map(reported_filters),
+    })
 }
 
 /// Perform a search through all items.
@@ -1071,6 +1245,7 @@ async fn search_unified_sources(
             (status = 200, body=SimpleSearchResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
+            (status = 429, body=ErrorResponse, description = "The caller's other searches kept every slot of its lane busy for 20 seconds, or the account's user API keys used their shared search allowance (200 at once, then one a second); retry after `Retry-After` seconds."),
             (status = 500, body=ErrorResponse),
     )
 )]
@@ -1089,10 +1264,9 @@ pub async fn handler(
     );
 
     // CRM opt-in is wired through the unified `/search` endpoint only.
-    let (results, _next_cursor) =
-        perform_unified_search(&ctx, user, None, query_params, req).await?;
+    let results = perform_unified_search(&ctx, user, false, query_params, req).await?;
 
-    let results = results.into_iter().map(|a| a.into()).collect();
+    let results = results.hits.into_iter().map(|a| a.into()).collect();
 
     // Note: SimpleSearchResponse doesn't have a next_cursor field
     // The cursor is returned by the unified search endpoint (/search)

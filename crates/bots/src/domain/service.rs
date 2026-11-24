@@ -10,12 +10,14 @@ use super::{
         BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
         BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
         CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessFacts, HarnessId,
-        MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
+        MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, ReplacedAgent,
+        UpdateAgentRequest,
     },
     ports::{BotError, BotRepo, BotService, HarnessRemoved, McpAppCatalog},
     tokens,
 };
 use bot_token::HashedBotToken;
+use channels::domain::broker_events::{ChannelMacroEvent, ChannelUpdatedMetadata};
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
     BotReceiptScope, Entity, EntityAccessReceipt, EntityPermission, EntityType,
@@ -267,6 +269,50 @@ where
         }));
     }
 
+    /// Tell the members of these channels that the bots in them changed: each
+    /// member's copy of a channel lists its bots. The stored name goes out as
+    /// both the old and the new name, which tells consumers it was not a
+    /// rename. The change is already stored, so a failure is logged; the
+    /// members' next full read of their channels picks it up.
+    async fn announce_bot_membership(
+        &self,
+        actor: &MacroUserIdStr<'static>,
+        mut channel_ids: Vec<Uuid>,
+    ) {
+        channel_ids.sort_unstable();
+        channel_ids.dedup();
+        if channel_ids.is_empty() {
+            return;
+        }
+        let names = match self.repo.channel_names(&channel_ids).await {
+            Ok(names) => names,
+            Err(error) => {
+                let error: anyhow::Error = error.into();
+                tracing::error!(
+                    error = ?error,
+                    channels = channel_ids.len(),
+                    "failed to read the channels whose bots changed"
+                );
+                return;
+            }
+        };
+        for (channel_id, name) in names {
+            let event = ChannelMacroEvent::updated(ChannelUpdatedMetadata {
+                channel_id,
+                actor: actor.clone(),
+                previous_name: name.clone(),
+                channel_name: name,
+            });
+            drop(self.event_broker.send_event(&event).inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    %channel_id,
+                    "failed to schedule the update of a channel whose bots changed"
+                );
+            }));
+        }
+    }
+
     async fn owner_for_request(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -458,7 +504,10 @@ where
         let requested_handle = req.handle.clone();
         let requested_description = req.description.clone();
         let requested_avatar_url = req.avatar_url.clone();
-        let agent = self
+        let ReplacedAgent {
+            agent,
+            mut previous_channel_ids,
+        } = self
             .repo
             .update_agent(current.id, owner, req)
             .await
@@ -472,13 +521,17 @@ where
                 .owner
                 .clone()
                 .expect("owned agent bot must have an owner"),
-            actor_user_id: caller,
+            actor_user_id: caller.clone(),
             name: Some(requested_name),
             handle: Some(requested_handle),
             description: requested_description,
             avatar_url: requested_avatar_url,
             updated_at: agent.bot.updated_at,
         }));
+        // A channel kept is joined again, which changes when the bot joined it.
+        previous_channel_ids.extend_from_slice(&agent.channel_ids);
+        self.announce_bot_membership(&caller, previous_channel_ids)
+            .await;
 
         Ok(agent)
     }
@@ -565,10 +618,12 @@ where
             handle: agent.bot.handle.clone(),
             description: agent.bot.description.clone(),
             avatar_url: agent.bot.avatar_url.clone(),
-            created_by_user_id,
+            created_by_user_id: created_by_user_id.clone(),
             channel_id: None,
             created_at: agent.bot.created_at,
         }));
+        self.announce_bot_membership(&created_by_user_id, agent.channel_ids.clone())
+            .await;
 
         Ok(agent)
     }
@@ -696,10 +751,12 @@ where
             handle: bot.handle.clone(),
             description: bot.description.clone(),
             avatar_url: bot.avatar_url.clone(),
-            created_by_user_id,
+            created_by_user_id: created_by_user_id.clone(),
             channel_id: Some(channel_id),
             created_at: bot.created_at,
         }));
+        self.announce_bot_membership(&created_by_user_id, vec![channel_id])
+            .await;
 
         Ok(CreateChannelScopedBotResponse {
             bot,
@@ -811,20 +868,22 @@ where
                 return Err(BotError::Unauthorized);
             }
         }
-        if !self
+        let Some(left_channel_ids) = self
             .repo
             .delete_bot(bot_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
-        {
+        else {
             return Err(BotError::NotFound("bot not found".to_string()));
-        }
+        };
 
         self.publish_bot_event(&BotMacroEvent::deleted(BotDeletedMetadata {
             bot_id: bot.id,
             owner: bot.owner.expect("owned bot must have an owner"),
-            actor_user_id: caller,
+            actor_user_id: caller.clone(),
         }));
+        self.announce_bot_membership(&caller, left_channel_ids)
+            .await;
 
         Ok(())
     }
@@ -845,11 +904,14 @@ where
             .get_authenticated_user()
             .cloned()
             .map_err(|_| BotError::Unauthorized)?;
-        self.ensure_manageable(caller, bot_id).await?;
+        self.ensure_manageable(caller.clone(), bot_id).await?;
         self.repo
             .add_bot_to_channel(channel_id, bot_id)
             .await
-            .map_err(|err| BotError::Repo(err.into()))
+            .map_err(|err| BotError::Repo(err.into()))?;
+        self.announce_bot_membership(&caller, vec![channel_id])
+            .await;
+        Ok(())
     }
 
     async fn remove_bot_from_channel(
@@ -858,17 +920,18 @@ where
         channel_id: Uuid,
         bot_id: BotId,
     ) -> Result<(), BotError> {
-        self.ensure_manageable(caller, bot_id).await?;
-        if self
+        self.ensure_manageable(caller.clone(), bot_id).await?;
+        if !self
             .repo
             .remove_bot_from_channel(channel_id, bot_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
         {
-            Ok(())
-        } else {
-            Err(BotError::NotFound("channel bot not found".to_string()))
+            return Err(BotError::NotFound("channel bot not found".to_string()));
         }
+        self.announce_bot_membership(&caller, vec![channel_id])
+            .await;
+        Ok(())
     }
 
     async fn list_bot_channels(
@@ -1008,7 +1071,7 @@ where
     }
 }
 
-/// Refuse a selected MCP app Pipedream does not list.
+/// Refuse a selected MCP app the connector catalog does not list.
 ///
 /// Slugs already stored on the agent are left alone, so editing instructions
 /// does not depend on the directory staying reachable. A newly named slug

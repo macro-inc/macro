@@ -77,6 +77,7 @@ impl Repository for Arc<Memory> {
         event_type: Uuid,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
+        exclude: Option<Uuid>,
     ) -> Result<i64, Error> {
         let on_day = |time: DateTime<Utc>| time >= start && time < end;
         Ok(self
@@ -86,6 +87,7 @@ impl Repository for Arc<Memory> {
             .values()
             .filter(|r| {
                 r.profile_id == profile
+                    && Some(r.booking.id) != exclude
                     && r.booking.event_type_id == event_type
                     && r.booking.status != BookingStatus::Cancelled
                     && (on_day(r.booking.starts_at)
@@ -235,10 +237,20 @@ struct Calendar {
     lose_cancel_response: AtomicBool,
     events: Mutex<HashMap<Uuid, Uuid>>,
     busy: Mutex<Vec<BusyRange>>,
+    /// The inbox each availability read was told the booking lands on.
+    busy_inboxes: Mutex<Vec<Option<Uuid>>>,
+}
+/// The calendar the fake pins for a host's booking: one per host, or one per
+/// connected inbox when the link names one.
+fn pinned_calendar(host: &str, inbox: Option<Uuid>) -> Uuid {
+    match inbox {
+        Some(inbox) => Uuid::new_v5(&Uuid::NAMESPACE_OID, inbox.as_bytes()),
+        None => Uuid::new_v5(&Uuid::NAMESPACE_OID, host.as_bytes()),
+    }
 }
 impl Calendars for Arc<Calendar> {
-    async fn creation_calendar(&self, host: &str) -> Result<Uuid, Error> {
-        Ok(Uuid::new_v5(&Uuid::NAMESPACE_OID, host.as_bytes()))
+    async fn creation_calendar(&self, host: &str, inbox: Option<Uuid>) -> Result<Uuid, Error> {
+        Ok(pinned_calendar(host, inbox))
     }
     async fn busy(
         &self,
@@ -246,7 +258,9 @@ impl Calendars for Arc<Calendar> {
         _: DateTime<Utc>,
         _: DateTime<Utc>,
         _: Option<Uuid>,
+        inbox: Option<Uuid>,
     ) -> Result<Vec<BusyRange>, Error> {
+        self.busy_inboxes.lock().unwrap().push(inbox);
         Ok(self.busy.lock().unwrap().clone())
     }
     async fn create(&self, record: &BookingRecord, _: &EventType) -> Result<(Uuid, String), Error> {
@@ -334,6 +348,7 @@ fn profile(team: Option<Uuid>) -> Profile {
         location: String::new(),
         macro_call: false,
         google_meet: false,
+        email_link_id: None,
         enabled: true,
         schedule_id: schedule.id,
         mode: if team.is_some() {
@@ -472,11 +487,7 @@ async fn concurrent_round_robin_bookings_use_distinct_hosts_and_calendars() {
     for record in [&a, &b] {
         assert_eq!(
             record.calendar_id,
-            Some(
-                cal.creation_calendar(&record.booking.hosts[0])
-                    .await
-                    .unwrap()
-            )
+            Some(pinned_calendar(&record.booking.hosts[0], None))
         );
     }
     assert_eq!(cal.creates.load(Ordering::SeqCst), 2);
@@ -1271,6 +1282,64 @@ async fn slots_stay_closed_on_a_full_day_while_a_move_out_of_it_awaits_the_calen
     );
 }
 
+#[tokio::test]
+async fn reschedule_offers_no_times_on_a_day_already_at_its_limit() {
+    let store = Arc::new(Memory::default());
+    let service = TestService::new(store.clone(), Arc::new(Calendar::default()), Members);
+    let mut p = profile(None);
+    p.event_types[0].daily_limit = Some(1);
+    let p = service.save("admin", None, p).await.unwrap();
+    let event = p.event_types[0].id;
+    let first_day = request();
+    let mut later = request();
+    later.starts_at += Duration::days(1);
+    let moving = service.book(p.id, event, later).await.unwrap();
+    let full_day = first_day.starts_at.date_naive();
+    let own_day = moving.booking.starts_at.date_naive();
+    // Before anyone books it, the other day offers replacement times.
+    assert!(
+        !service
+            .replacement_slots(moving.booking.id, moving.token, full_day, None)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let full = service.book(p.id, event, first_day).await.unwrap();
+    // The full day offers nothing and refuses the move; the booking's own day
+    // still offers other times, since it never takes a place from itself.
+    assert!(
+        service
+            .replacement_slots(moving.booking.id, moving.token, full_day, None)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        service
+            .host_replacement_slots("admin", moving.booking.id, full_day)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(matches!(
+        service
+            .reschedule(
+                moving.booking.id,
+                moving.token,
+                full.booking.starts_at + Duration::hours(1)
+            )
+            .await,
+        Err(Error::Conflict)
+    ));
+    assert!(
+        !service
+            .replacement_slots(moving.booking.id, moving.token, own_day, None)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
 /// A move whose first attempt failed without a recorded outcome may have
 /// reached the calendar, so a later refusal must not put the booking back:
 /// it stays failed at the requested time, holding both intervals.
@@ -1622,10 +1691,34 @@ async fn attaching_booking_targets_requires_current_access_and_an_enabled_saved_
 }
 
 impl AttachmentReadiness for Arc<Calendar> {
-    async fn ready(&self, _: &str) -> Result<(), Error> {
+    async fn ready(&self, _: &str, _: Option<Uuid>) -> Result<(), Error> {
         Ok(())
     }
 }
+impl BookingAccounts for Arc<Calendar> {
+    async fn booking_accounts(
+        &self,
+        _: &str,
+    ) -> Result<Vec<crate::domain::booking_link_models::BookingAccount>, Error> {
+        Ok(vec![
+            crate::domain::booking_link_models::BookingAccount {
+                email_link_id: WORK_INBOX,
+                email_address: "work@example.com".into(),
+                video_meetings: true,
+            },
+            crate::domain::booking_link_models::BookingAccount {
+                email_link_id: SIDE_INBOX,
+                email_address: "side@example.com".into(),
+                video_meetings: false,
+            },
+        ])
+    }
+}
+/// A connected inbox other than the host's primary one.
+const WORK_INBOX: Uuid = Uuid::from_u128(0x7);
+/// Another connected inbox, whose calendar cannot add video meetings.
+const SIDE_INBOX: Uuid = Uuid::from_u128(0x8);
+mod booking_account;
 mod booking_links;
 
 mod management;

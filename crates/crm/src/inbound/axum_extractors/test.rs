@@ -44,16 +44,16 @@ use crate::{
     inbound::axum_router::CrmRouterState,
 };
 
-const USER_ID: &str = "macro|user@example.com";
+pub(crate) const USER_ID: &str = "macro|user@example.com";
 const INTERNAL_USER_ID: &str = "macro|acting@example.com";
-const VALID_TOKEN: &str = "valid";
-const INTERNAL_KEY: &str = "valid-internal-key";
+pub(crate) const VALID_TOKEN: &str = "valid";
+pub(crate) const INTERNAL_KEY: &str = "valid-internal-key";
 const COMPANY_ID: &str = "11111111-1111-4111-8111-111111111111";
 const CONTACT_ID: &str = "22222222-2222-4222-8222-222222222222";
-const TEAM_ID: &str = "55555555-5555-4555-8555-555555555555";
+pub(crate) const TEAM_ID: &str = "55555555-5555-4555-8555-555555555555";
 
 #[derive(Clone, Default)]
-struct FakeJwtValidator;
+pub(crate) struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
     fn validate_credential(
@@ -94,13 +94,13 @@ struct EntityAccessCall {
 }
 
 #[derive(Clone)]
-struct FakeEntityAccessService {
+pub(crate) struct FakeEntityAccessService {
     result: PermissionResult,
     calls: Arc<Mutex<Vec<EntityAccessCall>>>,
 }
 
 impl FakeEntityAccessService {
-    fn with_access_level(access_level: AccessLevel) -> Self {
+    pub(crate) fn with_access_level(access_level: AccessLevel) -> Self {
         Self {
             result: PermissionResult::Allowed(EntityPermission::AccessLevel { access_level }),
             calls: Arc::new(Mutex::new(Vec::new())),
@@ -443,6 +443,26 @@ impl CrmService for FakeCrmService {
         Err(CrmError::ContactNotFoundForTeam)
     }
 
+    async fn add_company_domain(
+        &self,
+        _access: &crate::domain::auth::CrmCompanyReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _domain: &str,
+    ) -> Result<crate::domain::model::CrmCompanyWithContacts, CrmError> {
+        Err(CrmError::CompanyNotFoundForTeam)
+    }
+
+    async fn remove_company_domain(
+        &self,
+        _access: &crate::domain::auth::CrmCompanyReceipt<
+            entity_access::domain::models::EditAccessLevel,
+        >,
+        _domain: &str,
+    ) -> Result<crate::domain::model::CrmCompanyWithContacts, CrmError> {
+        Err(CrmError::CompanyNotFoundForTeam)
+    }
+
     async fn unlink_contact_company(
         &self,
         _access: &crate::domain::auth::CrmContactReceipt<
@@ -527,6 +547,14 @@ impl CrmService for FakeCrmService {
         _email: &str,
     ) -> Result<Option<CrmContact>, CrmError> {
         panic!("unexpected get_contact_by_email call")
+    }
+
+    async fn get_company_by_domain(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        panic!("unexpected get_company_by_domain call")
     }
 
     async fn get_company_for_team(
@@ -657,7 +685,7 @@ fn test_router(
     (router, entity_access, crm_service)
 }
 
-fn uuid(value: &str) -> Uuid {
+pub(crate) fn uuid(value: &str) -> Uuid {
     Uuid::parse_str(value).expect("test UUID should be valid")
 }
 
@@ -942,17 +970,6 @@ async fn contact_mutation_http_contract_covers_addresses_and_company_links(
         );
     }
     assert_eq!(
-        edit.clone()
-            .oneshot(request(
-                contact.id,
-                "company",
-                json!({"companyId": company.company.id})
-            ))
-            .await?
-            .status(),
-        StatusCode::BAD_REQUEST
-    );
-    assert_eq!(
         router(AccessLevel::View)
             .oneshot(request(
                 contact.id,
@@ -1032,23 +1049,33 @@ async fn contact_mutation_http_contract_covers_addresses_and_company_links(
             .status(),
         StatusCode::UNAUTHORIZED
     );
-    assert_eq!(
-        edit.clone()
-            .oneshot(request(
-                contact.id,
-                "company",
-                json!({"companyId": company.company.id})
-            ))
-            .await?
-            .status(),
-        StatusCode::BAD_REQUEST
-    );
+    // A work address without a company takes a first company, and cannot
+    // then switch to another.
+    let other = repo
+        .create_company_for_team(&team, None, "Other company", Utc::now())
+        .await?;
+    for (destination, status) in [
+        (company.company.id, StatusCode::OK),
+        (other.company.id, StatusCode::BAD_REQUEST),
+    ] {
+        assert_eq!(
+            edit.clone()
+                .oneshot(request(
+                    contact.id,
+                    "company",
+                    json!({"companyId": destination})
+                ))
+                .await?
+                .status(),
+            status
+        );
+    }
     let persisted = repo
         .get_contact_for_team(&team, &contact.id, true)
         .await?
         .unwrap();
     assert_eq!(persisted.email.as_deref(), Some("contact@example.com"));
-    assert_eq!(persisted.company_id, None);
+    assert_eq!(persisted.company_id, Some(company.company.id));
     let blank = repo
         .create_contact_for_team(&team, None, "Second", Utc::now())
         .await?;

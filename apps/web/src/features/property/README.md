@@ -61,6 +61,16 @@ fixed-size child in a smaller wrapper shifts the icon below the label.
 Empty Source values use the same link glyph; unsupported references retain the
 ordinary property editor.
 
+Every other single-value entity row in the side panel splits the same way once
+it has a value: `EntityLinkPill` puts the item behind the name and the picker
+behind the caret, and `ProjectLinkPill` does it for a project value, whichever
+property holds it. A viewer who cannot edit gets the name alone. An empty
+value, a person, and a value `usePropertyEntityLink` has nothing to open for
+keep the one pill that opens the picker. Both pills take the name's click
+through `useSplitNavigationHandler`, as mention links and collection chips do:
+a press that moved focus to the name would hand activation back to its own
+split after the click brings forward another split that already shows the item.
+
 `EntityRowTags.collapse` connects to the host's shared priority-overflow controller.
 Show at most three individual chips by default and keep the rest in overflow.
 Measure actual title, tag, and control widths; collapse more trailing chips when
@@ -90,6 +100,80 @@ height on touch instead of adopting the shared button touch minimum. Only
 the task-detail title-row tags selector uses the 36px touch target; document
 title-row tags retain their compact height.
 
+## Property editor
+
+`PropertyEditorModal` is the editor that list rows and a multi-row selection,
+CRM stage, owner and revenue actions, an open item's commands, inline title
+pills and the side panel's **Add property** open; the task composer renders its
+`PropertyEditorDialog` directly. The dialog has no title row for the items it
+edits. When the modal saves a value for the selected items, a toast names only
+the property (`entityActions.toastPropertySet`: "Companies set", or "Companies
+set on 3 items" for several). Tag assignment shows no toast, and the composer
+writes to its draft without one.
+
+When every selected item has one entity type, the modal's property list asks
+the properties service for that type (`for_entity_type`), so it offers only
+what those items can take: Stage, Owner and Revenue only on companies, and
+Parent Task, Subtasks and Time logged only on tasks. A mixed selection lists
+every definition. The create dialog uses the same type. The Properties panel
+reads the same list for its entity, so the picker opens with it loaded.
+
+A Link property takes its URL in the editor's search field
+(`editor/link-property-editor.tsx`): Enter sets it, or adds it when the
+property holds several links, and the item's links are listed below to remove
+one at a time, with **Clear all** once there are two. With nothing typed no row
+is highlighted, so Enter removes nothing until the arrow keys or the pointer
+pick a link, and every save closes the editor (Shift does not keep it open, as
+the listed links would be stale until the save lands). It validates and saves
+exactly as the property row's link editor does (`utils/linkValues.ts`). With
+several items selected no links are listed, and a URL replaces each item's
+value.
+
+Opened on a property definition for one saved item (a list row's shortcut or
+menu, the command menu), the editor does not know the value the item already
+holds until its properties are read. A property that holds several values
+(select, entity or Link) lists nothing and changes nothing until then: a save
+sends the whole value, so a pick would drop the values it hasn't read. A
+property that holds one value is replaced either way and stays editable.
+`SavedValueStatus` shows "Loading …" or, when the read fails, "Couldn't load
+this item's …" in place of the rows. Tag assignment waits only while the tags
+load, since unread tags would all look unapplied; a failed read still allows
+tagging, as its saves are additions and removals the server merges. Rows that
+arrive after a wait start with none highlighted (`createUnhighlightedArrival`),
+unless a search typed meanwhile found a match: the first row may be **Clear
+all**, and an Enter pressed meanwhile must not reach it. An item's own copy of a custom property carries no options, so the
+editor takes them from the property's definition.
+
+## Creating a property
+
+`CreatePropertyModal` names the built-in property when the typed name duplicates
+one that links CRM records (`utils/builtInSuggestion.ts`: Contact(s) for
+Contacts; Company, Companies and Customer(s) for Companies), and for every type
+but Any Entity adds that the type can't link to CRM records. Its **Use …**
+button calls `onUseBuiltIn(propertyDefinitionId)`. `PropertyEditorDialog`
+answers by selecting that property as if it had been picked from the list, so a
+host that keeps the property out of its list (the task composer, which edits
+Companies and Contacts through its Customer / Contact pill) still receives the
+value through `onSave`. Such a host passes the property with its current value
+in `properties` (the composer's `draftProperties`): the picker starts from that
+value and adds to it, and without it a pick would replace what the draft
+already links. Whichever way the create dialog closes, the editor's search
+field takes focus back on desktop: left on the page, the next keys would reach
+the app's shortcuts. That note never disables **Create**. Add a name there
+only for a built-in property whose look-alike breaks something a person would
+expect, not for every system property.
+
+A name that is a built-in property's own (the whole name, any case) is
+different: the server refuses it with a 409, because built-in names are reserved
+for user and team properties. The dialog reads the built-in definitions
+(`scope: 'system'`), says the name is taken, and disables **Create**. It offers
+**Use …** only when that property applies to the entity being edited, which it
+learns from the same list narrowed by `forEntityType`; `PropertyEditorDialog`
+passes the type the selected entities share, and a draft host supplies it
+through its `PropertiesProvider`. If the list has not loaded and the request
+goes out, the refusal (`isPropertyNameReserved`) shows the same sentence in
+place of the generic create error.
+
 ## Assignee selection
 
 The system Assignees property uses the existing selected-first ordering at opening
@@ -116,6 +200,16 @@ an enclosing dropdown consumes the event. Do not move that handler to `document`
 Kobalte can prevent the arrow key's default before a document listener runs.
 Ignore IME confirmation keys, including WebKit's key code 229; composing Escape
 must cancel composition without dismissing the popover.
+
+## References kept across updates
+
+A property read from a query is a store, and an update rewrites the objects of
+its reference list in place. Code that keeps references past the next update
+(a picker's staged selection, `Property.Root`'s pick shown until the source
+catches up, a collection row's accepted values) keeps plain copies from
+`utils/copy-entity-references.ts`; a kept store object turns into its neighbor
+when an earlier item is removed, and the next save then drops a reference the
+user never touched.
 
 ## Side-panel collections
 
@@ -152,13 +246,19 @@ name, values, and dropzone, with bounds refreshed as it resizes.
 Drops append a reference using the same entity-type conversion as the picker,
 ignore duplicate references and the owning entity's type-and-ID pair, and retain
 existing values. Picker saves, drops, chip removal, and row removal share a pending
-state until refresh completes. New references appear immediately as pending
-chips with an inline spinner until saving and refresh finish. Removed references
-disappear immediately; a failed save restores them from the last confirmed values.
-Confirmed edits remain visible if refresh fails, and reconcile when the query
-reflects them. Subsequent edits use these confirmed values rather than stale query
+state only until the save is accepted locally (the bulk save's `onAccepted`:
+written to the cache and queued), never until the server commits it: a queued
+write can wait minutes behind older ones. The save promise the row hands to
+`Property.Root` settles at acceptance too, so an open picker closes then; the
+commit and its reread finish in the background. New references appear immediately as
+pending chips with an inline spinner until then. Removed references
+disappear immediately; a failed save restores the stored values and rereads them
+from the server. Accepted edits stay visible until the query
+reflects them. Subsequent edits use these accepted values rather than stale query
 data. Other values remain visible. Failed saves clear pending additions through
-the existing error flow. Pending chips cannot be opened or removed. Collection rows
+the existing error flow. Pending chips cannot be opened or removed. After a
+committed save the row rereads the server only when the cache does not
+maintain it (REST-backed or uncached clients). Collection rows
 retain their definition identity through query updates so loading state survives
 refreshed property objects. Dropped items use the drag label while preview metadata loads.
 Read-only, metadata, loading, saving, and open-editor states reject drops.
@@ -169,6 +269,16 @@ available for keyboard and touch.
 Saved-item remove controls overlay the chip's right edge on hover or keyboard
 focus and remain visible on touch. They reserve no layout space or change chip
 width. Chip backgrounds use `bg-surface` at `Layer depth={3}`.
+
+A saved chip's name opens its item: a contact, company, task, document,
+channel, chat, email, folder or project. Document and task chips read their
+block from their own preview; the other types open through
+`hooks/usePropertyEntityLink.ts`, which `EntityLinkPill` shares: the
+mention-link navigation, a new split on Shift, and `openProject` for a project.
+A chip never opens the picker: that is the row's Add button, and a chip's
+remove control removes that one value. A value the hook has nothing to open
+for (a person, a call record, a calendar event, a database row) is plain text.
+Viewers who cannot edit still open values.
 
 Collection drop handling and save callbacks stay in the property callers.
 

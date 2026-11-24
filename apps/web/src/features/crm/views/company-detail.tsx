@@ -2,6 +2,8 @@ import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createOpenTracker } from '@core/internal/open-tracker';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import { CompanyDiscussionSection } from '../company-discussion-section';
+import { CrmAccessFallback } from '../components/access-denied';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
@@ -9,10 +11,10 @@ import type { CrmContact as CompanyContact } from '../core/contact';
 import {
   type CompanySection,
   type CrmRecordScope,
+  RECORD_PANEL_ORDER,
   sameRecordScope,
 } from '../core/record';
 import { CompanyContactsSection } from './company-contacts-section';
-import { CompanyDiscussionSection } from './company-discussion-section';
 import { CompanyEmailsSection } from './company-emails-section';
 import { CompanyHeader } from './company-header';
 import { CompanyListsSection } from './company-list-membership';
@@ -42,6 +44,7 @@ type CompanyProps = {
 };
 
 export function Company(props: CompanyProps) {
+  const context = useCrmContext();
   return (
     <TraceFlow
       name="crm.company"
@@ -51,7 +54,17 @@ export function Company(props: CompanyProps) {
         'crm.section': props.section ?? 'overview',
       }}
     >
-      <CompanyContent {...props} />
+      <Show
+        when={context.canAccess()}
+        fallback={
+          <CrmAccessFallback
+            state={context.accessState()}
+            onRetry={context.retryAccess}
+          />
+        }
+      >
+        <CompanyContent {...props} />
+      </Show>
     </TraceFlow>
   );
 }
@@ -135,7 +148,7 @@ function CompanyContent(props: CompanyProps) {
       <SidePanel.Section
         id="company-properties"
         title="Properties"
-        order={30}
+        order={RECORD_PANEL_ORDER.properties}
         defaultOpen
         render={(renderSection) => (
           <CompanyPropertiesSection
@@ -149,10 +162,18 @@ function CompanyContent(props: CompanyProps) {
           <CompanyListsSection companyId={props.companyId} />
         </Suspense>
       </Show>
-      <SidePanel.Section id="company-sharing" title="Email sharing" order={50}>
+      <SidePanel.Section
+        id="company-sharing"
+        title="Email sharing"
+        order={RECORD_PANEL_ORDER.sharing}
+      >
         <CompanySharingSection company={company()} />
       </SidePanel.Section>
-      <SidePanel.Section id="company-references" title="References" order={20}>
+      <SidePanel.Section
+        id="company-references"
+        title="References"
+        order={RECORD_PANEL_ORDER.references}
+      >
         <RecordReferencesSection scope={scope()} />
       </SidePanel.Section>
     </SidePanel.Layout>

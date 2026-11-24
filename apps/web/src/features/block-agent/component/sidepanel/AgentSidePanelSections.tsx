@@ -25,6 +25,7 @@ import GitBranch from '@icon/system/regular/git-branch.svg';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { createMemo, For, Show, Suspense } from 'solid-js';
 import { useAgentSession } from '../../context/AgentSessionContext';
+import { shownSessionModel } from '../../state/session-model';
 import { sessionStatus } from '../../state/session-status';
 import { activityCounts, latestPlan } from '../../state/session-summary';
 import { CountSummary, SessionStatusPill, TodoList } from '../../ui';
@@ -40,6 +41,10 @@ import {
 export function AgentSidePanelSections() {
   const { sessionId, session, bot, metadata, messages } = useAgentSession();
 
+  const shownModel = () => {
+    const model = metadata()?.model ?? session()?.model;
+    return model && shownSessionModel(model, session()?.harness);
+  };
   const plan = createMemo(() => latestPlan(messages()));
   const changes = useOptionalChanges();
   const files = () => changes?.model.files() ?? [];
@@ -82,7 +87,7 @@ export function AgentSidePanelSections() {
               </SidePanel.Pill>
             </SidePanel.Row>
           </Show>
-          <Show when={metadata()?.model ?? session()?.model}>
+          <Show when={shownModel()}>
             {(model) => (
               <SidePanel.Row label="Model">
                 <SidePanel.Pill>

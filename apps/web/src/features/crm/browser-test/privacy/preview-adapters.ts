@@ -10,14 +10,19 @@ import type {
 import { EmailThreadMention } from '../../email-thread-mention';
 import { createEmailPolicySource } from '../../queries/email-policy';
 import { createEmailPrivacySource } from '../../queries/email-privacy';
-import { policyClient } from './policy-adapter';
+import { connectPolicyMailbox, policyClient } from './policy-adapter';
 
 // Rich mentions import the same optional capabilities as other app references.
 export * from '@app/lib/analytics/posthog.tsx';
 export * from '@core/context/user.ts';
 export * from '@queries/team/teams.ts';
+export * from '@service-storage/crm-access-authority.ts';
 
 const params = new URLSearchParams(location.search);
+const crmAccess = () => !params.has('no-access');
+export const crmAccessAllowed = crmAccess;
+export const crmAccessState = () => (crmAccess() ? 'allowed' : 'denied');
+export const [excludedListReads, setExcludedListReads] = createSignal(0);
 const pendingPrivacyRead = Promise.withResolvers<void>();
 export const finishPrivacyRead = () => pendingPrivacyRead.resolve();
 let privacyReads = 0;
@@ -41,6 +46,26 @@ const [state, setState] = createSignal<EmailPrivacy>({
   canRemoveTeamDomains: params.has('admin'),
 });
 export const [lastChange, setLastChange] = createSignal('');
+export const [mailboxConnections, setMailboxConnections] = createSignal(0);
+const [primaryLinkId, setPrimaryLinkId] = createSignal(
+  params.has('disconnected') ? undefined : mailboxId
+);
+/**
+ * Stands in for the add-inbox flow completing in place, as it does on native
+ * iOS: the backend now reports the mailbox and the app's email links list it as
+ * primary. Nothing here refreshes CRM queries or touches consent, so the
+ * privacy source must notice the new link itself and sharing stays off.
+ */
+function connectMailbox() {
+  setMailboxConnections((count) => count + 1);
+  setState((s) => ({
+    ...s,
+    mailboxEmail: 'member@example.com',
+    mailboxLinkId: mailboxId,
+  }));
+  connectPolicyMailbox();
+  setPrimaryLinkId(mailboxId);
+}
 export const [statusUnavailable, setStatusUnavailable] = createSignal(
   params.has('status-unavailable')
 );
@@ -90,7 +115,11 @@ const [threads, setThreads] = createSignal([
     : []),
 ]);
 export const useCrmContext = () => ({
+  canAccess: crmAccess,
+  accessState: () => (crmAccess() ? 'allowed' : 'denied'),
+  retryAccess: async () => {},
   EmailThreadMention,
+  connectMailbox,
   createEmailPrivacy: () =>
     createEmailPrivacySource(
       {
@@ -99,7 +128,8 @@ export const useCrmContext = () => ({
         feedback: toast,
       },
       () => '00000000-0000-4000-8000-000000000048',
-      useUserId()
+      useUserId(),
+      primaryLinkId
     ),
   createEmailPolicy: () =>
     createEmailPolicySource(
@@ -174,6 +204,7 @@ export const crmEmailPrivacyClient = {
     _signal?: AbortSignal,
     threadId?: string
   ) => {
+    if (!threadId) setExcludedListReads((count) => count + 1);
     if (threadId && statusUnavailable())
       return err([{ code: 'NETWORK_ERROR' as const, message: 'Unavailable' }]);
     const matching = threads()

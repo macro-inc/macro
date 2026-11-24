@@ -20,6 +20,7 @@ import { visibleTags } from '../workspace/items';
 import { WorkspaceQuery } from '../workspace/query';
 import type { WorkspaceTag } from '../workspace/types';
 import { exclusions } from './exclusions';
+import { searchTimeZone } from './options';
 import type {
   SearchOptions,
   SearchPage,
@@ -48,28 +49,35 @@ const searchTypes: readonly SearchType[] = [
  * @agent
  * Search is keyword search, not semantic: pass 1-3 words that would literally appear in the item, not the user's description. Whitespace-separated terms are ANDed; for documents and email each word is a prefix and terms may match different passages, while for other kinds the query is one adjacent phrase prefix, so long phrases match nothing. Quote a multi-word phrase; use matchType 'exact' for a whole word, identifier or email address. Search a person and a topic separately. To find someone's email, search their quoted address, not their name.
  *
+ * Email search reads Gmail's operators in the query, ANDed with its words: subject:word or subject:"a phrase", from:, to: (To, Cc and Bcc), cc:, bcc:, in:inbox|signal|noise|archived|sent|drafts|calendar|shared|favorites, in:<tag or label> and label:<tag or label>, is:unread|read|starred|shared, has:attachment, after:2025/01/31 and before: (a day, from its midnight in timeZone), newer_than:/older_than: with 3d, 2w, 1m or 1y, and a minus before any of them to leave matching mail out (-in:inbox, -from:ana). A query with an operator returns email only; a minus before a plain word (-lunch) leaves mail out only beside an operator or in an email-only search. In code mode pass the user's timeZone when the query has dates.
+ *
  * Use macro.search.all(query) when the request does not name one kind of item, and keep any scope the user gives (types, inbox, tags) on follow-ups and retries. Per-type searches remain for one kind: macro.documents.search returns document handles, macro.email.search email threads, macro.tasks.search tasks. SearchOpts and SearchOptions select searchOn: 'name', 'content', or 'name_content'. These iterators auto-paginate; bound the work explicitly and record when you stop before exhaustion.
+ *
+ * Every search, this one and every entity's, is a heavy request that often takes seconds; code mode sends at most four at once and queues the rest in call order. Search less rather than one at a time: search several kinds with one macro.search.all(query), passing types only for kinds the user named, rather than one per-type search each, don't split one question into near-duplicate queries, and run the independent searches that remain together with Promise.all or Promise.allSettled.
  *
  * For activity rather than keywords ("what happened today", "catch me up", my recent or favorite items, tasks updated this week), browse with macro.workspace.page or macro.workspace.list, filtered by type, time, tags or inbox; for a sample of several kinds, fetch one small page per type concurrently. Read an AI chat's messages with macro.chats.byId(id).history(), or chat.history() on a search or workspace result.
  *
  * ```typescript
  * export async function main({macro}: CodeContext) {
  *   const queries = ['launch decision', 'release readiness'];
- *   const outcomes = await Promise.allSettled(queries.map(async query => {
+ *   const outcomes = await Promise.all(queries.map(async query => {
  *     const evidence = [];
  *     let stoppedEarly = false;
- *     for await (const result of macro.search.all(query, {searchOn:'content'})) {
- *       if (evidence.length === 5) { stoppedEarly = true; break; }
- *       evidence.push({type:result.type, id:result.entity.id, name:'name' in result.hit ? result.hit.name : undefined,
- *         text: result.type === 'document' ? (await result.entity.content()).slice(0,3000) : undefined});
+ *     try {
+ *       for await (const result of macro.search.all(query, {searchOn:'content'})) {
+ *         if (evidence.length === 5) { stoppedEarly = true; break; }
+ *         evidence.push({type:result.type, id:result.entity.id, name:'name' in result.hit ? result.hit.name : undefined,
+ *           text: result.type === 'document' ? (await result.entity.content()).slice(0,3000) : undefined});
+ *       }
+ *       return {query,evidence,stoppedEarly};
+ *     } catch (error) {
+ *       return {query,evidence,error:String(error)};
  *     }
- *     return {query,evidence,stoppedEarly};
  *   }));
- *   return {data: outcomes.map((item,index) => item.status === 'fulfilled'
- *     ? item.value : {query:queries[index],error:String(item.reason)}), reviews:[]};
+ *   return {data: outcomes, reviews:[]};
  * }
  * ```
- * Preserve useful evidence from each query. A short sample cannot establish corpus-wide completeness or absence. Use precise terms, metadata and relevant reads before expanding breadth. Do not swallow rejected branches. Normal for/while/for-await with break and sequential dependent calls are supported.
+ * Preserve useful evidence from each query. A short sample cannot establish corpus-wide completeness or absence. Use precise terms, metadata and relevant reads before expanding breadth. Do not swallow a failed query; record its error with the evidence gathered so far. Normal for/while/for-await with break and sequential dependent calls are supported.
  *
  * Skills are instructions to follow. When a request names a skill that is not attached, find it by name with macro.documents.skills({query}), which includes built-in skills, read its instructions with skill.content() before doing the task, and follow them for that request only.
  *
@@ -87,7 +95,10 @@ export class SearchNamespace {
 
   /**
    * One bounded page of matches across every kind of item, most relevant
-   * first; resume with `nextCursor` and the same options.
+   * first; resume with `nextCursor` and the same options. A query with an
+   * email operator (`subject:`, `from:`, `in:sent`, `is:unread`,
+   * `after:2025/01/31`) returns email only; in code mode pass the user's
+   * `timeZone` when it has dates.
    *
    * @readonly
    */
@@ -106,7 +117,10 @@ export class SearchNamespace {
 
   /**
    * Every match across every kind of item, most relevant first, auto-paginated; `maxItems` caps the total.
-   * Break a `for await` loop to stop; no further page is fetched.
+   * Break a `for await` loop to stop; no further page is fetched. A query
+   * with an email operator (`subject:`, `from:`, `in:sent`, `is:unread`,
+   * `after:2025/01/31`) returns email only; in code mode pass the user's
+   * `timeZone` when it has dates.
    *
    * @readonly
    */
@@ -128,6 +142,7 @@ export class SearchNamespace {
         agentSessions: true,
         calendarScope: true,
         pageSize: true,
+        timeZone: true,
       },
       () => this.allPages(query, search),
     );
@@ -182,11 +197,13 @@ export class SearchNamespace {
             : {}),
         };
     }
+    const timeZone = searchTimeZone(options.timeZone);
     return {
       query,
       match_type: options.matchType ?? 'partial',
       search_on: options.searchOn ?? 'name_content',
       filters,
+      ...(timeZone ? { time_zone: timeZone } : {}),
       ...(types.includes('company') ? { include_crm: true } : {}),
       ...(options.calendarScope
         ? { calendar_event_scope: options.calendarScope }
@@ -234,6 +251,8 @@ function validate(query: string, options: SearchOptions) {
     throw new Error(
       `Invalid search types. Supported values: ${searchTypes.join(', ')}. Tasks are documents.`,
     );
+  if (options.timeZone !== undefined && typeof options.timeZone !== 'string')
+    throw new Error(`Invalid search timeZone: ${options.timeZone}`);
   for (const [name, value, allowed] of [
     ['searchOn', options.searchOn, ['name', 'content', 'name_content']],
     ['matchType', options.matchType, ['partial', 'exact']],

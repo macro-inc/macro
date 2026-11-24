@@ -24,7 +24,21 @@ filters, view options, New, then expandable Search. Related detail actions share
 a `HeaderActionGroup`; keep sharing, item navigation, and detail/view toggles in
 separate groups. View tabs (channel, CRM record, and project sections, Signal and
 Noise) are `Tabs`: separate pills at their bar's control height (`size="sm"`
-in a detail header), never inside a group. Action groups use
+in a detail header), never inside a group. A pane's top-bar view tabs take
+`Tab`, `Shift+Tab` and `1`–`9` through `useViewTabHotkeys`, called beside the
+`Tabs` with its element: the keys act only while those tabs are on screen and
+the keyboard is on their pane (its list, the pane itself, or nothing focused
+while the user last pressed or focused something in that pane), so a field,
+an editor, a button, a detail beside the list or an open item without tabs
+keeps normal focus order, at every width and with the sidebar collapsed.
+Sidebar navigation (views, folders, scopes) is not tabs and takes no Tab or
+number keys; tabs atop a list that is the sidebar (Chat's rail) are
+that pane's top bar. A destination (`ViewSidebar.Item` in a `ViewSidebar.Nav`)
+or a view on the app rail chosen with the mouse leaves the keyboard on the pane
+even though the browser leaves focus on the button, so the next Tab switches
+the tabs; a right click, or a control there that opens a menu, dialog or
+picker or discloses a folder, chooses nothing, and a sidebar reached with the
+keyboard stays focus order. Nothing else in a view binds `Tab`. Action groups use
 `variant="secondary" finish="raised"`, fully rounded ends, and 8px gaps. Keep
 the right side of a bar at one height: detail headers use `sm`/`icon-sm` segments
 (28px controls); collection headers, beside New and Search, use `md`/`icon-md`
@@ -44,7 +58,10 @@ another frame, and a group with no visible actions renders nothing. Keep
 tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
 iconOnly`, then a menu). Decide those steps from whether the row fits with the
 shared mechanisms, `createLabelCollapse` (`@core/signal/create-label-collapse`;
-Reviews' list header, Email's phone reply buttons) or the split header's
+Reviews' list header, Email's list header, which hides its view options
+and then its inbox tabs' labels before Search would leave the pane, Tasks' list
+header, which hides its layout group and then its view options, Calendar's
+period controls, which show Today as its icon first, Email's phone reply buttons) or the split header's
 `PriorityCollapse`, never a new measurement. Preserve specialized editor toolbars. A touch header
 belongs to its view's mobile view, which lists every island it shows. A new one
 shows Back, the title (tap it for the title menu), and Info, with other actions
@@ -234,7 +251,10 @@ rows reads on until one matches or the directory ends; only a failed page shows 
 **Retry options** button. Closing and reopening starts at the first page, without
 clearing selected/custom chips.
 Explicit participant/agent/thread choices remain scoped extras. Matching addresses
-are deduplicated while keeping the caller's selected representation. Other recipient surfaces
+are deduplicated while keeping the caller's selected representation. Picking a
+selected row again removes it, except where the picker sets
+`markAlreadyAdded` (the email composers): there it is dimmed with its check and
+can't be picked; its chip's X or Backspace removes it. Other recipient surfaces
 are migrating separately; these controls do not change the AI planner's people pool.
 
 ## Property people pickers
@@ -333,7 +353,12 @@ newly selected values.
 New references appear immediately in the collection as pending chips with an
 inline spinner through saving and refresh. Use the dragged item's label while
 its preview metadata loads. Failed saves clear pending chips through the existing
-error flow. Pending chips cannot be opened or removed. A persistently
+error flow. Pending chips cannot be opened or removed. Click a saved chip's
+name to open its item (a contact, company, task, document, channel, email,
+folder or project); shift-click opens it in a new split, and an item already
+open in another split is brought forward instead of opened twice. The Add
+button opens the picker and a chip's remove control removes that value; a chip
+never opens the picker. People who can't edit the item still open its values. A persistently
 mounted status region announces additions, including picker saves. Removed
 references disappear immediately and are restored from the last confirmed values
 if saving fails. A failed refresh does not undo a successful save: keep confirmed

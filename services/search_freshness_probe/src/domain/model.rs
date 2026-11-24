@@ -47,6 +47,9 @@ pub enum Operation {
     Rename,
     /// The entity removed from search for good.
     Delete,
+    /// A new document whose word sorts late under a crowded prefix, searched
+    /// for by the prefix alone.
+    CrowdedPrefix,
 }
 
 impl Operation {
@@ -98,6 +101,61 @@ impl Token {
     pub fn title(&self) -> String {
         format!("{MARKER} {}", self.0)
     }
+
+    /// A fresh token that starts with `prefix` and sorts after the words
+    /// that usually share it: the prefix, then `zz`, then random letters.
+    pub fn after(prefix: &CrowdedPrefix) -> Self {
+        let mut rng = rand::rng();
+        let mut token = format!("{}{LATE}", prefix.0);
+        while token.len() < TOKEN_LEN {
+            token.push(char::from(rng.random_range(b'a'..=b'z')));
+        }
+        Self(token)
+    }
+}
+
+/// Puts a [`Token::after`] after the real words sharing its prefix: words
+/// that go on with `zz` are rare in any language the index holds.
+const LATE: &str = "zz";
+
+/// Fewest letters a prefix needs to be searched as one: shorter terms match
+/// exactly (`MIN_PREFIX_LEN` in crates/opensearch_client `search/query.rs`).
+const MIN_PREFIX_LEN: usize = 3;
+/// Fewest random letters after a prefix and [`LATE`], so every round's word
+/// is new.
+const MIN_NONCE_LEN: usize = 8;
+/// Longest crowded prefix that leaves room for the nonce.
+const MAX_PREFIX_LEN: usize = TOKEN_LEN - LATE.len() - MIN_NONCE_LEN;
+
+/// A prefix that starts more indexed words in every shard than a capped
+/// prefix expansion keeps, so a search for the prefix alone finds a word that
+/// sorts late under it only if search expands every match. Lowercase letters,
+/// long enough to be searched as a prefix, short enough to leave room for
+/// [`Token::after`]'s random letters.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CrowdedPrefix(String);
+
+/// A crowded prefix of the wrong shape.
+#[derive(Debug, thiserror::Error)]
+#[error("a crowded prefix is {MIN_PREFIX_LEN} to {MAX_PREFIX_LEN} lowercase letters")]
+pub struct InvalidPrefix;
+
+impl CrowdedPrefix {
+    /// `prefix`, if it has the shape a crowded prefix needs.
+    pub fn new(prefix: &str) -> Result<Self, InvalidPrefix> {
+        let letters = prefix.bytes().all(|byte| byte.is_ascii_lowercase());
+        let fits = (MIN_PREFIX_LEN..=MAX_PREFIX_LEN).contains(&prefix.len());
+        if letters && fits {
+            Ok(Self(prefix.to_owned()))
+        } else {
+            Err(InvalidPrefix)
+        }
+    }
+
+    /// The prefix's text.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 /// Whether `title` is one the probe gives: [`MARKER`] alone, as a seeded
@@ -122,6 +180,18 @@ pub enum SearchQuery {
         entity_type: EntityType,
         /// The exact word.
         token: Token,
+    },
+    /// `entity_id`, if a partial search for `prefix` alone matches it. The
+    /// search is narrowed to that one entity so other entities sharing the
+    /// prefix cannot crowd it off the page; the prefix still expands over
+    /// the whole shard, so a capped expansion still misses it.
+    Prefix {
+        /// The type searched.
+        entity_type: EntityType,
+        /// The start of the word.
+        prefix: CrowdedPrefix,
+        /// The only entity searched.
+        entity_id: EntityId,
     },
     /// Documents titled with `name` whose text property `property_id` holds
     /// `value`. Search needs words to match, so the property filter narrows a

@@ -1,3 +1,4 @@
+import { Model } from '@core/component/AI/constant/model';
 import {
   cleanup,
   fireEvent,
@@ -43,13 +44,16 @@ vi.mock('../../agents-view/queries/agent-roster-source', () => ({
   }),
 }));
 
-// Exercise the real AgentPicker, runtime model adapter, and Kobalte menus.
+// Exercise the unified selector, runtime model adapter, and Kobalte menus.
 // Replace discovery and host actions, with no Block or New Chat context.
 type Catalog = {
   status: 'pending' | 'error' | 'success';
   models: { id: string; name: string }[];
 };
 const [catalogs, setCatalogs] = createSignal<Record<string, Catalog>>({});
+vi.mock('@queries/agents/capabilities', () => ({
+  useAgentCapabilitiesQuery: () => ({ isSuccess: false }),
+}));
 vi.mock('@queries/agents/models', () => ({
   useAgentModelsQuery: (
     target: () => { harness: string; harnessId?: string },
@@ -130,12 +134,17 @@ function mount(target: RoutineTarget, overrides: Partial<ViewProps> = {}) {
   return { selection, onChange, onConnect, onCreate };
 }
 function openPicker() {
-  const trigger = screen.getByRole('button', { name: 'Agent' });
+  const trigger = screen.getByRole('button', {
+    name: 'Choose an agent or model',
+  });
   trigger.focus();
   fireEvent.keyDown(trigger, { key: 'Enter' });
   return trigger;
 }
 async function expectClosed(trigger: HTMLElement) {
+  if (trigger.getAttribute('aria-expanded') === 'true') {
+    fireEvent.keyDown(document, { key: 'Escape' });
+  }
   await waitFor(() =>
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
   );
@@ -143,15 +152,15 @@ async function expectClosed(trigger: HTMLElement) {
 }
 async function openModels(name: string) {
   const trigger = openPicker();
-  const row = screen.getByRole('menuitem', { name: new RegExp(`^${name}`) });
-  row.focus();
-  fireEvent.keyDown(row, { key: 'ArrowRight' });
-  // The root Macro catalog also has a search box; wait for the agent submenu.
-  const menu = await screen.findByRole('menu', {
+  const agent = screen.getByRole('menuitemradio', {
     name: new RegExp(`^${name}`),
   });
-  expect(menu.getAttribute('aria-label')).toBe(`Models for ${name}`);
-  await within(menu).findByRole('textbox', { name: 'Search models' });
+  agent.focus();
+  fireEvent.keyDown(agent, { key: 'Enter' });
+  const row = screen.getByRole('menuitem', { name: /^Model / });
+  row.focus();
+  fireEvent.keyDown(row, { key: 'ArrowRight' });
+  const menu = await screen.findByRole('menu', { name: /^Model / });
   return { trigger, menu: within(menu) };
 }
 
@@ -197,12 +206,12 @@ describe('routine execution picker', () => {
       screen.getByRole('group', { name: 'Routine model or agent' })
     ).toBeTruthy();
     const trigger = openPicker();
-    const item = screen.getByRole('menuitem', { name: 'Other model' });
+    const item = screen.getByRole('menuitemradio', { name: 'Other model' });
     item.focus();
     fireEvent.keyDown(item, { key: 'Enter' });
     expect(selection()).toEqual({ kind: 'model', model: 'other-model' });
     await expectClosed(trigger);
-    expect(trigger.textContent).toContain('Other model');
+    expect(trigger.textContent).toMatch(/other model/i);
   });
 
   it.each(['Researcher', 'Local worker'])(
@@ -214,9 +223,11 @@ describe('routine execution picker', () => {
         modelOverride: 'old-model',
       });
       const trigger = openPicker();
-      fireEvent.click(
-        screen.getByRole('menuitem', { name: new RegExp(`^${name}`) })
-      );
+      const agent = screen.getByRole('menuitemradio', {
+        name: new RegExp(`^${name}`),
+      });
+      agent.focus();
+      fireEvent.keyDown(agent, { key: 'Enter' });
       expect(selection()).toEqual({
         kind: 'agent',
         agentId: name === 'Researcher' ? managedId : externalId,
@@ -234,7 +245,7 @@ describe('routine execution picker', () => {
     async (name, agentId, label, model) => {
       const { selection } = mount({ kind: 'model', model: 'chat-model' });
       const { trigger, menu } = await openModels(name);
-      const item = menu.getByRole('menuitem', { name: label });
+      const item = menu.getByRole('menuitemradio', { name: label });
       item.focus();
       fireEvent.keyDown(item, { key: 'Enter' });
       expect(selection()).toEqual({
@@ -255,7 +266,7 @@ describe('routine execution picker', () => {
         modelOverride: 'old',
       });
       const trigger = openPicker();
-      const row = screen.getByRole('menuitem', { name: /^Researcher/ });
+      const row = screen.getByRole('menuitemradio', { name: /^Researcher/ });
       row.focus();
       fireEvent.keyDown(row, { key });
       expect(selection()).toEqual({ kind: 'agent', agentId: managedId });
@@ -272,10 +283,9 @@ describe('routine execution picker', () => {
       />
     ));
     let trigger = openPicker();
-    fireEvent.keyDown(
-      screen.getByRole('menuitem', { name: /Connect Cursor/ }),
-      { key: 'Enter' }
-    );
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: /^Cursor/ }), {
+      key: 'Enter',
+    });
     expect(host.openSettings).toHaveBeenCalledWith('Harness');
     await expectClosed(trigger);
     trigger = openPicker();
@@ -303,9 +313,12 @@ describe('routine execution picker', () => {
       }
     );
     const trigger = openPicker();
-    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Other model' }), {
-      key: 'Enter',
-    });
+    fireEvent.keyDown(
+      screen.getByRole('menuitemradio', { name: 'Other model' }),
+      {
+        key: 'Enter',
+      }
+    );
     await expectClosed(trigger);
     setLoading(false);
     expect(selection()).toEqual({ kind: 'model', model: 'other-model' });
@@ -348,8 +361,10 @@ describe('routine execution picker', () => {
     (target) => {
       const { onChange } = mount(target);
       expect(
-        screen.getByRole('button', { name: 'Agent' }).textContent
+        screen.getByRole('button', { name: 'Choose an agent or model' })
+          .textContent
       ).toContain('Retired Model');
+      expect(screen.getByRole('status').textContent).toContain('retired-model');
       expect(screen.getByRole('status').textContent).toContain(
         'not available from this machine'
       );
@@ -370,12 +385,12 @@ describe('routine execution picker', () => {
     // reconnect path (opens Settings → Runtimes) rather than a dead row.
     const reconnect = screen.getByRole('menuitem', { name: /Local worker/ });
     expect(reconnect.getAttribute('aria-disabled')).not.toBe('true');
-    expect(reconnect.textContent).toContain('Reconnect machine');
+    expect(reconnect.textContent).toContain('Local worker');
     fireEvent.keyDown(reconnect, { key: 'Enter' });
     expect(onConnect.mock.calls[0][0].harness).toBe('macrod');
     await expectClosed(trigger);
     trigger = openPicker();
-    const connect = screen.getByRole('menuitem', { name: /Connect Cursor/ });
+    const connect = screen.getByRole('menuitem', { name: /^Cursor/ });
     fireEvent.keyDown(connect, { key: 'Enter' });
     expect(onConnect.mock.calls[1][0].harness).toBe('cursor');
     await expectClosed(trigger);
@@ -408,7 +423,9 @@ describe('routine execution picker', () => {
     fireEvent.input(prompt, { target: { value: 'Keep writing' } });
     expect(screen.getByRole('status').textContent).toContain('Loading models');
     const trigger = openPicker();
-    fireEvent.click(screen.getByRole('menuitem', { name: /Researcher/ }));
+    const agent = screen.getByRole('menuitemradio', { name: /Researcher/ });
+    agent.focus();
+    fireEvent.keyDown(agent, { key: 'Enter' });
     await expectClosed(trigger);
     setCatalogs({
       'in-memory': {
@@ -422,6 +439,33 @@ describe('routine execution picker', () => {
       prompt
     );
     expect((prompt as HTMLTextAreaElement).value).toBe('Keep writing');
+  });
+
+  it('shows a retired Macro model as its replacement without changing the draft', () => {
+    setCatalogs({
+      'in-memory': {
+        status: 'success',
+        models: [{ id: Model.gpt62Sol, name: 'GPT-6.2 Sol' }],
+      },
+    });
+    const { onChange } = mount({ kind: 'model', model: 'openai/gpt-5.6' });
+    expect(
+      screen.getByRole('button', { name: 'Choose an agent or model' })
+        .textContent
+    ).toContain('GPT-6.2 Sol');
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps a model id another runtime saved, even one Macro retired', () => {
+    mount({
+      kind: 'agent',
+      agentId: externalId,
+      modelOverride: 'openai/gpt-5.6',
+    });
+    expect(screen.getByRole('status').textContent).toContain(
+      'model "openai/gpt-5.6" is not available'
+    );
   });
 
   it('retains a saved model when discovery fails or returns an empty catalog', () => {
@@ -455,7 +499,9 @@ describe('routine execution picker', () => {
     );
     failed = false;
     fireEvent.click(screen.getByRole('button', { name: 'Retry choices' }));
-    expect(screen.getByRole('button', { name: 'Agent' })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Choose an agent or model' })
+    ).toBeTruthy();
     expect(screen.getByRole('textbox', { name: 'Routine prompt' })).toBe(
       prompt
     );
@@ -488,7 +534,7 @@ describe('routine execution picker', () => {
       'Loading model and agent choices'
     );
     resolve([{ id: 'saved-model' }]);
-    await screen.findByRole('button', { name: 'Agent' });
+    await screen.findByRole('button', { name: 'Choose an agent or model' });
     expect(screen.getByRole('textbox', { name: 'Routine prompt' })).toBe(
       prompt
     );

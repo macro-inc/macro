@@ -556,9 +556,10 @@ impl Stack {
     }
 
     /// Whether `email_focus_worker` is done with the thread and left it
-    /// unclassified because its owner does not have the Focus flag. Nothing
-    /// else the worker does shows that, so the stack has it log the threads
-    /// it leaves at debug.
+    /// unclassified because nobody whose tab shows it is in the rollout: has
+    /// the Focus flag and has used Macro in the last week. Nothing else the
+    /// worker does shows that, so the stack has it log the threads it leaves
+    /// at debug.
     pub fn focus_skipped_without_flag(&self, thread_id: &str) -> bool {
         self.focus_worker_log().lines().any(|line| {
             line.contains(FOCUS_SKIPPED)
@@ -824,7 +825,7 @@ impl Stack {
 
     /// Runs the hourly link maintenance once, as the cron does in
     /// production: the real `email_refresh_handler` enqueues a `HealthCheck`
-    /// on `link-manager` for every Gmail inbox that is due and a `Refresh`
+    /// on `link-maintenance` for every Gmail inbox that is due and a `Refresh`
     /// for those whose hour it is. The handler runs with a health interval
     /// of one hour, so every syncing Gmail inbox is due a health check on
     /// each run; which inboxes are refreshed depends on the hour and the

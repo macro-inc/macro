@@ -56,6 +56,30 @@ fn channel_only_entity_type_filter_excludes_other_types() {
 }
 
 #[test]
+fn nil_call_ids_exclude_call_records() {
+    let mut filters = EntityFilters::default();
+    filters.call_filters.call_ids = vec![NIL_UUID.into()];
+    let excluded = SearchEntityFilters::from(filters);
+    assert!(!excluded.should_include_call_records);
+    assert!(excluded.call_filters.call_ids.is_empty());
+
+    let mut filters = EntityFilters::default();
+    filters.call_filters.channel_ids = vec![NIL_UUID.into()];
+    assert!(!SearchEntityFilters::from(filters).should_include_call_records);
+
+    let mut filters = EntityFilters::default();
+    filters.call_filters.call_ids = vec!["00000000-0000-0000-0000-000000000001".into()];
+    let one_call = SearchEntityFilters::from(filters);
+    assert!(one_call.should_include_call_records);
+    assert_eq!(
+        one_call.call_filters.call_ids,
+        ["00000000-0000-0000-0000-000000000001"]
+    );
+
+    assert!(SearchEntityFilters::from(EntityFilters::default()).should_include_call_records);
+}
+
+#[test]
 fn design_files_are_searchable_but_other_vector_files_are_not() {
     for design in [FileType::Fig, FileType::Psd, FileType::Psb, FileType::Ai] {
         assert!(is_searchable_file_type(&design), "{design}");

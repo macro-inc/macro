@@ -240,8 +240,7 @@ where
         if !targets.is_empty() {
             self.email_repo
                 .enqueue_mailbox_action(link.id, actor, &action, &targets)
-                .await
-                .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+                .await?;
         }
         Ok(UpdateThreadLabelsResult {
             successful_ids: targets.iter().map(|t| t.message_id).collect(),
@@ -867,9 +866,7 @@ where
             EmailEventOrigin::UserAction,
         );
 
-        if let Some(event) = event {
-            self.publish_email_event(&event);
-        }
+        self.publish_email_event(&event);
 
         for message_id in cancelled_send_ids {
             self.publish_email_event(&EmailMacroEvent::message_send_cancelled(

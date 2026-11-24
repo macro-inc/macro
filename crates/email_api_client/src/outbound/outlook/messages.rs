@@ -1,4 +1,5 @@
 use chrono::Utc;
+use models_email::email::service::message::RecentMailFolder;
 use models_email::service::{address::ContactInfo, attachment::Attachment, message::Message};
 use reqwest::Method;
 use serde_json::json;
@@ -6,20 +7,24 @@ use uuid::Uuid;
 
 use super::{
     OutlookApiClientRepository,
-    transport::{invalid_response, read_json},
+    transport::{GraphFailure, invalid_response, read_json},
     wire,
 };
 use crate::domain::models::{
-    AccessToken, Attention, EmailApiError, FolderRole, MailFolder, MailboxMessage, MailboxState,
-    MessageAction, MessageWithCalendarParts, MessageWriteReceipt, ProviderId, StreamToken,
-    SubmissionOutcome,
+    AccessToken, Attention, EmailApiError, FolderRole, MailFolder, MailFolderCatalog,
+    MailboxMessage, MailboxState, MessageAction, MessageWithCalendarParts, MessageWriteReceipt,
+    ProviderId, StreamToken, SubmissionOutcome,
 };
 use crate::domain::ports::{MailboxActionWriter, MailboxCalendarClient, MailboxContentReader};
 
 const MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,changeKey,internetMessageId,subject,bodyPreview,body,from,toRecipients,ccRecipients,bccRecipients,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime,createdDateTime,lastModifiedDateTime,internetMessageHeaders,webLink";
 
 /// Enough to read who wrote and what about, without bodies or headers.
-const RECENT_MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,subject,bodyPreview,from,toRecipients,ccRecipients,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime";
+pub(super) const RECENT_MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,subject,bodyPreview,from,toRecipients,ccRecipients,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime";
+
+/// Most pages one recent read follows. Graph answers up to `$top` messages
+/// a page, so a read takes one page unless Graph answers short.
+const MAX_RECENT_PAGES: u32 = 10;
 
 const ARCHIVE_ROLE_PROPERTY: &str =
     "String {81f532e3-7ace-4e0b-bae9-312ce0d50c8c} Name MacroFolderRole";
@@ -89,10 +94,25 @@ impl MailboxContentReader for OutlookApiClientRepository {
             Err(error) => Err(error),
         }
     }
-    async fn folders(&self, token: &AccessToken) -> Result<Vec<MailFolder>, EmailApiError> {
-        let mut roles = Vec::new();
+    async fn folders(&self, token: &AccessToken) -> Result<MailFolderCatalog, EmailApiError> {
+        // Every mailbox has an Inbox. Graph answers 404 to it only when the
+        // account has no mailbox it will serve, and then to every other
+        // mailbox call too.
+        let inbox = self.endpoint(&["me", "mailFolders", "inbox"])?;
+        let inbox: wire::Folder = match self
+            .graph_request(token, Method::GET, inbox, None, None)
+            .await
+        {
+            Ok(response) => read_json(response).await?,
+            Err(GraphFailure {
+                error: EmailApiError::NotFound,
+                code,
+                ..
+            }) => return Ok(MailFolderCatalog::NoMailbox { error_code: code }),
+            Err(failure) => return Err(failure.error),
+        };
+        let mut roles = vec![(inbox.id, FolderRole::Inbox)];
         for (name, role) in [
-            ("inbox", FolderRole::Inbox),
             ("sentitems", FolderRole::Sent),
             ("drafts", FolderRole::Drafts),
             ("archive", FolderRole::Archive),
@@ -168,7 +188,7 @@ impl MailboxContentReader for OutlookApiClientRepository {
                 }
             }
         }
-        Ok(result)
+        Ok(MailFolderCatalog::Folders(result))
     }
 
     async fn message(
@@ -263,19 +283,90 @@ impl MailboxContentReader for OutlookApiClientRepository {
         &self,
         token: &AccessToken,
         link_id: Uuid,
+        folder: RecentMailFolder,
         limit: u16,
+        since: Option<chrono::DateTime<Utc>>,
         folders: &[MailFolder],
     ) -> Result<Vec<MailboxMessage>, EmailApiError> {
-        let mut url = self.endpoint(&["me", "mailFolders", "inbox", "messages"])?;
+        // Received mail is dated by its arrival, sent mail by when it was
+        // sent: the window's start and its order read the same date.
+        let (folder_name, dated_by) = match folder {
+            RecentMailFolder::Inbox => ("inbox", "receivedDateTime"),
+            RecentMailFolder::Sent => ("sentitems", "sentDateTime"),
+        };
+        let mut url = self.endpoint(&["me", "mailFolders", folder_name, "messages"])?;
         url.query_pairs_mut()
             .append_pair("$select", RECENT_MESSAGE_FIELDS)
-            .append_pair("$orderby", "receivedDateTime desc")
+            .append_pair("$orderby", &format!("{dated_by} desc"))
             .append_pair("$top", &limit.to_string());
-        let page: wire::Page<wire::Message> = self.get(token, url).await?;
-        page.value
-            .into_iter()
-            .map(|message| normalize(message, Vec::new(), link_id, folders))
-            .collect()
+        // Graph orders by a filtered property only when the filter names it
+        // first, as this one does.
+        if let Some(since) = since {
+            url.query_pairs_mut().append_pair(
+                "$filter",
+                &format!(
+                    "{dated_by} ge {}",
+                    since.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+                ),
+            );
+        }
+        // Graph may answer a page short of `$top`, even empty, with more to
+        // come: follow its pages until the limit, a page it has read already
+        // (its query in any order), or [`MAX_RECENT_PAGES`]. A message
+        // that can't be read is left out and counted, so one bad message keeps
+        // the rest, and the limit counts the messages kept. A later page that
+        // fails, or a link to it that can't be followed, keeps what the
+        // earlier ones read.
+        let limit = usize::from(limit);
+        let mut messages = Vec::new();
+        let mut failed = 0usize;
+        let mut followed = std::collections::HashSet::from([page_key(&url)]);
+        let mut pages = 0u32;
+        loop {
+            let page: wire::Page<serde_json::Value> = match self.get(token, url).await {
+                Ok(page) => page,
+                Err(error) if pages > 0 => {
+                    tracing::warn!(%link_id, error = %error, "stopped reading recent Outlook messages at a page that failed");
+                    break;
+                }
+                Err(error) => return Err(error),
+            };
+            pages += 1;
+            // Each message decodes on its own, so one Graph can't describe
+            // leaves the rest of its page; rows past the limit are never read.
+            for message in page.value {
+                if messages.len() >= limit {
+                    break;
+                }
+                let read = serde_json::from_value::<wire::Message>(message)
+                    .map_err(|_| invalid_response("a message that does not decode"))
+                    .and_then(|message| normalize(message, Vec::new(), link_id, folders));
+                match read {
+                    Ok(message) => messages.push(message),
+                    Err(error) => {
+                        failed += 1;
+                        tracing::debug!(%link_id, error = %error, "could not read a recent Outlook message");
+                    }
+                }
+            }
+            let Some(next) = page.next else { break };
+            if messages.len() >= limit || pages >= MAX_RECENT_PAGES {
+                break;
+            }
+            match self.continuation(&StreamToken::new(next)) {
+                Ok(next) if followed.insert(page_key(&next)) => url = next,
+                Ok(_) => break,
+                Err(error) => {
+                    tracing::warn!(%link_id, error = %error, "stopped reading recent Outlook messages at a link that can't be followed");
+                    break;
+                }
+            }
+        }
+        if failed > 0 {
+            tracing::warn!(%link_id, failed_message_count = failed, "left out recent Outlook messages that failed to read");
+        }
+        messages.truncate(limit);
+        Ok(messages)
     }
 
     async fn attachment(
@@ -551,4 +642,13 @@ impl MailboxActionWriter for OutlookApiClientRepository {
             Err(error) => Err(error),
         }
     }
+}
+
+/// What makes two links one page of a list: the same path and the same
+/// query pairs, in any order and however the pairs are encoded. A path
+/// spelled two ways reads as two pages, which [`MAX_RECENT_PAGES`] bounds.
+fn page_key(url: &url::Url) -> (String, Vec<(String, String)>) {
+    let mut pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+    pairs.sort();
+    (url.path().to_owned(), pairs)
 }

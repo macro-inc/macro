@@ -157,6 +157,14 @@ export type AppEvents = {
   subscription_success: Record<string, unknown>;
 
   sidebar_click: Record<string, unknown>;
+  /**
+   * A desktop installer download started. The marketing download page sends
+   * the same event with `source: 'marketing'`.
+   */
+  desktop_download_clicked: {
+    platform: 'macos' | 'linux';
+    source: 'app_settings';
+  };
   notifications_toggled: Record<string, unknown>;
 
   share_menu_open: { blockType: string };
@@ -285,6 +293,8 @@ export type AppEvents = {
       | 'payment_required'
       | 'no_gmail_grant'
       | 'inbox_being_removed'
+      | 'identity_conflict'
+      | 'changed'
       | 'gmail_not_granted'
       | 'failed'
       | 'exception'

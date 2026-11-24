@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button, cn } from '@ui';
 import {
@@ -14,6 +15,7 @@ import {
   useListSearchKeys,
 } from './list-search-keys';
 import { SearchBar } from './SearchBar';
+import type { SearchTextPart } from './search-operator-text';
 import { ViewShell } from './ViewShell';
 
 export function ListHeader(props: {
@@ -61,6 +63,8 @@ export function ListHeaderSearch(props: {
   onOpenChange?: (open: boolean) => void;
   onFocusChange?: (focused: boolean) => void;
   suggestions?: ListSearchSuggestions;
+  /** Marks operators (`in:sent`) in the text, drawn as tokens. */
+  operators?: (value: string) => readonly SearchTextPart[];
   ref?: (element: HTMLDivElement) => void;
 }) {
   const [expanded, setExpandedState] = createSignal(Boolean(props.value));
@@ -124,7 +128,7 @@ export function ListHeaderSearch(props: {
     <div
       ref={props.ref}
       class={cn(
-        !expanded() && 'w-8 shrink-0',
+        !expanded() && 'w-8 shrink-0 touch:w-10',
         expanded() && !props.wide && 'w-56 max-w-[40cqw] min-w-24',
         expanded() && props.wide && 'min-w-24 flex-1'
       )}
@@ -136,18 +140,20 @@ export function ListHeaderSearch(props: {
             aria-label={props.label}
             tooltip={props.label}
             ref={trigger}
-            variant="secondary"
-            size="icon-md"
+            variant={isTouchDevice() ? 'ghost' : 'secondary'}
+            size={isTouchDevice() ? 'icon-lg' : 'icon-md'}
+            class="touch:island"
             aria-expanded="false"
             onClick={focus}
           >
-            <SearchIcon class="size-4" />
+            <SearchIcon class="size-4 touch:size-6" />
           </Button>
         }
       >
         <SearchBar
           ref={input}
           size="sm"
+          class="touch:island touch:h-10"
           label={props.label}
           placeholder={props.placeholder ?? props.label}
           value={props.value}
@@ -156,6 +162,7 @@ export function ListHeaderSearch(props: {
           autocomplete="off"
           aria-controls={props.suggestions?.listId}
           aria-activedescendant={props.suggestions?.activeId?.()}
+          operators={props.operators}
           onClose={close}
           onKeyDown={keys.onKeyDown}
           onFocus={() => props.onFocusChange?.(true)}

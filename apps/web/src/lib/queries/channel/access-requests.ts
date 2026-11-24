@@ -8,6 +8,7 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { invalidateChannelParticipants } from './channel-participants';
+import { refreshChannelDirectory } from './directory';
 import { channelKeys } from './keys';
 
 /** The viewer's own latest request to join a channel they cannot read. */
@@ -164,9 +165,7 @@ export function handleChannelAccessRequestChanged(payload: {
   });
 }
 
-/** Once the viewer is let in, their channel list gains the channel. */
-export function refreshJoinedChannel() {
-  return queryClient.invalidateQueries({
-    queryKey: channelKeys.listChannels._def,
-  });
+/** Once the viewer is let in, their channel directory gains the channel. */
+export function refreshJoinedChannel(channelId: string) {
+  return refreshChannelDirectory([channelId]);
 }

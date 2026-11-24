@@ -411,6 +411,17 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   Outlook discovery refreshes viewers only when a calendar was added, removed
   or changed, and raises the hint for the calendar changes Google's calendar
   list raises it for (`upsert_calendar_tx`).
+- Postgres text and `jsonb` cannot hold U+0000, and the Outlook sync retries
+  the same event first, so a write that fails on every retry holds back its
+  whole calendar. `upsert_event`, which every Google, Outlook and mutation
+  write of an event goes through, therefore first removes NUL characters from
+  the event's text (title, description, location, names, addresses,
+  recurrence lines, attendees, overrides, decline messages) and from every
+  string and key of its raw payload (`src/outbound/pg/nul_characters.rs`, as
+  the mail store's `email_db_client::parse::nul_characters` does). One warning,
+  `removing NUL characters from a calendar event`, names the `fields`, never
+  their values, with `calendar_id` and `provider_event_id`. Identifiers are
+  left alone.
 - The Outlook sync (`src/domain/outlook.rs`) refreshes a page's events one
   at a time, first pending id first, and retries that id after any error, so
   one error blocks the calendar. An event the adapter cannot normalize is not
@@ -469,6 +480,20 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   (reminders and automatic declines anchor all-day dates at UTC, team
   availability reports the zone missing). The warning `ignoring an Outlook
   mailbox time zone Macro cannot map` and the span carry `unmapped_time_zone`.
+- An Outlook calendar counts for team reads once certified
+  (`snapshot_normalization_version`, [team sharing](../../docs/design/calendar-team-sharing.md#outlook-calendars)):
+  `checkpoint_outlook_calendar`'s finish certifies a full scan and keeps a
+  delta round's certificate, unless a listed event has no stored copy
+  (`has_unreadable_events`), and the sync and an edit's echo
+  (`calendar_echo`) store a series missing an occurrence it could not read
+  under no role, even when it compares unchanged (`verify_source_access`
+  withdraws a stored role on a read under none). Discovery keeps an
+  uncertified calendar's coverage and schedules the full scan instead
+  (`rescan_for_verification`): a `canEdit` change restarts
+  the scan, and a calendar holding an unreadable event gets none, or it would
+  be scanned on every discovery. A copy written under another role since the
+  last round reaches discovery only until the next round finishes, so that
+  finish schedules the full scan itself (`holds_stale_role`).
 - A calendar's sync error reaches calendar caches only as an `UpsertCalendar`
   change-log entry, since they read the calendar list once and then follow
   the log. Google and Outlook log one when the shown error
@@ -540,6 +565,24 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   the sync logs `Outlook calendar sync queue depth` with `due_items` and
   `oldest_due_seconds`, which are the claimable rows waiting and the longest
   wait.
+- Google's per-inbox request gate (the calendar service's sliding window,
+  shared with calendar mutations) refuses with `Deferred` too, naming its
+  window, since a refused call is not counted. A Google account round
+  (`GoogleCalendarBackfillService::backfill`) stops at the first refusal
+  instead of isolating each calendar left, records no failure, skips the
+  calendar-list reconcile, and releases its lease through
+  `defer_google_backfill`, which keeps the job's `started_at`; the calendar
+  service hides the delivery for `retry_after`, at most five minutes, inside
+  the reaper's 15-minute stall threshold. The next delivery's claim hands
+  back that `round_started_at`, and the walk skips every calendar whose
+  `synced_at` is at or after it, so an inbox with more calendars than one
+  window admits reaches all of them over a few deliveries. A rate limit
+  Google itself returns stays a transient failure of that calendar, as
+  Microsoft's do. The `backfill` span records `calendars`,
+  `calendars_reached`, `resumed_from` (calendars earlier deliveries of the
+  round synced), `outcome` (`complete`, `deferred`), `retry_after_s` and
+  `deferred_until`, and each deferral logs `deferring a Google Calendar
+  account round at the inbox's request limit` with the same fields.
 
 ## Related
 

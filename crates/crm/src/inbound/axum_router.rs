@@ -13,6 +13,9 @@ pub mod set_company_name;
 /// Toggle the `hidden` flag on a `crm_contacts` row.
 pub mod set_contact_hidden;
 
+/// Add or remove one of a company's domains.
+pub mod company_domains;
+
 pub mod contact_emails;
 pub mod set_contact_company;
 pub mod set_contact_email;
@@ -35,6 +38,9 @@ pub mod get_contact;
 /// receive null for hidden rows; admin/owner reach hidden contacts.
 pub mod get_contact_by_email;
 
+/// Resolve a team's CRM company by one of its domains.
+pub mod get_company_by_domain;
+
 /// Search the caller's team's CRM contacts by email or name.
 pub mod search_contacts;
 
@@ -50,8 +56,11 @@ pub mod create_company;
 /// Manually create a contact (name + email) under a CRM company.
 pub mod create_contact;
 
-/// Manually create a contact without a company for the caller's team.
+/// Manually create a contact for the caller's team without naming a company.
 pub mod create_team_contact;
+
+/// Operator route: file a team's manual contacts under their domain's company.
+pub mod file_unfiled_contacts;
 
 /// The domains a team keeps out of email sync.
 pub mod blocked_domains;
@@ -144,6 +153,26 @@ impl<C, St, Eas, Auth> Clone for CrmRouterState<C, St, Eas, Auth> {
     }
 }
 
+/// Routes for internal callers, nested under the host's `/internal` router.
+/// Each handler authenticates with the internal-only extractor.
+pub fn crm_internal_router<C, St, Eas, Auth, S>(
+    state: CrmRouterState<C, St, Eas, Auth>,
+) -> Router<S>
+where
+    C: crate::domain::contact_filing::ContactFilingService,
+    St: Send + Sync + 'static,
+    Eas: Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+    S: Send + Sync + 'static,
+{
+    Router::new()
+        .route(
+            file_unfiled_contacts::ROUTE,
+            post(file_unfiled_contacts::handler::<C, St, Eas, Auth>),
+        )
+        .with_state(state)
+}
+
 /// Build the CRM router with all endpoints.
 pub fn crm_router<C, St, Eas, Auth, S>(state: CrmRouterState<C, St, Eas, Auth>) -> Router<S>
 where
@@ -185,6 +214,15 @@ where
         .route(
             "/companies/{company_id}/name",
             put(set_company_name::handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/companies/{company_id}/domains",
+            put(company_domains::add_handler::<C, St, Eas, Auth>)
+                .delete(company_domains::remove_handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/companies/by-domain",
+            get(get_company_by_domain::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}",
@@ -362,10 +400,23 @@ impl IntoResponse for CrmError {
                     message: "crm company is archived; restore it before making this change".into(),
                 }),
             ),
+            CrmError::CompanyDomainTaken(holder) => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(company_domains::CompanyDomainTakenResponse::from(holder)),
+                )
+                    .into_response();
+            }
+            CrmError::CompanyDomainAdminRequired => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "this company's email sync is off, so only a team admin or owner can remove its domains: removing one lets that domain's mail back into the CRM".into(),
+                }),
+            ),
             CrmError::CompanyAlreadyExistsForTeam => (
                 StatusCode::CONFLICT,
                 Json(ErrorResponse {
-                    message: "a crm company already exists for this domain".into(),
+                    message: "a crm company already exists for this domain; get it with GET /crm/companies/by-domain, which returns an archived company to team admins only".into(),
                 }),
             ),
             CrmError::ContactAlreadyExistsForCompany => (

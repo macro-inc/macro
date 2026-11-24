@@ -3,7 +3,13 @@
  * coordinator-routed RPCs, and fans out invalidations.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
+import {
+  cacheRequestStamp,
+  isReadOnlyCacheRequest,
+} from '../host/read-availability';
 import { executePeopleRequest } from '../people/worker';
 import type {
   AffectedOperationsResult,
@@ -38,8 +44,10 @@ import {
 import { cacheDatabaseIdentity } from './coordinator-protocol';
 import {
   type CacheEngine,
+  type CacheEngineHydrationResult,
   type CacheOpenOutcome,
   type CacheOpenResult,
+  type CacheWalCheckpoint,
   loadCacheWasm,
 } from './wasm-module';
 
@@ -70,7 +78,13 @@ type QueuedEngineRequest = {
   priority: number;
   readSignature?: string;
   waiters: RequestWaiter[];
+  /** When the first of its waiters arrived, on the core's monotonic clock. */
+  enqueuedAt: number;
 };
+
+// A page gives up on a request after 10 s; reporting from 1 s shows what held
+// the engine on the way there.
+const SLOW_REQUEST_MS = 1_000;
 
 export interface CacheWorkerCoreOptions {
   /** Atomically recovery-wipes before any Turso open during initialization. */
@@ -101,6 +115,8 @@ export interface CacheWorkerCoreOptions {
   queueDiagnosticsTimeoutMs?: number;
   /** Calls `resume` once the messages already delivered have been handled. */
   afterArrivedMessages?: (resume: () => void) => void;
+  /** Calls `run` once the engine has been quiet; returns a cancel. */
+  afterQuiet?: (run: () => void) => () => void;
 }
 
 // A burst that keeps arriving must not hold back the requests already here.
@@ -114,6 +130,18 @@ function afterArrivedMessages(resume: () => void): void {
     resume();
   };
   port2.postMessage(undefined);
+}
+
+/**
+ * How long the engine stays quiet before it copies the WAL: long enough for
+ * the requests a page sends on an answer (the boot reads after an open, the
+ * re-reads after a write's change notice) to arrive and run first.
+ */
+const IDLE_CHECKPOINT_QUIET_MS = 100;
+
+function afterQuiet(run: () => void): () => void {
+  const timer = setTimeout(run, IDLE_CHECKPOINT_QUIET_MS);
+  return () => clearTimeout(timer);
 }
 
 // Backfill hydration is cache warming, so foreground reads may overtake it.
@@ -130,6 +158,8 @@ const CACHE_WRITE_PRIORITY = 3;
 /** Reads may reorder while they overlap, but never across lifecycle barriers. */
 function isOrderingBarrier(request: CacheRequest): boolean {
   return (
+    request.kind === 'current-authority' ||
+    request.kind === 'transition-authority' ||
     request.kind === 'init' ||
     request.kind === 'current-storage-generation' ||
     request.kind === 'teardown' ||
@@ -139,7 +169,11 @@ function isOrderingBarrier(request: CacheRequest): boolean {
 
 /** A new engine or cleared storage: not even a typed search runs ahead. */
 function stopsTypedSearch(request: CacheRequest): boolean {
-  return request.kind === 'init' || request.kind === 'clear';
+  return (
+    request.kind === 'init' ||
+    request.kind === 'clear' ||
+    request.kind === 'transition-authority'
+  );
 }
 
 /** A change made on this device rather than a result from the network. */
@@ -221,6 +255,7 @@ function requestPriority(request: CacheRequest): number {
 function readSignature(request: CacheRequest): string | undefined {
   if (request.kind !== 'read' || request.opId === undefined) return;
   return JSON.stringify([
+    request.generation ?? null,
     request.opId,
     request.query,
     request.operationName ?? null,
@@ -239,11 +274,16 @@ export class CacheWorkerCore {
   private running = false;
   /** Between two requests, while arrivals join the queue. */
   private yielding = false;
+  /** A request that can write ran since the last WAL checkpoint. */
+  private checkpointPending = false;
+  private cancelIdleCheckpoint: (() => void) | undefined;
   private readonly afterArrivedMessages: (resume: () => void) => void;
+  private readonly afterQuiet: (run: () => void) => () => void;
   private acceptingRequests = true;
   private activeRequestHandlers = 0;
   private readonly drainWaiters = new Set<() => void>();
   private resetRequiredReported = false;
+  private executingAuthority: string | undefined;
   private hotCapacity: number | undefined;
   private readonly ports = new Set<PortLike>();
   private readonly telemetry: CacheTelemetryRecorderLike;
@@ -268,6 +308,7 @@ export class CacheWorkerCore {
     this.queueDiagnosticsTimeoutMs = options.queueDiagnosticsTimeoutMs ?? 250;
     this.afterArrivedMessages =
       options.afterArrivedMessages ?? afterArrivedMessages;
+    this.afterQuiet = options.afterQuiet ?? afterQuiet;
   }
 
   addPort(port: PortLike): void {
@@ -300,7 +341,11 @@ export class CacheWorkerCore {
 
     this.activeRequestHandlers += 1;
     try {
-      const result = await this.enqueue(request);
+      const envelope = (await this.enqueue(request)) as {
+        result: unknown;
+        authorityGeneration?: string;
+      };
+      const result = envelope.result;
       const durationMs = this.now() - startedAt;
       const revisionCategory = revisionAdvancementCategory(request);
       const revisionAdvanced =
@@ -362,7 +407,7 @@ export class CacheWorkerCore {
           durationMs,
         });
       }
-      respond({ id: request.id, ok: true, result });
+      respond({ id: request.id, ok: true, ...envelope });
     } catch (error) {
       const durationMs = this.now() - startedAt;
       const errorCode = classifyCacheError(error);
@@ -400,6 +445,8 @@ export class CacheWorkerCore {
     this.acceptingRequests = false;
     // A best-effort observation may never delay correctness teardown.
     this.cancelQueueDiagnostics?.();
+    this.cancelIdleCheckpoint?.();
+    this.cancelIdleCheckpoint = undefined;
     if (
       this.activeRequestHandlers > 0 ||
       this.running ||
@@ -468,6 +515,7 @@ export class CacheWorkerCore {
         priority,
         readSignature: signature,
         waiters: [{ resolve, reject }],
+        enqueuedAt: this.now(),
       });
       this.collectArrivalsThenDrain();
     });
@@ -509,14 +557,21 @@ export class CacheWorkerCore {
       }
     }
 
-    index = this.pickPastFences(index, segmentEnd);
+    index = this.pickPastFences(
+      index,
+      this.queue[index]?.priority ?? Number.NEGATIVE_INFINITY,
+      segmentEnd
+    );
 
     const [queued] = this.queue.splice(index, 1);
     if (!queued) return;
     this.running = true;
+    const startedAt = this.now();
+    const queueDepth = this.queue.length;
     void this.dispatch(queued.request)
       .then(
         async (result) => {
+          this.recordSlowRequest(queued, startedAt, queueDepth);
           // Resolve the cache result before the bounded observation checkpoint.
           for (const waiter of queued.waiters) waiter.resolve(result);
           if (isStorageTransactionRequest(queued.request)) {
@@ -524,14 +579,122 @@ export class CacheWorkerCore {
           }
         },
         (error) => {
+          this.recordSlowRequest(queued, startedAt, queueDepth, { error });
           for (const waiter of queued.waiters) waiter.reject(error);
         }
       )
       .finally(() => {
         this.running = false;
+        if (!isReadOnlyCacheRequest(queued.request.kind)) {
+          this.checkpointPending = true;
+        }
         this.collectArrivalsThenDrain();
+        this.scheduleIdleCheckpoint();
         this.resolveDrainWaitersIfIdle();
       });
+  }
+
+  /**
+   * Turso copies the WAL into the database file inside the COMMIT that takes
+   * it to 1,000 frames, so one write pays for the others. After a request
+   * that can write, once the engine has been quiet for a moment, it copies
+   * the WAL here from 500 frames instead. Each request that runs re-arms the
+   * wait, so the requests a page sends on an answer run before the copy. One
+   * that arrives during the copy waits for it, as it waited for the write
+   * that used to carry it.
+   */
+  private scheduleIdleCheckpoint(): void {
+    this.cancelIdleCheckpoint?.();
+    this.cancelIdleCheckpoint = undefined;
+    if (!this.checkpointPending || !this.acceptingRequests) return;
+    const engine = this.engine;
+    const checkpointIfDue = engine?.checkpointIfDue?.bind(engine);
+    if (!checkpointIfDue) {
+      // An engine without it keeps Turso's own checkpoint.
+      this.checkpointPending = false;
+      return;
+    }
+    this.cancelIdleCheckpoint = this.afterQuiet(() => {
+      this.cancelIdleCheckpoint = undefined;
+      if (
+        this.running ||
+        this.yielding ||
+        this.queue.length > 0 ||
+        !this.acceptingRequests ||
+        this.engine !== engine
+      ) {
+        // A request is under way and re-arms the wait when it finishes.
+        return;
+      }
+      this.checkpointPending = false;
+      this.running = true;
+      fireAndForget(
+        this.runIdleCheckpoint(checkpointIfDue),
+        'graphql_cache.wal_checkpoint'
+      );
+    });
+  }
+
+  /** Runs one idle copy, records it, and drains what arrived meanwhile. */
+  private async runIdleCheckpoint(
+    checkpointIfDue: () => Promise<CacheWalCheckpoint>
+  ): Promise<void> {
+    const startedAt = this.now();
+    try {
+      const checkpoint = await checkpointIfDue();
+      if (checkpoint.ran) {
+        this.telemetry.record({
+          name: 'graphql_cache.wal_checkpoint',
+          operationCategory: 'storage',
+          outcome: 'success',
+          errorCode: 'none',
+          durationMs: this.now() - startedAt,
+          count: checkpoint.backfilledFrames,
+          walFrames: checkpoint.walFrames,
+        });
+      }
+    } catch (error) {
+      // A failed copy leaves the WAL whole; the next idle retries it.
+      this.checkpointPending = true;
+      this.telemetry.record({
+        name: 'graphql_cache.wal_checkpoint',
+        operationCategory: 'storage',
+        outcome: 'error',
+        ...describeCacheError(error),
+        durationMs: this.now() - startedAt,
+      });
+      this.reportResetRequired(error);
+      if (isStorageBusy(error)) this.options.onStorageBusy?.();
+    } finally {
+      this.running = false;
+      this.collectArrivalsThenDrain();
+      this.resolveDrainWaitersIfIdle();
+    }
+  }
+
+  /**
+   * Reports a request answered a second or more after it arrived, split into
+   * the time it waited behind others and the time it ran, so a page timeout
+   * can be traced to the request that held the engine.
+   */
+  private recordSlowRequest(
+    queued: QueuedEngineRequest,
+    startedAt: number,
+    queueDepth: number,
+    failure?: { error: unknown }
+  ): void {
+    const finishedAt = this.now();
+    if (finishedAt - queued.enqueuedAt < SLOW_REQUEST_MS) return;
+    this.telemetry.record({
+      name: 'graphql_cache.slow_request',
+      operationCategory: operationCategoryForRequest(queued.request),
+      requestKind: queued.request.kind,
+      outcome: failure ? 'error' : 'success',
+      errorCode: failure ? classifyCacheError(failure.error) : 'none',
+      queueWaitMs: startedAt - queued.enqueuedAt,
+      durationMs: finishedAt - startedAt,
+      queueDepth,
+    });
   }
 
   /**
@@ -543,25 +706,145 @@ export class CacheWorkerCore {
    * A row read that ranks with the search crosses the same fences; it carries
    * no operation, and no local change was queued ahead of it when it arrived.
    */
-  private pickPastFences(selectedIndex: number, segmentEnd: number): number {
+  private pickPastFences(
+    selectedIndex: number,
+    selectedPriority: number,
+    segmentEnd: number
+  ): number {
     let index = selectedIndex;
+    let priority = selectedPriority;
     let searchEnd = this.queue.findIndex((queued) =>
       stopsTypedSearch(queued.request)
     );
     if (searchEnd === -1) searchEnd = this.queue.length;
     for (let i = segmentEnd; i < searchEnd; i += 1) {
       const candidate = this.queue[i];
-      const selected = this.queue[index];
       if (
         candidate &&
-        selected &&
         candidate.priority === TYPED_SEARCH_PRIORITY &&
-        candidate.priority > selected.priority
+        candidate.priority > priority
       ) {
         index = i;
+        priority = candidate.priority;
       }
     }
     return index;
+  }
+
+  /**
+   * The queued request to run while a hydrate's write waits, when it only
+   * reads: the one `drainQueue` would pick were that write still queued
+   * first. Every authoritative write queued keeps its place behind it, and
+   * anything that is not a read waits for it.
+   */
+  private pickReadBeforeHydrateCommit(): number | undefined {
+    let segmentEnd = this.queue.findIndex((queued) =>
+      isOrderingBarrier(queued.request)
+    );
+    if (segmentEnd === -1) segmentEnd = this.queue.length;
+    let index = -1;
+    let priority = BACKGROUND_HYDRATION_PRIORITY;
+    for (let i = 0; i < segmentEnd; i += 1) {
+      const candidate = this.queue[i];
+      if (
+        candidate &&
+        !isAuthoritativeWrite(candidate.request) &&
+        candidate.priority > priority
+      ) {
+        index = i;
+        priority = candidate.priority;
+      }
+    }
+    index = this.pickPastFences(index, priority, segmentEnd);
+    const picked = this.queue[index];
+    return picked && isReadOnlyCacheRequest(picked.request.kind)
+      ? index
+      : undefined;
+  }
+
+  /**
+   * Runs the reads that arrived while a step of a hydrate ran, before its
+   * next step. A hydrate runs in wasm without yielding, so a read sent
+   * meanwhile used to wait for all of it; now it waits for one step.
+   */
+  private async runReadsBeforeHydrateCommit(): Promise<void> {
+    // A failed request forgets the authority so the next one checks it
+    // again, in case it committed a transition. A read commits nothing, so
+    // the hydrate's notifications keep the authority it ran under.
+    const authority = this.executingAuthority;
+    for (let yields = 0; yields < MAX_ARRIVAL_YIELDS; yields += 1) {
+      try {
+        await new Promise<void>((resume) => this.afterArrivedMessages(resume));
+      } catch {
+        // Without a way to yield, the reads wait for the write.
+        return;
+      }
+      let ran = false;
+      for (
+        let index = this.pickReadBeforeHydrateCommit();
+        index !== undefined;
+        index = this.pickReadBeforeHydrateCommit()
+      ) {
+        const [queued] = this.queue.splice(index, 1);
+        if (!queued) break;
+        ran = true;
+        const startedAt = this.now();
+        const queueDepth = this.queue.length;
+        try {
+          const result = await this.dispatch(queued.request);
+          this.recordSlowRequest(queued, startedAt, queueDepth);
+          for (const waiter of queued.waiters) waiter.resolve(result);
+        } catch (error) {
+          this.executingAuthority = authority;
+          this.recordSlowRequest(queued, startedAt, queueDepth, { error });
+          for (const waiter of queued.waiters) waiter.reject(error);
+        }
+      }
+      // More may have arrived while these ran.
+      if (!ran) return;
+    }
+  }
+
+  /** A hydrate, its write held back for the reads that arrive meanwhile. */
+  private async hydrate(
+    request: Extract<CacheRequest, { kind: 'hydrate' }>
+  ): Promise<CacheEngineHydrationResult> {
+    const engine = this.requireEngine();
+    const prepare = engine.prepareHydrate?.bind(engine);
+    const commit = engine.commitHydrate?.bind(engine);
+    if (!prepare || !commit) {
+      return await engine.hydrateQuery(
+        request.query,
+        request.operationName,
+        request.variables,
+        request.data,
+        request.identity,
+        request.hydrationScope
+      );
+    }
+    await prepare(
+      request.query,
+      request.operationName,
+      request.variables,
+      request.data,
+      request.identity,
+      request.hydrationScope
+    );
+    await this.runReadsBeforeHydrateCommit();
+    const step = engine.stepHydrate?.bind(engine);
+    if (step) {
+      // One projection pass at a time, so a read waits for one, not all.
+      while (await step()) await this.runReadsBeforeHydrateCommit();
+    }
+    const stage = engine.stageHydrate?.bind(engine);
+    if (stage) {
+      // Most of the write is reading what it merges into: done here, it
+      // leaves the commit short for the reads that wait on it. A failed stage
+      // fails the hydrate before any read runs.
+      await stage();
+      await this.runReadsBeforeHydrateCommit();
+    }
+    return await commit();
   }
 
   /**
@@ -604,6 +887,62 @@ export class CacheWorkerCore {
   }
 
   private async dispatch(request: CacheRequest): Promise<unknown> {
+    let before = this.executingAuthority;
+    if (request.kind !== 'init') {
+      if (
+        before === undefined ||
+        (!isReadOnlyCacheRequest(request.kind) &&
+          request.kind !== 'current-authority')
+      ) {
+        const authority = await this.requireEngine().currentAuthority(
+          this.scope!
+        );
+        before = authority.generation;
+        if (this.executingAuthority !== before)
+          this.push({ kind: 'authority-changed', authority });
+        this.executingAuthority = before;
+      }
+      const storesContent = cacheRequestStamp(request.kind) === 'captured';
+      const removes =
+        request.kind === 'invalidate' || request.kind === 'delete-records';
+      // A queued command settles under its own stamp even once that is stale.
+      const settlesCommand =
+        request.kind === 'enqueue-optimistic-mutation' ||
+        request.kind === 'commit-optimistic-write';
+      const mustBeCurrent = (storesContent && !settlesCommand) || removes;
+      if (
+        (mustBeCurrent && request.generation !== before) ||
+        (storesContent && request.generation === undefined)
+      )
+        throw new Error(
+          'cache response belongs to an older session generation'
+        );
+    }
+    let result: unknown;
+    try {
+      result = await this.execute(request);
+    } catch (error) {
+      // A failed transition may have committed its closed marker. The next
+      // request must resume it before any read, even on the warm read path.
+      this.executingAuthority = undefined;
+      throw error;
+    }
+    if (
+      request.kind === 'write' ||
+      request.kind === 'hydrate' ||
+      request.kind === 'people-update'
+    ) {
+      const authority = await this.requireEngine().currentAuthority(
+        this.scope!
+      );
+      this.executingAuthority = authority.generation;
+      if (authority.generation !== before)
+        this.push({ kind: 'authority-changed', authority });
+    }
+    return { result, authorityGeneration: this.executingAuthority };
+  }
+
+  private async execute(request: CacheRequest): Promise<unknown> {
     if ('variables' in request && request.variables !== undefined) {
       // Structured clone retains undefined object fields; serde-wasm-bindgen
       // reads them as null. Match the JSON sent to GraphQL and stored in durable
@@ -617,7 +956,49 @@ export class CacheWorkerCore {
     return await match(request)
       .with({ kind: 'init' }, async (request) => {
         await this.init(request.scope, request.hotCapacity);
+        this.executingAuthority = (
+          await this.requireEngine().currentAuthority(request.scope)
+        ).generation;
         return null;
+      })
+      .with({ kind: 'current-authority' }, async (request) => {
+        const authority = await this.requireEngine().currentAuthority(
+          request.identity
+        );
+        if (this.executingAuthority !== authority.generation)
+          this.push({ kind: 'authority-changed', authority });
+        this.executingAuthority = authority.generation;
+        return authority;
+      })
+      .with({ kind: 'transition-authority' }, async (request) => {
+        const context = request.traceparent
+          ? Telemetry.remoteContext(request.traceparent)
+          : Telemetry.captureContext();
+        const result = await context.run(() =>
+          Telemetry.span('crm.access.owner.execute', async (span) => {
+            const result = await this.requireEngine().transitionAuthority(
+              request.identity,
+              request.expected,
+              request.policy
+            );
+            span.setAttr('crm.access.changed', result.changed);
+            return result;
+          })
+        );
+        this.executingAuthority = result.authority.generation;
+        if (result.changed) {
+          this.push({ kind: 'authority-changed', authority: result.authority });
+          this.push({
+            kind: 'ops-affected',
+            opIds: result.affectedOps,
+            keys: [],
+          });
+          this.push({
+            kind: 'cache-changed',
+            revision: parseCacheRevision(result.revision),
+          });
+        }
+        return result;
       })
       .with({ kind: 'current-revision' }, async () => {
         return parseCacheRevision(await this.requireEngine().currentRevision());
@@ -729,14 +1110,7 @@ export class CacheWorkerCore {
         return result;
       })
       .with({ kind: 'hydrate' }, async (request) => {
-        const result = await this.requireEngine().hydrateQuery(
-          request.query,
-          request.operationName,
-          request.variables,
-          request.data,
-          request.identity,
-          request.hydrationScope
-        );
+        const result = await this.hydrate(request);
         result.revision = parseCacheRevision(result.revision);
         // Only cache-only consumers opt into hydration. Do not invalidate
         // foreground Soup queries or switch their authority mid-backfill.
@@ -780,7 +1154,8 @@ export class CacheWorkerCore {
             request.nowMs,
             request.leaseExpiresAtMs,
             request.clientMetadata,
-            request.uncertainCalendarEventKeys
+            request.uncertainCalendarEventKeys,
+            request.generation
           );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
@@ -859,7 +1234,8 @@ export class CacheWorkerCore {
           request.query,
           request.operationName,
           request.variables,
-          request.data
+          request.data,
+          request.generation
         );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
@@ -967,6 +1343,7 @@ export class CacheWorkerCore {
       })
       .with({ kind: 'clear' }, async () => {
         const result: CacheRevisionResult = await this.requireEngine().clear();
+        this.executingAuthority = undefined;
         const revision = parseCacheRevision(result.revision);
         this.push({ kind: 'cache-changed', revision, reset: true });
         return revision;
@@ -1295,7 +1672,10 @@ export class CacheWorkerCore {
 
   private push(msg: CachePush): void {
     for (const port of this.ports) {
-      port.postMessage(msg);
+      port.postMessage({
+        ...msg,
+        authorityGeneration: this.executingAuthority,
+      });
     }
   }
 

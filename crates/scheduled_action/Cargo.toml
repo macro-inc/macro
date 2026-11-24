@@ -27,6 +27,7 @@ email = { path = "../email", default-features = false, features = ["outbound"] }
 github = { path = "../github", default-features = false, features = ["installation_claims"] }
 glob = { workspace = true }
 feature_flags = { path = "../feature_flags" }
+genai_telemetry = { path = "../genai_telemetry" }
 jev = { path = "../jev", features = ["outbound"] }
 lexical_client = { path = "../lexical_client" }
 mention_utils = { path = "../mention_utils" }

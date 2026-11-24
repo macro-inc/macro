@@ -1514,14 +1514,32 @@ async fn outlook_thread_without_a_sender_still_reads() -> Result<(), Report> {
 }
 
 /// What the agent harness asks before it suggests routines: the newest
-/// mail of the user's inboxes, read from the provider itself, with who it
-/// is from and the start of its text. When this fails the suggestions are
-/// made from no mail at all, or from another inbox's.
+/// mail of the user's inboxes, and their month of mail, read from the
+/// provider itself, with who it is from and the start of its text. When
+/// this fails the suggestions are made from no mail at all, or from another
+/// inbox's.
 async fn newest_mail_is_read_from_the_provider(provider: Provider) -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
     let inbox = ada.link(provider, ada.email()).await?;
+    let days_ago = |days| Some(chrono::Utc::now() - chrono::Duration::days(days));
 
+    inbox.deliver(&Mail {
+        date: days_ago(45),
+        ..Mail::new(
+            "Grace <grace@example.com>",
+            "Last quarter's numbers",
+            "Revenue was flat.",
+        )
+    })?;
+    inbox.deliver(&Mail {
+        date: days_ago(2),
+        ..Mail::new(
+            "Alan <alan@example.com>",
+            "Planning notes",
+            "Agenda inside.",
+        )
+    })?;
     inbox.deliver(&Mail::new(
         "Grace <grace@example.com>",
         "Quarterly numbers",
@@ -1552,6 +1570,45 @@ async fn newest_mail_is_read_from_the_provider(provider: Provider) -> Result<(),
         "{recent}"
     );
     assert!(messages.len() <= 5, "{recent}");
+
+    // The month read routine suggestions make: every message of the last 30
+    // days, newest first, the text only on the newest asked for.
+    let month = |texts: u16| {
+        format!(
+            "/internal/recent_messages/{}?days=30&limit=500&texts={texts}",
+            urlencoding::encode(ada.macro_id())
+        )
+    };
+    let read = inbox.get(&month(1)).await?.ok()?;
+    let messages = read["messages"].as_array().cloned().unwrap_or_default();
+    let seen: Vec<(&str, bool)> = messages
+        .iter()
+        .map(|message| {
+            (
+                message["subject"].as_str().unwrap_or_default(),
+                message["snippet"].is_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        seen,
+        [("Quarterly numbers", true), ("Planning notes", false)],
+        "{read}"
+    );
+    assert_eq!(messages[0]["from"]["email"], "grace@example.com", "{read}");
+    assert!(
+        messages[0]["snippet"]
+            .as_str()
+            .is_some_and(|snippet| snippet.contains("nine percent")),
+        "{read}"
+    );
+    let read = inbox.get(&month(0)).await?.ok()?;
+    assert!(
+        read["messages"]
+            .as_array()
+            .is_some_and(|messages| messages.iter().all(|message| message["snippet"].is_null())),
+        "{read}"
+    );
 
     stack.finish().await
 }

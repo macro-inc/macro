@@ -1,11 +1,16 @@
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { recipientEntityMapper } from '@core/user/combinedRecipient';
 import { useIsConnectedSecondaryInbox } from '@core/user/inboxOnly';
 import type {
   RecipientSource,
   RecipientSourceInput,
 } from '@core/user/recipient-source';
+import {
+  isMessageDestinationChannel,
+  toChannelListItem,
+} from '@queries/channel/directory-core';
 import { createMemo } from 'solid-js';
+import { useTeammateIds } from '../team/roster';
 import { createContactRecipientSource } from './recipient-window';
 import { useContactDirectoryScope } from './use-directory';
 
@@ -15,7 +20,9 @@ export function useContactRecipientSource(
   return createContactRecipientSource(
     useContactDirectoryScope(),
     input,
-    useIsConnectedSecondaryInbox()
+    useIsConnectedSecondaryInbox(),
+    undefined,
+    useTeammateIds(input.enabled)
   );
 }
 
@@ -24,13 +31,14 @@ export function useCombinedRecipientSource(
   input: RecipientSourceInput
 ): RecipientSource<'user' | 'channel'> {
   const people = useContactRecipientSource(input);
-  const channels = useChannelsContext();
+  const { channels } = useChannelDirectory();
   const groups = createMemo(() =>
     input.enabled()
-      ? channels
-          .channels()
-          .filter((channel) => channel.participants.length > 2)
-          .map(recipientEntityMapper('channel'))
+      ? channels()
+          .filter(isMessageDestinationChannel)
+          .map((channel) =>
+            recipientEntityMapper('channel')(toChannelListItem(channel))
+          )
       : []
   );
   return {

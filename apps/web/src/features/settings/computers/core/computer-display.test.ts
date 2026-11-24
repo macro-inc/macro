@@ -93,6 +93,18 @@ it('keeps an unrecognized runtime step generic without exposing raw text', () =>
   });
 });
 
+describe('unhealthy', () => {
+  it('reads as not responding, and can still be turned off', () => {
+    const computer: ComputerStatus = { ...waiting, status: 'unhealthy' };
+    expect(computerStatusLabel(computer)).toEqual({
+      label: 'Not responding',
+      detail: "It's back once it reconnects; Macro restarts it if it doesn't",
+      tone: 'failure',
+    });
+    expect(canTogglePower(computer)).toBe(true);
+  });
+});
+
 describe('computerFailureMessage', () => {
   it('shows a translated message for each known failure and the fallback otherwise', () => {
     const failure = (code: string) =>

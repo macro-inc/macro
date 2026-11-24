@@ -1609,6 +1609,59 @@
         }
       }
     },
+    "/scheduled-actions/{id}/stop": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "description": "Stop the routine's run in progress. It ends as stopped shortly after; with no run in progress, nothing changes.",
+        "operationId": "stop_scheduled_action_run",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The stop was sent, or nothing was running"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}/template": {
       "get": {
         "tags": ["scheduled actions"],
@@ -2352,6 +2405,85 @@
         }
       }
     },
+    "/suggestions/runs/report": {
+      "put": {
+        "tags": ["suggestions"],
+        "summary": "A suggestion's background run says, in one line for the person, what it\ndid and what it sent.",
+        "operationId": "report_suggestion_run",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunReport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the report was stored, and what to fix when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestion's background run, still under way, may report",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the user",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/suggestions/seen": {
       "post": {
         "tags": ["suggestions"],
@@ -2786,7 +2918,7 @@
     "/suggestions/{id}/restore": {
       "post": {
         "tags": ["suggestions"],
-        "summary": "The caller, or their own agent, takes back dismissing a suggestion, within\nfive minutes of it.",
+        "summary": "The caller, or their own agent, takes back dismissing a suggestion, or\ncompleting one by acting on it (not a finished run or an answered reply),\nwithin five minutes of it.",
         "operationId": "restore_suggestion",
         "parameters": [
           {
@@ -2834,7 +2966,7 @@
             }
           },
           "409": {
-            "description": "Not dismissed in the last five minutes, or a routine suggestion",
+            "description": "Not dismissed, or completed by acting on it, in the last five minutes; or a routine suggestion",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2925,6 +3057,69 @@
           },
           "404": {
             "description": "No such suggestion for the user, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/{id}/stop": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "The caller, or their own agent, stops an open suggestion's run without\ndismissing it.",
+        "operationId": "stop_suggestion_run",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Its run is being stopped, and the suggestion stays open: it shows running until the run settles, then can run again; with nothing under way, nothing changes"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A generation session may not stop a run",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No open suggestion with this id for the caller, or suggestions are off",
             "content": {
               "text/plain": {
                 "schema": {
@@ -4438,6 +4633,10 @@
             },
             "description": "What each step that ran did, in order: decisions, tool calls, the agent."
           },
+          "stopped": {
+            "type": "boolean",
+            "description": "The owner stopped the run before it finished. Older records, and\nreplicas built before it, leave it out."
+          },
           "version": {
             "type": "integer",
             "format": "int32",
@@ -5662,6 +5861,18 @@
         "description": "How a prompt suggestion runs.",
         "enum": ["composer", "background"]
       },
+      "RunReport": {
+        "type": "object",
+        "description": "What a background run did, in one line for the person, written by the\nrun before its last message.",
+        "required": ["report"],
+        "properties": {
+          "report": {
+            "type": "string",
+            "description": "What it did and what it sent, as the card shows it, such as \"12 seats\nadded · Nothing was sent\". One plain line; it names no email address,\nphone number or street address."
+          }
+        },
+        "additionalProperties": false
+      },
       "RunStart": {
         "oneOf": [
           {
@@ -6546,6 +6757,10 @@
         "description": "A run of a background prompt suggestion: a hidden agent session of the\nperson's, with the full toolset, that never stops to ask.",
         "required": ["sessionId", "startedAt", "state", "stateChangedAt"],
         "properties": {
+          "report": {
+            "type": ["string", "null"],
+            "description": "The one line the run wrote for the person before it ended, saying\nwhat it did and what it sent; none until it writes one."
+          },
           "sessionId": {
             "type": "string",
             "format": "uuid",

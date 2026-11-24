@@ -51,15 +51,25 @@ OpenSearch, and exposes backfill HTTP routes for each.
   must report every record they start and finish, once per delivery. Never
   rewind to a started record: one that hangs or kills its worker would then
   be retried on every stop.
-- The poll loop blocks on a full worker channel, so one slow, busy key stalls
-  every topic. `coalescible_reread_key` skips agent-session events while a
-  reread for that session is queued; only add an event kind there if handling
-  it rereads the entity's whole current state.
-- Every topic shares librdkafka's one prefetch queue; the group's `PREFETCH`
-  bound keeps other topics from waiting behind an email backlog (README "Kafka
-  Delivery Contract"). Email throughput comes from the workers, not the
-  prefetch, so raising the bound only drains quick events faster, at the cost
-  of that wait.
+- Each lane (`email`, `live`) is its own group member with its own poll loop
+  and workers (README "Kafka Delivery Contract"); a topic added to
+  `DeclaredMacroEvent` must join one lane's `declare_topics!` too. A stopping
+  task's members leave the group together (`LeaveTogether`); one that left
+  early would rebalance every task while the other lane drains. A poll loop
+  blocks on a full worker channel, so one slow, busy key stalls every topic
+  in its lane. `coalescible_reread_key` skips agent-session events and
+  one-thread email reindex requests while a reread for that session or thread
+  is queued; only add an event kind there if handling it rereads the entity's
+  whole current state. Handing off any other event for the key releases its
+  claim, since the reread runs before it; keep that, or a blind delete queued
+  behind a reread swallows the request that would undo it. Never shard a
+  thread event by its mailbox: one mailbox's import then runs on one worker
+  and its full channel stalls every topic in its lane.
+- A lane's topics share its member's one librdkafka prefetch queue; the
+  group's `PREFETCH` bound keeps a live topic from waiting behind another live
+  topic's backlog. Throughput comes from the workers, not the prefetch, so
+  raising the bound only drains quick events faster, at the cost of that
+  wait.
 - `changes_search_index` commits events that change nothing indexed before
   any reread claim; an event filtered later, in a worker, would hold the claim
   and absorb a later event that does change something.
@@ -80,6 +90,13 @@ OpenSearch, and exposes backfill HTTP routes for each.
   formatters drop `<m-paste>` (long pastes; in agent sessions also quoted
   replies) with every tag they do not know, so a new message index writes its
   pastes the same way.
+- A thread reindex deletes, and a message upsert skips, every message its
+  mailbox facts put in Trash or Junk or mark gone at the provider
+  (`ParsedSearchMessage::excluded_from_search`, read from
+  `email_message_mailbox_facts`). Never decide that from labels: Outlook
+  messages have no system labels, so a label check keeps Outlook trash, junk
+  and provider deletes searchable, whether the change came from Macro (an
+  organization command) or from Outlook.
 - Email documents are keyed `{thread_id}:{message_id}`, so a message that
   changes threads gets a new document and keeps the old one. An
   `email.message_sent` from a Macro send (`origin: UserAction`) deletes the
@@ -95,7 +112,10 @@ OpenSearch, and exposes backfill HTTP routes for each.
   waiting for a slot; the `email.mailbox_delete` span's `outcome` and task ids
   say which.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
-  already-deleted IDs — target specific IDs for those.
+  already-deleted IDs — target specific IDs for those. Chat messages deleted
+  without their delete reaching the index are removed by
+  `POST /internal/backfill/deleted-chat-messages`, a dry run unless the body
+  sets `"dry_run": false`.
 - Every backfill writer passes the task's `BackfillGate`
   (`domain/backfill_gate.rs`): the shared in-flight cap and the operator
   pause (`PUT /internal/backfill/pause`). A new backfill path takes a permit

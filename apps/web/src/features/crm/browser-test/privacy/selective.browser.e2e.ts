@@ -11,6 +11,7 @@ test.beforeEach(async ({ page }) => {
         })
       : route.continue()
   );
+  await page.route('https://**', (route) => route.abort());
   await page.routeWebSocket('**/*', (socket) => socket.close());
 });
 
@@ -80,6 +81,21 @@ test('read-only overview, aligned rule kinds, automatic validation and verified 
   await expect(
     page.getByRole('textbox', { name: 'Sharing rules JSON' })
   ).toHaveCount(0);
+});
+
+test('keeps the open sharing draft through CRM access retirement', async ({
+  page,
+}) => {
+  await openSettings(page, '/?selective-settings&contributing&retirement');
+  await page.getByRole('button', { name: 'Edit JSON', exact: true }).click();
+  const draft = page.getByRole('textbox', { name: 'Sharing rules JSON' });
+  const edited =
+    '{"schema_version":1,"include":[{"kind":"domain","domain":"draft.example.com"}]}';
+  await draft.fill(edited);
+  await page.getByRole('button', { name: 'Retire CRM cache' }).click();
+  await expect(page.getByTestId('retirement-complete')).toHaveText('true');
+  await expect(draft).toHaveValue(edited);
+  await expect(page.getByTestId('policy-calls')).not.toContainText('replace');
 });
 
 for (const pending of ['policy-pending', 'policy-flag-pending']) {
@@ -253,6 +269,26 @@ test('gate off retains selected rules, history and single-action withdrawal', as
   await expect(page.getByTestId('last-change')).toHaveText(
     '{"action":"set_consent","enabled":false}'
   );
+});
+
+test('a disconnected mailbox connects without enabling selected sharing', async ({
+  page,
+}) => {
+  await openSettings(page, '/?selective-settings&disconnected');
+  await expect(page.getByText('No email connected')).toBeVisible();
+  const connect = page.getByRole('button', {
+    name: 'Connect email',
+    exact: true,
+  });
+  await connect.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('member@example.com')).toBeVisible();
+  await expect(connect).toHaveCount(0);
+  await expect(
+    page.getByText('Your emails are not contributing to CRM.')
+  ).toBeVisible();
+  await expect(page.getByTestId('policy-calls')).not.toContainText('replace');
+  await expect(page.getByTestId('last-change')).toHaveText('');
 });
 
 test('gate off preserves the legacy all-mail settings', async ({ page }) => {

@@ -5,6 +5,10 @@ import { mergeRefs } from '@solid-primitives/refs';
 import { Button, cn, Hotkey, Surface } from '@ui';
 import type { JSX, JSXElement } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
+import {
+  SearchOperatorOverlay,
+  type SearchTextPart,
+} from './search-operator-text';
 
 export type SearchBarProps = Omit<
   JSX.InputHTMLAttributes<HTMLInputElement>,
@@ -21,6 +25,11 @@ export type SearchBarProps = Omit<
   onEscape?: () => void;
   /** Replaces the clear action with a close action in collapsible search fields. */
   onClose?: () => void;
+  /**
+   * Splits the text into runs, marking operators (`in:sent`) to draw as
+   * tokens; the text stays ordinary editable text.
+   */
+  operators?: (value: string) => readonly SearchTextPart[];
   /** Controls shown after the input and before its clear or close action. */
   actions?: JSXElement;
   size?: 'sm' | 'md';
@@ -36,6 +45,7 @@ export function SearchBar(props: SearchBarProps) {
     'hotkey',
     'onEscape',
     'onClose',
+    'operators',
     'actions',
     'size',
     'class',
@@ -99,6 +109,15 @@ export function SearchBar(props: SearchBarProps) {
           )}
         />
         <div class="relative min-w-0 flex-1">
+          <Show when={local.operators}>
+            {(operators) => (
+              <SearchOperatorOverlay
+                parts={operators()(local.value)}
+                input={() => input}
+                class="text-sm text-ink"
+              />
+            )}
+          </Show>
           <TextField.Input
             {...inputProps}
             ref={mergeRefs((element) => (input = element), local.ref)}
@@ -108,6 +127,7 @@ export function SearchBar(props: SearchBarProps) {
               local.hotkey &&
                 inputProps.placeholder &&
                 'placeholder:text-transparent group-focus-within:placeholder:text-ink-placeholder',
+              local.operators && 'text-transparent caret-ink',
               local.inputClass
             )}
           />

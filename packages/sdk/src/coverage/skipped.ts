@@ -37,6 +37,7 @@ export const agentHarnessExcluded = [
   // The connect chip's continuation after an app connects is app-internal.
   'reportAgentSessionAppConnected',
   'claudeSignOut', // Computer account credentials are managed in the app.
+  'createComputerScreenTicket', // Browser-only, person-only ticket for a computer's screen.
   'completeClaudeSignIn', // Computer account credentials are managed in the app.
   'getClaudeMode', // Computer account credentials are managed in the app.
   'startClaudeSignIn', // Computer account credentials are managed in the app.
@@ -187,26 +188,24 @@ export const calendarBacklog =
   [] as const satisfies readonly (keyof CalendarSdk)[];
 
 export const cognitionExcluded = [
-  'addMcpServer',
-  'browsePipedreamMcpCatalog',
+  // Connection management (consent, sign-in and its callbacks) is the web
+  // app's; agents connect through the harness's connected-apps routes.
+  'addConnectorServer',
+  'browseConnectorCatalog',
+  'completeConnectorConnect',
+  'connectorOauthCallback',
+  'connectorOauthClientMetadata',
+  'listConnectors',
+  'removeConnector',
+  'startConnectorConnect',
+  'updateConnector',
   'callTool',
-  'completePipedreamMcpConnect',
-  'completePipedreamMcpConnection',
-  'createPipedreamMcpToken',
-  'deletePipedreamMcpConnection',
-  'deleteMcpServer',
   'getBatchPreview',
   'getChatHistoryBatchMessagesHandler',
   'getChatsForAttachmentHandler',
   'getCitationHandler',
   'getMemoryHandler',
   'healthHandler',
-  'listMcpServers',
-  'listPipedreamMcpConnections',
-  'listPipedreamMcpOverlays',
-  'mcpAuthCallback',
-  'mcpOauthClientMetadata',
-  'recoverPipedreamMcpConnection',
   'rejectToolCall',
   // Channel discovery shares the app-only import workflow below.
   'discoverHandler',
@@ -225,9 +224,6 @@ export const cognitionExcluded = [
   // Proposes SQL for the web app's in-browser engine to execute.
   'generateDatabaseQuery',
   'setPricingHandler',
-  'startMcpAuth',
-  'updateMcpServer',
-  'updatePipedreamMcpConnection',
   'updateToolCall',
   'updateToolResponse',
 ] as const satisfies readonly (keyof CognitionSdk)[];
@@ -281,11 +277,15 @@ export const notificationExcluded = [
   'getTypedNotificationsByEventItemId',
   'getUnsubscribes',
   'healthHandler',
+  // Chat sidebar sections remain app-only navigation, like their storage
+  // endpoints; so do their notification settings.
+  'listSectionNotificationSettings',
   'removeUnsubscribeAll',
   'removeUnsubscribeItems',
   'unsubscribeAll',
   'unsubscribeEmail',
   'unsubscribeItems',
+  'updateSectionNotificationSettings',
 ] as const satisfies readonly (keyof NotificationSdk)[];
 
 export const notificationBacklog =

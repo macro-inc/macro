@@ -18,6 +18,7 @@ const rail = vi.hoisted(() => ({
   selectedChannel: () => undefined,
   list: { focus: { key: () => undefined } },
   channelActivity: { unreadChannelIds: () => new Set<string>() },
+  channelNotifications: { enabled: () => false },
 }));
 vi.mock('../ChannelsRailContext', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../ChannelsRailContext')>()),
@@ -278,11 +279,38 @@ describe('channel mention counts', () => {
     expect(activity.mentionCount('favorite')).toBe(1);
     // Mentions never feed section counts, which count unread channels.
     expect(activity.unreadCount('channels')).toBe(0);
+    // An unread filter keeps the mentioned channels all the same.
+    expect([...activity.unreadOrMentionedChannelIds()]).toEqual([
+      'favorite',
+      'one',
+    ]);
 
     setChannels([withMentions(row('one', []), [mention('m2')])]);
     expect(activity.mentionCount('one')).toBe(1);
     setChannels([withMentions(row('one', []), [])]);
     expect(activity.mentionCount('one')).toBe(0);
+    expect([...activity.unreadOrMentionedChannelIds()]).toEqual(['favorite']);
+  });
+
+  it('keeps both unread and mentioned channels for an unread filter', () => {
+    const activity = createRoot((cleanup) => {
+      dispose = cleanup;
+      return useChannelRailActivity(
+        () => [
+          row('unread', [
+            { id: 'n1', state: 'unseen', createdAt: '2026-01-01' },
+          ]),
+          withMentions(row('mentioned', []), [mention('m1')]),
+          row('read', []),
+        ],
+        calls
+      );
+    });
+    expect([...activity.unreadChannelIds()]).toEqual(['unread']);
+    expect([...activity.unreadOrMentionedChannelIds()]).toEqual([
+      'unread',
+      'mentioned',
+    ]);
   });
 
   it('clears on local read intent before the server commits, and restores on rollback', () => {

@@ -78,6 +78,10 @@ pub enum MessageLabelError<E> {
     /// its transaction rolled back.
     #[error("unable to queue the category change: {0}")]
     Command(E),
+    /// The inbox stayed locked past the lock timeout; the category command
+    /// rolled back and the same change can be retried.
+    #[error("{}", super::models::EmailErr::Contended)]
+    Contended,
 }
 
 /// The transaction step that failed, after its original error has been logged.
@@ -148,6 +152,12 @@ pub struct StagedLabelWrite {
 pub trait MessageLabelRepository: Send + Sync + 'static {
     /// Persistence failure, retaining its cause for callers.
     type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Whether a failed `enqueue_mailbox_action` found the inbox locked past
+    /// the lock timeout, so the same change can be retried.
+    fn is_contended(&self, _error: &Self::Err) -> bool {
+        false
+    }
 
     /// Resolve the first message through the caller's own and delegated inboxes.
     fn inbox_for_message(
@@ -302,11 +312,9 @@ where
                 is_adding,
                 EmailEventOrigin::UserAction,
             );
-            if let Some(event) = event {
-                let _ = self.broker.send_event(&event).inspect_err(|e| {
-                    tracing::error!(error=?e, "failed to publish email macro event");
-                });
-            }
+            let _ = self.broker.send_event(&event).inspect_err(|e| {
+                tracing::error!(error=?e, "failed to publish email macro event");
+            });
         }
 
         let (labels_to_add, labels_to_remove) = if is_adding {
@@ -342,6 +350,19 @@ where
                 )
                 .await
                 .map_err(MessageLabelError::Unqueued)?;
+
+            // The change is published above, so a reader may have seen the
+            // labels this undid.
+            for thread_id in &thread_ids {
+                let event = EmailMacroEvent::thread_reindex_requested(
+                    link.id,
+                    link.macro_id.clone(),
+                    *thread_id,
+                );
+                let _ = self.broker.send_event(&event).inspect_err(|e| {
+                    tracing::error!(error=?e, "failed to publish email macro event");
+                });
+            }
         }
 
         Ok(MessageLabelOutcome {
@@ -395,7 +416,13 @@ where
                         "Failed to queue the Outlook category change"
                     );
                 })
-                .map_err(MessageLabelError::Command)?;
+                .map_err(|error| {
+                    if self.repository.is_contended(&error) {
+                        MessageLabelError::Contended
+                    } else {
+                        MessageLabelError::Command(error)
+                    }
+                })?;
         }
         let (successful_ids, failed_ids) = messages
             .iter()

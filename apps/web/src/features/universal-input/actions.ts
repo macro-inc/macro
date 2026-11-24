@@ -25,7 +25,7 @@ import { useChatInputContext } from '@core/component/AI/context';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useAddInboxFlow } from '@core/email-link';
 import { recipientEntityMapper } from '@core/user/combinedRecipient';
@@ -36,6 +36,10 @@ import {
 } from '@queries/auth/account-scope';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useCreateCalendarEventMutation } from '@queries/calendar/mutations';
+import {
+  isMessageDestinationChannel,
+  toChannelListItem,
+} from '@queries/channel/directory-core';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
@@ -98,12 +102,14 @@ export function createInputActions(
   const group = useGetOrCreatePrivateChannelMutation();
   const sendMessage = useSendMessageMutation();
   const history = useUpsertToHistoryMutation();
-  const channelContext = useChannelsContext();
+  const directory = useChannelDirectory();
   const messageChannels = createMemo(() =>
-    channelContext
+    directory
       .channels()
-      .filter((channel) => channel.participants.length > 2)
-      .map(recipientEntityMapper('channel'))
+      .filter(isMessageDestinationChannel)
+      .map((channel) =>
+        recipientEntityMapper('channel')(toChannelListItem(channel))
+      )
   );
   const destinations = createMemo(() =>
     messageChannels().map(
@@ -464,7 +470,9 @@ export function createInputActions(
         });
         return {
           message: 'Event created',
-          open: () => host.navigate(calendarViewContent({ eventId: event.id })),
+          open: event
+            ? () => host.navigate(calendarViewContent({ eventId: event.id }))
+            : undefined,
         };
       })
       .with('message', async () => {

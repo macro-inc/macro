@@ -1,3 +1,5 @@
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { IdentityBindingWire } from '../protocol';
 /**
  * Typed entry point for durable optimistic GraphQL mutations.
@@ -12,6 +14,7 @@ import {
   type AnyVariables,
   type Client,
   CombinedError,
+  makeOperation,
   type Operation,
   type OperationContext,
   type OperationResult,
@@ -117,6 +120,9 @@ export type QueryRevalidation = {
 };
 
 export type OptimisticMutationOptions = {
+  /** Authority epoch in which cached source records were read. */
+  snapshotRejected?: boolean;
+  authorizationEpoch?: string;
   /** Required RFC UUID; reuse only when the newer intent safely replaces the older one. */
   uuid: string;
   /** Opaque durable client correlation; never included in GraphQL variables. */
@@ -148,6 +154,8 @@ export type OptimisticPatch<T> = T extends readonly (infer Item)[]
       : T;
 
 export type OptimisticMutationContext<TData = unknown> = {
+  snapshotRejected?: boolean;
+  authorizationEpoch?: string;
   uuid: string;
   optimisticResponse: TData;
   /** Opaque durable client correlation; never included in GraphQL variables. */
@@ -160,7 +168,7 @@ export type OptimisticMutationContext<TData = unknown> = {
 
 /** Caller-facing disposition of one durable optimistic mutation submission. */
 export type OptimisticMutationDisposition<TData> =
-  | { kind: 'committed'; data: TData }
+  | { kind: 'committed'; data: TData | undefined }
   | { kind: 'queued'; transactionId: string }
   | { kind: 'permanently-failed'; error: CombinedError };
 
@@ -175,20 +183,68 @@ export type OptimisticMutationDispositionMetadata =
     }
   | { kind: 'permanently-failed'; transactionId?: string };
 
+/** Preserve command/identity intent while refusing copied optimistic response data. */
+export function withoutOptimisticSnapshot(operation: Operation): Operation {
+  const context = optimisticContextOf(operation);
+  if (!context) return operation;
+  const revalidations = [...context.revalidations];
+  for (const {
+    query,
+    operationName,
+    variablesJson,
+    recordRoot,
+  } of context.linkPatches) {
+    // Query-rooted recipes normally derive this repair during enqueue. Keep
+    // only that fresh read when stripping the recipe before it reaches storage.
+    if (
+      recordRoot ||
+      revalidations.some(
+        (repair) =>
+          repair.query === query &&
+          repair.operationName === operationName &&
+          repair.variablesJson === variablesJson
+      )
+    )
+      continue;
+    revalidations.push({ query, operationName, variablesJson });
+  }
+  return makeOperation(operation.kind, operation, {
+    ...operation.context,
+    [OPTIMISTIC_MUTATION_CONTEXT_KEY]: {
+      ...context,
+      snapshotRejected: true,
+      optimisticResponse: undefined,
+      linkPatches: [],
+      revalidations,
+      // Fresh server reads repair parents whose copied link recipes were retired.
+      // Their request and response use the new generation like any other query.
+      uncertainCalendarEventKeys: [],
+    },
+  });
+}
+
 /** Returns a copy of an operation result carrying its queue disposition. */
 export function withOptimisticMutationDisposition(
   result: OperationResult,
   disposition: OptimisticMutationDispositionMetadata
 ): OperationResult {
+  const optimistic = optimisticContextOf(result.operation);
+  const authority = crmSnapshotAuthorization();
+  const admitted =
+    !optimistic?.snapshotRejected &&
+    !authority.paused &&
+    cacheSessionGeneration.isCurrent(
+      optimistic?.authorizationEpoch ?? authority.epoch
+    );
   const queuedData =
-    disposition.kind === 'queued'
+    admitted && disposition.kind === 'queued'
       ? optimisticContextOf(result.operation)?.optimisticResponse
       : undefined;
   return {
     ...result,
     ...(disposition.kind === 'queued'
       ? {
-          data: queuedData ?? result.data,
+          data: admitted ? (queuedData ?? result.data) : undefined,
           // A durable queued mutation is an accepted local write. Preserve the
           // network failure in queue diagnostics, not as a caller-facing error
           // that would roll back UI state or block the next edit.
@@ -232,7 +288,7 @@ export function optimisticMutationDispositionOf<
       transactionId: metadata.replacementTransactionId,
     };
   }
-  if (metadata.kind === 'committed' && result.data != null) {
+  if (metadata.kind === 'committed') {
     return { kind: 'committed', data: result.data };
   }
   if (metadata.kind === 'permanently-failed') {
@@ -515,8 +571,11 @@ export function optimisticMutationContext<TData>(
   }
   const context: OptimisticMutationContext<TData> = {
     uuid,
+    snapshotRejected: options.snapshotRejected,
     clientMetadata: options.clientMetadata,
     optimisticResponse: optimisticData,
+    authorizationEpoch:
+      options.authorizationEpoch ?? crmSnapshotAuthorization().epoch,
     identityBindings: options.identityBindings
       ? [...options.identityBindings]
       : undefined,
@@ -565,8 +624,10 @@ export function optimisticContextOf(
     }
     return {
       uuid: context.uuid,
+      snapshotRejected: context.snapshotRejected,
       clientMetadata: context.clientMetadata,
       optimisticResponse: context.optimisticResponse,
+      authorizationEpoch: context.authorizationEpoch,
       identityBindings: context.identityBindings,
       linkPatches: Array.isArray(context.linkPatches)
         ? context.linkPatches

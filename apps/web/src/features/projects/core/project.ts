@@ -41,6 +41,31 @@ export type ProjectFilters = {
   descending?: boolean;
 };
 
+export type ProjectListGroupBy = 'none' | 'status' | 'priority' | 'assignee';
+
+/** Persisted presentation and editable filters, separate from search and scroll. */
+export type ProjectCollectionSettings = {
+  layout: 'list' | 'gantt';
+  status: string;
+  priority: string;
+  dueBefore: string;
+  dueAfter: string;
+  mine: boolean;
+  sort: NonNullable<ProjectFilters['sort']>;
+  groupBy: ProjectListGroupBy;
+};
+
+export const DEFAULT_PROJECT_SETTINGS: ProjectCollectionSettings = {
+  layout: 'list',
+  status: '',
+  priority: '',
+  dueBefore: '',
+  dueAfter: '',
+  mine: false,
+  sort: 'updated',
+  groupBy: 'status',
+};
+
 export type TaskProjectReference =
   | { state: 'none' }
   | { state: 'unavailable' }
@@ -60,4 +85,28 @@ export const canDeleteProject = (project: Pick<Project, 'access'>) =>
 export const canDiscussProject = (project: ProjectDetail) =>
   project.access !== 'view';
 
-export type ProjectSection = 'overview' | 'tasks';
+export type ProjectSection = 'overview' | 'tasks' | 'time';
+
+export function isProjectSection(value: unknown): value is ProjectSection {
+  return value === 'overview' || value === 'tasks' || value === 'time';
+}
+
+/** A project's sections: Time only while time tracking is on. */
+export function projectSections(
+  timeTracking: boolean
+): readonly ProjectSection[] {
+  return timeTracking ? ['overview', 'tasks', 'time'] : ['overview', 'tasks'];
+}
+
+/**
+ * The section a project route shows: a Time link opened with time tracking
+ * off shows the Overview. A flag still loading is not off.
+ */
+export function shownProjectSection(
+  section: ProjectSection,
+  timeTracking: { enabled: boolean; loading: boolean }
+): ProjectSection {
+  if (section !== 'time' || timeTracking.enabled || timeTracking.loading)
+    return section;
+  return 'overview';
+}

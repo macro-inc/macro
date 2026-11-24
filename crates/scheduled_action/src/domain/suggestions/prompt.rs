@@ -8,13 +8,53 @@ use serde_json::{Value, json};
 use suggestions::domain::model::GenerationTrigger;
 
 use super::decode::line;
-use super::ports::InboxMessage;
+use super::ports::{BriefPart, InboxMessage};
+use super::work::WORK_DAYS;
 
 #[cfg(test)]
 mod test;
 
-/// The task, before the data.
+/// The task, before the data: a frame its part's plan and kinds of
+/// suggestion fill in.
 const TASK: &str = include_str!("prompt.md");
+/// How a session that both picks and drafts works.
+const WHOLE: &str = include_str!("prompt/whole.md");
+/// How a session that only picks works.
+const PICKS: &str = include_str!("prompt/picks.md");
+/// How a session that only drafts works, from the streams of work found in
+/// the person's month of mail.
+const DRAFTS: &str = include_str!("prompt/drafts.md");
+/// How it works when no streams were found: from the newest mail alone.
+const DRAFTS_FROM_MAIL: &str = include_str!("prompt/drafts_from_mail.md");
+/// A catalog pick, as a session hands it back.
+const CATALOG_KIND: &str = include_str!("prompt/catalog.md");
+/// A drafted routine, likewise.
+const DRAFTED_KIND: &str = include_str!("prompt/drafted.md");
+/// When a catalog routine handles a stream.
+const HANDLES: &str = "A catalog routine handles a stream when its condition holds for that \
+    stream's messages and what it makes is all the user needs, even when it is broader \
+    than the stream (one that makes a task for every email asking them for work handles \
+    each kind of request)";
+/// The streams the catalog lacks.
+const LACKS: &str = "The catalog lacks a stream whose work is more than a task for each \
+    request: notices that ask nothing outright but leave them a step to take, which no \
+    routine for requests or for mail awaiting their answer catches; messages that add up \
+    to one thing they keep track of (amounts, counts or statuses gathered across many \
+    messages and senders); and messages that bring them a company that may become a \
+    client, or an entry for a log they keep.";
+/// How many suggestions to expect, told to a session that picks.
+const COUNT: &str = " Most users get 3 to 6 suggestions in all, and leaving a part of the \
+    app without any is often right.";
+/// Likewise, to a session that only drafts: as many as the streams need.
+const COUNT_DRAFTS: &str = " Leaving a part of the app without any is often right.";
+/// Who a drafted routine is for, in a whole session and one that drafts from
+/// the newest mail: work that comes every week.
+const WEEKLY_STREAM: &str = "for a stream they act on every week";
+/// Likewise, drafting from the streams found in a month: the list says how
+/// often each comes, and a monthly one is work too.
+const LISTED_STREAM: &str = "for a stream on the list";
+/// Most routines a session that only drafts is told to draft.
+pub const MAX_DRAFTS: usize = 8;
 
 /// Longest subject passed on, in characters.
 const MAX_SUBJECT_CHARS: usize = 200;
@@ -47,22 +87,33 @@ pub struct BriefData<'a> {
     /// Whether a routine may start when mail arrives: the person is in the
     /// event routines rollout and the deployment evaluates conditions.
     pub events: bool,
+    /// Whether the person may add companies to a team's CRM, which a drafted
+    /// routine for possible clients does.
+    pub crm: bool,
     /// The SDK's routines guide.
     pub guide: &'a str,
+    /// The part of the work the session does.
+    pub part: BriefPart<'a>,
 }
 
 /// How a drafted routine starts when the person may have event triggers.
 const START_ON_MAIL: &str = "start it when that kind of mail arrives \
-    (`email.message_received`, with a condition that names it) and make the user a task \
-    for what it asks of them, or run it on a schedule that gathers that week's mail of \
-    that kind into one task or document for them";
+    (`email.message_received`, with a condition that names it) and handle what each \
+    message asks of them, or run it on a schedule that gathers that week's mail of that \
+    kind into one task or document for them";
 
 /// How a drafted routine starts when they may not: a check would refuse an
 /// event trigger.
 const START_ON_SCHEDULE: &str = "this user's routines can't start when mail \
-    arrives, so run it on a schedule: each morning, to make the user a task for what each \
-    of that kind of message since the last run asks of them, or each week, to gather that \
-    week's mail of that kind into one task or document for them";
+    arrives, so run it on a schedule: each morning, to handle what each message of that \
+    kind since the last run asks of them, or each week, to gather that week's mail of \
+    that kind into one task or document for them";
+
+/// What a drafted routine makes for a possible client, told only to a person
+/// who may add companies to a team's CRM: for anyone else the tool refuses,
+/// and a task for each step serves.
+const CRM_COMPANY: &str = "a company in their CRM for a company that may become a \
+    client (unless another app of theirs already keeps track of them), ";
 
 /// What a weekly routines session does before suggesting: review and retire.
 const WEEKLY_REVIEW: &str = "Where this differs from the rest of the brief, \
@@ -104,9 +155,48 @@ pub fn brief(data: &BriefData<'_>) -> String {
              suggestions come once a week). {WEEKLY_REVIEW}"
         ),
     };
+    let (plan, kinds, count) = match data.part {
+        BriefPart::Whole => (
+            WHOLE,
+            format!(
+                "1. {}\n2. {}",
+                CATALOG_KIND.trim_end(),
+                DRAFTED_KIND.trim_end()
+            ),
+            COUNT,
+        ),
+        // Nothing else is suggested, so no kind is preferred.
+        BriefPart::Picks => (
+            PICKS,
+            CATALOG_KIND.trim_end().replace(" Prefer these.", ""),
+            COUNT,
+        ),
+        BriefPart::Drafts(Some(_)) => (
+            DRAFTS,
+            DRAFTED_KIND
+                .trim_end()
+                .replace(WEEKLY_STREAM, LISTED_STREAM),
+            COUNT_DRAFTS,
+        ),
+        BriefPart::Drafts(None) => (
+            DRAFTS_FROM_MAIL,
+            DRAFTED_KIND.trim_end().to_owned(),
+            COUNT_DRAFTS,
+        ),
+    };
+    let plan = plan
+        .trim_end()
+        .replace("{handles}", HANDLES)
+        .replace("{lacks}", LACKS)
+        .replace("{max_drafts}", &MAX_DRAFTS.to_string())
+        .replace("{days}", &WORK_DAYS.to_string());
     let task = TASK
+        .replace("{count}", count)
+        .replace("{plan}", &plan)
+        .replace("{kinds}", &kinds)
         .replace("{surfaces}", &surfaces)
         .replace("{occasion}", &occasion)
+        .replace("{crm}", if data.crm { CRM_COMPANY } else { "" })
         .replace(
             "{start}",
             if data.events {
@@ -139,16 +229,40 @@ pub fn brief(data: &BriefData<'_>) -> String {
         .filter_map(|app| line(app, MAX_NAME_CHARS))
         .collect();
     let guide = data.guide.trim();
-    format!(
-        "{task}
-Now is {now}; the user's time zone is {timezone}. Cron schedules take `timezone: '{timezone}'`.
-
+    // A session that only picks writes no routine: it reads neither the
+    // guide nor how steps are written.
+    let writing = match data.part {
+        BriefPart::Picks => String::new(),
+        BriefPart::Whole | BriefPart::Drafts(_) => format!(
+            "
 <routines-guide>
 {guide}
 </routines-guide>
 
 {steps}
+"
+        ),
+    };
+    let work = match data.part {
+        BriefPart::Drafts(Some(list)) => format!(
+            "
 
+The streams of work a step found in the user's last {WORK_DAYS} days of mail, those they would most regret missing first:
+<untrusted>
+
+```json
+{}
+```
+
+</untrusted>",
+            list.to_brief()
+        ),
+        BriefPart::Whole | BriefPart::Picks | BriefPart::Drafts(None) => String::new(),
+    };
+    format!(
+        "{task}
+Now is {now}; the user's time zone is {timezone}. Cron schedules take `timezone: '{timezone}'`.
+{writing}
 Macro's catalog, for your surfaces (written by Macro):
 {catalog}
 
@@ -163,7 +277,7 @@ The user's connected apps:
 The user's newest mail, newest first:
 <untrusted>
 {inbox}
-</untrusted>",
+</untrusted>{work}",
         catalog = Value::Array(catalog),
         dismissed = json!(data.dismissed),
         apps = json!(apps),
@@ -212,7 +326,7 @@ fn message(message: &InboxMessage) -> Value {
 /// `text` on one line, cut to `max` characters, with control and
 /// formatting characters dropped and angle brackets swapped for look-alikes,
 /// so it can't close its tag.
-fn truncate(text: &str, max: usize) -> String {
+pub(super) fn truncate(text: &str, max: usize) -> String {
     text.chars()
         .map(|c| match c {
             '<' => '\u{2039}',

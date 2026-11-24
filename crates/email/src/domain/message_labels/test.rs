@@ -33,6 +33,8 @@ struct Repository {
     /// Each Outlook message's facts beside its thread.
     facts: Vec<(Uuid, MailboxActionMessage)>,
     command_fails: bool,
+    /// A failed command found the inbox locked past the lock timeout.
+    command_contended: bool,
     commands: Mutex<Vec<Command>>,
 }
 
@@ -46,6 +48,10 @@ struct Command {
 
 impl MessageLabelRepository for Repository {
     type Err = TestError;
+
+    fn is_contended(&self, _: &TestError) -> bool {
+        self.command_contended
+    }
 
     async fn inbox_for_message(
         &self,
@@ -236,6 +242,7 @@ fn service() -> MessageLabelService<Repository, Enqueuer, Broker> {
             staged: Mutex::default(),
             facts: Vec::new(),
             command_fails: false,
+            command_contended: false,
             commands: Mutex::default(),
         },
         enqueuer: Enqueuer {
@@ -440,14 +447,29 @@ async fn enqueue_failure_reports_only_restored_messages_as_failed() {
     assert_eq!(outcome.successful_ids, vec![Uuid::from_u128(4)]);
     assert_eq!(outcome.failed_ids, vec![Uuid::from_u128(3)]);
     let write_id = service.repository.staged.lock().unwrap()[0].write_id;
+    let calls = service.repository.calls.lock().unwrap();
+    let reverted = calls
+        .iter()
+        .position(|call| {
+            *call
+                == Call::Revert(
+                    Uuid::from_u128(1),
+                    vec![Uuid::from_u128(9)],
+                    vec![Uuid::from_u128(3)],
+                    write_id,
+                )
+        })
+        .unwrap();
+    // The change was published before the write was undone, so the thread is
+    // reindexed once the old labels are back.
+    assert_eq!(calls[reverted + 1..], [Call::Event]);
+    let events = service.broker.events.lock().unwrap();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["event_type"], "email.thread_labels_updated");
+    assert_eq!(events[1]["event_type"], "email.threads_reindex_requested");
     assert_eq!(
-        service.repository.calls.lock().unwrap().last(),
-        Some(&Call::Revert(
-            Uuid::from_u128(1),
-            vec![Uuid::from_u128(9)],
-            vec![Uuid::from_u128(3)],
-            write_id
-        ))
+        events[1]["metadata"]["thread_ids"],
+        serde_json::json!([Uuid::from_u128(9)])
     );
 }
 
@@ -583,6 +605,19 @@ async fn outlook_command_that_cannot_be_queued_fails_the_request() {
             .change(request(vec![Uuid::from_u128(3), Uuid::from_u128(4)]))
             .await,
         Err(MessageLabelError::Command(TestError))
+    ));
+}
+
+#[tokio::test]
+async fn outlook_command_behind_a_busy_inbox_is_a_retryable_failure() {
+    let mut service = outlook();
+    service.repository.messages = vec![message(3, 9)];
+    service.repository.facts = vec![(Uuid::from_u128(9), fact(3, true))];
+    service.repository.command_fails = true;
+    service.repository.command_contended = true;
+    assert!(matches!(
+        service.change(request(vec![Uuid::from_u128(3)])).await,
+        Err(MessageLabelError::Contended)
     ));
 }
 

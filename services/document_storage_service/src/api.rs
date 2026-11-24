@@ -21,6 +21,7 @@ use utoipa_swagger_ui::SwaggerUi;
 pub(crate) mod context;
 mod saved_views;
 mod sync;
+mod task_templates;
 pub(crate) mod util;
 
 // Middleware
@@ -364,6 +365,15 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/time",
+            time_tracking::inbound::axum_router::time_tracking_router(
+                state.time_tracking_state.clone(),
+            )
+            .merge(time_tracking::inbound::report_router::time_report_router(
+                state.time_report_state.clone(),
+            )),
+        )
+        .nest(
             "/channel-sections",
             channel_labels::inbound::axum_router::channel_sections_router(
                 state.channel_sections_state.clone(),
@@ -517,6 +527,7 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest("/recents", recents::router())
         .nest("/saved_views", saved_views::router())
+        .nest("/task_templates", task_templates::router())
         .nest(
             "/passwords",
             passwords::inbound::router::router(state.passwords_state.clone()).merge(

@@ -45,6 +45,10 @@ pub mod service;
 #[cfg(feature = "ports")]
 pub mod stages;
 
+/// Operator-run filing of manual contacts under their email domain's company
+#[cfg(feature = "ports")]
+pub mod contact_filing;
+
 /// Capability-token receipt wrappers gating per-entity CRM service calls
 #[cfg(feature = "ports")]
 pub mod auth;
@@ -89,3 +93,7 @@ pub mod pipeline_commercial;
 /// Explicit contact field edits.
 #[cfg(feature = "ports")]
 pub mod contact_update;
+
+/// Adding and removing a company's domains.
+#[cfg(feature = "ports")]
+pub mod company_domains;

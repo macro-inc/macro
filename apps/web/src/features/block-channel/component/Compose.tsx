@@ -1,7 +1,11 @@
 import { useAgentDmRecipients } from '@app/features/agent-dms/agent-dm-recipients';
-import { selectConversationRecipients } from '@app/features/agent-dms/core/personas';
+import { channelListName } from '@channel/group-chat-name';
 import { buildPostMessageRequest, type InputSnapshot } from '@channel/Input';
 import { DraftComposer } from '@channel/Input/DraftComposer';
+import {
+  createMessageRecipients,
+  postToExistingChannel,
+} from '@channel/message-recipients';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
@@ -10,32 +14,22 @@ import {
 import { SplitToolbarLeft } from '@components/app/split-layout/components/SplitToolbar';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
-import {
-  getDisplayName,
-  tryMacroId,
-  type WithCustomUserInput,
-} from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import InfoIcon from '@icon/system/regular/info.svg';
 import { useCreateChannelMutation } from '@queries/channel/channels';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
-import { useContactRecipientSource } from '@queries/contacts/recipient-source';
 import { createEffect, createMemo, createSignal, on } from 'solid-js';
 
 export function ChannelCompose() {
   const [channelName, setChannelName] = createSignal<string>('');
 
   const agentOptions = ENABLE_AGENT_DMS ? useAgentDmRecipients() : () => [];
-  const [selectedRecipients, setSelectedRecipients] = createSignal<
-    WithCustomUserInput<'user' | 'contact' | 'agent'>[]
-  >([]);
-
-  const selectRecipients = (
-    next: WithCustomUserInput<'user' | 'contact' | 'agent'>[]
-  ) => {
-    setSelectedRecipients(selectConversationRecipients(next));
-  };
+  const messageRecipients = createMessageRecipients();
+  const selectedRecipients = messageRecipients.selected;
+  const selectedChannel = messageRecipients.selectedChannel;
 
   const selectedRecipientCount = createMemo(() => selectedRecipients().length);
 
@@ -67,6 +61,13 @@ export function ChannelCompose() {
 
   const previewName = createMemo(() => {
     const recipients = selectedRecipients();
+    const channel = selectedChannel();
+    if (channel) {
+      return channelListName({
+        name: channel.data.name ?? '',
+        channelType: channel.data.channel_type,
+      });
+    }
     if (recipients.length === 0) {
       return 'Draft message';
     } else if (recipients.length === 1) {
@@ -76,7 +77,7 @@ export function ChannelCompose() {
       const names = recipients
         .slice(0, 2)
         .map((r) => {
-          if (r.kind === 'agent') return r.data.name;
+          if (r.kind === 'agent' || r.kind === 'channel') return r.data.name;
           if (r.kind === 'user') {
             return getDisplayName(tryMacroId(r.data.id));
           }
@@ -107,6 +108,20 @@ export function ChannelCompose() {
     const { content, mentions, attachments } = buildPostMessageRequest({
       snapshot,
     });
+
+    if (destination.type === 'channel') {
+      const sent = await postToExistingChannel(sendToChannel, {
+        span: 'channels.compose_send_to_channel',
+        channelId: destination.id,
+        content,
+        mentions,
+        attachments,
+      });
+      // The message is in: a failed navigation must not keep the draft, or
+      // sending it again would post it twice.
+      fireAndForget(sent.navigateToChannel(), 'channel-compose');
+      return;
+    }
 
     const persona = recipients.find((recipient) => recipient.kind === 'agent');
     if (persona) {
@@ -155,7 +170,7 @@ export function ChannelCompose() {
   }
 
   const placeholder = createMemo(() => {
-    const name = channelName();
+    const name = channelName() || (selectedChannel() && previewName());
     return name ? `Send message to ${name}` : 'Send message';
   });
 
@@ -190,15 +205,16 @@ export function ChannelCompose() {
                 }
               }}
             />
-            <RecipientSelector<'user' | 'contact' | 'agent'>
+            <RecipientSelector<'user' | 'contact' | 'agent' | 'channel'>
               options={agentOptions}
-              createSource={useContactRecipientSource}
+              createSource={messageRecipients.createSource}
               selectedOptions={selectedRecipients()}
-              setSelectedOptions={selectRecipients}
+              setSelectedOptions={messageRecipients.select}
+              full={messageRecipients.isFull()}
               placeholder={
                 ENABLE_AGENT_DMS
-                  ? 'To: People, agents, or email addresses'
-                  : 'To: Macro users or email addresses'
+                  ? 'To: People, agents, channels, or email addresses'
+                  : 'To: Macro users, channels, or email addresses'
               }
               triedToSubmit={triedToSubmit}
               focusOnMount

@@ -44,6 +44,12 @@ pub struct SearchHandlerState {
     pub calendar_event_labels: Arc<dyn CalendarEventLabelReader>,
     /// Which callers get dynamic multi-term matching on document content.
     pub term_matching_rollout: Arc<dyn crate::TermMatchingRollout>,
+    /// How many unified searches each caller runs at once in this process.
+    /// One instance per process, shared by every router that mounts search.
+    pub search_lanes: Arc<crate::SearchLanes>,
+    /// The search allowance each account's user API keys share, counted in
+    /// buckets every process reads.
+    pub api_key_search_buckets: Arc<dyn crate::SearchTokenBuckets>,
 }
 
 impl SearchHandlerState {
@@ -56,6 +62,9 @@ impl SearchHandlerState {
         crate::domain::email_search::EmailSearchService(
             crate::outbound::email_search::EmailSearchPgSource {
                 db: self.db.clone(),
+                favorites: favorites::outbound::pg_favorites_repo::PgFavoritesRepo::new(
+                    (*self.db).clone(),
+                ),
             },
         )
     }

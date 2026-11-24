@@ -53,8 +53,9 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
     home.openStartedSession(id);
   };
   return (
-    <div class="agents-view-portal min-w-0 [&_.newchat]:p-0">
+    <div class="agents-view-portal agents-scope min-w-0 [&_.newchat]:p-0">
       <NewChatPage
+        homeLayout
         roster={roster.roster()}
         rosterLoading={roster.loading()}
         availabilityLoading={roster.availabilityLoading()}

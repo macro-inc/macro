@@ -11,7 +11,7 @@ impl AddressBookRepository for PgMailboxSync {
         let row = sqlx::query!(r#"
             WITH candidate AS (
                 SELECT s.id FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
-                WHERE l.is_sync_active AND NOT l.needs_reauth AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
+                WHERE l.is_sync_active AND NOT l.needs_reauth AND l.mailbox_unavailable_at IS NULL AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
                     AND s.kind IN ('contacts_catalog','contacts_profile','contacts') AND s.next_run_at <= now()
                     AND (s.lease_until IS NULL OR s.lease_until < now())
                 ORDER BY s.next_run_at,s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
@@ -64,7 +64,7 @@ impl AddressBookRepository for PgMailboxSync {
         work: &AddressBookWork,
         catalog: &ContactFolderCatalog,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         lock_work(&mut tx, work).await?;
         let link = work.stream.mailbox.link_id;
         let mut ids: Vec<_> = catalog
@@ -111,7 +111,7 @@ impl AddressBookRepository for PgMailboxSync {
         work: &AddressBookWork,
         profile: &AddressBookContact,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         lock_work(&mut tx, work).await?;
         let email = sqlx::query_scalar!(
             "SELECT email_address FROM email_links WHERE id = $1",
@@ -139,7 +139,7 @@ impl AddressBookRepository for PgMailboxSync {
         work: &AddressBookWork,
         page: &AddressBookPage,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         lock_work(&mut tx, work).await?;
         let link = work.stream.mailbox.link_id;
         let folder = work.stream.folder.as_str();
@@ -192,7 +192,7 @@ impl AddressBookRepository for PgMailboxSync {
     }
 
     async fn reset(&self, work: &AddressBookWork) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         lock_work(&mut tx, work).await?;
         sqlx::query!("UPDATE email_sync_streams SET position = NULL,initial_complete = false,scan_id = $2,next_run_at = now(),lease_id = NULL,lease_until = NULL WHERE id = $1",work.stream.id,macro_uuid::generate_uuid_v7())
             .execute(&mut *tx).await.map_err(db_error)?;
@@ -200,7 +200,7 @@ impl AddressBookRepository for PgMailboxSync {
     }
 
     async fn retire_folder(&self, work: &AddressBookWork) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         lock_work(&mut tx, work).await?;
         let rows = sqlx::query!("UPDATE email_address_book_sources SET deleted_at = now(),revision = revision + 1,photo_lease_id = NULL,photo_lease_until = NULL WHERE link_id = $1 AND folder_id = $2 AND deleted_at IS NULL RETURNING emails",work.stream.mailbox.link_id,work.stream.folder.as_str())
             .fetch_all(&mut *tx).await.map_err(db_error)?;
@@ -238,7 +238,7 @@ impl AddressBookRepository for PgMailboxSync {
     async fn claim_photo(&self, lease_id: Uuid) -> Result<Option<ContactPhotoLease>, MailboxError> {
         let row = sqlx::query!(r#"WITH candidate AS (
             SELECT s.link_id,s.folder_id,s.provider_id FROM email_address_book_sources s JOIN email_links l ON l.id = s.link_id
-            WHERE l.is_sync_active AND NOT l.needs_reauth AND l.provider = 'OUTLOOK' AND s.deleted_at IS NULL AND s.photo_due_at <= now()
+            WHERE l.is_sync_active AND NOT l.needs_reauth AND l.mailbox_unavailable_at IS NULL AND l.provider = 'OUTLOOK' AND s.deleted_at IS NULL AND s.photo_due_at <= now()
                 AND (s.photo_lease_until IS NULL OR s.photo_lease_until < now())
             ORDER BY s.photo_due_at,s.link_id,s.folder_id,s.provider_id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
         ) UPDATE email_address_book_sources s SET photo_lease_id = $1,photo_lease_until = now() + interval '3 minutes'
@@ -284,7 +284,7 @@ impl AddressBookRepository for PgMailboxSync {
         hash: Option<&str>,
         url: Option<&str>,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         lock_mailbox(&mut tx, lease.mailbox).await?;
         let row = sqlx::query!(r#"UPDATE email_address_book_sources SET photo_url = $6,photo_hash = $7,photo_due_at = now() + interval '1 day',photo_lease_id = NULL,photo_lease_until = NULL
             WHERE link_id = $1 AND folder_id = $2 AND provider_id = $3 AND revision = $4 AND photo_lease_id = $5 AND photo_lease_until > now() AND deleted_at IS NULL RETURNING emails"#,

@@ -1,5 +1,6 @@
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import { analytics } from '@app/lib/analytics';
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import type { CrmCompanyEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
@@ -19,6 +20,7 @@ import {
 } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { CompanyImporter } from '../context/crm-sources';
+import type { CompanyDomainChange } from '../core/company';
 import { contactCompanySummary } from '../core/contact';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
@@ -157,6 +159,7 @@ function wipeCompanyEmailCache(
 export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
   return useMutation(
     () => ({
+      onMutate: () => captureQueryAuthorization(),
       mutationFn: ({ name, domain }: { name: string; domain?: string }) =>
         Telemetry.span('crm.company.create', async (span) => {
           span.setAttr('crm.company.has_domain', !!domain);
@@ -166,8 +169,9 @@ export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
           span.setAttr('crm.company.id', company.id);
           return company;
         }),
-      onSuccess: (data) => {
+      onSuccess: (data, _variables, canCache) => {
         analytics.track('crm_company_created', { companyId: data.id });
+        if (!canCache?.()) return;
         deps.client.setQueryData(crmKeys.company(data.id).queryKey, data);
         return deps.client.invalidateQueries({ queryKey: soupKeys._def });
       },
@@ -186,12 +190,14 @@ export function createCompanyImporter(
 ): CompanyImporter {
   return {
     async create(input) {
+      const canCache = captureQueryAuthorization();
       const created = await deps.storage.createCompany(input);
       if (created.isOk()) {
-        deps.client.setQueryData(
-          crmKeys.company(created.value.id).queryKey,
-          created.value
-        );
+        if (canCache())
+          deps.client.setQueryData(
+            crmKeys.company(created.value.id).queryKey,
+            created.value
+          );
         return 'created';
       }
       if (created.error.some((error) => error.code === 'CONFLICT'))
@@ -213,6 +219,7 @@ export function createCompanyImporter(
 export function useCreateContactMutation(deps: CrmRecordDependencies) {
   return useMutation(
     () => ({
+      onMutate: () => captureQueryAuthorization(),
       mutationFn: ({
         companyId,
         name,
@@ -232,11 +239,12 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
           span.setAttr('crm.contact.id', contact.id);
           return contact;
         }),
-      onSuccess: (contact, { companyId }) => {
+      onSuccess: (contact, { companyId }, canCache) => {
         analytics.track('crm_contact_created', {
           companyId,
           contactId: contact.id,
         });
+        if (!canCache?.()) return;
         return Promise.all([
           companyId &&
             deps.client.invalidateQueries({
@@ -265,12 +273,14 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
       mutationFn: ({ companyId, name }: { companyId: string; name: string }) =>
         throwOnErr(() => deps.storage.setCompanyName({ companyId, name })),
       onMutate: async ({ companyId, name }) => {
+        const canCache = captureQueryAuthorization();
         const queryKey = crmKeys.company(companyId).queryKey;
         const details = contactDetailsOfCompanyFilter(companyId);
         await Promise.all([
           deps.client.cancelQueries({ queryKey }),
           deps.client.cancelQueries(details),
         ]);
+        if (!canCache()) return;
         const previous = deps.client.getQueryData<CrmCompanyResponse>(queryKey);
         if (previous) {
           deps.client.setQueryData<CrmCompanyResponse>(queryKey, {
@@ -287,12 +297,12 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
             company: { ...detail.company, name },
           });
         }
-        return { previous, previousDetails, optimisticName: name };
+        return { previous, previousDetails, optimisticName: name, canCache };
       },
       // Roll back only if the cache still holds this mutation's optimistic
       // name — a stale failure must not clobber a newer rename's update.
       onError: (_err, { companyId }, context) => {
-        if (!context) return;
+        if (!context?.canCache()) return;
         if (context.previous) {
           deps.client.setQueryData<CrmCompanyResponse>(
             crmKeys.company(companyId).queryKey,
@@ -326,6 +336,79 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
     }),
     () => deps.client
   );
+}
+
+/**
+ * Adds or removes a company domain via `PUT`/`DELETE
+ * /crm/companies/{id}/domains`. The server never changes the company's name
+ * or primary domain, so the answer replaces only the domain list of the
+ * cached company. Which of the company's contacts are on its domains changes
+ * with it, so their details and the company's Team list refresh, and soup
+ * refreshes the domains Customers listings show. Failures worth surfacing:
+ * 409 when another company has the domain (its name in the error message),
+ * 400 for a personal provider or the domain the company is named after, 403
+ * for a member removing a domain from a company whose email sync is off.
+ */
+export function useEditCompanyDomainMutation(deps: CrmRecordDependencies) {
+  return useMutation(
+    () => ({
+      // The header and Record details each edit through their own instance;
+      // one edit at a time keeps a slower response from replacing a newer list.
+      scope: { id: 'crm-company-domain-edits' },
+      mutationFn: ({
+        companyId,
+        domain,
+        change,
+      }: {
+        companyId: string;
+        domain: string;
+        change: CompanyDomainChange;
+      }) => editCompanyDomain(deps, companyId, domain, change),
+    }),
+    () => deps.client
+  );
+}
+
+async function editCompanyDomain(
+  deps: CrmRecordDependencies,
+  companyId: string,
+  domain: string,
+  change: CompanyDomainChange
+): Promise<CrmCompanyResponse> {
+  return Telemetry.span('crm.company_domain_edit', async (span) => {
+    span.setAttr('crm.record_id', companyId);
+    span.setAttr('crm.change', change);
+    const canCache = captureQueryAuthorization();
+    const write =
+      change === 'add'
+        ? deps.storage.addCompanyDomain
+        : deps.storage.removeCompanyDomain;
+    const company = await span.span('crm.company_domain_edit.save', () =>
+      throwOnErr(() => write({ companyId, domain }))
+    );
+    if (!canCache()) return company;
+
+    // A read already in flight would answer with the domains before the
+    // write and replace these.
+    await deps.client.cancelQueries({
+      queryKey: crmKeys.company(companyId).queryKey,
+    });
+    if (!canCache()) return company;
+    deps.client.setQueryData<CrmCompanyResponse>(
+      crmKeys.company(companyId).queryKey,
+      (current) => current && { ...current, domains: company.domains }
+    );
+    await span.span('crm.company_domain_edit.refresh', () =>
+      Promise.all([
+        refreshContactDetailsOfCompany(deps.client, companyId),
+        deps.client.invalidateQueries({
+          queryKey: crmKeys.companyContacts(companyId).queryKey,
+        }),
+        deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+      ])
+    );
+    return company;
+  });
 }
 
 /** Loaded contact details whose summary is of `companyId`. */

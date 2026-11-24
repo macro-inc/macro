@@ -1,4 +1,19 @@
 export default {
+  accessDenied: "You don't have access to CRM",
+  accessDeniedHelp: 'Ask a team admin or owner to restore your access.',
+  accessCheckFailed: "Couldn't check your CRM access.",
+  listLoadFailed: "Couldn't load this list.",
+  listReloadHelp: 'Please try again to reload this view.',
+  tryAgain: 'Try again',
+  memberAccessAlways: 'Owners and admins always have CRM access.',
+  memberAccessFor: 'CRM access for {{name}}',
+  memberAccess: 'CRM access',
+  memberAccessOff: 'No CRM access',
+  memberAccessFixed: 'Always has CRM access',
+  memberAccessTitle: 'Who can use CRM',
+  memberAccessLoadFailed: "Couldn't load who can use CRM.",
+  memberAccessDescription:
+    "People without CRM access don't see Customers or CRM records. They keep their own email contribution settings.",
   policyChange: 'Change',
   policyRules: 'Sharing rules',
   policyEdit: 'Edit JSON',
@@ -170,14 +185,17 @@ export default {
   email: 'Email',
   addEmail: 'Add email',
   manageContactEmail: 'Email options for {{email}}',
+  contactEmailLabel: 'Email: {{email}}',
+  contactEmailSummary: {
+    one: 'Email: {{email}} and {{count}} more',
+    other: 'Email: {{email}} and {{count}} more',
+  },
   primaryEmail: 'Primary',
-  primaryContactEmail: '{{email}} (primary)',
   makePrimaryContactEmail: 'Make primary',
+  makeContactEmailPrimaryNamed: 'Make {{email}} primary',
   removeContactEmail: 'Remove',
-  contactEmailLinksCompany:
-    'This address links the contact to its company, so it cannot be removed.',
-  contactEmailPlaceholder: 'person@example.com',
-  saveContact: 'Save',
+  removeContactEmailNamed: 'Remove {{email}}',
+  addEmailPlaceholder: 'Add an email address',
   savingContact: 'Saving…',
   cancel: 'Cancel',
   company: 'Company',
@@ -190,11 +208,8 @@ export default {
   removeCompanyTitle: 'Remove company from this contact?',
   removeCompanyBody:
     'The contact, its email history and its discussions are kept. It will no longer appear under this company.',
-  removeCompanyPermanent:
-    'Its primary email is not a personal address, so it cannot be linked to a company again from here.',
   contactCompanyLinkedByEmail:
     'Linked by an email address on this company’s domain.',
-  goToCompany: 'Go to company',
   searchCompanies: 'Search companies…',
   contactEditFailed: 'Could not save this change. Try again.',
   contactEmailConflict:
@@ -205,6 +220,33 @@ export default {
     'This contact or company is no longer available to edit.',
   contactEditInvalid:
     'This change is unavailable. Check the value and try again.',
+  domain: 'Domain',
+  domains: 'Domains',
+  addDomain: 'Add domain',
+  manageCompanyDomain: 'Domain options for {{domain}}',
+  primaryDomain: 'Primary',
+  companyDomainLabel: 'Domain: {{domain}}',
+  companyDomainSummary: {
+    one: 'Domain: {{domain}} and {{count}} more',
+    other: 'Domain: {{domain}} and {{count}} more',
+  },
+  removeCompanyDomainNamed: 'Remove {{domain}}',
+  companyDomainPlaceholder: 'example.com',
+  companyDomainAddHelp:
+    'Mail and new contacts from this domain go to this company.',
+  companyDomainRemoveHelp:
+    'Contacts and email history stay. New mail from this domain is no longer filed under this company.',
+  companyDomainTaken:
+    '{{company}} already has this domain. Remove it there first.',
+  companyDomainTakenArchived:
+    'An archived company already has this domain. A team admin can restore it or remove the domain from it.',
+  companyDomainInvalid:
+    'This domain can’t be added. Enter a company domain such as example.com; personal email providers can’t be added.',
+  companyDomainNamesCompany:
+    'The company is named after this domain. Rename the company first.',
+  companyDomainAdminRequired:
+    'Email sync is off for this company, so only a team admin can remove its domains.',
+  companyDomainUnavailable: 'This company is no longer available to edit.',
 
   navigation: 'CRM navigation',
   records: 'Records',
@@ -265,7 +307,8 @@ export default {
   toolsNavigation: 'CRM tools',
   import: 'Import',
   export: 'Export',
-  settings: 'CRM settings',
+  settings: 'Settings',
+  settingsLabel: 'CRM settings',
   pipelineTrack: 'Track',
   pipelineTrackChoice: 'Track {{choice}}',
   pipelineTrackCompanies: 'Companies',
@@ -319,8 +362,9 @@ export default {
   privacyRetry: 'Retry',
   privacyContributionTitle: 'Your email contribution',
   privacyAvailability:
-    'Everyone on your team can use CRM and manage companies without sharing their email.',
-  privacyConnect: 'Connect your email first',
+    'Email contribution is optional and separate from CRM access.',
+  privacyConnect: 'No email connected',
+  privacyConnectEmail: 'Connect email',
   privacyShared: 'Your eligible emails are shared with your team.',
   privacyNotShared: 'Your emails are not contributing to CRM.',
   privacyOn: 'Sharing on',

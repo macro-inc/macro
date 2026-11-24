@@ -337,3 +337,117 @@ async fn the_owners_sharing_changes_are_recorded_on_their_staged_rows(pool: PgPo
     let row = repo.get(&ana, anas).await.unwrap().unwrap();
     assert_eq!(row.metadata["plan"]["shared"], true);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn stale_claim_cleanup_preserves_a_newer_personal_verdict(pool: PgPool) {
+    let repo = PgImportRepo::new(pool.clone());
+    let user = member(&pool, "review-owner", Uuid::now_v7()).await;
+    let id = roadmap_plan(&repo, &user).await;
+    // A writer retained the earlier Shared plan while a newer review chose Personal.
+    repo.set_plan_sharing(&user, &[], &[id]).await.unwrap();
+    repo.claim_importing(&user, &[id], &[], None).await.unwrap();
+    assert!(repo.clear_stale_link(&user, id).await.unwrap());
+    let current = repo.get(&user, id).await.unwrap().unwrap();
+    assert_eq!(
+        current.metadata["plan"]["shared"], false,
+        "claim cleanup must never rewrite a newer reviewed verdict"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn siblings_staged_in_one_transaction_keep_their_order_across_phases(pool: PgPool) {
+    let user = member(&pool, "ordered-owner", Uuid::now_v7()).await;
+    let repo = PgImportRepo::new(pool);
+    let mut rows = vec![PlanRow {
+        kind: ImportKind::Page,
+        foreign_id: "root".into(),
+        parent_foreign_id: None,
+        metadata: serde_json::json!({"title":"Root", "plan":{"decision":"copy", "path":[]}}),
+    }];
+    // A permutation, deliberately different from title/foreign-id order.
+    let expected: Vec<_> = (0..128)
+        .map(|index| format!("sibling-{:03}", (index * 73) % 128))
+        .collect();
+    for id in &expected {
+        rows.push(PlanRow {
+            kind: ImportKind::Page,
+            foreign_id: id.clone(),
+            parent_foreign_id: Some("root".into()),
+            metadata: serde_json::json!({"title":id, "plan":{"decision":"copy", "path":["Root"]}}),
+        });
+    }
+    let staged = repo
+        .replace_plan(&user, ImportSource::Notion, &rows)
+        .await
+        .unwrap();
+    let parent = staged[0].id;
+    let siblings: Vec<_> = staged
+        .iter()
+        .filter(|row| row.parent_id == Some(parent))
+        .collect();
+    assert_eq!(siblings.len(), 128);
+    assert!(
+        siblings
+            .iter()
+            .all(|row| row.created_at == staged[0].created_at),
+        "one transaction ties creation timestamps"
+    );
+    let listed = repo
+        .list(&user, Some(ImportSource::Notion), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        listed
+            .iter()
+            .filter(|row| row.parent_id == Some(parent))
+            .map(|row| &row.foreign_id)
+            .collect::<Vec<_>>(),
+        expected.iter().collect::<Vec<_>>(),
+        "review order follows the staged siblings"
+    );
+    for row in siblings.iter().rev() {
+        repo.mark_importing(&user, &[row.id]).await.unwrap();
+    }
+    let listed = repo
+        .list(&user, Some(ImportSource::Notion), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        listed
+            .iter()
+            .filter(|row| row.parent_id == Some(parent))
+            .map(|row| &row.foreign_id)
+            .collect::<Vec<_>>(),
+        expected.iter().collect::<Vec<_>>(),
+        "writing does not reorder siblings"
+    );
+    for row in &siblings {
+        repo.mark_imported(&user, row.id, "document", "md", None)
+            .await
+            .unwrap();
+    }
+    let listed = repo
+        .list(&user, Some(ImportSource::Notion), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        listed
+            .iter()
+            .filter(|row| row.parent_id == Some(parent))
+            .map(|row| &row.foreign_id)
+            .collect::<Vec<_>>(),
+        expected.iter().collect::<Vec<_>>(),
+        "completion does not reorder siblings"
+    );
+    assert!(
+        siblings
+            .last()
+            .unwrap()
+            .id
+            .get_timestamp()
+            .unwrap()
+            .to_unix()
+            > siblings[0].id.get_timestamp().unwrap().to_unix(),
+        "the staged IDs cross a millisecond boundary"
+    );
+}

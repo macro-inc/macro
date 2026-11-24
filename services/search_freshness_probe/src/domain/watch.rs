@@ -44,6 +44,13 @@ impl Schedule {
         failing_for: Duration::from_secs(30),
     };
 
+    /// A round that tests recall rather than speed, with an expensive query:
+    /// every 5 s throughout, so its seen time is accurate to 5 s.
+    pub const RECALL: Self = Self {
+        fast: Duration::from_secs(5),
+        ..Self::PRODUCTION
+    };
+
     fn gap_after(&self, elapsed: Duration) -> Duration {
         if elapsed < self.fast_for {
             self.fast

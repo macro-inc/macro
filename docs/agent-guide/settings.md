@@ -277,14 +277,16 @@ second failed start, which the server undoes (computer released, charge
 refunded, agent taken back), with **Retry** buying afresh. Other refusals
 (a trial, an invite already in flight, a failed workspace) show in place.
 The new agent appears in **Team → Members** as its own row (name, **Agent**
-tag) with a status in place of a role: **Setting up** with a spinner while its
+tag) with a status on the summary line where a person's role and plan are: **Setting up** with a spinner while its
 computer provisions, with the computer's setup step under it (**Creating the
 computer**, **Starting up**, **Connecting to Macro**), then **Starting**
 (spinner; the computer is up and the agent hasn't reported online yet), then
-**Running**, **Paused**, **Needs attention** or **Released**. A failed
+**Running**, **Paused**, **Not responding** (its computer stopped answering
+after setup, or crashed and is restarting; it comes back by itself),
+**Needs attention** or **Released**. A failed
 computer's row offers owners and admins **Retry**, the computer's own retry,
-so it never buys a second computer. Owners and admins pick a voice later with the
-row's waveform button (**Change voice**): **Save voice** calls
+so it never buys a second computer. Owners and admins pick a voice later from
+the row's ⋯ (**Change voice**), which also holds **Remove agent**: **Save voice** calls
 `PUT /team_agents/{agent}/voice`, which commits `config/voice.json` in the
 agent's repository and applies from its next call; a failed save keeps the
 pick for retry.
@@ -310,8 +312,10 @@ link…" until the computer has made the link, then the link; **Open again**
 once used), then the code field with **Complete sign-in**, which is primary
 only once a code is typed and says "Checking with Claude. This can take a minute." while it runs.
 A failure shows one inline alert with its way out: **Get a new link** (link
-expired, code rejected, timed out), **Try again** (couldn't get a link), or
-paste again (malformed code, computer busy or unreachable). The harness
+expired, code rejected, including the CLI's own "Invalid code", or the
+computer's sign-in timed out), **Try again** (couldn't get a link), or send
+the code again (malformed code, computer busy or unreachable, or the service
+timed out waiting for the computer, which may still have finished). The harness
 tells its two 403s apart: `rollout_disabled` reads "Computers aren't
 available for this account yet." with **Try again** before a link exists;
 after a code was sent the sign-in still waits, so the field stays open to
@@ -333,11 +337,10 @@ short chip) and above the composer; messages still send. **Setting up** (also
 while the agent is **Starting**): "<name>
 is still being set up. It'll answer once it's ready."; a failed setup:
 "<name> isn't running: setup failed." with **Retry** for owners and admins;
-a powered-off computer, or one whose macrod isn't connected: "<name> isn't
+a powered-off computer, or one that is **Not responding**: "<name> isn't
 running: its computer is offline."; a released one: "<name> isn't running
-right now." The state comes from the team's agents and `/harnesses`, the same
-sources as the Members row; members can't see the computer's runtime, so a
-running computer whose macrod dropped shows them no banner.
+right now." The state comes from the team's agents, the same source as the
+Members row, so every member sees the same banner.
 
 Owners and admins remove an agent with its trash button and a destructive
 confirmation, **Remove <name>?** ("Its computer and files are deleted. This
@@ -434,7 +437,7 @@ The compact sidebar uses the shared workspace width.
 
 When a newer version is ready, an **Update available** button (a download icon
 in a subtle accent circle that a glowing comet periodically circles) appears in
-the sidebar rail above the mobile-app and settings icons. Its popover (a title,
+the sidebar rail above the Downloads and settings icons. Its popover (a title,
 a short description, and one action) opens by itself once per update until
 dismissed (click outside or Escape); the button stays until the update is
 applied. Its wording and action depend on the update: **New version available**
@@ -446,8 +449,8 @@ popover opens again (even if dismissed) with **Reload**; there is no blocking
 alert. Touch layouts have no rail, so a newer web build shows a **Reload** toast
 there instead.
 
-On desktop release builds, **Account → Desktop app update** shows native update
-progress. While preparing to restart, the popover can't be dismissed and its
+On desktop release builds, **Desktop App → Updates → Desktop app update** shows native update
+progress, with **Restart to update** once an update is ready. While preparing to restart, the popover can't be dismissed and its
 action is disabled. Restart waits for pending canvas/PDF saves and
 local persistence; active calls, uploads, and imports must finish first. A ready
 update also installs on normal app quit. Closing a window only triggers
@@ -476,28 +479,47 @@ Left nav (feature and platform gates still apply):
   Integrations; `/app/settings/team-connections` opens Integrations.
 - **Blocks**: Email, Calendar, Agents, CRM. On touch devices, where the Agents
   sidebar can be collapsed, **Routines** (`/app/settings/routines`) follows Agents.
-- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
+- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Downloads, then the native app page (**iOS App**, **Android App** or **Desktop App**) inside the native apps.
 - **Workspace**: Tags, Integrations (email, accounts, team Slack export, AI apps and agent tools).
 - **Developer**: Machines, MCP server, API Keys, Account Managers, Bots.
 
-**Desktop App** (`/app/settings/desktop-app`) is titled
-**Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
-date card in the desktop app. Build date is when the installed native binary
-was built (from `get_native_build_time`), not when it was installed or when the
-running JavaScript was built, so OTA updates don't change it. Bundle date is when the active
-OTA bundle was built (from `get_bundle_debug_info`), or **No OTA update** while
-the app's embedded bundle runs. In the browser it links to the latest desktop release
-on GitHub, and only appears when the `desktop-app` PostHog flag is enabled. Native desktop always shows this section regardless of the flag;
-native mobile never shows it.
+**Downloads** (`/app/settings/downloads`; in a browser the old
+`/app/settings/mobile-app` and `/app/settings/desktop-app` links land on it)
+gets Macro onto other devices. In a desktop browser its **Desktop app (Alpha)** section offers
+**Download for macOS** and **Download for Linux**: the one for the browser's
+computer is primary and listed first, with that installer's system
+requirement under the row. On a computer with no installer (Windows, ChromeOS) both are secondary
+under "Available for macOS and Linux." The links are the website's stable
+installer links, `https://macro.com/download/mac` and `/download/linux`
+(the same ones as the marketing `/download` page), which redirect to the
+current release's installers. A click sends the PostHog event `desktop_download_clicked`
+with `platform` (`macos` or `linux`) and `source: 'app_settings'`. Its
+**Mobile app** section has an **iPhone** / **Android** switch for the App
+Store or Google Play QR code, with **Copy link** for that store's URL. Inside
+the desktop app the page shows only the Mobile app section. Phones, tablets and
+the iOS and Android apps have no Downloads page.
 
-The **Mobile App** page is titled **Mobile app**. In a desktop browser an
-**iPhone** / **Android** switch picks which phone and QR code to show (App Store
-or Google Play), with **Copy link** for that store's URL. Phone browsers get a
-store button instead, with no QR codes: **App Store** on an iPhone, **Google
-Play** on an Android phone, and both when the user agent names neither. The
-page description names the store shown, or says "your app store" with both. Inside the
-iOS and Android apps it shows the same Version, Build date, and Bundle date card
-as the desktop app, and the sidebar's **Get the mobile app** button stays hidden.
+The native app page (`/app/settings/app`; inside the native apps the old
+`/app/settings/mobile-app` and `/app/settings/desktop-app` links land on it)
+is titled for the app: **iOS App**, **Android App** or **Desktop App**. The
+browser has no such page. **About** lists **Version** (the installed release),
+**Build** (the native build number), **Build date** (when the installed binary
+was built) and **Bundle date** (when the downloaded web bundle was built, or
+**Built into the app** while the bundled one runs). **Updates** holds one row
+with a read-only status and the one action that applies now; there are no
+update preferences. In the iOS and Android apps it is **App update**, the
+over-the-air bundle: **Check for updates**, **Retry**, **Download**,
+**Download anyway** (off Wi-Fi), **Update** or **Reload**. In the desktop app
+it is **Desktop app update** (above), shown only on release builds. The PostHog
+flag `disable-auto-update-ui` hides **Bundle date** and the mobile **Updates**
+section. Check the page over mocked native commands at desktop and phone
+widths with
+`bunx playwright test --config src/features/settings/browser-test/native-app/playwright.config.ts`
+from `apps/web`.
+
+The sidebar rail's **Downloads** button (a download glyph in the same accent
+circle as the update button, without its comet) opens this page; Shift-click
+opens it in a new split. It shows wherever the page exists.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens
@@ -738,14 +760,19 @@ Max stays active until renewal; **Keep Max plan** cancels a pending downgrade
 without resetting usage. Failed renewal-detail reads offer **Try again**.
 Team members who cannot manage billing see the notice without its action.
 
-`Team → Members` (`/app/settings/team-members`; on a paid team each row shows the seat's plan,
-and admins/owners can move a seat between Pro and Max with the `Seat plan`
-menu; Max upgrades are immediate and prorated, except the first Max seat on a
+`Team → Members` (`/app/settings/team-members`; every row, owner, admin,
+member or agent, is the picture, name, email, one summary line (role, then the
+seat's plan on a paid team) and a ⋯ holding what the viewer can change: a menu
+on desktop and a sheet on touch, like Machines. Admins/owners move a seat
+between Pro and Max under the ⋯'s **Plan**; Max upgrades are immediate and prorated, except the first Max seat on a
 trialing team, which ends the trial and bills Max for a new cycle today.
-Pro downgrades start at renewal.
-**Keep Max** appears only for a confirmed pending downgrade and cancels it;
+Pro downgrades start at renewal, and the row's summary says **Pro at renewal**
+until then.
+**Keep Max** appears in the ⋯ only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
-scheduled plans show no retry notice). CRM (individual email contribution, gated selective sharing rules with JSON,
+scheduled plans show no retry notice). CRM (for owners and admins while
+`enable-crm-member-access-changes` is on, **Who can use CRM** first: each person's
+CRM access switch, the same setting as their ⋯ in Members; individual email contribution, gated selective sharing rules with JSON,
 count preview and history subpages, and team/personal domain exclusions;
 a `Stages` section independent of email contribution for the company Stage options that new pipelines
 also start with, with `Customize`, inline rename, reorder by drag handle or arrow
@@ -795,9 +822,10 @@ dot sits beside the name.
   description. **Connect** (or **Add account** with multi-inbox) starts that
   provider's flow; Outlook checks availability first. **Manage** opens Email
   settings, where each inbox is managed.
-- **GitHub**: one row for the account link (pull request reviews and status)
-  and agent tools. Its menu has **Configure GitHub App**, **Agent tools** (the
-  GitHub provider page) and **Disconnect**.
+- **GitHub**: one row for pull request reviews and status and agent tools.
+  Its status is the server's (`app/github`), not the account link's; the link
+  only adds the username and, when linked, **Configure GitHub App** to the
+  menu beside **Agent tools** (the GitHub provider page) and **Disconnect**.
 - **Slack**, **Linear**, **Notion**: agent tools, with **Connect**/**Manage**
   opening the provider page and **Import** beside it. Slack's Import opens the
   Slack export importer for team admins with archive import enabled, otherwise
@@ -807,8 +835,10 @@ dot sits beside the name.
   Hermes; opens Machines within Integrations and follows the Machines
   availability gate; Back returns to Integrations).
 - Installed catalog apps and custom MCP servers, with their More menus.
-- The catalog: every Pipedream app not yet connected, tagged with its directory
-  categories. Apps Macro can import from show **Import** beside **Connect**.
+- The catalog: every app not yet held, tagged with its directory categories.
+  Apps Macro can import from show **Import** beside **Connect**; a held app
+  shows **Import** only when the server says its connection can be imported
+  from (`importAvailable`).
 
 The search filters every row by name, description and category and also searches
 the catalog. **Add custom** sits beside it. Gmail, Google Calendar and Google
@@ -816,25 +846,33 @@ Sheets are hidden from the catalog because Macro syncs email and calendars
 natively. LinkedIn never appears in the catalog or its search: the backend
 hides it. Scrolling toward the end loads the next catalog page; a failed page
 keeps loaded apps and offers Retry.
-Overlaid catalog apps (the `mcp_overlays` table, served at
-`GET /pipedream/mcp/overlays`) look the same in the catalog but never open
-Pipedream: their Connect action opens the vendor's own MCP OAuth consent in a new
-tab (system browser on native) and the row turns connected once that server is
-authorized, after which it lists as that catalog app (its icon, Agent tools
-category) among the integrations in use, not with the custom MCP servers at
-the top; native servers wait for the overlay list before rendering so one never
-jumps. Verify with an overlaid app such as Sentry or Asana; completing a
-Pipedream connection for one answers 409.
-GitHub is overlaid onto `api.githubcopilot.com/mcp`, but its server is
-authorized by the GitHub account link (the same GitHub App), so connecting
-GitHub anywhere (catalog, chat connect card, import dialog, the GitHub AI
-provider page) runs the account link, and a linked account shows GitHub
-connected for Macro AI with no second consent. Disconnecting GitHub on its AI
-provider page unlinks the account. Verify by linking GitHub from its row and
-checking the GitHub catalog entry reads connected.
+Every row's status is the server's (`GET /connectors`); the page computes
+none and never says which provider holds a connection. Connect asks the server
+how (`POST /connectors/{key}/connect`) and follows its answer: a consent page
+in a new tab (system browser on native) or the embedded connect dialog, then
+`POST /connectors/{key}/complete` records it. A server added by URL is listed
+as a custom MCP server unless the server reports it as an app; existing native
+Linear and Notion connections therefore appear among the custom servers, and
+the Linear and Notion rows read Not connected. A server added by URL can count as
+connected without a sign-in, so every server row offers **Sign in**, which
+runs `POST /connectors/server/{id}/connect`: on the row while it is not
+connected (it reads **Sign in required** when its grant is dead: a sign-in
+that never finished, or an expired token with no refresh), in its menu
+otherwise. An app with a row of its own
+(Granola) is listed once, in that row. A held connection that no longer
+counts (for example one through a provider the user is not on) reads
+**Not connected** with **Connect**.
+Connecting GitHub anywhere (its row, the chat connect card, the import
+dialog, the GitHub AI provider page) asks the server like any app. When
+GitHub's connection is the GitHub account link (the same GitHub App), the
+server answers with `/app/connect/github`, which starts the link and returns
+to Integrations; someone on Macro Connect gets Connect's consent page instead,
+and a linked account then reads Not connected. A link needing reauthorization
+reads as such, and disconnecting GitHub (`DELETE /connectors/app/github`)
+unlinks the account.
 The Agents workspace opens this same Integrations page. The list includes featured providers, a searchable catalog,
-and `Add Custom`. Pipedream Slack OAuth is available in production and
-development from the featured Slack provider. Connecting Slack here grants tool
+and `Add Custom`. Slack is available in production and development from the
+featured Slack provider. Connecting Slack here grants tool
 access; channel import is a separate action where the user chooses channels.
 Provider Back returns to the combined integrations overview; navigation
 is local to each mounted Integrations page.
@@ -965,7 +1003,9 @@ row: status dot, name, one muted line, at most one action, and **⋯** (a sheet
 on touch) for the rest. The line is the size and the resources recorded at
 purchase (`Standard · 4 vCPU · 8 GB · 100 GB`), then one state: setup progress
 (`Setting up · Starting up (2 of 3)`, or **Waiting for space on the
-host**), **Starting…** while a power-on runs, **Powered off**, a fault, or how
+host**), **Starting…** while a power-on runs, **Powered off**, **Not responding**
+(past setup but unreachable or restarting after a crash; it comes back by
+itself), a fault, or how
 Claude is paid for (`Claude: Macro credits`, `Signed in with Claude`,
 `Claude: not signed in`; a shimmer while the mode loads). A purchase whose
 charge is still being confirmed (`purchasing`, or the API's billing setup

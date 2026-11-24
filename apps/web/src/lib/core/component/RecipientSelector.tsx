@@ -145,12 +145,18 @@ function AgentAvatar(props: { agent: CombinedRecipientItem<'agent'>['data'] }) {
 
 type RecipientComboboxItemProps = CollectionNode<CombinedRecipientItem> & {
   inviteExternalEmails?: boolean;
+  /** Already a recipient: shown dimmed with its check, and not pickable. */
+  added?: boolean;
 };
 
 const RECIPIENT_OPTION_HEIGHT_PX = 36;
 const RECIPIENT_OPTION_MAX_VISIBLE_COUNT = 6;
 
 function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
+  // Rows are disabled when invalid or already added; only invalid ones read
+  // as unknown.
+  const invalid = () => props.disabled && !props.added;
+
   const handleMouseEnter = () => {
     const items = document.querySelectorAll('[data-highlighted]');
     items.forEach((item) => {
@@ -172,10 +178,11 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
       item={props}
       class={cn(
         'flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5',
-        props.disabled && 'hover:bg-ink/5'
+        invalid() && 'hover:bg-ink/5',
+        props.added && 'opacity-50'
       )}
-      onMouseEnter={props.disabled ? handleMouseEnter : undefined}
-      onMouseLeave={props.disabled ? handleMouseLeave : undefined}
+      onMouseEnter={invalid() ? handleMouseEnter : undefined}
+      onMouseLeave={invalid() ? handleMouseLeave : undefined}
       // Kobalte still selects on pointerup, but synchronously detaches this
       // popup. Cancel outside-dismiss handling of that same event in a drawer.
       onPointerUp={(event) => event.preventDefault()}
@@ -198,7 +205,7 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
             const showEmail = Boolean(name) && name !== email && Boolean(email);
 
             // Use appropriate id for UserIcon based on type
-            const iconId = props.disabled ? '?' : option.id;
+            const iconId = invalid() ? '?' : option.id;
 
             return (
               <Combobox.ItemLabel class="flex flex-row w-full items-center gap-1.5 text-ink select-none text-sm">
@@ -221,7 +228,7 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
                 <p
                   class={cn(
                     'ph-no-capture truncate my-auto',
-                    props.disabled && 'italic'
+                    invalid() && 'italic'
                   )}
                 >
                   <Show
@@ -318,6 +325,16 @@ export type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   allowCustomRecipients?: boolean;
   /** Show each person's address beside their name on chips, as email does. */
   showChipAddresses?: boolean;
+  /**
+   * Takes no more recipients: chips can still be removed, with their X or
+   * Backspace, but the field takes no typing and opens no suggestions.
+   */
+  full?: boolean;
+  /**
+   * List recipients already in the field among suggestions dimmed, with
+   * their check, and not pickable, instead of removing them when picked.
+   */
+  markAlreadyAdded?: boolean;
 } & (
   | {
       /** Explicit scoped options, such as team participants or agents. */
@@ -372,12 +389,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     createSignal(Boolean(props.focusOnMount));
 
   const setComboboxOpen = (next: boolean) => {
-    if (next && suppressOpenUntilInputChange()) return;
+    if (next && (suppressOpenUntilInputChange() || props.full)) return;
     setIsOpen(next);
   };
 
   const hasValidCustomEmail = () => {
-    const input = inputValue();
+    // Trimmed as commitEmails trims, so a padded address still counts.
+    const input = inputValue().trim();
     if (!input || !EmailValidator.validate(input)) return false;
     return true;
   };
@@ -401,7 +419,23 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     });
   }
 
+  // With markAlreadyAdded, an added recipient stays listed, so the user sees
+  // it is there, but is disabled: Kobalte would otherwise remove it when it
+  // is picked again, and its keyboard navigation skips disabled rows, so
+  // Enter and Tab never land on one. Chips still remove it.
+  const addedValues = createMemo(
+    () =>
+      new Set(
+        props.markAlreadyAdded
+          ? (props.selectedOptions as CombinedRecipientItem[]).map(
+              getRecipientOptionValue
+            )
+          : []
+      )
+  );
+
   function getOptionDisabled(option: CombinedRecipientItem): boolean {
+    if (addedValues().has(getRecipientOptionValue(option))) return true;
     if (option.kind === 'custom') {
       return option.data.invalid;
     }
@@ -753,6 +787,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     return commitEmails([inputValue()]);
   };
 
+  // Kobalte opens a closed list on its first selected row, a disabled one
+  // when it was already added. Opened here first, before Kobalte's own
+  // handler runs, the highlight is left to typing, the arrow keys and each
+  // page of results, which all skip disabled rows.
+  const openBeforeKobalte = () => {
+    if (!isOpen() && addedValues().size > 0) setComboboxOpen(true);
+  };
+
   const onInputChange = (next: string) => {
     rowPickedByKey = false;
     props.onInputChange?.(next);
@@ -807,7 +849,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         noResetInputOnBlur={props.noResetInputOnBlur}
         shouldFocusWrap
         placeholder={
-          props.selectedOptions?.length === 0 || isMobile()
+          !props.full && (props.selectedOptions?.length === 0 || isMobile())
             ? (props.placeholder ?? placeholderText())
             : undefined
         }
@@ -981,6 +1023,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   <Combobox.Input
                     id={props.inputId}
                     disabled={disabled()}
+                    // Read-only rather than disabled: Backspace still removes
+                    // the last chip.
+                    readOnly={props.full}
                     ref={(el) => {
                       setInputRef(el);
                       props.inputRef?.(el);
@@ -998,6 +1043,15 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                         setDisabled(true);
                         queueMicrotask(() => setDisabled(false));
                       }
+                    }}
+                    // Non-delegated, so it runs before Kobalte's handler: an
+                    // edit lifts Escape's hold on opening, as onInputChange
+                    // does, and opens the list first. Only the user's edits:
+                    // Kobalte also clears the text as it closes, which must
+                    // not reopen the list.
+                    on:input={() => {
+                      setSuppressOpenUntilInputChange(false);
+                      openBeforeKobalte();
                     }}
                     // use a non-delegated event here so that we can process it before Kobalte
                     on:keydown={(e: KeyboardEvent) => {
@@ -1047,6 +1101,8 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
                       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                         rowPickedByKey = true;
+                        // Alt+Arrow opens or closes without moving.
+                        if (!e.altKey) openBeforeKobalte();
                       }
 
                       if (
@@ -1059,7 +1115,19 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                         return;
                       }
 
-                      if (e.key === 'Tab' && context.isOpen()) {
+                      // Tab accepts the highlighted row or a complete typed
+                      // address, as Enter would. With neither (no match, or
+                      // results still loading) it moves focus on, so the
+                      // field never keeps focus on Tab.
+                      const focusedKey = list.selectionManager().focusedKey();
+                      const hasHighlightedRow =
+                        focusedKey !== undefined &&
+                        list.collection().getItem(focusedKey) !== undefined;
+                      if (
+                        e.key === 'Tab' &&
+                        context.isOpen() &&
+                        (hasHighlightedRow || hasValidCustomEmail())
+                      ) {
                         e.preventDefault();
                         e.stopPropagation();
                         inputRef()?.dispatchEvent(
@@ -1141,7 +1209,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                 ref={setListboxRef}
                 class="flex flex-col gap-1"
                 scrollToItem={scrollToItem()}
-                autoFocus="first"
+                // Kobalte opens the list on its first selected row, to restore
+                // a single choice. Rows already added are disabled, so it
+                // starts on none of them: typing and each page of results
+                // highlight the first row that can be picked.
+                autoFocus={addedValues().size > 0 ? false : 'first'}
               >
                 {(items) => {
                   // Read the options only inside the list, never in this
@@ -1185,6 +1257,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                           <RecipientComboboxItem
                             {...item}
                             inviteExternalEmails={props.inviteExternalEmails}
+                            added={addedValues().has(item.key)}
                           />
                         );
                       }}

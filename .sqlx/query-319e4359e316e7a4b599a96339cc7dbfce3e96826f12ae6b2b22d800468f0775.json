@@ -1,0 +1,99 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE time_entry\n            SET entry_date = $3, minutes = $4, note = $5, started_at = $6, ended_at = $7,\n                updated_at = now()\n            WHERE id = $1 AND user_id = $2 AND updated_at = $8\n            RETURNING id, task_id, user_id, entry_date, minutes, note, started_at, ended_at,\n                      source AS \"source: TimeEntrySource\", created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "task_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "entry_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "source: TimeEntrySource",
+        "type_info": {
+          "Custom": {
+            "name": "time_entry_source",
+            "kind": {
+              "Enum": [
+                "manual",
+                "timer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Date",
+        "Int4",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "319e4359e316e7a4b599a96339cc7dbfce3e96826f12ae6b2b22d800468f0775"
+}

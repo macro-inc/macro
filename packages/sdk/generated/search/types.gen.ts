@@ -389,7 +389,10 @@ export type ChannelFilters = {
     /**
      * Filter by whether the requesting user is an active participant of the channel.
      * Presence of this filter also widens the candidate set to team channels of the
-     * user's teams that they have not joined, so `false` matches those channels.
+     * user's teams that they have not joined, so `false` matches those channels,
+     * and, when the filter admits only channels it names by id, to public
+     * channels too. Soup listings apply the filter and its widening; channel
+     * search (`/search`) reads only the channels the user joined and ignores it.
      * None to ignore (participant channels only, today's default).
      */
     is_participant?: boolean | null;
@@ -1139,6 +1142,20 @@ export type EmailFilters = {
      */
     exclude_labels?: Array<string>;
     /**
+     * Leave out the threads in these mailbox views. Search only.
+     */
+    exclude_views?: Array<EmailSearchView>;
+    /**
+     * True for the caller's favorite threads only, false to leave them out.
+     * Search only.
+     */
+    favorite?: boolean | null;
+    /**
+     * True for threads with an attachment on any message, false for threads
+     * with none. Search only.
+     */
+    has_attachment?: boolean | null;
+    /**
      * Filter by email importance. None to not filter. True to show only important emails
      * (drafts, personal, sent, or uncategorized). False to show only unimportant emails
      * (those categorized as promotions, social, updates, or forums).
@@ -1153,6 +1170,14 @@ export type EmailFilters = {
      * Filter by the email thread's read flag, independently of notification state.
      */
     is_read?: boolean | null;
+    /**
+     * Tags or labels each thread must carry, or must not, by name, as typing
+     * `label:` or `in:<name>` into the search does. A name matches the
+     * caller's tags with that label and the labels with that name in the
+     * caller's inboxes, ignoring case; a name that is neither matches
+     * nothing. Search only.
+     */
+    label_names?: Array<EmailLabelMatch>;
     /**
      * Restrict to specific inboxes by email_links.id. Empty means "any inbox the
      * caller can access" (soup expands to the full set at the router edge).
@@ -1182,11 +1207,43 @@ export type EmailFilters = {
      */
     senders?: Array<string>;
     /**
+     * Only messages sent at or after this instant. Mail with no sent time
+     * never matches. Search only.
+     */
+    sent_after?: string | null;
+    /**
+     * Only messages sent before this instant. Mail with no sent time never
+     * matches. Search only.
+     */
+    sent_before?: string | null;
+    /**
      * Controls whether shared email threads are included in results.
      * Defaults to "exclude" (only the user's own threads).
      */
     shared?: SharedEmailFilter;
+    /**
+     * Words or phrases each message must contain, or must not, in one part
+     * of it, as typing `subject:`, `from:`, `to:`, `cc:`, `bcc:` or a minus
+     * into the search does. Search only.
+     */
+    text_matches?: Array<EmailTextMatch>;
     view?: null | EmailSearchView;
+};
+
+/**
+ * A tag or provider label that an email thread must, or must not, carry,
+ * named by its label.
+ */
+export type EmailLabelMatch = {
+    /**
+     * Leave out the threads that carry it instead.
+     */
+    exclude?: boolean;
+    /**
+     * The label of one of the caller's tags, or the name of a label in one
+     * of the caller's inboxes, ignoring case.
+     */
+    name: string;
 };
 
 /**
@@ -1281,6 +1338,12 @@ export type EmailSearchResponseItem = {
  */
 export type EmailSearchResponseItemWithMetadata = EmailSearchResponseItem & {
     created_at: string;
+    /**
+     * Whether the thread holds mail the user received, not only mail they
+     * sent or drafted. A thread without any was never in the inbox, so it is
+     * not archived when it is out of the inbox.
+     */
+    has_received_mail?: boolean;
     inbox_visible: boolean;
     is_draft: boolean;
     is_important: boolean;
@@ -1348,7 +1411,31 @@ export type EmailSearchResult = {
 /**
  * A mailbox view the Email list scopes a search to, as its tabs do.
  */
-export type EmailSearchView = 'sent' | 'drafts';
+export type EmailSearchView = 'sent' | 'drafts' | 'calendar';
+
+/**
+ * A word or phrase that must, or must not, appear in one part of a message.
+ */
+export type EmailTextMatch = {
+    /**
+     * Leave out the messages that match instead.
+     */
+    exclude?: boolean;
+    /**
+     * The part of the message matched.
+     */
+    part: EmailTextPart;
+    /**
+     * One word, matched as a search word is (a prefix unless the search is
+     * exact), or several words, matched as an adjacent phrase.
+     */
+    text: string;
+};
+
+/**
+ * The part of an email message a search condition matches.
+ */
+export type EmailTextPart = 'any' | 'subject' | 'from' | 'to' | 'cc' | 'bcc';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -1806,10 +1893,14 @@ export type PropertyValue = {
      */
     value: string;
 } | {
+    /**
+     * True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone.
+     */
+    has_time?: boolean;
     type: 'Date';
     /**
-     * Date/timestamp value
-     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
+     * Date value, with or without a time of day
+     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
      */
     value: string;
 } | {
@@ -2560,6 +2651,16 @@ export type UnifiedSearchRequest = {
     match_type: MatchType;
     /**
      * The search query string. Must not be empty; one character is enough.
+     * When the search reaches email it also reads Gmail's operators:
+     * `subject:`, `from:`, `to:`, `cc:`, `bcc:`, `in:` a Mail view (`inbox`,
+     * `signal`, `noise`, `archived`, `sent`, `drafts`, `calendar`, `shared`,
+     * `favorites`) or a tag or label name, `label:`, `is:unread`, `is:read`,
+     * `is:starred`, `is:shared`, `has:attachment`, `after:`/`before:` a day
+     * (`2017/06/01`), `newer_than:`/`older_than:` a span (`3d`, `2w`, `1m`,
+     * `1y`), and a minus before an operator to leave matching mail out. A
+     * query that types an operator searches email only. A minus before a
+     * word or quoted phrase leaves out mail containing it beside an operator
+     * or in a search of email alone; elsewhere it is part of the word.
      */
     query: string;
     /**
@@ -2572,6 +2673,13 @@ export type UnifiedSearchRequest = {
      * app's Search view asks for `dynamic`.
      */
     term_matching?: TermMatching;
+    /**
+     * The IANA time zone (such as `America/New_York`) the query's typed
+     * dates are read in: `after:2017/06/01` starts at that day's midnight
+     * there, and `newer_than:1m` counts a month back on its calendar.
+     * Defaults to UTC.
+     */
+    time_zone?: string | null;
 };
 
 export type UnifiedSearchResponse = {
@@ -2579,6 +2687,7 @@ export type UnifiedSearchResponse = {
      * The next cursor to use for paginating results
      */
     next_cursor?: string | null;
+    query_filters?: null | EmailFilters;
     /**
      * The search results
      */
@@ -2626,6 +2735,10 @@ export type UnifiedSearchData = {
 export type UnifiedSearchErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * The caller's other searches kept every slot of its lane busy for 20 seconds, or the account's user API keys used their shared search allowance (200 at once, then one a second); retry after `Retry-After` seconds.
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -2656,6 +2769,10 @@ export type SimpleUnifiedSearchData = {
 export type SimpleUnifiedSearchErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * The caller's other searches kept every slot of its lane busy for 20 seconds, or the account's user API keys used their shared search allowance (200 at once, then one a second); retry after `Retry-After` seconds.
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 

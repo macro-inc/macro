@@ -52,7 +52,12 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   action outside an island (`HeaderActionButton`, `ChatWithAgentButton`) is
   32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`.
   Keep 8px between islands. Filter, sort, group, and download live in the header, never
-  in a second toolbar row; only active filter chips sit below it.
+  in a second toolbar row; only active filter chips sit below it. A pane's
+  top-bar `Tabs` take Tab, Shift+Tab and 1–9 through `useViewTabHotkeys`,
+  registered beside them on the split's own scope (`splitRootScope`, which an
+  inline preview keeps); a sidebar's navigation and the rest of a view never
+  bind Tab. Tabs atop a list that is the sidebar (Chat) are that
+  pane's top bar.
 - **FE-63** Style controls only through their props (`variant`, `size`, `finish`,
   `fullWidth`); `class` on a control is for placement (margin,
   width, order, shrink). Never resize or recolor a control from a wrapper
@@ -72,10 +77,10 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   Button uses the semantic pressed fill for its variant. Mark action toggles with
   `aria-pressed`, and expansion triggers with `aria-expanded`. A toggle whose
   label and icon flip with its state (call mic and camera: Mute/Unmute) omits
-  `aria-pressed` and keeps one fill. Do not restyle
-  buttons as tabs. The agent composer's Auto/Chat/Code switch remains
-  `Tabs variant="track"`, a flat pill sliding along the composer's tray. Keep all
-  tab treatments flat: use borders and selected fills, not raised edges, gradients, or shadows.
+  `aria-pressed` and keeps one fill. Do not restyle buttons as tabs. Use the same
+  grouped `Tabs` pill for the Agents composer's Auto/Chat/Code switch on desktop
+  and in the phone drawer; preserve Home's existing track tabs. Keep all tab
+  treatments flat: use borders and selected fills, not raised edges, gradients, or shadows.
 - **FE-65** Let `Tabs` own its touch styling: set its `touch` prop instead of
   swapping tab components or variants. For overflowing touch header sections,
   use a shared `MobileDrawer` selector instead of a scrolling tab strip.

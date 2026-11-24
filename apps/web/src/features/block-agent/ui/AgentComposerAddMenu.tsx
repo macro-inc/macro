@@ -3,10 +3,10 @@ import {
   ComposerAddMenu,
   type ComposerAddMenuGroup,
 } from '@channel/Input/ComposerAddMenu';
+import { ConnectedAppIcon } from '@core/connectors/ConnectedAppIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { isMobile } from '@core/mobile/isMobile';
-import { ConnectedAppIcon } from '@core/pipedream/ConnectedAppIcon';
 import { lazy } from '@core/util/lazy';
 import LightningIcon from '@icon/system/regular/lightning.svg';
 import PlugsIcon from '@icon/system/regular/plugs.svg';
@@ -14,7 +14,11 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import BooksIcon from '@phosphor/books.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
-import type { ProviderId } from '../../settings/connections/model';
+import { match } from 'ts-pattern';
+import type {
+  CapabilityStatus,
+  ProviderId,
+} from '../../settings/connections/model';
 import { providerIcon } from '../../settings/connections/provider-meta';
 import { useConnectionsModel } from '../../settings/connections/use-connections-model';
 import { agentAttachmentItems } from './attachment-menu';
@@ -29,9 +33,24 @@ const LeftoverRow = lazy(async () => ({
 }));
 
 type Target =
-  | { kind: 'overview'; mode: 'connected' | 'discover' }
+  | { kind: 'overview' }
   | { kind: 'provider'; provider: ProviderId; title: string }
   | { kind: 'other'; connectionId: string; title: string };
+
+function connectionDescription(
+  status: CapabilityStatus,
+  account?: string
+): string {
+  return match(status)
+    .with('connected', () => account || 'Open connection settings')
+    .with('off', () => 'Disabled · Open settings')
+    .with(
+      'action-required',
+      'not-connected',
+      () => 'Needs attention · Open settings'
+    )
+    .exhaustive();
+}
 
 /** Shared composer actions plus the owner's existing connection settings. */
 export function AgentComposerAddMenu(props: {
@@ -43,12 +62,21 @@ export function AgentComposerAddMenu(props: {
   getEditor: () => HTMLElement | null | undefined;
   session?: boolean;
   disabled?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const connections = useConnectionsModel();
   const settings = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
-  const [drawerOpen, setDrawerOpen] = createSignal(false);
-  const [target, setTarget] = createSignal<Target>();
+  const [drawerOpen, updateDrawerOpen] = createSignal(false);
+  const [target, updateTarget] = createSignal<Target>();
+  const setDrawerOpen = (open: boolean) => {
+    updateDrawerOpen(open);
+    props.onOpenChange?.(open || !!target());
+  };
+  const setTarget = (next: Target | undefined) => {
+    updateTarget(next);
+    props.onOpenChange?.(drawerOpen() || !!next);
+  };
   const openTarget = (next: Target) => {
     // Release the mobile add sheet before opening the next focus trap.
     if (isMobile()) queueMicrotask(() => setTarget(next));
@@ -88,14 +116,12 @@ export function AgentComposerAddMenu(props: {
         ...connections.model().capabilities.map((connection) => ({
           id: connection.id,
           label: connection.title,
-          description:
-            connection.status === 'connected'
-              ? (connection.account !== connection.title &&
-                  connection.account) ||
-                'Open connection settings'
-              : connection.status === 'off'
-                ? 'Disabled · Open settings'
-                : 'Needs attention · Open settings',
+          description: connectionDescription(
+            connection.status,
+            connection.account !== connection.title
+              ? connection.account
+              : undefined
+          ),
           icon: providerIcon(connection.provider),
           onSelect: () =>
             openTarget({
@@ -107,11 +133,9 @@ export function AgentComposerAddMenu(props: {
         ...connections.model().leftovers.map((connection) => ({
           id: connection.id,
           label: connection.title,
-          description: connection.enabled
-            ? 'Open connection settings'
-            : 'Disabled · Open settings',
+          description: connectionDescription(connection.status),
           icon:
-            connection.kind === 'pipedream' ? (
+            connection.kind === 'app' ? (
               <ConnectedAppIcon appSlug={connection.appSlug} />
             ) : (
               <PlugsIcon />
@@ -134,12 +158,12 @@ export function AgentComposerAddMenu(props: {
               },
             ]
           : []),
-        ...(connections.partialError()
+        ...(connections.error()
           ? [
               {
                 id: 'retry',
                 label: 'Retry connections',
-                description: 'Some connections could not be loaded',
+                description: 'Connections could not be loaded',
                 icon: <PlugsIcon />,
                 onSelect: connections.retry,
               },
@@ -150,14 +174,14 @@ export function AgentComposerAddMenu(props: {
           label: 'Add connections',
           description: 'Connect more apps to Macro',
           icon: <PlusIcon />,
-          onSelect: () => openTarget({ kind: 'overview', mode: 'discover' }),
+          onSelect: () => openTarget({ kind: 'overview' }),
         },
         {
           id: 'manage',
           label: 'Manage connections',
           description: 'Accounts, permissions, and settings',
           icon: <PlugsIcon />,
-          onSelect: () => openTarget({ kind: 'overview', mode: 'connected' }),
+          onSelect: () => openTarget({ kind: 'overview' }),
         },
       ],
     },
@@ -169,7 +193,7 @@ export function AgentComposerAddMenu(props: {
         disabled={props.disabled}
         onOpenDrawer={() => setDrawerOpen(true)}
         placement="bottom-start"
-        contentClass="w-[min(42rem,calc(100vw-2rem))] max-h-[min(32rem,var(--kb-popper-content-available-height))] overflow-y-auto rounded-2xl"
+        contentClass="w-[min(42rem,calc(100vw-2rem))] max-h-[min(32rem,var(--kb-popper-content-available-height))] overflow-y-auto"
       />
       <ComposerAddDrawer
         groups={groups()}

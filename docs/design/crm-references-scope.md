@@ -245,8 +245,9 @@ literal (names only, complete cursor pagination) instead of the search service.
 Both detail views add a References section to the floating information panel,
 listing the full union (all sources plus CRM contacts) with loading, empty,
 error/retry, and load-more states, through `createRecordReferences` in the CRM
-context. Its rows use the shared list's condensed narrow layout (icon and name)
-so task properties do not crowd the panel; the full-width tabs are unchanged.
+context. Its rows are the side panel's own compact item rows (icon and name,
+12px, like a document's References), so task properties do not crowd the panel;
+the full-width tabs are unchanged.
 
 **Sources References cannot list.** Initiatives and database rows are opt-in
 Soup sources, like agent sessions and CRM contacts: the association constrains

@@ -200,6 +200,9 @@ function MoreViewsDrawer(props: {
 function MobileNavigationDockRow(props: { vertical?: boolean }) {
   const navigate = useMobileNavNavigate();
   const foregroundView = useForegroundMobileView();
+  // Projects keeps its create action but belongs to the Tasks dock destination.
+  const activeView = () =>
+    foregroundView() === 'projects' ? 'tasks' : foregroundView();
   const availableViews = useMobileDockViews();
   // The dock's bell is Home, and opens Notifications when that view is on.
   const unread = useNavigationUnread({ homeIsNotifications: true });
@@ -265,12 +268,12 @@ function MobileNavigationDockRow(props: { vertical?: boolean }) {
           {(button) => (
             <MobileDockButton
               icon={
-                foregroundView() === button.id
+                activeView() === button.id
                   ? (button.iconActive ?? button.icon)
                   : button.icon
               }
               ariaLabel={button.label}
-              active={foregroundView() === button.id}
+              active={activeView() === button.id}
               unread={unread.has(button.id)}
               unreadCount={unread.count(button.id)}
               onClick={() => navigate(button.id)}
@@ -281,7 +284,7 @@ function MobileNavigationDockRow(props: { vertical?: boolean }) {
           views={dockViews()}
           visibleCount={visibleCount()}
           onMove={move}
-          isActive={(id) => foregroundView() === id}
+          isActive={(id) => activeView() === id}
           unread={unread}
           onNavigate={navigate}
         />

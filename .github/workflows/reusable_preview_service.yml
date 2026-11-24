@@ -5,31 +5,31 @@ on:
   workflow_call:
     inputs:
       environment:
-        required: true
-        type: string
         description: The environment to preview
-      service-name:
         required: true
         type: string
+      service-name:
         description: The name of the service to preview
+        required: true
+        type: string
       pulumi-stack-name:
+        description: Override pulumi stack name (defaults to service-name)
         required: false
         type: string
-        description: Override pulumi stack name (defaults to service-name)
       use-docker:
+        description: Whether to setup docker
         required: false
         type: boolean
         default: true
-        description: Whether to setup docker
       use-lfs:
+        description: Whether to checkout LFS content
         required: false
         type: boolean
         default: false
-        description: Whether to checkout LFS content
       github-token:
+        description: GitHub token for PR comments
         required: false
         type: string
-        description: GitHub token for PR comments
     secrets:
       AWS_ACCESS_KEY:
         required: true
@@ -45,42 +45,42 @@ jobs:
   preview:
     runs-on: namespace-profile-linux-small
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Mount /nix cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-      continue-on-error: true
-    - name: Setup Nix
-      uses: ./.github/actions/setup-nix
-      with:
-        nix-cache-url: ${{ vars.NIX_CACHE_URL }}
-        nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    - id: project-name
-      name: Get project name
-      uses: ./.github/actions/get-project-name
-      with:
-        service-name: ${{ inputs.service-name }}
-    - name: Preview pulumi stack
-      uses: ./.github/actions/preview-cloud-storage-pulumi
-      with:
-        environment: ${{ inputs.environment }}
-        aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-        pulumi-service-name: ${{ inputs.pulumi-stack-name || steps.project-name.outputs.project-name }}
-        dd-app-key: ${{ secrets.DD_APP_KEY }}
-        dd-api-key: ${{ secrets.DD_API_KEY }}
-        use-docker: ${{ inputs.use-docker }}
-        use-lfs: ${{ inputs.use-lfs }}
-        github-token: ${{ inputs.github-token }}
-        cloud-storage-service-name: ${{ inputs.service-name }}
-    - name: Teardown Nix
-      if: always()
-      uses: ./.github/actions/teardown-nix
+      - name: Checkout Repo # zizmor: ignore[artipacked] Pulumi previews run from the checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount /nix cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          nix-cache-url: ${{ vars.NIX_CACHE_URL }}
+          nix-cache-public-key: ${{ vars.NIX_CACHE_PUBLIC_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - id: project-name
+        name: Get project name
+        uses: ./.github/actions/get-project-name
+        with:
+          service-name: ${{ inputs.service-name }}
+      - name: Preview pulumi stack
+        uses: ./.github/actions/preview-cloud-storage-pulumi
+        with:
+          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          pulumi-service-name: ${{ inputs.pulumi-stack-name || steps.project-name.outputs.project-name }}
+          dd-app-key: ${{ secrets.DD_APP_KEY }}
+          dd-api-key: ${{ secrets.DD_API_KEY }}
+          environment: ${{ inputs.environment }}
+          use-docker: ${{ inputs.use-docker }}
+          use-lfs: ${{ inputs.use-lfs }}
+          github-token: ${{ inputs.github-token }}
+          cloud-storage-service-name: ${{ inputs.service-name }}
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix

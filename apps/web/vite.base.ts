@@ -10,12 +10,14 @@ import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { browserslist, version } from './package.json';
+import { unexpectedCostlySelectors } from './scripts/costly-selectors';
 import { devCompression } from './scripts/dev-compression';
 import { devHttps } from './scripts/dev-https';
 import { devExternalSourcemaps } from './scripts/dev-sourcemaps';
 import { hostedDevProxy } from './scripts/hosted-dev-proxy';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
 import { localDevServer } from './scripts/local-dev-server';
+import { sandboxedFrameBundle } from './scripts/sandboxed-frame-bundle';
 
 function readShortSha(): string {
   try {
@@ -193,6 +195,37 @@ function posthogSourceMapLimit(): Plugin {
       if (problems.length === 0) return;
       this.error(
         `PostHog cannot symbolicate these chunks (source maps are required and must be at most ${limitBytes} bytes): ${problems.join(', ')}. Split the chunk behind lazy() boundaries or in startupChunks().`
+      );
+    },
+  };
+}
+
+/**
+ * Every whole-page restyle (a custom property written on <html>, a theme
+ * switch) tests each element against Chrome's universal rules, and some of
+ * those cost every element real work: `:root ::selection` and
+ * `:where(.a, .b) *` once made a restyle three times slower. Fail the build
+ * on a new one; `scripts/costly-selectors.ts` says what counts and how to
+ * scope it.
+ */
+function costlySelectorBudget(): Plugin {
+  return {
+    name: 'costly-selector-budget',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const problems = Object.values(bundle).flatMap((file) => {
+        if (file.type !== 'asset' || !file.fileName.endsWith('.css')) return [];
+        const css =
+          typeof file.source === 'string'
+            ? file.source
+            : Buffer.from(file.source).toString('utf8');
+        return unexpectedCostlySelectors(css, file.fileName).map(
+          (selector) => `${selector} (${file.fileName})`
+        );
+      });
+      if (problems.length === 0) return;
+      this.error(
+        `These selectors make Chrome do work for every element on each whole-page restyle: ${problems.join(', ')}. Give the walk an ancestor class outside :is()/:where() (\`.x *\`, \`:where(.x) *\`), set a ::selection on the subtree root, or add the selector to ALLOWED_COSTLY_SELECTORS in scripts/costly-selectors.ts with why it must reach every element.`
       );
     },
   };
@@ -658,7 +691,9 @@ export const createAppViteConfig = (): UserConfigFn => {
         gitBranchHmrPlugin(),
         cloudFrontCompressionLimit(),
         posthogSourceMapLimit(),
+        costlySelectorBudget(),
         acyclicStartupChunks(),
+        sandboxedFrameBundle({ root: __dirname, minify: !NO_MINIFY }),
       ],
       define: defineEnv(ENV_MODE, command),
       clearScreen: false,

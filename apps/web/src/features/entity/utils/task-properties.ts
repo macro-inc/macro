@@ -1,16 +1,30 @@
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { TaskEntityWithProperties } from '../types/entity';
 
-/** The stored due-date instant; absent and cleared DATE values are undated. */
-export function getTaskDueDate(
-  entity: TaskEntityWithProperties
+function getTaskDate(
+  entity: TaskEntityWithProperties,
+  definitionId: string
 ): string | undefined {
   const value = entity.properties?.find(
-    (property) => property.definition.id === SYSTEM_PROPERTY_IDS.DUE_DATE
+    (property) => property.definition.id === definitionId
   )?.value;
   return value?.type === 'Date' && typeof value.value === 'string'
     ? value.value
     : undefined;
+}
+
+/** The stored due-date instant; absent and cleared DATE values are undated. */
+export function getTaskDueDate(
+  entity: TaskEntityWithProperties
+): string | undefined {
+  return getTaskDate(entity, SYSTEM_PROPERTY_IDS.DUE_DATE);
+}
+
+/** The stored start-date instant; absent and cleared DATE values are undated. */
+export function getTaskStartDate(
+  entity: TaskEntityWithProperties
+): string | undefined {
+  return getTaskDate(entity, SYSTEM_PROPERTY_IDS.START_DATE);
 }
 
 export const TASK_STATUS_OPTIONS = [
@@ -149,6 +163,38 @@ export const getTaskReferencedEntityIds = (
     return [];
   }
   return value.value.map((reference) => reference.entity_id);
+};
+
+/**
+ * Whether one of a task's custom entity properties, a team's or a person's
+ * own, references the entity. Built-in properties and database columns are
+ * not custom properties.
+ */
+export const taskCustomPropertyReferences = (
+  entity: TaskEntityWithProperties,
+  entityType: string,
+  entityId: string
+): boolean => {
+  return (entity.properties ?? []).some(({ definition, value }) => {
+    if (definition.data_type !== 'ENTITY') return false;
+
+    // Rows read over GraphQL carry no owner, so the built-in flag decides.
+    if (definition.is_system || definition.owner.scope === 'database') {
+      return false;
+    }
+
+    if (
+      value?.type !== 'EntityReference' ||
+      !isEntityReferenceArray(value.value)
+    ) {
+      return false;
+    }
+
+    return value.value.some(
+      (reference) =>
+        reference.entity_type === entityType && reference.entity_id === entityId
+    );
+  });
 };
 
 /**

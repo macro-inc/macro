@@ -36,6 +36,8 @@ export type DialogProps = {
   fullscreen?: boolean /* Fill the viewport */;
   children: JSX.Element /* Content children */;
   class?: string /* classes for content */;
+  /** The dialog's accessible name, when it has no `Dialog.Title`. */
+  'aria-label'?: string;
   open: boolean /* if dialog is open */;
   visibleScrim?: boolean /* if the scrim is visible */;
   /** Desktop opening animation; mobile drawers own their transitions. */
@@ -87,6 +89,7 @@ function DialogDrawer(props: DialogProps) {
           />
           <MobileDrawer.Content
             ref={props.contentRef}
+            aria-label={props['aria-label']}
             maxHeight={100}
             class={cn('mx-auto max-w-[calc(100vw-16px)]', props.class)}
           >
@@ -178,6 +181,7 @@ function DesktopDialog(props: DialogProps) {
         >
           <KobalteDialog.Content
             ref={props.contentRef}
+            aria-label={props['aria-label']}
             class={cn(
               'portal-scope isolate',
               // A fullscreen dialog paints the whole screen but keeps its

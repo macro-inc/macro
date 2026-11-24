@@ -35,8 +35,10 @@ pub async fn generate_database_query(
     State(state): State<ApiContext>,
     model_access: DcsChatModelAccess,
     user: MacroAuthorizationExtractor<DcsAuthorizationService, UserOrInternal>,
-    Json(request): Json<DatabaseQueryRequest>,
+    Json(mut request): Json<DatabaseQueryRequest>,
 ) -> Result<Json<DatabaseQueryAnswer>, StructuredCompletionError> {
+    // A caller that has not reloaded since a model retired still names it.
+    request.model = chat::domain::models::current_model(&request.model).to_owned();
     if !model_access.has_access(&request.model) {
         return Err(StructuredCompletionError {
             error: format!("No access to model {}", request.model),

@@ -1,10 +1,11 @@
+import { Model } from '@core/component/AI/constant/model';
 import { setPreferredSpeed } from '@core/component/AI/signal/speed';
 import type { TurnState } from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, mergeProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { UnifiedModelSelectorState } from '../../agents-view/components/unified-model-selector/root';
 import type { AgentInputProps } from '../ui/AgentInput';
-import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
 import type { QueuedPromptsProps } from '../ui/QueuedPrompts';
 import { AgentComposer } from './AgentComposer';
 
@@ -37,7 +38,7 @@ const mocks = vi.hoisted(() => ({
   metadata: () =>
     undefined as { model: string; configOptions: unknown[] } | undefined,
   input: undefined as AgentInputProps | undefined,
-  model: undefined as AgentModelSelectorProps | undefined,
+  model: undefined as UnifiedModelSelectorState | undefined,
   queued: undefined as QueuedPromptsProps | undefined,
 }));
 
@@ -88,15 +89,17 @@ vi.mock('../ui', () => ({
     mocks.input = props;
     return <div>{props.modelControl}</div>;
   },
-  AgentModelSelector: (props: AgentModelSelectorProps) => {
-    mocks.model = props;
-    return null;
-  },
   QueuedPrompts: (props: QueuedPromptsProps) => {
     mocks.queued = props;
     return null;
   },
   ComposerNotice: () => null,
+}));
+vi.mock('@app/features/agents-view/model-selector', () => ({
+  UnifiedModelSelector: (props: { state: UnifiedModelSelectorState }) => {
+    mocks.model = mergeProps(() => props.state);
+    return null;
+  },
 }));
 vi.mock('./PermissionRequest', () => ({ PermissionRequest: () => null }));
 
@@ -132,7 +135,7 @@ describe('view-only session controls', () => {
     mocks.input?.onSend('A new prompt', []);
     mocks.input?.onStop?.();
     mocks.input?.onAttachFiles?.([new File(['text'], 'note.txt')]);
-    mocks.model?.onSelect('new-model');
+    mocks.model?.onModel('new-model');
     // Read-only: the edit is not sent, so nothing is there to await.
     expect(mocks.queued?.onEdit('queued-1', 'Edited prompt')).toBeUndefined();
     mocks.queued?.onRemove('queued-1');
@@ -292,3 +295,17 @@ it('allows another prompt after a failed turn', () => {
     prompt: 'Try again',
   });
 });
+
+it.each([
+  ['in-memory', Model.gpt62Sol],
+  ['macrod', 'openai/gpt-5.6'],
+])(
+  "shows a %s session's last model %s until its next turn",
+  (harness, shown) => {
+    mocks.session = () => ({ canEdit: true, harness });
+    mocks.metadata = () => ({ model: 'openai/gpt-5.6', configOptions: [] });
+    render(() => <AgentComposer />);
+    expect(mocks.model?.model).toBe(shown);
+    expect(mocks.selectModel).not.toHaveBeenCalled();
+  }
+);

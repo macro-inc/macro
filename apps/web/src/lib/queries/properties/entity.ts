@@ -14,7 +14,10 @@ import { isInstantiatedProperty } from '@property/utils';
 import { refreshCrmAssociatedSoupQueries } from '@queries/soup/crm-association';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { DeleteEntityPropertyDocument } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  hasGraphqlCacheHost,
+} from '@service-storage/graphql-soup';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, batch } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
@@ -24,6 +27,7 @@ import type { SoupProperty } from '../../service-clients/service-storage/generat
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { queryClient } from '../client';
 import {
+  bumpSoupEntityTouchedAt,
   getSoupEntityById,
   invalidateSoupEntity,
   optimisticUpdateSoupEntity,
@@ -55,9 +59,6 @@ function toPropertyTargetEntityType(
   if (entityType === 'CALENDAR_EVENT') {
     // Not a property target yet; surface a real error instead of a bad request.
     throw new Error('calendar events do not support properties');
-  }
-  if (entityType === 'CONTACT') {
-    throw new Error('crm contacts do not support properties');
   }
   return entityType;
 }
@@ -178,6 +179,10 @@ export function useEntityPropertiesQuery(
     refetch() {
       if (entityId().length === 0) return Promise.resolve(undefined);
       return usesGraphql() ? graphqlQuery.refetch() : restQuery.refetch();
+    },
+    /** Whether a saved value reaches this query through the cache's own write. */
+    get isCacheMaintained() {
+      return usesGraphql() && hasGraphqlCacheHost();
     },
   };
 }
@@ -612,6 +617,28 @@ const CRM_ASSOCIATION_PROPERTY_IDS: readonly string[] = [
   SYSTEM_PROPERTY_IDS.CONTACTS,
 ];
 
+/**
+ * Whether a property's values decide which items a CRM record lists: the
+ * built-in Companies and Contacts properties, and a custom entity property,
+ * which lists a task on the records it references.
+ */
+function decidesCrmAssociation(
+  property: Property | PropertyDefinitionDomain
+): boolean {
+  if (
+    CRM_ASSOCIATION_PROPERTY_IDS.includes(getPropertyDefinitionId(property))
+  ) {
+    return true;
+  }
+  if (property.valueType !== 'ENTITY') return false;
+
+  // Properties read over GraphQL carry no owner, so the built-in flag decides.
+  const builtIn = isInstantiatedProperty(property)
+    ? (property.isSystemProperty ?? false)
+    : property.isSystem;
+  return !builtIn && property.owner.scope !== 'database';
+}
+
 function invalidatePropertySaveCaches(
   item: BulkSaveEntityPropertiesParams['properties'][number]
 ): void {
@@ -625,11 +652,7 @@ function invalidatePropertySaveCaches(
     'entity-properties'
   );
   // CRM record lists resolve membership on the server, not from these rows.
-  if (
-    CRM_ASSOCIATION_PROPERTY_IDS.includes(
-      getPropertyDefinitionId(item.property)
-    )
-  ) {
+  if (decidesCrmAssociation(item.property)) {
     fireAndForget(refreshCrmAssociatedSoupQueries(), 'entity-properties');
   }
 }
@@ -640,6 +663,9 @@ function handleCommittedPropertySave(
 ): void {
   if (disposition.kind !== 'committed') return;
 
+  // A saved property is the viewer's own touch (a PropertyChanged activity),
+  // so Recent moves the item now rather than after a later refetch.
+  bumpSoupEntityTouchedAt(item.entityId);
   trackTaskPropertySave(
     item.entityId,
     getPropertyDefinitionId(item.property),

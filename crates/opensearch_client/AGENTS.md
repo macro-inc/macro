@@ -14,6 +14,9 @@ projects.
   entity type — the shape each indexer must produce.
 - `src/search/builder.rs` + `src/search/unified.rs`: the cross-entity search
   request builder and the unified result model.
+- `src/chat_message_repair.rs`: paging the chats index's message documents
+  by message id and deleting them by id, for the deleted chat message repair
+  in `services/search_processing_service`.
 - `examples/`: runnable usage beyond the README.
 
 ## Scope
@@ -43,8 +46,39 @@ projects.
 
 - `cargo test -p opensearch_client` (`SQLX_OFFLINE` unset; needs a running
   OpenSearch — see `crates/opensearch_query_builder/docker-compose.yml`).
+- A change to the content or name search builders (`src/search`, or the
+  `opensearch_query_builder` queries they use) merges only with
+  `tests/content_search` passing. It seeds documents, chats and calls
+  through the upsert paths, runs `search_unified`, and compares each search
+  with the matches its rules select over `_analyze` tokens (`oracle.rs`; the
+  cases and the rule each checks are in `fixtures.rs`). A new matching
+  rule changes its oracle in the same change. It needs an OpenSearch whose
+  search indices are empty, so plain `cargo test` skips it (`test = false`);
+  CI runs it whenever this crate is selected. Locally, on a free port:
+  `docker build -t search-opensearch infra/local/opensearch`, `docker run -d
+  -p 127.0.0.1:<port>:9200 -e discovery.type=single-node search-opensearch`,
+  then in `infra/stacks/opensearch/helpers` `bun install --frozen-lockfile`
+  and `ENVIRONMENT=local DRY_RUN=false OPENSEARCH_URL=http://127.0.0.1:<port>
+  OPENSEARCH_USERNAME=admin OPENSEARCH_PASSWORD=admin bun run
+  scripts/create_indices.ts` (the node has no security plugin; the helper
+  only needs the credentials set), and
+  `SEARCH_TEST_OPENSEARCH_URL=http://127.0.0.1:<port> cargo test -p
+  opensearch_client --test content_search`. A search the test keeps for a
+  known bug is `#[ignore = "known bug: ..."]`; the fix removes the ignore.
+  `tests/content_search/email_operators.rs` runs the same way and checks the
+  conditions typed Mail search operators become (`EmailTextCondition`,
+  `EmailLabelCondition`, excluded threads, sent bounds), an address beside a
+  word, hyphenated and punctuated words in email text and searches at the term
+  cap inside the unified request; it needs the emails index empty too.
 
 ## Gotchas
+
+- A top-level `range` on a date field fails the whole unified search
+  (`unsupported_operation_exception` in the fetch phase) whenever the plain
+  highlighter has a populated field to highlight, on OpenSearch 3.5 and
+  whether the field is indexed or doc values only. A range inside a `nested`
+  query (document date properties) is safe. Email sent bounds are therefore a
+  script over the doc values (`emails::sent_between_query`).
 
 - Map a failed `.send()` with `OpensearchClientError::request_failed` and a
   failed body read with `deserialization_failed`. Both take an
@@ -116,11 +150,56 @@ projects.
   (`INNER_HITS_PER_RESULT`, divided by `split_inner_hits_budget`), so a
   result carries at most that many matches, not every match; do not give
   each term its own.
-- Build a `has_child` clause's per-term query with `query::child_content_query`.
-  A single word matches as `match_bool_prefix`, not `match_phrase_prefix`:
-  OpenSearch expands a phrase prefix again for every inner hit of every
-  returned parent, and keeps only the first `max_expansions` terms of the
-  shard, so words past them never match.
+- Build a `has_child` clause's per-term query with `query::child_content_query`
+  and any other field's with `query::create_query`. A partial term that is
+  one word (by the UAX #29 word boundaries the standard tokenizer uses) of
+  three or more characters matches as `match_bool_prefix` of that word, not
+  `match_phrase_prefix`: OpenSearch expands a phrase prefix again for every
+  inner hit of every returned parent, and keeps only the first
+  `max_expansions` terms of the shard, so words past them never match. Pass
+  the word, not the term: `match_bool_prefix` reads a last token followed by
+  punctuation (`con.`) as finished. A word counts as one only with nothing
+  but ASCII punctuation around it and at most 255 characters (the
+  tokenizer's longest token). Several words (`e-mail`, a Thai run the
+  tokenizer keeps whole but UAX #29 splits), a word next to an emoji, and,
+  outside content, words under three characters keep the capped
+  `match_phrase_prefix`; OpenSearch has no phrase prefix that keeps every
+  match.
+- An address or a domain in an email search, which is any term with an `@` or
+  a dotted name (`example.com`, `node.js`), matches apart from the words beside
+  it, and the words match together, all in the address fields or all in the
+  text fields (`emails::terms::term_groups`). Never match each word apart: one
+  that is in many addresses, such as the name of the searcher's own domain,
+  would match nearly every message, and one the analyzer drops (`½`) would
+  match none. Regexp input that uses syntax stays one group.
+- Email text terms go into one `simple_query_string`
+  (`emails::terms::build_text_query_string`), where a `term*` prefix is not
+  analyzed: `follow-up*` looks for one token `follow-up`, which the index
+  never holds. A term of one word with ASCII punctuation around it
+  (`follow-`, `Re:`, `-lunch`) matches by that word alone, as a prefix or,
+  under three characters, as the whole word; one `single_word` does not count
+  (a Devanagari word with a virama) is an uncapped `term*` too. Any other
+  partial term is a query the analyzer reads (`terms::analyzed_prefix`): a
+  phrase prefix when it is certainly several tokens (`follow-up`, `東京都`),
+  otherwise an all-words `match_bool_prefix` (`CO₂`, a Thai run, `lunch🎉`).
+  Never give `match_phrase_prefix` a term the tokenizer may read as one token
+  (`CO₂` is `co`): it becomes a clause per word that shares the prefix, up to
+  256 in each field. Everything a `simple_query_string` would read as syntax
+  is escaped (`terms::escape_syntax`): unescaped, the address clause of
+  `-lunch` was NOT `lunch` and matched every other message. Only regexp input
+  keeps its punctuation.
+- OpenSearch refuses a query of more than 1,024 clauses on an index shard
+  (`too_many_nested_clauses`). A search of email alone then fails with a 500,
+  and a search of several kinds answers without the email hits. An email term
+  is a clause per token in each field where it is neither quoted nor a prefix
+  (`terms::clauses`), so a search whose terms cost more than
+  `terms::MAX_TERM_CLAUSES` is built in the compact form, which quotes every
+  term that is not a prefix. Keep whole addresses and their `.parts` in
+  separate clauses (`terms::addresses_query`): a pattern for one costs a
+  clause in each field of the other and never matches there.
+  `email_operators.rs` runs every shape of term up to the cap of 50 terms. A
+  `has_child` clause counts as one in its parent's query and has its own
+  limit.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:

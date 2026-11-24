@@ -3,6 +3,7 @@ mod appearance;
 mod check;
 mod inboxes;
 mod owned_purge;
+mod stop;
 mod sub_routines;
 mod user_cleanup;
 
@@ -975,6 +976,10 @@ async fn nonowners_can_neither_read_nor_manage_routines() {
         );
         assert_policy(
             svc.execute_action_now(owner_receipt(id)).await,
+            ActionPolicyError::NotFound,
+        );
+        assert_policy(
+            svc.stop_run(owner_receipt(id)).await,
             ActionPolicyError::NotFound,
         );
     }

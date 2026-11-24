@@ -8,10 +8,27 @@ const mocks = vi.hoisted(() => ({
   channel: (): ChannelEntity | undefined => undefined,
 }));
 
+// The agent screen's DM button has its own tests (agent-screen/dm-screen-button).
+vi.mock('@app/features/agent-screen/dm-screen-button', () => ({
+  DmScreenButton: () => null,
+  useDmScreenHarnessId: () => () => undefined,
+}));
 vi.mock('@app/components/view-shell', () => ({
   ViewShell: { TopBar: mocks.pass },
+  useViewTabHotkeys: () => {},
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
+  ChatWithAgentButton: (props: {
+    entity: { id: string; name: string; channelType: string };
+    label?: string;
+  }) => (
+    <button
+      type="button"
+      data-entity={`${props.entity.id}:${props.entity.name}:${props.entity.channelType}`}
+    >
+      {props.label}
+    </button>
+  ),
   openChatWithAgent: vi.fn(),
 }));
 vi.mock('@app/features/next-soup/actions', () => ({
@@ -51,7 +68,7 @@ vi.mock('@channel/Call/ChannelCallAutoJoin', () => ({
   ChannelCallAutoJoin: () => null,
 }));
 vi.mock('@channel/Call/ChannelCallButton', () => ({
-  ChannelCallButton: () => null,
+  ChannelCallButton: () => <button type="button">Call</button>,
 }));
 vi.mock('@channel/Call/ChannelCallTab', () => ({ ChannelCallTab: () => null }));
 vi.mock('../../Call/views/ActiveCallHeader', () => ({
@@ -65,7 +82,7 @@ vi.mock('@channel/Calls/ChannelCallsTab', () => ({
   ChannelCallsTab: () => null,
 }));
 vi.mock('@channel/channel-invite-button', () => ({
-  ChannelInviteButton: () => null,
+  ChannelInviteButton: () => <button type="button">Invite</button>,
 }));
 vi.mock('@channel/components/ChannelTopIcon', () => ({
   ChannelTitleIcon: () => null,
@@ -92,6 +109,7 @@ vi.mock('@app/components/priority-collapse/createPriorityCollapser', () => ({
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitDisplayName: () => {},
+  useSplitPanel: () => undefined,
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
 }));
 vi.mock('@core/constant/allBlocks', () => ({
@@ -99,7 +117,12 @@ vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: (type: string) => type,
 }));
 vi.mock('@core/context/channels', () => ({
-  useChannel: () => () => ({ agent_dm: false }),
+  useChannel: () => () => ({
+    id: 'channel-1',
+    name: 'Design',
+    channelType: 'private',
+    agentDm: null,
+  }),
   useChannelName: () => () => 'Design',
   useChannelType: () => () => 'private',
 }));
@@ -181,5 +204,27 @@ describe('channel top bar title menu', () => {
     setResolved(CHANNEL);
 
     expect(await screen.findByLabelText('Channel actions')).toBeTruthy();
+  });
+});
+
+/** The header's actions read Ask Macro, Invite, then Call, left to right. */
+describe('channel top bar actions', () => {
+  it('offers Ask Macro on this channel before Invite and Call', async () => {
+    render(() => <ChannelDetailTopBar channelId="channel-1" />);
+
+    const askMacro = await screen.findByRole('button', { name: 'Ask Macro' });
+    expect(askMacro.dataset.entity).toBe('channel-1:Design:private');
+
+    const order = ['Ask Macro', 'Invite', 'Call'].map((name) =>
+      screen.getByRole('button', { name })
+    );
+    for (const [before, after] of [
+      [order[0], order[1]],
+      [order[1], order[2]],
+    ]) {
+      expect(
+        before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    }
   });
 });

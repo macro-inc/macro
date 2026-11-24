@@ -134,7 +134,7 @@ With `macro.firecrackerHost.alloy.enable`, Grafana Alloy on the host
 (`firecracker-host.alloy`) reads host metrics (CPU, memory, pressure, swap,
 KSM) and each computer's CPU, memory and disk IO from its VM's cgroup
 (`<unit>/vms/c-<id>`, labelled `computer_id`), and writes them every 30 s to
-Macro's Prometheus (`infra/stacks/observability`), where the **Macro
+Macro's Mimir in the observability cluster (`infra/k8s/observability`), where the **Macro
 computers fleet** dashboard shows capacity, noisy neighbours and overcommit
 in use. Nothing runs in guests. The Datadog agent stays for the agent's
 spans, its `firecracker_host.*` metrics and the monitors.

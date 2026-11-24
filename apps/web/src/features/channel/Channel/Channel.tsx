@@ -4,6 +4,10 @@ import {
 } from '@app/features/agent-conversations/agent-conversation-message';
 import { AgentConversationsProvider } from '@app/features/agent-conversations/agent-conversations-provider';
 import { AgentDmComposer } from '@app/features/agent-dms/agent-dm-composer';
+import {
+  ChannelNotificationList,
+  createChannelNotificationGutter,
+} from '@app/features/channel-notification-stacks/channel-notification-gutter';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { TeamAgentDmBanner } from '@app/features/settings/views/team-agent-dm-status';
 import { taskSourceComposerContext } from '@app/features/task-composer/source-context';
@@ -45,8 +49,10 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
+  knownLastView,
   useChannel,
-  useChannelActivity,
+  useChannelDirectory,
+  useChannelLastViewed,
   useChannelName,
   useChannelType,
 } from '@core/context/channels';
@@ -324,31 +330,46 @@ export function Channel(props: ChannelProps) {
     insets: threadListScrollInsets,
     onDestinationsChanged: () => threadListNavigation()?.requestLayoutUpdate(),
   });
+  // Desktop only: the gutter it fills is beside a wide pane, and its controls
+  // appear on hover. Its reads wait until the channel's rows are on screen.
+  const notificationGutter = createChannelNotificationGutter({
+    channelId: props.channelId,
+    ready: () =>
+      !callPanel && !isTouchDevice() && threadListNavigation() !== undefined,
+    unread: unread.notifications,
+    unreadStatus: unread.notificationsStatus,
+    retryUnread: unread.retryNotifications,
+    pane: threadListContainerEl,
+    goToMessage: (threadId, replyId) => goToMessage(threadId, replyId),
+  });
   const participants = useChannelParticipants(() => props.channelId);
   const channelBotMentionUsers = useMessageBotMentionUsers(() => ({
     type: 'channel',
     id: props.channelId,
   }));
 
-  const activity = useChannelActivity(props.channelId);
+  const channel = useChannel(props.channelId);
+  const directory = useChannelDirectory();
+  const lastViewed = useChannelLastViewed(props.channelId);
 
   // One view on entry, after the first page and away from the open's own
-  // requests, and one on leaving. The channel remounts per id, so cleanup
-  // covers every way out of it.
+  // requests, and one on leaving. The entry view also waits for the view
+  // before it, so what's new is marked from that one. The channel remounts per
+  // id, so cleanup covers every way out of it.
   let entryViewRecorded = false;
   createEffect(
     on(
-      () => queryReadyGate(messagesQuery),
+      () => queryReadyGate(messagesQuery) && lastViewed().status !== 'pending',
       (loaded) => {
         // The panel hides what's new in the channel, so it hasn't been seen.
         if (callPanel || !loaded || entryViewRecorded) return;
         entryViewRecorded = true;
-        recordChannelViewWhenIdle(props.channelId);
+        recordChannelViewWhenIdle(props.channelId, directory);
       }
     )
   );
   onCleanup(() => {
-    if (!callPanel) recordChannelViewWhenIdle(props.channelId);
+    if (!callPanel) recordChannelViewWhenIdle(props.channelId, directory);
   });
 
   // Rows newer than the call are the channel's, not the call's.
@@ -463,7 +484,7 @@ export function Channel(props: ChannelProps) {
   });
 
   const activityTracker = createActivityTracker({
-    lastViewedAt: () => activity()?.viewed_at,
+    lastViewedAt: () => knownLastView(lastViewed()),
     userId,
   });
 
@@ -492,7 +513,6 @@ export function Channel(props: ChannelProps) {
   });
 
   const channelName = useChannelName(props.channelId);
-  const channel = useChannel(props.channelId);
   const channelType = useChannelType(props.channelId);
   const { popoverSplit } = useSplitLayout();
 
@@ -501,7 +521,7 @@ export function Channel(props: ChannelProps) {
   const inputPlaceholderName = () => {
     const name = channelName();
     if (!name) return undefined;
-    if (channel()?.agent_dm) return name;
+    if (channel()?.agentDm) return name;
     if (channelType() === ChannelTypeEnum.Private && isNamedForPeople(name)) {
       return groupChatName(name);
     }
@@ -512,7 +532,7 @@ export function Channel(props: ChannelProps) {
 
   const inputPlaceholder = () => {
     const name = inputPlaceholderName();
-    if (channel()?.agent_dm) return `Message ${name ?? 'agent'}`;
+    if (channel()?.agentDm) return `Message ${name ?? 'agent'}`;
     return name ? `Type @ to share with ${name}` : 'Type @ to share';
   };
 
@@ -877,7 +897,7 @@ export function Channel(props: ChannelProps) {
     <AgentConversationsProvider
       channelId={props.channelId}
       // Only an agent DM has a conversing agent so far.
-      hasAgents={!!channel()?.agent_dm}
+      hasAgents={!!channel()?.agentDm}
     >
       <EntityLoadGate
         result={messagesLoadResult}
@@ -924,7 +944,7 @@ export function Channel(props: ChannelProps) {
                           when={
                             messagesQuery.isSuccess &&
                             channelType() === ChannelTypeEnum.DirectMessage &&
-                            !channel()?.agent_dm
+                            !channel()?.agentDm
                           }
                         >
                           <DirectMessageEmptyState />
@@ -934,7 +954,12 @@ export function Channel(props: ChannelProps) {
                       <div
                         class={cn(
                           'relative flex-1 min-h-0',
-                          callPanel && '[container-type:size]'
+                          callPanel && '[container-type:size]',
+                          // Contains layout, so only while its checks may show.
+                          !callPanel &&
+                            !isTouchDevice() &&
+                            notificationGutter.flagOn() &&
+                            '@container/channel-pane'
                         )}
                         ref={setThreadListContainerEl}
                       >
@@ -1067,8 +1092,11 @@ export function Channel(props: ChannelProps) {
                                                 />
                                               }
                                               hideTriggeredBy={
-                                                !!channel()?.agent_dm
+                                                !!channel()?.agentDm
                                               }
+                                              gutter={notificationGutter.threadGutter(
+                                                item.id
+                                              )}
                                               data={m}
                                               parent={() => ({
                                                 type: 'channel',
@@ -1215,6 +1243,9 @@ export function Channel(props: ChannelProps) {
                               />
                             </Show>
                           </Show>
+                          <ChannelNotificationList
+                            gutter={notificationGutter}
+                          />
                           <Show when={!callPanel && !findBar.isOpen()}>
                             <Show when={unread.chip()}>
                               {(chip) => (
@@ -1312,6 +1343,9 @@ export function Channel(props: ChannelProps) {
                                     .reply_count ?? 0) > 0
                                 }
                                 plain={isDefaultCallThread()}
+                                // A call's thread stays as the call chat
+                                // was: dictation only.
+                                voiceMemos={!isDefaultCallThread()}
                                 placeholder={
                                   isDefaultCallThread()
                                     ? t('calls.messageThisCall')
@@ -1337,12 +1371,13 @@ export function Channel(props: ChannelProps) {
                                 agent: editing and thread replies stay open. */}
                             <AgentDmComposer
                               channelId={props.channelId}
-                              botId={channel()?.agent_dm?.bot_id}
+                              botId={channel()?.agentDm?.botId}
                             >
                               <ChannelInput
                                 autofocus={props.autofocus}
                                 onEscape={focusMessageList}
                                 collapsible
+                                features={{ voiceMemos: true }}
                                 input={{
                                   mode: 'channel',
                                   id: `channel-input-${props.channelId}`,

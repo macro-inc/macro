@@ -1,6 +1,15 @@
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openAgentsPage } from './open-page';
+
+const device = vi.hoisted(() => ({ touch: false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
+
+afterEach(() => {
+  device.touch = false;
+});
 
 describe('openAgentsPage', () => {
   it('opens routines using durable list and detail routes', () => {
@@ -57,6 +66,34 @@ describe('openAgentsPage', () => {
       id: 'agents',
       params: { agentPage: 'connections' },
     });
+  });
+
+  it('opens the durable archive route on phone without replacing history', () => {
+    device.touch = true;
+    const replace = vi.fn();
+    const openWithSplit = vi.fn(() => ({
+      status: 'reused' as const,
+      split: { content: () => ({ type: 'component', id: 'agents' }), replace },
+    }));
+    const layout = { openWithSplit } as unknown as Parameters<
+      typeof openAgentsPage
+    >[0];
+    openAgentsPage(layout, 'archived');
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'agents-archive',
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'app', params: {} },
+              { id: 'view-agents-archive', params: {} },
+            ],
+          },
+        },
+      }),
+      { activate: true, search: {} }
+    );
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it('allows navigation to be intercepted', () => {

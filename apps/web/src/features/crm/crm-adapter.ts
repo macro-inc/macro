@@ -1,6 +1,7 @@
 import { useCreateContext } from '@app/features/command/context/create-context';
 import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
 import { composeEmail } from '@app/features/email-view/compose-email';
+import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -32,6 +33,10 @@ import {
 } from '@queries/team/teams';
 import { patchTeamCrmSettings } from '@service-auth/crm';
 import { storageServiceClient } from '@service-storage/client';
+import {
+  crmAccessAuthority,
+  crmAccessState,
+} from '@service-storage/crm-access-authority';
 import { crmEmailPolicyClient } from '@service-storage/crm-email-policy';
 import { crmEmailPrivacyClient } from '@service-storage/crm-email-privacy';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
@@ -68,6 +73,7 @@ import {
   useCompanyQuery,
   useCreateCompanyMutation,
   useCreateContactMutation,
+  useEditCompanyDomainMutation,
   useSetCompanyHiddenMutation,
   useSetCompanyNameMutation,
   useSetEmailSyncMutation,
@@ -114,6 +120,12 @@ const CrmRecordTasks = lazy(async () => ({
 
 const CrmActivityTasks = lazy(async () => ({
   default: (await import('./activity-tasks-adapter')).CrmActivityTasks,
+}));
+
+// Team › Members owns the roster and its CRM access switch.
+const CrmMemberAccess = lazy(async () => ({
+  default: (await import('@app/features/settings/views/crm-member-access'))
+    .CrmMemberAccessSection,
 }));
 
 /**
@@ -214,6 +226,9 @@ export function createAppCrmContext(): CrmContext {
   };
   const createSettings = () => useTeamCrmConfig(deps);
   return {
+    canAccess: crmAccessAuthority.allowed,
+    accessState: crmAccessState,
+    retryAccess: crmAccessAuthority.refresh,
     createEmailPolicy: () => {
       const team = useCurrentTeamQuery();
       return createEmailPolicySource(
@@ -222,12 +237,14 @@ export function createAppCrmContext(): CrmContext {
         userId
       );
     },
+    connectMailbox: () => openAddInboxDialog(),
     createEmailPrivacy: () => {
       const team = useCurrentTeamQuery();
       return createEmailPrivacySource(
         { ...deps, privacy: crmEmailPrivacyClient },
         () => (team.isSuccess ? team.data?.team.id : undefined),
-        userId
+        userId,
+        usePrimaryEmailLinkId()
       );
     },
     registerTaskComposerRecord(source) {
@@ -248,6 +265,7 @@ export function createAppCrmContext(): CrmContext {
         record
       ),
     PipelineSharing: PipelineShare,
+    MemberAccess: CrmMemberAccess,
     createPipelineTransfer: (pipeline) =>
       createPipelineTransfer(deps, pipeline),
     feedback: toast,
@@ -406,6 +424,7 @@ export function createAppCrmContext(): CrmContext {
     renameContact: (...args) => useSetContactNameMutation(deps, ...args),
     editContactEmail: () => useSetContactEmailMutation(deps),
     editContactCompany: () => useSetContactCompanyMutation(deps),
+    editCompanyDomain: () => useEditCompanyDomainMutation(deps),
     hideCompany: (...args) => useSetCompanyHiddenMutation(deps, ...args),
     hideContact: (...args) => useSetContactHiddenMutation(deps, ...args),
     setEmailSync: (...args) => useSetEmailSyncMutation(deps, ...args),

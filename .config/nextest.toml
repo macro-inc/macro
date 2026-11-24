@@ -1,8 +1,19 @@
 # The end-to-end email suite starts real service processes and needs an SQS
 # server besides Postgres and Redis, so it runs by itself: `just email-e2e`
-# (profile `email-e2e`), not with the workspace's tests.
+# (profile `email-e2e`), not with the workspace's tests. The connectors suite
+# drives dev as real test accounts, so its scenarios run only in their own
+# profile (`just connectors-e2e`); its unit tests stay in the default run.
 [profile.default]
-default-filter = "not package(email_e2e)"
+default-filter = "not package(email_e2e) & not (package(connectors_e2e) & kind(test))"
+
+# The content search tests share one search cluster's aliases, so only one of
+# them runs at a time.
+[test-groups.opensearch-content-search]
+max-threads = 1
+
+[[profile.default.overrides]]
+filter = "package(opensearch_client) & binary(content_search)"
+test-group = "opensearch-content-search"
 
 [profile.email-e2e]
 default-filter = "package(email_e2e)"
@@ -41,6 +52,12 @@ max-threads = 1
 filter = "package(email_e2e) & binary(search)"
 test-group = "email-e2e-search"
 
+# Leaving and coming back waits on the Focus worker's minute-apart looks
+# and sweeps, four of their rounds: about four minutes whatever the load.
+[[profile.email-e2e.overrides]]
+filter = "package(email_e2e) & binary(focus) & test(away_from_macro)"
+slow-timeout = { period = "120s", terminate-after = 4 }
+
 [[profile.email-e2e.overrides]]
 filter = "package(email_e2e) & binary(focus)"
 test-group = "email-e2e-focus"
@@ -48,3 +65,23 @@ test-group = "email-e2e-focus"
 [[profile.email-e2e.overrides]]
 filter = "package(email_e2e)"
 test-group = "email-e2e"
+
+# The connectors suite (crates/connectors_e2e/AGENTS.md): scenarios against dev
+# that share two test accounts, so one runs at a time. An agent's turn starts a
+# sandbox first, so a scenario may take several minutes.
+[profile.connectors-e2e]
+default-filter = "package(connectors_e2e)"
+slow-timeout = { period = "300s", terminate-after = 6 }
+failure-output = "immediate-final"
+fail-fast = false
+retries = 1
+
+[profile.connectors-e2e.junit]
+path = "junit.xml"
+
+[test-groups.connectors-e2e]
+max-threads = 1
+
+[[profile.connectors-e2e.overrides]]
+filter = "package(connectors_e2e)"
+test-group = "connectors-e2e"

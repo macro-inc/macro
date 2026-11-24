@@ -166,7 +166,7 @@ fn a_scope_is_stored_by_name() {
 }
 
 /// A run that sends nothing changes the person's own items but never sends,
-/// posts, shares, invites, sets up a routine, or starts work with the
+/// posts, shares, invites, pings, sets up a routine, or starts work with the
 /// person's full access.
 #[test]
 fn a_run_that_sends_nothing_reaches_nobody() {
@@ -250,6 +250,9 @@ fn a_run_that_sends_nothing_reaches_nobody() {
             "/agent-sessions/a/code-executions/b/connected-apps/slack/send/calls",
         ),
         ("POST", "/team/invite"),
+        ("POST", "/notification/v1/user_notifications/send"),
+        ("POST", "/notification/user_notifications/send"),
+        ("POST", "/user_notifications/send"),
     ] {
         assert!(!scope.allows(method, path), "{method} {path}");
     }
@@ -343,4 +346,20 @@ fn a_dry_run_reads_and_writes_nothing() {
         assert!(!scope.allows(method, path), "{method} {path}");
     }
     assert!(!scope.allows_sharing());
+}
+
+/// A screen ticket lets a person watch or drive a computer in their
+/// browser; no scoped run gets one.
+#[test]
+fn no_scope_gets_a_screen_ticket() {
+    for scope in [
+        SessionScope::NoSend,
+        SessionScope::DryRun,
+        SessionScope::Generation,
+    ] {
+        assert!(!scope.allows(
+            "POST",
+            "/agent-harness/computers/0193a3c2-0000-7000-8000-000000000001/screen/tickets"
+        ));
+    }
 }

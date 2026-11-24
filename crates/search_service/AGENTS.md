@@ -33,7 +33,8 @@ per-entity-type search plus a unified search across them — mounted into
 
 - Depends on: `opensearch_client`, `models_opensearch`, `macro_db_client`,
   `entity_access`, `properties`, `crm`, `item_filters`, `calendar_events`
-  (domain only, no features, for its Macro call rule and label port).
+  (domain only, no features, for its Macro call rule and label port),
+  `rate_limit` (its token bucket, for the API-key search allowance).
 - Used by: `document_storage_service` (mounts `search_router`); called
   through `search_service_client`.
 
@@ -58,6 +59,60 @@ per-entity-type search plus a unified search across them — mounted into
   (`term_len`, `search.terms`, `search.search_on`). The unified
   search span is built by `simple_unified::unified_search_span`, which a test
   reads back; add a field there, not by instrumenting the request.
+- A unified search (`/search`, `/search/simple`, on both DSS mounts) waits
+  for its caller's turn in `domain::search_lanes` after the request's own
+  checks (query, paging, cursor, terms, sessions, email filters; ids a source
+  parses when it runs, such as channel and CRM company ids, are checked in the
+  turn) and before it reads anything: per process, three searches in
+  flight for the person's app session (the mention menu sends three one-type
+  searches per term) and two for every other caller, the rest waiting in
+  arrival order, and one still waiting after
+  20 s answered 429 (`SearchError::Busy`, `Retry-After`). OpenSearch has few
+  search threads per node, and one caller's burst of heavy searches filled
+  them for everyone. The caller (`api::search::caller::search_caller`) is the
+  user plus who acts: a signed agent (one lane across all its sessions for
+  that user) or routine, else the credential's kind: the app session, a
+  service searching for them (`Internal`: the AI tools, an agent's native
+  search tools, routine drafting), or an API credential. So a person's app
+  searches never wait behind a program's or a service's. The turn covers the
+  CRM membership read (so a receipt is never older than its search) and the
+  Postgres and OpenSearch search, not enrichment; the span records
+  `search.lane`, `search.lane_wait_ms` and `search.lane_outcome`
+  (`immediate`, `queued`, `refused`). Lanes are per process, so a caller's
+  bound grows with the replica count; DSS builds one `SearchLanes` for both
+  mounts. The internal mount runs under `connection_drop_prevention_handler`,
+  so a service search whose caller gave up keeps its place in the service's
+  lane and runs to the end.
+- Before its turn, a unified search sent with a user API key
+  (`CredentialOrigin::UserApiKey`, `search.caller = user_api_key`) draws on
+  its account's search allowance (`domain::search_allowance`): one token
+  bucket per account in Redis, shared by all its keys and every process, of
+  200 searches that refills one a second. An empty bucket answers 429
+  (`SearchError::RateLimited`, `Retry-After` in whole seconds) without
+  waiting in the lane. The lanes bound searches in flight per process; the
+  bucket bounds the rate across processes, which lanes cannot. It is a safety
+  net, sized from production traces so today's busiest keys, which search in
+  batches that a fixed 60-a-minute window would refuse, never reach it;
+  measure before tightening it. A bucket that errors or does not answer
+  within 500 ms lets the search run. A limited search is not logged as an
+  error. The span records `search.rate_limit` (`allowed`, `limited`,
+  `unavailable`), `search.rate_limit_remaining` (searches the account may
+  still send at once) and `search.rate_limit_wait_ms`. App sessions,
+  agents, routines, services, Macro API tokens and account-manager
+  credentials never draw on it, and neither does `/search/channel`, which
+  takes no lane turn either.
+- Search never returns an item in the Trash. The documents and chats indexes
+  keep trashed items until a purge (projects leave the index on trash).
+  Enrichment drops a document, chat or project hit whose row has `deletedAt`,
+  as it drops a hit whose row is gone, so the SDK, the API, the AI tools and
+  the web app get the same results. The web mapper still checks
+  `metadata.deleted_at`: saved AI chats render their stored search results
+  through it, and older ones hold trashed hits. `/search/simple` returns hits
+  unenriched and is not covered.
+- A phrase is quoted with straight or curly double quotes
+  (`terms::is_phrase_quote`), since phones and Macs type `“ ”` and `„ “` for
+  `"`. The web app reads a query's quotes too, to gate empty searches and pick
+  exact matching (`straightenQuotes`): change both together.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
   blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
   term under three characters matches as a whole word in document, chat, call
@@ -115,6 +170,41 @@ per-entity-type search plus a unified search across them — mounted into
   change to any of these with the default model on rows that are really in the
   index, and a user whose memory does not describe the behavior under test.
 
+- Typed Mail search operators are read out of the query by the service, so
+  Mail's search field, the API, the SDK and the AI tools search the same way
+  (`api/search/email_operators.rs`, after `split_search_terms`): `subject:`,
+  `from:`, `to:` (To, Cc and Bcc), `cc:`, `bcc:`, `in:<view>` (the last one
+  wins; `in:focus` is the web app's and stays a word here), `in:<name>` and
+  `label:` (a tag or inbox label of that name), `is:unread|read|starred|shared`,
+  `has:attachment`, `after:`/`before:` (a day, from its midnight in the
+  request's `time_zone`) and `newer_than:`/`older_than:` (`3d`, `2w`, `1m`,
+  `1y` back on that zone's calendar), each with a minus to leave matches out.
+  Each becomes an `EmailFilters` field ANDed with the request's own, applied
+  before paging; an unknown name or invalid value stays a word. A search that
+  types a named operator becomes an email search (no other kind can meet
+  them); one that leaves email out, or uses `regexp`/`query` matching, reads
+  none. A minus before a plain word or phrase says nothing about email, so it
+  leaves out mail containing it only beside a named operator or in a search
+  of email alone; otherwise, and always for a term starting `--`, it stays a
+  word and the search keeps every kind. Opposite
+  operators search nothing. A cursor keeps the first page's moment
+  (`query_time_millis`) so relative dates bound the same instants on every
+  page, and the response's `query_filters` reports what the operators became.
+  `-in:signal` and `-in:noise` stay a word left out: each view is two
+  conditions, so leaving it out is an OR across the index and Postgres.
+  `email_operators/typed_operators.json` lists typed terms and whether each
+  is an operator; these tests and Mail's search field
+  (`apps/web/src/features/email-view/search/email-search-operators.ts`, which
+  draws and completes operators) both check it, so change it with the parser.
+- The typed conditions that are not thread states run in OpenSearch: text
+  matches, labels and tags (`labels` terms or the nested tag filter, each name
+  resolved for the caller in Postgres; a required name naming nothing matches
+  nothing), favorites (the caller's favorite threads as required or excluded
+  ids) and the sent range on `sent_at_millis`, which is stored for sorting
+  only (doc values, not indexed), so the range is checked per candidate.
+  `has:attachment` and the left-out views past `MAX_THREAD_SET_ALLOWLIST`
+  are page checks: `ThreadStates::excluded` runs each as its own positive
+  check and drops the threads it matches.
 - Email search scopes by the owners of the inboxes the caller can reach
   (`fetch_search_inboxes_for_macro_id`), so a link's mail matches until its
   documents are deleted. An inbox whose disconnect has started (`deleting_at`)

@@ -14,9 +14,10 @@
 //! NOTE: like the web preview steps, this must NOT be a required status check — a
 //! PR should stay mergeable regardless of whether its preview built.
 
+use gh_workflow::expr::typed::{Bool, Expr, Json, Str, always, github};
 use gh_workflow::{
-    Concurrency, Env, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType,
-    Run, Step, Use, Workflow, WorkflowDispatch,
+    Concurrency, Env, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use,
+    Workflow, WorkflowDispatch,
 };
 
 use crate::workflows::{runners, steps, vars};
@@ -36,8 +37,9 @@ pub fn ios_preview() -> Workflow {
             .workflow_dispatch(WorkflowDispatch::default()))
         .concurrency(
             // `github.ref` keeps manual dispatches from all sharing one group.
-            Concurrency::new(Expression::new(
-                "ios-preview-${{ github.event.pull_request.number || github.ref }}",
+            Concurrency::new(format!(
+                "ios-preview-{}",
+                pr_number().or_else(github().git_ref())
             ))
             .cancel_in_progress(true),
         )
@@ -57,19 +59,26 @@ fn pull_request_event() -> PullRequest {
 /// labels, so both need the same membership test: is `ios-preview` on the PR
 /// right now? Reading it off the event payload avoids an API call, and means
 /// removing the label stops later pushes from building.
-fn labelled_and_open() -> String {
-    format!(
-        "github.event_name == 'workflow_dispatch' || (github.event.action != 'closed' \
-         && contains(github.event.pull_request.labels.*.name, '{LABEL}') \
-         && github.event.pull_request.draft == false)"
-    )
+fn labelled_and_open() -> Expr<Bool> {
+    let labelled = github()
+        .event::<Json>("pull_request.labels.*.name")
+        .contains(LABEL);
+    github().event_name().eq("workflow_dispatch").or(github()
+        .event::<Str>("action")
+        .ne("closed")
+        .and(labelled)
+        .and(github().event::<Bool>("pull_request.draft").eq(false)))
+}
+
+fn pr_number() -> Expr<Str> {
+    github().event("pull_request.number")
 }
 
 fn preview() -> Job {
     Job::default()
         .name("Build iOS simulator app and publish to Appetize")
         .runs_on(runners::Runner::MacOsTahoeArm.to_string())
-        .cond(Expression::new(labelled_and_open()))
+        .cond(labelled_and_open())
         // A cold run — fresh nix store, no cached aarch64-apple-ios-sim
         // artifacts — measured 11m15s on Sequoia, but 40 minutes on the Tahoe
         // image, 31 of them fetching the dev shell from cache.nixos.org. This
@@ -84,7 +93,7 @@ fn preview() -> Job {
         .add_step(steps::select_ios_xcode())
         .add_step(steps::install_nix_macos())
         .add_step(build_simulator_app())
-        .add_step(upload_app_artifact().if_condition(Expression::new("always()")))
+        .add_step(upload_app_artifact().if_condition(always()))
         .add_step(publish_preview())
 }
 
@@ -101,11 +110,12 @@ fn build_simulator_app() -> Step<Run> {
 /// screenshot and log archive come along on failures too — `if: always()` —
 /// since a build that dies at the smoke test is exactly when they are wanted.
 fn upload_app_artifact() -> Step<Use> {
-    steps::upload_artifact(
+    steps::upload_artifact_action(
         "macro-ios-simulator-app",
         xtask_paths::runtime_path!("artifacts/*"),
     )
-    .add_with(("if-no-files-found", "warn"))
+    .if_no_files_found("warn")
+    .step()
 }
 
 /// Uploads the archive and posts the comment. The PR number, branch and SHA
@@ -114,10 +124,13 @@ fn upload_app_artifact() -> Step<Use> {
 /// `cleanup_preview::get_preview_id`.
 fn publish_preview() -> Step<Run> {
     publish_step("Publish to Appetize and comment")
-        .if_condition(Expression::new("github.event_name == 'pull_request'"))
+        .if_condition(github().event_name().eq("pull_request"))
         .add_env(Env::new("ARCHIVE_PATH", ARCHIVE_PATH))
-        .add_env(Env::new("BRANCH", "${{ github.head_ref }}"))
-        .add_env(Env::new("SHA", "${{ github.event.pull_request.head.sha }}"))
+        .add_env(Env::new("BRANCH", github().head_ref()))
+        .add_env(Env::new(
+            "SHA",
+            github().event::<Str>("pull_request.head.sha"),
+        ))
 }
 
 /// The publish and cleanup steps run the same script; `CLEANUP` picks the mode.
@@ -126,12 +139,9 @@ fn publish_step(name: &str) -> Step<Run> {
         .run(include_str!("scripts/publish_ios_preview.sh"))
         .shell("bash")
         .add_env(Env::new("APPETIZE_API_TOKEN", vars::APPETIZE_API_TOKEN))
-        .add_env(Env::new("GH_TOKEN", "${{ secrets.GITHUB_TOKEN }}"))
-        .add_env(Env::new("REPO", "${{ github.repository }}"))
-        .add_env(Env::new(
-            "PR_NUMBER",
-            "${{ github.event.pull_request.number }}",
-        ))
+        .add_env(Env::new("GH_TOKEN", vars::GITHUB_TOKEN))
+        .add_env(Env::new("REPO", github().repository()))
+        .add_env(Env::new("PR_NUMBER", pr_number()))
 }
 
 /// Appetize apps outlive their PR unless something deletes them, and the key
@@ -141,9 +151,12 @@ fn cleanup() -> Job {
     Job::default()
         .name("Delete the PR's Appetize app")
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        .cond(Expression::new(
-            "github.event_name == 'pull_request' && github.event.action == 'closed'",
-        ))
+        .cond(
+            github()
+                .event_name()
+                .eq("pull_request")
+                .and(github().event::<Str>("action").eq("closed")),
+        )
         .permissions(
             Permissions::default()
                 .contents(Level::Read)

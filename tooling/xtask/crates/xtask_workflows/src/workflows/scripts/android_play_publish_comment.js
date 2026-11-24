@@ -48,14 +48,18 @@ if (env.JOB_STATUS === 'success') {
     tail = lines.slice(-30).join('\n').slice(-3000);
   }
   const retry =
-    env.UPLOAD_OUTCOME === 'success'
+    env.UPLOADED === 'true'
       ? [
           `The bundle reached the internal track, so version code ${versionCode} is used up: bump`,
           '(`cd apps/web && just android-bump`), commit, and re-add the `android-update` label.',
           'If only the promotion failed and the native code is unchanged, you can instead promote',
           `version code ${versionCode} by hand with **Publish Android to Google Play** (\`operation=promote-production\`).`,
         ].join('\n')
-      : 'Fix the problem, then remove and re-add the `android-update` label to retry.';
+      : [
+          'Fix the problem, then remove and re-add the `android-update` label to retry. If Play refused',
+          `the upload because version code ${versionCode} was already used, an earlier attempt reached Play:`,
+          'bump (`cd apps/web && just android-bump`) and commit first.',
+        ].join('\n');
   body = [
     `🤖 Android Play release for ${releaseName} **failed**${failedStep ? ` at **${failedStep}**` : ''} (${runs}).`,
     ...(tail ? ['', '```text', tail, '```'] : []),

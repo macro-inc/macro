@@ -28,6 +28,7 @@ import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import LockIcon from '@icon/system/regular/lock.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import { useCurrentTeamQuery } from '@queries/team/teams';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { createMemo } from 'solid-js';
 import type { MobileDockIcon } from './MobileDockButton';
 import type { MobileNavViewId } from './mobile-nav-views';
@@ -161,6 +162,7 @@ export function useMobileDockViews() {
     MOBILE_DOCK_VIEWS.filter(
       (view) => view.id !== 'reviews' || reviews().enabled
     )
+      .filter((view) => view.id !== 'companies' || crmAccessAllowed())
       .filter((view) => view.id !== 'passwords' || passwordsAvailable())
       .filter((view) => view.id !== 'external' || external().enabled)
   );

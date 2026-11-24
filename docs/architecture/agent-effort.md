@@ -24,21 +24,24 @@ provider serialization tests when adding support.
 
 | Routed model | Explicit effort values |
 | --- | --- |
-| anthropic/claude-sonnet-5-5, anthropic/claude-opus-5-5 | low, medium, high, xhigh, max |
-| openai/gpt-6.1-sol, openai/gpt-6-astra | low, medium, high, xhigh, max |
-| openai/gpt-5.5 | none, low, medium, high, xhigh |
-| openai/gpt-5-mini | minimal, low, medium, high |
+| anthropic/claude-sonnet-5-5, anthropic/claude-opus-5-5, anthropic/claude-haiku-5-5 | low, medium, high, xhigh, max |
+| openai/gpt-6.2-sol, openai/gpt-6-astra | low, medium, high, xhigh, max |
+| openai/gpt-6-luna | none, low, medium, high, xhigh, max |
+| openai/gpt-5.5 (retired, kept for old sessions) | none, low, medium, high, xhigh |
+| openai/gpt-5-mini (retired, kept for old sessions) | minimal, low, medium, high |
 | Haiku 4.5, retired Claude ids (Sonnet 5, Opus 5), and unknown models | No effort control |
 
 Every supported profile also offers **Default**, meaning no session override.
-It preserves Macro's existing adapter defaults (including low for GPT-5 mini).
+It preserves Macro's existing adapter defaults (including low for GPT-6 Luna
+and the GPT minis).
 It is distinct from OpenAI's explicit `none` and is never sent as a provider
 value. Anthropic receives `output_config.effort`; OpenAI Responses receives
 `reasoning.effort`. A compatible Chat Completions endpoint does not inherit
 native OpenAI capabilities merely because its model name resembles GPT.
 Thinking token budgets are not exposed as effort levels.
 
-Sources checked September 21, 2026 (GPT-6 rows November 12, 2026):
+Sources checked September 21, 2026 (GPT-6 rows November 12, 2026; Haiku 5.5,
+GPT-6.2 Sol and GPT-6 Luna November 24, 2026):
 [Anthropic effort](https://platform.claude.com/docs/en/build-with-claude/effort),
 [GPT-5.5](https://developers.openai.com/api/docs/models/gpt-5.5),
 [OpenAI models](https://developers.openai.com/api/docs/models), and
@@ -97,17 +100,19 @@ an external harness result.
 
 ## Model menu interaction
 
-The selected model also has a labeled **Effort** button (dial icon and current
-level) beside its model selector in new-chat and running-session composers. It
-opens a titled desktop menu or a dedicated bottom sheet on mobile. A simple list shows the supported effort levels and checks the current choice. Selecting a level applies it and closes the menu; models with fewer than two choices hide the button.
+The Agents new-chat and running-session composers use one model selector. Its desktop
+menu shows Reasoning effort as a submenu only when the selected runtime offers
+multiple values; its phone sheet pushes an effort view and returns to the list
+after a choice. The selected model and effort appear in the bounded trigger,
+with the full selection in a shared tooltip. Model selection remains available
+when capability discovery is pending or effort is unsupported. The separate
+effort control remains available to unrelated consumers.
 
-On desktop, effort remains available in each model’s submenu.
-Discovery runs when the submenu opens, scoped to that model and harness;
-the current session's advertised options take precedence for its selected model.
-The trigger displays the model and selected effort together. Keyboard Right Arrow
-opens the submenu. On mobile, tapping a model selects it directly; use the adjacent
-effort button to adjust its supported effort levels. Loading, discovery errors, and models with
-no effort options keep ordinary model selection available.
+The Speed submenu uses only the in-memory runtime's advertised values. The
+presentation maps `standard` to Standard, `priority` and `fast` to Fast, and
+`ultrafast` to Ultrafast without changing the selected wire value or the shared
+preference. A single offered choice hides the submenu; no model-name inference
+creates an Ultrafast option.
 
 A combined running-session selection waits for the model's correlated ACP
 confirmation, validates effort against the new snapshot, then confirms effort.

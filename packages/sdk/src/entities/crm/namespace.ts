@@ -29,7 +29,13 @@ import { PipelineNamespace } from './pipelines';
  *
  * Create a pipeline with its stages and fields in one `crm.pipelines.create` call. Work with entries by name through the pipeline's own methods: `find` (filters by field name and stage label, with per-stage counts and number totals such as Revenue), `addRecords`, `updateEntries` (a stage by its label, a person as `'me'`), `removeRecords`, and `edit` for fields and stage options. `importCsv` / `exportCsv` move entries through CSV, and `crm.importCompaniesCsv` loads a companies list. `crm.pipelines.entriesFor` and `searchEntries` find a company's deals across pipelines. Reach for `applyOps` and column ids only for what these cannot express.
  *
+ * Find a company before creating one: `crm.companyByDomain` by its domain, `crm.searchCompanies` by its name. Create it only when neither finds it; `createCompany` refuses a domain the team already tracks.
+ *
+ * An organization that mails from several domains (a school's `.edu` and `.com`) is one company: add each further domain to it with `company.addDomain` instead of creating a company for it, and `removeDomain` one added by mistake. `addDomain` refuses a domain another company of the team already tracks.
+ *
  * A company also has its own Stage, Owner and Revenue properties on its CRM page. They are separate from every pipeline and not kept in sync with it. When the user has pipelines, deal and stage requests mean pipeline entries; change the company's own properties only when the user asks for those properties specifically.
+ *
+ * Companies and contacts both take the team's custom properties, such as a phone number or a LinkedIn link: create the definition once with `properties.create` (scope `team`), then call `setProperty` on each company or contact and read them back with `properties()`.
  */
 export class CrmNamespace {
   /** Your email contribution. */
@@ -90,9 +96,23 @@ export class CrmNamespace {
   }
 
   /**
-   * Search the caller's current team's CRM contacts whose email or name
-   * contains `query` (case-insensitive), most recently interacted first.
-   * An empty query lists the most recent contacts.
+   * The team's company for a domain. Exact and current, unlike
+   * {@link searchCompanies}, so use it after `createCompany` reports the domain
+   * is already tracked. An archived company is returned to team admins only.
+   *
+   * @readonly
+   */
+  async companyByDomain(domain: string): Promise<Company | undefined> {
+    const { company } = unwrap(
+      await this.client.storage.getCompanyByDomain({ query: { domain } }),
+    );
+    return company ? Company.from(this.client, company) : undefined;
+  }
+
+  /**
+   * Search the caller's team's CRM contacts by email or name, most recently
+   * interacted first. Matches contain `query`, case-insensitive; an empty
+   * query lists the most recent contacts.
    *
    * @param opts.limit Maximum contacts to return (1-500, default 20).
    *
@@ -111,7 +131,9 @@ export class CrmNamespace {
   }
 
   /**
-   * Create a CRM company for the caller's current team.
+   * Create a CRM company for the caller's current team. Look it up first with
+   * {@link companyByDomain} or {@link searchCompanies}: a domain the team
+   * already tracks is refused.
    *
    * @write
    */
@@ -123,9 +145,10 @@ export class CrmNamespace {
   }
 
   /**
-   * Create a contact without a company for the caller's current team. The
-   * email is optional and may be at any domain. To add someone to a company,
-   * use {@link Company.createContact}.
+   * Create a contact for the caller's current team. The email is optional; a
+   * work address links the contact to its domain's company, created if
+   * missing. To choose the company, find it with {@link companyByDomain} or
+   * {@link searchCompanies} and use {@link Company.createContact}.
    *
    * @write
    */
@@ -220,8 +243,8 @@ export class CrmNamespace {
   }
 
   /**
-   * Create the companies a CSV lists (CSV text, or a CSV document), keyed by
-   * domain; companies the team already has are counted, not duplicated. When
+   * Create the companies a CSV lists, keyed by domain. The CSV is text or a
+   * CSV document; companies the team already has are counted, not duplicated. When
    * the CSV has Stage, Owner or Revenue columns, those go on entries of
    * `pipeline` (a company pipeline), or of a new pipeline (private unless
    * `newPipeline.sharing` is `team`, named after the file unless named).

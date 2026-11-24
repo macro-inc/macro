@@ -149,6 +149,7 @@ notification = { path = "../../crates/notification" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 mime_guess = "2.0.5"
+nom = { workspace = true }
 channels = { path = "../../crates/channels", features = ["outbound"] }
 contacts = { path = "../../crates/contacts" }
 generic_email_domains = { path = "../../crates/generic_email_domains" }
@@ -178,6 +179,7 @@ sqlx-core = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
   "email",
   "gmail",
+  "search",
   "sfs_delete",
   "sfs_uploader"
 ] }
@@ -211,3 +213,4 @@ tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+wiremock = { workspace = true }

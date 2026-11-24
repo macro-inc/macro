@@ -12,6 +12,14 @@ test.beforeEach(async ({ page }) => {
       });
     return route.continue();
   });
+  // Keep external analytics scripts from adding unrelated requests to the
+  // assertion that this fixture never fetches CRM records.
+  await page.route(
+    (url) =>
+      ['http:', 'https:'].includes(url.protocol) &&
+      !['127.0.0.1', 'localhost'].includes(url.hostname),
+    (route) => route.abort()
+  );
   await page.routeWebSocket('**/*', (socket) => socket.close());
 });
 
@@ -80,6 +88,9 @@ for (const admin of [false, true]) {
     page,
   }, testInfo) => {
     await page.goto(admin ? '/?admin' : '/');
+    await page
+      .getByRole('button', { name: 'Email settings', exact: true })
+      .waitFor();
     await page
       .getByRole('button', { name: 'Email settings', exact: true })
       .click();
@@ -157,6 +168,9 @@ test('disconnected mailbox cannot opt in while exclusions remain editable', asyn
   await page.goto('/?disconnected');
   await page
     .getByRole('button', { name: 'Email settings', exact: true })
+    .waitFor();
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
     .click();
   await expect(
     page.getByRole('button', { name: 'Share my emails with CRM', exact: true })
@@ -166,12 +180,63 @@ test('disconnected mailbox cannot opt in while exclusions remain editable', asyn
   ).toBeEnabled();
 });
 
+test('disconnected mailbox connects from the dialog by keyboard and stays unshared', async ({
+  page,
+}, testInfo) => {
+  const phone = testInfo.project.name === 'phone';
+  if (phone) await page.setViewportSize({ width: 320, height: 740 });
+  await page.goto('/?disconnected');
+  const settings = page.getByRole('button', {
+    name: 'Email settings',
+    exact: true,
+  });
+  await settings.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('No email connected')).toBeVisible();
+  const connect = dialog.getByRole('button', {
+    name: 'Connect email',
+    exact: true,
+  });
+  await expect(connect).toBeVisible();
+  const box = await connect.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box && viewport && box.x + box.width <= viewport.width).toBe(true);
+  // The dialog opens on its title. The desktop header's Close button comes
+  // next; the phone drawer has no Close button, so the mailbox row is first.
+  await expect(
+    dialog.getByRole('heading', { name: 'Contribute your emails to CRM' })
+  ).toBeFocused();
+  if (!phone) await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(connect).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId('mailbox-connections')).toHaveText('1');
+  await settings.click();
+  await expect(dialog.getByText('member@example.com')).toBeVisible();
+  await expect(dialog.getByText('Sharing off')).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Connect email', exact: true })
+  ).toHaveCount(0);
+  await expect(
+    dialog.getByRole('button', {
+      name: 'Share my emails with CRM',
+      exact: true,
+    })
+  ).toBeEnabled();
+  await expect(page.getByTestId('last-change')).toHaveText('');
+});
+
 test('banner opens review using the device input mode', async ({
   page,
 }, testInfo) => {
   const phone = testInfo.project.name === 'phone';
   if (phone) await page.setViewportSize({ width: 320, height: 740 });
   await page.goto('/');
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .waitFor();
   const review = page.getByRole('button', {
     name: 'Review and opt in',
     exact: true,
@@ -218,6 +283,9 @@ test('owner can inspect and remove a private-thread exception', async ({
   page,
 }, testInfo) => {
   await page.goto('/');
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .waitFor();
   await page
     .getByRole('button', { name: 'Email settings', exact: true })
     .click();
@@ -267,6 +335,9 @@ test('own thread action creates an exception using the device menu', async ({
   page,
 }, testInfo) => {
   await page.goto('/?contributing');
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .waitFor();
   const trigger = page.getByRole('button', {
     name: 'Thread actions',
     exact: true,
@@ -294,6 +365,9 @@ test('thread action is unavailable for a teammate copy', async ({
 }, testInfo) => {
   await page.goto('/?teammate');
   await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .waitFor();
+  await page
     .getByRole('button', { name: 'Thread actions', exact: true })
     .click();
   await expect(
@@ -312,6 +386,9 @@ test('owner can page through excluded threads and return to the first page', asy
   page,
 }) => {
   await page.goto('/?paged');
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .waitFor();
   await page
     .getByRole('button', { name: 'Email settings', exact: true })
     .click();
@@ -353,6 +430,9 @@ test('cursor page survives deletion of an earlier exclusion', async ({
   await page.goto('/?paged&contributing&excluded');
   await page
     .getByRole('button', { name: 'Email settings', exact: true })
+    .waitFor();
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
     .click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Next page', exact: true }).click();
@@ -378,6 +458,9 @@ test('disabled rollout keeps the thread action and exception settings unavailabl
   page,
 }) => {
   await page.goto('/?flag-off');
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .waitFor();
   await expect(
     page.getByRole('button', { name: 'Exclude thread from CRM', exact: true })
   ).toHaveCount(0);
@@ -413,6 +496,9 @@ for (const [query, reason] of [
     page,
   }, info) => {
     await page.goto(`/?${query}`);
+    await page
+      .getByRole('button', { name: 'Email settings', exact: true })
+      .waitFor();
     if (info.project.name === 'desktop') {
       const button = page.getByRole('button', {
         name: 'Exclude thread from CRM',
@@ -454,6 +540,9 @@ test('existing exclusions remain removable after contribution is withdrawn', asy
   page,
 }, info) => {
   await page.goto('/?excluded');
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .waitFor();
   if (info.project.name === 'desktop') {
     const restore = page.getByRole('button', {
       name: 'Remove from excluded threads',
@@ -500,6 +589,9 @@ test('failed status refresh preserves the cached exclusion and disables actions'
   page,
 }, info) => {
   await page.goto('/?contributing&excluded');
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .waitFor();
   if (info.project.name === 'desktop') {
     await expect(
       page.getByRole('button', {
@@ -554,6 +646,9 @@ test('header exclusion and settings removal stay synchronized', async ({
     'The phone header keeps actions in its title menu.'
   );
   await page.goto('/?contributing&excluded');
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .waitFor();
   const restore = page.getByRole('button', {
     name: 'Remove from excluded threads',
     exact: true,
@@ -601,6 +696,9 @@ for (const mode of ['click', 'shift-click', 'already-open', 'keyboard']) {
       'Desktop modifier navigation.'
     );
     await page.goto(`/?${mode === 'already-open' ? 'already-open' : ''}`);
+    await page
+      .getByRole('button', { name: 'Email settings', exact: true })
+      .waitFor();
     const panes = page.getByTestId('panes').getByTestId('pane');
     await expect(panes.first()).toBeAttached();
     const initialCount = await panes.count();
@@ -662,6 +760,9 @@ test('email mention preview opens its thread and dismisses settings', async ({
   await page.goto('/');
   await page
     .getByRole('button', { name: 'Email settings', exact: true })
+    .waitFor();
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
     .click();
   const dialog = page.getByRole('dialog');
   const mention = page.getByRole('link', {
@@ -701,4 +802,62 @@ test('email mention preview opens its thread and dismisses settings', async ({
     )
   ).toHaveAttribute('data-active', 'true');
   await expect(page.getByTestId('last-change')).toBeEmpty();
+});
+
+test('denied members can open and remove their excluded threads without CRM record reads', async ({
+  page,
+}) => {
+  const dataRequests: string[] = [];
+  page.on('request', (request) => {
+    if (['fetch', 'xhr'].includes(request.resourceType()))
+      dataRequests.push(request.url());
+  });
+  await page.goto('/?no-access&contributing');
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .click();
+  const dialog = page.getByRole('dialog');
+  await expect(
+    dialog.getByRole('button', { name: 'Stop sharing my emails', exact: true })
+  ).toBeVisible();
+  await expect(
+    dialog.getByText('Excluded threads', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByTestId('excluded-list-reads')).not.toHaveText('0');
+  const thread = dialog.getByRole('link', {
+    name: 'Private conversation',
+    exact: true,
+  });
+  await expect(thread.locator('[data-document-mention]')).toHaveAttribute(
+    'data-block-name',
+    'email'
+  );
+  await thread.click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.locator(
+      '[data-testid="pane"][data-content="00000000-0000-4000-8000-000000000046"]'
+    )
+  ).toHaveAttribute('data-active', 'true');
+  await page
+    .getByRole('button', { name: 'Email settings', exact: true })
+    .click();
+  await dialog
+    .getByRole('button', {
+      name: 'Remove Private conversation from excluded threads',
+      exact: true,
+    })
+    .click();
+  await expect(
+    dialog.getByText('No excluded threads.', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByTestId('last-change')).toHaveText(
+    JSON.stringify({
+      action: 'set_thread_exclusion',
+      thread_id: '00000000-0000-4000-8000-000000000046',
+      excluded: false,
+    })
+  );
+  // Privacy I/O is the injected owner-scoped source; all other data reads are observable.
+  expect(dataRequests).toEqual([]);
 });

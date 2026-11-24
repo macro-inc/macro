@@ -4,8 +4,8 @@ use super::models::{
     Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner,
     BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
     CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
-    CreateChannelScopedBotResponse, HarnessFacts, HarnessId, PatchAgentRequest, PatchBotRequest,
-    UpdateAgentRequest,
+    CreateChannelScopedBotResponse, DeletedHarnessAgents, HarnessFacts, HarnessId,
+    PatchAgentRequest, PatchBotRequest, ReplacedAgent, UpdateAgentRequest,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
@@ -38,7 +38,7 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_id: BotId,
         owner: BotOwner,
         req: UpdateAgentRequest,
-    ) -> impl Future<Output = Result<Option<Agent>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<ReplacedAgent>, Self::Err>> + Send;
 
     /// List active agents the caller can manage or start a managed session as.
     ///
@@ -193,15 +193,26 @@ pub trait BotRepo: Send + Sync + 'static {
         req: PatchBotRequest,
     ) -> impl Future<Output = Result<Option<Bot>, Self::Err>> + Send;
 
-    /// Soft-delete an active bot.
-    fn delete_bot(&self, bot_id: BotId) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    /// Soft-delete an active bot and take it out of its channels, returning
+    /// the channels it left, or `None` when no active bot has that id.
+    fn delete_bot(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Option<Vec<Uuid>>, Self::Err>> + Send;
 
     /// Soft-delete every active agent bound to `harness` in one transaction,
-    /// returning the deleted bots and their owners.
+    /// returning the deleted bots, their owners and the channels they left.
     fn delete_harness_agents(
         &self,
         harness: HarnessId,
-    ) -> impl Future<Output = Result<Vec<(BotId, BotOwner)>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<DeletedHarnessAgents, Self::Err>> + Send;
+
+    /// The stored names of the channels that exist among `channel_ids`
+    /// (`None` for a channel without one, such as a direct message).
+    fn channel_names(
+        &self,
+        channel_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<(Uuid, Option<String>)>, Self::Err>> + Send;
 
     /// Add bot reach to a channel.
     fn add_bot_to_channel(
@@ -461,12 +472,13 @@ pub trait BotService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<AuthenticatedBot, BotError>> + Send;
 }
 
-/// Whether a Pipedream app slug is one an agent may pin.
+/// Whether a connector catalog slug is one an agent may pin.
 ///
-/// The directory is Pipedream's. `Ok(false)` is a definite miss. `Err` means
-/// the directory could not be asked, and the slug must not be stored.
+/// The catalog is Pipedream's app directory plus the apps overlaid onto the
+/// native MCP stack. `Ok(false)` is a definite miss. `Err` means the catalog
+/// could not be asked, and the slug must not be stored.
 pub trait McpAppCatalog: Send + Sync + 'static {
-    /// `true` when `slug` is a connectable Pipedream app.
+    /// `true` when `slug` is a connectable catalog app.
     fn is_connectable_app(&self, slug: &str)
     -> impl Future<Output = Result<bool, BotError>> + Send;
 }

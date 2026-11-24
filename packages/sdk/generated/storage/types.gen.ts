@@ -3575,6 +3575,32 @@ export type ChannelAccessRequestedMetadata = {
 };
 
 /**
+ * A bot's membership in a channel, stored under the principal `bot|<id>`.
+ */
+export type ChannelBotParticipant = {
+    /**
+     * Participant bot id.
+     */
+    bot_id: string;
+    /**
+     * Channel id for the participant membership.
+     */
+    channel_id: string;
+    /**
+     * Timestamp when the bot joined the channel.
+     */
+    joined_at: string;
+    /**
+     * Timestamp when the bot left the channel, if any.
+     */
+    left_at?: string | null;
+    /**
+     * Participant role in the channel.
+     */
+    role: ParticipantRole;
+};
+
+/**
  * Metadata for [`ChannelTopicEvent::Created`].
  */
 export type ChannelCreatedMetadata = {
@@ -3640,7 +3666,10 @@ export type ChannelFilters = {
     /**
      * Filter by whether the requesting user is an active participant of the channel.
      * Presence of this filter also widens the candidate set to team channels of the
-     * user's teams that they have not joined, so `false` matches those channels.
+     * user's teams that they have not joined, so `false` matches those channels,
+     * and, when the filter admits only channels it names by id, to public
+     * channels too. Soup listings apply the filter and its widening; channel
+     * search (`/search`) reads only the channels the user joined and ignores it.
      * None to ignore (participant channels only, today's default).
      */
     is_participant?: boolean | null;
@@ -3986,7 +4015,9 @@ export type ChannelTopicEvent = {
 } | {
     event_type: 'channel.updated';
     /**
-     * A channel's metadata was updated (rename).
+     * A channel's settings were patched (a rename, a team conversion, or an
+     * auto-join change), or the bots in it changed; the names are equal when
+     * it was not a rename.
      */
     metadata: ChannelUpdatedMetadata;
 } | {
@@ -4033,7 +4064,8 @@ export type ChannelUpdatedMetadata = {
      */
     channel_id: string;
     /**
-     * New channel name.
+     * Stored channel name after the update; equal to `previous_name` when
+     * the update was not a rename.
      */
     channel_name?: string | null;
     /**
@@ -4071,6 +4103,10 @@ export type ChannelWebhookResponse = {
  */
 export type ChannelWithParticipants = {
     /**
+     * Bots that are participants in the channel.
+     */
+    bot_participants?: Array<ChannelBotParticipant>;
+    /**
      * Channel metadata.
      */
     channel: Channel;
@@ -4080,7 +4116,7 @@ export type ChannelWithParticipants = {
      */
     is_participant?: boolean;
     /**
-     * Participants in the channel.
+     * Participants in the channel. Bots are in `bot_participants`.
      */
     participants: Array<ChannelParticipant>;
 };
@@ -4754,6 +4790,37 @@ export type CompanyContactsPageResponse = {
 };
 
 /**
+ * One of a company's domains. It travels in the body, as a contact's
+ * addresses do.
+ */
+export type CompanyDomainRequest = {
+    /**
+     * A bare domain such as "example.com": no scheme, path or email. An
+     * identical retry is accepted.
+     */
+    domain: string;
+};
+
+/**
+ * The 409 answer when another company of the team already tracks the domain.
+ */
+export type CompanyDomainTakenResponse = {
+    /**
+     * The company that tracks the domain. Absent when the caller cannot see
+     * it: an archived company, for a team member.
+     */
+    companyId?: string | null;
+    /**
+     * That company's display name, when the caller can see it.
+     */
+    companyName?: string | null;
+    /**
+     * What happened, naming the other company when the caller can see it.
+     */
+    message: string;
+};
+
+/**
  * What a companies import did.
  */
 export type CompanyImportResponse = {
@@ -5321,8 +5388,10 @@ export type CreateCrmContactRequest = {
  */
 export type CreateCrmTeamContactRequest = {
     /**
-     * The contact's email address, of any domain. Optional: omit it to
-     * add the contact by name only.
+     * The contact's email address, of any domain. A company-domain address
+     * also links the contact to that domain's company, unless the team
+     * blocks the domain or the company is hidden. Optional: omit it to add
+     * the contact by name only.
      */
     email?: string | null;
     /**
@@ -5819,6 +5888,10 @@ export type CreateTaskRequest = {
      */
     markdown?: string | null;
     /**
+     * Property definition IDs to pin in the first task snapshot. Omission keeps implicit defaults.
+     */
+    pinnedPropertyDefinitionIds?: Array<string> | null;
+    /**
      * Optional project ID to associate the task with.
      */
     projectId?: string | null;
@@ -5870,6 +5943,28 @@ export type CreateTaskResponse = {
      * A pre-generated permission token that you can use for SS
      */
     token: string;
+};
+
+/**
+ * Create a personal template or one owned by a current team.
+ */
+export type CreateTaskTemplateRequest = {
+    /**
+     * Reusable task fields and description.
+     */
+    configuration: TaskTemplateConfiguration;
+    /**
+     * Client-generated creation identity; reuse the same ID and input when retrying.
+     */
+    id?: string | null;
+    /**
+     * Template name.
+     */
+    name: string;
+    /**
+     * Owning team; omission creates a personal template.
+     */
+    teamId?: string | null;
 };
 
 /**
@@ -6845,6 +6940,16 @@ export type DirectAccess = {
      * Recipient.
      */
     userId: string;
+};
+
+/**
+ * Discard the caller's timer.
+ */
+export type DiscardTimerRequest = {
+    /**
+     * The timer to discard.
+     */
+    timerId: string;
 };
 
 /**
@@ -9377,6 +9482,20 @@ export type EmailFilters = {
      */
     exclude_labels?: Array<string>;
     /**
+     * Leave out the threads in these mailbox views. Search only.
+     */
+    exclude_views?: Array<EmailSearchView>;
+    /**
+     * True for the caller's favorite threads only, false to leave them out.
+     * Search only.
+     */
+    favorite?: boolean | null;
+    /**
+     * True for threads with an attachment on any message, false for threads
+     * with none. Search only.
+     */
+    has_attachment?: boolean | null;
+    /**
      * Filter by email importance. None to not filter. True to show only important emails
      * (drafts, personal, sent, or uncategorized). False to show only unimportant emails
      * (those categorized as promotions, social, updates, or forums).
@@ -9391,6 +9510,14 @@ export type EmailFilters = {
      * Filter by the email thread's read flag, independently of notification state.
      */
     is_read?: boolean | null;
+    /**
+     * Tags or labels each thread must carry, or must not, by name, as typing
+     * `label:` or `in:<name>` into the search does. A name matches the
+     * caller's tags with that label and the labels with that name in the
+     * caller's inboxes, ignoring case; a name that is neither matches
+     * nothing. Search only.
+     */
+    label_names?: Array<EmailLabelMatch>;
     /**
      * Restrict to specific inboxes by email_links.id. Empty means "any inbox the
      * caller can access" (soup expands to the full set at the router edge).
@@ -9420,10 +9547,26 @@ export type EmailFilters = {
      */
     senders?: Array<string>;
     /**
+     * Only messages sent at or after this instant. Mail with no sent time
+     * never matches. Search only.
+     */
+    sent_after?: string | null;
+    /**
+     * Only messages sent before this instant. Mail with no sent time never
+     * matches. Search only.
+     */
+    sent_before?: string | null;
+    /**
      * Controls whether shared email threads are included in results.
      * Defaults to "exclude" (only the user's own threads).
      */
     shared?: SharedEmailFilter;
+    /**
+     * Words or phrases each message must contain, or must not, in one part
+     * of it, as typing `subject:`, `from:`, `to:`, `cc:`, `bcc:` or a minus
+     * into the search does. Search only.
+     */
+    text_matches?: Array<EmailTextMatch>;
     view?: null | EmailSearchView;
 };
 
@@ -9538,6 +9681,22 @@ export type EmailInclusionRule = {
      */
     company_id: string;
     kind: 'company';
+};
+
+/**
+ * A tag or provider label that an email thread must, or must not, carry,
+ * named by its label.
+ */
+export type EmailLabelMatch = {
+    /**
+     * Leave out the threads that carry it instead.
+     */
+    exclude?: boolean;
+    /**
+     * The label of one of the caller's tags, or the name of a label in one
+     * of the caller's inboxes, ignoring case.
+     */
+    name: string;
 };
 
 /**
@@ -9998,7 +10157,31 @@ export type EmailRuleValidation = {
 /**
  * A mailbox view the Email list scopes a search to, as its tabs do.
  */
-export type EmailSearchView = 'sent' | 'drafts';
+export type EmailSearchView = 'sent' | 'drafts' | 'calendar';
+
+/**
+ * A word or phrase that must, or must not, appear in one part of a message.
+ */
+export type EmailTextMatch = {
+    /**
+     * Leave out the messages that match instead.
+     */
+    exclude?: boolean;
+    /**
+     * The part of the message matched.
+     */
+    part: EmailTextPart;
+    /**
+     * One word, matched as a search word is (a prefix unless the search is
+     * exact), or several words, matched as an adjacent phrase.
+     */
+    text: string;
+};
+
+/**
+ * The part of an email message a search condition matches.
+ */
+export type EmailTextPart = 'any' | 'subject' | 'from' | 'to' | 'cc' | 'bcc';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -12397,6 +12580,13 @@ export type GetBatchProjectPreviewResponse = {
 };
 
 /**
+ * Response from looking up a CRM company by domain.
+ */
+export type GetCompanyByDomainResponse = {
+    company?: null | CrmCompanyResponse;
+};
+
+/**
  * Response from looking up a CRM contact by email.
  */
 export type GetContactByEmailResponse = {
@@ -13947,6 +14137,10 @@ export type InitiativePropertySnapshot = {
      */
     priority?: string | null;
     /**
+     * Start timestamp, or unset.
+     */
+    startDate?: string | null;
+    /**
      * Status option id, or unset.
      */
     status?: string | null;
@@ -14465,6 +14659,50 @@ export type LocationResponseV3 = {
      */
     metadata: DocumentBasic;
     type: 'syncServiceContent';
+};
+
+/**
+ * Typed time to log on a task.
+ */
+export type LogTimeRequest = {
+    /**
+     * The logger's calendar day for the work, `YYYY-MM-DD`.
+     */
+    date: string;
+    /**
+     * When the work ended, after `startedAt`.
+     */
+    endedAt?: string | null;
+    /**
+     * A UUIDv7 chosen by the client, so a retry logs once; generated when omitted.
+     */
+    id?: string | null;
+    /**
+     * Length in whole minutes, 1 to 1440.
+     */
+    minutes: number;
+    /**
+     * What the time was spent on, up to 2000 characters.
+     */
+    note?: string | null;
+    /**
+     * When the work started; given with `endedAt` or not at all.
+     */
+    startedAt?: string | null;
+};
+
+/**
+ * An entry and its task's Time logged after the write that returned it.
+ */
+export type LoggedTime = {
+    /**
+     * The entry as stored.
+     */
+    entry: TimeEntry;
+    /**
+     * The task's Time logged, in minutes.
+     */
+    totalMinutes: number;
 };
 
 export type MacroUserIdStr = string;
@@ -18017,6 +18255,20 @@ export type PropertyDateRanges = {
 };
 
 /**
+ * A reusable default using the task creation property's existing value contract.
+ */
+export type PropertyDefault = {
+    /**
+     * Definition that receives the default.
+     */
+    propertyId: string;
+    /**
+     * Default value; absence from the configuration leaves the field blank.
+     */
+    value: SetPropertyValue;
+};
+
+/**
  * Property definition model (service representation).
  */
 export type PropertyDefinition = {
@@ -18168,10 +18420,14 @@ export type PropertyValue = {
      */
     value: string;
 } | {
+    /**
+     * True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone.
+     */
+    has_time?: boolean;
     type: 'Date';
     /**
-     * Date/timestamp value
-     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
+     * Date value, with or without a time of day
+     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
      */
     value: string;
 } | {
@@ -18887,6 +19143,24 @@ export type RunPatch = {
     underline?: boolean | null;
 };
 
+/**
+ * A person's running timer.
+ */
+export type RunningTimer = {
+    /**
+     * The timer's id, kept by the entry it becomes.
+     */
+    id: string;
+    /**
+     * When it started, by the server's clock.
+     */
+    startedAt: string;
+    /**
+     * The task being timed.
+     */
+    taskId: string;
+};
+
 export type S3ObjectInfo = {
     bucket: string;
     key: string;
@@ -19299,7 +19573,9 @@ export type SetCompanyNameRequest = {
 };
 
 /**
- * Link or switch a contact with a known personal-provider email.
+ * Link a contact without a company, or switch the company of a contact
+ * whose primary email is at a known personal provider. A contact with an
+ * address on its current company's domain cannot switch.
  */
 export type SetContactCompanyRequest = {
     /**
@@ -19401,6 +19677,7 @@ export type SetPropertyValue = {
     type: 'boolean';
     value: boolean;
 } | {
+    has_time?: boolean;
     type: 'date';
     value: string;
 } | {
@@ -22213,6 +22490,39 @@ export type StageRequirement = {
 };
 
 /**
+ * Start timing a task.
+ */
+export type StartTimerRequest = {
+    /**
+     * A UUIDv7 chosen by the client, so a retry starts once; generated when omitted.
+     */
+    id?: string | null;
+    /**
+     * An earlier start within the last 24 hours; only Undo on a switch sends it.
+     */
+    startedAt?: string | null;
+    /**
+     * The task to time.
+     */
+    taskId: string;
+    /**
+     * IANA zone whose day a stopped previous timer's entry takes; UTC when omitted.
+     */
+    timeZone?: string | null;
+};
+
+/**
+ * A started timer, and the entry saved for the timer it replaced.
+ */
+export type StartedTimer = {
+    stopped?: null | LoggedTime;
+    /**
+     * The timer now running.
+     */
+    timer: RunningTimer;
+};
+
+/**
  * Starter result. A missing database means the user already started or removed it.
  */
 export type StarterDatabase = {
@@ -22242,6 +22552,35 @@ export type StarterDocumentsResponse = {
      * Id of the user's "Macro how to guide".
      */
     how_to_guide_id: string;
+};
+
+/**
+ * Stop the caller's timer.
+ */
+export type StopTimerRequest = {
+    /**
+     * When the person stopped working, for a timer past the limit.
+     */
+    endedAt?: string | null;
+    /**
+     * Log all the time until now, for a timer past the limit.
+     */
+    logAll?: boolean;
+    /**
+     * IANA zone whose calendar day the entry takes; UTC when omitted.
+     */
+    timeZone?: string | null;
+    /**
+     * The timer to stop.
+     */
+    timerId: string;
+};
+
+/**
+ * The entry a stop saved, or none when the timer was discarded.
+ */
+export type StoppedTimer = {
+    logged?: null | LoggedTime;
 };
 
 /**
@@ -22774,6 +23113,88 @@ export type TaskSimilaritySearchResponse = {
 };
 
 /**
+ * A personal or team-owned template with viewer-specific management capability.
+ */
+export type TaskTemplate = {
+    /**
+     * Whether the current viewer can update or delete the template.
+     */
+    canManage: boolean;
+    /**
+     * Reusable task fields and description.
+     */
+    configuration: TaskTemplateConfiguration;
+    /**
+     * Creation time.
+     */
+    createdAt: string;
+    /**
+     * Original creator; cleared when that account is deleted.
+     */
+    creatorId?: string | null;
+    /**
+     * Stable template ID.
+     */
+    id: string;
+    /**
+     * User-supplied template name.
+     */
+    name: string;
+    /**
+     * Positive revision used for conditional updates and deletes.
+     */
+    revision: number;
+    /**
+     * Owning team; absent for personal templates.
+     */
+    teamId?: string | null;
+    /**
+     * Last content update time.
+     */
+    updatedAt: string;
+    /**
+     * Personal owner; absent for team-owned templates.
+     */
+    userId?: string | null;
+};
+
+/**
+ * Selected fields, optional task title and sharing defaults, and description Markdown.
+ */
+export type TaskTemplateConfiguration = {
+    /**
+     * Defaults for selected fields only.
+     */
+    defaults?: Array<PropertyDefault>;
+    /**
+     * Markdown inserted only when the current description is blank.
+     */
+    descriptionMarkdown: string;
+    /**
+     * Visible definition IDs, including fields without a default value.
+     */
+    propertyIds: Array<string>;
+    /**
+     * Default task sharing, independent of template ownership; absence preserves the current choice.
+     */
+    shareWithTeam?: boolean | null;
+    /**
+     * Default task title, separate from the template name; absence leaves the task untitled.
+     */
+    title?: string | null;
+};
+
+/**
+ * A task's Time logged.
+ */
+export type TaskTimeTotal = {
+    /**
+     * The task's Time logged, in minutes.
+     */
+    totalMinutes: number;
+};
+
+/**
  * Availability for exactly the members selected by the domain service.
  */
 export type TeamAvailability = {
@@ -23214,6 +23635,243 @@ export type ThreadState = {
 };
 
 /**
+ * Time a person logged on a task.
+ */
+export type TimeEntry = {
+    /**
+     * When it was logged.
+     */
+    createdAt: string;
+    /**
+     * The logger's own calendar day for the work.
+     */
+    date: string;
+    /**
+     * When the work ended, given exactly when `started_at` is.
+     */
+    endedAt?: string | null;
+    /**
+     * The entry's id; a timer's entry keeps the timer's id.
+     */
+    id: string;
+    /**
+     * Length in whole minutes; the truth even when a start and end are given.
+     */
+    minutes: number;
+    /**
+     * What the time was spent on.
+     */
+    note?: string | null;
+    /**
+     * How the entry was made.
+     */
+    source: TimeEntrySource;
+    /**
+     * When the work started, if known.
+     */
+    startedAt?: string | null;
+    /**
+     * The task document the time was spent on.
+     */
+    taskId: string;
+    /**
+     * When it last changed.
+     */
+    updatedAt: string;
+    /**
+     * Who logged it.
+     */
+    userId: string;
+};
+
+/**
+ * Where a page of entries continues: after this day and id, newest first.
+ */
+export type TimeEntryCursor = {
+    /**
+     * The day of the last entry returned.
+     */
+    date: string;
+    /**
+     * The id of the last entry returned.
+     */
+    id: string;
+};
+
+/**
+ * A task's entries, newest day first, with its Time logged.
+ */
+export type TimeEntryPage = {
+    /**
+     * Entries of this page.
+     */
+    entries: Array<TimeEntry>;
+    nextCursor?: null | TimeEntryCursor;
+    /**
+     * The task's Time logged, in minutes.
+     */
+    totalMinutes: number;
+};
+
+/**
+ * How a time entry was made.
+ */
+export type TimeEntrySource = 'manual' | 'timer';
+
+/**
+ * A scope's entries over a period as CSV text.
+ */
+export type TimeExport = {
+    /**
+     * False when entries were left out: past 10,000 entries or 16 MiB, or
+     * past the first 5,000 tasks of the scope.
+     */
+    complete: boolean;
+    /**
+     * The CSV: one row per entry, oldest day first.
+     */
+    csv: string;
+    /**
+     * Entries written.
+     */
+    rows: number;
+};
+
+/**
+ * The total of one group, and its split by the second grouping.
+ */
+export type TimeGroup = {
+    /**
+     * What the group is for.
+     */
+    key: TimeGroupKey;
+    /**
+     * Minutes logged in the group.
+     */
+    minutes: number;
+    /**
+     * The group's totals by the second grouping, in report order; empty
+     * without one.
+     */
+    rows: Array<TimeTotal>;
+    /**
+     * Tasks with time in the group.
+     */
+    taskCount: number;
+};
+
+/**
+ * What one total is for.
+ */
+export type TimeGroupKey = {
+    by: 'person';
+    /**
+     * The person.
+     */
+    userId: string;
+} | {
+    by: 'task';
+    /**
+     * The task document.
+     */
+    taskId: string;
+} | {
+    by: 'day';
+    /**
+     * The loggers' calendar day.
+     */
+    date: string;
+};
+
+/**
+ * What a report's totals are grouped by.
+ */
+export type TimeGrouping = 'person' | 'task' | 'day';
+
+/**
+ * Whose time a report reads.
+ */
+export type TimeScopeName = 'project' | 'mine' | 'team';
+
+/**
+ * The time a scope logged over a period.
+ */
+export type TimeSummary = {
+    /**
+     * False when the scope held more than 5,000 tasks and only the first
+     * 5,000 were read.
+     */
+    complete: boolean;
+    /**
+     * The first day of the period.
+     */
+    from: string;
+    /**
+     * Totals by the first grouping, in report order: days in calendar order,
+     * people and tasks with the most time first. For the caller's own and
+     * their team's time grouped by person, every current member has a group,
+     * with or without time.
+     */
+    groups: Array<TimeGroup>;
+    /**
+     * For a project, its tasks the caller can see that are out of the
+     * Trash, with time or not; absent for other scopes.
+     */
+    scopeTaskCount?: number | null;
+    /**
+     * Tasks with time in the period.
+     */
+    taskCount: number;
+    /**
+     * Totals by the second grouping across all groups, in report order;
+     * empty without one.
+     */
+    thenTotals: Array<TimeTotal>;
+    /**
+     * The last day of the period.
+     */
+    to: string;
+    /**
+     * Minutes logged in the period.
+     */
+    totalMinutes: number;
+};
+
+/**
+ * A total of minutes.
+ */
+export type TimeTotal = {
+    /**
+     * What the total is for.
+     */
+    key: TimeGroupKey;
+    /**
+     * Minutes logged.
+     */
+    minutes: number;
+};
+
+/**
+ * Error body of the time tracking endpoints.
+ */
+export type TimeTrackingApiError = {
+    /**
+     * Machine-readable failure category.
+     */
+    code: TimeTrackingErrorCode;
+    /**
+     * Human-readable failure description.
+     */
+    message: string;
+    timer?: null | RunningTimer;
+};
+
+/**
+ * Machine-readable reason a time tracking request failed.
+ */
+export type TimeTrackingErrorCode = 'not_found' | 'forbidden' | 'not_author' | 'invalid_input' | 'timer_over_limit' | 'conflict' | 'unavailable' | 'internal';
+
+/**
  * A displayable fact returned together with a message page.
  */
 export type TimelineActivity = {
@@ -23237,6 +23895,17 @@ export type TimelineActivity = {
      * The action's stored payload.
      */
     payload?: unknown;
+};
+
+/**
+ * The caller's timer, if any, and the server's clock to count it from.
+ */
+export type TimerState = {
+    /**
+     * The server's current time.
+     */
+    serverNow: string;
+    timer?: null | RunningTimer;
 };
 
 /**
@@ -23804,6 +24473,50 @@ export type UpdateSharePermissionRequestV2 = {
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * Replace content without changing ownership.
+ */
+export type UpdateTaskTemplateRequest = {
+    /**
+     * Replacement task fields and description.
+     */
+    configuration: TaskTemplateConfiguration;
+    /**
+     * Replacement name.
+     */
+    name: string;
+    /**
+     * Revision observed when editing began.
+     */
+    revision: number;
+};
+
+/**
+ * Changes to one's own entry. Omitted fields stay; `null` clears a note or span.
+ */
+export type UpdateTimeEntryRequest = {
+    /**
+     * A new day, `YYYY-MM-DD`.
+     */
+    date?: string | null;
+    /**
+     * A new end, or `null` to clear the span; changed with `startedAt`.
+     */
+    endedAt?: string | null;
+    /**
+     * A new length in whole minutes, 1 to 1440.
+     */
+    minutes?: number | null;
+    /**
+     * A new note, or `null` for none.
+     */
+    note?: string | null;
+    /**
+     * A new start, or `null` to clear the span; changed with `endedAt`.
+     */
+    startedAt?: string | null;
 };
 
 /**
@@ -28473,6 +29186,40 @@ export type CreateCrmCompanyResponses = {
 
 export type CreateCrmCompanyResponse = CreateCrmCompanyResponses[keyof CreateCrmCompanyResponses];
 
+export type GetCompanyByDomainData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The company domain to resolve within the caller's team, such as
+         * `acme.com`.
+         */
+        domain: string;
+    };
+    url: '/crm/companies/by-domain';
+};
+
+export type GetCompanyByDomainErrors = {
+    /**
+     * The domain is not a bare domain like acme.com.
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetCompanyByDomainError = GetCompanyByDomainErrors[keyof GetCompanyByDomainErrors];
+
+export type GetCompanyByDomainResponses = {
+    /**
+     * The company for the domain, or a null company when none is visible.
+     */
+    200: GetCompanyByDomainResponse;
+};
+
+export type GetCompanyByDomainResponse2 = GetCompanyByDomainResponses[keyof GetCompanyByDomainResponses];
+
 export type ImportCrmCompaniesCsvData = {
     body: ImportCompaniesCsvRequest;
     path?: never;
@@ -28627,6 +29374,63 @@ export type ListCompanyContactsPageResponses = {
 };
 
 export type ListCompanyContactsPageResponse = ListCompanyContactsPageResponses[keyof ListCompanyContactsPageResponses];
+
+export type RemoveCrmCompanyDomainData = {
+    body: CompanyDomainRequest;
+    path: {
+        /**
+         * The company to update
+         */
+        company_id: string;
+    };
+    query?: never;
+    url: '/crm/companies/{company_id}/domains';
+};
+
+export type RemoveCrmCompanyDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveCrmCompanyDomainError = RemoveCrmCompanyDomainErrors[keyof RemoveCrmCompanyDomainErrors];
+
+export type RemoveCrmCompanyDomainResponses = {
+    200: CrmCompanyResponse;
+};
+
+export type RemoveCrmCompanyDomainResponse = RemoveCrmCompanyDomainResponses[keyof RemoveCrmCompanyDomainResponses];
+
+export type AddCrmCompanyDomainData = {
+    body: CompanyDomainRequest;
+    path: {
+        /**
+         * The company to update
+         */
+        company_id: string;
+    };
+    query?: never;
+    url: '/crm/companies/{company_id}/domains';
+};
+
+export type AddCrmCompanyDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: CompanyDomainTakenResponse;
+    500: ErrorResponse;
+};
+
+export type AddCrmCompanyDomainError = AddCrmCompanyDomainErrors[keyof AddCrmCompanyDomainErrors];
+
+export type AddCrmCompanyDomainResponses = {
+    200: CrmCompanyResponse;
+};
+
+export type AddCrmCompanyDomainResponse = AddCrmCompanyDomainResponses[keyof AddCrmCompanyDomainResponses];
 
 export type SetEmailSyncData = {
     body: SetEmailSyncRequest;
@@ -37560,6 +38364,115 @@ export type BulkWakeupSyncServiceDocumentsResponses = {
 
 export type BulkWakeupSyncServiceDocumentsResponse = BulkWakeupSyncServiceDocumentsResponses[keyof BulkWakeupSyncServiceDocumentsResponses];
 
+export type ListTaskTemplatesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        teamId?: string;
+    };
+    url: '/task_templates';
+};
+
+export type ListTaskTemplatesErrors = {
+    403: ErrorResponse;
+};
+
+export type ListTaskTemplatesError = ListTaskTemplatesErrors[keyof ListTaskTemplatesErrors];
+
+export type ListTaskTemplatesResponses = {
+    200: Array<TaskTemplate>;
+};
+
+export type ListTaskTemplatesResponse = ListTaskTemplatesResponses[keyof ListTaskTemplatesResponses];
+
+export type CreateTaskTemplateData = {
+    body: CreateTaskTemplateRequest;
+    path?: never;
+    query?: never;
+    url: '/task_templates';
+};
+
+export type CreateTaskTemplateErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type CreateTaskTemplateError = CreateTaskTemplateErrors[keyof CreateTaskTemplateErrors];
+
+export type CreateTaskTemplateResponses = {
+    201: TaskTemplate;
+};
+
+export type CreateTaskTemplateResponse = CreateTaskTemplateResponses[keyof CreateTaskTemplateResponses];
+
+export type DeleteTaskTemplateData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        revision: number;
+    };
+    url: '/task_templates/{id}';
+};
+
+export type DeleteTaskTemplateErrors = {
+    404: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type DeleteTaskTemplateError = DeleteTaskTemplateErrors[keyof DeleteTaskTemplateErrors];
+
+export type DeleteTaskTemplateResponses = {
+    204: void;
+};
+
+export type DeleteTaskTemplateResponse = DeleteTaskTemplateResponses[keyof DeleteTaskTemplateResponses];
+
+export type GetTaskTemplateData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/task_templates/{id}';
+};
+
+export type GetTaskTemplateErrors = {
+    404: ErrorResponse;
+};
+
+export type GetTaskTemplateError = GetTaskTemplateErrors[keyof GetTaskTemplateErrors];
+
+export type GetTaskTemplateResponses = {
+    200: TaskTemplate;
+};
+
+export type GetTaskTemplateResponse = GetTaskTemplateResponses[keyof GetTaskTemplateResponses];
+
+export type UpdateTaskTemplateData = {
+    body: UpdateTaskTemplateRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/task_templates/{id}';
+};
+
+export type UpdateTaskTemplateErrors = {
+    404: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type UpdateTaskTemplateError = UpdateTaskTemplateErrors[keyof UpdateTaskTemplateErrors];
+
+export type UpdateTaskTemplateResponses = {
+    200: TaskTemplate;
+};
+
+export type UpdateTaskTemplateResponse = UpdateTaskTemplateResponses[keyof UpdateTaskTemplateResponses];
+
 export type EditThreadV2Data = {
     body: PatchThreadRequestV2;
     path: {
@@ -37621,6 +38534,316 @@ export type GetThreadChannelSharesResponses = {
 };
 
 export type GetThreadChannelSharesResponse = GetThreadChannelSharesResponses[keyof GetThreadChannelSharesResponses];
+
+export type DeleteTimeEntryData = {
+    body?: never;
+    path: {
+        /**
+         * The entry's id.
+         */
+        entry_id: string;
+    };
+    query?: never;
+    url: '/time/entries/{entry_id}';
+};
+
+export type DeleteTimeEntryErrors = {
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type DeleteTimeEntryError = DeleteTimeEntryErrors[keyof DeleteTimeEntryErrors];
+
+export type DeleteTimeEntryResponses = {
+    200: TaskTimeTotal;
+};
+
+export type DeleteTimeEntryResponse = DeleteTimeEntryResponses[keyof DeleteTimeEntryResponses];
+
+export type UpdateTimeEntryData = {
+    body: UpdateTimeEntryRequest;
+    path: {
+        /**
+         * The entry's id.
+         */
+        entry_id: string;
+    };
+    query?: never;
+    url: '/time/entries/{entry_id}';
+};
+
+export type UpdateTimeEntryErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type UpdateTimeEntryError = UpdateTimeEntryErrors[keyof UpdateTimeEntryErrors];
+
+export type UpdateTimeEntryResponses = {
+    200: LoggedTime;
+};
+
+export type UpdateTimeEntryResponse = UpdateTimeEntryResponses[keyof UpdateTimeEntryResponses];
+
+export type ExportTimeData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Whose time to read.
+         */
+        scope: TimeScopeName;
+        /**
+         * The project, with `scope=project` only.
+         */
+        projectId?: string;
+        /**
+         * The first day, `YYYY-MM-DD`.
+         */
+        from: string;
+        /**
+         * The last day, `YYYY-MM-DD`, at most 365 days after `from`.
+         */
+        to: string;
+    };
+    url: '/time/export';
+};
+
+export type ExportTimeErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type ExportTimeError = ExportTimeErrors[keyof ExportTimeErrors];
+
+export type ExportTimeResponses = {
+    200: TimeExport;
+};
+
+export type ExportTimeResponse = ExportTimeResponses[keyof ExportTimeResponses];
+
+export type GetTimeSummaryData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Whose time to read.
+         */
+        scope: TimeScopeName;
+        /**
+         * The project, with `scope=project` only.
+         */
+        projectId?: string;
+        /**
+         * The first day, `YYYY-MM-DD`.
+         */
+        from: string;
+        /**
+         * The last day, `YYYY-MM-DD`, at most 365 days after `from`.
+         */
+        to: string;
+        /**
+         * What the totals are grouped by.
+         */
+        groupBy: TimeGrouping;
+        /**
+         * What each group is split by; another grouping than `groupBy`.
+         */
+        thenBy?: TimeGrouping;
+    };
+    url: '/time/summary';
+};
+
+export type GetTimeSummaryErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type GetTimeSummaryError = GetTimeSummaryErrors[keyof GetTimeSummaryErrors];
+
+export type GetTimeSummaryResponses = {
+    200: TimeSummary;
+};
+
+export type GetTimeSummaryResponse = GetTimeSummaryResponses[keyof GetTimeSummaryResponses];
+
+export type ListTimeEntriesData = {
+    body?: never;
+    path: {
+        /**
+         * The task document's id.
+         */
+        task_id: string;
+    };
+    query?: {
+        /**
+         * Entries per page, 1 to 200; 50 when omitted.
+         */
+        limit?: number;
+        /**
+         * The `date` of the previous page's `nextCursor`.
+         */
+        cursorDate?: string;
+        /**
+         * The `id` of the previous page's `nextCursor`.
+         */
+        cursorId?: string;
+    };
+    url: '/time/tasks/{task_id}/entries';
+};
+
+export type ListTimeEntriesErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type ListTimeEntriesError = ListTimeEntriesErrors[keyof ListTimeEntriesErrors];
+
+export type ListTimeEntriesResponses = {
+    200: TimeEntryPage;
+};
+
+export type ListTimeEntriesResponse = ListTimeEntriesResponses[keyof ListTimeEntriesResponses];
+
+export type LogTimeData = {
+    body: LogTimeRequest;
+    path: {
+        /**
+         * The task document's id.
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/time/tasks/{task_id}/entries';
+};
+
+export type LogTimeErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    409: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type LogTimeError = LogTimeErrors[keyof LogTimeErrors];
+
+export type LogTimeResponses = {
+    200: LoggedTime;
+};
+
+export type LogTimeResponse = LogTimeResponses[keyof LogTimeResponses];
+
+export type GetTimerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/time/timer';
+};
+
+export type GetTimerErrors = {
+    401: ErrorResponse;
+    500: TimeTrackingApiError;
+};
+
+export type GetTimerError = GetTimerErrors[keyof GetTimerErrors];
+
+export type GetTimerResponses = {
+    200: TimerState;
+};
+
+export type GetTimerResponse = GetTimerResponses[keyof GetTimerResponses];
+
+export type DiscardTimerData = {
+    body: DiscardTimerRequest;
+    path?: never;
+    query?: never;
+    url: '/time/timer/discard';
+};
+
+export type DiscardTimerErrors = {
+    401: ErrorResponse;
+    404: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type DiscardTimerError = DiscardTimerErrors[keyof DiscardTimerErrors];
+
+export type DiscardTimerResponses = {
+    204: void;
+};
+
+export type DiscardTimerResponse = DiscardTimerResponses[keyof DiscardTimerResponses];
+
+export type StartTimerData = {
+    body: StartTimerRequest;
+    path?: never;
+    query?: never;
+    url: '/time/timer/start';
+};
+
+export type StartTimerErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    403: TimeTrackingApiError;
+    404: TimeTrackingApiError;
+    409: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type StartTimerError = StartTimerErrors[keyof StartTimerErrors];
+
+export type StartTimerResponses = {
+    200: StartedTimer;
+};
+
+export type StartTimerResponse = StartTimerResponses[keyof StartTimerResponses];
+
+export type StopTimerData = {
+    body: StopTimerRequest;
+    path?: never;
+    query?: never;
+    url: '/time/timer/stop';
+};
+
+export type StopTimerErrors = {
+    400: TimeTrackingApiError;
+    401: ErrorResponse;
+    404: TimeTrackingApiError;
+    409: TimeTrackingApiError;
+    500: TimeTrackingApiError;
+    503: TimeTrackingApiError;
+};
+
+export type StopTimerError = StopTimerErrors[keyof StopTimerErrors];
+
+export type StopTimerResponses = {
+    200: StoppedTimer;
+};
+
+export type StopTimerResponse = StopTimerResponses[keyof StopTimerResponses];
 
 export type ListUserApiKeysData = {
     body?: never;

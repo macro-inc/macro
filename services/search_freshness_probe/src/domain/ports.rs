@@ -49,6 +49,12 @@ pub trait Rotation: Send {
     /// The type it changes.
     fn entity_type(&self) -> EntityType;
 
+    /// Housekeeping before the round's timed write, such as deleting an
+    /// earlier round's entity.
+    fn prepare(&mut self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
     /// Makes the next change in the cycle, and says what search must show
     /// once it is indexed.
     fn change(&mut self) -> impl Future<Output = Result<Change, NoChange>> + Send;
@@ -112,7 +118,7 @@ pub trait CreatedWrites: Send {
         token: &Token,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Removes the entity for good, not to a trash that search still shows.
+    /// Removes the entity for good, not to the Trash, which the index keeps.
     /// An entity already gone counts as deleted.
     fn delete(&mut self, id: EntityId) -> impl Future<Output = Result<(), Self::Err>> + Send;
 

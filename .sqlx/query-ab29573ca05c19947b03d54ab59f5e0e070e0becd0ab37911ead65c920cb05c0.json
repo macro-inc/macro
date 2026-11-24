@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id, disabled_event_types, section_mute_override\n           FROM user_channel_notification_setting\n           WHERE user_id = ANY($1) AND channel_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "disabled_event_types",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 2,
+        "name": "section_mute_override",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "ab29573ca05c19947b03d54ab59f5e0e070e0becd0ab37911ead65c920cb05c0"
+}

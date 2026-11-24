@@ -68,12 +68,23 @@ pub fn set_parent(span: &tracing::Span, meta: Option<&Map<String, Value>>) {
 /// The keys SEP-414 reserves in an MCP request's `_meta` for W3C context.
 const MCP_TRACE_KEYS: [&str; 2] = ["traceparent", "tracestate"];
 
+/// Set to `true` in an MCP request's `_meta` by a caller whose content is
+/// withheld from traces ([`crate::withhold_content`]), so the server that
+/// runs the tool withholds its content too.
+const MCP_WITHHOLD_CONTENT: &str = "macro.dev/withhold-content";
+
 /// Put `span`'s context in an MCP request's `_meta` under the keys SEP-414
 /// reserves (`traceparent`, `tracestate`), keeping every other key. A
-/// disabled span clears stale context.
+/// disabled span clears stale context. A caller inside
+/// [`crate::withhold_content`] also marks the request withheld
+/// ([`mcp_withholds_content`]); any other caller clears the mark.
 pub fn inject_mcp(span: &tracing::Span, meta: &mut Map<String, Value>) {
     for key in MCP_TRACE_KEYS {
         meta.remove(key);
+    }
+    meta.remove(MCP_WITHHOLD_CONTENT);
+    if crate::content_withheld() {
+        meta.insert(MCP_WITHHOLD_CONTENT.to_owned(), Value::Bool(true));
     }
     let context = span.context();
     if !context.span().span_context().is_valid() {
@@ -82,6 +93,15 @@ pub fn inject_mcp(span: &tracing::Span, meta: &mut Map<String, Value>) {
     opentelemetry::global::get_text_map_propagator(|propagator| {
         propagator.inject_context(&context, &mut CarrierMut(meta));
     });
+}
+
+/// Whether an MCP request's `_meta` says its caller withholds content from
+/// traces ([`inject_mcp`]): the server then runs the tool inside
+/// [`crate::withhold_content`]. A caller can only ask for less on traces.
+pub fn mcp_withholds_content(meta: &Map<String, Value>) -> bool {
+    meta.get(MCP_WITHHOLD_CONTENT)
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 /// Parent an MCP server's handling of a request under the caller that sent

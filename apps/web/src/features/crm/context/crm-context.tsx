@@ -8,6 +8,7 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
 import type { CrmActivityViewState } from '../core/activity-view';
+import type { CompanyDomainChange } from '../core/company';
 import type { ContactEmailChange, CrmContact } from '../core/contact';
 
 export type ActivityFilters = {
@@ -67,7 +68,14 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  /** Admitted record data; pending/error stay gated. Pipeline grants are separate. */
+  canAccess: Accessor<boolean>;
+  accessState: Accessor<'pending' | 'allowed' | 'denied' | 'error'>;
+  retryAccess(): Promise<unknown>;
   createEmailPolicy(): EmailPolicySource;
+  /** Opens the app's add-inbox flow; never changes CRM email consent. */
+  connectMailbox(): void;
+  /** Owner-scoped email reference, available independently of CRM viewing access. */
   EmailThreadMention: Component<{
     threadId: string;
     subject: string;
@@ -88,6 +96,8 @@ export type CrmContext = {
     record: Accessor<PipelineEntryRecord>
   ): AddToPipelineSource;
   PipelineSharing: PipelineSharing;
+  /** CRM settings' Who can use CRM; renders nothing for viewers who can't change it. */
+  MemberAccess: Component;
   createPipelineTransfer(pipeline: Pipeline): PipelineTransfer;
   downloadCsv(content: string, filename: string): Promise<{ saved: boolean }>;
   /** Profile picture lookup for a contact; presentation owns the fallback. */
@@ -111,7 +121,10 @@ export type CrmContext = {
     ): void;
     showCompanies(): void;
     /** Open any soup row (email, file, call, ...) in a split. */
-    openEntity(entity: import('@entity').EntityData): void;
+    openEntity(
+      entity: import('@entity').EntityData,
+      options?: { newSplit?: boolean }
+    ): void;
   };
   listsEnabled(): Accessor<boolean>;
 
@@ -236,6 +249,11 @@ export type CrmContext = {
     { contact: CrmContact; companyId: string | null },
     CrmContact
   >;
+  editCompanyDomain(): CrmMutation<{
+    companyId: string;
+    domain: string;
+    change: CompanyDomainChange;
+  }>;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;
   hideContact(): CrmMutation<{ contactId: string; hidden: boolean }>;
   setEmailSync(): CrmMutation<{ companyId: string; emailSync: boolean }>;

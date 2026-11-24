@@ -1,7 +1,7 @@
 import { PersonaAvatar } from '@app/features/agent-dms/components/persona-avatar';
 import { EntityIcon, type EntityIconProps } from '@core/component/EntityIcon';
 import { UserIcon, type UserIconSize } from '@core/component/UserIcon';
-import { useChannelsContext } from '@core/context/channels';
+import { directMessagePeer, useChannel } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { Show } from 'solid-js';
@@ -22,15 +22,17 @@ export type ChannelIconProps = {
 
 function DirectMessageIcon(props: ChannelIconProps) {
   const userId = useUserId();
-  const channels = useChannelsContext();
-  const channel = () => channels.channelsById()[props.channelId];
-  const agentDm = () => channel()?.agent_dm;
+  const channel = useChannel(() => props.channelId);
+  const agentDm = () => channel()?.agentDm;
   const participantId = () => {
-    const participants =
-      props.participantIds ??
-      channel()?.participants.map((participant) => participant.user_id) ??
-      [];
-    return participants.find((id) => id !== userId()) ?? participants[0];
+    const ids = props.participantIds;
+    if (ids) return ids.find((id) => id !== userId()) ?? ids[0];
+    const current = channel();
+    if (!current) return undefined;
+    // A DM with only the viewer in it shows the viewer.
+    return (
+      directMessagePeer(current, userId()) ?? current.participants[0]?.userId
+    );
   };
 
   return (
@@ -77,9 +79,9 @@ function DirectMessageIcon(props: ChannelIconProps) {
       >
         {(persona) => (
           <PersonaAvatar
-            botId={persona().bot_id}
+            botId={persona().botId}
             name={persona().name}
-            avatarUrl={persona().avatar_url}
+            avatarUrl={persona().avatarUrl}
             size={props.avatarSize ?? 'fill'}
             class={props.class}
           />

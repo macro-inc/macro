@@ -5,7 +5,11 @@
 //! nightly, run by the `suggestion_generation` crate, which also runs their
 //! suggestions sessions) are told what [`RoutineSuggestionApi::brief`] says: the
 //! person's newest mail and connected apps as untrusted data, Macro's
-//! catalog, and what they dismissed. Each hands back suggestions through
+//! catalog, and what they dismissed. At onboarding, behind
+//! [`ROUTINE_FIND_WORK_FLAG`], one session picks from the catalog at once
+//! while [`RoutineSuggestionApi::find_work`] lists the streams of work in the
+//! person's last month of mail ([`work`]), and a second drafts from that
+//! list. Each hands back suggestions through
 //! `macro.routines.suggest` ([`RoutineSuggestionApi::suggest`]), which only the
 //! person's own open routines sessions may call. A suggestion is a catalog
 //! routine with bounded knob values, or a routine the session drafted that
@@ -16,8 +20,9 @@
 //!
 //! A read serves, per surface, AI's open suggestions best first, then
 //! catalog routines marked `suggest` as Macro's templates, to
-//! [`PER_SURFACE`], skipping what the person dismissed or saved a routine
-//! from. Dismissal is permanent and later generations are told.
+//! [`PER_SURFACE`] (drafted routines to [`DRAFTED_PER_SURFACE`] with
+//! [`ROUTINE_FIND_WORK_FLAG`] on), skipping what the person dismissed or saved
+//! a routine from. Dismissal is permanent and later generations are told.
 //!
 //! An AI suggestion's state is stored; [`state::RoutineSuggestionState::on`]
 //! is the one function that changes it and its card in the Suggestions feed
@@ -29,6 +34,7 @@ pub mod ports;
 pub mod prompt;
 pub mod state;
 pub mod text;
+pub mod work;
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -43,6 +49,7 @@ use model_owner::CreationPrincipal;
 use routine_program::{CATALOG, Surface};
 use suggestions::domain::model::{GenerationSession, GenerationTrigger, RoutineText, SessionKind};
 use suggestions::domain::ports::GenerationSessions;
+use tracing::Instrument as _;
 
 use self::model::{
     GenerationStatus, RetireSuggestion, ReviewedSuggestion, RoutineGenerationReport,
@@ -51,8 +58,14 @@ use self::model::{
 };
 use suggestions::domain::service::{NEW_PER_GENERATION, OPEN_LIMIT};
 
-use self::ports::{GenerationStatuses, Kept, SuggestionRepo, SuggestionSources};
+use self::ports::{
+    BriefPart, GenerationStatuses, Kept, SuggestionRepo, SuggestionSources, WorkModel,
+};
 use self::state::{RoutineSuggestionState, Transition};
+use self::work::{
+    SENT_MESSAGES, SENT_TEXTS, WORK_DAYS, WORK_MESSAGES, WORK_MODEL, WORK_TEXTS, WORK_TRIES,
+    WorkList,
+};
 use super::event_rollout::EVENT_ROUTINES_FLAG;
 use super::models::ActionPolicyError;
 use super::ports::{
@@ -64,10 +77,17 @@ mod test;
 
 /// The PostHog flag that turns routine suggestions on for a person.
 pub const ROUTINE_SUGGESTIONS_FLAG: &str = "enable-routine-suggestions";
+/// The PostHog flag that has a person's onboarding find the work in their
+/// last month of mail, and draft routines from it in a session of its own.
+pub const ROUTINE_FIND_WORK_FLAG: &str = "routine-suggestions-find-work";
 /// Inbox messages a brief holds.
 pub const INBOX_MESSAGES: u16 = 100;
 /// Suggestions shown per surface: AI's, then Macro's templates.
 pub const PER_SURFACE: usize = 3;
+/// Most drafted routines a surface shows with [`ROUTINE_FIND_WORK_FLAG`] on,
+/// where drafting from the month's streams makes more than [`PER_SURFACE`]
+/// worth showing. Catalog picks and templates still stop at [`PER_SURFACE`].
+pub const DRAFTED_PER_SURFACE: usize = 8;
 /// AI's catalog picks onboarding shows switched on, at most.
 pub const MAX_ON_BY_DEFAULT: usize = 2;
 /// The keep estimate a catalog pick needs to be shown switched on.
@@ -122,6 +142,8 @@ pub struct RoutineSuggestionService<Actions, Repo, Sources, Code, Flags> {
     statuses: Arc<dyn GenerationStatuses>,
     flags: Option<Flags>,
     briefing: RoutineBriefing,
+    /// What finds the work in a person's mail; without it, none is found.
+    work: Option<Arc<dyn WorkModel>>,
 }
 
 impl<Actions, Repo, Sources, Code, Flags>
@@ -156,7 +178,14 @@ where
             statuses,
             flags,
             briefing,
+            work: None,
         }
+    }
+
+    /// Find the work in a person's month of mail with `model`.
+    pub fn with_work_model(mut self, model: Arc<dyn WorkModel>) -> Self {
+        self.work = Some(model);
+        self
     }
 
     /// The flags for the person; none when they can't be read.
@@ -230,10 +259,12 @@ where
     }
 
     /// The person's suggestions, per surface AI's then Macro's templates.
+    /// A surface shows up to `drafted` drafted routines.
     async fn answer(
         &self,
         user: &MacroUserIdStr<'static>,
         surface: Option<Surface>,
+        drafted: usize,
     ) -> Result<RoutineSuggestions> {
         let (status, stored, dismissed_templates, saved_from) = tokio::try_join!(
             self.statuses.latest(user),
@@ -243,7 +274,14 @@ where
         )?;
         Ok(RoutineSuggestions {
             status: status.unwrap_or(GenerationStatus::None),
-            suggestions: fill(user, &stored, &dismissed_templates, &saved_from, surface),
+            suggestions: fill(
+                user,
+                &stored,
+                &dismissed_templates,
+                &saved_from,
+                surface,
+                drafted,
+            ),
         })
     }
 
@@ -403,16 +441,24 @@ where
         user: &MacroUserIdStr<'static>,
         surface: Option<Surface>,
     ) -> Result<RoutineSuggestions> {
-        self.require_flag(user).await?;
-        self.answer(user, surface).await
+        let flags = self.require_flag(user).await?;
+        let drafted = if flags.is_enabled(ROUTINE_FIND_WORK_FLAG) {
+            DRAFTED_PER_SURFACE
+        } else {
+            PER_SURFACE
+        };
+        self.answer(user, surface, drafted).await
     }
 
     #[tracing::instrument(name = "routine.suggestions.brief", skip_all, fields(
         routine.suggestions.surfaces = ?surfaces,
+        routine.suggestions.part = part.name(),
+        routine.suggestions.work_streams = tracing::field::Empty,
         routine.suggestions.inbox_messages = tracing::field::Empty,
         routine.suggestions.apps = tracing::field::Empty,
         routine.suggestions.code = tracing::field::Empty,
         routine.suggestions.events = tracing::field::Empty,
+        routine.suggestions.crm = tracing::field::Empty,
     ), err)]
     async fn brief(
         &self,
@@ -420,6 +466,7 @@ where
         surfaces: &[Surface],
         trigger: GenerationTrigger,
         timezone: Tz,
+        part: BriefPart<'_>,
     ) -> Result<String> {
         // A drafted routine starts on mail through a condition, and saving
         // one needs both conditions and this flag: told otherwise, a session
@@ -427,9 +474,10 @@ where
         let flags = self.require_flag(user).await?;
         let events = self.briefing.conditions && flags.is_enabled(EVENT_ROUTINES_FLAG);
         let code = self.code.sdk().is_some();
-        let (inbox, apps, dismissed) = tokio::join!(
+        let (inbox, apps, crm, dismissed) = tokio::join!(
             self.sources.inbox(user, INBOX_MESSAGES),
             self.sources.apps(user),
+            self.sources.crm(user),
             self.dismissed_names(user),
         );
         let inbox = inbox
@@ -438,11 +486,20 @@ where
         let apps = apps
             .inspect_err(|error| tracing::warn!(error = ?error, "could not read connected apps to suggest routines"))
             .unwrap_or_default();
+        // When it can't be read, no draft is told to add companies: a routine
+        // whose CRM tool refuses it would fail every run.
+        let crm = crm
+            .inspect_err(|error| tracing::warn!(error = ?error, "could not read CRM access to suggest routines"))
+            .unwrap_or(false);
         let span = tracing::Span::current();
         span.record("routine.suggestions.inbox_messages", inbox.len());
         span.record("routine.suggestions.apps", apps.len());
         span.record("routine.suggestions.code", code);
         span.record("routine.suggestions.events", events);
+        span.record("routine.suggestions.crm", crm);
+        if let BriefPart::Drafts(Some(list)) = part {
+            span.record("routine.suggestions.work_streams", list.streams.len());
+        }
         Ok(prompt::brief(&prompt::BriefData {
             surfaces,
             trigger,
@@ -453,8 +510,78 @@ where
             agent_model: &self.briefing.agent_model,
             code,
             events,
+            crm,
             guide: self.briefing.guide,
+            part,
         }))
+    }
+
+    #[tracing::instrument(name = "routine.suggestions.find_work", skip_all, fields(
+        agent.session.id = %session,
+        routine.suggestions.model = WORK_MODEL,
+        routine.suggestions.messages = tracing::field::Empty,
+        routine.suggestions.texts = tracing::field::Empty,
+        routine.suggestions.sent = tracing::field::Empty,
+        routine.suggestions.streams = tracing::field::Empty,
+        routine.suggestions.tries = tracing::field::Empty,
+    ), err)]
+    async fn find_work(&self, user: &MacroUserIdStr<'static>, session: Uuid) -> Result<WorkList> {
+        let Some(model) = &self.work else {
+            bail!("nothing here finds the work in a person's mail");
+        };
+        let span = tracing::Span::current();
+        // What reached them and what they sent, read side by side.
+        let (messages, sent) = tokio::try_join!(
+            self.sources
+                .inbox_window(user, WORK_DAYS, WORK_MESSAGES, WORK_TEXTS)
+                .instrument(tracing::info_span!("routine.suggestions.read_month")),
+            self.sources
+                .sent_window(user, WORK_DAYS, SENT_MESSAGES, SENT_TEXTS)
+                .instrument(tracing::info_span!("routine.suggestions.read_sent")),
+        )?;
+        span.record("routine.suggestions.messages", messages.len());
+        span.record("routine.suggestions.sent", sent.len());
+        span.record(
+            "routine.suggestions.texts",
+            messages
+                .iter()
+                .filter(|message| message.snippet.is_some())
+                .count(),
+        );
+        let prompt = work::prompt(&messages, &sent, Utc::now());
+        let mut tries = 0;
+        let list = loop {
+            tries += 1;
+            // The mail and the list are held nowhere outside the generation:
+            // the call records none of what it is told or answers on traces.
+            let answer = genai_telemetry::withhold_content(model.complete(
+                user,
+                session,
+                WORK_MODEL,
+                prompt.clone(),
+                work::schema(),
+            ))
+            .instrument(tracing::info_span!(
+                "routine.suggestions.list_work",
+                routine.suggestions.try = tries
+            ))
+            .await
+            .and_then(WorkList::from_answer);
+            match answer {
+                Ok(list) => break list,
+                Err(error) if tries < WORK_TRIES => tracing::warn!(
+                    error = %error,
+                    "the finding call answered outside the list's shape; asking again"
+                ),
+                Err(error) => {
+                    span.record("routine.suggestions.tries", tries);
+                    return Err(error);
+                }
+            }
+        };
+        span.record("routine.suggestions.tries", tries);
+        span.record("routine.suggestions.streams", list.streams.len());
+        Ok(list)
     }
 
     #[tracing::instrument(name = "routine.suggestions.texts", skip_all, fields(
@@ -783,16 +910,17 @@ fn rejected(problems: Vec<String>) -> SuggestOutcome {
 
 /// Per surface (only `surface`, when given), AI's open suggestions best
 /// first, then catalog routines marked `suggest` as Macro's templates, to
-/// [`PER_SURFACE`]. Skips AI's suggestions that aren't open, and a template
-/// the person dismissed, saved a routine from (`saved_from`) or AI already
-/// picked. Each suggestion appears once, in the order its first surface
-/// reached it.
+/// [`PER_SURFACE`], or drafted routines to `drafted_cap`. Skips AI's
+/// suggestions that aren't open, and a template the person dismissed, saved
+/// a routine from (`saved_from`) or AI already picked. Each suggestion
+/// appears once, in the order its first surface reached it.
 pub fn fill(
     user: &MacroUserIdStr<'_>,
     stored: &[StoredSuggestion],
     dismissed_templates: &[String],
     saved_from: &[Uuid],
     surface: Option<Surface>,
+    drafted_cap: usize,
 ) -> Vec<RoutineSuggestion> {
     let saved: HashSet<&Uuid> = saved_from.iter().collect();
     // Catalog keys AI picked (open, dismissed or saved) never show again as
@@ -842,8 +970,13 @@ pub fn fill(
             .filter(|suggestion| suggestion.surfaces.contains(&surface))
             .count();
         for suggestion in open.iter().filter(|s| s.surfaces.contains(&surface)) {
-            if count >= PER_SURFACE {
-                break;
+            let cap = if drafted(suggestion) {
+                drafted_cap.max(PER_SURFACE)
+            } else {
+                PER_SURFACE
+            };
+            if count >= cap {
+                continue;
             }
             if ids.insert(suggestion.id) {
                 shown.push(for_you(suggestion, on_by_default.contains(&suggestion.id)));

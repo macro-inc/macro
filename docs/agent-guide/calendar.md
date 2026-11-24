@@ -28,11 +28,17 @@ recurrence, Guests, conferencing, Location, and Notifications open on the first
 click from the title field and accept changes without closing the composer.
 Each end is a date button (its calendar closes on a pick) and, unless all day,
 a time field: type `3p` or `15:30` and the list jumps there, Enter commits,
-Escape restores the old time. Escape dismisses the active menu before the composer.
+Escape restores the old time. Escape dismisses the active menu before the composer;
+in the description it closes the description's own menu first, then the composer, as from the title.
 Moving the start date or time moves the end with it, keeping the event's length
 (all-day dates keep their day count), until the end is picked in the same edit;
 after that the end stays put, and a start past it shows the end-before-start
 error.
+
+If a permission change retires a successful create response, the composer uses
+the preserved server identity. If that identity cannot be read yet, it closes
+and refreshes the calendar without opening the event or offering a duplicate
+creation. The universal input reports **Event created** without an Open action.
 
 The path selects the Month, Week, or Day period, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
@@ -127,7 +133,15 @@ a covered range with such occurrences refetches once instead of rendering
 without them (span `calendar.refetch_unreadable_occurrences`). A
 `refresh_calendar` poke, reconnecting, coming online, or returning to the tab
 runs one `CalendarChanges` delta that
-applies edits made elsewhere. RSVPs, edits, deletions, and creates show at once
+applies edits made elsewhere. The delta tracks the user's own inboxes and the
+ones delegated to them, not teammates' shared calendars. When an inbox becomes
+visible after weeks were cached, the cache drops what it holds and refetches
+the visible weeks: it never adopts the new inbox from a page, so the delta
+leaves it out and the server resets. That includes the first inbox of a user
+whose weeks were cached with none; with no inbox the delta asks for the
+server's watermark only. Span `calendar.delta_sync` records
+`calendar.delta.reset` (`first_link`, `new_link`, `retention`) and
+`calendar.delta.pages`. RSVPs, edits, deletions, and creates show at once
 through the durable mutation queue: a rejected write rolls back with the usual
 error, and a write made offline stays visible and replays on reconnect. Native
 apps whose engine lacks the calendar cache commands keep the REST path. Until the
@@ -135,7 +149,49 @@ cache answers its first calendar read, viewports wait at most a second and then
 read from REST, and writes use REST, so a cache that is slow to start or fails
 ("Local cache unavailable") never leaves the calendar on skeletons. Writes in
 that window behave as on the REST path: offline, they roll back with an error
-instead of replaying.
+instead of replaying. After the cache has answered, a viewport still reads from
+REST whenever the cache cannot answer it: a refused or timed-out cache request
+(another tab handing over the database) reads REST at once, and a cache path
+still running after three seconds (a read, coverage commit or write
+acknowledgement waiting on an owner change) races a REST read that keeps
+whichever answers first. The cache path keeps running, so the week is cached
+once it finishes; while it is overdue, other viewports give the cache only the
+one-second head start before racing REST. If REST fails, the cache gets one
+more deadline to answer before the viewport errors. Retry takes the same path.
+Span `calendar.occurrences.read` records which path answered
+(`calendar.read.source`) and why it fell back (`calendar.read.fallback_reason`,
+`calendar.read.cache_error`); deadline and cache-error fallbacks also log
+`calendar.occurrences.cache_fallback`. A failed GraphQL fetch of an uncovered
+week also reads REST, as `fetch-error`, without that log.
+A week the cache covered is only as current as its last delta, while a REST
+answer shows the server as it is, and a change notice (a `refresh_calendar`
+poke, a write settling) says the server holds something the cache may not. So
+once REST has answered a viewport, or a notice has arrived, the cache answers
+only after a delta that read the server since: the read waits
+for one (`calendar.read.catch_up` `held`, or `retried` when it retries a failed
+one whose backoff has passed; `waiting` when REST answered at the deadline
+first). A failed delta also retries on its own, after 2, 4 and 8 seconds, then
+waits for the next poke; one can fail while another tab hands over the
+database. A cache that cannot be brought forward (`behind`) reads REST
+(fallback `behind`, also logged) without fetching the week's gaps, and answers
+from its older copy of a covered week only if REST fails too
+(`calendar.read.older_cache`). While a failed delta backs off or has used its
+retries, a change in the cache does not refetch the viewports, since they
+would only read REST again. A cache that neither a REST read nor a notice has
+overtaken reads no REST and runs no extra delta, even after a failed one.
+Without this, an event REST had shown, such as one just created, would drop
+off the grid until a later delta. A notice refetches the viewports once its
+delta finishes, or after three seconds while it is still running, and those
+reads wait for it or read REST; viewports not on screen refetch when they
+mount. Without this, an event deleted elsewhere (a booking its guest
+cancelled) stayed in the grid and in Upcoming events, which reads the same
+occurrence viewports, until a reload whenever the poke's delta failed or was
+held behind another tab's database handoff. A week a pending write shaped
+(an edit, RSVP or create still in flight or queued) answers from the cache
+without catching up (`calendar.read.pending_write`), since REST cannot show the
+write; the write's settle refreshes it. Span `calendar.occurrences_refresh`
+records how the refresh's delta went (`calendar.delta.outcome`: `synced`,
+`failed`, `deadline`, `cache_starting`).
 
 A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
 accumulate against the requested date and interrupt unfinished slides, without
@@ -214,11 +270,12 @@ The calendar view's setup prompt decides and acts on own inboxes alone too: a
 delegate with no inbox of their own sees **Connect your calendar**, the Calendar
 is off vs Enable calendar wording counts only own inboxes, and Grant access, Turn
 on and Reconnect only start consent for one of them. It covers the grid only in a
-week without events and with no working calendar the viewer can see; a working
-calendar shared with them keeps it to the bottom-right pill, so a delegate whose
-only working calendar is shared sees the pill in every week. On desktop the
-pill rides above the toast stack while it shows anything, so the app-wide
-prompt for the same inbox doesn't cover it.
+week without events and with no working calendar the viewer can see. Otherwise
+(a teammate's out-of-office on the grid, or a working calendar shared with them)
+it is a banner in the page's flow with the same title, description and action,
+above the grid on desktop and tablets and below it on phones, where
+`RangeUnavailableBanner` sits, so it never covers an event. A delegate whose only
+working calendar is shared sees the banner in every week.
 An own inbox whose calendar used to sync but lost calendar access without the
 user turning it off (a Google grant from before Macro narrowed its calendar
 scopes, which the server turns off and clears hourly) shows **Calendar for
@@ -393,6 +450,12 @@ desktop controls are 32px tall and use the shared button surface: Today and the
 previous/next arrows share a navigation group, the period selector has its own
 view group, and Booking links and New have separate outlined buttons. Adjacent
 controls and groups have a uniform 8px gap, with matching text-button padding.
+In a header 600px or narrower New shows only its icon, as in other headers; when
+the controls still don't fit their row, Today shows its icon, and then Search
+wraps onto its own row below the other controls; in a still narrower pane the
+other controls wrap too, so no control leaves the pane. Collapsed Search never
+sits on another control; opened on its own row, it leaves the controls above it
+in view.
 Click Search or press Cmd/Ctrl+F to expand and focus the wider inline search field.
 The field slides out with a short width transition and focuses immediately.
 The results popup stays hidden until the field contains non-whitespace text,
@@ -1261,7 +1324,20 @@ schedule picker without an extra Availability schedule heading. The selected sch
 weekly hours and timezone appear directly beneath the picker. This summary does not show
 live calendar free/busy or date overrides. First-time links use the default draft schedule
 until saved. Calendar busy-time exclusions appear in the help popover beside
-Availability. Team links group Scheduling type and Team hosts under Team scheduling
+Availability. A personal link whose owner has more than one connected account
+shows a Calendar account select below Availability, listing each inbox whose
+primary calendar they can write by its address (the primary first). Bookings
+land on that account's calendar and their invitations come from its address;
+choosing the primary account stores none, so the link follows the primary
+inbox ("Primary account" when that inbox lists no calendar to book on). In the
+editor, a link whose account is no longer connected shows "Disconnected account"
+and asks for another before that link is saved, as it does for former team
+hosts; saving the profile's other links is not blocked. Google Meet on an
+account that cannot add video meetings (an Outlook inbox without Teams) blocks
+saving too.
+A chosen account that needs reconnecting shows a note that the link offers no
+times until it is reconnected. Review and the link's details list the account.
+Team links group Scheduling type and Team hosts under Team scheduling
 in Location & availability. Collective and Round robin use pill selectors above
 Team hosts. The header's icon-only Reset team
 settings action restores the default mode and hosts, and is disabled at those defaults.
@@ -1562,12 +1638,21 @@ syncing, the copy past the first 20 events, or an email whose time differs from 
 cancelled, declined, and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
 already-open invitation cards as well as the calendar view.
 
-For a writable Outlook event you organize, the editor's `Replace event…` action
-can reset guest RSVPs or remove its online meeting. Save or discard ordinary edits
-first. Choose the entire series or only this occurrence, review the saved event,
-and check the cancellation/reinvitation acknowledgement before `Replace event`.
-The old invitation is cancelled after the replacement is prepared; guests receive
-a new invitation and must respond again. `Check progress` and `Continue replacement`
+Outlook cannot remove Teams from an existing event. In the editor of a writable
+Outlook event you organize, turning Teams off (the pill reads `No meeting link`)
+disables Save and shows a notice with `Replace event…` and `Undo`; `Undo` turns
+Teams back on. `Replace event…` previews a replacement that carries the editor's
+unsaved changes (title, time, description, location, guests, reminders, repeat
+rule) without Teams; nothing is saved to the old event. It replaces this occurrence
+or all events as the editor's `Apply changes to` choice says. A time or repeat change
+on the whole series drops its changed and cancelled occurrences, as Outlook does;
+otherwise occurrences still showing the series' value take the edit, and guests
+added or removed on the series are added to or removed from every occurrence. Check the
+cancellation/reinvitation acknowledgement before `Replace event`. The old
+invitation is cancelled after the replacement is prepared; guests receive a new
+invitation and must respond again. Closing the dialog before confirming discards
+the preview. There is no other entry point: Google events remove Meet with an
+ordinary save. `Check progress` and `Continue replacement`
 resume that saved operation after an interrupted response. Recovery continues when
 the dialog closes. A conflict offers links to review both copies in Outlook; do
 not create another copy while the existing operation is unresolved. Events with

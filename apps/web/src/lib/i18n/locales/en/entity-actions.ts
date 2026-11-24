@@ -53,6 +53,7 @@ export default {
   unlinkValue: 'Unlink',
   unlinking: 'Unlinking…',
   unpinProperty: 'Unpin property',
+  removeLink: 'Remove link',
   moveToFolder: 'Move to folder',
   removeFromFolder: 'Remove from folder',
   duplicate: 'Duplicate',
@@ -89,6 +90,9 @@ export default {
   setOwner: 'Set owner',
   setRevenue: 'Set revenue',
   openPropertyEditor: 'Open property editor',
+  propertyValuesLoading: 'Loading {{values}}…',
+  propertyValuesUnavailable: "Couldn't load this item's {{values}}",
+  propertyLinks: 'links',
 
   // Command menu wording that differs from the menu labels.
   markAsNotDone: 'Mark as not done',
@@ -151,6 +155,10 @@ export default {
     other: '{{count}} drafts discarded',
   },
   toastDiscardDraftFailed: 'Failed to discard draft',
+  toastPropertySet: {
+    one: '{{property}} set',
+    other: '{{property}} set on {{count}} items',
+  },
   toastAddedToFavorites: 'Added to favorites',
   toastAddedCountToFavorites: {
     one: 'Added {{count}} item to favorites',
@@ -304,6 +312,7 @@ export default {
   chatAboutProject: 'Chat',
   presentationActions: 'Presentation actions',
   documentActions: 'Document actions',
+  agentActions: 'Agent actions',
   copyGithubLink: 'Copy GitHub Link',
   prMerge: 'Merge',
   prMerging: 'Merging…',

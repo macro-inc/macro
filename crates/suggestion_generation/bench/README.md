@@ -17,8 +17,9 @@ with one number and its parts underneath.
 | `judge.ts` | The model judges and their rubrics. |
 | `catalog.ts` | The routine catalog, read from `routine_program`'s `catalog.rs`, and the check that each answer key places every routine. |
 | `score.ts` | Scores, summaries and the win, loss or noise verdict. |
+| `sides.ts` | One side of a comparison joined from run files, and the checks two sides must pass to be set side by side. |
 | `report.ts` | The summary table. |
-| `heldout.ts` | Writing held-out personas and the ledger of their use. |
+| `heldout.ts` | Writing held-out personas, the ledger of their use and the answer keys each person was first scored against. |
 
 It shares `stack.ts` (the stack, sign-in, the per-stack lock) and `seedId`
 with the routine drafting eval in `crates/scheduled_action/bench/`, and
@@ -92,13 +93,14 @@ mail or suggestions names the first seat's domain in any case or its own in
 another case, and its mail renamed is the first seat's word for word: a
 snippet cut at 500 characters can cut a longer domain's copy elsewhere), a
 routines judgement reads the first seat's mail and the seat's suggestions
-renamed (`routinesEvidence`), so the seats of one round share the person,
-mail, catalog and key word for word; those go after the rubric, which the
-route caches, and the round's first judgement writes the cache the others then
-read. Any other seat is judged on its own mail, which no other seat's
-judgement shares. Rejudged that way, the same generations scored within the
-judge's own pass-to-pass difference (main 12.3 against 12.3 and 11.0, a
-single-session build 64.7 against 66.3) at about half the judge's cost.
+renamed (`routinesEvidence`), so a persona's seats, in every rep of the run
+(all at one "now"), share the person, mail, catalog and key word for word;
+those go after the rubric, which the route caches, and the persona's first
+judgement writes the cache the others then read. Any other seat is judged on
+its own mail, which no other seat's judgement shares. Rejudged that way, the
+same generations scored within the judge's own pass-to-pass difference (main
+12.3 against 12.3 and 11.0, a single-session build 64.7 against 66.3) at about
+half the judge's cost.
 
 A run records its judge (`JUDGE` in `judge.ts`: the model and a version to
 bump with any change to a rubric, a schema or what a judgement reads), and
@@ -109,7 +111,17 @@ workspace and mail as its generations read them: `compare` and `noise` refuse
 two sides that read a persona they share differently or without a digest, no
 side joins runs that do, and `rejudge` refuses a run whose persona has changed
 since, or one from before the digest was kept, so the judge reads what the
-generation read: run that one again instead.
+generation read: run that one again instead. A run records a digest of each
+persona's answer keys too, and `compare` and `noise` refuse two sides scored
+against different keys, or one without the digest: `rejudge` the older one,
+which records the keys it judges against. A judge's marks name the key's
+entries by id, so `rescore` keeps them only for the keys the run recorded,
+as they are now; a run with other keys, or none recorded, is rejudged. A
+held-out run that recorded no keys isn't judged again: whether a key changed
+after its builds ran is unknown. `noise` measures one build against itself, so it
+also refuses two runs of different or unrecorded commits, or with different
+or unrecorded flags, and a side is one build: its runs share a known commit
+and flags.
 
 ## Running it
 
@@ -129,9 +141,9 @@ B=crates/suggestion_generation/bench
 bun $B/bench.ts run routines --label main           # one section at its default size
 bun $B/bench.ts run feed --label main --seats 1 --reps 1   # a quick look: one attempt a persona
 bun $B/bench.ts all --label main                    # every section
-bun $B/bench.ts compare <main run.json> <mine run.json>
+bun $B/bench.ts compare <main run.json> <mine run.json> --margins <score,found,bad>
 bun $B/bench.ts report <run.json>...
-bun $B/bench.ts rescore <run.json>...               # after changing an answer key: free, no model calls
+bun $B/bench.ts rescore <run.json>...               # after changing the scoring: free, no model calls
 ```
 
 A section's default size is 3 personas × 3 seats × 3 reps: 27 attempts. A
@@ -140,30 +152,53 @@ seat is a copy of a persona under a domain of its own (`founder`,
 by side (see **Seats** below). Seats sign up on their first run (one signup
 each for `routines`, five for `feed`'s teams), against the webhook's 50
 an hour: on a new stack, run the two sections an hour apart, or `all` stops
-part way through the feed when the webhook refuses a seat. Judging runs alongside, as three
-grader accounts, while the next rep seeds.
+part way through the feed when the webhook refuses a seat. Judging runs as
+three grader accounts: the feed's while the next rep seeds, the routines'
+once the last rep has generated (see **Seats** below).
 
 Each run writes `~/.cache/suggestions-bench/runs/<label>-<section>-<set>-<time>/run.json`,
 with each attempt's suggestions, the judge's marks, the score and the
-sessions' transcripts beside it. `run` starts the stand-in if it isn't up
-and holds the stack while it runs (the drafting eval's lock), so two runs
-never share it.
+sessions' transcripts beside it. A routines attempt is written as soon as it
+has generated, marked not judged until it is, so `rejudge` can judge a run
+that stopped first; `rejudge` reads each work list again from the
+transcripts (where they were saved, or beside `run.json`). A list it
+finds replaces the run's reading, and a list it can't read is an error;
+finding no list, the run's reading stands (its list, its error, or none
+read). Where both transcripts are gone, or the one found holds no prompt,
+the run's reading stands too, and a run with neither a list nor an error
+has an unknown list. The harness sends a brief to its
+runtime as Markdown, which backslash-escapes characters such as `_` outside
+code; the bench reads a list in a fenced `json` block as written and undoes
+those escapes in a bare one (briefs before the fence), with the links the
+round trip made of addresses, domains and URLs. A brief that says it carries a list (the
+drafting brief's words at the start of a line, outside the mail's
+`<untrusted>` block) the bench still can't parse is that attempt's list
+error, as is an unknown list: counted as not judged, by `rescore` too, never
+an empty list. `run` starts the stand-in if it isn't up and holds the
+stack while it runs (the drafting eval's lock), so two runs never share it.
 
 To compare a change: run main, switch the stack to your build (`just
 run_local --instance sugbench ...` from your branch, or reload the harness),
-run the same section with another `--label`, then `compare`. A difference
-inside the section's margin (`MARGINS` in `bench.ts`) is noise.
+run the same section with another `--label`, then `compare` with the
+margins two runs of main measured. A difference inside them is noise.
 
 ### Noise
 
 `compare` takes, for each persona both runs have, B's mean less A's, and
 averages over personas; its 95% interval is that ± t standard errors, from
 how much each persona's attempts spread on each side. It calls a change a
-win or a loss only when the score moved past the section's margin
-(`MARGINS` in `bench.ts`: how far two runs of main land apart at the
-default size) and the interval leaves zero. *found* and *bad* get the same
+win or a loss only when the score moved past its margin (`--margins
+score,found,bad`: how far two runs of main land apart at the default size,
+on the same kind of set and judged by the same judge) and the interval
+leaves zero. *found* and *bad* get the same
 test against margins of their own, and show a change in one before the
-score can. Measure the margins again after changing the personas, the
+score can. On a month set judged for stream jobs, good drafts and good
+drafts by stream job get it too, with two margins more (`--margins
+score,found,bad,goodDrafts,jobDrafts`, as `noise` prints them); given three,
+`compare` reports their change as unmeasured. Each is compared over the
+people both sides have scores for it, and not at all where they share none
+(or, on a held-out set, fewer than two), so `noise` prints four margins
+where the sides share no person judged for stream jobs. Measure the margins again after changing the personas, the
 judge or the default size:
 
 ```sh
@@ -171,9 +206,14 @@ bun $B/bench.ts run routines --label main-a && bun $B/bench.ts run routines --la
 bun $B/bench.ts noise <main-a run.json> <main-b run.json>
 ```
 
-A side of `compare`, `noise` or `report` may be several runs of one section
-and set, judged by one recorded judge on personas read the same way, joined by
-commas (`a1.json,a2.json`), read as one. The margins hold at the default size:
+`compare` has no margins of its own and refuses to run without
+`--margins`: ones measured on another kind of set or by another judge
+would decide nothing. The week-set margins below were measured with the
+judge from before judges were recorded.
+
+A side of `compare`, `noise` or `report` may be several runs of one build,
+section and set, judged by one recorded judge on personas read the same way and
+scored against the same keys, joined by commas (`a1.json,a2.json`), read as one. The margins hold at the default size:
 a smaller run (fewer seats or reps) is only a look.
 
 ### Held-out personas
@@ -188,16 +228,113 @@ bun $B/bench.ts run routines --set h1 --label mine
 bun $B/bench.ts heldout list            # how often each set was read
 ```
 
-Writing a set takes about 15 minutes and $3 a person (Opus 5.5, about 22
-short model calls each, since the stack gives one 90 seconds). If one still times out, `heldout make`
+Writing a person takes about 17 minutes and $3 (Opus 5.5, about 22
+short model calls each, since the stack gives one 90 seconds), and three
+are written at once, so a set of three or of nine takes under an hour. If one still times out, `heldout make`
 says which people are missing; run the same command again to write just
-those.
+those. The author is told every slug, full name and mail domain the tune
+set and the held-out sets already have. A set whose author still sketches
+one of them, or two people of the set who share one, stops before anyone
+is written, saying which of the three repeated but not whom; run it again.
 
 Held-out sets live outside the repository and are reported only in
-aggregate. A set written before keys placed every catalog routine (`h2`
+aggregate: `report`, `summary`, `compare` and `noise` show a measure only
+over two held-out people or more who have it (scored in every run set side by
+side; timed, rated, or with a work list read, for those measures), and say
+why where they show none. A set written before keys placed every catalog routine (`h2`
 and earlier) can't be read by the `routines` section: write a new one. Don't open their files while tuning. Each run is recorded in the
 set's ledger; after a baseline and one candidate a set is spent and the bench
-says so: make a new one.
+says so: make a new one. The first run, rejudge, rescore or `find` of a
+held-out person writes down the answer keys it scored them against
+(`keys.json` in the set, written by one bench command at a time: a command
+killed while writing leaves `keys.json.lock`, to remove by hand), and every
+later one must score against the same keys, so no key changes after a build
+has run on its person; one that changed stops the bench, saying how many
+people's keys changed but not whose. Nothing the bench prints names a
+held-out person: their slugs, names and domains are left out of its errors and
+progress lines, and a measure (the stream jobs one too) shows only over two
+held-out people or more, each with a generation that built: a failed build
+is a known 0 that says nothing of its person (a work list it read before
+failing was judged as read, and counts).
+
+### A month of mail
+
+`heldout make <name> <count> month` writes people with a month of mail
+instead: 30 days, up to 500 messages, enough recurring work that five good
+drafted routines are within reach, and a streams key (`streams-truth.json`)
+that spells out every stream in the mail: its senders, count, cadence, what
+each message asks and what the person does with it, as `work` (mail they act
+on), `noise` (mail they read or ignore) or `thread` (a one-off
+conversation). Every message of `inbox.messages` is the inbox's. A person
+written since sent mail was added (sets `msent0`, `mdev2` and later) is also
+written with what they sent in the same 30 days
+(`inbox.sent`, never seeded): a reply to or forward of the plan's count of
+each stream they answer or forward, sent 20 minutes to 9 hours after its
+message, and the mail they start themselves, with text on the newest 50; each
+stream of the key says in one word what they do with its mail (`does`:
+answers, forwards, files, leaves to someone, nothing, or sends), to whom
+(`to`), and how many they sent. The writer refuses a person
+whose month keeps fewer than 250 messages or whose key has fewer than eight
+needs (by id, with a drafted routine that isn't blank) a drafted routine can
+meet (five for earlier sets), after writing its needs from the same mail three
+times. Both writers refuse a workspace where two people share a first name in
+any case (each is mailed as first name at the domain) or a colleague is named
+Owner (the person's own place), when sketching and when finishing a set.
+`run`, `find` and `heldout make` take counts from 1 to 1000.
+Writing one took $4.50 to $4.91 a person (three at once in about ten
+minutes), and $5.70 with sent mail. The stand-in serves the month to the read
+the finding step makes (`?days=30&limit=500&texts=100&snippet_chars=500`),
+what they sent to its sent read (`&folder=sent` with `limit=200&texts=50`),
+refuses any other window or folder, and serves the newest 100 to the old
+read; the inbox reads hold the inbox alone, as Gmail and Outlook are read,
+all cut at the exact start of the window and with texts cut by characters,
+as the service cuts them. The routines judge (`v5`) reads what a person
+sent beside their mail, where they have it, so a reason that rests on it
+isn't marked invented.
+
+On a month set a routines run also reports good suggestions: a drafted
+routine or a catalog pick that meets a need of the key with nothing wrong
+with it, counted apart, and how many generations reached five good drafts.
+Beside them it reports a second measure, judged apart (`judgeJobs`): for
+each suggestion, the key's work streams whose real job it does right (runs
+on that stream's mail and does what the person does with it, or the part an
+assistant can do without sending as them), whether or not a need of the key
+bundles that stream with others. A good draft by stream job does at least
+one work stream's job with nothing wrong by the first measure's flags; the
+run reports them per generation, how many generations reached five, the
+distinct work streams their jobs cover, and good catalog picks by stream
+job. Both measures are always reported. Good catalog picks have no measured
+margin.
+
+`find` measures the finding step on its own: one model call reads a month
+person's mail as the service reads it (`mailText`, the lines
+`suggestions/work.rs` writes) with `find.md`, the list is bounded as the
+service bounds it before a session reads it (`boundedList`), and the judge
+matches each listed stream to the streams key, with the addresses of every
+seat and copy read as the key writes them (`asWritten`). A judge whose marks
+leave an entry unmarked, mark one twice or name a stream the key doesn't have
+is asked again, twice at most. A list scores the key's work streams it names,
+as the stream an entry mostly covers or one it covers in full (*found*), and
+the entries that name none (*unreal*: noise, a one-off thread, or nothing in
+the mail). It runs on a set whose every person has a streams key, times each
+list from just before its call, and prints per-person results only for
+people who aren't held out; for held-out people it prints only whether each
+call answered, and their aggregate only over two people or more:
+
+```sh
+bun $B/bench.ts find --set m1 --label flash --model google/gemini-3.8-flash --thinking low --reps 2
+```
+
+A candidate behind a flag runs with it on: `--flags
+routine-suggestions-find-work` (comma-separated) adds flags to the
+section's. With `routine-suggestions-find-work` on, the run scores the work
+list each generation's drafting session read the same way (`workListOf`
+reads it from the earliest `session/prompt` the harness sent a runtime that
+holds one), a generation whose session read none as finding nothing, its
+build failed or not, and a list the judge couldn't mark apart from the
+routines, which are scored all the same. `rescore` scores the lists again
+from their marks, and refuses marks that no longer fit the list and the key. The run reports
+time to the last suggestion beside the first.
 
 The seed CLI refuses an address whose local part isn't ASCII, so as a
 persona is loaded, each such address in its mail, workspace and answer keys
@@ -275,15 +412,57 @@ briefs, customer requests); the sales rep lost one of the two needs only a
 drafted routine meets (found 3.83 to 2.94). Wrong sidebars fell from 0.56 to
 0.19 a generation.
 
+### One onboarding session, judged once a run
+
+Main `fa31ccc0c0` (one routines session for every surface) twice on
+`routines`, every rep at one "now" and each persona's judge prefix written
+once a run (`judgeLast`), 2026-11-19, on one stack:
+
+| Run | Score | Found / needs | Bad | Suggested | First | End |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | 70.5 (61.6 to 79.5) | 4.07 / 5.7 | 0.11 | 4.8 | 136 s | 151 s |
+| B | 70.4 (61.5 to 79.3) | 4.11 / 5.7 | 0.15 | 4.9 | 141 s | 155 s |
+
+`noise` A against B: score −0.1 (95% −7.5 to 7.2), found +0.04 (−0.28 to
+0.35), bad +0.04 (−0.17 to 0.24), each inside its margin: judging once a
+run leaves `MARGINS` as they were.
+
+### Main on a month of mail
+
+Main `1d77cd00fd` on a readable month set (3 people, 10 needs each on
+average, of which 5 to 8 only a drafted routine meets), 27 attempts,
+2026-11-20:
+
+| Score | Found / needs | Bad | Suggested | Drafted | Good drafts | Five good | Good picks | First | End | $ / gen |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 19.3 (12.2 to 26.8) | 2.67 / 10.0 | 0.67 | 5.3 | 2.26 | 0.56 | 0 of 27 | 1.67 | 76 s | 173 s | $0.072 |
+
+The finding step alone on the same people, 2026-11-20 (time includes the
+bench's retries):
+
+| Model | Lists | Found | Unreal a list | Median time | $ a list |
+| --- | --- | --- | --- | --- | --- |
+| `google/gemini-3.8-flash`, thinking low | 3 of 3 | 95% (39 of 41) | 0.3 | 33 s | $0.016 |
+| `anthropic/claude-sonnet-5-5` | 4 of 6 | 96% (52 of 54) | 0.25 | 175 s | $0.12 |
+| `anthropic/claude-haiku-4-5` | 3 of 3 | 80% (33 of 41) | 3.7 | 87 s | $0.086 |
+
+Sonnet's two missing lists, and every list of Gemini 3.8 Flash at its
+default thinking (6 of 6), ran past the stack's 90-second limit.
+
 ## Cost and time
 
-From the baseline runs. A generation's cost is its `ai_usage`; the judge
-(Opus 5.5) costs about as much again.
+An attempt's cost, from the baseline runs (`feed`, 2026-11-18) and main's
+runs above (`routines`, 2026-11-19). A generation's cost is its
+`ai_usage`; the judge is Opus 5.5.
 
 | Section | Generation | Judge | One run (27 attempts) | Wall time of a run |
 | --- | --- | --- | --- | --- |
-| `routines` | $0.21 | $0.24 | about $12 | 31 to 34 minutes |
+| `routines` | $0.08 | $0.05 | about $3.70 | 33 to 35 minutes |
 | `feed` | $0.18 | $0.28 | about $12 | 26 to 32 minutes |
+
+A `routines` run's judge costs $1.35 to $1.65. Of one at $1.64, $0.75 wrote each
+persona's prefix and each attempt's own part, $0.70 was output and $0.20
+cached reads.
 
 A comparison is one run of the change against a stored run of main from the
 same stack: the cost of one run. Run main again when main changes what the
@@ -304,8 +483,9 @@ cost nothing beyond the model calls.
   under the name `stack.env` points at: PostHog's `/flags` answers with the
   section's flags, and email_service's `/internal/recent_messages/{user}`
   answers with the persona's mailbox (the routines brief reads it from Gmail
-  or Outlook, which seeded mail never reaches); everything else goes to
-  email_service. The suggestions service trusts a flag for a minute, so the
+  or Outlook, which seeded mail never reaches): the newest 100, the month
+  for exactly the month read, or what they sent for exactly the sent read.
+  A person with a month answers any other window or folder with a 400; everything else goes to email_service. The suggestions service trusts a flag for a minute, so the
   bench waits a minute after changing them.
 - **Clean runs.** Every attempt seeds its persona again with the seed CLI's
   `apply`, which replaces the persona's seeded rows. A person signs up
@@ -330,10 +510,14 @@ cost nothing beyond the model calls.
   session (`delivery_unknown`) a bench error, so a build that breaks prompt
   delivery has nothing scored and `compare` refuses it rather than calling it
   a loss. The feed section indexes the
-  seeded items for search first. Judging runs alongside, three grader
-  accounts at a time, each judgement's cost read from its grader's usage
-  (a routines round's first judgement pays to write the cache its other
-  seats read).
+  seeded items for search first. Judging takes three grader accounts at a
+  time, each judgement's cost read from its grader's usage. The feed's
+  runs alongside, while the next rep seeds. Every rep of a routines run
+  reads its mail at the run's one "now", so a persona's judgements share
+  one cached prefix (the rubric, mail, catalog and key) across seats and
+  reps; they wait for the last rep, so the cache is still warm, and each
+  persona's first judgement pays to write it once, not once a rep
+  (`judgeLast`).
 
 ## Adding a persona or a section
 
@@ -345,7 +529,7 @@ cost nothing beyond the model calls.
   every other catalog routine in `fine` or `misfit`.
 - A catalog routine added, renamed or removed in `catalog.rs` stops the
   `routines` section until every answer key places it again (the run says
-  which); `rescore` then scores earlier runs with the new keys.
+  which); `rejudge` then judges earlier runs against the new keys.
 - A section is an entry in `SECTIONS` (`bench.ts`): its trigger, flags,
   persona copy and judge. The weekly routines review would be manual with
   both flags on and routines due, a persona copy with last week's routine

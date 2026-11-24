@@ -107,9 +107,10 @@ export function ContactHeader(props: {
             class="mt-3 flex flex-wrap items-center gap-2"
             aria-label="Contact details"
           >
-            <ContactEmailField contact={contact()} />
+            <ContactEmailField contact={contact()} surface="header" />
             <ContactCompanyField
               contact={contact()}
+              surface="header"
               onOpenCompany={props.onOpenCompany}
             />
             <Tooltip label={formatDateAndTime(contact().lastInteraction)}>

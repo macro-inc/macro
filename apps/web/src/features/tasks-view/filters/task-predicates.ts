@@ -1,6 +1,10 @@
-import { testFacets } from '@app/features/soup';
-import { getTaskAssigneeIds, type TaskEntityWithProperties } from '@entity';
-import { getTaskDueDate } from '@entity/utils/task-properties';
+import { testFacets } from '@app/features/soup/filters/facets';
+import type { TaskEntityWithProperties } from '@entity/types/entity';
+import {
+  getTaskAssigneeIds,
+  getTaskDueDate,
+  getTaskStartDate,
+} from '@entity/utils/task-properties';
 import {
   type TaskDatePredicate,
   taskMatchesDueDate,
@@ -18,6 +22,7 @@ export type TaskViewContext = {
   facets: Record<string, string[]>;
   facetContext?: TaskFacetContext;
   dueDate?: TaskDatePredicate;
+  startDate?: TaskDatePredicate;
 };
 
 export function taskMatchesTab(
@@ -47,6 +52,8 @@ export function taskMatchesView(
 ) {
   if (!taskMatchesTab(task, context.tab, context.userId)) return false;
   if (!taskMatchesDueDate(getTaskDueDate(task), context.dueDate)) return false;
+  if (!taskMatchesDueDate(getTaskStartDate(task), context.startDate))
+    return false;
 
   return testFacets(context.facets, TASK_FACETS, task, {
     ...(context.facetContext ?? EMPTY_TASK_FACET_CONTEXT),

@@ -55,9 +55,14 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `src/domain/service/tests/attention.rs` → `src/outbound/pg_soup_repo/attention.rs`
   (`attention/query.sql`). Channel-thread keying applies only to
   `AttentionKeying::ThreadScoped`; keep it in step with `attention_feed`'s
-  `keying.rs`. A read of known items (`only`) under `FiledEntity` keying
-  takes its pending notifications from `attention/pending_only.sql`, by key;
-  every other read takes them from `attention/pending.sql`. Change both.
+  `keying.rs`. A read of known items (`only`) reads by key: pending
+  notifications from `attention/pending_only.sql` (`FiledEntity`) or
+  `attention/pending_only_thread.sql` (`ThreadScoped`), own work from
+  `attention/own_work_latest_only.sql`. A whole page reads
+  `attention/pending.sql` and `attention/own_work_latest.sql`, and a probe
+  (which empties pending) reads `pending.sql`. Change them together; the
+  `a_read_of_known_items_matches_the_whole_feed_for_every_item` test checks
+  that a read of known items returns what the whole feed has for them.
 - Find where a viewer's unread rows may be without paging a feed:
   `src/outbound/pg_soup_repo/attention_unread.rs`. It is neither gated nor
   filtered and runs for every signed-in viewer; its two reads are bounded by
@@ -82,6 +87,15 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `ports` for `domain/service`, `outbound` for the Postgres repository.
 
 ## Gotchas
+
+- `AttentionCandidateRequest::assume_attention` probes the attention query:
+  each `only` key counts as if a notification about it were pending, so a
+  caller can ask whether a new notification would be listed. A probe never
+  reads the viewer's pending notifications, so its cost stays flat however
+  many they have (`a_probe_costs_the_same_however_many_notifications_are_pending`;
+  past Postgres's JIT threshold a probe took hundreds of milliseconds).
+  A page builds exactly `query.sql` with the page fragments, and a probe
+  reads `pending.sql` emptied by `AND FALSE` (`only_a_probe_changes_the_query`).
 
 - Project grouping uses the system Project property (initiative membership),
   including canonical TASK assignments, rather than legacy folder `project_id`.
@@ -111,6 +125,20 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `entity_type = 'DATABASE_ROW' AND values->>'type' = 'EntityReference'` so the
   partial index applies, and join the row by the guarded uuid cast, never
   `r.id::text = ep.entity_id`, which reads every row cell of every database.
+  Keep both of its `OFFSET 0` fences as well: joined plainly, the planner
+  started from every entity definition and compared all of their cells with
+  every record, from about 500 records with fresh statistics and for a single
+  record once they were stale, and the statement ran into its timeout.
+- Property edges reach a task's custom entity properties from the requested
+  records through `idx_ep_crm_record_references_gin`, for a company or contact
+  scope only (`custom_task_properties`; the activity scope reads the built-in
+  properties). Keep that arm's copy of the index predicate, without which the
+  index cannot apply, and both `OFFSET 0` fences: joined plainly, the planner
+  started from every custom entity definition and read all of their values
+  once statistics were stale or the scope named more than about ten records.
+  The arm does not check who owns the property: a task shows every property
+  set on it to whoever can open it, and the document arm still checks access
+  to the task.
 
 - A `crm_domains` (`ecd`) scope that email rejects as not found or not
   permitted (archived company, email sync off) leaves email threads out of the
@@ -174,8 +202,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   (`fetch_user_source_ids`); never restate the source rule in SQL. Both paths
   must return identical pages: the query test helper installs the triggers,
   backfills the table from the fixture, audits it, and runs every case on both.
-  The migrations install no maintenance triggers; feed tests load
-  `fixtures/source_items_triggers.sql` first, which also marks the empty table
+  Feed tests load `fixtures/source_items_triggers.sql` first, which installs
+  the triggers whatever the migrations did and marks the empty table
   backfilled. Rollout: `SOURCE_ITEMS_ROLLOUT.md`.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.
@@ -198,6 +226,26 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   collected once rather than semi-joined per row; cost follows the ids passed
   in. A gate `EXISTS` also needs `PER_CANDIDATE`, or Postgres hashes it back
   into the caller's whole accessible set.
+- Postgres 14 hashes `= ANY(...)` only over a constant array. Over
+  `ARRAY(SELECT ...)` it searches the source list for each grant row it
+  filters, or, as an index condition, descends the index once per source, so
+  either way its cost per candidate grows with the viewer's sources. A plain
+  `IN (SELECT source_id FROM user_source_ids)` is a join that stale statistics
+  can drive from the sources, one `entity_access` probe per source and
+  candidate. The agent-session gate writes `ea.source_id = $1 OR ea.source_id
+  IN (...)` (`notified::SOURCE_GRANTED_SQL`): under the `OR` it is a subplan.
+  It hashes the sources only when the planner expects them to fit in
+  `work_mem`, and builds that hash each time the subplan holding it runs;
+  otherwise it compares each grant row with a materialized source list.
+  Measure any other gate on a viewer with thousands of sources before moving
+  it to that form, since the gates are shared with every page.
+- Compare a membership by the uuid column: `cp.channel_id = <uuid>`, with the
+  text id cast behind a uuid-pattern guard, in an `EXISTS` fenced with
+  `PER_CANDIDATE` (`channel_thread_gate`), and keep the text comparison as a
+  filter on the row found when callers compare the text. Written as
+  `cp.channel_id::text = ...` alone, no index can take the channel, and each
+  candidate walks the viewer's memberships until it meets its own; as a join
+  on the uuid, stale statistics can still walk them by user.
 - The initiative listing starts from the caller's access instead
   (`INITIATIVE_LISTING_ACCESS`): one `(source_id, entity_type, entity_id)`
   index descent per source returns only that source's initiative grants, and

@@ -1,14 +1,19 @@
 //! Durable downstream projection and live-mail notification policy.
 
+use super::retry::message_retry;
 use super::telemetry::{
-    claim_failed, elapsed_ms, record_deferred, record_done, record_failed, span_int,
+    claim_failed, elapsed_ms, record_deferred, record_done, record_failed,
+    record_projection_abandoned, span_int,
 };
-use super::{MailboxError, MailboxKey};
+use super::{MailboxError, MailboxKey, MessageRetry, UNFINISHED_CLAIM_LIMIT};
 use crate::domain::events::*;
 use crate::domain::models::calendar_invitation::CalendarInvitation;
-use email_api_client::domain::models::CalendarPart;
+use email_api_client::domain::models::{CalendarPart, EmailApiError};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::{link::Link, message::Message};
+use models_email::service::{
+    link::{Link, UserProvider},
+    message::Message,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, future::Future, time::Instant};
 use tracing::{Instrument, Span};
@@ -91,6 +96,9 @@ pub struct ProjectionLease {
     pub from_current_generation: bool,
     /// Claims of this event so far, including this one.
     pub attempts: i32,
+    /// Claims in a row before this one that ended without recording an
+    /// outcome: their worker stopped while it held the lease.
+    pub unfinished_claims: i32,
 }
 
 pub struct ProjectedMessage {
@@ -132,6 +140,8 @@ pub struct CorrespondenceContact {
 pub struct CorrespondenceProjection {
     pub link_id: Uuid,
     pub owner: MacroUserIdStr<'static>,
+    /// The inbox's provider, which names the contacts list its people join.
+    pub provider: UserProvider,
     pub is_sent: bool,
     pub contacts: Vec<CorrespondenceContact>,
     pub connections: Vec<MacroUserIdStr<'static>>,
@@ -150,12 +160,15 @@ pub trait MailboxProjectionRepository: Send + Sync + 'static {
         &self,
         lease: &ProjectionLease,
     ) -> impl Future<Output = Result<Option<ProjectionContext>, MailboxError>> + Send;
-    /// Deletes a delivered event, or with `retry_after_seconds` makes it due
-    /// again after that delay.
+    /// Deletes an event that was delivered (`None`) or given up
+    /// (`MessageRetry::Abandon`), or makes it due again after the retry's
+    /// delay, giving the claim back to `attempts` when the failure is not
+    /// counted. Giving up an event this lease no longer holds is `Stale`, so
+    /// only the worker that deleted it logs the abandonment.
     fn finish_projection(
         &self,
         lease: &ProjectionLease,
-        retry_after_seconds: Option<u32>,
+        retry: Option<MessageRetry>,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
 }
 
@@ -216,6 +229,44 @@ pub trait MailboxAttachmentAccess: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<u8>, MailboxError>> + Send;
 }
 
+/// Counted failures after which an attachment the provider refuses outright
+/// (gone, forbidden, malformed), or whose data the database refuses, is
+/// abandoned.
+const PERMANENT_ATTACHMENT_FAILURES: i16 = 3;
+
+/// Counted failures after which an attachment that keeps failing for any
+/// other reason is abandoned. At the projection's backoff (`message_retry`'s)
+/// that is about a day of one event's retries.
+const ATTACHMENT_FAILURES: i16 = 50;
+
+/// How many counted failures abandon an attachment whose download or upload
+/// failed with `error`, or `None` when the failure is not counted against it.
+/// An abandoned attachment is no longer stored: it reads as one that cannot be
+/// fetched, and opening it still tries.
+///
+/// As for a message (`message_retry`), throttling and credential failures
+/// belong to the mailbox, and a lost lease or a lock timeout to the worker, so
+/// they are not counted. Unlike a message read, a transient download failure
+/// is: Graph can cut the same attachment's download every time while the
+/// mailbox's other reads succeed, and the message it belongs to is already
+/// stored.
+pub fn attachment_failure_limit(error: &MailboxError) -> Option<i16> {
+    match error {
+        MailboxError::Provider(
+            EmailApiError::RateLimited { .. }
+            | EmailApiError::CredentialsUnavailable { .. }
+            | EmailApiError::AuthRequired,
+        )
+        | MailboxError::Stale => None,
+        _ if error.is_lock_timeout() => None,
+        MailboxError::Provider(
+            EmailApiError::Permanent { .. } | EmailApiError::Forbidden | EmailApiError::NotFound,
+        )
+        | MailboxError::Unstorable(_) => Some(PERMANENT_ATTACHMENT_FAILURES),
+        _ => Some(ATTACHMENT_FAILURES),
+    }
+}
+
 pub struct MailboxProjectionService<R, E> {
     repo: R,
     effects: E,
@@ -253,10 +304,38 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
             otel.status_description = tracing::field::Empty,
         );
         let correlation = lease.event.agent_correlation_id();
+        if lease.unfinished_claims >= UNFINISHED_CLAIM_LIMIT {
+            return self.abandon_unfinished(&lease).instrument(span).await;
+        }
         agent_correlation::context::scope(correlation, self.project_leased(&lease).instrument(span))
             .await
     }
 
+    /// Gives up on an event without projecting it, since projecting it is the
+    /// likely cause of the workers that stopped. A later event for the link
+    /// carries newer state and supersedes it.
+    async fn abandon_unfinished(&self, lease: &ProjectionLease) -> Result<bool, MailboxError> {
+        let span = Span::current();
+        let error = MailboxError::ClaimsUnfinished(lease.unfinished_claims);
+        self.repo
+            .finish_projection(lease, Some(MessageRetry::Abandon))
+            .await
+            .inspect_err(|finish| record_failed(&span, lease.mailbox.link_id, finish))?;
+        record_projection_abandoned(
+            &span,
+            lease.mailbox.link_id,
+            lease.id,
+            lease.event.kind(),
+            lease.attempts,
+            &error,
+        );
+        Err(error)
+    }
+
+    /// Projects a claimed event and records its outcome. A failure is retried
+    /// and given up as a message read is (`message_retry`): the event's
+    /// effects either succeed again on a retry or fail the same way, and a
+    /// later event for the link carries newer state.
     async fn project_leased(&self, lease: &ProjectionLease) -> Result<bool, MailboxError> {
         let span = Span::current();
         let mut effects = EffectCounts::default();
@@ -268,27 +347,37 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
         span.record("outlook.refreshes", i64::from(effects.refreshes));
         span.record("outlook.reindex_events", i64::from(effects.reindex_events));
         span.record("outlook.attachment_upload_ms", effects.attachment_upload_ms);
-        let retry_after = result
-            .is_err()
-            .then(|| projection_retry_seconds(lease.attempts));
+        let Err(error) = result else {
+            self.repo
+                .finish_projection(lease, None)
+                .await
+                .inspect_err(|finish| record_failed(&span, lease.mailbox.link_id, finish))?;
+            record_done(&span, "imported");
+            return Ok(true);
+        };
+
+        let retry = message_retry(&error, lease.attempts);
         self.repo
-            .finish_projection(lease, retry_after)
+            .finish_projection(lease, Some(retry))
             .await
             .inspect_err(|finish| record_failed(&span, lease.mailbox.link_id, finish))?;
-        match (result, retry_after) {
-            (Ok(()), _) => {
-                record_done(&span, "imported");
-                Ok(true)
-            }
-            (Err(error), Some(delay)) if !matches!(error, MailboxError::Stale) => {
-                record_deferred(&span, lease.mailbox.link_id, &error, delay);
-                Err(error)
-            }
-            (Err(error), _) => {
+        match retry {
+            _ if matches!(error, MailboxError::Stale) => {
                 record_failed(&span, lease.mailbox.link_id, &error);
-                Err(error)
             }
+            MessageRetry::After { seconds, .. } => {
+                record_deferred(&span, lease.mailbox.link_id, &error, seconds);
+            }
+            MessageRetry::Abandon => record_projection_abandoned(
+                &span,
+                lease.mailbox.link_id,
+                lease.id,
+                lease.event.kind(),
+                lease.attempts,
+                &error,
+            ),
         }
+        Err(error)
     }
 
     async fn project(
@@ -469,13 +558,10 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
         effects: &mut EffectCounts,
     ) -> Result<(), MailboxError> {
         self.effects
-            .publish(EmailMacroEvent::threads_reindex_requested(
-                ThreadsReindexRequestedMetadata {
-                    link_id: link.id,
-                    owner: link.macro_id.clone(),
-                    thread_ids: vec![thread],
-                    reason: ThreadsReindexReason::ProviderChanged,
-                },
+            .publish(EmailMacroEvent::thread_reindex_requested(
+                link.id,
+                link.macro_id.clone(),
+                thread,
             ))
             .await?;
         effects.reindex_events += 1;
@@ -490,14 +576,6 @@ struct EffectCounts {
     refreshes: u32,
     reindex_events: u32,
     attachment_upload_ms: i64,
-}
-
-/// A failed projection backs off 30 s per attempt, up to ten minutes.
-fn projection_retry_seconds(attempts: i32) -> u32 {
-    u32::try_from(attempts)
-        .unwrap_or(1)
-        .saturating_mul(30)
-        .clamp(30, 600)
 }
 
 impl ProjectionEvent {
@@ -624,6 +702,7 @@ fn correspondence(context: &ProjectionContext) -> CorrespondenceProjection {
     let mut result = CorrespondenceProjection {
         link_id: context.link.id,
         owner: context.link.macro_id.clone(),
+        provider: context.link.provider,
         is_sent: false,
         contacts: Vec::new(),
         connections: Vec::new(),

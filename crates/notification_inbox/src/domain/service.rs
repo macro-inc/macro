@@ -8,14 +8,14 @@ use std::collections::{HashMap, HashSet};
 use attention_feed::domain::{
     acknowledge::Acknowledger,
     models::{
-        Acknowledgment, CandidateKeying, CandidateRequest, DoneReceipt, FeedError, FeedKey,
-        FeedPosition, FeedRevision, FeedViewer, Loaded, MailFacts, unseen_among,
+        Acknowledgment, CandidateKeying, CandidateRead, CandidateRequest, DoneReceipt, FeedError,
+        FeedKey, FeedPosition, FeedRevision, FeedViewer, Loaded, MailFacts, unseen_among,
     },
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
-    reader::FeedReader,
+    reader::{self, FeedReader},
 };
 use chrono::{DateTime, Utc};
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use notification::domain::bulk_action::{
     ApplyChunk, BulkAction, BulkActionItem, BulkActionLease, BulkActionStatus, BulkActionStore,
     ChunkOutcome, CreatedBulkAction, NewBulkAction, UndoRequested,
@@ -29,8 +29,8 @@ use super::{
     models::{
         ClearAction, ClearCursor, ClearPass, ClearRun, InboxChange, InboxClearRequest,
         InboxDoneOutcome, InboxEntry, InboxNotificationDoneOutcome, InboxPage, InboxQuery,
-        InboxRow, InboxRowId, InboxRowTarget, InboxRowType, InboxScope, StartedClear,
-        UNREAD_ROWS_COUNTED, UnreadRows,
+        InboxRow, InboxRowId, InboxRowTarget, InboxRowType, InboxScope, StartedClear, UnreadRow,
+        UnreadRows,
     },
     policy,
     ports::ClearUpdates,
@@ -157,8 +157,8 @@ pub trait NotificationInboxService: Send + Sync + 'static {
 
     /// Count the unread rows of the viewer's whole inbox, by kind, without
     /// paging it: only groups that may hold an unread row are read, and an
-    /// entity type's groups stop being read once they hold
-    /// [`UNREAD_ROWS_COUNTED`] unread rows.
+    /// entity type's groups stop being read once they hold enough unread
+    /// rows.
     fn unread_rows(
         &self,
         viewer: FeedViewer,
@@ -166,7 +166,7 @@ pub trait NotificationInboxService: Send + Sync + 'static {
 
     /// Bring `unread` up to date after `groups` changed, reading those
     /// groups alone. Everything is counted again only when a count that had
-    /// stopped at [`UNREAD_ROWS_COUNTED`] falls back under it.
+    /// stopped at enough unread rows no longer holds enough.
     fn recount_unread_rows(
         &self,
         viewer: FeedViewer,
@@ -224,7 +224,19 @@ fn candidate_request(viewer: &FeedViewer) -> CandidateRequest {
         limit: 0,
         after: None,
         only: None,
+        assume_attention: false,
+        read: CandidateRead::Replica,
     }
+}
+
+/// The entity as the viewer's inbox would list a new notification about it;
+/// `None` when it would not.
+pub async fn new_notification_listing<S: CandidateSource>(
+    source: &S,
+    viewer: &FeedViewer,
+    entity: Entity<'static>,
+) -> Result<Option<S::Entity>, Report> {
+    reader::listed(source, candidate_request(viewer), entity).await
 }
 
 /// A group cut into every one of its rows.
@@ -445,16 +457,24 @@ where
     A: BulkActionStore,
     U: ClearUpdates,
 {
-    /// Every row of each current group in `keys`, keyed by group.
+    /// Every row of each current group in `keys`, keyed by group, read from
+    /// `read`.
     async fn current(
         &self,
         viewer: &FeedViewer,
         keys: &[FeedKey],
+        read: CandidateRead,
     ) -> Result<HashMap<FeedKey, Group<S::Entity>>, Report> {
         let now = Utc::now();
         Ok(self
             .reader
-            .current(candidate_request(viewer), keys)
+            .current(
+                CandidateRequest {
+                    read,
+                    ..candidate_request(viewer)
+                },
+                keys,
+            )
             .await?
             .into_iter()
             .map(|(key, loaded)| (key, Group::cut(loaded, viewer, now)))
@@ -613,7 +633,12 @@ where
         if keys.is_empty() {
             return Ok(Vec::new());
         }
-        let mut current = self.current(viewer, &keys).await?;
+        // Live updates and write replies: clients apply these entries over the
+        // Soup patches announcing the change, which were hydrated from the
+        // primary.
+        let mut current = self
+            .current(viewer, &keys, CandidateRead::Committed)
+            .await?;
         Ok(keys
             .into_iter()
             .map(
@@ -726,8 +751,12 @@ where
         }
         // Rows are found among every row of their group, whatever inbox the
         // caller was looking at, so done acknowledges what they observed.
+        // Read from the primary: what they observed may have come from a live
+        // recompute the replica has not caught up with.
         let groups = unique(targets.iter().map(|target| target.id.group.clone()));
-        let current = self.current(&viewer, &groups).await?;
+        let current = self
+            .current(&viewer, &groups, CandidateRead::Committed)
+            .await?;
 
         let rows: Vec<InboxRowId> = targets.iter().map(|target| target.id.clone()).collect();
         let mut found = Vec::new();
@@ -782,7 +811,10 @@ where
         notification: Uuid,
     ) -> Result<InboxNotificationDoneOutcome<Self::Entity>, FeedError> {
         let groups = vec![row.group.clone()];
-        let current = self.current(&viewer, &groups).await?;
+        // From the primary, as for `mark_done`.
+        let current = self
+            .current(&viewer, &groups, CandidateRead::Committed)
+            .await?;
         let acknowledgment = match current.get(&row.group).and_then(|group| {
             let found = group.row(&row)?;
             Some((group, found))
@@ -1063,7 +1095,11 @@ where
         if groups.is_empty() {
             return Ok(Vec::new());
         }
-        let current = self.current(&viewer, &groups).await?;
+        // From the primary, as for `mark_done`: a row opened from a live
+        // recompute can hold notifications the replica does not have yet.
+        let current = self
+            .current(&viewer, &groups, CandidateRead::Committed)
+            .await?;
         let notification_ids: Vec<Uuid> = rows
             .iter()
             .filter_map(|id| current.get(&id.group)?.row(id))
@@ -1084,6 +1120,7 @@ where
             user = %viewer.user,
             groups = tracing::field::Empty,
             rows = tracing::field::Empty,
+            chat_rows = tracing::field::Empty,
         ),
         err
     )]
@@ -1092,6 +1129,7 @@ where
         let span = tracing::Span::current();
         span.record("groups", unread.groups.len());
         span.record("rows", unread.groups.values().map(Vec::len).sum::<usize>());
+        span.record("chat_rows", unread.chat_counts().values().sum::<u32>());
         Ok(unread)
     }
 

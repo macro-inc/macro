@@ -1,5 +1,11 @@
 import { useViewControlHotkeys } from '@app/components/view-shell';
+import { useWorkspaceDrawerEntry } from '@app/features/agents-view/primitives/drawer-navigation';
+import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  SplitHeaderScope,
+  useSplitHeaderScope,
+} from '@components/app/SplitHeaderScope';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { openInNewTab } from '@components/app/tab-layout/open-in-new-tab';
@@ -8,6 +14,7 @@ import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
 import { enableRoutineStarterTemplates } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Show, Suspense } from 'solid-js';
 import { useRoutinesDiscover } from '../routine-suggestions/routine-suggestions';
 import { getErrorMessage } from './core/routine-draft';
@@ -23,12 +30,14 @@ import { startRoutineDraft } from './routine-draft-start';
 import { routineContent, routineIdFromContent } from './routine-navigation';
 import { RoutineNew } from './routine-new';
 import { useRoutineRowMenuActions } from './routine-row-menu-actions';
+import { MobileRoutinesListHeader } from './views/mobile/routines-list-header';
 import { RoutinesListView } from './views/routines-list';
 
 function RoutinesContent() {
   const userId = useUserId();
   const layout = useSplitLayout();
   const panel = useSplitPanelOrThrow();
+  const fromWorkspaceDrawer = useWorkspaceDrawerEntry();
   const selectedId = () => routineIdFromContent(panel.handle.content());
   const open = (id?: string) =>
     layout.openWithSplit(routineContent(id), {
@@ -89,6 +98,18 @@ function RoutinesContent() {
       keyed
       fallback={
         <RoutinesListView
+          mobileHeader={(focusSearch) => (
+            <MobileRoutinesListHeader
+              fromDrawer={fromWorkspaceDrawer()}
+              onBack={() =>
+                panel.handle.canGoBack()
+                  ? panel.handle.goBack()
+                  : openAgentsPage(layout, 'new')
+              }
+              onSearch={focusSearch}
+              onCreate={create}
+            />
+          )}
           source={source}
           userId={userId}
           registerSearchFocus={(focus) => (focusSearch = focus)}
@@ -107,12 +128,30 @@ function RoutinesContent() {
         <Show
           when={id !== 'new'}
           fallback={
-            <RoutineNew onCreated={(id) => open(id)} onCancel={() => open()} />
+            <RoutineNew
+              onCreated={(id) =>
+                layout.openWithSplit(routineContent(id), {
+                  handle: panel.handle,
+                  activate: true,
+                  search: {},
+                  mergeHistory: isTouchDevice(),
+                })
+              }
+              onCancel={() =>
+                isTouchDevice() && panel.handle.canGoBack()
+                  ? panel.handle.goBack()
+                  : open()
+              }
+            />
           }
         >
           <RoutineDetail
             scheduleId={id}
-            onBack={() => open()}
+            onBack={() =>
+              isTouchDevice() && panel.handle.canGoBack()
+                ? panel.handle.goBack()
+                : open()
+            }
             onOpen={(id) => open(id)}
           />
         </Show>
@@ -120,12 +159,28 @@ function RoutinesContent() {
     </Show>
   );
 }
+
+function RoutinesTopBar() {
+  const scope = useSplitHeaderScope();
+  return (
+    <Show when={scope}>
+      {/* Each mobile routine header owns the navigation island. */}
+      <SplitHeaderScope.TopBar leading={<span class="hidden" />} />
+    </Show>
+  );
+}
+
 export function RoutinesPage() {
   return (
-    <Suspense
-      fallback={<div class="p-6 text-sm text-ink-muted">Loading routines…</div>}
-    >
-      <RoutinesContent />
-    </Suspense>
+    <SplitHeaderScope.Root when={isTouchDevice()}>
+      <RoutinesTopBar />
+      <Suspense
+        fallback={
+          <div class="p-6 text-sm text-ink-muted">Loading routines…</div>
+        }
+      >
+        <RoutinesContent />
+      </Suspense>
+    </SplitHeaderScope.Root>
   );
 }

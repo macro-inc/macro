@@ -220,17 +220,21 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'routine-suggestions-failures',
     'search-dropped-events',
     'search-email-backlog',
+    'search-email-indexer-silent',
     'search-email-near-retention',
+    'search-failed-bulk-items',
     'search-indexer-silent',
     'search-live-backlog',
     'search-near-retention',
     'search-offset-reset',
     'search-probe-failing',
     'search-probe-late',
+    'search-probe-prefix-unseen',
     'search-probe-unseen',
     'sqs-dlq-inflow',
     'sqs-email-backfill-age',
     'sqs-email-backfill-backlog-anomaly',
+    'sqs-link-maintenance-age',
     'sqs-work-queue-age',
     'storage-pool-wait',
   ]);
@@ -373,6 +377,7 @@ test('a heartbeat uses one missing-data mode', () => {
   const heartbeats = monitors().filter((r) => r.inputs.notifyNoData === true);
   expect(heartbeats.map((r) => r.name).sort()).toEqual([
     'firecracker-host-unhealthy',
+    'search-email-indexer-silent',
     'search-indexer-silent',
   ]);
   for (const resource of heartbeats) {
@@ -381,8 +386,10 @@ test('a heartbeat uses one missing-data mode', () => {
       onMissingData: resource.inputs.onMissingData,
     }).toEqual({ name: resource.name, onMissingData: undefined });
   }
-  const silent = heartbeats.find((r) => r.name === 'search-indexer-silent');
-  expect(silent?.inputs.noDataTimeframe).toBe(10);
+  for (const name of ['search-indexer-silent', 'search-email-indexer-silent']) {
+    const silent = heartbeats.find((r) => r.name === name);
+    expect(silent?.inputs.noDataTimeframe).toBe(10);
+  }
 });
 
 test('Firecracker restore percentiles use an enabled distribution of successful snapshot launches', () => {
@@ -418,4 +425,30 @@ test('Firecracker memory follows admission policy and unresolved drift persists 
   expect(drift?.inputs.query).toBe(
     'min(last_5m):max:firecracker_host.reconcile.drift{env:prod,service:firecracker-host} by {host} > 0'
   );
+});
+
+test('the probe judges rotation rounds per type, the crowded prefix apart and failures per operation', () => {
+  const query = (name: string) =>
+    monitors().find((r) => r.name === name)?.inputs.query as string;
+
+  for (const name of ['search-probe-late', 'search-probe-unseen']) {
+    expect(query(name)).toContain('!operation:crowded_prefix');
+    expect(query(name)).toContain('by {entity_type}.as_count()');
+  }
+  expect(query('search-probe-prefix-unseen')).toBe(
+    'sum(last_30m):sum:search.freshness.probe_rounds{env:prod,service:search-freshness-probe,operation:crowded_prefix,outcome:unseen} by {entity_type}.as_count() >= 2'
+  );
+  expect(query('search-probe-failing')).toContain(
+    'by {entity_type,operation}.as_count()'
+  );
+});
+
+test('failed bulk items alert only when they last, on complete buckets', () => {
+  const failed = monitors().find((r) => r.name === 'search-failed-bulk-items');
+  expect(failed?.inputs.query).toBe(
+    'min(last_30m):default_zero(sum:search.index.failed_bulk_items{env:prod,service:search-processing-service} by {entity_type,failure}.as_rate().rollup(avg, 300)) * 300 > 0'
+  );
+  // An unfinished 5-minute bucket reads as none; the delay keeps the alert
+  // from recovering every 5 minutes.
+  expect(failed?.inputs.evaluationDelay).toBe(420);
 });

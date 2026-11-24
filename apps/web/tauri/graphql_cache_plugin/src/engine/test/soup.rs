@@ -208,6 +208,81 @@ fn native_live_query_returns_field_deltas_from_the_shared_engine() {
 }
 
 #[test]
+fn native_live_query_resume_finishes_interrupted_retirement() {
+    let handle = spawn_handle();
+    hydrate(&handle);
+    let project_key = format!("GraphqlSoupProject:{}", id(100));
+    write_data(
+        &handle,
+        include_str!("project.graphql"),
+        json!({"user": {"id": VIEWER, "soup": {
+            "items": [{"__typename": "GraphqlSoupProject", "id": id(100), "cacheProjection": null,
+                "ownerId": VIEWER, "parentId": null, "createdAt": TIMESTAMP, "updatedAt": TIMESTAMP,
+                "notifications": [], "properties": [], "isFavorited": false}],
+        }}}),
+        Some(VIEWER),
+    );
+    let mut filters = filters();
+    filters["emailFilter"] = json!({"tree": {"literal": {"threadId": id(0)}}});
+    filters["projectFilter"] = json!({"literal": {"projectIdSelf": id(100)}});
+    let live: EntityFilterRequest = serde_json::from_value(json!({
+        "filters": filters, "sortMethod": "UPDATED_AT", "sortDirection": "DESC", "limit": 20,
+        "baseline": [{"key": project_key, "sortTimestamp": TIMESTAMP}],
+        "liveQuery": {"id": "interrupted-mail", "document": "fragment Item on GraphqlSoupProject { id }", "fragmentName": "Item"},
+    })).unwrap();
+    let first = evaluate(&handle, live);
+    assert_eq!(first["kind"], "live-query", "{first}");
+    assert_eq!(first["upserts"].as_array().unwrap().len(), 1);
+    let registration = serde_json::from_value(first["registrationId"].clone()).unwrap();
+    block_on(async {
+        let mut state = handle.inner.lock().await;
+        let current = state.engine.current_authority("profile").await.unwrap();
+        state
+            .engine
+            .begin_authority_transition("profile", current.generation, "team:denied".into(), true)
+            .await
+            .unwrap();
+    });
+    // Do not read authority first: this retained-view entry point must recover
+    // the durable marker itself before returning any old content.
+    assert!(
+        block_on(handle.resume_entity_filter("interrupted-mail".into(), registration, None))
+            .unwrap()
+            .is_none()
+    );
+    let current = block_on(handle.current_authority("profile")).unwrap();
+    assert!(current.ready);
+    assert_eq!(current.policy.as_deref(), Some("team:denied"));
+    block_on(async {
+        use cache_core::store::Storage;
+        assert!(
+            handle
+                .inner
+                .lock()
+                .await
+                .engine
+                .storage()
+                .get_batch(&[EntityKey(project_key.into())])
+                .await
+                .unwrap()[0]
+                .is_some()
+        );
+        assert!(
+            handle
+                .inner
+                .lock()
+                .await
+                .engine
+                .storage()
+                .get_batch(&[EntityKey(key(4).into())])
+                .await
+                .unwrap()[0]
+                .is_none()
+        );
+    });
+}
+
+#[test]
 fn native_backfill_evaluates_unseen_mail_filters_without_query_baselines() {
     let handle = spawn_handle();
     assert_eq!(
