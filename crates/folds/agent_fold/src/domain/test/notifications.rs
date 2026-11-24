@@ -252,3 +252,187 @@ fn successful_notification_noop_does_not_restore_an_older_failure() {
     }
     assert_eq!(machine.inner().metadata().turn, TurnState::Idle);
 }
+
+/// The reply the Notion preview showed on 2026-11-24: prose, then the noop
+/// signal in its own chunk. Only the trailing tag is dropped, live and when the
+/// stored log is folded again, and it never streams.
+#[test]
+fn notification_turn_drops_a_trailing_noop_after_prose() {
+    let request = AgentAction::notification(vec![Notification {
+        id: macro_uuid::generate_uuid_v7(),
+        subject_id: "review".into(),
+        created_at: "2026-11-24T18:34:13Z".into(),
+        event: NotificationEvent::AppConnected {
+            app: "Notion".into(),
+        },
+    }])
+    .to_runtime(&SessionId::new("s"), RequestId::Str("event".into()))
+    .unwrap();
+    let mut frames = vec![AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::Notification(request),
+        logged_at: None,
+    }];
+    frames.extend(parse_log(r#"
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Let"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" me prepare the full import"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"."}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"\n\n<noop/>"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"event","result":{"stopReason":"end_turn"}}}
+"#));
+
+    let mut machine = LifecycleFold::new();
+    let mut signals = Vec::new();
+    for frame in frames.clone() {
+        signals.extend(machine.push(frame).signals);
+        assert!(
+            machine
+                .inner()
+                .messages()
+                .iter()
+                .all(|message| !message.readable_text().contains("<no"))
+        );
+    }
+    let live = machine.inner().messages();
+    assert_eq!(live.len(), 1);
+    assert_eq!(live[0].readable_text(), "Let me prepare the full import.");
+    assert!(signals.iter().any(|signal| matches!(
+        signal,
+        TurnSignal::TurnEnded {
+            notification_noop: false,
+            last_text: Some(text),
+            ..
+        } if text == "Let me prepare the full import."
+    )));
+    assert_eq!(machine.inner().metadata().noop_turn, None);
+
+    let stored = fold(frames);
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].readable_text(), "Let me prepare the full import.");
+}
+
+#[test]
+fn notification_turn_holds_a_trailing_noop_split_across_chunks() {
+    let request = AgentAction::notification(vec![Notification {
+        id: macro_uuid::generate_uuid_v7(),
+        subject_id: "app".into(),
+        created_at: "2026-10-21T00:00:00Z".into(),
+        event: NotificationEvent::AppConnected {
+            app: "Calendar".into(),
+        },
+    }])
+    .to_runtime(&SessionId::new("s"), RequestId::Str("event".into()))
+    .unwrap();
+    let mut frames = vec![AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::Notification(request),
+        logged_at: None,
+    }];
+    frames.extend(parse_log(r#"
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Calendar is connected."}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"\n<no"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"op/>"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"event","result":{"stopReason":"end_turn"}}}
+"#));
+
+    use crate::domain::{fold::FoldMachineImpl, ports::FoldMachine};
+    let mut machine = FoldMachineImpl::new();
+    for frame in frames.clone() {
+        machine.push(frame);
+        assert!(
+            machine
+                .messages()
+                .iter()
+                .all(|message| !message.readable_text().contains('<'))
+        );
+    }
+    assert_eq!(
+        machine.messages()[0].readable_text(),
+        "Calendar is connected."
+    );
+    assert_eq!(fold(frames)[0].readable_text(), "Calendar is connected.");
+}
+
+/// Only a trailing tag is the signal: one followed by more prose, or a tag
+/// prefix the reply ends on, is the agent's text.
+#[test]
+fn notification_turn_keeps_a_noop_tag_that_is_not_trailing() {
+    let request = AgentAction::notification(vec![Notification {
+        id: macro_uuid::generate_uuid_v7(),
+        subject_id: "app".into(),
+        created_at: "2026-10-21T00:00:00Z".into(),
+        event: NotificationEvent::AppConnected {
+            app: "Calendar".into(),
+        },
+    }])
+    .to_runtime(&SessionId::new("s"), RequestId::Str("event".into()))
+    .unwrap();
+    let mut frames = vec![AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::Notification(request),
+        logged_at: None,
+    }];
+    frames.extend(parse_log(r#"
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Reply <noop/>"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" when nothing is needed, or <no"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"event","result":{"stopReason":"end_turn"}}}
+"#));
+
+    let messages = fold(frames);
+    assert_eq!(messages.len(), 1);
+    assert_eq!(
+        messages[0].readable_text(),
+        "Reply <noop/> when nothing is needed, or <no"
+    );
+}
+
+#[test]
+fn prompted_and_post_tool_turns_keep_a_trailing_noop_after_prose() {
+    let request = AgentAction::prompt("actual owner request")
+        .to_runtime(&SessionId::new("s"), RequestId::Str("owner".into()))
+        .unwrap();
+    let mut frames = vec![AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::ToRuntime(request),
+        logged_at: None,
+    }];
+    frames.extend(parse_log(r#"
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Let me prepare the full import."}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"\n\n<noop/>"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"owner","result":{"stopReason":"end_turn"}}}
+"#));
+    let request = AgentAction::notification(vec![Notification {
+        id: macro_uuid::generate_uuid_v7(),
+        subject_id: "app".into(),
+        created_at: "2026-10-21T00:00:00Z".into(),
+        event: NotificationEvent::AppConnected {
+            app: "Calendar".into(),
+        },
+    }])
+    .to_runtime(&SessionId::new("s"), RequestId::Str("event".into()))
+    .unwrap();
+    frames.push(AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::Notification(request),
+        logged_at: None,
+    });
+    frames.extend(parse_log(r#"
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Sending it."}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"send","title":"SendEmail","kind":"other","status":"completed"}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Sent.\n\n<noop/>"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"event","result":{"stopReason":"end_turn"}}}
+"#));
+
+    let messages = fold(frames);
+    assert_eq!(messages.len(), 3);
+    assert_eq!(
+        messages[1].last_text().as_deref(),
+        Some("Let me prepare the full import.\n\n<noop/>")
+    );
+    assert_eq!(messages[2].last_text().as_deref(), Some("Sent.\n\n<noop/>"));
+}

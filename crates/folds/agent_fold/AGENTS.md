@@ -87,9 +87,14 @@ project into `SessionMetadata.notifications`, separate from message search and
 exports. `SessionNotification` flattens the protocol’s tagged event enum into
 its existing `kind`/`payload` wire shape; generated clients narrow payloads by
 kind. Export with Specta’s phased format to retain optional error fields, and
-keep deserialization compatible with existing flat rows. Exact `<noop/>` is buffered and suppressed only for notification-only
-turns without tool activity; lifecycle still reports the turn ending. User turns
-and tool-bearing turns preserve the literal text.
+keep deserialization compatible with existing flat rows. In notification-only
+turns without tool activity, the fold holds back any tail that could still
+become a trailing `<noop/>` (whitespace plus the tag or a prefix of it), so the
+tag never streams. A reply that is only `<noop/>` is a silent turn
+(`noop_turn`); lifecycle still reports it ending. A `<noop/>` ending prose is
+dropped and the prose kept. A tag followed by more text, user turns and
+tool-bearing turns keep the literal text. `close_turn` settles held text, so
+live, stored and replayed folds agree.
 
 Claude Code injects background-task reports (`<task-notification>`) as user
 turns. `claude_fold` copies the transcript's `origin` to
