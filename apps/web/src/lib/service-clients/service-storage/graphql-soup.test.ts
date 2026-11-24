@@ -1137,6 +1137,28 @@ describe('GraphQL Soup browser cache session gate', () => {
     }
   );
 
+  it('builds no host for a logout wipe that only lost its request', async () => {
+    const { CacheRequestTimeoutError } = await import(
+      '@graphql-cache/host/errors'
+    );
+    const { CacheNavigationError } = await import(
+      '@graphql-cache/host/navigation-error'
+    );
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+    const recover = mocks.registerCacheHost.mock.calls[0]?.[1];
+    expect(recover).toBeDefined();
+    for (const error of [
+      new CacheRequestTimeoutError('init'),
+      new CacheNavigationError(),
+      Object.assign(new Error('owner epoch 1 was lost'), {
+        errorCode: 'owner-epoch-lost',
+      }),
+    ])
+      expect(recover?.(error)).toBeUndefined();
+    expect(mocks.createWorkerCacheHost).toHaveBeenCalledOnce();
+  });
+
   it('passes caller cancellation through auth refresh and retries a live session', async () => {
     const controller = new AbortController();
     mocks.platformFetch
