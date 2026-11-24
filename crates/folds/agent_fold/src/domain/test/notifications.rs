@@ -436,3 +436,63 @@ fn prompted_and_post_tool_turns_keep_a_trailing_noop_after_prose() {
     );
     assert_eq!(messages[2].last_text().as_deref(), Some("Sent.\n\n<noop/>"));
 }
+
+/// Reasoning after shown prose is not tool activity: the turn can still drop
+/// a trailing `<noop/>`, and the prose keeps its place before the reasoning.
+#[test]
+fn notification_turn_drops_a_trailing_noop_after_prose_and_reasoning() {
+    use crate::domain::model::MessagePart;
+    let request = AgentAction::notification(vec![Notification {
+        id: macro_uuid::generate_uuid_v7(),
+        subject_id: "app".into(),
+        created_at: "2026-10-21T00:00:00Z".into(),
+        event: NotificationEvent::AppConnected {
+            app: "Calendar".into(),
+        },
+    }])
+    .to_runtime(&SessionId::new("s"), RequestId::Str("event".into()))
+    .unwrap();
+    let mut frames = vec![AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::Notification(request),
+        logged_at: None,
+    }];
+    frames.extend(parse_log(r#"
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Checking."}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"Nothing else is needed."}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"\n\n<noop/>"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"event","result":{"stopReason":"end_turn"}}}
+"#));
+
+    let mut machine = LifecycleFold::new();
+    let mut signals = Vec::new();
+    for frame in frames.clone() {
+        signals.extend(machine.push(frame).signals);
+        assert!(
+            machine
+                .inner()
+                .messages()
+                .iter()
+                .all(|message| !message.readable_text().contains("<no"))
+        );
+    }
+    let live = machine.inner().messages();
+    assert_eq!(live.len(), 1);
+    assert!(matches!(
+        live[0].parts.as_slice(),
+        [
+            MessagePart::Text { text },
+            MessagePart::Thought { text: thought },
+        ] if text == "Checking." && thought == "Nothing else is needed."
+    ));
+    assert_eq!(machine.inner().metadata().noop_turn, None);
+    assert!(signals.iter().any(|signal| matches!(
+        signal,
+        TurnSignal::TurnEnded {
+            notification_noop: false,
+            ..
+        }
+    )));
+    assert_eq!(fold(frames).as_slice(), live);
+}
