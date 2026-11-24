@@ -206,12 +206,14 @@ pub trait MicrosoftGrantRepository: Send + Sync {
         envelope: &EncryptedMicrosoftToken,
         scopes: &[String],
     ) -> Result<bool, MicrosoftAuthError>;
+    /// Whether the release matched the leased grant version: a lease that
+    /// expired, or a grant that moved on, changes nothing.
     async fn release_refresh(
         &self,
         grant: &StoredGrant,
         lease: Uuid,
         revoke: bool,
-    ) -> Result<(), MicrosoftAuthError>;
+    ) -> Result<bool, MicrosoftAuthError>;
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -679,12 +681,14 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuth
                 MicrosoftAuthError::ReauthorizationRequired
                     | MicrosoftAuthError::MissingPermissions
             );
-            self.repo
+            let released = self
+                .repo
                 .release_refresh(&grant, lease, revoke)
                 .instrument(span.clone())
                 .await?;
-            span.record("microsoft.grant_revoked", revoke);
-            if revoke {
+            let revoked = revoke && released;
+            span.record("microsoft.grant_revoked", revoked);
+            if revoked {
                 tracing::warn!(
                     parent: &span,
                     grant_id = %grant.id,
