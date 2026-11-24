@@ -10,7 +10,9 @@
  * S1 one engine has a database open at a time.
  * S2 a live page never drops its host, short of a newer build taking over, and
  *    never asks to reload without one.
- * S3 a write that reached the durable queue stays in it.
+ * S3 a write that reached the durable queue stays in it, and the database is
+ *    wiped only after an engine died in a page that went on, failed to open it
+ *    or stopped answering.
  * S4 no older build opens the database after a newer one.
  * S5 a refused request says why, with an error code.
  * S6 nothing throws out of an event handler or a timer.
@@ -137,6 +139,19 @@ function lostWrites(world: World): Violation[] {
   return [...neverStored, ...lost];
 }
 
+/** The faults a coordinator answers by wiping the database. */
+const WIPE_CAUSES = /^(crash-engine|fail-open|late-message)/;
+
+function needlessWipes(world: World): Violation[] {
+  if (world.injected.some((fault) => WIPE_CAUSES.test(fault))) return [];
+  return [...world.storage.databases]
+    .filter(([, { wipes }]) => wipes > 0)
+    .map(([scope]) => ({
+      symptom: 'S3:database wiped though no engine failed',
+      detail: scope,
+    }));
+}
+
 function olderOpens(world: World): Violation[] {
   const violations: Violation[] = [];
   const newest = new Map<string, number>();
@@ -231,6 +246,7 @@ export function check(world: World): Violation[] {
     ...retirements(world),
     ...needlessReloads(world),
     ...lostWrites(world),
+    ...needlessWipes(world),
     ...olderOpens(world),
     ...uncodedRefusals(world),
     ...world.sim.uncaught.map((error) => ({

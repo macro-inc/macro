@@ -1111,8 +1111,8 @@ export class World {
         `${context.id}:${context.history}${context.alive ? '' : 'x'}${context.frozen ? 'f' : ''}`
     );
     const storage = [...this.storage.databases].map(
-      ([scope, { queue, wipes, openBy }]) =>
-        `${scope}:${queue.size}.${wipes}.${openBy ?? ''}`
+      ([scope, { queue, salvaged, wipes, openBy }]) =>
+        `${scope}:${queue.size}.${salvaged.size}.${wipes}.${openBy ?? ''}`
     );
     const state = [
       contexts.join(),

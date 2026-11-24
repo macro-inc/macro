@@ -1,13 +1,13 @@
 /**
  * Stands in for the WASM engine (`CacheWorkerCore` over turso-opfs) inside the
  * real engine runtime. It keeps the parts of the engine the handover depends
- * on, and nothing else: it loads its assets in a task of their own, takes the
- * database owner lock without queueing, reports a busy lock, waits for the
- * coordinator's storage grant and then for database files another context still
- * has open, wipes the database on a recovery open (as `recovery_wipe` does,
- * mutation queue included), asks for a reset when its storage breaks, refuses
- * requests once draining, and waits for an in-flight open before a drain closes
- * storage. The runtime lets neither engine see a request after its drain.
+ * on, and nothing else: it takes the database owner lock without queueing,
+ * reports a busy lock, waits for the coordinator's storage grant and then for
+ * database files another context still has open, wipes the database on a
+ * recovery open and carries its mutation queue across (as `wipe_keeping_queue`
+ * and `Crossing::finish` do, each step a task the engine may die before),
+ * refuses requests once draining, and waits for an in-flight open before a drain
+ * closes storage. The runtime lets neither engine see a request after its drain.
  *
  * `DurableStorage` is the origin's OPFS: one database per scope that outlives
  * every page and worker.
@@ -33,6 +33,8 @@ export type StoredMutation = { uuid: string; enqueuedBy: string };
 
 type Database = {
   queue: Map<string, StoredMutation>;
+  /** The side file: a queue on its way from a wiped database to the next. */
+  salvaged: Map<string, StoredMutation>;
   wipes: number;
   openBy: string | undefined;
 };
@@ -55,7 +57,12 @@ export class DurableStorage {
   database(scope: string): Database {
     let database = this.databases.get(scope);
     if (!database) {
-      database = { queue: new Map(), wipes: 0, openBy: undefined };
+      database = {
+        queue: new Map(),
+        salvaged: new Map(),
+        wipes: 0,
+        openBy: undefined,
+      };
       this.databases.set(scope, database);
     }
     return database;
@@ -69,6 +76,19 @@ export class DurableStorage {
         `${engine} opened ${scope} while ${database.openBy} had it open`
       );
     database.openBy = engine;
+  }
+
+  /** Copies the queue to the side file, where a wipe leaves it alone. */
+  salvage(scope: string): void {
+    const { queue, salvaged } = this.database(scope);
+    for (const [uuid, mutation] of queue) salvaged.set(uuid, mutation);
+  }
+
+  /** Queues what is in the side file, which is then gone. */
+  restore(scope: string): void {
+    const { queue, salvaged } = this.database(scope);
+    for (const [uuid, mutation] of salvaged) queue.set(uuid, mutation);
+    salvaged.clear();
   }
 
   wipe(scope: string): void {
@@ -244,16 +264,23 @@ export class FakeEngineCore {
     }
     await this.options.onOwnerLockAcquired?.();
     await this.filesFree(scope);
-    if (this.options.recoveryOpen) this.storage.wipe(scope);
+    if (this.options.recoveryOpen) {
+      this.storage.salvage(scope);
+      await this.laterTask();
+      this.storage.wipe(scope);
+      await this.laterTask();
+    }
     if (this.storage.failNextOpens > 0) {
       this.storage.failNextOpens -= 1;
       this.releaseLock?.();
       throw new Error('storage error: unable to open database file');
     }
     this.storage.open(scope, this.context.id, this.context.buildTime);
+    this.storage.restore(scope);
     this.openedScope = scope;
     this.options.onInitializationOutcome?.(
-      this.options.recoveryOpen ? 'reset-storage-uncertain' : 'opened-existing'
+      this.options.recoveryOpen ? 'reset-storage-uncertain' : 'opened-existing',
+      'preserved'
     );
   }
 
