@@ -4,8 +4,8 @@
  * on, and nothing else: it takes the database owner lock without queueing,
  * reports a busy lock, waits for the coordinator's storage grant and then for
  * database files another context still has open, wipes the database on a
- * recovery open (as `recovery_wipe` does, mutation queue included), refuses requests once draining with the same untyped message,
- * and waits for an in-flight open before a drain closes storage.
+ * recovery open (as `recovery_wipe` does, mutation queue included), refuses
+ * requests once draining with the same code, and waits for an in-flight open before a drain closes storage.
  *
  * `DurableStorage` is the origin's OPFS: one database per scope that outlives
  * every page and worker.
@@ -14,7 +14,11 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { match } from 'ts-pattern';
 import { TEST_AUTHORITY_GENERATION, testAuthority } from '../authority-fixture';
-import type { CacheRequest, CacheResponse } from '../protocol';
+import {
+  type CacheRequest,
+  type CacheResponse,
+  OWNER_EPOCH_LOST_ERROR_CODE,
+} from '../protocol';
 import { databaseOwnerLockName } from '../worker/coordinator-protocol';
 import type { CacheWorkerCoreOptions } from '../worker/worker-core';
 import type { Sim, SimContext } from './sim';
@@ -104,7 +108,12 @@ export class FakeEngineCore {
   async handleRequest(port: Port, request: CacheRequest): Promise<void> {
     const respond = (response: CacheResponse) => port.postMessage(response);
     if (!this.accepting) {
-      respond({ id: request.id, ok: false, error: 'cache engine is draining' });
+      respond({
+        id: request.id,
+        ok: false,
+        error: 'cache engine is draining',
+        errorCode: OWNER_EPOCH_LOST_ERROR_CODE,
+      });
       return;
     }
     this.active += 1;

@@ -405,6 +405,13 @@ enqueues nor forward them directly to the API. Requests queued at the coordinato
 but not yet routed remain eligible for one dispatch to the replacement engine;
 late old-epoch responses cannot settle the rejected requests.
 
+Any other request its owner left without an answer, drained or lost, is refused
+with `owner-epoch-lost`. A page still starting asks the next owner again and
+keeps its callers waiting, and so does an authority read, which startup waits on
+after the handshake. Reads and writes are not replayed. During a handover the
+coordinator announced, a host told its owner was lost keeps sending it requests,
+which wait there for the next owner.
+
 Safari can recreate the SharedWorker global while retaining a page's MessagePort,
 including when another tab closes. A second Effect ready frame is a transport
 reset, not a duplicate initial handshake: the page retires its orphanable engine

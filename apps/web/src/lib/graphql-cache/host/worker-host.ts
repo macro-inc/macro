@@ -11,6 +11,7 @@ import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
 import {
   type AuthorityTransition,
+  type CacheAuthority,
   cacheAuthorityError,
   createAuthorityObserver,
   StaleCacheAuthorityError,
@@ -303,6 +304,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let initializationError: Error | undefined;
   let replacementError: CacheResponseError | undefined;
   let recoveryInProgress = false;
+  const transportWaiters = new Set<() => void>();
   let latestReplacementEpoch = 0;
   let failureReported = false;
   let terminalFailureHandled = false;
@@ -608,6 +610,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     // A rejected old-epoch read may have registered dependencies before its
     // response was lost. It belongs to the lost generation, not replacement.
     markPendingRegistrations(lostRegisteredOpKeys);
+    // A handshake is not over: it asks the next owner again. And in a handover
+    // it announced, the coordinator keeps new requests for the next owner.
+    if (state === 'initializing' || readAvailability.timeoutsPaused) return;
     replacementError = error;
     initialization = undefined;
     state = 'awaiting-replacement';
@@ -706,8 +711,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         // Cancellation may arrive after a retry timer fires, before this continuation.
         if (initializationId !== initializationAttempt)
           throw new CacheNavigationError();
-        if (state !== 'initializing')
-          throw new CacheHostDisposedError();
+        if (state !== 'initializing') throw new CacheHostDisposedError();
         const current = getAdapter();
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
@@ -724,8 +728,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           ]);
           if (initializationId !== initializationAttempt)
             throw new CacheNavigationError();
-          if (state !== 'initializing')
-            throw new CacheHostDisposedError();
+          if (state !== 'initializing') throw new CacheHostDisposedError();
           registeredAdapter = current;
           return;
         } catch (error) {
@@ -891,6 +894,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     { uncertain = false, preserveDatabase = false } = {}
   ): void {
     state = 'failed';
+    releaseTransportWaiters();
     readAvailability.resume();
     initialization = undefined;
     initializationError = error;
@@ -1043,6 +1047,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
    */
   function leave(mode: 'leaving' | 'navigation'): void {
     state = 'disposing';
+    releaseTransportWaiters();
     disposalMode = mode;
     clearSubscribers();
     rejectPending(
@@ -1335,24 +1340,46 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }, storageHealthIntervalMs);
   }
 
+  async function askOwner(attempt: number): Promise<void> {
+    await request({
+      kind: 'init',
+      scope: options.scope,
+      hotCapacity: options.hotCapacity,
+    });
+    if (attempt !== initializationAttempt) throw new CacheNavigationError();
+    const version = authorityObserver.version();
+    const authority = await request({
+      kind: 'current-authority',
+      identity: options.scope,
+    });
+    authorityObserver.observeCurrent(authority, version);
+  }
+
+  /** Asks again when the owner is lost: the coordinator keeps it for the next. */
+  async function askOwnerUntilAnswered(attempt: number): Promise<void> {
+    for (;;) {
+      try {
+        return await askOwner(attempt);
+      } catch (error) {
+        if (attempt !== initializationAttempt || state !== 'initializing')
+          throw error;
+        if (!isOwnerEpochLoss(error)) throw error;
+      }
+    }
+  }
+
   function startInitialization(): Promise<void> {
     state = 'initializing';
+    releaseTransportWaiters();
     replacementError = undefined;
     initializationStartedAt = now();
-    const sendInit = () =>
-      request({
-        kind: 'init',
-        scope: options.scope,
-        hotCapacity: options.hotCapacity,
-      });
     const attempt = ++initializationAttempt;
     const suspended = suspension;
     const ready = (async () => {
       if (suspended) {
         await suspended;
         if (attempt !== initializationAttempt) throw new CacheNavigationError();
-        if (state !== 'initializing')
-          throw new CacheHostDisposedError();
+        if (state !== 'initializing') throw new CacheHostDisposedError();
         suspension = undefined;
         adapter = undefined;
         registeredAdapter = undefined;
@@ -1377,14 +1404,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       if (!adapter || registeredAdapter !== adapter)
         await registerAdapter(attempt);
       if (attempt !== initializationAttempt) throw new CacheNavigationError();
-      await sendInit();
-      if (attempt !== initializationAttempt) throw new CacheNavigationError();
-      const version = authorityObserver.version();
-      const authority = await request({
-        kind: 'current-authority',
-        identity: options.scope,
-      });
-      authorityObserver.observeCurrent(authority, version);
+      await askOwnerUntilAnswered(attempt);
     })();
     const handshake = ready.then(
       () => {
@@ -1432,16 +1452,28 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           failInitialization(restarted, { preserveDatabase: true });
           throw restarted;
         }
-        if (isOwnerEpochLoss(initializationFailure)) {
-          observeOwnerEpochLoss(initializationFailure);
-        } else {
-          failInitialization(initializationFailure);
-        }
+        failInitialization(initializationFailure);
         throw initializationFailure;
       }
     );
     initialization = handshake;
     return handshake;
+  }
+
+  /** Whether this host still has, or will have, an owner to ask. */
+  const isServing = (): boolean =>
+    state !== 'failed' && state !== 'disposing' && state !== 'disposed';
+
+  function releaseTransportWaiters(): void {
+    const waiters = [...transportWaiters];
+    transportWaiters.clear();
+    for (const resolve of waiters) resolve();
+  }
+
+  /** Waits for the next owner while this host has none. */
+  function transportReady(): Promise<void> {
+    if (state !== 'awaiting-replacement') return Promise.resolve();
+    return new Promise((resolve) => transportWaiters.add(resolve));
   }
 
   function ensureInitialized(): Promise<void> {
@@ -1498,14 +1530,25 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     return await request(msg, opKey, signal);
   }
 
-  async function currentAuthority() {
+  async function askAuthority(): Promise<CacheAuthority> {
     const version = authorityObserver.version();
     const value = await initializedRequest({
       kind: 'current-authority',
       identity: options.scope,
     });
-    const observed = authorityObserver.observeCurrent(value, version);
-    return observed;
+    return authorityObserver.observeCurrent(value, version);
+  }
+
+  /** Answers once there is an owner to ask, however many are lost meanwhile. */
+  async function currentAuthority(): Promise<CacheAuthority> {
+    for (;;) {
+      try {
+        return await askAuthority();
+      } catch (error) {
+        if (!isOwnerEpochLoss(error) || !isServing()) throw error;
+        await transportReady();
+      }
+    }
   }
 
   function trackActiveOperation(opKey: number): void {

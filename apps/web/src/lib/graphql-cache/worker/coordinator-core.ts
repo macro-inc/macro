@@ -589,7 +589,8 @@ export class CoordinatorCore {
 
     const actions = this.rejectEpochRequests(
       ownerEpoch,
-      'engine drained before delivering its response'
+      'engine drained before delivering its response',
+      OWNER_EPOCH_LOST_ERROR_CODE
     );
     actions.push({ kind: 'close-engine-route', tabId, ownerEpoch });
     if (this.retiringTabs.delete(tabId)) {

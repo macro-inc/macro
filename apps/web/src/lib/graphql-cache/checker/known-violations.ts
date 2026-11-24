@@ -15,10 +15,6 @@ export type KnownViolation = ViolationKey & {
 
 const WIPE =
   'The open after an engine died in a live page wipes the database, queued writes included.';
-const STARTUP_LOSS =
-  "An owner lost while a tab's startup handshake is pending fails the handshake. The page drops a host that was waiting for the next owner, and recovery calls the error unrecoverable and stops until reload.";
-const RESTART_AT_STARTUP =
-  'A coordinator restart during startup drops a host that could re-register.';
 const BFCACHE_AT_STARTUP =
   'A tab that enters the back/forward cache while starting drops its host, and nothing restarts it when the tab comes back.';
 const SUPERSEDED_AT_STARTUP =
@@ -52,7 +48,6 @@ const known = (
   }));
 
 const WIPED = 'S3:queued write lost (database wiped)';
-const EPOCH_LOST = 'S2:host retired on CacheResponseError:owner-epoch-lost';
 const STOPPED =
   'L1:cache not back (recovery-required, stopped unrecoverable, probe read not made)';
 const UNSERVED = 'L2:no active engine (waiting-for-tab)';
@@ -67,13 +62,6 @@ const UNAVAILABLE = 'L1:cache not back (unavailable, probe read not made)';
 const timeout = (request: string): string =>
   `Error:untyped:cache worker timeout: ${request}`;
 
-const OWNER_LOST: InjectedFault[] = [
-  'close owner',
-  'kill owner',
-  'bfcache owner',
-  'crash-engine owner',
-];
-
 /** Faults that make a tab ask for the database a tab of another build has. */
 const CONTENDING: InjectedFault[] = [
   'open-newer',
@@ -87,15 +75,6 @@ const CONTENDING: InjectedFault[] = [
 
 export const KNOWN_VIOLATIONS: KnownViolation[] = [
   ...known(WIPE, ['crash-engine owner'], [WIPED]),
-  ...OWNER_LOST.flatMap((fault) =>
-    known(STARTUP_LOSS, [fault], [EPOCH_LOST, STOPPED, UNSERVED])
-  ),
-  ...known(STARTUP_LOSS, ['expire-session owner'], [EPOCH_LOST, STOPPED]),
-  ...known(
-    RESTART_AT_STARTUP,
-    ['restart-coordinator'],
-    ['S2:host retired on CoordinatorRestartedError:owner-epoch-lost']
-  ),
   ...(['bfcache', 'bfcache owner'] as const).flatMap((fault) =>
     known(
       BFCACHE_AT_STARTUP,
@@ -112,6 +91,9 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
     [
       'L1:cache not back (recovery-required, stopped superseded, probe read not made)',
     ]
+  ),
+  ...(['close owner', 'kill owner', 'bfcache owner'] as const).flatMap(
+    (fault) => known(SUPERSEDED_AT_STARTUP, [fault], [UNSERVED])
   ),
   ...known(
     FILES_BUSY,
@@ -132,7 +114,6 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
       ]
     )
   ),
-  ...known(STARTUP_LOSS, ['late-message'], [EPOCH_LOST]),
   ...known(
     STARTUP_TIMEOUT,
     ['late-message'],

@@ -101,6 +101,7 @@ class FakePageAdapter {
   onmessage: ((event: MessageEvent<WorkerMessage>) => void) | null = null;
   readonly requests: CacheRequest[] = [];
   readonly start = vi.fn(async (): Promise<void> => {});
+  readonly authorityRequests: CacheRequest[] = [];
   readonly ignoredKinds = new Set<CacheRequest['kind']>();
   readonly errors = new Map<CacheRequest['kind'], string>();
   readonly dispose = vi.fn(
@@ -115,6 +116,7 @@ class FakePageAdapter {
       request.kind !== 'transition-authority'
     )
       this.requests.push(request);
+    else this.authorityRequests.push(request);
     if (this.ignoredKinds.has(request.kind)) return;
     const error = this.errors.get(request.kind);
     queueMicrotask(() => {
@@ -1107,7 +1109,7 @@ describe('createWorkerCacheHost', () => {
     }
   );
 
-  it('recovers typed initial epoch loss with fresh init handshakes only', async () => {
+  it('asks the next owner when owners are lost during the first handshake, and keeps its callers waiting', async () => {
     configureAdapter = (fake) => fake.ignoredKinds.add('init');
     const onInitializationError = vi.fn();
     const host = createWorkerCacheHost({
@@ -1117,6 +1119,7 @@ describe('createWorkerCacheHost', () => {
     const affected: number[][] = [];
     host.onOpsAffected((keys) => affected.push(keys));
 
+    const authority = host.authority?.current();
     const read = host.readQuery({ opKey: 44, query: 'query Read { user }' });
     const mutation = host.enqueueOptimisticMutation(
       {
@@ -1127,52 +1130,114 @@ describe('createWorkerCacheHost', () => {
       },
       { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
     );
-    const readRejected = expect(read).rejects.toMatchObject({
-      message: 'owner epoch 1 was lost',
-      errorCode: 'owner-epoch-lost',
-    });
-    const mutationRejected = expect(mutation).rejects.toMatchObject({
-      message: 'owner epoch 1 was lost',
-      errorCode: 'owner-epoch-lost',
-    });
     const adapter = requireAdapter();
-    await vi.waitFor(() => expect(adapter.requests).toHaveLength(1));
+    const sent = () => adapter.requests.map(({ kind }) => kind);
+    await vi.waitFor(() => expect(sent()).toEqual(['init']));
     adapter.reject(1, 'owner epoch 1 was lost', 'owner-epoch-lost');
-    await Promise.all([readRejected, mutationRejected]);
-
+    await vi.waitFor(() => expect(sent()).toEqual(['init', 'init']));
     adapter.replace(2);
-    expect(adapter.requests.map(({ id, kind }) => [id, kind])).toEqual([
-      [1, 'init'],
-      [2, 'init'],
-    ]);
-    expect(affected).toEqual([]);
-    adapter.reject(2, 'owner epoch 2 was lost', 'owner-epoch-lost');
-    await Promise.resolve();
-
+    // The owner answers the first half of the handshake, and is lost.
+    adapter.ignoredKinds.add('current-authority');
+    adapter.respond(2, null);
+    await vi.waitFor(() => expect(adapter.authorityRequests).toHaveLength(1));
+    adapter.reject(3, 'owner epoch 2 was lost', 'owner-epoch-lost');
+    await vi.waitFor(() => expect(sent()).toEqual(['init', 'init', 'init']));
     adapter.replace(3);
-    expect(adapter.requests.map(({ id, kind }) => [id, kind])).toEqual([
-      [1, 'init'],
-      [2, 'init'],
-      [3, 'init'],
-    ]);
-    expect(affected).toEqual([]);
-    adapter.respond(3, null);
-    await vi.waitFor(() =>
-      expect(
-        adapter.requests.filter(({ kind }) => kind === 'init')
-      ).toHaveLength(3)
-    );
-    expect(affected).toEqual([]);
+    adapter.ignoredKinds.clear();
+    adapter.respond(4, null);
 
+    await expect(read).resolves.toEqual({ kind: 'miss' });
+    await expect(mutation).resolves.toBeDefined();
+    await expect(authority).resolves.toMatchObject({
+      generation: TEST_AUTHORITY_GENERATION,
+    });
     expect(
-      adapter.requests.filter(
-        (request) =>
-          request.kind === 'read' ||
-          request.kind === 'enqueue-optimistic-mutation'
+      sent().filter(
+        (kind) => kind === 'read' || kind === 'enqueue-optimistic-mutation'
       )
-    ).toEqual([]);
+    ).toEqual(['read', 'enqueue-optimistic-mutation']);
+    expect(affected).toEqual([]);
     expect(onInitializationError).not.toHaveBeenCalled();
     host.dispose();
+  });
+
+  it('answers an authority read from the next owner when this one is lost', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('current-authority');
+    const authority = host.authority?.current();
+    await vi.waitFor(() => expect(adapter.authorityRequests).toHaveLength(2));
+    adapter.reject(
+      adapter.authorityRequests.at(-1)?.id ?? 0,
+      'engine drained before delivering its response',
+      'owner-epoch-lost'
+    );
+    adapter.ignoredKinds.clear();
+    adapter.replace(2);
+
+    await expect(authority).resolves.toMatchObject({
+      generation: TEST_AUTHORITY_GENERATION,
+    });
+    host.dispose();
+  });
+
+  it('keeps sending writes to the coordinator when a draining owner refuses one', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const generations = vi.fn();
+    host.onCacheGenerationChanged(generations);
+    await host.readQuery({ opKey: 7, query: 'query Seven { seven }' });
+    const adapter = requireAdapter();
+    const write = () =>
+      host.writeQuery({
+        generation: TEST_AUTHORITY_GENERATION,
+        query: 'query Value { value }',
+        data: { value: 'one' },
+      });
+
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    adapter.ignoredKinds.add('write');
+    const refused = write();
+    const rejected = expect(refused).rejects.toMatchObject({
+      errorCode: 'owner-epoch-lost',
+    });
+    await vi.waitFor(() => expect(adapter.requests.at(-1)?.kind).toBe('write'));
+    adapter.reject(
+      adapter.requests.at(-1)?.id ?? 0,
+      'cache engine is draining',
+      'owner-epoch-lost'
+    );
+    await rejected;
+
+    adapter.ignoredKinds.clear();
+    await expect(write()).resolves.toBeDefined();
+    adapter.replace(2);
+    await host.currentRevision();
+    expect(generations).toHaveBeenCalledExactlyOnceWith({
+      storage: 'preserved',
+    });
+    host.dispose();
+  });
+
+  it('refuses an authority read waiting for the next owner once the host is disposed', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('current-authority');
+    const authority = host.authority?.current();
+    const refused = expect(authority).rejects.toMatchObject({
+      errorCode: 'host-disposed',
+    });
+    await vi.waitFor(() => expect(adapter.authorityRequests).toHaveLength(2));
+    adapter.reject(
+      adapter.authorityRequests.at(-1)?.id ?? 0,
+      'owner epoch 1 was lost',
+      'owner-epoch-lost'
+    );
+    // Let the read start its wait.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    host.dispose();
+    await refused;
   });
 
   it('suppresses replacement notification while an original init is queued', async () => {

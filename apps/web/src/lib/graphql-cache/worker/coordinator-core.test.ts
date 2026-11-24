@@ -653,6 +653,23 @@ describe('CoordinatorCore', () => {
     });
   });
 
+  it('tells a request its drained engine never answered that the owner was lost', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    ready(core, 'tab-a', 1, 'opened-existing');
+    core.request('tab-b', clear(9));
+    core.beginGracefulDeparture('tab-a', 1);
+
+    expect(core.engineDrained('tab-a', 1)).toContainEqual({
+      kind: 'reject-request',
+      tabId: 'tab-b',
+      requestId: 9,
+      error: 'engine drained before delivering its response',
+      errorCode: 'owner-epoch-lost',
+    });
+  });
+
   it('rejects old-epoch inflight work without replay and requires wipe proof', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');
