@@ -8,15 +8,17 @@
 #   (the parent cgroup, present while the host runs). Hibernated and stopped
 #   computers have no cgroup, so no series.
 # A VM is shown only by an alias, the last 8 hex digits of its computer id
-# (`vm`). Computer ids are UUIDv7: the first digits are the creation time, the
-# last are random, so VMs created together never share an alias. The full id
+# (`vm`). Computer ids are UUIDv7: the first digits are the creation time and
+# the last are random, so VMs created together don't share a time prefix; two
+# VMs on one host can still share a 32-bit suffix by chance, which is rare.
+# Counts and sums match VMs by their full id inside the query; the full id
 # never reaches a legend, table, tooltip or URL.
 #
 # Current values follow one freshness rule: a series counts only with a sample
 # in the last 2 minutes (`fresh`). A host is covered when both its
 # node_exporter and its cAdvisor (the parent cgroup) are fresh; VM counts and
-# reservations exist only for covered hosts, and fleet ratios divide only by
-# the hosts their numerator has. A host without telemetry shows as missing,
+# reservations exist only for covered hosts, and each fleet ratio sums its
+# numerator and denominator over the same hosts: those that have both. A host without telemetry shows as missing,
 # never as 0.
 { lib }:
 let
@@ -36,6 +38,9 @@ let
   # The filesystem computers' disks live on: the ZFS dataset `<pool>/firecracker`
   # and its clones, or the XFS mount (`macro.firecrackerHost.storage`).
   storage = ''${host},fstype=~"zfs|xfs",mountpoint=~"/[^/]+/firecracker(/.*)?|/var/lib/firecracker-host"'';
+  # Only the parent dataset (or the XFS mount): a child's available space can
+  # differ from it under quotas and reservations.
+  storageParent = ''${host},fstype=~"zfs|xfs",mountpoint=~"/[^/]+/firecracker|/var/lib/firecracker-host"'';
 
   # Default `memory_high_watermark_percent` (docs/runbooks/computer-overcommit.md).
   watermark = "0.8";
@@ -64,27 +69,33 @@ let
   # reservations; its size minus that is what it references, and clones count
   # the blocks they share with their golden while snapshot-only blocks are
   # missed, so the referenced sum is an estimate. XFS: the one filesystem.
-  storageAvailableByHost = "max by (${byHost}) (${fresh "node_filesystem_avail_bytes" storage})";
+  storageAvailableByHost = "max by (${byHost}) (${fresh "node_filesystem_avail_bytes" storageParent})";
   storageReferencedByHost = "sum by (${byHost}) (${fresh "node_filesystem_size_bytes" storage} - ${fresh "node_filesystem_avail_bytes" storage})";
   psi =
     resource:
     "(sum by (${byHost}) (rate(node_pressure_${resource}_waiting_seconds_total{${host}}[5m])) and on (host) ${nodeUp})";
 
-  vmMemoryFresh = fresh "container_memory_usage_bytes" vms;
-  vmCountByHost = "count by (${byHost}) (${vmMemoryFresh})";
-  # 0 only where cAdvisor is fresh and shows no VM.
-  zeroIfNoVms = "(${cadvisorUp} * 0 unless on (host) ${vmCountByHost})";
-  runningVmsByHost = "((${vmCountByHost} and on (host) ${cadvisorUp}) or ${zeroIfNoVms})";
-  # A host's reservations count only when every running VM has the limit.
+  # One series per VM running now (fresh usage), by its full id.
+  vmKey = "deployment_environment, host, computer_id";
+  vmPresentById = "group by (${vmKey}) (${fresh "container_memory_usage_bytes" vms})";
+  vmCountByHost = "count by (${byHost}) (${vmPresentById})";
+  # 0 only on a covered host whose cAdvisor shows no VM.
+  zeroIfNoVms = "(${covered} * 0 unless on (host) ${vmCountByHost})";
+  runningVmsByHost = "((${vmCountByHost} and on (host) ${covered}) or ${zeroIfNoVms})";
+  # A host's reservations count only when every VM running now has the limit:
+  # limits are matched to running VMs by full id before counting and summing.
   reservedByHost =
-    perVm:
-    "((sum by (${byHost}) (${perVm}) and on (host) (count by (${byHost}) (${perVm}) == ${vmCountByHost}) and on (host) ${cadvisorUp}) or ${zeroIfNoVms})";
+    limit:
+    let
+      matched = "(${limit} and on (${vmKey}) ${vmPresentById})";
+    in
+    "((sum by (${byHost}) (${matched}) and on (host) (count by (${byHost}) (group by (${vmKey}) (${matched})) == ${vmCountByHost}) and on (host) ${covered}) or ${zeroIfNoVms})";
   vcpusByHost = reservedByHost "${fresh "container_spec_cpu_quota" vms} / ${fresh "container_spec_cpu_period" vms}";
   memoryLimitsByHost = reservedByHost (fresh "container_spec_memory_limit_bytes" vms);
   vcpuPerCoreByHost = "${vcpusByHost} / ${coresByHost}";
-  vcpuPerCoreFleet = "sum(${vcpusByHost}) / sum(${coresByHost} and on (host) ${vcpusByHost})";
+  vcpuPerCoreFleet = "sum(${vcpusByHost} and on (host) ${coresByHost}) / sum(${coresByHost} and on (host) ${vcpusByHost})";
   memoryCommittedByHost = "100 * ${memoryLimitsByHost} / ${memTotalByHost}";
-  memoryCommittedFleet = "100 * sum(${memoryLimitsByHost}) / sum(${memTotalByHost} and on (host) ${memoryLimitsByHost})";
+  memoryCommittedFleet = "100 * sum(${memoryLimitsByHost} and on (host) ${memTotalByHost}) / sum(${memTotalByHost} and on (host) ${memoryLimitsByHost})";
 
   # Newest sample of each host: exact within the 5 minute lookback, else the
   # last day's newest at minute resolution.
@@ -96,9 +107,9 @@ let
   perVm = expr: "sum by (host, vm) (${vm expr})";
   vmPresent = perVm (fresh "container_memory_usage_bytes" hostVms);
   vmCpu = "${perVm "rate(container_cpu_usage_seconds_total{${hostVms}}[5m])"} and on (host, vm) ${vmPresent}";
-  vmVcpus = perVm "${fresh "container_spec_cpu_quota" hostVms} / ${fresh "container_spec_cpu_period" hostVms}";
+  vmVcpus = "${perVm "${fresh "container_spec_cpu_quota" hostVms} / ${fresh "container_spec_cpu_period" hostVms}"} and on (host, vm) ${vmPresent}";
   vmMemory = vmPresent;
-  vmMemoryLimit = perVm (fresh "container_spec_memory_limit_bytes" hostVms);
+  vmMemoryLimit = "${perVm (fresh "container_spec_memory_limit_bytes" hostVms)} and on (host, vm) ${vmPresent}";
   vmThrottled = "${perVm "rate(container_cpu_cfs_throttled_seconds_total{${hostVms}}[5m])"} and on (host, vm) ${vmPresent}";
   vmCpuShare = "100 * (${vmCpu}) / ${vmVcpus}";
   vmMemoryShare = "100 * ${vmMemory} / ${vmMemoryLimit}";
@@ -418,9 +429,9 @@ let
     ]
   ];
 
-  # 0: no host reports; 1: some host seen today is silent or lacks cAdvisor;
-  # 2: every host seen today reports both.
-  incomplete = "(count(${nodeUp} unless on (host) ${cadvisorUp}) or vector(0)) + (count(${seenToday} unless on (host) ${nodeUp}) or vector(0))";
+  # 0: no host reports; 1: some host seen today is silent, or reports only one
+  # of node_exporter and cAdvisor; 2: every host seen today reports both.
+  incomplete = "(count(${nodeUp} unless on (host) ${cadvisorUp}) or vector(0)) + (count(${cadvisorUp} unless on (host) ${nodeUp}) or vector(0)) + (count(${seenToday} unless on (host) ${nodeUp}) or vector(0))";
   banner = {
     id = 1;
     title = "";
@@ -459,7 +470,7 @@ let
               index = 0;
             };
             "1" = {
-              text = "Partial telemetry: a host is silent or has no cAdvisor. Fleet totals count covered hosts only; see Hosts.";
+              text = "Partial telemetry: a host is silent or reports only node_exporter or only cAdvisor. Fleet totals count covered hosts only; see Hosts.";
               color = "orange";
               index = 1;
             };
@@ -712,7 +723,8 @@ let
       ref = "N";
       name = "Status";
       unit = "none";
-      expr = "(${sampleAge}) > bool 120";
+      # The fleet's freshness rule: ok exactly when the host counts as reporting.
+      expr = "(${nodeUp} * 0) or (${seenToday} * 0 + 1)";
     }
     {
       ref = "O";
@@ -760,7 +772,7 @@ let
     (table {
       id = 30;
       title = "Hosts";
-      description = "One row per host seen in the last day; a value needs a sample in the last 2 minutes. Cores to Headroom and PSI are node_exporter; Running VMs, vCPU / core and Mem limits / RAM are cAdvisor (cgroup limits of running VMs: reservations) and stay empty without fresh cAdvisor or with a VM missing its limit. Storage available: the dataset or mount's available space; Referenced (estimate): what its datasets reference, counting clones' shared blocks and missing snapshot-only ones. Headroom: memory left before the default 80 % admission watermark. PSI: share of time tasks waited.";
+      description = "One row per host seen in the last day; a value needs a sample in the last 2 minutes, and Status is ok exactly when the host counts in Hosts reporting. Cores to Headroom and PSI are node_exporter; Running VMs, vCPU / core and Mem limits / RAM are cAdvisor (cgroup limits of running VMs: reservations) and stay empty without fresh cAdvisor or with a VM missing its limit. Storage available: the dataset or mount's available space; Referenced (estimate): what its datasets reference, counting clones' shared blocks and missing snapshot-only ones. Headroom: memory left before the default 80 % admission watermark. PSI: share of time tasks waited.";
       gridPos = pos 0 (nodeRowY + 1) 24 10;
       columns = nodeColumns;
       keys = [
@@ -796,7 +808,7 @@ let
           ]
           [
             "1"
-            "stale > 2m"
+            "silent"
             "red"
           ]
         ])
