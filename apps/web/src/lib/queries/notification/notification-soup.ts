@@ -142,11 +142,11 @@ const rereadAfterReplicaLag = debounce(
 /**
  * GraphQL lists ordered by notification have no local projection: the cache
  * cannot place a newly notified entity in them. A loaded row's mapping reads
- * the notified-at floor reactively, so a list that sorts by it on the client
- * (Home) moves the row at once; the page order itself, and rows not loaded
- * yet, change only with a read. Grouped notified lists project by update
- * time, which a notification leaves alone. They read their loaded pages again
- * instead, which carries the new stamps.
+ * the notified-at floor reactively, and a flat list moves that row up to its
+ * delivered time at once (`placeNotifiedRows` in `soup/graphql/items.ts`);
+ * rows not loaded yet arrive only with a read. Grouped notified lists project
+ * by update time, which a notification leaves alone. They read their loaded
+ * pages again instead, which carries the new stamps.
  * A flat list's read runs the notified page query, whose cost grows with the
  * viewer's notifications, for every loaded page; a grouped list's runs the
  * grouped query by update time for its first page and each loaded

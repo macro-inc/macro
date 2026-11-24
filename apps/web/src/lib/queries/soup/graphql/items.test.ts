@@ -2982,14 +2982,14 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
-  it('moves a loaded row to a delivered notification time before any re-read', () => {
+  it('moves a loaded row up to a delivered notification time before any re-read', () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
     // The real entity mapper resolves notified_at through the floor.
     mapSoupPageToEntityListMock.mockImplementation((page) =>
       page.items.map((item: { id: string; notified_at?: string }) => ({
         ...item,
-        notified_at: resolveNotifiedAt(item.id, item.notified_at),
+        notifiedAt: resolveNotifiedAt(item.id, item.notified_at),
       }))
     );
     const { query, dispose } = createRoot((dispose) => ({
@@ -2999,30 +2999,38 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         () => ({ enabled: true })
       ),
     }));
+    const rows = () =>
+      (query.data()?.entities ?? []) as { id: string; notifiedAt?: string }[];
     const notifiedAtOf = (id: string) =>
-      (
-        query.data()?.entities as
-          | { id: string; notified_at?: string }[]
-          | undefined
-      )?.find((entity) => entity.id === id)?.notified_at;
+      rows().find((entity) => entity.id === id)?.notifiedAt;
+    const order = () => rows().map((entity) => entity.id);
     try {
       fake.executions[0].next(
         graphqlSoupPage({
-          items: [{ id: 'top' }, { id: 'below' }],
+          items: [{ id: 'top' }, { id: 'below' }, { id: 'last' }],
           next_cursor: null,
           notified_at: [
             { entityId: 'top', notifiedAt: '2026-11-18T10:00:00Z' },
             { entityId: 'below', notifiedAt: '2026-11-18T09:00:00Z' },
+            { entityId: 'last', notifiedAt: '2026-11-18T08:00:00Z' },
           ],
         })
       );
       expect(notifiedAtOf('below')).toBe('2026-11-18T09:00:00Z');
+      expect(order()).toEqual(['top', 'below', 'last']);
 
       // A notification over the websocket raises the floor; the list's
       // network re-read is throttled and may hit a lagging replica.
       raiseNotifiedFloor('below', '2026-11-18T11:00:00Z');
       expect(notifiedAtOf('below')).toBe('2026-11-18T11:00:00Z');
       expect(notifiedAtOf('top')).toBe('2026-11-18T10:00:00Z');
+      expect(order()).toEqual(['below', 'top', 'last']);
+
+      // A burst: each delivered row goes where its time puts it, newest
+      // first; a rise that stays below the next row moves nothing past it.
+      raiseNotifiedFloor('last', '2026-11-18T11:30:00Z');
+      raiseNotifiedFloor('top', '2026-11-18T10:30:00Z');
+      expect(order()).toEqual(['last', 'below', 'top']);
       expect(fake.executions).toHaveLength(1);
     } finally {
       dispose();
