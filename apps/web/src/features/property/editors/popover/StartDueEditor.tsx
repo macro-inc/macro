@@ -15,6 +15,11 @@ import { EditorPopover } from './EditorPopover';
 
 const ENDS: DateField[] = ['start', 'due'];
 
+/** Whether `end` of `dates` holds a time of day. */
+function hasTimeAt(dates: StartDue, end: DateField): boolean {
+  return !!dates.timed && dates[end] != null && dates.wholeDay !== end;
+}
+
 export type StartDueEditorProps = {
   /** Which end the pill or row that opens the picker shows. */
   field: DateField;
@@ -72,7 +77,7 @@ function StartDueEditorBody(
     const value: DateApiValue = {
       valueType: 'DATE',
       value: next[field],
-      ...(next.timed && next[field] ? { hasTime: true } : {}),
+      ...(hasTimeAt(next, field) ? { hasTime: true } : {}),
     };
     if (field === props.field) {
       await ctx.onSave?.(own, value);
@@ -90,6 +95,24 @@ function StartDueEditorBody(
 
   // The server keeps a start on or before the saved due date, so a start
   // moving past that due date waits until the new due date is saved.
+  // What the server holds once `field` of `next` is saved: each end keeps
+  // the precision it was last saved with.
+  const savedWith = (field: DateField, next: StartDue): StartDue => {
+    const ends = { start: saved.start, due: saved.due, [field]: next[field] };
+    const withTime = {
+      start: hasTimeAt(field === 'start' ? next : saved, 'start'),
+      due: hasTimeAt(field === 'due' ? next : saved, 'due'),
+    };
+    const timed = withTime.start || withTime.due;
+    return {
+      ...ends,
+      timed,
+      wholeDay: timed
+        ? ENDS.find((end) => ends[end] && !withTime[end])
+        : undefined,
+    };
+  };
+
   const saveOrder = (next: StartDue, changed: DateField[]): DateField[] =>
     changed.includes('due') && next.start && saved.due && next.start > saved.due
       ? ['due', ...changed.filter((end) => end !== 'due')]
@@ -107,12 +130,7 @@ function StartDueEditorBody(
         (error) => error
       );
       if (result.isOk()) {
-        saved = {
-          ...saved,
-          [field]: next[field],
-          timed: next.timed,
-          wholeDay: saved.wholeDay === field ? undefined : saved.wholeDay,
-        };
+        saved = savedWith(field, next);
         continue;
       }
       // mutation onError owns toast
@@ -155,12 +173,9 @@ function StartDueEditorBody(
         due: end('due').displayName,
       }}
       onChange={(next, changed) => {
-        // An end edited with times on is saved with its time.
-        setDates(
-          next.wholeDay && changed.includes(next.wholeDay)
-            ? { ...next, wholeDay: undefined }
-            : next
-        );
+        // The picks say which end is a whole day: a picked time gives an end
+        // one, and Change day keeps an end without a time a whole day.
+        setDates(next);
         fireAndForget(enqueue(next, changed), 'property-editor');
       }}
       onClose={() => ctx.closeEditor()}

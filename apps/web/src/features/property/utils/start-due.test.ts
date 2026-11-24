@@ -356,22 +356,28 @@ describe('dates with times', () => {
       timed: true,
       wholeDay: 'start' as const,
     };
+    // The start has a time now, so neither end is a whole day.
     expect(pickTime(dates, 'start', at(24, 0), 9 * 60)).toEqual({
-      dates: { ...dates, start: at(24, 9) },
+      dates: { ...dates, start: at(24, 9), wholeDay: undefined },
       changed: ['start'],
     });
     const sameDay = { ...dates, start: at(27, 0) };
     expect(pickTime(sameDay, 'start', at(27, 0), 9 * 60)).toEqual({
-      dates: { ...sameDay, start: at(27, 9) },
+      dates: { ...sameDay, start: at(27, 9), wholeDay: undefined },
       changed: ['start'],
     });
     expect(pickTime(sameDay, 'start', at(27, 0), 21 * 60)).toEqual({
-      dates: { ...sameDay, start: at(27, 21), due: at(27, 21) },
+      dates: {
+        ...sameDay,
+        start: at(27, 21),
+        due: at(27, 21),
+        wholeDay: undefined,
+      },
       changed: ['start', 'due'],
     });
   });
 
-  it('keep a whole-day due date a whole day until a start time passes it', () => {
+  it('keep a whole-day due date a whole day, at the end of its day once a start time passes it', () => {
     const endOfDay = new Date(2026, 10, 26, 23, 59, 59, 999);
     const dates = {
       start: at(26, 9),
@@ -385,7 +391,7 @@ describe('dates with times', () => {
     });
     const midnight = { ...dates, start: at(26, 0), due: at(26, 0) };
     expect(pickTime(midnight, 'start', at(26, 0), 14 * 60)).toEqual({
-      dates: { ...midnight, start: at(26, 14), due: at(26, 14) },
+      dates: { ...midnight, start: at(26, 14), due: endOfDay },
       changed: ['start', 'due'],
     });
   });
@@ -542,6 +548,76 @@ describe('pickTimedDay past the due date', () => {
       },
       changed: ['start', 'due'],
     });
+  });
+});
+
+describe('dates with an end saved without a time', () => {
+  const endOfDay = (day: number) => new Date(2026, 10, day, 23, 59, 59, 999);
+
+  it('takes a whole-day due date to the start day picked past it, still a whole day', () => {
+    const dates = {
+      start: at(25, 9),
+      due: endOfDay(26),
+      timed: true,
+      wholeDay: 'due' as const,
+    };
+    expect(pickTimedDay(dates, 'start', at(28, 0))).toEqual({
+      dates: { ...dates, start: at(28, 9), due: endOfDay(28) },
+      changed: ['start', 'due'],
+    });
+    expect(pickTimedDay(dates, 'due', at(30, 0))).toEqual({
+      dates: { ...dates, due: endOfDay(30) },
+      changed: ['due'],
+    });
+  });
+
+  it('keeps a whole-day start a whole day and gives it no length to keep', () => {
+    const dates = {
+      start: at(24, 0),
+      due: at(27, 20),
+      timed: true,
+      wholeDay: 'start' as const,
+    };
+    expect(pickTimedDay(dates, 'start', at(26, 0))).toEqual({
+      dates: { ...dates, start: at(26, 0) },
+      changed: ['start'],
+    });
+    expect(pickTimedDay(dates, 'start', at(30, 0))).toEqual({
+      dates: { ...dates, start: at(30, 0), due: at(30, 20) },
+      changed: ['start', 'due'],
+    });
+  });
+
+  it('holds a midnight due date at the end of its day when the start moves onto it', () => {
+    const dates = {
+      start: at(25, 9),
+      due: at(28, 0),
+      timed: true,
+      wholeDay: 'due' as const,
+    };
+    expect(pickTimedDay(dates, 'start', at(28, 0))).toEqual({
+      dates: { ...dates, start: at(28, 9), due: endOfDay(28) },
+      changed: ['start', 'due'],
+    });
+  });
+
+  it('counts calendar days in the footer, not hours from the date without a time', () => {
+    expect(
+      startDueLength({
+        start: at(26, 9),
+        due: endOfDay(26),
+        timed: true,
+        wholeDay: 'due',
+      })
+    ).toBe('1 day');
+    expect(
+      startDueLength({
+        start: at(26, 0),
+        due: at(26, 20),
+        timed: true,
+        wholeDay: 'start',
+      })
+    ).toBe('1 day');
   });
 });
 
