@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
   mutate: vi.fn(),
   privacyFailed: false,
   policyFailed: false,
+  enabled: false,
   mailboxEmail: null as string | null,
   mailboxLinkId: null as string | null,
 }));
@@ -38,7 +39,7 @@ vi.mock('../context/crm-context', () => ({
         data: state.privacyFailed
           ? undefined
           : {
-              enabled: false,
+              enabled: state.enabled,
               mailboxEmail: state.mailboxEmail,
               mailboxLinkId: state.mailboxLinkId,
               teamDomains: [],
@@ -59,6 +60,7 @@ afterEach(() => {
   cleanup();
   state.connectMailbox.mockReset();
   state.mutate.mockReset();
+  state.enabled = false;
   state.privacyFailed = false;
   state.policyFailed = false;
   state.mailboxEmail = null;
@@ -97,6 +99,23 @@ it('leaves a connected mailbox with sharing off and no Connect email', () => {
     }).disabled
   ).toBe(false);
   expect(state.mutate).not.toHaveBeenCalled();
+});
+
+it('keys Connect email on the linked mailbox, not its address', () => {
+  state.mailboxLinkId = '00000000-0000-4000-8000-000000000045';
+  render(() => <CrmEmailPrivacySettings />);
+
+  screen.getByText('Sharing off');
+  expect(screen.queryByRole('button', { name: 'Connect email' })).toBeNull();
+});
+
+it('keeps the sharing status instead of Connect email while sharing is on', () => {
+  state.enabled = true;
+  render(() => <CrmEmailPrivacySettings />);
+
+  screen.getByText('Sharing on');
+  expect(screen.queryByRole('button', { name: 'Connect email' })).toBeNull();
+  screen.getByRole('button', { name: 'Stop sharing my emails' });
 });
 
 it('keeps the load error and retry without offering Connect email for an unknown mailbox', () => {

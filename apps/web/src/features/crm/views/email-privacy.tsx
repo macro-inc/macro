@@ -345,7 +345,7 @@ function LegacyEmailPrivacySettings(props: {
             }
           >
             <Show
-              when={settings()?.mailboxEmail}
+              when={settings()?.enabled || settings()?.mailboxLinkId}
               fallback={
                 <ConnectEmailButton onConnectEmail={props.onConnectEmail} />
               }
@@ -420,6 +420,8 @@ function SelectiveEmailPrivacy(
   );
   const policy = settings.policy;
   const mailbox = () => policy()?.mailbox_email;
+  // Opt-in keys on the linked mailbox, so Connect email does too.
+  const needsMailbox = () => !policy()?.enabled && !policy()?.link_id;
   const go = (next: EmailPolicyPage) => {
     if (settings.state.busy) return;
     if (next === 'editor' || next === 'preview' || next === 'all')
@@ -458,7 +460,7 @@ function SelectiveEmailPrivacy(
             }
           >
             <div class="flex flex-wrap justify-end gap-2">
-              <Show when={!mailbox()}>
+              <Show when={needsMailbox()}>
                 <ConnectEmailButton onConnectEmail={props.onConnectEmail} />
               </Show>
               <Show when={settings.canAuthor()}>
