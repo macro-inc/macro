@@ -209,3 +209,34 @@ async fn an_unreadable_resume_opens_the_stream_live() {
     assert_eq!(open(&id, "&resume=1").await, (StatusCode::OK, None));
     assert_eq!(open(&id, "&resume=yes").await, (StatusCode::OK, None));
 }
+
+/// A `POST` selects the same stream with its filters in the body, so their
+/// ids stay out of the URL, and resumes the same way.
+#[tokio::test]
+async fn a_post_body_selects_the_stream_and_resumes() {
+    let streams = RecordingStreams::default();
+    let router = webhook_stream_router::<_, _, ()>(WebhookStreamRouterState::new(
+        streams.clone(),
+        MacroAuthorizationState::new(Arc::new(SignedIn)),
+    ));
+    let id = uuid::Uuid::now_v7().to_string();
+    let request = Request::builder()
+        .method("POST")
+        .uri("/events/stream?resume=true")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header("last-event-id", &id)
+        .body(Body::from(
+            serde_json::json!({"scope": "user", "filters": [{"events": ["document.updated"]}]})
+                .to_string(),
+        ))
+        .unwrap();
+
+    let status = router.oneshot(request).await.unwrap().status();
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        *streams.opened.lock().unwrap(),
+        vec![Some(StreamCursor::parse(&id).unwrap())]
+    );
+}

@@ -93,7 +93,7 @@ pub(crate) struct StreamStats {
     pub(crate) source_errors: u64,
 }
 
-/// A stream's sources, opened live.
+/// A stream's sources, opened from the stream's start.
 pub(crate) struct OpenedSources {
     /// Minted before the first source opened: where a source lost before
     /// its first event resumes from, and the oldest event a resumed source
@@ -111,16 +111,19 @@ impl OpenedSources {
 }
 
 /// Open every source; an error here fails the request before any
-/// notification, as the spec asks.
+/// notification, as the spec asks. Each opens from the stream's start, as a
+/// resumed source does, so a source that falls behind ends and is resumed
+/// instead of skipping events.
 pub(crate) async fn open_sources(
     source: &Arc<dyn EventSource>,
     user: &MacroUserIdStr<'static>,
     filter: &McpEventFilter,
 ) -> Result<OpenedSources, SourceError> {
     let opened_at = uuid::Uuid::now_v7();
+    let cursor = opened_at.to_string();
     let mut groups = Vec::new();
     for group in filter.stream_groups() {
-        let stream = source.open(user, &group.source, None).await?;
+        let stream = source.open(user, &group.source, Some(&cursor)).await?;
         groups.push((group, stream));
     }
     Ok(OpenedSources { opened_at, groups })
@@ -256,9 +259,9 @@ struct GroupState {
     current: Option<SourceStream>,
     last_event_id: Option<String>,
     opened_at: uuid::Uuid,
-    /// Whether `current` was opened with a resume cursor and may still be
-    /// replaying events from before the stream opened: until its first
-    /// heartbeat.
+    /// Whether `current` may still be replaying events from before the
+    /// stream opened: until its first heartbeat. Every source opens with a
+    /// cursor, so each starts out resumed.
     resumed: bool,
     failures: u32,
 }
@@ -288,7 +291,7 @@ fn group_stream(
         // when the stream opened.
         last_event_id: Some(opened_at.to_string()),
         opened_at,
-        resumed: false,
+        resumed: true,
         failures: 0,
     };
     stream::unfold(state, |mut state| async move {

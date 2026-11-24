@@ -254,8 +254,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   (`dss.rs`: internal routes, secret sealed with the MCP OAuth KMS key under
   purpose `mcp-event-subscription-secret`); the same words compile once per
   user per process. Streams (`stream.rs`) read
-  document storage's live event stream as the user, one connection per
-  distinct `ids`, reconnect with resume, heartbeat every 5–45 s and are capped
+  document storage's live event stream as the user (`POST`, the filter in
+  the body, so its ids stay out of URLs), one connection per distinct `ids`,
+  each opened from the stream's start, reconnect with resume, heartbeat every 5–45 s and are capped
   at five per user per process. Spans: `public_mcp.events`,
   `mcp_events.compile`, `mcp_events.store.*`, `mcp_events.source.open`.
   `src/public_mcp/analytics.rs` sends PostHog `$mcp_initialize` /
