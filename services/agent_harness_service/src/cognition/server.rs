@@ -666,7 +666,13 @@ pub async fn build(
         databases_tool_context.service.clone(),
     );
 
-    let entity_creator = ai_tools::ToolEntityCreator {
+    let crm_tool_context = ai_tools::build_crm_tool_context(db.clone());
+    let pipeline_tool_context = ai_tools::build_pipeline_tool_context(
+        db.clone(),
+        &databases_tool_context,
+        &crm_tool_context,
+    );
+    let entity_creator = Arc::new(ai_tools::ToolEntityCreator {
         document_creator: document_tool_context.creator.clone(),
         entity_access_service: entity_access_service.clone(),
         channel_service: channel_tool_context.service.clone(),
@@ -677,12 +683,12 @@ pub async fn build(
         project_service: project_tool_context.service.clone(),
         databases_service: databases_tool_context.service.clone(),
         document_service: document_tool_context.service.clone(),
-    };
+    });
     let import_service = Arc::new(
         import::domain::service::ImportServiceImpl::new(
             ai_tools::build_import_repo(db.clone()),
             Arc::clone(&connections),
-            Arc::new(entity_creator),
+            entity_creator.clone(),
             recorder.clone(),
         )
         .with_slack_source(Arc::new(
@@ -699,6 +705,16 @@ pub async fn build(
         .with_notion_connections(Arc::new(
             import_notion::outbound::connected::ConnectedNotion::new(Arc::clone(&connections)),
         ))
+        .with_hubspot(
+            Arc::new(import_hubspot::outbound::client::HubspotApi::new(
+                Arc::clone(&connections),
+            )),
+            Arc::new(ai_tools::HubspotCrmWriter::new(
+                &crm_tool_context,
+                &pipeline_tool_context,
+                entity_creator,
+            )),
+        )
         .with_admission(admission.clone())
         .with_notifier(import_notify)
         .with_job_shutdown(import_jobs.shutdown.clone(), import_jobs.tracker.clone()),
@@ -721,12 +737,6 @@ pub async fn build(
         soup_service.clone(),
         db.clone(),
         side_effect_clients.feature_flags.clone(),
-    );
-    let crm_tool_context = ai_tools::build_crm_tool_context(db.clone());
-    let pipeline_tool_context = ai_tools::build_pipeline_tool_context(
-        db.clone(),
-        &databases_tool_context,
-        &crm_tool_context,
     );
     let crm_transfer_tool_context = ai_tools::build_crm_transfer_tool_context(
         &pipeline_tool_context,

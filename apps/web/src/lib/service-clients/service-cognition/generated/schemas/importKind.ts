@@ -25,4 +25,8 @@ export const ImportKind = {
   jira_project: 'jira_project',
   jira_epic: 'jira_epic',
   channel: 'channel',
+  hubspot_pipeline: 'hubspot_pipeline',
+  hubspot_company: 'hubspot_company',
+  hubspot_contact: 'hubspot_contact',
+  hubspot_deal: 'hubspot_deal',
 } as const;

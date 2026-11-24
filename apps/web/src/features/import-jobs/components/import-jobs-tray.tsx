@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import IconHubSpot from '@icon/import/hubspot.svg';
 import IconJira from '@icon/import/jira.svg';
 import IconNotion from '@icon/import/notion.svg';
 import IconLinear from '@icon/mcp-linear.svg';
@@ -28,6 +29,7 @@ const SOURCES: Record<ImportSource, SourceDisplay> = {
   linear: { name: 'Linear', icon: IconLinear },
   jira: { name: 'Jira', icon: IconJira },
   slack: { name: 'Slack', icon: IconSlack },
+  hubspot: { name: 'HubSpot', icon: IconHubSpot },
 };
 
 function phaseLabel(source: ImportSource, phase: ImportJobPhase): string {
@@ -37,6 +39,9 @@ function phaseLabel(source: ImportSource, phase: ImportJobPhase): string {
         .with('notion', () => t('importJobs.scanningPages', { count: found }))
         .with('linear', 'jira', () =>
           t('importJobs.scanningIssues', { count: found })
+        )
+        .with('hubspot', () =>
+          t('importJobs.scanningRecords', { count: found })
         )
         .with('slack', () => t('importJobs.findingChannels'))
         .exhaustive()

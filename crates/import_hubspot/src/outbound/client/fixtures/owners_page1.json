@@ -1,0 +1,3 @@
+{"results": [
+  {"id": "101", "email": "ada@example.com", "type": "PERSON", "firstName": "Ada", "lastName": "L", "userId": 9001, "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "archived": false}
+], "paging": {"next": {"after": "101", "link": "https://api.hubapi.com/crm/v3/owners?after=101"}}}

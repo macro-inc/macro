@@ -56,11 +56,25 @@ const NOTION_WORKSPACE_HANDOFF: AgentImportHandoff = {
   ].join(' '),
 };
 
+/**
+ * HubSpot runs Macro's CRM importer: companies, contacts, deal pipelines and
+ * deals, planned with ImportFromHubspot and presented for review.
+ */
+const HUBSPOT_HANDOFF: AgentImportHandoff = {
+  input: 'Import my HubSpot CRM into Macro.',
+  instructions: [
+    "The user started this from Macro's import dialog and has just connected HubSpot.",
+    'Use ImportFromHubspot to plan it and present the import review right away.',
+    'Never recreate companies, contacts or deals with other tools, and never edit or delete anything in HubSpot.',
+  ].join(' '),
+};
+
 export function agentImportHandoff(
   config: ImportCategoryConfig,
   provider: ImportProvider
 ): AgentImportHandoff {
   if (provider.ledger === 'notion') return NOTION_WORKSPACE_HANDOFF;
+  if (provider.ledger === 'hubspot') return HUBSPOT_HANDOFF;
   if (provider.ledger === 'linear' || provider.ledger === 'jira') {
     return {
       input: `Import my ${provider.name} workspace into Macro.`,

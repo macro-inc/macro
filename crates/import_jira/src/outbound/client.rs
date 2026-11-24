@@ -238,7 +238,7 @@ impl<S: ApiConnectionsService> Client<S> {
                 .await
             {
                 Ok(users) => users,
-                Err(TrackerError::Forbidden(_)) => {
+                Err(TrackerError::Forbidden { .. }) => {
                     inventory.warnings.push(format!(
                         "{} does not allow listing users; assignees use visible issue emails.",
                         site.name
