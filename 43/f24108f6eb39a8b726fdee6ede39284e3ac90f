@@ -1,0 +1,41 @@
+crates/ai_tools/AGENTS.md
+  s_8c8123a52748fa::t_c242cdbaaf8075 47
+crates/ai_tools/src/lib.rs
+  s_8c8123a52748fa::t_47731366569fae 112-115,309
+crates/ai_tools/src/build_context.rs
+  s_8c8123a52748fa::t_47731366569fae 693-699,751
+.github/workspace-dep-closures.json
+  s_8c8123a52748fa::t_aea38253ce3882 1049,1266,2151,3744,6114
+services/agent_harness_service/src/cognition/server.rs
+  s_8c8123a52748fa::t_c6d5f7d4a0dd06 815-821,1001-1002,1013
+crates/ai_tools/src/tool_context/fusion.rs
+  s_8c8123a52748fa::t_529a87ef97694a 1-161
+crates/ai_tools/src/tool_context.rs
+  s_8c8123a52748fa::t_62034db466e531 111-115,2279-2280
+crates/ai_tools/Cargo.toml
+  s_8c8123a52748fa::t_62034db466e531 37,75,91
+crates/fusion_import/AGENTS.md
+  s_8c8123a52748fa::t_c242cdbaaf8075 36-40
+services/agent_harness_service/src/cognition/api/context/test.rs
+  s_8c8123a52748fa::t_c6d5f7d4a0dd06 569
+services/agent_harness_service/AGENTS.md
+  s_8c8123a52748fa::t_c242cdbaaf8075 383
+Cargo.lock
+  s_8c8123a52748fa::t_3883393cf99ec5 1261,1292,1322
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "43f24108f6eb39a8b726fdee6ede39284e3ac90f",
+  "prompts": {},
+  "sessions": {
+    "s_8c8123a52748fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e3ebe64b-e3f3-41de-91c9-1dffbc9d884d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
