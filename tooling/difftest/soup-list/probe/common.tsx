@@ -5,7 +5,8 @@
  *
  * Nothing here decides equality: the driver normalizes and diffs.
  */
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
+import { createAppChannelDirectory } from '@queries/channel/directory';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
@@ -96,11 +97,11 @@ export function mountWith(
         {options.quickAccess ? (
           <UserContextProvider>
             <EmailLinksContextProvider>
-              <ChannelsContextProvider>
+              <ChannelDirectoryProvider directory={createAppChannelDirectory()}>
                 <QuickAccessContextProvider value={quickAccessStub}>
                   <Inner />
                 </QuickAccessContextProvider>
-              </ChannelsContextProvider>
+              </ChannelDirectoryProvider>
             </EmailLinksContextProvider>
           </UserContextProvider>
         ) : (
