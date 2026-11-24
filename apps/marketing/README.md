@@ -15,7 +15,7 @@ future re-enablement.
 Use a pale blue selection highlight (#b8d5ff) with dark text (#101820) in both website entry styles. Keep public website text selectable with native browser behavior; restrict `user-select: none` to interactive controls that need it, never the page globally.
 
 The homepage uses the feature-page hero.
-Keep the H1 “A new kind of office suite” on a single line across desktop and mobile, and keep the supporting H2 “Macro
+Keep the H1 “A new kind of office suite.” on a single line across desktop and mobile, and keep the supporting H2 “Macro
 replaces 27+ apps with one connected system for humans and agents.”
 on two lines below it on desktop, breaking after “connected.” Below 700px, left-align the hero and use the
 product-list subhead ending in “Everything links to everything else.” Keep Get
