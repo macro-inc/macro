@@ -24,7 +24,19 @@ export default function BlockEmail() {
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
-  usePending('email.thread', () => threadQuery.isLoading);
+  const phaseAttributes = { 'email.thread_id': threadId() };
+  usePending(
+    'email.thread.identity',
+    () => threadQuery.isResolvingIdentity,
+    phaseAttributes
+  );
+  // The thread phase covers the lookup too, so the view's flow stays open
+  // from the lookup's answer to the thread request it starts.
+  usePending(
+    'email.thread',
+    () => threadQuery.isResolvingIdentity || threadQuery.isLoading,
+    phaseAttributes
+  );
   const source = createEmailThreadSource(threadId, threadQuery);
   const threadData = source.thread;
 
