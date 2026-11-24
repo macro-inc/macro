@@ -322,6 +322,14 @@ pub enum AttachmentChange {
         /// New attachments to append.
         add: Vec<NewAttachment>,
     },
+    /// `Delta` for callers that replay an edit until they hear an answer: an
+    /// added entity the message already holds is not attached a second time.
+    DeltaOnce {
+        /// Existing attachment UUIDs to remove.
+        remove: Vec<Uuid>,
+        /// New attachments to append unless already held.
+        add: Vec<NewAttachment>,
+    },
 }
 
 /// Partial updates share the same authorship, reference, and delivery rules as edits.
@@ -477,6 +485,17 @@ impl MessageEvent {
             mentions.clone(),
         ))
     }
+}
+
+/// A message as a repeatable write answers with it.
+#[derive(Debug, Clone)]
+pub struct WrittenMessage {
+    /// The written message, or the stored one when nothing was left to write.
+    pub message: Message,
+    /// A position in the channel's changes that `message` includes everything
+    /// up to: the one the write committed, or the channel's own from before
+    /// the stored message was read. Absent for parents without a change log.
+    pub seq: Option<i64>,
 }
 
 /// Persisted reaction state and whether this operation changed membership.

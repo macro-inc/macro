@@ -102,6 +102,21 @@ pub struct GraphqlChannelThread {
     pub preview: Vec<GraphqlChannelMessage>,
 }
 
+/// A channel message mutation's result: the written message, and for a reply
+/// its root with the thread summary that now counts it.
+#[derive(SimpleObject)]
+pub struct GraphqlChannelMessageWrite {
+    /// The message as the reads return it.
+    pub message: GraphqlChannelMessage,
+    /// The reply's root; absent for a root, and when the root could not be
+    /// read back after the write committed.
+    pub root: Option<GraphqlChannelMessage>,
+    /// Channel position both include every change up to, encoded as in
+    /// `channelChanges`: the one this write committed, or, when there was
+    /// nothing left to write, the channel's position before the read.
+    pub seq: String,
+}
+
 /// Canonical channel message, shared by pages, item reads, and change replay.
 #[derive(SimpleObject)]
 pub struct GraphqlChannelMessage {
