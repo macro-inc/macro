@@ -170,8 +170,8 @@ another schema, so a binding keeps its ID only when its response object states
 its type under a literal `__typename` key; one that states none, or states it
 under an alias, is refused and reported. When the write has bindings and none
 resolves, the attempt is rolled back as before. No identity a reference field
-infers replaces a key a binding reads from the response, whether that binding
-resolved or not.
+infers replaces one a key already has, or names a key a binding reads from the
+response, whether that binding resolved or not.
 Settling a create moves the shadows of the writes queued after it to the key
 the server gave the record while their sources keep the local key, so a tier
 follows the alias settlement stored from one to the other, and keeps the

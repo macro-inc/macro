@@ -140,7 +140,8 @@ pub fn resolve_stated(bindings: &[IdentityBinding], data: &Value) -> Result<Iden
 /// Some normalized read models share the identity of the entity they preview.
 /// No key a binding reads from the response is inferred: that binding's own
 /// response object decides it, and nothing does when that failed. A
-/// reference-only binding, with no response path, is inferred as before.
+/// reference-only binding, with no response path, is inferred unless it
+/// already has an identity, such as one an earlier write's alias gave it.
 pub fn expand_reference_identities(bindings: &[IdentityBinding], identities: &mut IdentityMap) {
     for binding in bindings {
         let Some(target) = identities.get(&binding.local_key).cloned() else {
@@ -156,7 +157,9 @@ pub fn expand_reference_identities(bindings: &[IdentityBinding], identities: &mu
                     .iter()
                     .any(|bound| !bound.response_path.is_empty() && bound.local_key == local)
                 {
-                    identities.insert(local, EntityKey::entity(typename, &[new_id]));
+                    identities
+                        .entry(local)
+                        .or_insert_with(|| EntityKey::entity(typename, &[new_id]));
                 }
             }
         }
@@ -572,7 +575,26 @@ mod tests {
                 EntityKey::entity("Draft", &["1"]),
             )])
         );
-        // A reference-only binding reads nothing from the response.
+        // A reference-only binding reads nothing from the response, but keeps
+        // an identity it already has.
+        let mut aliased = IdentityMap::from([
+            (
+                EntityKey::entity("Draft", &["local"]),
+                EntityKey::entity("Draft", &["1"]),
+            ),
+            (
+                EntityKey::entity("Message", &["local"]),
+                EntityKey::entity("Message", &["2"]),
+            ),
+        ]);
+        expand_reference_identities(
+            &[draft.clone(), binding("Message:local", &[])],
+            &mut aliased,
+        );
+        assert_eq!(
+            aliased.get(&EntityKey::entity("Message", &["local"])),
+            Some(&EntityKey::entity("Message", &["2"]))
+        );
         assert_eq!(
             resolve(&[draft, binding("Message:local", &[])], &data),
             Ok(IdentityMap::from([
