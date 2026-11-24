@@ -11,6 +11,7 @@
 //! [`READ_AHEAD_BYTES`] of received but unapplied bytes, so the server
 //! prepares later pages during writes instead of idling.
 
+pub use crate::engine::SyncFailure;
 use crate::engine::{NativeSyncHooks, SyncPublication, WeakEngineHandle, WriteResultWire};
 use async_trait::async_trait;
 use cache_core::sync::{SyncHooks, SyncRun, SyncRunResult, SyncStartArgs};
@@ -99,35 +100,6 @@ pub trait SyncResponseBody: Send {
     /// The next chunk of body bytes as received (still content-encoded), or
     /// `None` at the end of the body.
     async fn next_chunk(&mut self) -> Result<Option<Vec<u8>>, SyncHttpError>;
-}
-
-/// Why a run did not complete (`SyncFailure` in `sync-protocol.ts`).
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum SyncFailure {
-    /// Another run is in progress.
-    Busy,
-    /// This host cannot stream (no opener installed).
-    Unsupported,
-    /// Stopped by `sync_stop`, suspension, clear, or cache shutdown.
-    Aborted,
-    /// The server answered with a non-success status.
-    Http {
-        /// Response status.
-        status: u16,
-    },
-    /// The request failed, or the stream broke the contract or ended early.
-    Stream {
-        /// Diagnostic.
-        message: String,
-    },
-    /// No response, or no response bytes, for [`STALL_TIMEOUT`].
-    Stalled,
-    /// Writing a frame into the cache failed.
-    Write {
-        /// Diagnostic.
-        message: String,
-    },
 }
 
 /// How a run ended (`SyncRunOutcome` in `sync-protocol.ts`).

@@ -4,7 +4,6 @@
 
 use super::access::EngineAccess;
 use super::{AffectedOperationsResultWire, EngineState, WriteResultWire, wire_write_result};
-use crate::sync::SyncFailure;
 use cache_core::engine::Engine;
 use cache_core::predicate::ProjectionMutation;
 use cache_core::sync::{
@@ -19,6 +18,37 @@ use soup_filter_cache_adapter::host_projections::{
 use std::collections::BTreeSet;
 use std::sync::Weak;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+/// Why a run did not complete (`SyncFailure` in `sync-protocol.ts`). Here,
+/// not in the plugin's `sync` module, because the fuzzer compiles this
+/// engine module without the plugin around it.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum SyncFailure {
+    /// Another run is in progress.
+    Busy,
+    /// This host cannot stream (no opener installed).
+    Unsupported,
+    /// Stopped by `sync_stop`, suspension, clear, or cache shutdown.
+    Aborted,
+    /// The server answered with a non-success status.
+    Http {
+        /// Response status.
+        status: u16,
+    },
+    /// The request failed, or the stream broke the contract or ended early.
+    Stream {
+        /// Diagnostic.
+        message: String,
+    },
+    /// No response, or no response bytes, for the run's stall timeout.
+    Stalled,
+    /// Writing a frame into the cache failed.
+    Write {
+        /// Diagnostic.
+        message: String,
+    },
+}
 
 /// The native composition edge: the same projections as
 /// `graphql_cache_hydrate` and `graphql_cache_delete_records`, and the host's
