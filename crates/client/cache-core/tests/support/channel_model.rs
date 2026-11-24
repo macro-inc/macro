@@ -2,10 +2,10 @@
 //! evictions, checked against the server after every one.
 
 use crate::channel_device::Device;
-use crate::channel_server::{Anchor, Answer, Entry, List, Request, Server};
+use crate::channel_server::{Anchor, Answer, Entry, List, REPLAY, Request, Server};
 use cache_core::channel_timeline::ChannelTimelineStorage;
 use proptest::prelude::*;
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 const CHANNELS: [&str; 2] = ["c1", "c2"];
 /// As large as a page gets, so a window ends where its stretch does.
@@ -106,6 +106,8 @@ pub enum Wrong {
     /// A message deleted by the watermark is in a stored answer, or its
     /// content is.
     DeletedReadable,
+    /// A message the device was told is gone is back, by an older answer.
+    Returned,
     /// A list answered as complete lacks a message it held by the watermark.
     Missing,
     /// A listed message is older than it was at the watermark.
@@ -153,6 +155,18 @@ struct World<S: ChannelTimelineStorage> {
     /// Messages an answer without a sequence brought: such an answer may
     /// leave a record of one the device did not hold, never a list entry.
     undated: BTreeSet<String>,
+    /// The newest sequence at which the device was told a message is gone.
+    told: BTreeMap<String, u64>,
+    /// The newest sequence an answer that has a message was stored at.
+    brought: BTreeMap<String, u64>,
+    /// The highest watermark of each channel since it was last emptied.
+    peaks: BTreeMap<String, u64>,
+}
+
+/// Raises what `key` has to `seq`.
+fn newest(seqs: &mut BTreeMap<String, u64>, key: &str, seq: u64) {
+    let newest = seqs.entry(key.to_owned()).or_default();
+    *newest = seq.max(*newest);
 }
 
 fn pick<T>(items: &[T], at: u16) -> Option<&T> {
@@ -176,6 +190,9 @@ pub async fn run<S: ChannelTimelineStorage>(
         sends: 0,
         clock: 0,
         undated: BTreeSet::new(),
+        told: BTreeMap::new(),
+        brought: BTreeMap::new(),
+        peaks: BTreeMap::new(),
     };
     for (turn, op) in ops.iter().enumerate() {
         world = world.apply(*op, &mut reopen).await;
@@ -255,17 +272,63 @@ impl<S: ChannelTimelineStorage> World<S> {
         self.pushes[at].push_back(self.server.changes(channel, from, seq));
     }
 
-    async fn store(&mut self, answer: Answer) {
-        match &answer {
+    /// What the device must remember of `answer`.
+    async fn note(&mut self, answer: &Answer) {
+        match answer {
             Answer::Undated(entry) => {
                 self.undated.insert(entry.message.id.clone());
             }
-            Answer::Page { list, .. } => {
-                self.clock += 1;
-                let (channel, now) = (list.channel.clone(), self.clock);
-                self.device.touch(&channel, now).await;
+            Answer::Page {
+                list,
+                seq,
+                entries,
+                reset,
+                ..
+            } => {
+                if *reset {
+                    self.forget(&list.channel);
+                }
+                self.bring(entries, *seq);
             }
-            Answer::Changes { .. } | Answer::Stamped { .. } => {}
+            Answer::Changes {
+                channel,
+                seq,
+                entries,
+                removed,
+                ..
+            } => {
+                if self.device.watermark(channel).await.is_some() {
+                    self.bring(entries, *seq);
+                    for id in removed {
+                        newest(&mut self.told, id, *seq);
+                    }
+                }
+            }
+            Answer::Stamped { seq, entry, .. } => {
+                self.bring(std::slice::from_ref(entry), *seq);
+            }
+        }
+    }
+
+    fn bring(&mut self, entries: &[Entry], seq: u64) {
+        for entry in entries {
+            newest(&mut self.brought, &entry.message.id, seq);
+            self.bring(&entry.preview, seq);
+        }
+    }
+
+    /// The device emptied `channel`.
+    fn forget(&mut self, channel: &str) {
+        let messages = &self.server.messages;
+        self.told.retain(|id, _| messages[id].channel != channel);
+        self.peaks.remove(channel);
+    }
+
+    async fn store(&mut self, answer: Answer) {
+        self.note(&answer).await;
+        if let Answer::Page { list, .. } = &answer {
+            self.clock += 1;
+            self.device.touch(&list.channel, self.clock).await;
         }
         self.device.store(&answer).await;
     }
@@ -380,7 +443,12 @@ impl<S: ChannelTimelineStorage> World<S> {
                     self.device.drop_thread(&list).await;
                 }
             }
-            Op::Evict => self.device.evict(self.clock.max(1)).await,
+            Op::Evict => {
+                self.device.evict(self.clock.max(1)).await;
+                for channel in CHANNELS {
+                    self.forget(channel);
+                }
+            }
             Op::Reload => {
                 if !self.device.sending() {
                     self.device = self.device.reload(reopen);
@@ -436,6 +504,7 @@ impl<S: ChannelTimelineStorage> World<S> {
     async fn settle(&mut self) {
         match self.sent.take() {
             Some(Sent::Taken { local, seq, entry }) => {
+                self.bring(std::slice::from_ref(&entry), seq);
                 self.device.settle(&local, Some((seq, &entry))).await;
             }
             sent => self.sent = sent,
@@ -448,6 +517,7 @@ impl<S: ChannelTimelineStorage> World<S> {
             let Some(held) = self.device.watermark(channel).await else {
                 continue;
             };
+            newest(&mut self.peaks, channel, held);
             for list in self.lists() {
                 if list.channel != channel {
                     continue;
@@ -468,7 +538,7 @@ impl<S: ChannelTimelineStorage> World<S> {
                 .server
                 .messages
                 .values()
-                .filter(|m| m.channel == channel && m.gone_by(held))
+                .filter(|m| m.channel == channel && m.deleted.is_some())
                 .map(|m| m.id.clone())
                 .collect();
             for id in gone {
@@ -481,13 +551,35 @@ impl<S: ChannelTimelineStorage> World<S> {
     }
 
     fn check_gone(&self, id: &str, held: u64, place: &str) -> Result<(), Violation> {
-        match self.server.messages.get(id) {
-            Some(message) if message.gone_by(held) && !self.undated.contains(id) => violation(
+        let Some(message) = self.server.messages.get(id) else {
+            return Ok(());
+        };
+        if self.undated.contains(id) {
+            return Ok(());
+        }
+        if message.gone_by(held) {
+            return violation(
                 Wrong::DeletedReadable,
                 format!(
                     "{id}, deleted at {:?}, is in {place} at {held}",
                     message.deleted
                 ),
+            );
+        }
+        self.check_returned(id, place)
+    }
+
+    /// A removal outlives older answers for as long as the server replays it.
+    fn check_returned(&self, id: &str, place: &str) -> Result<(), Violation> {
+        let Some(told) = self.told.get(id) else {
+            return Ok(());
+        };
+        let peak = self.peaks.get(&self.server.messages[id].channel);
+        let replayed = peak.is_none_or(|peak| told + REPLAY > *peak);
+        match self.brought.get(id) {
+            Some(brought) if replayed && brought < told => violation(
+                Wrong::Returned,
+                format!("{id}, told gone at {told}, brought at {brought}, is in {place}"),
             ),
             _ => Ok(()),
         }
@@ -521,6 +613,7 @@ impl<S: ChannelTimelineStorage> World<S> {
                     format!("{id}, deleted at {:?}, is in {place}", message.deleted),
                 );
             }
+            self.check_returned(id, &place)?;
             let wanted = message.version(held);
             let version = self.device.version(id).await;
             if version.is_none_or(|version| version < wanted) {

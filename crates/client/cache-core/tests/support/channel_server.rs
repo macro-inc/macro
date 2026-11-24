@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 /// How many changes back the server replays.
-const REPLAY: u64 = 1_000;
+pub const REPLAY: u64 = 1_000;
 
 /// One message over its whole life.
 #[derive(Clone, Debug)]

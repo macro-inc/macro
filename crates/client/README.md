@@ -102,7 +102,7 @@ bundle.
 The server numbers each channel's changes, and every `seq` it sends is a floor:
 the answer is at least that new. The engine keeps three things by it. Each
 message and activity row has the `seq` of the response that stored it; a removed
-one stays as a tombstone at the `seq` of its removal, pruned once it is 1,000
+one leaves a tombstone at the `seq` of its removal, pruned once it is 1,000
 changes behind; and the channel's watermark says up to where its changes were
 applied to everything held. Content older than its row, its tombstone or (for an
 entry not held) the watermark is dropped, so answers may arrive in any order.
@@ -444,7 +444,7 @@ without it is incompatible, since it already records version 12 and no step
 runs. No contacts store was introduced.
 
 Storage schema 14 adds the channel timeline tables (`channel_timeline`,
-`channel_coverage`, `channel_sync`), created empty by a step in
+`channel_removed`, `channel_coverage`, `channel_sync`), created empty by a step in
 `storage/migration.rs`: an upgraded native database keeps its records and queued
 mutations and holds no channel until a page is fetched. Native binaries must be
 rebuilt to gain the tables and the commands that read them.
