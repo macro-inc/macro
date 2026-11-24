@@ -4,7 +4,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::calendar::CalendarSpan;
+use crate::calendar::{CalendarSpan, MaterializedRange};
 use crate::catalog::Pass;
 use crate::lane::{LaneError, LaneId, LanePlan};
 use crate::plan::plan_lanes;
@@ -133,8 +133,13 @@ pub struct SyncPlan {
 }
 
 impl SyncPlan {
-    /// Parses a request body, its protocol first, and plans its lanes at `now`.
-    pub fn from_json(body: &[u8], now: DateTime<Utc>) -> Result<Self, RequestError> {
+    /// Parses a request body, its protocol first, and plans its lanes at `now`,
+    /// calendar windows inside the `materialized` range.
+    pub fn from_json(
+        body: &[u8],
+        now: DateTime<Utc>,
+        materialized: MaterializedRange,
+    ) -> Result<Self, RequestError> {
         let ProtocolField { protocol } = serde_json::from_slice(body)?;
         let protocol = protocol
             .filter(|version| PROTOCOL_VERSIONS.contains(version))
@@ -161,7 +166,7 @@ impl SyncPlan {
             protocol,
             pass: request.pass,
             saved_lanes: request.lanes.len(),
-            lanes: plan_lanes(&request, now)?,
+            lanes: plan_lanes(&request, now, materialized)?,
             max_pages: request.max_pages,
         })
     }

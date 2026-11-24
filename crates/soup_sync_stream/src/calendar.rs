@@ -10,17 +10,24 @@
 mod test;
 
 use chrono::{
-    DateTime, Datelike as _, Days, LocalResult, NaiveDate, NaiveTime, TimeDelta, TimeZone, Utc,
+    DateTime, Datelike as _, LocalResult, NaiveDate, NaiveTime, TimeDelta, TimeZone, Utc,
 };
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashSet;
 
-/// Days back the server materializes occurrences for.
-const HISTORY_DAYS: u64 = 364;
-/// Days ahead the server materializes occurrences for.
-const FUTURE_DAYS: u64 = 729;
+/// The occurrences the server keeps, which calendar windows stay inside:
+/// the calendar service's materialized range
+/// (`calendar_events::domain::models::OccurrenceRange::historical_sync`),
+/// whose reads return nothing outside it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MaterializedRange {
+    /// Inclusive start.
+    pub starts_at: DateTime<Utc>,
+    /// Exclusive end.
+    pub ends_at: DateTime<Utc>,
+}
 
 /// Units of a [`CalendarSpan`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -59,12 +66,13 @@ pub(crate) fn calendar_windows(
     zone: Tz,
     coverage: &[CalendarSpan],
     now: DateTime<Utc>,
+    materialized: MaterializedRange,
     months: u32,
     budget: usize,
 ) -> Vec<CalendarWindow> {
     let mut windows = Vec::new();
     let mut seen = HashSet::new();
-    for (start, end) in backfill_months(zone, now, months) {
+    for (start, end) in backfill_months(zone, now, materialized, months) {
         if windows.len() >= budget {
             break;
         }
@@ -104,18 +112,13 @@ pub(crate) fn calendar_windows(
 fn backfill_months(
     zone: Tz,
     now: DateTime<Utc>,
+    materialized: MaterializedRange,
     months: u32,
 ) -> Vec<(DateTime<Utc>, DateTime<Utc>)> {
     let today = local_date(zone, now);
-    let supported_start = today
-        .checked_sub_days(Days::new(HISTORY_DAYS))
-        .map(|date| local_midnight(zone, date));
-    let supported_end = today
-        .checked_add_days(Days::new(FUTURE_DAYS))
-        .map(|date| local_midnight(zone, date));
-    let (Some(supported_start), Some(supported_end)) = (supported_start, supported_end) else {
-        return Vec::new();
-    };
+    // Whole local days inside the materialized range.
+    let supported_start = local_midnight(zone, local_date_ceil(zone, materialized.starts_at));
+    let supported_end = local_midnight(zone, local_date(zone, materialized.ends_at));
     let mut offsets = vec![0_i32];
     for offset in 1..=i32::try_from(months).unwrap_or(i32::MAX) {
         offsets.extend([offset, -offset]);

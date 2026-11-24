@@ -26,7 +26,7 @@ mod runner;
 mod turns;
 
 pub use active::{ActiveStreamGuard, ActiveStreams};
-pub use calendar::{CalendarSpan, SpanKind};
+pub use calendar::{CalendarSpan, MaterializedRange, SpanKind};
 pub use catalog::{LANE_QUERIES, LaneQuery, Pass};
 pub use frame::{EndReason, Frame, LaneDoneReason};
 pub use lane::{InvalidLaneId, LaneError, LaneId, LaneKind, Paging};

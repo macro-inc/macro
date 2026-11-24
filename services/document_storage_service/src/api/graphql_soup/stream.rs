@@ -16,6 +16,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::Cached;
+use calendar_events::domain::models::OccurrenceRange;
 use complete_graph::{GraphqlRequestParts, MAIL_CACHE_PROFILE_HEADER, MailCacheProfile};
 use futures::StreamExt as _;
 use macro_authorization::{
@@ -23,8 +24,8 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use soup_sync_stream::{
-    ActiveStreamGuard, ActiveStreams, PageExecutor, PageTurn, PageTurns, RequestError, StreamTurns,
-    SyncPlan,
+    ActiveStreamGuard, ActiveStreams, MaterializedRange, PageExecutor, PageTurn, PageTurns,
+    RequestError, StreamTurns, SyncPlan,
 };
 use std::{
     convert::Infallible,
@@ -76,7 +77,14 @@ pub(super) async fn sync_stream_handler(
             .into_response();
     };
     // The message echoes only the caller's own request; it is not logged.
-    let plan = match SyncPlan::from_json(&body, chrono::Utc::now()) {
+    let now = chrono::Utc::now();
+    // Calendar windows stay inside the occurrences the calendar service keeps.
+    let materialized = OccurrenceRange::historical_sync(now);
+    let materialized = MaterializedRange {
+        starts_at: materialized.starts_at,
+        ends_at: materialized.ends_at,
+    };
+    let plan = match SyncPlan::from_json(&body, now, materialized) {
         Ok(plan) => plan,
         // The client's cache engine speaks another protocol: it cannot sync
         // through this server and pages instead.

@@ -5,7 +5,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::calendar::{CalendarWindow, calendar_windows, iso_instant};
+use crate::calendar::{CalendarWindow, MaterializedRange, calendar_windows, iso_instant};
 use crate::catalog::{
     CALENDAR_PAGE, CALENDAR_QUERY, LaneSpec, SoupLaneKind, SoupLaneSpec, lane_specs,
     with_updated_since,
@@ -49,6 +49,7 @@ enum Slot {
 pub(crate) fn plan_lanes(
     request: &SyncRequest,
     now: DateTime<Utc>,
+    materialized: MaterializedRange,
 ) -> Result<Vec<LanePlan>, RequestError> {
     let saved = request
         .lanes
@@ -98,7 +99,8 @@ pub(crate) fn plan_lanes(
                     );
                     continue;
                 };
-                let windows = calendar_windows(zone, &calendar.coverage, now, months, budget);
+                let windows =
+                    calendar_windows(zone, &calendar.coverage, now, materialized, months, budget);
                 budget = budget.saturating_sub(windows.len());
                 for (index, window) in windows.into_iter().enumerate() {
                     drafts.push(calendar_lane(id_prefix, index, window, now)?);

@@ -26,6 +26,7 @@ fn months_run_from_local_midnights_nearest_first() {
         Tz::America__New_York,
         &[],
         at("2026-11-02T12:00:00Z"),
+        MaterializedRange::around(at("2026-11-02T12:00:00Z")),
         1,
         10,
     );
@@ -60,7 +61,14 @@ fn months_run_from_local_midnights_nearest_first() {
 
 #[test]
 fn months_stay_inside_the_materialized_range() {
-    let windows = calendar_windows(Tz::UTC, &[], at("2026-11-02T12:00:00Z"), 12, 100);
+    let windows = calendar_windows(
+        Tz::UTC,
+        &[],
+        at("2026-11-02T12:00:00Z"),
+        MaterializedRange::around(at("2026-11-02T12:00:00Z")),
+        12,
+        100,
+    );
     assert_eq!(windows.len(), 25);
     // 364 days back is 2025-11-03; the materialized range ends 729 days ahead.
     let earliest = windows.last().unwrap();
@@ -83,7 +91,14 @@ fn only_what_the_cache_lacks_is_fetched() {
             end: epoch_day(date("2026-12-01")),
         },
     ];
-    let windows = calendar_windows(Tz::UTC, &coverage, at("2026-11-02T12:00:00Z"), 0, 10);
+    let windows = calendar_windows(
+        Tz::UTC,
+        &coverage,
+        at("2026-11-02T12:00:00Z"),
+        MaterializedRange::around(at("2026-11-02T12:00:00Z")),
+        0,
+        10,
+    );
     // The timed gap fetches its dates too, which covers the all-day gap.
     assert_eq!(windows.len(), 1);
     assert_eq!(
@@ -109,7 +124,14 @@ fn only_what_the_cache_lacks_is_fetched() {
             end: epoch_day(date("2026-11-20")),
         },
     ];
-    let windows = calendar_windows(Tz::UTC, &coverage, at("2026-11-02T12:00:00Z"), 0, 10);
+    let windows = calendar_windows(
+        Tz::UTC,
+        &coverage,
+        at("2026-11-02T12:00:00Z"),
+        MaterializedRange::around(at("2026-11-02T12:00:00Z")),
+        0,
+        10,
+    );
     assert_eq!(windows.len(), 1);
     assert_eq!(windows[0].input["startDate"], "2026-11-20");
     assert_eq!(windows[0].input["start"], "2026-11-20T00:00:00.000Z");
@@ -127,7 +149,17 @@ fn only_what_the_cache_lacks_is_fetched() {
             end: i64::MAX,
         },
     ];
-    assert!(calendar_windows(Tz::UTC, &everything, at("2026-11-02T12:00:00Z"), 12, 100).is_empty());
+    assert!(
+        calendar_windows(
+            Tz::UTC,
+            &everything,
+            at("2026-11-02T12:00:00Z"),
+            MaterializedRange::around(at("2026-11-02T12:00:00Z")),
+            12,
+            100
+        )
+        .is_empty()
+    );
 }
 
 #[test]
@@ -137,15 +169,39 @@ fn a_timed_gap_ending_mid_day_fetches_through_that_date() {
         start: ms("2026-11-10T15:00:00Z"),
         end: ms("2026-12-01T00:00:00Z"),
     }];
-    let windows = calendar_windows(Tz::UTC, &coverage, at("2026-11-02T12:00:00Z"), 0, 10);
+    let windows = calendar_windows(
+        Tz::UTC,
+        &coverage,
+        at("2026-11-02T12:00:00Z"),
+        MaterializedRange::around(at("2026-11-02T12:00:00Z")),
+        0,
+        10,
+    );
     assert_eq!(windows[0].input["endDate"], "2026-11-11");
 }
 
 #[test]
 fn the_budget_keeps_the_nearest_windows() {
-    let windows = calendar_windows(Tz::UTC, &[], at("2026-11-02T12:00:00Z"), 12, 3);
+    let windows = calendar_windows(
+        Tz::UTC,
+        &[],
+        at("2026-11-02T12:00:00Z"),
+        MaterializedRange::around(at("2026-11-02T12:00:00Z")),
+        12,
+        3,
+    );
     assert_eq!(starts(&windows), ["2026-11-01", "2026-12-01", "2026-10-01"]);
-    assert!(calendar_windows(Tz::UTC, &[], at("2026-11-02T12:00:00Z"), 12, 0).is_empty());
+    assert!(
+        calendar_windows(
+            Tz::UTC,
+            &[],
+            at("2026-11-02T12:00:00Z"),
+            MaterializedRange::around(at("2026-11-02T12:00:00Z")),
+            12,
+            0
+        )
+        .is_empty()
+    );
 }
 
 #[test]
@@ -167,4 +223,14 @@ fn epoch_days_round_trip() {
     assert_eq!(epoch_day(date("2026-11-01")), 20_758);
     assert_eq!(epoch_day_date(20_758), Some(date("2026-11-01")));
     assert_eq!(epoch_day_date(-1), Some(date("1969-12-31")));
+}
+
+impl MaterializedRange {
+    /// The calendar service's range around `now`: a year back, two ahead.
+    pub(crate) fn around(now: DateTime<Utc>) -> Self {
+        Self {
+            starts_at: now - TimeDelta::days(365),
+            ends_at: now + TimeDelta::days(730),
+        }
+    }
 }

@@ -1,3 +1,4 @@
+use crate::calendar::MaterializedRange;
 use crate::lane::{LaneKind, LanePlan};
 use crate::request::{MAX_LANES, SyncPlan};
 use chrono::{DateTime, Utc};
@@ -11,9 +12,13 @@ fn now() -> DateTime<Utc> {
 }
 
 fn plan(body: Value) -> Vec<LanePlan> {
-    SyncPlan::from_json(body.to_string().as_bytes(), now())
-        .unwrap()
-        .lanes
+    SyncPlan::from_json(
+        body.to_string().as_bytes(),
+        now(),
+        MaterializedRange::around(now()),
+    )
+    .unwrap()
+    .lanes
 }
 
 fn ids(lanes: &[LanePlan]) -> Vec<&str> {

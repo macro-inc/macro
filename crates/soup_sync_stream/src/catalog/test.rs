@@ -1,3 +1,4 @@
+use crate::calendar::MaterializedRange;
 use crate::catalog::{LANE_QUERIES, LaneQuery};
 use crate::lane::{LaneKind, LanePlan};
 use crate::request::SyncPlan;
@@ -19,7 +20,12 @@ fn now() -> DateTime<Utc> {
 }
 
 fn plan(body: Value) -> SyncPlan {
-    SyncPlan::from_json(body.to_string().as_bytes(), now()).unwrap()
+    SyncPlan::from_json(
+        body.to_string().as_bytes(),
+        now(),
+        MaterializedRange::around(now()),
+    )
+    .unwrap()
 }
 
 fn initial(lane: &LanePlan) -> &Value {

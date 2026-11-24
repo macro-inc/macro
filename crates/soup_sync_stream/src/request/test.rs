@@ -6,7 +6,11 @@ fn now() -> DateTime<Utc> {
 }
 
 fn parse(body: Value) -> Result<SyncPlan, RequestError> {
-    SyncPlan::from_json(body.to_string().as_bytes(), now())
+    SyncPlan::from_json(
+        body.to_string().as_bytes(),
+        now(),
+        MaterializedRange::around(now()),
+    )
 }
 
 #[test]
@@ -51,7 +55,8 @@ fn rejects_malformed_bodies() {
         let error = parse(body.clone()).unwrap_err();
         assert!(matches!(error, RequestError::Body(_)), "{body}: {error}");
     }
-    let error = SyncPlan::from_json(b"not json", now()).unwrap_err();
+    let error =
+        SyncPlan::from_json(b"not json", now(), MaterializedRange::around(now())).unwrap_err();
     assert!(matches!(error, RequestError::Body(_)));
 }
 
