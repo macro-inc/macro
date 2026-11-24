@@ -85,6 +85,10 @@ export function connectorDescription(
     .with('crm', () => 'the CRM')
     .with('channels', () => 'Macro')
     .exhaustive();
-  const items = found.provider.detail;
-  return `Import ${items.charAt(0).toLowerCase()}${items.slice(1)} into ${destination}, or connect so agents can use ${name} without copying anything.`;
+  const detail = found.provider.detail;
+  // Lowercase the first word unless it is an acronym ("CAD designs").
+  const items = /^[A-Z]{2}/.test(detail)
+    ? detail
+    : `${detail.charAt(0).toLowerCase()}${detail.slice(1)}`;
+  return `Import ${items} into ${destination}, or connect so agents can use ${name} without copying anything.`;
 }

@@ -1,4 +1,6 @@
 /** @vitest-environment jsdom */
+
+import { IMPORT_CATEGORIES } from '@app/features/connector-import/core/catalog';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -70,5 +72,16 @@ it.each([
 it('describes an app by whether it can be imported from', () => {
   expect(connectorDescription(undefined, 'Autodesk')).toBe(
     'Agents can use Autodesk when you ask them to. Nothing is copied into Macro.'
+  );
+  const files = IMPORT_CATEGORIES.files;
+  const source = (slug: string) => ({
+    config: files,
+    provider: files.providers.find((p) => p.appSlug === slug)!,
+  });
+  expect(connectorDescription(source('notion'), 'Notion')).toBe(
+    'Import pages and wikis into your Drive, or connect so agents can use Notion without copying anything.'
+  );
+  expect(connectorDescription(source('autodesk'), 'Autodesk')).toBe(
+    'Import CAD designs and their versions into your Drive, or connect so agents can use Autodesk without copying anything.'
   );
 });
