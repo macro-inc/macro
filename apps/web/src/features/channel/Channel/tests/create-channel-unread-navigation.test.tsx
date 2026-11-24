@@ -22,7 +22,11 @@ import { UnreadNotificationsOverlay } from '../UnreadNotificationsOverlay';
 
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => <span /> }));
 
-const mocks = vi.hoisted(() => ({ query: vi.fn(), source: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  query: vi.fn(),
+  source: vi.fn(),
+  rootIds: undefined as undefined | (() => string[]),
+}));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: mocks.source,
   useOptionalGlobalNotificationSource: mocks.source,
@@ -31,12 +35,15 @@ vi.mock('@queries/channel/notifications', () => ({
   createChannelNotificationsQuery: mocks.query,
 }));
 vi.mock('@queries/messages/timeline', () => ({
-  useMessageTimelineByIdsQuery: () => ({
-    isPending: true,
-    get data() {
-      throw new Error('Read pending parent query');
-    },
-  }),
+  useMessageTimelineByIdsQuery: (_parent: unknown, ids: () => string[]) => {
+    mocks.rootIds = ids;
+    return {
+      isPending: true,
+      get data() {
+        throw new Error('Read pending parent query');
+      },
+    };
+  },
 }));
 
 function notification(threadId: string, time: number): UnifiedNotification {
@@ -451,4 +458,65 @@ it('places the chip when an activity row is the first visible row', () => {
   expect(
     view.getByRole('button', { name: '1 unread notification stack above' })
   ).toBeTruthy();
+});
+
+function renderRootLookup(followsPushes: boolean) {
+  const [records, setRecords] = createSignal<UnifiedNotification[]>([]);
+  const [loaded, setLoaded] = createSignal<MessageListItem[]>([]);
+  mocks.source.mockReturnValue({ withLocalOverrides: undefined });
+  mocks.query.mockReturnValue({
+    isEnabled: true,
+    isPending: false,
+    get data() {
+      return records();
+    },
+  });
+  render(() => {
+    createChannelUnreadNavigation({
+      channelId: 'channel',
+      messages: loaded,
+      followsPushes: () => followsPushes,
+      scrollState: () => undefined,
+      onDestinationsChanged: () => {},
+      container: () => undefined,
+      insets: () => ({ start: 0, end: 0 }),
+    });
+    return null;
+  });
+  const message = (id: string) =>
+    ({ id, created_at: '2026-09-01T12:00:00Z' }) as MessageListItem;
+  return { setRecords, setLoaded, message, rootIds: () => mocks.rootIds?.() };
+}
+
+it('waits for a pushed message to reach the timeline before fetching it by id', async () => {
+  vi.useFakeTimers();
+  try {
+    const view = renderRootLookup(true);
+    // The notification arrives before the device reread shows the message.
+    view.setRecords([notification('root-new', 12)]);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(view.rootIds()).toEqual([]);
+    view.setLoaded([view.message('root-new')]);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(view.rootIds()).toEqual([]);
+
+    // A parent that never arrives is still looked up once things settle.
+    view.setRecords([
+      notification('root-new', 12),
+      notification('root-old', 10),
+    ]);
+    view.setLoaded([]);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(view.rootIds()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(view.rootIds()).toEqual(['root-new']);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('looks an unloaded parent up at once on the REST path', () => {
+  const view = renderRootLookup(false);
+  view.setRecords([notification('root-new', 12)]);
+  expect(view.rootIds()).toEqual(['root-new']);
 });

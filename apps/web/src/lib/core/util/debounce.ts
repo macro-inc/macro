@@ -33,6 +33,22 @@ export function debouncedDependent<T>(source: () => T, delay = 300): () => T {
 }
 
 /**
+ * A debounced view of a signal that starts from `initial`: its first value
+ * also waits until the source has been still for `delay`.
+ */
+export function settledDependent<T>(
+  source: () => T,
+  initial: T,
+  delay = 300
+): () => T {
+  const [settled, setSettled] = createSignal(initial);
+  const schedule = solidDebounce((v: T) => setSettled(() => v), delay);
+  createEffect(() => schedule(source()));
+  onCleanup(() => schedule.clear());
+  return settled;
+}
+
+/**
  * A debounced view of a signal that can be brought up to date at once. A key
  * that acts on what the view lists (Enter) calls `flush` first, so it acts on
  * the text on screen without waiting.

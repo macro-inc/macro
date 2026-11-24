@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { settledDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   isGraphqlServerFault,
@@ -22,6 +23,9 @@ import {
   unreadThreads,
 } from './unread-thread-navigation';
 
+/** How long the device path waits for a pushed message to show. */
+const UNREAD_ROOT_SETTLE_MS = 1_000;
+
 /** Data and viewport wiring for the channel's unread navigation affordance. */
 export function createChannelUnreadNavigation(options: {
   channelId: string;
@@ -32,6 +36,11 @@ export function createChannelUnreadNavigation(options: {
   container: Accessor<HTMLElement | undefined>;
   insets: Accessor<{ start: number; end: number }>;
   onDestinationsChanged: () => void;
+  /**
+   * Whether a pushed message reaches `messages` only after a reread (the
+   * device path), so its notification can arrive before it does.
+   */
+  followsPushes?: Accessor<boolean>;
 }) {
   const notificationSource = useGlobalNotificationSource();
   const channelNotifications = createChannelNotificationsQuery(
@@ -77,13 +86,18 @@ export function createChannelUnreadNavigation(options: {
   // A reply's timestamp says nothing about where its parent sits in history.
   // Only the first unloaded unread parent can become the next target.
   // Resolve it without loading entire timelines or every offscreen thread.
+  const unloadedRoot = () => {
+    const loaded = new Set(options.messages().map((message) => message.id));
+    const target = unread().find((thread) => !loaded.has(thread.threadId));
+    return target ? [target.threadId] : [];
+  };
+  // A pushed message shows once the device has reread it, which its
+  // notification can beat: wait for the timeline to settle before asking the
+  // server for it, or every push fetches its own message again.
+  const settledRoot = settledDependent(unloadedRoot, [], UNREAD_ROOT_SETTLE_MS);
   const unreadRoots = useMessageTimelineByIdsQuery(
     () => ({ type: 'channel', id: options.channelId }),
-    () => {
-      const loaded = new Set(options.messages().map((message) => message.id));
-      const target = unread().find((thread) => !loaded.has(thread.threadId));
-      return target ? [target.threadId] : [];
-    }
+    () => (options.followsPushes?.() ? settledRoot() : unloadedRoot())
   );
   const unreadChip = createMemo(() => {
     const positions = new Map<string, ThreadPosition>(

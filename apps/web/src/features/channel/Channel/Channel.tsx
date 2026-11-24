@@ -314,6 +314,7 @@ export function Channel(props: ChannelProps) {
     channelId: props.channelId,
     messages,
     activities: () => messageIndex.activityByKey,
+    followsPushes: () => timeline.mode() === 'local',
     scrollState: threadListScrollState,
     container: threadListContainerEl,
     insets: threadListScrollInsets,
