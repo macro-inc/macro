@@ -1355,6 +1355,7 @@ export const ContentSearch = z.object({
         'projects',
         'call_records',
         'calendar_events',
+        'database_rows',
         'chats',
       ])
     )
@@ -2009,6 +2010,19 @@ export const SearchToolResponse = z.object({
                 ),
               }),
               z.object({ type: z.literal('agentSession') })
+            ),
+            z.intersection(
+              z.object({
+                database_id: z.string().uuid(),
+                table_id: z.string().uuid(),
+                row_id: z.string().uuid(),
+                database_name: z.string(),
+                table_name: z.string(),
+                title: z.string(),
+                snippet: z.union([z.string(), z.null()]).optional(),
+                updated_at: z.string().datetime({ offset: true }),
+              }),
+              z.object({ type: z.literal('databaseRow') })
             ),
           ];
           const errors = schemas.reduce<z.ZodError[]>(
@@ -14080,6 +14094,7 @@ export const NameSearch = z.object({
         'projects',
         'call_records',
         'calendar_events',
+        'database_rows',
         'chats',
       ])
     )
