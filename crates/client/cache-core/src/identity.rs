@@ -1,6 +1,6 @@
 //! Durable bindings between optimistic entity handles and server identities.
 
-use crate::document::{Operation, OperationKind, Selection};
+use crate::document::{FieldNode, Operation, OperationKind, Selection};
 use crate::meta::{Schema, TypeKind};
 use crate::normalize::RecordUpdates;
 use crate::value::{CacheValue, EntityKey, Record};
@@ -79,8 +79,7 @@ pub fn validate(bindings: &[IdentityBinding]) -> Result<(), String> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UntypedObject {
     /// As normalizing the response under the schema typed it: of the object
-    /// type its field declares, read through the fragments that apply to the
-    /// objects above it. One of an abstract type fails.
+    /// type its field declares. One of an abstract type fails.
     Normalized,
     /// Not at all, so it fails: for a response that doesn't normalize, which
     /// a server on another schema may have sent.
@@ -88,8 +87,11 @@ pub enum UntypedObject {
 }
 
 /// Extract bindings only from explicitly declared response objects of the same
-/// type. `op`'s selections say each key an object's `__typename` is selected
-/// under; `untyped` says how an object that states none is typed.
+/// type. Each object along a binding's path is of the type it states, else
+/// as `untyped` says, and its fields are read through the fragments that
+/// apply to that type, as normalizing reads them; an object of no known type
+/// is read through all its fragments. `op`'s selections say each key an
+/// object's `__typename` is selected under.
 pub fn resolve(
     schema: &Schema,
     bindings: &[IdentityBinding],
@@ -104,26 +106,13 @@ pub fn resolve(
         if binding.response_path.is_empty() {
             continue;
         }
-        let object = binding
-            .response_path
-            .iter()
-            .try_fold(data, |value, field| {
-                value.get(field).ok_or("missing identity response object")
-            })?;
         let local_type = binding
             .local_key
             .typename()
             .ok_or("invalid local identity")?;
-        let typename = match response_typename(&op.selection_set, &binding.response_path, object)? {
-            Some(typename) => typename,
-            None => match untyped {
-                UntypedObject::Normalized => {
-                    normalized_type(schema, op, &binding.response_path, data)
-                }
-                UntypedObject::Rejected => None,
-            }
-            .ok_or("identity response type is not stated")?,
-        };
+        let (object, typename) =
+            response_object(schema, op, &binding.response_path, data, untyped)?;
+        let typename = typename.ok_or("identity response type is not stated")?;
         let id = object
             .get("id")
             .and_then(Value::as_str)
@@ -145,57 +134,81 @@ pub fn resolve(
     Ok(result)
 }
 
-/// The type normalizing gives the response object at `path` when it states
-/// none: each object along the path is of the type it states, else of the
-/// object type its field declares, and its fields are those of the fragments
-/// that apply to that type. `None` when the object's type is abstract, or the
-/// path leaves the selections or the schema.
-fn normalized_type<'a>(
+/// The response object at `path` and its type, read as [`resolve`] says.
+fn response_object<'a>(
     schema: &'a Schema,
     op: &'a Operation,
     path: &[String],
     data: &'a Value,
-) -> Option<&'a str> {
-    let mut concrete = match op.kind {
-        OperationKind::Query => schema.query_root(),
-        OperationKind::Mutation => schema.mutation_root()?,
-        OperationKind::Subscription => schema.subscription_root()?,
+    untyped: UntypedObject,
+) -> Result<(&'a Value, Option<&'a str>), String> {
+    let mut typename = match op.kind {
+        OperationKind::Query => Some(schema.query_root()),
+        OperationKind::Mutation => schema.mutation_root(),
+        OperationKind::Subscription => schema.subscription_root(),
     };
     let mut selections: Vec<&'a [Selection]> = vec![&op.selection_set];
-    let mut value = data;
+    let mut object = data;
     for (depth, step) in path.iter().enumerate() {
         let mut fields = Vec::new();
         for selection_set in selections {
-            crate::normalize::collect_fields(schema, selection_set, concrete, &mut fields);
+            match typename {
+                Some(typename) => {
+                    crate::normalize::collect_fields(schema, selection_set, typename, &mut fields);
+                }
+                None => all_fields(selection_set, &mut fields),
+            }
         }
         fields.retain(|field| field.response_key == *step);
-        let declared = schema.field_meta(concrete, &fields.first()?.name)?.ty.name;
-        value = value.get(step)?;
-        concrete = match response_typename(&op.selection_set, &path[..=depth], value).ok()? {
-            Some(stated) => stated,
-            None if schema.type_meta(declared)?.kind == TypeKind::Object => declared,
-            None => return None,
-        };
+        let declared = typename
+            .zip(fields.first())
+            .and_then(|(typename, field)| schema.field_meta(typename, &field.name))
+            .map(|field| field.ty.name);
+        object = object.get(step).ok_or("missing identity response object")?;
         selections = fields.iter().map(|field| &*field.selection_set).collect();
+        // An object above the bound one whose type can't be told is read
+        // through all its fragments.
+        typename = match stated_typename(&selections, object) {
+            Ok(Some(stated)) => Some(stated),
+            Ok(None) => declared.filter(|declared| {
+                untyped == UntypedObject::Normalized
+                    && schema
+                        .type_meta(declared)
+                        .is_some_and(|meta| meta.kind == TypeKind::Object)
+            }),
+            Err(error) if depth + 1 == path.len() => return Err(error),
+            Err(_) => None,
+        };
     }
-    Some(concrete)
+    Ok((object, typename))
 }
 
-/// The `__typename` of the response object at `path`, under any key
-/// `selections` select it by, an alias included, or `None` when the response
-/// holds none. A key that a fragment on another type selects another field by
-/// is skipped: its value may not be a type name. When the object holds a
-/// value only under such keys, its type can't be told.
-fn response_typename<'a>(
-    selections: &[Selection],
-    path: &[String],
+/// Pushes every field `selections` select, through all their fragments.
+fn all_fields<'a>(selections: &'a [Selection], fields: &mut Vec<&'a FieldNode>) {
+    for selection in selections {
+        match selection {
+            Selection::Field(field) => fields.push(field),
+            Selection::Fragment { selection_set, .. } => all_fields(selection_set, fields),
+        }
+    }
+}
+
+/// The `__typename` `object` states under any key `selections`, the object's
+/// own, select it by, an alias included, or `None` when it states none. A key
+/// that a fragment on another type selects another field by is skipped: its
+/// value may not be a type name. When the object holds a value only under such
+/// keys, its type can't be told.
+fn stated_typename<'a>(
+    selections: &[&[Selection]],
     object: &'a Value,
 ) -> Result<Option<&'a str>, String> {
     let mut keys = ResponseKeys {
         typename: vec!["__typename"],
         other: BTreeSet::new(),
     };
-    keys.collect(selections, path);
+    for selection_set in selections {
+        keys.collect(selection_set);
+    }
     let (ambiguous, typename): (Vec<&str>, Vec<&str>) = keys
         .typename
         .into_iter()
@@ -212,7 +225,7 @@ fn response_typename<'a>(
     Ok(None)
 }
 
-/// The response keys selected on the object at a path, through fragments.
+/// The response keys an object's selections select, through fragments.
 struct ResponseKeys<'s> {
     /// Keys `__typename` is selected under.
     typename: Vec<&'s str>,
@@ -221,20 +234,16 @@ struct ResponseKeys<'s> {
 }
 
 impl<'s> ResponseKeys<'s> {
-    fn collect(&mut self, selections: &'s [Selection], path: &[String]) {
+    fn collect(&mut self, selections: &'s [Selection]) {
         for selection in selections {
             match selection {
-                Selection::Fragment { selection_set, .. } => self.collect(selection_set, path),
-                Selection::Field(field) => match path.split_first() {
-                    None if field.name == "__typename" => self.typename.push(&field.response_key),
-                    None => {
-                        self.other.insert(&field.response_key);
-                    }
-                    Some((step, rest)) if field.response_key == *step => {
-                        self.collect(&field.selection_set, rest);
-                    }
-                    Some(_) => {}
-                },
+                Selection::Fragment { selection_set, .. } => self.collect(selection_set),
+                Selection::Field(field) if field.name == "__typename" => {
+                    self.typename.push(&field.response_key);
+                }
+                Selection::Field(field) => {
+                    self.other.insert(&field.response_key);
+                }
             }
         }
     }
@@ -537,7 +546,9 @@ mod tests {
         type SavePayload { draft: Draft message: Message saved: Result other: Other } \
         union Result = Saved | Other \
         union SaveResult = APayload | BPayload \
-        type APayload { record: Saved } type BPayload { record: Other } \
+        type APayload { record: Saved child: Child } \
+        type BPayload { record: Other child: Child } \
+        type Child { id: ID! label: String record: Saved } \
         type Draft { id: ID! } type Message { id: ID! } \
         type Saved { id: ID! label: String } type Other { id: ID! label: String }";
     const DRAFT: &str = "mutation Save { save { draft { __typename id } } }";
@@ -683,6 +694,39 @@ mod tests {
                 &untyped
             ),
             Err("identity response type is not stated".into())
+        );
+    }
+
+    #[test]
+    fn resolve_reads_a_type_name_through_the_fragments_of_its_parent_type() {
+        // The inactive fragment selects the child's label under the key the
+        // active one selects its type name by.
+        let document = "mutation Save { result { __typename \
+             ... on APayload { child { kind: __typename id record { id } } } \
+             ... on BPayload { child { kind: label record { id } } } } }";
+        let response = json!({ "result": { "__typename": "APayload",
+            "child": { "kind": "Child", "id": "4", "record": { "id": "9" } } } });
+        assert_eq!(
+            resolve_in(
+                document,
+                &[binding("Saved:local", &["result", "child", "record"])],
+                &response
+            ),
+            Ok(IdentityMap::from([(
+                EntityKey::entity("Saved", &["local"]),
+                EntityKey::entity("Saved", &["9"])
+            )]))
+        );
+        assert_eq!(
+            resolve_in(
+                document,
+                &[binding("Child:local", &["result", "child"])],
+                &response
+            ),
+            Ok(IdentityMap::from([(
+                EntityKey::entity("Child", &["local"]),
+                EntityKey::entity("Child", &["4"])
+            )]))
         );
     }
 
