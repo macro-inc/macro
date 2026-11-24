@@ -483,6 +483,21 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
   }
 
   /**
+   * Stop the run in progress. It ends as stopped shortly after; with none
+   * running, nothing changes.
+   *
+   * @write
+   * @idempotent
+   */
+  async stop(): Promise<void> {
+    unwrap(
+      await this.client.scheduledAction.stopScheduledActionRun({
+        path: { id: this.id },
+      }),
+    );
+  }
+
+  /**
    * Completed executions, with their routine scoped identity.
    *
    * @readonly

@@ -46,6 +46,17 @@ const BASE_OPTIONS = {
   lineHoverHighlight: 'line',
 } satisfies FileDiffOptions<string>;
 
+// Pierre pins the gutter "+" to the number column's right edge, between the
+// number and the code; on a lit line (a focused note, a code link) it stays
+// shown, so both keep a small gap from it.
+const GUTTER_UTILITY_CSS =
+  '[data-line] { padding-inline-start: calc(1ch + 6px); } [data-column-number] { padding-inline-end: calc(1ch + 6px); }';
+
+// Pierre tints a lit line by mixing its selection colour into the row; in dark
+// mode the mix is strong enough to dim the code, so it is lighter there.
+const LIT_LINE_CSS =
+  '[data-line][data-selected-line] { --mix-selection-dark: 85%; }';
+
 export function PierreFileDiff(props: {
   path: string;
   diff: FileDiffMetadata;
@@ -117,7 +128,7 @@ export function PierreFileDiff(props: {
     ...BASE_OPTIONS,
     diffStyle: props.diffStyle,
     themeType: props.themeType,
-    unsafeCSS: props.unsafeCSS,
+    unsafeCSS: `${LIT_LINE_CSS}${props.onSelectLines ? GUTTER_UTILITY_CSS : ''}${props.unsafeCSS ?? ''}`,
     renderAnnotation,
     enableGutterUtility: props.onSelectLines !== undefined,
     onGutterUtilityClick: props.onSelectLines
@@ -151,7 +162,9 @@ export function PierreFileDiff(props: {
   );
 
   // Pierre lights one range per file. It follows the host: the range being
-  // annotated, one the host points at (a focused comment), or none.
+  // annotated, one the host points at (a focused comment or code link), or
+  // none. Not deferred: a range pointed at before this body mounted (a
+  // collapsed or off-screen file) lights on the first render.
   createEffect(
     on(
       () => props.selection,
@@ -167,8 +180,7 @@ export function PierreFileDiff(props: {
             : null,
           { notify: false }
         );
-      },
-      { defer: true }
+      }
     )
   );
 

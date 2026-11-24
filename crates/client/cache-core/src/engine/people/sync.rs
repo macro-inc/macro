@@ -113,6 +113,8 @@ impl<S: Storage> Engine<S> {
             revision_advanced: changed,
             search_changed_buckets: Some(BTreeSet::from(["person".into()])),
             identity_errors: vec![],
+            unwritable_response: None,
+            channel: None,
             mutation_uuid: None,
             reset: false,
             revalidations: vec![],

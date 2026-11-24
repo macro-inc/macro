@@ -9,9 +9,67 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
+mod channel_timeline;
 mod hydration_scope;
 mod mail_projection;
 mod people;
+mod schema_change;
+mod schema_cost;
+
+/// The old way of reading a hydrate's data, which `json_value_from_js` must
+/// match.
+fn json_value_from_js_old(value: JsValue) -> serde_json::Value {
+    serde_wasm_bindgen::from_value(value).unwrap()
+}
+
+#[wasm_bindgen_test]
+fn hydrate_data_reads_as_serde_wasm_bindgen_reads_it() {
+    let mut texts = vec![
+        r#"{"text":"line\n\"quoted\" 🙂 \u0000","nested":[null,true,false,{"value":1.25}],"safe":9007199254740991,"minSafe":-9007199254740991,"big":1152921504606846976,"minusBig":-1152921504606846976,"huge":1e21,"tiny":5e-324,"third":0.1,"negativeZero":-0,"int":42,"float":-17.5,"keys":{"b":1,"a":2,"10":3,"2":4},"__proto__":5,"empty":{},"list":[]}"#.to_owned(),
+        // A lone surrogate does not parse back from JSON.stringify's text.
+        r#"["\ud800 lone", {"\udc00": "\udbff"}]"#.to_owned(),
+        // Deeper than serde_json's recursion limit.
+        format!("{}1{}", "[".repeat(200), "]".repeat(200)),
+        "null".to_owned(),
+        "7".to_owned(),
+    ];
+    // Floats from random bit patterns.
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let floats = (0..2_000)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            f64::from_bits(state)
+        })
+        .filter(|float| float.is_finite())
+        .map(|float| {
+            js_sys::JSON::stringify(&JsValue::from_f64(float))
+                .unwrap()
+                .as_string()
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    texts.push(format!("[{}]", floats.join(",")));
+    for text in texts {
+        let value = js_sys::JSON::parse(&text).unwrap();
+        assert_eq!(
+            json_value_from_js(value.clone()).unwrap(),
+            json_value_from_js_old(value),
+            "{text}"
+        );
+    }
+    let big = json_value_from_js(js_sys::JSON::parse("[1152921504606846976]").unwrap()).unwrap();
+    assert!(big[0].is_f64());
+    // An `undefined` property, which JSON.parse never produces, is left out.
+    let object = js_sys::Object::new();
+    js_sys::Reflect::set(&object, &"gone".into(), &JsValue::UNDEFINED).unwrap();
+    js_sys::Reflect::set(&object, &"kept".into(), &JsValue::from_f64(1.0)).unwrap();
+    assert_eq!(
+        json_value_from_js(object.into()).unwrap(),
+        serde_json::json!({"kept": 1})
+    );
+}
 
 #[wasm_bindgen_test]
 fn read_response_conversion_preserves_json_and_revision_strings() {
@@ -331,6 +389,8 @@ fn empty_js_write_result() -> JsWriteResult {
         unchanged_views: None,
         field_changes: None,
         identity_errors: Vec::new(),
+        unwritable_response: None,
+        channel: None,
         mutation_uuid: None,
         revision: "0".to_string(),
         revision_advanced: false,
@@ -348,6 +408,7 @@ fn tagged_wire_enum_fields_are_camel_case() {
     committed
         .identity_errors
         .push("missing identity response object".into());
+    committed.unwritable_response = Some("unknown field".into());
     let value =
         serde_json::to_value(JsCommitOptimisticWriteResult::Committed { result: committed })
             .unwrap();
@@ -356,6 +417,7 @@ fn tagged_wire_enum_fields_are_camel_case() {
         value["identityErrors"],
         serde_json::json!(["missing identity response object"])
     );
+    assert_eq!(value["unwritableResponse"], "unknown field");
     assert_eq!(
         serde_json::to_value(JsMutationUpsertKind::ReplacedPending {
             removed_transaction_id: "1".to_string(),
@@ -1271,6 +1333,7 @@ async fn backfill_supplement_failure_does_not_commit_or_advance_revision() {
             })),
             Some("user-1".into()),
             JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -1296,6 +1359,7 @@ async fn backfill_supplement_failure_does_not_commit_or_advance_revision() {
             }
         })),
         Some("user-1".into()),
+        JsValue::UNDEFINED,
         JsValue::UNDEFINED,
     ))
     .await
@@ -1696,6 +1760,62 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
     );
 
     close_and_destroy(&reopened, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_confirmed_response_that_does_not_normalize_retires_the_write() {
+    const SCOPE: &str = "cache-wasm-unwritable-settlement";
+    let engine = fresh_engine(SCOPE).await;
+    let enqueue: serde_json::Value = from_js(
+        resolved(engine.enqueue_optimistic_mutation(
+            None,
+            "00000000-0000-4000-8000-000000000009".into(),
+            PROPERTY_MUTATION.into(),
+            Some("SetEntityProperty".into()),
+            js(mutation_variables()),
+            js(serde_json::json!({
+                "setEntityProperty": { "id": "prop-1", "displayName": "Stage" }
+            })),
+            JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
+            123.0,
+            "runner".into(),
+            10.0,
+            1_000.0,
+            JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
+            test_generation(&engine).await,
+        ))
+        .await,
+    );
+
+    // No retry of this response can be written, so it settles without its
+    // content and the queue moves on.
+    let commit: serde_json::Value = from_js(
+        resolved(
+            engine.commit_optimistic_write(
+                enqueue["transactionId"].as_str().unwrap().to_owned(),
+                "runner".into(),
+                enqueue["initialClaim"]["mutation"]["leaseGeneration"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                PROPERTY_MUTATION.into(),
+                Some("SetEntityProperty".into()),
+                js(mutation_variables()),
+                js(serde_json::json!({ "setEntityProperty": "malformed" })),
+                test_generation(&engine).await,
+            ),
+        )
+        .await,
+    );
+    assert_eq!(commit["kind"], "committed");
+    assert!(commit["unwritableResponse"].is_string(), "{commit}");
+    let queued: serde_json::Value = from_js(resolved(engine.inspect_mutations()).await);
+    assert_eq!(queued, serde_json::json!([]));
+
+    close_and_destroy(&engine, SCOPE).await;
 }
 
 #[wasm_bindgen_test(async)]
@@ -2665,7 +2785,7 @@ async fn queue_one_mutation(engine: &CacheEngine) {
         100.0,
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
-        test_generation(&engine).await,
+        test_generation(engine).await,
     ))
     .await;
 }
@@ -2972,6 +3092,7 @@ fn hydrate_backfill(engine: &CacheEngine) -> js_sys::Promise {
         backfill_page(),
         Some("user-1".into()),
         JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
     )
 }
 
@@ -2982,6 +3103,7 @@ fn prepare_backfill(engine: &CacheEngine) -> js_sys::Promise {
         backfill_variables(),
         backfill_page(),
         Some("user-1".into()),
+        JsValue::UNDEFINED,
         JsValue::UNDEFINED,
     )
 }
@@ -3164,6 +3286,7 @@ async fn a_prepared_hydrate_keeps_the_scope_it_was_given() {
             backfill_page(),
             Some("user-1".into()),
             scope.clone(),
+            JsValue::UNDEFINED,
         )
     };
     let scope_of = |generation: String| {
@@ -3179,6 +3302,7 @@ async fn a_prepared_hydrate_keeps_the_scope_it_was_given() {
             backfill_page(),
             Some("user-1".into()),
             scope_of(generation),
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -3349,6 +3473,7 @@ async fn a_failed_prepare_leaves_nothing_to_commit() {
         ),
         Some("user-1".into()),
         JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
     ))
     .await
     .expect_err("an incomplete required projection rejects");
@@ -3410,6 +3535,7 @@ async fn run_steps(engine: &CacheEngine, steps: &[Step]) {
                     })),
                     Some("user-1".into()),
                     JsValue::UNDEFINED,
+                    JsValue::UNDEFINED,
                 ))
                 .await;
             }
@@ -3428,6 +3554,7 @@ async fn run_steps(engine: &CacheEngine, steps: &[Step]) {
                         }
                     })),
                     Some("user-1".into()),
+                    JsValue::UNDEFINED,
                     JsValue::UNDEFINED,
                 ))
                 .await;
@@ -3520,6 +3647,7 @@ async fn assert_page_commit_is_hydrate_after(
             page(),
             Some("user-1".into()),
             JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
         )
     };
     let engine = fresh_engine(scope).await;
@@ -3552,6 +3680,7 @@ async fn assert_page_commit_is_hydrate_after(
             backfill_variables(),
             page(),
             Some("user-1".into()),
+            JsValue::UNDEFINED,
             JsValue::UNDEFINED,
         ))
         .await;

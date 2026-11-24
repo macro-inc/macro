@@ -155,32 +155,10 @@ impl<S: PredicateIndexStorage> Engine<S> {
         let mut remove = Vec::new();
         let mut retain = Vec::new();
         for (key, record) in keys.into_iter().zip(records) {
-            let Some(mut record) = record else {
-                remove.push(key);
-                continue;
-            };
-            if ![
-                identity::ALIAS_FIELD,
-                identity::MUTATION_UUID_FIELD,
-                identity::DELETED_FIELD,
-            ]
-            .iter()
-            .any(|field| record.fields.contains_key(*field))
-            {
-                remove.push(key);
-                continue;
+            match record.and_then(identity::identity_metadata) {
+                Some(record) => retain.push((key, record)),
+                None => remove.push(key),
             }
-            record.fields.retain(|field, _| {
-                matches!(
-                    field.as_str(),
-                    identity::ALIAS_FIELD
-                        | identity::MUTATION_UUID_FIELD
-                        | identity::DELETED_FIELD
-                        | "id"
-                        | "__typename"
-                )
-            });
-            retain.push((key, record));
         }
         if !retain.is_empty() {
             self.retire_record_fields(retain, vec![]).await?;

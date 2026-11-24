@@ -64,7 +64,10 @@ vi.mock('@property/editors/popover/StartDueEditor', () => ({
     <button
       type="button"
       onClick={() =>
-        props.saveOther(props.other(), new Date('2026-09-21T00:00:00Z'))
+        props.saveOther(props.other(), {
+          valueType: 'DATE',
+          value: new Date('2026-09-21T00:00:00Z'),
+        })
       }
     >
       Set start date

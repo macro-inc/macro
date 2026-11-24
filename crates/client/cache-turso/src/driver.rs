@@ -415,6 +415,10 @@ pub(crate) fn execute(
     sql: &str,
     values: Values,
 ) -> Result<i64, TursoStorageError> {
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    if let Some(error) = take_statement_failure(sql) {
+        return Err(error);
+    }
     let mut statement = prepare(connection, sql)?;
     execute_prepared(&mut statement, values)
 }
@@ -672,6 +676,7 @@ pub(crate) enum TestControlPhase {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 thread_local! {
     static RESET_FAILURE_SQL: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+    static STATEMENT_FAILURE: std::cell::RefCell<Option<(String, TursoStorageError)>> = const { std::cell::RefCell::new(None) };
     static CURRENT_CONTROL_PHASE: std::cell::Cell<Option<TestControlPhase>> = const { std::cell::Cell::new(None) };
     static CONTROL_TRACE: std::cell::RefCell<Vec<TestControlPhase>> = const { std::cell::RefCell::new(Vec::new()) };
     static CONTROL_IO_TRACE: std::cell::RefCell<Vec<TestControlPhase>> = const { std::cell::RefCell::new(Vec::new()) };
@@ -731,6 +736,24 @@ fn record_control_io() {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) fn current_test_control_phase() -> Option<TestControlPhase> {
     CURRENT_CONTROL_PHASE.with(std::cell::Cell::get)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+fn take_statement_failure(sql: &str) -> Option<TursoStorageError> {
+    STATEMENT_FAILURE.with(|fault| {
+        let mut fault = fault.borrow_mut();
+        match fault.as_ref() {
+            Some((armed, _)) if armed == sql => fault.take().map(|(_, error)| error),
+            Some(_) | None => None,
+        }
+    })
+}
+
+/// Makes the next [`execute`] of `sql` on this thread fail with `error`, as
+/// a statement that fails partway through would, inside its transaction.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) fn arm_statement_failure(sql: &str, error: TursoStorageError) {
+    STATEMENT_FAILURE.with(|fault| *fault.borrow_mut() = Some((sql.to_owned(), error)));
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]

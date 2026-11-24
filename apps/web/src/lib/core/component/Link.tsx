@@ -24,6 +24,8 @@ type UnfurlLinkProps = {
 
 type LinkHoverCardProps = {
   unfurled: GetUnfurlResponse;
+  /** The second line, in place of the link's domain; empty hides it. */
+  subtitle?: string;
 };
 
 /**
@@ -55,6 +57,7 @@ function VideoEmbed(props: { embedUrl: string; title: string }) {
 export function LinkHoverCard(props: LinkHoverCardProps) {
   const domain = extractDomain(props.unfurled.url);
   const title = () => props.unfurled.title || domain;
+  const subtitle = () => props.subtitle ?? domain;
 
   return (
     <Show
@@ -89,7 +92,9 @@ export function LinkHoverCard(props: LinkHoverCardProps) {
           </div>
           <div class="min-w-0 flex-1">
             <div class="truncate text-sm/6 font-medium text-ink">{title()}</div>
-            <div class="truncate text-xs text-ink-muted">{domain}</div>
+            <Show when={subtitle()}>
+              <div class="truncate text-xs text-ink-muted">{subtitle()}</div>
+            </Show>
           </div>
         </div>
       }

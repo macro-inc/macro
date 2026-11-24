@@ -199,98 +199,9 @@ fn requests_validate_their_window() {
 }
 
 #[test]
-fn commits_validate_spans_keys_and_sequences() {
-    let commit = |edit: fn(&mut ChannelTimelineCommit)| {
-        let mut commit = ChannelTimelineCommit {
-            channel_id: "c1".into(),
-            ..ChannelTimelineCommit::default()
-        };
-        edit(&mut commit);
-        commit.validate()
-    };
-    assert_eq!(commit(|_| {}), Ok(()));
-    assert_eq!(
-        commit(|c| c.channel_id.clear()),
-        Err(ChannelTimelineError::InvalidKey)
-    );
-    assert_eq!(
-        commit(|c| c.coverage.push(ChannelCoverage {
-            thread_root_id: None,
-            span: span("20", "10")
-        })),
-        Err(ChannelTimelineError::InvalidSpan)
-    );
-    assert_eq!(
-        commit(|c| c.coverage.push(ChannelCoverage {
-            thread_root_id: None,
-            span: span(TIMELINE_START, TIMELINE_HEAD)
-        })),
-        Ok(())
-    );
-    assert_eq!(
-        commit(|c| c
-            .removed_keys
-            .push(EntityKey::entity("GraphqlSoupChannel", &["x"]))),
-        Err(ChannelTimelineError::InvalidKey)
-    );
-    assert_eq!(
-        commit(|c| c.seq = Some(ChannelSeqUpdate::Lower { seq: "-1".into() })),
-        Err(ChannelTimelineError::InvalidSeq)
-    );
-    assert_eq!(
-        commit(|c| c.seq = Some(ChannelSeqUpdate::Advance {
-            from: "5".into(),
-            to: "4".into()
-        })),
-        Err(ChannelTimelineError::InvalidSeq)
-    );
-}
-
-#[test]
-fn the_applied_sequence_never_skips_a_change() {
-    let with = |seq: ChannelSeqUpdate, reset: bool| ChannelTimelineCommit {
-        channel_id: "c1".into(),
-        seq: Some(seq),
-        reset,
-        ..ChannelTimelineCommit::default()
-    };
-    let lower = |seq: &str| ChannelSeqUpdate::Lower { seq: seq.into() };
-    let advance = |from: &str, to: &str| ChannelSeqUpdate::Advance {
-        from: from.into(),
-        to: to.into(),
-    };
-
-    // A page read at an older sequence pulls the whole channel back to it.
-    assert_eq!(next_seq(None, &with(lower("7"), false)), Some(7));
-    assert_eq!(next_seq(Some(9), &with(lower("7"), false)), Some(7));
-    assert_eq!(next_seq(Some(5), &with(lower("7"), false)), Some(5));
-    // A push applies only on top of exactly the previous change.
-    assert_eq!(next_seq(Some(7), &with(advance("7", "8"), false)), Some(8));
-    assert_eq!(next_seq(Some(6), &with(advance("7", "8"), false)), Some(6));
-    assert_eq!(next_seq(Some(9), &with(advance("7", "8"), false)), Some(9));
-    assert_eq!(next_seq(None, &with(advance("7", "8"), false)), None);
-    // A reset forgets the stored sequence first.
-    assert_eq!(next_seq(Some(3), &with(lower("12"), true)), Some(12));
-    assert_eq!(
-        next_seq(Some(3), &with(advance("11", "12"), true)),
-        Some(12)
-    );
-    assert_eq!(
-        next_seq(
-            Some(3),
-            &ChannelTimelineCommit {
-                reset: true,
-                ..ChannelTimelineCommit::default()
-            }
-        ),
-        None
-    );
-}
-
-#[test]
 fn windows_plan_against_the_span_holding_their_anchor() {
     let spans = [span("10", "20"), span("30", TIMELINE_HEAD)];
-    let latest = plan_window(&request(2), None, &spans).unwrap();
+    let latest = plan_window(&request(2), None, &spans, 0).unwrap();
     assert_eq!(
         (latest.span.clone(), latest.position.as_str()),
         (spans[1].clone(), TIMELINE_HEAD)
@@ -302,29 +213,32 @@ fn windows_plan_against_the_span_holding_their_anchor() {
 
     let mut before = request(2);
     before.before = Some("15".into());
-    assert_eq!(plan_window(&before, None, &spans).unwrap().span, spans[0]);
+    assert_eq!(
+        plan_window(&before, None, &spans, 0).unwrap().span,
+        spans[0]
+    );
     before.before = Some("25".into());
-    assert_eq!(plan_window(&before, None, &spans), None);
+    assert_eq!(plan_window(&before, None, &spans, 0), None);
 
     let mut around = request(2);
     around.around = Some(key("m1"));
-    assert_eq!(plan_window(&around, None, &spans), None);
+    assert_eq!(plan_window(&around, None, &spans, 0), None);
     let anchor = row("m1", "12");
-    let plan = plan_window(&around, Some(&anchor), &spans).unwrap();
+    let plan = plan_window(&around, Some(&anchor), &spans, 0).unwrap();
     assert!(plan.read_older && plan.read_newer);
     let hidden = ChannelTimelineRow {
         hidden: true,
         ..anchor.clone()
     };
-    assert_eq!(plan_window(&around, Some(&hidden), &spans), None);
+    assert_eq!(plan_window(&around, Some(&hidden), &spans, 0), None);
     let elsewhere = ChannelTimelineRow {
         scope: TimelineScope::Thread("m0".into()),
         ..anchor
     };
-    assert_eq!(plan_window(&around, Some(&elsewhere), &spans), None);
+    assert_eq!(plan_window(&around, Some(&elsewhere), &spans, 0), None);
     assert_eq!(anchor_root_key(&around, &elsewhere), Some(key("m0")));
 
-    assert_eq!(plan_window(&request(2), None, &[span("10", "20")]), None);
+    assert_eq!(plan_window(&request(2), None, &[span("10", "20")], 0), None);
 }
 
 fn snapshot(
@@ -488,57 +402,7 @@ fn pending_mutations_replace_stored_rows() {
 }
 
 #[test]
-fn coverage_groups_by_scope() {
-    let commit = ChannelTimelineCommit {
-        channel_id: "c1".into(),
-        coverage: vec![
-            ChannelCoverage {
-                thread_root_id: None,
-                span: span("10", "20"),
-            },
-            ChannelCoverage {
-                thread_root_id: Some("m1".into()),
-                span: span(TIMELINE_START, TIMELINE_HEAD),
-            },
-            ChannelCoverage {
-                thread_root_id: None,
-                span: span("30", "40"),
-            },
-        ],
-        ..ChannelTimelineCommit::default()
-    };
-    assert_eq!(
-        commit_coverage_by_scope(&commit),
-        [
-            (
-                TimelineScope::Channel("c1".into()),
-                vec![span("10", "20"), span("30", "40")]
-            ),
-            (
-                TimelineScope::Thread("m1".into()),
-                vec![span(TIMELINE_START, TIMELINE_HEAD)]
-            ),
-        ]
-    );
-}
-
-#[test]
-fn commits_and_results_use_the_host_wire_shape() {
-    let commit: ChannelTimelineCommit = serde_json::from_value(serde_json::json!({
-        "channelId": "c1",
-        "coverage": [{"start": "10", "end": "20"}, {"threadRootId": "m1", "start": "", "end": TIMELINE_HEAD}],
-        "seq": {"kind": "advance", "from": "3", "to": "4"},
-        "touchedAtMs": 5,
-    }))
-    .unwrap();
-    assert_eq!(commit.coverage[1].thread_root_id.as_deref(), Some("m1"));
-    assert_eq!(
-        commit.seq,
-        Some(ChannelSeqUpdate::Advance {
-            from: "3".into(),
-            to: "4".into()
-        })
-    );
+fn results_use_the_host_wire_shape() {
     assert_eq!(
         serde_json::to_value(ChannelTimelineResult {
             covered: true,

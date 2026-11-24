@@ -4,10 +4,10 @@
 //! A run starts when the person runs the suggestion, and settles once:
 //! `finished` (the suggestion is done with what the run made), `failed` (the
 //! suggestion stays accepted, and running it again retries) or `cancelled`
-//! (its suggestion closed while it ran). Until then it is starting, running,
-//! waiting (paused on an approval, a question, or a lost runtime, since a
-//! time) or being stopped. The state is stored on the run, so reading the
-//! feed never asks a session how it is going.
+//! (its suggestion closed while it ran, or the person stopped it). Until then
+//! it is starting, running, waiting (paused on an approval, a question, or a
+//! lost runtime, since a time) or being stopped. The state is stored on the
+//! run, so reading the feed never asks a session how it is going.
 //!
 //! [`RunState::on`] is the whole machine: every (state, event) pair is either
 //! a [`Step`] or a [`Refused`]. A step may carry a [`RunEffect`], which must
@@ -61,8 +61,8 @@ pub enum RunState {
         /// When the stop was asked for.
         since: DateTime<Utc>,
     },
-    /// Its suggestion closed while it ran: it is being stopped and settles
-    /// cancelled.
+    /// Its suggestion closed while it ran, or the person stopped it: it is
+    /// being stopped and settles cancelled.
     Cancelling {
         /// When it was cancelled.
         since: DateTime<Utc>,
@@ -72,7 +72,8 @@ pub enum RunState {
     /// Settled: it stopped without finishing; running the suggestion again
     /// retries.
     Failed,
-    /// Settled: stopped because its suggestion closed.
+    /// Settled: stopped because its suggestion closed or the person stopped
+    /// it.
     Cancelled,
 }
 
@@ -101,13 +102,14 @@ pub enum RunStateName {
     Waiting,
     /// Over its time and being stopped; it settles failed.
     Stopping,
-    /// Its suggestion closed, and it is being stopped; it settles cancelled.
+    /// Its suggestion closed, or the person stopped it, and it is being
+    /// stopped; it settles cancelled.
     Cancelling,
     /// Done: its result is the session and the suggestion's `produced`.
     Finished,
     /// It stopped without finishing; running the suggestion again retries.
     Failed,
-    /// Stopped because its suggestion closed.
+    /// Stopped because its suggestion closed or the person stopped it.
     Cancelled,
 }
 
@@ -289,7 +291,8 @@ pub enum RunEvent {
     StartRefused,
     /// Its session was read, or said something about itself.
     Observed(Observation),
-    /// Its suggestion closed (dismissed, retired or resolved).
+    /// Its suggestion closed (dismissed, retired or resolved), or the person
+    /// stopped it.
     Cancel,
 }
 

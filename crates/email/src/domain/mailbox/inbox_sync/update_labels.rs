@@ -222,7 +222,7 @@ fn label_diff(
 
 /// System labels that never appear in a `thread_labels_updated` event:
 /// INBOX/TRASH/UNREAD/STARRED/SPAM map to dedicated thread-state events, and
-/// IMPORTANT/SENT/DRAFT changes are not published.
+/// IMPORTANT/SENT/DRAFT changes only request the thread's reindex.
 const NON_USER_LABELS: [&str; 8] = [
     service::label::system_labels::INBOX,
     service::label::system_labels::SPAM,
@@ -409,6 +409,15 @@ async fn publish_label_diff_events<L, R, G, Q, E>(
                 removed: removed_user,
                 origin: EmailEventOrigin::ProviderSync,
             },
+        ));
+    }
+
+    // IMPORTANT, SENT, DRAFT and category labels have no event of their own.
+    if events.is_empty() {
+        events.push(EmailMacroEvent::thread_reindex_requested(
+            link.id,
+            link.macro_id.clone(),
+            thread_db_id,
         ));
     }
 

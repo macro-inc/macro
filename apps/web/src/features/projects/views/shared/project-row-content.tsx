@@ -12,7 +12,7 @@ import { startDueEditorFor } from '@property/editors/popover/start-due-editor-fo
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { isDateProperty } from '@property/utils';
-import { formatStartDue, startDueOf } from '@property/utils/start-due';
+import { formatStartDueCompact, startDueOf } from '@property/utils/start-due';
 import { cn } from '@ui/utils/classname';
 import { For, Show } from 'solid-js';
 import { ProjectProgress } from '../../components/project-progress';
@@ -90,14 +90,14 @@ export function ProjectRowColumns(
     ) {
       return undefined;
     }
-    return formatStartDue(startDueOf(startDate(), property));
+    return formatStartDueCompact(startDueOf(startDate(), property));
   };
   const dueDatesEditor = startDueEditorFor({
     field: 'due',
     enabled: startDateEnabled,
     other: startDate,
     saveOther: (property, value) =>
-      context.saveHandler.saveProperty(property, { valueType: 'DATE', value }),
+      context.saveHandler.saveProperty(property, value),
   });
   const updated = () => {
     const date = new Date(props.row.project.updatedAt);

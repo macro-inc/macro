@@ -15,6 +15,7 @@ import {
   useListSearchKeys,
 } from './list-search-keys';
 import { SearchBar } from './SearchBar';
+import type { SearchTextPart } from './search-operator-text';
 import { ViewShell } from './ViewShell';
 
 export function ListHeader(props: {
@@ -62,6 +63,8 @@ export function ListHeaderSearch(props: {
   onOpenChange?: (open: boolean) => void;
   onFocusChange?: (focused: boolean) => void;
   suggestions?: ListSearchSuggestions;
+  /** Marks operators (`in:sent`) in the text, drawn as tokens. */
+  operators?: (value: string) => readonly SearchTextPart[];
   ref?: (element: HTMLDivElement) => void;
 }) {
   const [expanded, setExpandedState] = createSignal(Boolean(props.value));
@@ -159,6 +162,7 @@ export function ListHeaderSearch(props: {
           autocomplete="off"
           aria-controls={props.suggestions?.listId}
           aria-activedescendant={props.suggestions?.activeId?.()}
+          operators={props.operators}
           onClose={close}
           onKeyDown={keys.onKeyDown}
           onFocus={() => props.onFocusChange?.(true)}

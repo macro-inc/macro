@@ -21,9 +21,9 @@ a typed retryable admission error.
 - Depends on: Tokio synchronization/time and tracing only.
 - Used by: message persistence and transaction owners that write message parents.
 - Admission is shared within one process, never across separate processes.
-- `WritePermit::scope` carries admission across caller-owned journal leases;
-  nested same-parent writes serialize on one local slot without reacquiring
-  global admission. Spawned tasks do not inherit this scope.
+- A permit covers one write transaction. Work that spans several writes, such
+  as an agent reply under its journal lease, limits itself under a key of its
+  own and lets each write take the parent's permit.
 
 ## Checks
 

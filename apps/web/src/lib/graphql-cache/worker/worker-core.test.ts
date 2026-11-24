@@ -6,6 +6,8 @@ import {
 } from '../authority-fixture';
 import {
   type CacheRequest,
+  type ChannelChange,
+  type ChannelCommitArgs,
   INITIAL_CACHE_REVISION,
   parseCacheRevision,
 } from '../protocol';
@@ -17,6 +19,7 @@ vi.mock('./wasm-module', () => ({
     const module = await loadCacheWasmMock();
     const wrap = (engine: object) => ({
       currentAuthority: async (identity: string) => testAuthority(identity),
+      onChannelsChanged: async () => undefined,
       ...engine,
     });
     const result = { ...module };
@@ -42,6 +45,31 @@ import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
+  it('pushes the channels a transaction changed to every port', async () => {
+    let report: ((changes: ChannelChange[]) => void) | undefined;
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: async () => ({
+        onChannelsChanged: async (callback: typeof report) => {
+          report = callback;
+        },
+      }),
+    });
+    const ports = [{ postMessage: vi.fn() }, { postMessage: vi.fn() }];
+    const core = new CacheWorkerCore();
+    for (const port of ports) core.addPort(port);
+    await core.handleRequest(ports[0], {
+      id: 1,
+      kind: 'init',
+      scope: 'profile',
+    });
+    const changes: ChannelChange[] = [{ channelId: 'c1', kind: 'changed' }];
+    report?.(changes);
+    for (const port of ports)
+      expect(port.postMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ kind: 'channels-changed', changes })
+      );
+  });
+
   it('uses the owner stamp for warm reads and refreshes it after a clear', async () => {
     let generation = TEST_AUTHORITY_GENERATION;
     const currentAuthority = vi.fn(async (identity: string) => ({
@@ -1167,7 +1195,7 @@ describe('CacheWorkerCore', () => {
             ...write,
             revision: '2',
             changed: ['GraphqlChannelMessage:m1'],
-            channelSeq: '9',
+            channel: { channelId: 'c1', seq: '9', outcome: 'applied' as const },
           };
         }),
         channelTimelineEvict: vi.fn(async () => {
@@ -1218,7 +1246,8 @@ describe('CacheWorkerCore', () => {
       commit: {
         channelId: 'c1',
         coverage: [{ start: 'k1', end: '\u{10FFFF}' }],
-        seq: { kind: 'lower', seq: '9' },
+        seq: '9',
+        watermark: { kind: 'lower' },
       },
     });
     const read = core.handleRequest(port, {
@@ -1245,7 +1274,7 @@ describe('CacheWorkerCore', () => {
         kind: 'committed',
         revision: '2',
         changed: ['GraphqlChannelMessage:m1'],
-        channelSeq: '9',
+        channel: { channelId: 'c1', seq: '9', outcome: 'applied' },
       },
     });
     expect(messages).toContainEqual({
@@ -3247,6 +3276,56 @@ describe('CacheWorkerCore', () => {
     );
   });
 
+  it.each(['write', 'hydrate'] as const)(
+    'stores a channel commit with the %s it describes and answers what it did',
+    async (kind) => {
+      const channel = { channelId: 'c1', seq: '9', outcome: 'applied' };
+      const answer = {
+        revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        channel,
+      };
+      const writeQuery = vi.fn().mockResolvedValue(answer);
+      const hydrateQuery = vi.fn().mockResolvedValue(answer);
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ writeQuery, hydrateQuery }),
+      });
+      const port = { postMessage: vi.fn() };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      const channelCommit: ChannelCommitArgs = {
+        channelId: 'c1',
+        seq: '9',
+        watermark: { kind: 'lower' },
+      };
+      await core.handleRequest(port, {
+        generation: TEST_AUTHORITY_GENERATION,
+        id: 2,
+        kind,
+        query: '{ user { id } }',
+        data: {},
+        channelCommit,
+      });
+
+      const engineArgs = (kind === 'write' ? writeQuery : hydrateQuery).mock
+        .calls[0];
+      expect(
+        kind === 'write' ? engineArgs?.[0]?.channelCommit : engineArgs?.at(-1)
+      ).toEqual(channelCommit);
+      expect(port.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 2,
+          ok: true,
+          result: expect.objectContaining({ channel }),
+        })
+      );
+    }
+  );
+
   it('forwards a guarded hydration and publishes nothing on scope rejection', async () => {
     const hydrateQuery = vi
       .fn()
@@ -3278,7 +3357,8 @@ describe('CacheWorkerCore', () => {
       undefined,
       {},
       'viewer',
-      scope
+      scope,
+      undefined
     );
     expect(port.postMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'cache-hydrated' })
@@ -3393,6 +3473,53 @@ describe('CacheWorkerCore', () => {
       expect.objectContaining({
         name: 'graphql_cache.schema_init',
         openOutcome: 'reset-corrupt',
+      })
+    );
+  });
+
+  it('records what bringing the opened records to the schema did', async () => {
+    const observations: Array<Record<string, unknown>> = [];
+    loadCacheWasmMock.mockResolvedValue({
+      openCacheWithOutcome: vi.fn().mockResolvedValue({
+        engine: {
+          queueDiagnostics: vi.fn().mockResolvedValue({
+            availability: 'available',
+            depth: '0',
+            oldestCreatedAtMs: null,
+          }),
+        },
+        outcome: 'opened-existing',
+        schemaChange: {
+          change: 'types',
+          changedTypes: 2,
+          droppedRecords: 40,
+          incompleteDocuments: 0,
+          retiredOverlays: 1,
+          adoptMs: 12.5,
+        },
+      }),
+    });
+    const core = new CacheWorkerCore({
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.schema_init',
+        openOutcome: 'opened-existing',
+        schemaChange: 'types',
+        schemaChangedTypes: 2,
+        schemaDroppedRecords: 40,
+        schemaIncompleteDocuments: 0,
+        schemaRetiredOverlays: 1,
+        schemaAdoptMs: 12.5,
       })
     );
   });

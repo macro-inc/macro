@@ -247,10 +247,14 @@ tools — hexagonal, heavily feature-gated.
 - Focus's `decide` and `signals` are versioned: bump `FOCUS_RULE_VERSION` in
   `domain/focus/rule.rs` when either changes, or stored rows keep the old verdict
   until new mail arrives. The worker's sweep re-decides older rows from their
-  stored `scores`, without calling Jev. `rule/experiment.csv` holds the expected
-  verdicts for 643 real threads; report how far a rule change moves them. A new
-  question's answer is `#[serde(default)]`, so stored `scores` still decode, and
-  needs no bump when it decides nothing at 0.
+  stored `scores`, without calling Jev. `FocusClassifier::answer` takes a
+  `ClassifierLane`: `classify_thread` (new mail) asks on `Live`, the backfill
+  and the sweep on `Background`, so the worker can hold background calls to
+  its TypeSafe token budget while live mail never waits.
+  `rule/experiment.csv` holds the expected verdicts for 643 real threads;
+  report how far a rule change moves them. A new question's answer is
+  `#[serde(default)]`, so stored `scores` still decode, and needs no bump when
+  it decides nothing at 0.
 - Nothing reclassifies a Focus thread as it ages, so `focus_pg` applies who wrote
   last, the wait, the due day, the calendar hold and the meeting being over when it
   reads: the owner's latest message takes a thread out, and only `awaiting_reply`
@@ -292,10 +296,15 @@ tools — hexagonal, heavily feature-gated.
   `syncing_inboxes` inbox, so a person who joins is found without mail, and
   `backfill` fills one inbox several threads at a time. The sweep goes inbox by
   inbox (`inboxes_with_focus` plus those seen enrolled) and leaves an inbox being
-  backfilled to the backfill, so no thread is classified twice at once; `stale_threads` reads one
+  backfilled to the backfill, so no thread is classified twice at once. An inbox
+  whose threads can't be read counts in `inboxes_failed` and the sweep goes on
+  to the next, so one slow inbox can't stop the sweep for all. `stale_threads` reads one
   inbox through its latest-inbound and latest-outbound indexes; keep its
   `OFFSET 0` fence, or the per-thread calendar and contact checks run on every
-  thread in the window.
+  thread in the window. It reads the owner's recent contacts once, from their
+  sent mail, and checks each thread's senders against that set: through
+  `email_message_recipients.contact_id` a list address, both the sender and a
+  recipient of all its mail, costs every thread the list's whole history.
 - A Focus thread's days (`due_on` and the day of the meeting it is about) are read
   in one call when new mail is classified, only for a thread
   with `is_focus` or `awaiting_reply`, never for a thread the backfill's second pass
@@ -439,7 +448,11 @@ tools — hexagonal, heavily feature-gated.
   fails is skipped. Subjects are cut to 200 characters and snippets to the
   caller's `snippet_chars` (the provider's 300 by default, at most 500, past
   the preview taken from the body) there, not in the adapters; each message
-  carries its label names.
+  carries its label names. `read_window` uses `WindowRead::folder` to read
+  the inbox (the default) or Sent from each mailbox over the last `days`
+  (at most 30). It keeps the newest `limit` messages across mailboxes (at
+  most 500) dated since the window's start, with snippets on only the newest
+  `texts`. The `email.recent_inbox` span records the folder.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
@@ -460,6 +473,17 @@ tools — hexagonal, heavily feature-gated.
 - Forwarded attachments register through `domain/draft_attachments.rs` and resolve
   bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
   source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.
+- Search indexes each message's label names, so any write that changes a
+  message's stored labels, or a label's name, must ask for its reindex: the
+  event of the change when it has one (`thread_labels_updated`,
+  `thread_read`, …), else `EmailMacroEvent::thread_reindex_requested`, as a
+  re-sync that changed labels (`upsert_message`) and a diff of only
+  IMPORTANT, SENT, DRAFT or category labels do. A rename (`sync_labels`)
+  queues its label's threads on the search event queue
+  (`ThreadReindexQueue`), the bulk lane backfills use, so a big label can't
+  delay new mail's events. It queues before it stores the name, and keeps the
+  old name when queueing fails, so the next sync finds the rename again: a
+  failed reindex must not stop a mailbox's sync. Label deletes ask for none.
 - A send with files staged before delivery goes through
   `StagedAttachmentSender` (`domain/service/attachments.rs`): draft, staged
   attachment rows, then the send. `DraftAttachmentSender` adds Macro documents

@@ -227,6 +227,9 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
             ...baseProperty,
             valueType: 'DATE',
             value: new Date(dateVal),
+            ...('has_time' in propertyValue && propertyValue.has_time
+              ? { hasTime: true }
+              : {}),
           };
         }
       }

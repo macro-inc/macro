@@ -1220,7 +1220,15 @@ export function createMutationQueueRunner(
         );
         if (!transition(attempt, forgetConfirmed)) return detachedResult();
         settled = true;
-        for (const error of committed.identityErrors ?? []) {
+        const cacheErrors = [...(committed.identityErrors ?? [])];
+        if (committed.unwritableResponse !== undefined)
+          cacheErrors.push(committed.unwritableResponse);
+        // The response's effects apply only when its content was written, under
+        // the cache session it was read in.
+        const applies =
+          committed.unwritableResponse === undefined &&
+          cacheSessionGeneration.isCurrent(snapshotGeneration);
+        for (const error of cacheErrors) {
           try {
             options.onCacheError?.(new Error(error), op);
           } catch {
@@ -1258,8 +1266,7 @@ export function createMutationQueueRunner(
           replacementTransactionId = committed.replacementTransactionId;
           disposition = 'superseded';
           outcome = 'superseded';
-          if (cacheSessionGeneration.isCurrent(snapshotGeneration))
-            await deps.deleteReportedRecords(result);
+          if (applies) await deps.deleteReportedRecords(result);
           else
             await deps.revalidate(
               committed.revalidations ?? [],
@@ -1270,7 +1277,7 @@ export function createMutationQueueRunner(
         } else {
           disposition = 'committed';
           outcome = 'committed';
-          if (!cacheSessionGeneration.isCurrent(snapshotGeneration)) {
+          if (!applies) {
             await deps.revalidate(
               committed.revalidations ?? [],
               op,

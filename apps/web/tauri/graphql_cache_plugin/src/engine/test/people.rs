@@ -39,7 +39,7 @@ fn native_person_policy_preserves_scope_and_publication() {
             "{ user { id contacts(limit: 1) { nodes { __typename id userId name email } nextCursor } } }".into(),
             None, Variables::new(),
             serde_json::json!({"user":{"id":viewer,"contacts":{"nodes":[{"__typename":"GraphqlContact","id":contact,"userId":user,"name":"Private label","email":"person@example.com"}],"nextCursor":null}}}),
-            Some(viewer.into()), Some(scope.clone()),
+            Some(viewer.into()), Some(scope.clone()), None
         ).await.unwrap();
         let sql = cache_core::people::sql::PeopleSqlRequest {
             scope: scope.clone(),

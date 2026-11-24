@@ -15,8 +15,12 @@ pub trait MessageReader: Send + Sync + 'static {
         channel_id: Uuid,
         after: i64,
     ) -> Result<ChannelChanges, MessageError>;
-    /// Read the channel counter for a page watermark; grants no data access.
-    async fn channel_seq(&self, channel_id: Uuid) -> Result<i64, MessageError>;
+    /// Read the channel counter for a page watermark, under view access.
+    async fn channel_seq(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        channel_id: Uuid,
+    ) -> Result<i64, MessageError>;
     /// Read an individual message under its parent's view permission.
     async fn get(
         &self,
@@ -29,6 +33,12 @@ pub trait MessageReader: Send + Sync + 'static {
         access: EntityAccessReceipt<MessageView>,
         root: Uuid,
     ) -> Result<MessageThread, MessageError>;
+    /// Read one message in a single pass: a reply alone, a root as a timeline shows it.
+    async fn get_entry(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        id: Uuid,
+    ) -> Result<MessageRead, MessageError>;
     /// Read a root with its bounded preview and call state under parent access.
     async fn get_root(
         &self,
@@ -200,8 +210,12 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageReader for MessageSe
     ) -> Result<ChannelChanges, MessageError> {
         MessageService::channel_changes(self, access, channel_id, after).await
     }
-    async fn channel_seq(&self, channel_id: Uuid) -> Result<i64, MessageError> {
-        MessageService::channel_seq(self, channel_id).await
+    async fn channel_seq(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        channel_id: Uuid,
+    ) -> Result<i64, MessageError> {
+        MessageService::channel_seq(self, access, channel_id).await
     }
     async fn get(
         &self,
@@ -216,6 +230,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageReader for MessageSe
         root: Uuid,
     ) -> Result<MessageThread, MessageError> {
         MessageService::get_thread(self, access, root).await
+    }
+    async fn get_entry(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        id: Uuid,
+    ) -> Result<MessageRead, MessageError> {
+        MessageService::get_entry(self, access, id).await
     }
     async fn get_root(
         &self,
@@ -399,8 +420,12 @@ mockall::mock! {
         channel_id: Uuid,
         after: i64,
     ) -> Result<ChannelChanges, MessageError>;
-    /// Read the channel counter for a page watermark; grants no data access.
-    async fn channel_seq(&self, channel_id: Uuid) -> Result<i64, MessageError>;
+    /// Read the channel counter for a page watermark, under view access.
+    async fn channel_seq(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        channel_id: Uuid,
+    ) -> Result<i64, MessageError>;
     /// Read an individual message under its parent's view permission.
     async fn get(
         &self,
@@ -413,6 +438,12 @@ mockall::mock! {
         access: EntityAccessReceipt<MessageView>,
         root: Uuid,
     ) -> Result<MessageThread, MessageError>;
+    /// Read one message in a single pass: a reply alone, a root as a timeline shows it.
+    async fn get_entry(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        id: Uuid,
+    ) -> Result<MessageRead, MessageError>;
     /// Read a root with its bounded preview and call state under parent access.
     async fn get_root(
         &self,

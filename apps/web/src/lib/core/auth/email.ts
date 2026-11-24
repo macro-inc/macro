@@ -1,4 +1,5 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
+import { appendMetaClickIds } from '@app/lib/analytics/metaClickIds';
 import { SERVER_HOSTS } from '@core/constant/servers';
 
 export const GOOGLE_GMAIL_IDP = 'google_gmail';
@@ -22,6 +23,7 @@ export function emailAuthUrl(params: EmailAuthParams) {
     'referral_code'
   );
   if (referral_code) url.searchParams.set('referral_code', referral_code);
+  appendMetaClickIds(url);
   return url.toString();
 }
 

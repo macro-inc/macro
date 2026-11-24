@@ -11,7 +11,9 @@
 //! engine without collisions; they're interned to the engine's `u64` ids
 //! internally — the same scheme as the `cache-wasm` shell.
 
+use cache_core::channel_timeline::{ChannelCommitOutcome, ChannelTimelineCommit};
 use cache_core::deps::OpId;
+use cache_core::engine::channel_changes::ChannelListener;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
     HydrationScope, HydrationWriteResult, InitialClaimOutcome, NetworkWrite, NormalizedResponse,
@@ -45,9 +47,7 @@ mod channel_timeline;
 mod people;
 mod soup;
 pub use calendar::CalendarRangeResultWire;
-pub use channel_timeline::{
-    ChannelCommitResultWire, ChannelEvictionResultWire, ChannelTimelineResultWire,
-};
+pub use channel_timeline::{ChannelEvictionResultWire, ChannelTimelineResultWire};
 pub use soup::{
     EntityFilterRequest, EntityFilterResult, LiveQueryResult, PredicateBaselineEntry,
     PredicateFilterResult,
@@ -76,9 +76,13 @@ pub struct WriteResultWire {
     /// Effective scalar patches; absent when a query reread is required.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
-    /// Bindings omitted while preserving a normalizable server response.
+    /// Bindings omitted while preserving a server response.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub identity_errors: Vec<String>,
+    /// Why a confirmed response's content was not written; nothing is
+    /// applied from that response.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unwritable_response: Option<String>,
     /// Effective-view revision installed by this logical mutation.
     pub revision: String,
     /// Whether this write advanced `revision`.
@@ -98,6 +102,10 @@ pub struct WriteResultWire {
     /// Stable caller identity on settlement.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mutation_uuid: Option<String>,
+    /// What the write's channel commit did; absent without one, or when the
+    /// response reset the account it belongs to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel: Option<ChannelCommitOutcome>,
 }
 
 /// Internal hydration result used to fan out changes before returning only
@@ -399,6 +407,8 @@ pub struct WriteRequest {
     pub data: serde_json::Value,
     /// Opaque identity witness.
     pub identity: Option<String>,
+    /// What the response proves about a channel, committed with it.
+    pub channel_commit: Option<ChannelTimelineCommit>,
 }
 
 struct EngineState {
@@ -453,6 +463,7 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
         unchanged_views: None,
         field_changes: result.field_changes,
         identity_errors: result.identity_errors,
+        unwritable_response: result.unwritable_response,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
         search_changed_buckets: result.search_changed_buckets,
@@ -465,6 +476,7 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
         reset: result.reset,
         revalidations: result.revalidations,
         mutation_uuid: result.mutation_uuid,
+        channel: result.channel,
     }
 }
 
@@ -494,14 +506,36 @@ impl EngineHandle {
         hot_capacity: Option<u32>,
         schema: Arc<cache_core::meta::Schema>,
     ) -> Self {
-        let engine = Engine::with_schema(
+        Self::over(Self::engine(storage, hot_capacity, schema))
+    }
+
+    /// [`Self::with_schema`], telling `listener` of every channel a
+    /// transaction changes.
+    pub fn with_channel_listener(
+        storage: TursoStorage,
+        hot_capacity: Option<u32>,
+        schema: Arc<cache_core::meta::Schema>,
+        listener: impl ChannelListener + 'static,
+    ) -> Self {
+        Self::over(Self::engine(storage, hot_capacity, schema).with_channel_listener(listener))
+    }
+
+    fn engine(
+        storage: TursoStorage,
+        hot_capacity: Option<u32>,
+        schema: Arc<cache_core::meta::Schema>,
+    ) -> Engine<TursoStorage> {
+        Engine::with_schema(
             storage,
             hot_capacity
                 .filter(|c| *c > 0)
                 .map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
             schema,
         )
-        .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners);
+        .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners)
+    }
+
+    fn over(engine: Engine<TursoStorage>) -> Self {
         let inner = Arc::new(EngineAccess::new(EngineState {
             engine,
             ops: OpInterner::default(),
@@ -556,19 +590,22 @@ impl EngineHandle {
             .map_err(|error| error.to_string())
     }
 
-    /// Validates and persists compatible metadata before publishing it to native operations.
-    pub async fn install_schema(
-        &self,
-        schema: &cache_core::meta::Schema,
-        path: &std::path::Path,
-    ) -> Result<(), String> {
+    /// Merges `schema`, a webview's build, into the engine's and records the
+    /// result in storage before native operations use it. A build that
+    /// changes the shape of a type the engine knows is refused, and nothing
+    /// changes.
+    pub async fn install_schema(&self, schema: &cache_core::meta::Schema) -> Result<(), String> {
         let mut state = self.inner.lock().await;
         let merged = state
             .engine
             .schema()
             .merge(schema)
             .map_err(|e| e.to_string())?;
-        persist_schema(path, &merged)?;
+        state
+            .engine
+            .storage()
+            .record_schema(&merged, schema)
+            .map_err(|e| e.to_string())?;
         state
             .engine
             .install_schema(&merged)
@@ -758,6 +795,7 @@ impl EngineHandle {
             variables,
             data,
             identity,
+            channel_commit,
         } = request;
         let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
@@ -772,6 +810,7 @@ impl EngineHandle {
             variables: &variables,
             data: &data,
             identity: identity.as_deref(),
+            channel: channel_commit.as_ref(),
         };
         let registration =
             registration
@@ -819,6 +858,10 @@ impl EngineHandle {
 
     /// Stores a query response and returns only fields not marked
     /// `@cacheOnly`.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the hydrate commands' fields, which have no other owner"
+    )]
     #[tracing::instrument(name = "graphql_cache.native.hydrate_query", skip_all, err)]
     pub async fn hydrate_query(
         &self,
@@ -828,6 +871,7 @@ impl EngineHandle {
         data: serde_json::Value,
         identity: Option<String>,
         hydration_scope: Option<HydrationScope>,
+        channel_commit: Option<ChannelTimelineCommit>,
     ) -> Result<HydrationWriteResultWire, String> {
         let write = NetworkWrite {
             query: &query,
@@ -835,6 +879,7 @@ impl EngineHandle {
             variables: &variables,
             data: &data,
             identity: identity.as_deref(),
+            channel: channel_commit.as_ref(),
         };
         let mut state = self.snapshot_hydration().await?;
         // One normalization serves the projection passes and the write, as in
@@ -962,14 +1007,7 @@ impl EngineHandle {
             }
             (None, None) => {
                 engine
-                    .hydrate_query_with_projections(
-                        &query,
-                        operation_name.as_deref(),
-                        &variables,
-                        &data,
-                        identity.as_deref(),
-                        projections,
-                    )
+                    .hydrate_query_with_projections(write, projections)
                     .await
             }
         }
@@ -1202,7 +1240,7 @@ impl EngineHandle {
             .await
             .map_err(|error| error.to_string())?;
         let projections = if admitted {
-            soup::write_projections(
+            match soup::write_projections(
                 engine,
                 &query,
                 operation_name.as_deref(),
@@ -1211,7 +1249,27 @@ impl EngineHandle {
                 None,
                 None,
             )
-            .await?
+            .await
+            {
+                Ok(projections) => projections,
+                // The engine settles a response that does not normalize
+                // without its content, so nothing is projected from it.
+                Err(error) => {
+                    let schema = engine.schema_snapshot();
+                    let response = soup::write_response(
+                        &schema,
+                        &query,
+                        operation_name.as_deref(),
+                        &variables,
+                        &data,
+                        None,
+                    );
+                    if response.normalizes() {
+                        return Err(error);
+                    }
+                    Vec::new()
+                }
+            }
         } else {
             Vec::new()
         };
@@ -1225,6 +1283,7 @@ impl EngineHandle {
                     variables: &variables,
                     data: &data,
                     identity: None,
+                    channel: None,
                 },
                 projections,
                 self.generation,
@@ -1349,25 +1408,3 @@ impl EngineHandle {
 
 #[cfg(test)]
 mod test;
-
-/// Atomically persists metadata separately from user records; no database reset occurs.
-pub(crate) fn persist_schema(
-    path: &std::path::Path,
-    schema: &cache_core::meta::Schema,
-) -> Result<(), String> {
-    let bytes = serde_json::to_vec(schema.artifact()).map_err(|e| e.to_string())?;
-    let temporary = path.with_extension("json.tmp");
-    use std::io::Write;
-    let mut file = std::fs::File::create(&temporary).map_err(|e| e.to_string())?;
-    file.write_all(&bytes).map_err(|e| e.to_string())?;
-    file.sync_all().map_err(|e| e.to_string())?;
-    drop(file);
-    std::fs::rename(&temporary, path).map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    if let Some(parent) = path.parent() {
-        std::fs::File::open(parent)
-            .and_then(|dir| dir.sync_all())
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}

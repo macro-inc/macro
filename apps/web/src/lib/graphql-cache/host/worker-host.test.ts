@@ -1584,6 +1584,36 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('delivers each changed channel to every subscriber left', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const first = vi.fn();
+    const second = vi.fn();
+    const affected = vi.fn();
+    const stop = host.onChannelChanged(first);
+    host.onChannelChanged(second);
+    host.onOpsAffected(affected);
+    await host.clear();
+
+    const adapter = requireAdapter();
+    const changes = [
+      { channelId: 'c1', kind: 'changed' as const },
+      { channelId: 'c2', kind: 'evicted' as const },
+    ];
+    adapter.push({ kind: 'channels-changed', changes });
+    expect(first.mock.calls).toEqual(changes.map((change) => [change]));
+    expect(second.mock.calls).toEqual(first.mock.calls);
+
+    stop();
+    adapter.push({
+      kind: 'channels-changed',
+      changes: [{ channelId: 'c1', kind: 'reset' }],
+    });
+    expect(first).toHaveBeenCalledTimes(2);
+    expect(second).toHaveBeenLastCalledWith({ channelId: 'c1', kind: 'reset' });
+    expect(affected).not.toHaveBeenCalled();
+    host.dispose();
+  });
+
   it('reports initialization failure once, settles callers, and closes transport', async () => {
     vi.useFakeTimers();
     configureAdapter = (fake) => {

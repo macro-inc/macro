@@ -21,9 +21,10 @@ import type {
   CalendarCommitCacheResult,
   CalendarRangeCacheArgs,
   CalendarRangeCacheResult,
+  ChannelChange,
+  ChannelCommitArgs,
   ChannelTimelineCacheArgs,
   ChannelTimelineCacheResult,
-  ChannelTimelineCommitArgs,
   ChannelTimelineCommitCacheResult,
   ChannelTimelineEvictArgs,
   ChannelTimelineEvictCacheResult,
@@ -92,6 +93,8 @@ export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   registerDependencies?: boolean;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
+  /** What the response proves about a channel; stored in its transaction. */
+  channelCommit?: ChannelCommitArgs;
 }
 
 export interface CacheHydrateArgs extends Omit<CacheWriteArgs, 'opKey'> {
@@ -99,7 +102,8 @@ export interface CacheHydrateArgs extends Omit<CacheWriteArgs, 'opKey'> {
   hydrationScope?: HydrationScope;
 }
 
-export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
+export interface EnqueueOptimisticMutationArgs
+  extends Omit<CacheWriteArgs, 'channelCommit'> {
   /** Caller-supplied RFC UUID used for explicit safe coalescing. */
   uuid: string;
   /** Opaque durable client correlation; never included in GraphQL variables. */
@@ -193,9 +197,9 @@ export interface CacheHost {
   channelTimeline(
     args: ChannelTimelineCacheArgs
   ): Promise<ChannelTimelineCacheResult>;
-  /** Atomically applies channel coverage, deletions, and the change sequence. */
+  /** Applies a channel commit that comes with no response. */
   channelTimelineCommit(
-    args: ChannelTimelineCommitArgs,
+    args: ChannelCommitArgs,
     generation: string
   ): Promise<ChannelTimelineCommitCacheResult>;
   /** Removes the channels opened longest ago with their cached messages. */
@@ -243,7 +247,7 @@ export interface CacheHost {
   commitOptimisticWrite(
     transactionId: string,
     claim: MutationClaim,
-    args: CacheWriteArgs
+    args: Omit<CacheWriteArgs, 'channelCommit'>
   ): Promise<CommitOptimisticWriteResult>;
   /** Permanently fails a claimed mutation and drops its optimistic layer. */
   rollbackOptimisticWrite(
@@ -283,6 +287,12 @@ export interface CacheHost {
   onCacheGenerationChanged(
     cb: (change: CacheGenerationChange) => void
   ): () => void;
+
+  /** Reports, in every tab, each channel whose timeline a stored transaction
+   * changed: a commit, a stamped write, an eviction, a reset, or an optimistic
+   * write queued, settled or rolled back. Clearing the cache is reported by
+   * onCacheGenerationChanged instead. */
+  onChannelChanged(cb: (change: ChannelChange) => void): () => void;
 
   /** Subscribes to final commit, rollback, or supersession events. */
   onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;

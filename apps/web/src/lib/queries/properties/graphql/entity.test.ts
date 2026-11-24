@@ -132,6 +132,7 @@ describe('buildEntityPropertiesInput', () => {
     ['CHANNEL', 'CHANNEL'],
     ['CALL_RECORD', 'CALL'],
     ['COMPANY', 'CRM_COMPANY'],
+    ['CONTACT', 'CRM_CONTACT'],
     ['CALENDAR_EVENT', 'CALENDAR_EVENT'],
     ['DATABASE_ROW', 'DATABASE_ROW'],
   ] as const)('reads one %s as a %s Soup entity', (entityType, soupType) => {
@@ -141,14 +142,9 @@ describe('buildEntityPropertiesInput', () => {
     });
   });
 
-  it.each(['USER', 'CONTACT'] as const)(
-    'returns undefined for %s, which carries no Soup properties',
-    (entityType) => {
-      expect(
-        buildEntityPropertiesInput(entityType, 'entity-1')
-      ).toBeUndefined();
-    }
-  );
+  it('returns undefined for USER, which carries no Soup properties', () => {
+    expect(buildEntityPropertiesInput('USER', 'entity-1')).toBeUndefined();
+  });
 
   it('loads nothing for an entity type a newer service added', () => {
     const fromNewerService = JSON.parse('"AGENT_SESSION"');

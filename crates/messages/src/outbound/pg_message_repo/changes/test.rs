@@ -132,3 +132,31 @@ fn command(channel: Uuid, thread_id: Option<Uuid>) -> CreateMessage {
         },
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_second_pruner_leaves_the_log_to_the_one_already_running(pool: PgPool) {
+    let channel = Uuid::from_u128(30);
+    let now = Utc::now();
+    sqlx::query!(
+        "INSERT INTO channel_change_log(channel_id, seq, kind, message_id, created_at)
+         SELECT $1, n, 1, $2, $3 FROM generate_series(1, 4) n",
+        channel,
+        Uuid::from_u128(1),
+        now - chrono::Duration::days(31),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut running = pool.begin().await.unwrap();
+    assert!(
+        channel_change_db_utils::try_lock_prune_in(&mut running)
+            .await
+            .unwrap()
+    );
+    let repo = PgMessageRepository::new(pool.clone());
+
+    assert_eq!(repo.prune_channel_change_log(now, 10).await.unwrap(), 0);
+
+    running.rollback().await.unwrap();
+    assert_eq!(repo.prune_channel_change_log(now, 10).await.unwrap(), 4);
+}

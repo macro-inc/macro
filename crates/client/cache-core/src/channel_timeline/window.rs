@@ -15,8 +15,7 @@ pub struct WindowPlan {
     /// The anchor: older rows lie in `[span.start, position)`, newer rows in
     /// `(position, span.end]`.
     pub position: String,
-    /// Rows to read on each side: one more than the page size, so the page
-    /// knows whether the stretch continues.
+    /// Rows to read on each side; see [`read_limit`].
     pub read_limit: usize,
     /// Whether the page needs rows older than the anchor.
     pub read_older: bool,
@@ -38,14 +37,23 @@ pub fn anchor_root_key(
     }
 }
 
+/// Rows to read on each side of a window: one more than the page size, so the
+/// page knows whether the stretch continues, and one for each of the `pending`
+/// entries an optimistic mutation may take out of the rows read.
+pub fn read_limit(request: &ChannelTimelineRequest, pending: usize) -> usize {
+    usize::from(request.limit) + 1 + pending
+}
+
 /// Decides which stored rows answer `request`, given the resolved anchor row
 /// of an `around` read and the fetched stretches of the request's scope.
+/// `pending` counts the entries of the overlay the page is composed with.
 /// `None` means the cache cannot answer: the anchor is unknown, hidden, in
 /// another list, or outside everything fetched.
 pub fn plan_window(
     request: &ChannelTimelineRequest,
     anchor: Option<&ChannelTimelineRow>,
     spans: &[TimelineSpan],
+    pending: usize,
 ) -> Option<WindowPlan> {
     let (position, read_older, read_newer) = match (&request.before, &request.after) {
         (Some(before), _) => (before.clone(), true, false),
@@ -60,7 +68,7 @@ pub fn plan_window(
     Some(WindowPlan {
         span,
         position,
-        read_limit: usize::from(request.limit) + 1,
+        read_limit: read_limit(request, pending),
         read_older,
         read_newer,
     })
@@ -71,6 +79,8 @@ pub fn plan_window(
 /// `overlay` maps every message touched by a pending optimistic mutation to
 /// its composed row (`None` when the composed record is not a timeline
 /// entry); those replace the stored rows of the same keys.
+/// The snapshot was read with one spare row for each of them, so what is left
+/// of it still says whether the stretch continues.
 pub fn compose_channel_window(
     request: &ChannelTimelineRequest,
     snapshot: ChannelTimelineSnapshot,
@@ -111,17 +121,16 @@ pub fn compose_channel_window(
         (None, None, None) => TIMELINE_HEAD.to_owned(),
     };
 
-    let older_truncated = snapshot.older.len() > limit;
-    let newer_truncated = snapshot.newer.len() > limit;
     let mut older = snapshot.older;
     let mut newer = snapshot.newer;
     if !overlay.is_empty() {
         // An overlay row beyond the last stored row read belongs to a later page.
-        let older_floor = older_truncated
+        let full = read_limit(request, overlay.len());
+        let older_floor = (older.len() >= full)
             .then(|| older.last().map(|row| row.sort_key.clone()))
             .flatten()
             .unwrap_or_else(|| span.start.clone());
-        let newer_ceiling = newer_truncated
+        let newer_ceiling = (newer.len() >= full)
             .then(|| newer.last().map(|row| row.sort_key.clone()))
             .flatten()
             .unwrap_or_else(|| span.end.clone());
@@ -155,8 +164,8 @@ pub fn compose_channel_window(
     } else {
         (limit, 0)
     };
-    let more_older = older_truncated || older.len() > older_limit;
-    let more_newer = newer_truncated || newer.len() > newer_limit;
+    let more_older = older.len() > older_limit;
+    let more_newer = newer.len() > newer_limit;
     older.truncate(older_limit);
     newer.truncate(newer_limit);
 

@@ -54,26 +54,28 @@ impl<R: Runtime> SystemInfo<R> {
 
 /// Return persistent storage for downloaded bundles and their markers.
 ///
-/// iOS deliberately ignores the legacy cache contents. Startup falls back to
-/// the embedded bundle and downloads the current bundle into Application
-/// Support instead. Other platforms retain their existing cache location.
+/// The mobile operating systems delete cache files when storage runs low, which
+/// can take some of a bundle's files and leave the rest, so iOS and Android keep
+/// bundles in app data instead. Both ignore the legacy cache contents: startup
+/// falls back to the embedded bundle and downloads the current bundle into the
+/// new location. Desktop platforms retain their existing cache location.
 pub(crate) fn bundle_storage_dir<R: Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<std::path::PathBuf, std::io::Error> {
-    #[cfg(target_os = "ios")]
+    #[cfg(any(target_os = "ios", target_os = "android"))]
     let path = app
         .path()
         .app_data_dir()
         .map(|dir| dir.join("bundle-updates"));
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     let path = app.path().app_cache_dir();
 
     let path = path.map_err(|error| std::io::Error::new(std::io::ErrorKind::NotFound, error))?;
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    std::fs::create_dir_all(&path)?;
+    // Android app backups are turned off in the manifest's backup rules.
     #[cfg(target_os = "ios")]
-    {
-        std::fs::create_dir_all(&path)?;
-        exclude_from_backup(&path)?;
-    }
+    exclude_from_backup(&path)?;
     Ok(path)
 }
 

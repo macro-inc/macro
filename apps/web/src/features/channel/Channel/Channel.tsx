@@ -1371,6 +1371,9 @@ export function Channel(props: ChannelProps) {
                                     .reply_count ?? 0) > 0
                                 }
                                 plain={isDefaultCallThread()}
+                                // A call's thread stays as the call chat
+                                // was: dictation only.
+                                voiceMemos={!isDefaultCallThread()}
                                 placeholder={
                                   isDefaultCallThread()
                                     ? t('calls.messageThisCall')
@@ -1402,6 +1405,7 @@ export function Channel(props: ChannelProps) {
                                 autofocus={props.autofocus}
                                 onEscape={focusMessageList}
                                 collapsible
+                                features={{ voiceMemos: true }}
                                 input={{
                                   mode: 'channel',
                                   id: `channel-input-${props.channelId}`,

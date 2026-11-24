@@ -4,13 +4,16 @@
 
 pub mod authority;
 mod calendar;
+pub mod channel_changes;
 mod channel_timeline;
+mod channel_write;
 mod hydration;
 mod pass_reads;
 mod people;
 mod retirement;
-pub use channel_timeline::{ChannelCommitResult, ChannelEvictionResult};
+pub use channel_timeline::ChannelEvictionResult;
 mod staged_hydrate;
+use channel_write::{ChannelAdmission, Refused};
 pub use hydration::HydrationScope;
 pub use pass_reads::{PassReadSet, PassReads};
 pub use staged_hydrate::StagedHydrate;
@@ -22,6 +25,7 @@ pub mod watch_query;
 mod window_observation;
 
 use crate::calendar::{CalendarError, EVENT_TYPENAME};
+use crate::channel_timeline::{ChannelCommitOutcome, ChannelStamps, ChannelTimelineCommit};
 use crate::denormalize::{DenormalizeError, ReadOutcome, ReadPlans, ReadSession, RecordSource};
 use crate::deps::{
     DepIndex, OpId, QueryDependencies, ViewerFieldUpdate, ViewerFields, changed_viewer_fields,
@@ -182,6 +186,8 @@ pub struct NetworkWrite<'a> {
     pub data: &'a Json,
     /// Optional opaque session identity witness.
     pub identity: Option<&'a str>,
+    /// What the response proves about a channel, committed with it.
+    pub channel: Option<&'a ChannelTimelineCommit>,
 }
 
 /// A network response normalized before its write, so a host can derive its
@@ -225,8 +231,12 @@ pub struct QueryRegistration<'a> {
 pub struct WriteResult {
     /// Effective scalar changes; absent when consumers must re-read queries.
     pub field_changes: Option<Vec<crate::field_changes::RecordFieldChange>>,
-    /// Identity bindings omitted while committing otherwise normalizable server data.
+    /// Identity bindings omitted while committing server data.
     pub identity_errors: Vec<String>,
+    /// Why a confirmed response's content was not written: it did not
+    /// normalize, so its write settled with only the identities it resolved.
+    /// Hosts apply nothing from that response and revalidate instead.
+    pub unwritable_response: Option<String>,
     /// Revision installed after this logical cache mutation.
     pub revision: CacheRevision,
     /// Whether this write advanced [`Self::revision`].
@@ -247,8 +257,26 @@ pub struct WriteResult {
     pub reset: bool,
     /// Queries that should be revalidated after terminal settlement.
     pub revalidations: Vec<QueryRevalidation>,
+    /// What the write's channel commit did; absent when it had none or an
+    /// account reset replaced it.
+    pub channel: Option<ChannelCommitOutcome>,
     /// Stable caller identity of a settled mutation.
     pub mutation_uuid: Option<String>,
+}
+
+/// The `id` and `__typename` of a server-assigned key, the content a settled
+/// outcome keeps of the record it names.
+fn identity_record(key: &EntityKey<'static>) -> Record {
+    let mut record = Record::default();
+    for (field, value) in [("__typename", key.typename()), ("id", key.id())] {
+        if let Some(value) = value {
+            record.fields.insert(
+                field.into(),
+                crate::value::CacheValue::String(value.to_owned()),
+            );
+        }
+    }
+    record
 }
 
 /// Internal durable deltas; viewer field proof is never sent across host boundaries.
@@ -259,11 +287,26 @@ struct PersistedChanges {
     revision_advanced: bool,
     search_changed_buckets: BTreeSet<String>,
     viewer_fields: ViewerFields,
+    channel: Option<ChannelCommitOutcome>,
+    /// The channels reported changed.
+    channels: channel_changes::ChannelChanges,
+}
+
+/// Records a write would leave, not yet written; `None` deletes one.
+type StagedRecords = BTreeMap<EntityKey<'static>, Option<Record>>;
+
+/// The durable changes of a write, with what they change beneath the
+/// optimistic layers.
+struct ComposedChanges {
+    persisted: PersistedChanges,
+    visible_changed: BTreeSet<EntityKey<'static>>,
 }
 
 /// A merge of normalized updates into stored records, computed but not
 /// written.
 struct PersistPlan {
+    /// The channel half of the write.
+    admission: ChannelAdmission,
     field_changes: Vec<crate::field_changes::RecordFieldChange>,
     changed: BTreeSet<EntityKey<'static>>,
     search_changed_buckets: BTreeSet<String>,
@@ -352,7 +395,7 @@ pub enum DeferOptimisticWriteResult {
     /// The current mutation retained its optimistic layer and retry state.
     Deferred,
     /// The attempt was superseded, so it was discarded instead of retried.
-    DiscardedSuperseded(SupersededMutationResult),
+    DiscardedSuperseded(Box<SupersededMutationResult>),
 }
 
 /// Tagged rollback result used by transport adapters for settlement fanout.
@@ -502,6 +545,7 @@ pub struct Engine<S: Storage> {
     optimistic_hydrated: bool,
     /// What the last projection passes read, for the write that follows.
     kept_reads: Option<pass_reads::KeptReads>,
+    channel_listener: Option<Box<dyn channel_changes::ChannelListener>>,
 }
 
 impl<S: Storage> Engine<S> {
@@ -537,6 +581,7 @@ impl<S: Storage> Engine<S> {
             optimistic: Vec::new(),
             optimistic_hydrated: false,
             kept_reads: None,
+            channel_listener: None,
         }
     }
 
@@ -686,6 +731,7 @@ impl<S: Storage> Engine<S> {
             .collect();
         let affected_ops = self.deps.ops_for_keys(changed.iter());
         let revision = self.advance_revision()?;
+        self.report_channels(channel_changes::composed(&before_all, &after));
         self.live_queries.record(
             revision,
             live_query::Changes {
@@ -696,6 +742,8 @@ impl<S: Storage> Engine<S> {
         Ok(WriteResult {
             field_changes: Some(crate::field_changes::between(&before_all, &after)),
             identity_errors: Vec::new(),
+            unwritable_response: None,
+            channel: None,
             revision,
             revision_advanced: true,
             search_changed_buckets: None,
@@ -720,7 +768,7 @@ impl<S: Storage> Engine<S> {
         queued: Vec<QueuedMutation>,
         strict_tail: Option<MutationId>,
     ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
-        self.rebuild_queued_layers_with_staged(queued, strict_tail, &RecordUpdates::new())
+        self.rebuild_queued_layers_with_staged(queued, strict_tail, &StagedRecords::new())
             .await
     }
 
@@ -730,7 +778,7 @@ impl<S: Storage> Engine<S> {
         &mut self,
         queued: Vec<QueuedMutation>,
         strict_tail: Option<MutationId>,
-        staged: &RecordUpdates,
+        staged: &StagedRecords,
     ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
         let mut layers = Vec::with_capacity(queued.len());
         for queued in queued {
@@ -766,14 +814,18 @@ impl<S: Storage> Engine<S> {
             for projection in &mut source.projection_mutations {
                 identity::remap_projection(projection, &identities);
             }
-            let document = Self::document(&mut self.docs, &queued.mutation.request.query)?;
-            let operation =
-                document.operation(queued.mutation.request.operation_name.as_deref())?;
-            let mut updates = identity::remap_updates(
-                normalize(&self.schema, operation, &variables, &source.mutation_data)?,
-                &source.identity_bindings,
-                &identities,
-            );
+            // A retired overlay adds no records. Its document is not
+            // normalized: it may select a field a later schema removed.
+            let normalized = if crate::schema_change::is_retired(&source) {
+                RecordUpdates::new()
+            } else {
+                let document = Self::document(&mut self.docs, &queued.mutation.request.query)?;
+                let operation =
+                    document.operation(queued.mutation.request.operation_name.as_deref())?;
+                normalize(&self.schema, operation, &variables, &source.mutation_data)?
+            };
+            let mut updates =
+                identity::remap_updates(normalized, &source.identity_bindings, &identities);
             identity::apply_record_lifecycle(&mut updates, &source.identity_bindings, &identities);
             if updates
                 .keys()
@@ -851,7 +903,7 @@ impl<S: Storage> Engine<S> {
     async fn load_identity_bindings(
         &self,
         bindings: &[IdentityBinding],
-        staged: &RecordUpdates,
+        staged: &StagedRecords,
     ) -> Result<IdentityMap, EngineError<S::Error>> {
         let keys = bindings
             .iter()
@@ -873,7 +925,10 @@ impl<S: Storage> Engine<S> {
                 .map_err(EngineError::Storage)?;
             let mut advanced = false;
             for ((target, record), visited) in targets.iter_mut().zip(records).zip(&mut visited) {
-                let record = staged.get(target).or(record.as_ref());
+                let record = match staged.get(target) {
+                    Some(staged) => staged.as_ref(),
+                    None => record.as_ref(),
+                };
                 if let Some(next) = record.and_then(identity::alias_target) {
                     if !visited.insert(next.clone()) {
                         return Err(EngineError::InvalidOptimisticProjection(
@@ -1062,6 +1117,9 @@ impl<S: Storage> Engine<S> {
                         })
                         .collect();
                     if to_fetch.is_empty() {
+                        if session.omit_absent() {
+                            continue;
+                        }
                         // Everything missing is genuinely absent → miss.
                         break ReadResult::Miss;
                     }
@@ -1309,7 +1367,8 @@ impl<S: Storage> Engine<S> {
                 })
                 .collect();
             if to_fetch.is_empty() {
-                break;
+                pending.retain(|_, session| session.omit_absent());
+                continue;
             }
             let fetched = self
                 .storage
@@ -1476,6 +1535,7 @@ impl<S: Storage> Engine<S> {
                 variables,
                 data,
                 identity,
+                channel: None,
             },
         )
         .await
@@ -1650,6 +1710,7 @@ impl<S: Storage> Engine<S> {
             variables,
             data,
             identity,
+            channel,
         } = input;
         self.hydrate_optimistic().await?;
         let normalized = match normalization {
@@ -1735,6 +1796,8 @@ impl<S: Storage> Engine<S> {
                         WriteResult {
                             field_changes: None,
                             identity_errors: Vec::new(),
+                            unwritable_response: None,
+                            channel: None,
                             mutation_uuid: None,
                             revision: self.revision,
                             revision_advanced: true,
@@ -1750,82 +1813,32 @@ impl<S: Storage> Engine<S> {
             }
         }
 
-        // Without optimistic layers, durable changes are exactly the visible
-        // changes. Avoid loading/cloning the whole batch again on both sides
-        // of an ordinary network refresh.
-        let optimistic_update = if self.optimistic.is_empty() {
-            None
-        } else {
-            let mut candidates = layer_keys(&self.optimistic);
-            candidates.extend(updates.keys().cloned());
-            let bases = self.load_bases(&candidates).await?;
-            let before = effective_records(&bases, &self.optimistic, &candidates);
-            let staged: RecordUpdates = stage_updates(&bases, updates.clone())
-                .1
-                .into_iter()
-                .collect();
-            let queued = self
-                .storage
-                .load_mutation_queue()
-                .await
-                .map_err(EngineError::Storage)?;
-            let replacement = self
-                .rebuild_queued_layers_with_staged(queued, None, &staged)
-                .await?;
-            candidates.extend(layer_keys(&replacement));
-            let mut staged_bases = self.load_bases(&candidates).await?;
-            staged_bases.extend(staged);
-            let after = effective_records(&staged_bases, &replacement, &candidates);
-            Some((candidates, before, replacement, after))
-        };
+        let admission = self
+            .admit_channel_entries(
+                &mut updates,
+                &normalized.channel_stamps,
+                channel,
+                Refused::Drop,
+            )
+            .await?;
+        let ComposedChanges {
+            persisted,
+            visible_changed,
+        } = self
+            .persist_composed(updates, admission, projections)
+            .await?;
         let PersistedChanges {
-            mut field_changes,
+            field_changes,
             changed,
             revision,
             revision_advanced,
-            mut search_changed_buckets,
-            viewer_fields: mut viewer_changes,
-        } = self.persist_updates(updates, projections).await?;
-
-        let visible_changed =
-            if let Some((candidates, before, replacement, after)) = optimistic_update {
-                self.optimistic = replacement;
-                field_changes = crate::field_changes::between(&before, &after);
-                if revision_advanced {
-                    self.live_queries.extend(
-                        revision,
-                        candidates.iter().cloned(),
-                        live_query::projection_keys(&self.optimistic),
-                    );
-                }
-                // Compare the composed view: a hydration hidden beneath a pending
-                // edit must not invalidate the search projection it did not change.
-                search_changed_buckets.clear();
-                viewer_changes.clear();
-                for key in &candidates {
-                    if let Some(fields) = changed_viewer_fields(
-                        before.get(key).and_then(Option::as_ref),
-                        after.get(key).and_then(Option::as_ref),
-                    ) {
-                        viewer_changes.insert(key.clone(), fields);
-                    }
-                    collect_search_changes(
-                        key,
-                        before.get(key).and_then(Option::as_ref),
-                        after.get(key).and_then(Option::as_ref),
-                        &mut search_changed_buckets,
-                    );
-                }
-                candidates
-                    .into_iter()
-                    .filter(|key| before.get(key) != after.get(key))
-                    .collect()
-            } else {
-                changed.clone()
-            };
-
+            search_changed_buckets,
+            viewer_fields,
+            channel,
+            channels: _,
+        } = persisted;
         let mut affected_ops = if is_query {
-            self.deps.ops_for_changes(&visible_changed, &viewer_changes)
+            self.deps.ops_for_changes(&visible_changed, &viewer_fields)
         } else {
             self.deps.ops_for_keys(visible_changed.iter())
         };
@@ -1845,6 +1858,8 @@ impl<S: Storage> Engine<S> {
             WriteResult {
                 field_changes: Some(field_changes),
                 identity_errors: Vec::new(),
+                unwritable_response: None,
+                channel,
                 mutation_uuid: None,
                 revision,
                 revision_advanced,
@@ -1873,11 +1888,14 @@ impl<S: Storage> Engine<S> {
         identity: Option<&str>,
     ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
         self.hydrate_query_with_projections(
-            query,
-            operation_name,
-            variables,
-            data,
-            identity,
+            NetworkWrite {
+                query,
+                operation_name,
+                variables,
+                data,
+                identity,
+                channel: None,
+            },
             Vec::new(),
         )
         .await
@@ -1886,26 +1904,11 @@ impl<S: Storage> Engine<S> {
     /// Hydrates a response while atomically maintaining generic projections.
     pub async fn hydrate_query_with_projections(
         &mut self,
-        query: &str,
-        operation_name: Option<&str>,
-        variables: &serde_json::Map<String, Json>,
-        data: &Json,
-        identity: Option<&str>,
+        input: NetworkWrite<'_>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
-        self.hydrate_query_fenced(
-            NetworkWrite {
-                query,
-                operation_name,
-                variables,
-                data,
-                identity,
-            },
-            Normalization::Pending(None),
-            projections,
-            None,
-        )
-        .await
+        self.hydrate_query_fenced(input, Normalization::Pending(None), projections, None)
+            .await
     }
 
     /// Hydrates a response [`Self::normalize_network`] normalized without a
@@ -1936,6 +1939,7 @@ impl<S: Storage> Engine<S> {
             variables,
             data,
             identity,
+            channel,
         } = input;
         let projected = {
             let doc = Self::document(&mut self.docs, query)?;
@@ -1968,6 +1972,7 @@ impl<S: Storage> Engine<S> {
                     variables,
                     data,
                     identity,
+                    channel,
                 },
                 normalization,
                 projections,
@@ -1985,22 +1990,119 @@ impl<S: Storage> Engine<S> {
         })
     }
 
-    /// Merges normalized updates into the hot tier and storage. Returns the
-    /// keys whose durable contents actually changed.
-    async fn persist_updates(
+    /// Writes admitted updates, and composes the optimistic layers again over
+    /// what they leave.
+    async fn persist_composed(
         &mut self,
         updates: RecordUpdates,
+        admission: ChannelAdmission,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<ComposedChanges, EngineError<S::Error>> {
+        // Without optimistic layers, durable changes are exactly the visible
+        // changes. Avoid loading/cloning the whole batch again on both sides
+        // of an ordinary network refresh.
+        if self.optimistic.is_empty() {
+            let persisted = self
+                .persist_admitted(updates, admission, projections)
+                .await?;
+            return Ok(ComposedChanges {
+                visible_changed: persisted.changed.clone(),
+                persisted,
+            });
+        }
+        let mut candidates = layer_keys(&self.optimistic);
+        candidates.extend(updates.keys().cloned());
+        candidates.extend(admission.deleted.iter().cloned());
+        let bases = self.load_bases(&candidates).await?;
+        let before = effective_records(&bases, &self.optimistic, &candidates);
+        let mut staged = StagedRecords::new();
+        for (key, update) in &updates {
+            if let Some((record, _)) = admission.merge(key, bases.get(key).cloned(), update.clone())
+            {
+                staged.insert(key.clone(), Some(record));
+            }
+        }
+        staged.extend(admission.deleted.iter().map(|key| (key.clone(), None)));
+        let queued = self
+            .storage
+            .load_mutation_queue()
+            .await
+            .map_err(EngineError::Storage)?;
+        let replacement = self
+            .rebuild_queued_layers_with_staged(queued, None, &staged)
+            .await?;
+        candidates.extend(layer_keys(&replacement));
+        let mut staged_bases = self.load_bases(&candidates).await?;
+        overlay_staged(&mut staged_bases, &staged, &candidates);
+        let after = effective_records(&staged_bases, &replacement, &candidates);
+
+        let mut persisted = self
+            .persist_admitted(updates, admission, projections)
+            .await?;
+        self.optimistic = replacement;
+        persisted.field_changes = crate::field_changes::between(&before, &after);
+        let mut channels = channel_changes::composed(&before, &after);
+        channels.retain(|channel, _| !persisted.channels.contains_key(channel));
+        self.report_channels(channels);
+        if persisted.revision_advanced {
+            self.live_queries.extend(
+                persisted.revision,
+                candidates.iter().cloned(),
+                live_query::projection_keys(&self.optimistic),
+            );
+        }
+        // Compare the composed view: a hydration hidden beneath a pending
+        // edit must not invalidate the search projection it did not change.
+        persisted.search_changed_buckets.clear();
+        persisted.viewer_fields.clear();
+        for key in &candidates {
+            let (before, after) = (
+                before.get(key).and_then(Option::as_ref),
+                after.get(key).and_then(Option::as_ref),
+            );
+            if let Some(fields) = changed_viewer_fields(before, after) {
+                persisted.viewer_fields.insert(key.clone(), fields);
+            }
+            collect_search_changes(key, before, after, &mut persisted.search_changed_buckets);
+        }
+        Ok(ComposedChanges {
+            visible_changed: candidates
+                .into_iter()
+                .filter(|key| before.get(key) != after.get(key))
+                .collect(),
+            persisted,
+        })
+    }
+
+    /// Merges updates no response dates into the hot tier and storage. Returns
+    /// the keys whose durable contents actually changed.
+    async fn persist_updates(
+        &mut self,
+        mut updates: RecordUpdates,
         projections: Vec<ProjectionMutation>,
     ) -> Result<PersistedChanges, EngineError<S::Error>> {
-        let plan = self.plan_persist(updates, &projections).await?;
+        let admission = self
+            .admit_channel_entries(&mut updates, &ChannelStamps::new(), None, Refused::Drop)
+            .await?;
+        self.persist_admitted(updates, admission, projections).await
+    }
+
+    async fn persist_admitted(
+        &mut self,
+        updates: RecordUpdates,
+        admission: ChannelAdmission,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<PersistedChanges, EngineError<S::Error>> {
+        let plan = self.plan_persist(updates, admission, &projections).await?;
         self.apply_persist(plan, projections).await
     }
 
-    /// Reads what [`Self::persist_updates`] merges into and computes the
+    /// Reads what [`Self::persist_admitted`] merges into and computes the
     /// merge, writing nothing. The plan holds while storage is unchanged.
     async fn plan_persist(
         &mut self,
         updates: RecordUpdates,
+        mut admission: ChannelAdmission,
         projections: &[ProjectionMutation],
     ) -> Result<PersistPlan, EngineError<S::Error>> {
         // Load current values (hot tier, then storage) so merges detect real
@@ -2077,6 +2179,22 @@ impl<S: Storage> Engine<S> {
         let mut persisted = Vec::with_capacity(updates.len());
         for (key, update) in updates {
             let (merged, did_change, was_hot) = match staging.remove(&key) {
+                None if admission.only_over_held(&key) => continue,
+                Some((existing, was_hot)) if admission.replaces(&key) => {
+                    let did_change = existing != update;
+                    if did_change {
+                        field_changes.push(crate::field_changes::RecordFieldChange::Invalidate {
+                            key: key.clone(),
+                        });
+                        collect_search_changes(
+                            &key,
+                            Some(&existing),
+                            Some(&update),
+                            &mut search_changed_buckets,
+                        );
+                    }
+                    (update, did_change, was_hot)
+                }
                 Some((mut existing, was_hot)) => {
                     // Compare only fields supplied by this partial response,
                     // overlaid onto the existing row, without cloning its body.
@@ -2107,6 +2225,7 @@ impl<S: Storage> Engine<S> {
                     (update, true, false)
                 }
             };
+            admission.note_record(&key, &merged, did_change);
             if did_change {
                 changed.insert(key.clone());
                 to_persist.push((key, merged));
@@ -2116,10 +2235,16 @@ impl<S: Storage> Engine<S> {
             persisted.push(did_change);
         }
 
+        for key in &admission.deleted {
+            changed.insert(key.clone());
+            field_changes
+                .push(crate::field_changes::RecordFieldChange::Invalidate { key: key.clone() });
+        }
+
         // Unchanged bases are already durable, including those fetched after
         // hot-tier eviction. Still apply every projection mutation: a partial
         // response can change projection authority without changing records.
-        let revision_advanced = if changed.is_empty() {
+        let revision_advanced = if changed.is_empty() && !admission.changes_reads {
             match self
                 .projection_mutations_change(projections, kept.as_ref())
                 .await
@@ -2131,6 +2256,7 @@ impl<S: Storage> Engine<S> {
             true
         };
         Ok(PersistPlan {
+            admission,
             field_changes,
             changed,
             search_changed_buckets,
@@ -2149,6 +2275,7 @@ impl<S: Storage> Engine<S> {
         projections: Vec<ProjectionMutation>,
     ) -> Result<PersistedChanges, EngineError<S::Error>> {
         let PersistPlan {
+            admission,
             field_changes,
             changed,
             search_changed_buckets,
@@ -2161,23 +2288,40 @@ impl<S: Storage> Engine<S> {
         let projection_keys = projections
             .iter()
             .map(|mutation| mutation.record_key().clone())
+            .chain(
+                admission
+                    .deleted
+                    .iter()
+                    .filter_map(|key| predicate_index::RecordKey::new(key.to_string()).ok()),
+            )
             .collect();
         // A refetch that changes no record and no projection authority has
         // nothing to store. Pending layers still get their shadows rebased in
         // the storage write, as before.
-        if (revision_advanced || !self.optimistic.is_empty())
-            && let Err(error) = self
-                .storage
+        let channel = &admission.write;
+        let written = if !channel.is_empty() {
+            self.storage
+                .put_channel_records(&to_persist, projections, channel)
+                .await
+        } else if revision_advanced || !self.optimistic.is_empty() {
+            self.storage
                 .put_records_with_projections(&to_persist, projections)
                 .await
-        {
+        } else {
+            Ok(())
+        };
+        if let Err(error) = written {
             return Err(self.restore_unchanged(unchanged, EngineError::Storage(error)));
+        }
+        for key in &channel.deleted {
+            self.hot.pop(key);
         }
         let revision = if revision_advanced {
             self.advance_revision()?
         } else {
             self.revision
         };
+        self.report_channels(admission.changes.clone());
         if revision_advanced {
             self.live_queries.record(
                 revision,
@@ -2210,6 +2354,8 @@ impl<S: Storage> Engine<S> {
             revision_advanced,
             search_changed_buckets,
             viewer_fields,
+            channel: admission.outcome,
+            channels: admission.changes,
         })
     }
 
@@ -2547,6 +2693,7 @@ impl<S: Storage> Engine<S> {
             affected_ops.remove(&origin);
         }
         let revision = self.advance_revision()?;
+        self.report_channels(channel_changes::composed(&before, &after));
         self.live_queries.record(
             revision,
             live_query::Changes {
@@ -2560,6 +2707,8 @@ impl<S: Storage> Engine<S> {
             write_result: WriteResult {
                 field_changes: Some(crate::field_changes::between(&before, &after)),
                 identity_errors: Vec::new(),
+                unwritable_response: None,
+                channel: None,
                 revision,
                 revision_advanced: true,
                 search_changed_buckets: None,
@@ -2690,12 +2839,12 @@ impl<S: Storage> Engine<S> {
                 .map(|candidate| candidate.id)
                 .ok_or(EngineError::UnknownTransaction(transaction))?;
             let write_result = self.rollback_optimistic_write(transaction, claim).await?;
-            return Ok(DeferOptimisticWriteResult::DiscardedSuperseded(
+            return Ok(DeferOptimisticWriteResult::DiscardedSuperseded(Box::new(
                 SupersededMutationResult {
                     write_result,
                     replacement_transaction_id,
                 },
-            ));
+            )));
         }
         if !self
             .storage
@@ -2882,8 +3031,11 @@ impl<S: Storage> Engine<S> {
     /// network response without flickering through the pre-mutation value.
     /// Real records and queue deletion commit in one storage transaction.
     /// Invalid response identities are reported in [`WriteResult::identity_errors`].
-    /// If that response also cannot normalize, the attempt is discarded and
-    /// [`EngineError::IdentityResolutionFailed`] carries the rollback changes.
+    /// A response that cannot normalize settles without its content, keeping
+    /// the identities that resolved, and [`WriteResult::unwritable_response`]
+    /// says why. If it has identities and none resolved, the attempt is
+    /// discarded instead, and [`EngineError::IdentityResolutionFailed`]
+    /// carries the rollback changes.
     pub async fn commit_optimistic_write(
         &mut self,
         transaction: OptimisticTransactionId,
@@ -2949,6 +3101,7 @@ impl<S: Storage> Engine<S> {
                 variables,
                 data,
                 identity: None,
+                channel: None,
             },
             projections,
             true,
@@ -3026,6 +3179,7 @@ impl<S: Storage> Engine<S> {
                 variables,
                 data,
                 identity: None,
+                channel: None,
             },
             projections,
             true,
@@ -3066,35 +3220,86 @@ impl<S: Storage> Engine<S> {
             .ok_or(EngineError::UnknownTransaction(transaction))?;
         let mutation_uuid = Some(self.optimistic[index].uuid.to_string());
         let mut bindings = self.optimistic[index].identity_bindings.clone();
+        let doc = Self::document(&mut self.docs, query)?;
+        let op = doc.operation(operation_name)?;
+        let mut stamps = ChannelStamps::new();
+        let normalized = normalize_with_dependencies(
+            &self.schema,
+            op,
+            variables,
+            data,
+            &EntityResolverLookup::default(),
+        )
+        .map(|normalized| {
+            stamps = normalized.channel_stamps;
+            normalized.updates
+        });
+        // A response that doesn't normalize may come from a server on another
+        // schema, so only an object stating its type identifies anything.
+        let resolve: fn(&[IdentityBinding], &serde_json::Value) -> Result<IdentityMap, String> =
+            if normalized.is_ok() {
+                identity::resolve
+            } else {
+                identity::resolve_stated
+            };
         let mut identity_errors = Vec::new();
-        let identities = match identity::resolve(&bindings, data) {
+        let identities = match resolve(&bindings, data) {
             Ok(identities) => identities,
             Err(_) => {
-                // Salvage valid bindings without guessing targets for failed ones.
+                // Salvage valid bindings without guessing targets for failed
+                // ones: each keeps only its own identity, and reference fields
+                // infer from those left, never a key any binding names.
                 let mut identities = IdentityMap::new();
-                bindings.retain(|binding| {
-                    match identity::resolve(std::slice::from_ref(binding), data) {
+                bindings.retain(
+                    |binding| match resolve(std::slice::from_ref(binding), data) {
                         Ok(resolved) => {
-                            identities.extend(resolved);
+                            identities.extend(
+                                resolved
+                                    .into_iter()
+                                    .filter(|(local, _)| *local == binding.local_key),
+                            );
                             true
                         }
                         Err(error) => {
                             identity_errors.push(error);
                             false
                         }
-                    }
-                });
+                    },
+                );
+                identity::expand_reference_identities(
+                    &self.optimistic[index].identity_bindings,
+                    &mut identities,
+                );
                 identities
             }
         };
-        let doc = Self::document(&mut self.docs, query)?;
-        let op = doc.operation(operation_name)?;
-        let mut updates = match normalize(&self.schema, op, variables, data) {
+        // The bindings left are those that resolved, an ID the server kept
+        // included; one with no response path reads nothing from it.
+        let resolved = bindings
+            .iter()
+            .any(|binding| !binding.response_path.is_empty());
+        let mut unwritable = None;
+        let mut updates = match normalized {
             Ok(updates) => updates,
-            Err(error) if identity_errors.is_empty() => return Err(error.into()),
+            Err(error) if identity_errors.is_empty() || resolved => {
+                // The server accepted the write, but no retry of this response
+                // normalizes: the schema dropped a field a write queued under
+                // an older one selects, or the response is malformed. Settle it
+                // as a stale outcome is settled, keeping the IDs it resolved
+                // without its content, rather than holding the queue head or
+                // losing an ID a later queued write names. Bindings that did
+                // not resolve are reported, as for a response that normalizes.
+                unwritable = Some(error.to_string());
+                projections.clear();
+                identities
+                    .values()
+                    .map(|target| (target.clone(), identity_record(target)))
+                    .collect()
+            }
             Err(error) => {
-                // No safe authoritative write is possible. Retire this attempt
-                // rather than replaying an already successful server mutation.
+                // Neither the content nor any identity can be written. Retire
+                // this attempt rather than replaying an already successful
+                // server mutation.
                 let error = format!("{}; {error}", identity_errors.join("; "));
                 let rollback = self
                     .rollback_optimistic_write_with_outcome(transaction, claim)
@@ -3114,6 +3319,7 @@ impl<S: Storage> Engine<S> {
                 )));
             }
         };
+        let publish_snapshot = publish_snapshot && unwritable.is_none();
         if publish_snapshot && let Some(records) = self.response_records {
             updates.extend(records(&self.schema, op, variables, data, &updates)?);
         }
@@ -3160,7 +3366,7 @@ impl<S: Storage> Engine<S> {
         }
 
         let stored_identities = self
-            .load_identity_bindings(&bindings, &RecordUpdates::new())
+            .load_identity_bindings(&bindings, &StagedRecords::new())
             .await?;
         let mut settled_identities = stored_identities;
         settled_identities.extend(identities.clone());
@@ -3179,11 +3385,15 @@ impl<S: Storage> Engine<S> {
                 });
                 !record.fields.is_empty()
             });
+            stamps.clear();
         }
+        let mut admission = self
+            .admit_channel_entries(&mut updates, &stamps, None, Refused::KeepIdentity)
+            .await?;
         let mut candidates = layer_keys(&self.optimistic);
         candidates.extend(updates.keys().cloned());
         let (mut candidates, bases) = self
-            .load_link_patch_bases(candidates, &[], &updates, &recipes, &RecordUpdates::new())
+            .load_link_patch_bases(candidates, &[], &updates, &recipes, &StagedRecords::new())
             .await?;
         let before = effective_records(&bases, &self.optimistic, &candidates);
 
@@ -3206,7 +3416,13 @@ impl<S: Storage> Engine<S> {
         let reconciliation = self
             .stage_shadow_reconciliation(transaction, &projections, &identities)
             .await?;
-        let staged: RecordUpdates = entries.iter().cloned().collect();
+        for (key, record) in &entries {
+            admission.note_record(key, record, durable_changed.contains(key));
+        }
+        let staged = entries
+            .iter()
+            .map(|(key, record)| (key.clone(), Some(record.clone())))
+            .collect::<StagedRecords>();
         let mut queued = self
             .storage
             .load_mutation_queue()
@@ -3218,7 +3434,7 @@ impl<S: Storage> Engine<S> {
             .await?;
         candidates.extend(layer_keys(&replacement));
         let mut settled_bases = self.load_bases(&candidates).await?;
-        settled_bases.extend(staged);
+        overlay_staged(&mut settled_bases, &staged, &candidates);
         let after = effective_records(&settled_bases, &replacement, &candidates);
         if !self
             .storage
@@ -3228,6 +3444,7 @@ impl<S: Storage> Engine<S> {
                 entries.clone(),
                 projections,
                 reconciliation,
+                &admission.write,
             )
             .await
             .map_err(EngineError::Storage)?
@@ -3248,6 +3465,9 @@ impl<S: Storage> Engine<S> {
             .filter(|key| before.get(key) != after.get(key))
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
+        let mut channels = channel_changes::composed(&before, &after);
+        channels.extend(admission.changes);
+        self.report_channels(channels);
         self.live_queries.record(
             revision,
             live_query::Changes {
@@ -3258,6 +3478,8 @@ impl<S: Storage> Engine<S> {
         Ok(WriteResult {
             field_changes: Some(crate::field_changes::between(&before, &after)),
             identity_errors,
+            unwritable_response: unwritable,
+            channel: None,
             revision,
             revision_advanced: true,
             search_changed_buckets: None,
@@ -3356,6 +3578,7 @@ impl<S: Storage> Engine<S> {
             .filter(|key| before.get(key) != after.get(key))
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
+        self.report_channels(channel_changes::composed(&before, &after));
         self.live_queries.record(
             revision,
             live_query::Changes {
@@ -3366,6 +3589,8 @@ impl<S: Storage> Engine<S> {
         Ok(WriteResult {
             field_changes: Some(crate::field_changes::between(&before, &after)),
             identity_errors: Vec::new(),
+            unwritable_response: None,
+            channel: None,
             revision,
             revision_advanced: true,
             search_changed_buckets: None,
@@ -3385,7 +3610,7 @@ impl<S: Storage> Engine<S> {
         layers: &[OptimisticLayer],
         pending_updates: &RecordUpdates,
         patches: &[OptimisticLinkPatch],
-        staged: &RecordUpdates,
+        staged: &StagedRecords,
     ) -> Result<
         (
             BTreeSet<EntityKey<'static>>,
@@ -3396,11 +3621,7 @@ impl<S: Storage> Engine<S> {
         candidates.extend(patches.iter().map(OptimisticLinkPatch::root_key));
         loop {
             let mut bases = self.load_bases(&candidates).await?;
-            for key in &candidates {
-                if let Some(record) = staged.get(key) {
-                    bases.insert(key.clone(), record.clone());
-                }
-            }
+            overlay_staged(&mut bases, staged, &candidates);
             let composed = effective_records(&bases, layers, &candidates);
             let mut effective = present_records(composed);
             merge_updates_into_effective(&mut effective, pending_updates);
@@ -3607,6 +3828,7 @@ impl<S: Storage> Engine<S> {
         self.ensure_revision_can_advance()?;
         let keys = &*without_metadata(keys);
         let affected = self.deps.ops_for_keys(keys.iter());
+        let channels = self.channels_holding(keys).await?;
         self.storage
             .delete_batch(keys)
             .await
@@ -3621,6 +3843,7 @@ impl<S: Storage> Engine<S> {
             self.hot.pop(key);
         }
         self.advance_revision()?;
+        self.report_channels(channels);
         Ok(self.revisioned(affected))
     }
 
@@ -3710,6 +3933,8 @@ impl<S: PredicateIndexStorage> Engine<S> {
         Ok(WriteResult {
             field_changes: self.optimistic.is_empty().then_some(field_changes),
             identity_errors: Vec::new(),
+            unwritable_response: None,
+            channel: None,
             revision,
             revision_advanced,
             search_changed_buckets: None,
@@ -3778,6 +4003,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
         self.ensure_revision_can_advance()?;
         let keys = &*without_metadata(keys);
         let affected = self.deps.ops_for_keys(keys.iter());
+        let channels = self.channels_holding(keys).await?;
         self.storage
             .delete_batch_with_projection_changes(keys, projections)
             .await
@@ -3792,6 +4018,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
             self.hot.pop(key);
         }
         self.advance_revision()?;
+        self.report_channels(channels);
         Ok(self.revisioned(affected))
     }
 
@@ -3920,6 +4147,25 @@ fn effective_records(
             (key.clone(), record)
         })
         .collect()
+}
+
+/// Puts the staged records among `keys` over `bases`.
+fn overlay_staged(
+    bases: &mut HashMap<EntityKey<'static>, Record>,
+    staged: &StagedRecords,
+    keys: &BTreeSet<EntityKey<'static>>,
+) {
+    for key in keys {
+        match staged.get(key) {
+            Some(Some(record)) => {
+                bases.insert(key.clone(), record.clone());
+            }
+            Some(None) => {
+                bases.remove(key);
+            }
+            None => {}
+        }
+    }
 }
 
 fn present_records(

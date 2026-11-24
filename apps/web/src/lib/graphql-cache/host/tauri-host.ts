@@ -31,9 +31,11 @@ import type {
   CalendarCommitCacheResult,
   CalendarRangeCacheArgs,
   CalendarRangeCacheResult,
+  ChannelChange,
+  ChannelCommitArgs,
+  ChannelCommitOutcome,
   ChannelTimelineCacheArgs,
   ChannelTimelineCacheResult,
-  ChannelTimelineCommitArgs,
   ChannelTimelineCommitCacheResult,
   ChannelTimelineEvictArgs,
   ChannelTimelineEvictCacheResult,
@@ -64,6 +66,7 @@ import {
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
 } from '../protocol';
+import { emitNativeSchemaInit, type NativeSchemaInit } from '../telemetry-otel';
 import type {
   AffectedOperationsListener,
   CacheChangeListener,
@@ -87,6 +90,8 @@ const CACHE_CHANGED_EVENT = 'graphql-cache://cache-changed';
 const CACHE_HYDRATED_EVENT = 'graphql-cache://cache-hydrated';
 /** Keep in sync with `MUTATION_SETTLED_EVENT` in graphql_cache_plugin. */
 const MUTATION_SETTLED_EVENT = 'graphql-cache://mutation-settled';
+/** Keep in sync with `CHANNELS_CHANGED_EVENT` in graphql_cache_plugin. */
+const CHANNELS_CHANGED_EVENT = 'graphql-cache://channels-changed';
 const AUTHORITY_CHANGED_EVENT = 'graphql-cache://authority-changed';
 
 /** Payload of the ops-affected event (graphql_cache_plugin `OpsAffectedEvent`). */
@@ -105,6 +110,15 @@ type CacheChangedPayload = {
 // Older native binaries omit the advancement bit and still receive OTA JS.
 import { createPeopleCache } from '../people/host';
 import { PEOPLE_UNSUPPORTED } from '../people/protocol';
+
+/** Only named when set: an older scoped hydrate rejects a field it lacks. */
+function channelCommitOf(
+  args: Pick<CacheWriteArgs, 'channelCommit'>
+): Pick<CacheWriteArgs, 'channelCommit'> {
+  return args.channelCommit === undefined
+    ? {}
+    : { channelCommit: args.channelCommit };
+}
 
 type NativeHydrationResult = HydrationResult & { revisionAdvanced?: boolean };
 const PEOPLE_CONTEXT_COMMAND = 'graphql_cache_people_context';
@@ -241,6 +255,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const settlementSubscribers = new Set<
     (settlement: MutationSettlement) => void
   >();
+  const channelSubscribers = new Set<(change: ChannelChange) => void>();
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
@@ -468,6 +483,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       return undefined;
     });
 
+  const unlistenChannels: Promise<UnlistenFn | undefined> = listen<
+    ChannelChange[]
+  >(CHANNELS_CHANGED_EVENT, (event) => {
+    pendingReads.clear();
+    flushAffected();
+    for (const change of event.payload)
+      for (const cb of channelSubscribers) cb(change);
+  }).catch((error) => {
+    console.warn('graphql cache channels-changed listener failed', error);
+    return undefined;
+  });
+
   const unlistenCacheChanges: Promise<UnlistenFn | undefined> =
     listen<CacheChangedPayload>(CACHE_CHANGED_EVENT, (event) => {
       pendingReads.clear();
@@ -540,18 +567,25 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     // An app from before runtime SDL loading has no such command. Its own
     // `graphql_cache_init` would run its compiled-in schema, which can lack
     // fields this bundle reads, so the bundle stays uncached instead.
+    let opened: NativeSchemaInit | null | undefined;
     try {
-      await request<void>(INIT_COMMAND, {
-        scope: options.scope,
-        hotCapacity: options.hotCapacity,
-        schemaSdl,
-      });
+      opened = await request<NativeSchemaInit | null | undefined>(
+        INIT_COMMAND,
+        {
+          scope: options.scope,
+          hotCapacity: options.hotCapacity,
+          schemaSdl,
+        }
+      );
     } catch (error) {
       if (isMissingCommand(error, INIT_COMMAND)) {
         throw new NativeCacheUpgradeRequiredError(CACHE_NEEDS_UPDATE);
       }
       throw error;
     }
+    // Null when another webview opened the cache first; binaries from
+    // before the report resolve with nothing.
+    if (opened) emitNativeSchemaInit(opened);
     // Probe before any enqueue/claim. Older binaries silently ignore new
     // metadata arguments, so waiting until a draft fails would lose correlation.
     try {
@@ -979,17 +1013,17 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     async channelTimelineCommit(
-      args: ChannelTimelineCommitArgs,
+      args: ChannelCommitArgs,
       generation: string
     ): Promise<ChannelTimelineCommitCacheResult> {
       return channelTimelineRequest(
         CHANNEL_TIMELINE_COMMIT_COMMAND,
         { commit: args, generation },
-        (result: WriteResult & { channelSeq: string | null }) => ({
+        (result: WriteResult & { channel: ChannelCommitOutcome }) => ({
           kind: 'committed',
           revision: parseCacheRevision(result.revision),
           changed: result.changed,
-          channelSeq: result.channelSeq,
+          channel: result.channel,
         })
       );
     },
@@ -999,13 +1033,8 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     ): Promise<ChannelTimelineEvictCacheResult> {
       return channelTimelineRequest(
         CHANNEL_TIMELINE_EVICT_COMMAND,
-        {
-          eviction: args,
-          // A removal holds no fetched content: it takes the observed stamp.
-          generation:
-            authorityObserver.snapshot()?.generation ??
-            UNKNOWN_CACHE_GENERATION,
-        },
+        // A removal holds no fetched content, so no session stamp fences it.
+        { eviction: args },
         (result: WriteResult & { channelIds: string[]; hasMore: boolean }) => ({
           kind: 'evicted',
           revision: parseCacheRevision(result.revision),
@@ -1050,6 +1079,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           data: args.data,
           generation: args.generation,
           identity: args.identity,
+          ...channelCommitOf(args),
         })
       );
     },
@@ -1087,6 +1117,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         variables: args.variables,
         data: args.data,
         identity: args.identity,
+        ...channelCommitOf(args),
       };
       const result = args.hydrationScope
         ? await request<NativeHydrationResult>('graphql_cache_hydrate_scoped', {
@@ -1319,6 +1350,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       return () => settlementSubscribers.delete(cb);
     },
 
+    onChannelChanged(cb: (change: ChannelChange) => void): () => void {
+      channelSubscribers.add(cb);
+      return () => channelSubscribers.delete(cb);
+    },
+
     dispose() {
       clearTimeout(affectedTimer);
       pendingAffected.clear();
@@ -1329,11 +1365,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       hydrationSubscribers.clear();
       generationChangeSubscribers.clear();
       settlementSubscribers.clear();
+      channelSubscribers.clear();
       for (const unlisten of [
         unlistenOps,
         unlistenCacheChanges,
         unlistenHydration,
         unlistenSettlements,
+        unlistenChannels,
         unlistenAuthority,
       ]) {
         // UnlistenFn returns the unlisten IPC promise despite its void type.

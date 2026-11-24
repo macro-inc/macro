@@ -78,6 +78,26 @@ export const CACHE_OPEN_OUTCOMES = [
 ] as const;
 export type CacheOpenOutcome = (typeof CACHE_OPEN_OUTCOMES)[number];
 
+/** What opening a cache with this build's GraphQL schema did to its records:
+ * nothing, a compatible change, dropping the changed types, or a reset. */
+export const CACHE_SCHEMA_CHANGES = [
+  'unchanged',
+  'compatible',
+  'types',
+  'reset',
+] as const;
+export type CacheSchemaChange = (typeof CACHE_SCHEMA_CHANGES)[number];
+
+/** Why a schema change dropped every record. */
+export const CACHE_SCHEMA_RESET_REASONS = [
+  'unreadable',
+  'roots',
+  'invalid',
+  'failed',
+] as const;
+export type CacheSchemaResetReason =
+  (typeof CACHE_SCHEMA_RESET_REASONS)[number];
+
 export const CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY = [
   'available',
   'unavailable',
@@ -267,6 +287,15 @@ export type CacheTelemetryObservation = {
   ownerEvent?: CacheOwnerEvent;
   persistence?: 'granted' | 'denied' | 'unknown';
   openOutcome?: CacheOpenOutcome;
+  /** The open's schema change (`graphql_cache.schema_init`). */
+  schemaChange?: CacheSchemaChange;
+  schemaResetReason?: CacheSchemaResetReason;
+  schemaChangedTypes?: number;
+  schemaDroppedRecords?: number;
+  schemaIncompleteDocuments?: number;
+  schemaRetiredOverlays?: number;
+  /** How long the open spent bringing its records to the schema. */
+  schemaAdoptMs?: number;
   queueDiagnosticsAvailability?: CacheQueueDiagnosticsAvailability;
   revisionCategory?: CacheRevisionCategory;
   resetAttempt?: 'wipe-before-open';
@@ -378,6 +407,33 @@ function sanitizeObservation(
     ...(input.openOutcome !== undefined &&
     CACHE_OPEN_OUTCOMES.includes(input.openOutcome)
       ? { openOutcome: input.openOutcome }
+      : {}),
+    ...(input.schemaChange !== undefined &&
+    CACHE_SCHEMA_CHANGES.includes(input.schemaChange)
+      ? { schemaChange: input.schemaChange }
+      : {}),
+    ...(input.schemaResetReason !== undefined &&
+    CACHE_SCHEMA_RESET_REASONS.includes(input.schemaResetReason)
+      ? { schemaResetReason: input.schemaResetReason }
+      : {}),
+    ...(boundedNumber(input.schemaChangedTypes) !== undefined
+      ? { schemaChangedTypes: boundedNumber(input.schemaChangedTypes) }
+      : {}),
+    ...(boundedNumber(input.schemaDroppedRecords) !== undefined
+      ? { schemaDroppedRecords: boundedNumber(input.schemaDroppedRecords) }
+      : {}),
+    ...(boundedNumber(input.schemaIncompleteDocuments) !== undefined
+      ? {
+          schemaIncompleteDocuments: boundedNumber(
+            input.schemaIncompleteDocuments
+          ),
+        }
+      : {}),
+    ...(boundedNumber(input.schemaRetiredOverlays) !== undefined
+      ? { schemaRetiredOverlays: boundedNumber(input.schemaRetiredOverlays) }
+      : {}),
+    ...(boundedNumber(input.schemaAdoptMs, 3_600_000) !== undefined
+      ? { schemaAdoptMs: boundedNumber(input.schemaAdoptMs, 3_600_000) }
       : {}),
     ...(input.queueDiagnosticsAvailability !== undefined &&
     CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY.includes(
@@ -860,6 +916,13 @@ export function isCacheTelemetryObservation(
       'ownerEvent',
       'persistence',
       'openOutcome',
+      'schemaChange',
+      'schemaResetReason',
+      'schemaChangedTypes',
+      'schemaDroppedRecords',
+      'schemaIncompleteDocuments',
+      'schemaRetiredOverlays',
+      'schemaAdoptMs',
       'queueDiagnosticsAvailability',
       'revisionCategory',
       'resetAttempt',

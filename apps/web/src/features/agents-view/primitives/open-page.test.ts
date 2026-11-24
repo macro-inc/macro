@@ -68,7 +68,7 @@ describe('openAgentsPage', () => {
     });
   });
 
-  it('pushes a phone page even when Agents is already mounted', () => {
+  it('opens the durable archive route on phone without replacing history', () => {
     device.touch = true;
     const replace = vi.fn();
     const openWithSplit = vi.fn(() => ({
@@ -81,7 +81,15 @@ describe('openAgentsPage', () => {
     openAgentsPage(layout, 'archived');
     expect(openWithSplit).toHaveBeenCalledWith(
       expect.objectContaining({
-        params: expect.objectContaining({ agentPage: 'archived' }),
+        id: 'agents-archive',
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'app', params: {} },
+              { id: 'view-agents-archive', params: {} },
+            ],
+          },
+        },
       }),
       { activate: true, search: {} }
     );

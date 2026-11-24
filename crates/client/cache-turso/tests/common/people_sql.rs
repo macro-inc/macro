@@ -49,6 +49,7 @@ pub async fn seed<S: Storage>(engine: &mut Engine<S>, count: usize) -> Hydration
                 variables: json!({"limit":500,"after":start.to_string()}).as_object().unwrap(),
                 data: &json!({"user":{"id":VIEWER,"contacts":{"nodes":nodes,"nextCursor":null}}}),
                 identity: Some(VIEWER),
+                channel: None,
             }, &scope, vec![])
             .await
             .unwrap();

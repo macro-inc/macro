@@ -209,6 +209,7 @@ fn absent_thread_revalidation_revokes_stale_mail_membership() {
                     variables: &variables,
                     data: &data,
                     identity: None,
+                    channel: None,
                 },
                 projections,
             )

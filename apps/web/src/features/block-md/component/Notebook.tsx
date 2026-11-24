@@ -40,6 +40,7 @@ import { markdownWideMode } from '../wide-mode';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
+import { InlineTaskTimeLogged } from './InlineTaskTimeLogged';
 import { MarkdownEditor } from './MarkdownEditor';
 import { useMarkdownName } from './MarkdownNameProvider';
 import {
@@ -395,6 +396,7 @@ export function Notebook(props: {
         <SkillDescriptionField />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
+          <InlineTaskTimeLogged />
           <InlineTaskGithubPullRequests />
           <TaskDuplicateMatchPill />
         </div>

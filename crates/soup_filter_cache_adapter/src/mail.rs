@@ -26,7 +26,7 @@ mod retention;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
 
-const TYPE: &str = "GraphqlSoupEmailThread";
+pub(super) const TYPE: &str = "GraphqlSoupEmailThread";
 const EXACT_ATTRIBUTES: &[&str] = &[
     "id",
     "mail-link-id",
@@ -42,8 +42,9 @@ const EXACT_ATTRIBUTES: &[&str] = &[
     "mail-sent-message",
 ];
 const SORT_ATTRIBUTES: &[&str] = &["mail-all-ts", "mail-inbox-ts", "mail-sent-ts"];
-/// The fields of a thread update that decide which facts a patch rewrites.
-const FIELDS: &[&str] = &[
+/// The fields of a thread record its projection reads, which decide which
+/// facts a patch of a thread update rewrites.
+pub(super) const FIELDS: &[&str] = &[
     "linkId",
     "ownerId",
     "isRead",

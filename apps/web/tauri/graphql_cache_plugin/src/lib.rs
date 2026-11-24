@@ -42,6 +42,10 @@ pub const CACHE_CHANGED_EVENT: &str = "graphql-cache://cache-changed";
 /// Broadcast event carrying the final outcome of a queued mutation.
 pub const MUTATION_SETTLED_EVENT: &str = "graphql-cache://mutation-settled";
 
+/// Broadcast event listing the channels one transaction changed, after it
+/// committed: [`cache_core::engine::channel_changes::ChannelChange`]s.
+pub const CHANNELS_CHANGED_EVENT: &str = "graphql-cache://channels-changed";
+
 /// Payload of [`OPS_AFFECTED_EVENT`] — mirrors the worker `CachePush`
 /// message in `apps/web/src/lib/graphql-cache/protocol.ts`.
 #[derive(Clone, Debug, Serialize)]

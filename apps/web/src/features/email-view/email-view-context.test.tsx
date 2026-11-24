@@ -27,7 +27,12 @@ const mocks = vi.hoisted(() => ({
   /** What the view hands its list: the tab or definition it queries. */
   list: undefined as
     | {
-        input: { tab: string; facets: Record<string, string[]> };
+        input: {
+          tab: string;
+          facets: Record<string, string[]>;
+          search: string;
+          searchScope: string;
+        };
         options: {
           savedView?: () => unknown;
           enabled?: () => boolean;
@@ -203,14 +208,124 @@ describe('email view inbox reconciliation', () => {
   });
 });
 
-it('clears persisted text search when entering and leaving Email Reminders', () => {
+it('narrows a running search to the tab picked, keeping its words', () => {
   const { view } = mount();
-  view.setState('search', 'prior inbox search');
+  view.setState('search', 'invoice');
+  // A search of all mail selects no view.
+  expect(view.shownTab()).toBe('search');
+
+  view.setTab('sent');
+  expect(view.state.tab).toBe('sent');
+  expect(view.state.search).toBe('in:sent invoice');
+  expect(view.shownTab()).toBe('sent');
+
+  view.setTab('important');
+  expect(view.state.search).toBe('in:signal invoice');
+  expect(view.shownTab()).toBe('important');
+
+  view.selectInbox();
+  expect(view.state.tab).toBe('important');
+  expect(view.state.search).toBe('in:inbox invoice');
+  expect(view.shownTab()).toBe('inbox');
+
+  view.setTab('all');
+  expect(view.state.search).toBe('invoice');
+  expect(view.shownTab()).toBe('search');
+});
+
+it('ends a search on a tab the search index has no view of', () => {
+  const { view } = mount();
+  view.setState('search', 'invoice');
   view.setTab('reminders');
   expect(view.state.search).toBe('');
-  view.setState('search', 'stale restored search');
-  view.setTab('all');
+  expect(view.shownTab()).toBe('reminders');
+
+  view.setState('search', 'invoice');
+  view.setTab('scheduled');
   expect(view.state.search).toBe('');
+});
+
+it.each([
+  ['in:inbox invoice', 'inbox'],
+  ['in:focus invoice', 'focus'],
+  ['in:signal invoice', 'important'],
+  ['in:noise invoice', 'noise'],
+  ['in:sent invoice', 'sent'],
+  ['invoice', 'search'],
+])('shows no Inbox tabs while the field holds %s', (search, shown) => {
+  const { view } = mount();
+  view.setTab('noise');
+  expect(view.showsInboxTabs()).toBe(true);
+
+  view.setState('search', search);
+  expect(view.showsInboxTabs()).toBe(false);
+  expect(view.shownTab()).toBe(shown);
+
+  view.setState('search', '');
+  expect(view.showsInboxTabs()).toBe(true);
+  expect(view.shownTab()).toBe('noise');
+});
+
+it('keeps the search on screen while an in: filter has no words after it', () => {
+  const { view } = mount();
+  for (const search of ['in', 'in:', 'in:fo', 'in:focus', 'in:focus ']) {
+    view.setState('search', search);
+    expect(mocks.list?.input.search).toBe('in');
+    expect(mocks.list?.input.searchScope).toBe('all');
+    expect(view.shownTab()).toBe('search');
+  }
+
+  view.setState('search', 'in:focus d');
+  expect(mocks.list?.input.search).toBe('d');
+  expect(mocks.list?.input.searchScope).toBe('focus');
+  expect(view.shownTab()).toBe('focus');
+
+  // A finished filter goes on with the search it already narrowed.
+  view.setState('search', 'in:focus ');
+  expect(mocks.list?.input.search).toBe('d');
+  expect(mocks.list?.input.searchScope).toBe('focus');
+
+  view.setState('search', '');
+  expect(mocks.list?.input.search).toBe('');
+});
+
+it.each(['in:', 'in:se', 'in:sent '])(
+  'stays on the open tab’s list when %s follows no search',
+  (search) => {
+    const { view } = mount();
+    view.setTab('noise');
+    view.setState('search', search);
+    expect(view.showsInboxTabs()).toBe(false);
+    expect(view.shownTab()).toBe('noise');
+    expect(mocks.list?.input.search).toBe('');
+    expect(mocks.list?.input.tab).toBe('noise');
+  }
+);
+
+it('opens a tab picked while the field holds no words, ending the search', () => {
+  const { view } = mount();
+  for (const search of ['in:', 'in:se', 'in:focus ']) {
+    view.setTab('important');
+    view.setState('search', search);
+
+    view.setTab('sent');
+    expect(view.state.tab).toBe('sent');
+    expect(view.state.search).toBe('');
+    expect(view.shownTab()).toBe('sent');
+  }
+
+  view.setTab('noise');
+  view.setState('search', 'in:');
+  view.selectInbox();
+  expect(view.state.search).toBe('');
+  expect(view.shownTab()).toBe('noise');
+});
+
+it('opens a tab as usual when no search runs', () => {
+  const { view } = mount();
+  view.setTab('sent');
+  expect(view.state.search).toBe('');
+  expect(view.shownTab()).toBe('sent');
 });
 
 describe('tag view title', () => {

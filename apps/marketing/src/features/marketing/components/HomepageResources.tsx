@@ -2,6 +2,10 @@ import IconGithub from '../../../assets/icons/icon-github.svg';
 import IconInstagram from '../../../assets/icons/icon-instagram.svg';
 import IconLinkedin from '../../../assets/icons/icon-linkedin.svg';
 import IconTwitter from '../../../assets/icons/icon-twitter.svg';
+import {
+  ANDROID_PLAY_STORE_URL,
+  IOS_APP_STORE_URL,
+} from '../core/desktopDownloads';
 import './homepage-resources.css';
 
 /** Homepage companion to the feature pages' section outline. */
@@ -10,18 +14,11 @@ export function HomepageResources() {
     <aside class="page-outline homepage-resources" aria-label="Resources">
       <p>Downloads</p>
       <nav aria-label="Downloads">
-        <a
-          href="https://apps.apple.com/us/app/macro-app/id6743133649"
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href="/download">Download for Desktop</a>
+        <a href={IOS_APP_STORE_URL} target="_blank" rel="noreferrer">
           Download for iOS
         </a>
-        <a
-          href="https://play.google.com/store/apps/details?id=com.macro.workspace.mobile"
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href={ANDROID_PLAY_STORE_URL} target="_blank" rel="noreferrer">
           Download for Android
         </a>
       </nav>

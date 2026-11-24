@@ -866,9 +866,7 @@ where
             EmailEventOrigin::UserAction,
         );
 
-        if let Some(event) = event {
-            self.publish_email_event(&event);
-        }
+        self.publish_email_event(&event);
 
         for message_id in cancelled_send_ids {
             self.publish_email_event(&EmailMacroEvent::message_send_cancelled(

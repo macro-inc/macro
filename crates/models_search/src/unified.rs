@@ -88,6 +88,16 @@ pub fn entity_filters_from_include(
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, JsonSchema)]
 pub struct UnifiedSearchRequest {
     /// The search query string. Must not be empty; one character is enough.
+    /// When the search reaches email it also reads Gmail's operators:
+    /// `subject:`, `from:`, `to:`, `cc:`, `bcc:`, `in:` a Mail view (`inbox`,
+    /// `signal`, `noise`, `archived`, `sent`, `drafts`, `calendar`, `shared`,
+    /// `favorites`) or a tag or label name, `label:`, `is:unread`, `is:read`,
+    /// `is:starred`, `is:shared`, `has:attachment`, `after:`/`before:` a day
+    /// (`2017/06/01`), `newer_than:`/`older_than:` a span (`3d`, `2w`, `1m`,
+    /// `1y`), and a minus before an operator to leave matching mail out. A
+    /// query that types an operator searches email only. A minus before a
+    /// word or quoted phrase leaves out mail containing it beside an operator
+    /// or in a search of email alone; elsewhere it is part of the word.
     pub query: String,
 
     /// How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field.
@@ -124,6 +134,13 @@ pub struct UnifiedSearchRequest {
 
     #[schemars(skip)]
     pub collapse: Option<bool>,
+
+    /// The IANA time zone (such as `America/New_York`) the query's typed
+    /// dates are read in: `after:2017/06/01` starts at that day's midnight
+    /// there, and `newer_than:1m` counts a month back on its calendar.
+    /// Defaults to UTC.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_zone: Option<String>,
 }
 
 /// Whether a [FileAssociation] is indexed by the search processing service.
@@ -322,6 +339,11 @@ pub struct UnifiedSearchResponse {
     pub results: Vec<UnifiedSearchResponseItem>,
     /// The next cursor to use for paginating results
     pub next_cursor: Option<String>,
+    /// The email filters the query's typed operators (`subject:`, `in:`,
+    /// `after:` and the rest) became, each date as the instant it bounds.
+    /// Absent when the query typed none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_filters: Option<item_filters::EmailFilters>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]

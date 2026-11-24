@@ -45,9 +45,36 @@ async fn channel_retention_drains_batches_with_one_fixed_thirty_day_cutoff() {
         counts: Mutex::new([CHANGE_LOG_PRUNE_BATCH, CHANGE_LOG_PRUNE_BATCH, 7].into()),
     });
     let now = DateTime::from_timestamp(2_000_000_000, 0).unwrap();
-    assert_eq!(retention.run_once(now).await.unwrap(), 20_007);
+    assert_eq!(
+        retention.run_once(now).await.unwrap(),
+        ChannelPruneRound {
+            removed: 20_007,
+            more: false
+        }
+    );
     assert_eq!(
         *calls.lock().unwrap(),
         vec![(now - chrono::Duration::days(30), CHANGE_LOG_PRUNE_BATCH); 3]
     );
+}
+
+#[tokio::test]
+async fn a_backlog_ends_the_round_at_its_batch_limit_and_asks_for_another() {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let retention = ChannelChangeLogRetention::new(Pruner {
+        calls: calls.clone(),
+        counts: Mutex::new([CHANGE_LOG_PRUNE_BATCH; CHANGE_LOG_PRUNE_ROUND_BATCHES].into()),
+    });
+    let now = DateTime::from_timestamp(2_000_000_000, 0).unwrap();
+
+    let round = retention.run_once(now).await.unwrap();
+
+    assert_eq!(
+        round,
+        ChannelPruneRound {
+            removed: CHANGE_LOG_PRUNE_ROUND_BATCHES * CHANGE_LOG_PRUNE_BATCH,
+            more: true
+        }
+    );
+    assert_eq!(calls.lock().unwrap().len(), CHANGE_LOG_PRUNE_ROUND_BATCHES);
 }

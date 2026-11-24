@@ -298,6 +298,9 @@ impl messages::domain::api::MessageReader for RecordingMessages {
     }
     async fn channel_seq(
         &self,
+        _: entity_access::domain::models::EntityAccessReceipt<
+            messages::domain::service::MessageView,
+        >,
         _: uuid::Uuid,
     ) -> Result<i64, messages::domain::ports::MessageError> {
         unimplemented!()
@@ -317,6 +320,13 @@ impl messages::domain::api::MessageReader for RecordingMessages {
     ) -> Result<messages::domain::models::MessageThread, messages::domain::ports::MessageError>
     {
         unimplemented!("read path unused by mutation tools")
+    }
+    async fn get_entry(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<messages::domain::ports::MessageRead, messages::domain::ports::MessageError> {
+        unimplemented!("read path unused by these tools")
     }
     async fn get_root(
         &self,

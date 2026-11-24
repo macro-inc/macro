@@ -101,6 +101,7 @@ async fn mail_projection_reads_latch_reset_required_for_all_write_paths() {
                 js(data.clone()),
                 Some("mail-viewer".into()),
                 JsValue::UNDEFINED,
+                JsValue::UNDEFINED,
             ),
             WritePath::Enqueue => enqueue(&engine, generation.clone()),
             WritePath::Commit => {

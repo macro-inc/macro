@@ -99,6 +99,38 @@ impl PeopleSearchService for MockService {
     }
 }
 
+/// The first page holds one member named for the list, with that member as
+/// the cursor; a later page holds the member named by the cursor it was given,
+/// and ends the list. A page asked for more than 100 people fails.
+impl ContactListMembersService for MockService {
+    async fn list_members(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+        list: ContactList,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> Result<crate::domain::models::page::ContactIdPage, Report> {
+        use crate::domain::models::page::{ContactIdEntry, ContactIdPage};
+        if limit.get() > 100 {
+            return Err(rootcause::report!("page too large"));
+        }
+        let page = match after {
+            None => {
+                let member = format!("macro|{}@example.com", list.as_ref());
+                ContactIdPage {
+                    contacts: vec![ContactIdEntry::parse(member.clone()).unwrap()],
+                    next_cursor: ContactCursor::from_position(member),
+                }
+            }
+            Some(after) => ContactIdPage {
+                contacts: vec![ContactIdEntry::parse(after.position().to_owned()).unwrap()],
+                next_cursor: None,
+            },
+        };
+        Ok(page)
+    }
+}
+
 #[derive(Clone, Default)]
 struct FakeJwtValidator {
     validation_count: Arc<AtomicUsize>,
@@ -452,4 +484,75 @@ async fn search_rejects_oversized_or_missing_queries_and_anonymous_callers() {
         .unwrap();
     let response = api.oneshot(anonymous).await.unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+fn members_request(path_and_query: &str) -> Request<Body> {
+    Request::get(path_and_query)
+        .header(header::AUTHORIZATION, "Bearer found")
+        .body(Body::empty())
+        .unwrap()
+}
+
+#[tokio::test]
+async fn list_members_pages_through_an_opaque_cursor() {
+    let (api, _) = build_test_router(false);
+
+    let response = api
+        .clone()
+        .oneshot(members_request("/contacts/lists/invited/members"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = search_body(response).await;
+    assert_eq!(
+        body["members"],
+        serde_json::json!(["macro|invited@example.com"])
+    );
+    let cursor = body["nextCursor"].as_str().unwrap().to_owned();
+    assert!(!cursor.contains('@'), "the cursor is opaque: {cursor}");
+
+    let response = api
+        .oneshot(members_request(&format!(
+            "/contacts/lists/invited/members?limit=100&cursor={}",
+            urlencoding::encode(&cursor)
+        )))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = search_body(response).await;
+    assert_eq!(
+        body["members"],
+        serde_json::json!(["macro|invited@example.com"])
+    );
+    assert_eq!(body["nextCursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_members_rejects_bad_lists_limits_cursors_and_anonymous_callers() {
+    let (api, _) = build_test_router(false);
+    for path in [
+        "/contacts/lists/friends/members",
+        "/contacts/lists/teammates/members?limit=0",
+        "/contacts/lists/teammates/members?limit=501",
+        "/contacts/lists/teammates/members?cursor=not-base64!",
+    ] {
+        let response = api.clone().oneshot(members_request(path)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{path}");
+    }
+
+    let anonymous = Request::get("/contacts/lists/teammates/members")
+        .body(Body::empty())
+        .unwrap();
+    let response = api.clone().oneshot(anonymous).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn list_members_shares_the_search_rate_limit() {
+    let (api, _) = build_test_router(true);
+    let response = api
+        .oneshot(members_request("/contacts/lists/teammates/members"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
 }

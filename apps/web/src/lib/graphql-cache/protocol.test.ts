@@ -207,6 +207,14 @@ describe('cache worker message validators', () => {
           error: 'denied',
         },
       },
+      {
+        kind: 'channels-changed',
+        changes: [
+          { channelId: 'c1', kind: 'changed' },
+          { channelId: 'c2', kind: 'reset' },
+          { channelId: 'c3', kind: 'evicted' },
+        ],
+      },
     ];
 
     expect(values.map(isWorkerMessage)).toEqual(values.map(() => true));
@@ -243,6 +251,15 @@ describe('cache worker message validators', () => {
     {
       kind: 'mutation-settled',
       settlement: { transactionId: '5', status: 'superseded' },
+    },
+    { kind: 'channels-changed', changes: [{ channelId: 'c1' }] },
+    {
+      kind: 'channels-changed',
+      changes: [{ channelId: 'c1', kind: 'renamed' }],
+    },
+    {
+      kind: 'channels-changed',
+      changes: [{ channelId: 'c1', kind: 'changed', seq: '1' }],
     },
   ])('rejects malformed or extended worker message %#', (value) => {
     expect(isWorkerMessage(value)).toBe(false);

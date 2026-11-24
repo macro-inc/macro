@@ -35,10 +35,15 @@ describe('desktop releases', () => {
       writeFileSync(join(dir, `${name}.sig`), 'signature');
       writeFileSync(join(dir, `${target}.release.json`), JSON.stringify({ ...identity, enabled: true }));
     }
-    const manifest = createManifest(dir, tag, 'macro-inc/macro');
+    const manifest = createManifest(dir, tag, 'macro-inc/macro', '14.0');
     expect(Object.keys(manifest.platforms)).toEqual(['darwin-aarch64', 'linux-x86_64']);
     expect(manifest.platforms['darwin-aarch64'].url).toContain('/v2026.10.6.1/Macro-2026.1006.1-');
+    expect(manifest.platforms['darwin-aarch64'].minimumSystemVersion).toBe('14.0');
+    expect(manifest.platforms['linux-x86_64']).not.toHaveProperty('minimumSystemVersion');
+    for (const minimum of [undefined, '', '13', '13.x']) {
+      expect(() => createManifest(dir, tag, 'macro-inc/macro', minimum)).toThrow();
+    }
     rmSync(join(dir, 'Macro-2026.1006.1-x86_64-linux.AppImage.sig'));
-    expect(() => createManifest(dir, tag, 'macro-inc/macro')).toThrow();
+    expect(() => createManifest(dir, tag, 'macro-inc/macro', '14.0')).toThrow();
   });
 });

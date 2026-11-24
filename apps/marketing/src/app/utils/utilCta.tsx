@@ -48,15 +48,15 @@ export const handleDemoClick = (buttonName: string): void => {
 };
 
 /**
- * A demo was booked in the site's dialog. Sends Meta the conversion the backend
- * sent for a cal.com demo booking (`crates/cal`), so campaigns that count demos
- * keep counting them.
+ * A demo was booked in the site's dialog. Sends Meta the Lead the backend
+ * sends for a cal.com demo booking (`crates/cal`). A demo is not an account,
+ * so it is not CompleteRegistration.
  */
 export const handleDemoBooked = (): void => {
   analytics.track('demo_booking_complete', {
     page_location: window.location.href,
   });
-  analytics.trackMeta('CompleteRegistration', {
+  analytics.trackMeta('Lead', {
     content_name: 'demo_meeting',
     content_category: 'cal_booking',
     value: 100,

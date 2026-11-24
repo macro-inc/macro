@@ -176,6 +176,32 @@ impl Storage for OwnerOnlyStorage {
             .await
     }
 
+    async fn load_channel_guard(
+        &self,
+        query: &cache_core::channel_timeline::ChannelGuardQuery,
+    ) -> Result<cache_core::channel_timeline::ChannelGuard, Self::Error> {
+        self.0.load_channel_guard(query).await
+    }
+
+    async fn load_channel_entries(
+        &self,
+        channel_id: &str,
+        entries: cache_core::channel_timeline::ChannelEntries<'_>,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.0.load_channel_entries(channel_id, entries).await
+    }
+
+    async fn put_channel_records(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+        channel: &cache_core::channel_timeline::ChannelWrite,
+    ) -> Result<(), Self::Error> {
+        self.0
+            .put_channel_records(entries, projections, channel)
+            .await
+    }
+
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
         self.0.delete_batch(keys).await
     }
@@ -247,6 +273,20 @@ impl Storage for OwnerOnlyStorage {
     ) -> Result<bool, Self::Error> {
         self.0
             .complete_mutation_with_projections(id, claim, entries, projections)
+            .await
+    }
+
+    async fn complete_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+        reconciliation: cache_core::predicate::OptimisticShadowReconciliation,
+        channel: &cache_core::channel_timeline::ChannelWrite,
+    ) -> Result<bool, Self::Error> {
+        self.0
+            .complete_mutation_with_shadow(id, claim, entries, projections, reconciliation, channel)
             .await
     }
 

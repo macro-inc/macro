@@ -8,6 +8,8 @@ use std::sync::Arc;
 pub(super) struct Field<'a> {
     pub node: &'a FieldNode,
     pub source: FieldSource<'a>,
+    /// Whether a list in this field leaves out records the cache does not hold.
+    pub omits_absent: bool,
 }
 
 pub(super) enum FieldSource<'a> {
@@ -74,6 +76,7 @@ fn compile_field<'a>(
         return Ok(Field {
             node,
             source: FieldSource::Typename,
+            omits_absent: false,
         });
     }
     let metadata =
@@ -90,6 +93,7 @@ fn compile_field<'a>(
             return Ok(Field {
                 node,
                 source: FieldSource::MissingArguments,
+                omits_absent: false,
             });
         }
         Err(error) => return Err(error.into()),
@@ -119,5 +123,13 @@ fn compile_field<'a>(
             ty: metadata.ty,
         },
     };
-    Ok(Field { node, source })
+    // A thread names its oldest replies; one the cache refused or dropped is
+    // gone from the thread, and the rest of it is still whole.
+    let omits_absent =
+        concrete == crate::channel_timeline::THREAD_TYPENAME && node.name == "preview";
+    Ok(Field {
+        node,
+        source,
+        omits_absent,
+    })
 }

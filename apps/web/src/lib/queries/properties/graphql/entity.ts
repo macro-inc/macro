@@ -65,11 +65,12 @@ export function buildEntityPropertiesInput(
     .with('CHANNEL', () => 'CHANNEL')
     .with('CALL_RECORD', () => 'CALL')
     .with('COMPANY', () => 'CRM_COMPANY')
+    .with('CONTACT', () => 'CRM_CONTACT')
     .with('CALENDAR_EVENT', () => 'CALENDAR_EVENT')
     .with('INITIATIVE', () => 'INITIATIVE')
     .with('DATABASE_ROW', () => 'DATABASE_ROW')
-    // Users and CRM contacts carry no Soup properties.
-    .with('USER', 'CONTACT', () => undefined)
+    // Users carry no Soup properties.
+    .with('USER', () => undefined)
     .exhaustive(() => undefined);
   return soupEntityType && { entityType: soupEntityType, entityId };
 }
@@ -199,7 +200,9 @@ export function toGraphqlSetPropertyValue(
   if (value === null) return null;
   return match(value)
     .with({ type: 'boolean' }, (v) => ({ boolean: v.value }))
-    .with({ type: 'date' }, (v) => ({ date: v.value }))
+    .with({ type: 'date' }, (v) =>
+      v.has_time ? { dateWithTime: v.value } : { date: v.value }
+    )
     .with({ type: 'date_range' }, (v) => ({ dateRange: v.value }))
     .with({ type: 'number' }, (v) => ({ number: v.value }))
     .with({ type: 'string' }, (v) => ({ string: v.value }))
@@ -227,9 +230,6 @@ export function toGraphqlPropertyTargetEntityType(
   if (entityType === 'TASK') return 'DOCUMENT';
   if (entityType === 'CALENDAR_EVENT') {
     throw new Error('calendar events do not support properties');
-  }
-  if (entityType === 'CONTACT') {
-    throw new Error('crm contacts do not support properties');
   }
   return entityType;
 }

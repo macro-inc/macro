@@ -26,7 +26,7 @@ async fn people_abi_preserves_scope_publication_and_winning_identity() {
         "{ user { id contacts(limit: 1) { nodes { __typename id userId name email } nextCursor } } }".into(),
         None, js(serde_json::json!({})),
         js(serde_json::json!({"user":{"id":viewer,"contacts":{"nodes":[{"__typename":"GraphqlContact","id":contact,"userId":user,"name":"Private label","email":"person@example.com"}],"nextCursor":null}}})),
-        Some(viewer.into()), js(scope.clone()),
+        Some(viewer.into()), js(scope.clone()), JsValue::UNDEFINED
     )).await;
     let sql = serde_json::json!({"scope":scope,"input":{"kind":"statement","sql":"SELECT name, row_position FROM macro.people"}});
     let answer: serde_json::Value =

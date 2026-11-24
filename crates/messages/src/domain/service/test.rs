@@ -841,6 +841,37 @@ async fn inaccessible_references_are_rejected_before_persistence() {
 }
 
 #[tokio::test]
+async fn voice_memo_attachments_must_name_a_static_file() {
+    let service = MessageService::new(fixture(), Events::default());
+    let input = PostMessage {
+        id: None,
+        attribution: Default::default(),
+        notification_policy: Default::default(),
+        content: String::new(),
+        thread_id: None,
+        anchor: None,
+        mentions: vec![],
+        attachments: vec![NewAttachment {
+            entity_type: "static/audio".into(),
+            entity_id: "not-a-static-file".into(),
+            width: None,
+            height: None,
+        }],
+        nonce: None,
+    };
+    // Repo::create is deliberately unimplemented: a rejected request must never reach it.
+    assert!(matches!(
+        service
+            .post(
+                access("macro|author@example.com", "doc", AccessLevel::Comment),
+                input
+            )
+            .await,
+        Err(MessageError::Invalid("invalid media identifier"))
+    ));
+}
+
+#[tokio::test]
 async fn user_mentions_do_not_require_or_grant_parent_sharing() {
     let service = MessageService::new(fixture(), Events::default());
     let mentions = vec![SimpleMention {
@@ -2025,6 +2056,83 @@ async fn a_short_side_lends_its_room_to_the_other() {
     let (page, _) = around(&repo, facts, 7).await;
     assert_eq!(entry_ids(&page).len(), 4);
     assert!(page.next_cursor.is_none() && page.previous_cursor.is_none());
+}
+
+#[tokio::test]
+async fn a_mixed_page_offers_its_cursors_side_only_when_an_entry_lies_there() {
+    let mut repo = fixture();
+    repo.message.parent = MessageParent::Channel(Uuid::from_u128(20));
+    repo.state.anchor = None;
+    let fact = |id: u128, seconds| activity::domain::timeline::TimelineActivity {
+        id: Uuid::from_u128(100 + id),
+        actor_id: "macro|author@example.com".into(),
+        occurred_at: repo.message.created_at + chrono::Duration::seconds(seconds),
+        action: "picture_changed".into(),
+        payload: None,
+    };
+    let facts = vec![fact(0, -1), fact(1, 1)];
+    let service = MessageService::new(repo.clone(), Events::default())
+        .with_activity(TimelineFacts(facts.clone()));
+    let read = |cursor: MessageCursor, direction| {
+        service.timeline_entries(
+            channel_access()
+                .try_into_requirement::<MessageView>()
+                .unwrap(),
+            MessageTimelineQuery {
+                cursor: Some(cursor),
+                direction,
+                ..Default::default()
+            },
+        )
+    };
+    let at = |seconds| MessageCursor {
+        created_at: repo.message.created_at + chrono::Duration::seconds(seconds),
+        id: Uuid::from_u128(999),
+    };
+
+    // The entries the cursors were taken from are gone: nothing lies beyond.
+    let older = read(at(5), MessageDirection::Older).await.unwrap();
+    assert_eq!(entry_ids(&older).len(), 3);
+    assert!(older.previous_cursor.is_none());
+    let newer = read(at(-5), MessageDirection::Newer).await.unwrap();
+    assert_eq!(entry_ids(&newer).len(), 3);
+    assert!(newer.next_cursor.is_none());
+
+    // An activity on the cursor's side is offered, and so is a message from
+    // a page that holds activity alone.
+    let older = read(
+        MessageCursor {
+            created_at: facts[1].occurred_at,
+            id: facts[1].id,
+        },
+        MessageDirection::Older,
+    )
+    .await
+    .unwrap();
+    assert_eq!(entry_ids(&older), [repo.message.id, facts[0].id]);
+    assert_eq!(older.previous_cursor.unwrap().id, repo.message.id);
+    let newer = read(
+        MessageCursor {
+            created_at: repo.message.created_at,
+            id: Uuid::from_u128(0),
+        },
+        MessageDirection::Newer,
+    )
+    .await
+    .unwrap();
+    assert_eq!(entry_ids(&newer), [facts[1].id, repo.message.id]);
+    assert!(newer.next_cursor.is_some());
+    let only_activity = read(
+        MessageCursor {
+            created_at: repo.message.created_at,
+            id: Uuid::from_u128(0),
+        },
+        MessageDirection::Older,
+    )
+    .await
+    .unwrap();
+    assert_eq!(entry_ids(&only_activity), [facts[0].id]);
+    assert_eq!(only_activity.previous_cursor.unwrap().id, facts[0].id);
 }
 
 fn entry_ids(page: &MessageTimelinePage) -> Vec<Uuid> {

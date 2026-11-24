@@ -83,6 +83,11 @@ fragment ActivityEventFields on GraphqlActivityEvent {
 		... on GraphqlActivityCallStarted {
 			callId
 		}
+		... on GraphqlActivityTimeLogged {
+			minutes
+			entryDate
+			source
+		}
 		... on GraphqlActivityUnknownAction {
 			tag
 			payload

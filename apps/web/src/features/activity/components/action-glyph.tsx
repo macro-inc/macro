@@ -7,6 +7,7 @@ import PencilSimple from '@icon/system/regular/pencil-simple.svg';
 import Phone from '@icon/system/regular/phone.svg';
 import Plus from '@icon/system/regular/plus.svg';
 import SlidersHorizontal from '@icon/system/regular/sliders-horizontal.svg';
+import Timer from '@icon/system/regular/timer.svg';
 import Trash from '@icon/system/regular/trash.svg';
 import UserMinus from '@icon/system/regular/user-minus.svg';
 import UserPlus from '@icon/system/regular/user-plus.svg';
@@ -27,6 +28,7 @@ const GLYPHS = {
   'participant-removed': UserMinus,
   'call-started': Phone,
   responded: ClipboardText,
+  'time-logged': Timer,
   unknown: PencilSimple,
 } as const;
 

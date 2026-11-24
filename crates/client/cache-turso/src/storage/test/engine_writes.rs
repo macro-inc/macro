@@ -296,6 +296,7 @@ fn unchanged_records_still_commit_projection_only_changes() {
                     variables: &variables,
                     data: &data,
                     identity: None,
+                    channel: None,
                 },
                 vec![ProjectionMutation::Replace(projection.clone())],
             )

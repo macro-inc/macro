@@ -1,9 +1,10 @@
 //! Channel timeline page reads, commits and eviction over the local index.
 
-use super::{CacheEngine, JsWriteResult, err_js, js_write_result, to_js};
+use super::{CacheEngine, CacheState, JsWriteResult, err_js, js_write_result, to_js};
 use cache_core::channel_timeline::{
     ChannelEviction, ChannelTimelineCommit, ChannelTimelineRequest, ChannelTimelineResult,
 };
+use cache_core::engine::channel_changes::ChannelChange;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
@@ -19,14 +20,6 @@ struct JsChannelTimelineResult {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct JsChannelCommitResult {
-    #[serde(flatten)]
-    write: JsWriteResult,
-    channel_seq: Option<String>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 struct JsChannelEvictionResult {
     #[serde(flatten)]
     write: JsWriteResult,
@@ -34,8 +27,37 @@ struct JsChannelEvictionResult {
     has_more: bool,
 }
 
+impl CacheState {
+    pub(super) fn listen_to_channels(&mut self) {
+        let (Some(engine), Some(callback)) = (&mut self.engine, &self.on_channels_changed) else {
+            return;
+        };
+        let callback = callback.clone();
+        engine.set_channel_listener(move |changes: &[ChannelChange]| {
+            // The write is stored whatever the listener does with the news.
+            to_js(changes)
+                .and_then(|changes| callback.call1(&JsValue::NULL, &changes))
+                .ok();
+        });
+    }
+}
+
 #[wasm_bindgen]
 impl CacheEngine {
+    /// Calls `callback` with the channels each transaction changed, after it
+    /// committed and before its call resolves.
+    #[wasm_bindgen(js_name = onChannelsChanged)]
+    pub fn on_channels_changed(&self, callback: js_sys::Function) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            state.on_channels_changed = Some(callback);
+            state.listen_to_channels();
+            Ok(JsValue::UNDEFINED)
+        })
+    }
+
     /// Answers one channel or thread page from cached messages, or reports
     /// that the requested window was never fully fetched.
     #[wasm_bindgen(js_name = channelTimeline)]
@@ -56,9 +78,8 @@ impl CacheEngine {
         })
     }
 
-    /// Atomically applies fetched coverage, deletions and the applied change
-    /// sequence of one channel. Resolves like `writeQuery`, plus the
-    /// channel's sequence after the commit.
+    /// Commits what is known of a channel without a response: a touch, a reset
+    /// or dropped threads. Resolves like `writeQuery`.
     #[wasm_bindgen(js_name = channelTimelineCommit)]
     pub fn channel_timeline_commit(&self, commit: JsValue) -> js_sys::Promise {
         let state = self.state.clone();
@@ -75,12 +96,9 @@ impl CacheEngine {
                 .unchanged_observed_windows()
                 .await
                 .unwrap_or_default();
-            let mut write = js_write_result(result.write, &ops.borrow());
+            let mut write = js_write_result(result, &ops.borrow());
             write.unchanged_views = Some(unchanged_views);
-            to_js(&JsChannelCommitResult {
-                write,
-                channel_seq: result.seq,
-            })
+            to_js(&write)
         })
     }
 

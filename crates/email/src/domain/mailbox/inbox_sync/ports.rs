@@ -1,6 +1,7 @@
 //! Capabilities for processing one delivered Gmail inbox update.
 
 use super::super::connection::ConnectionSourceError;
+use super::ThreadReindexQueue;
 use email_api_client::domain::models::EmailApiError;
 use futures::future::BoxFuture;
 use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
@@ -154,7 +155,7 @@ pub trait InboxSyncGmail: Send + Sync + 'static {
 }
 
 /// Primary and retry publication of inbox-sync operations.
-pub trait InboxSyncQueue: Send + Sync + 'static {
+pub trait InboxSyncQueue: ThreadReindexQueue {
     /// The original queue cause.
     type Err: ConnectionSourceError;
     /// Publish follow-up work to the primary queue.

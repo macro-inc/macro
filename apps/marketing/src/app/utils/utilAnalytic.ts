@@ -1,4 +1,5 @@
 import { isServer } from 'solid-js/web';
+import { isProductionMetaHost } from './metaHost';
 import { createDeferredPosthog } from './utilDeferredPosthog';
 import {
   mobileCaptureDevice,
@@ -40,8 +41,8 @@ const GOOGLE_CONVERSION_LABELS = {
 
 type GoogleConversionAction = keyof typeof GOOGLE_CONVERSION_LABELS;
 
-/** Meta Pixel standard events we fire — `fbq('track', ...)` only accepts these. */
-type MetaStandardEvent = 'Lead' | 'CompleteRegistration';
+/** Meta Pixel standard events the site fires. Account creation is not one of them. */
+type MetaStandardEvent = 'Lead';
 
 // The old GTM container (GTM-M58X7PJ8) was removed: it is unpublished and
 // both gtm.js and ns.html returned 404 on every production page load.
@@ -131,6 +132,9 @@ const createAnalytics = () => {
 
   initializeProviders();
 
+  const metaEnabled = () =>
+    !disabled && isProductionMetaHost(window.location.hostname);
+
   // The deferred PostHog queue records navigation until the SDK is ready, then
   // its history-change capture takes over without duplicating pageviews.
   const pageView = (path: string) => {
@@ -145,9 +149,11 @@ const createAnalytics = () => {
       });
     }, PAGE_VIEW_FAIL_ERROR_MESSAGE);
 
-    tryCatch(() => {
-      fbq('track', 'PageView', {}, { eventID: generateEventId() });
-    }, PAGE_VIEW_FAIL_ERROR_MESSAGE);
+    if (metaEnabled()) {
+      tryCatch(() => {
+        fbq('track', 'PageView', {}, { eventID: generateEventId() });
+      }, PAGE_VIEW_FAIL_ERROR_MESSAGE);
+    }
 
     posthog?.pageView();
   };
@@ -159,6 +165,9 @@ const createAnalytics = () => {
     eventId?: string
   ) => {
     if (disabled) {
+      return;
+    }
+    if (provider === 'meta' && !metaEnabled()) {
       return;
     }
     tryCatch(() => {
@@ -195,7 +204,7 @@ const createAnalytics = () => {
   };
 
   /**
-   * Fires a Meta Pixel **standard** event (Lead, CompleteRegistration, …).
+   * Fires a Meta Pixel **standard** event (Lead, …).
    * Meta's optimization models are pre-trained on the standard taxonomy and
    * Ads Manager surfaces these natively in its conversion pickers, so campaign
    * conversions must go through here rather than `track()` (which sends a
@@ -245,7 +254,7 @@ const createAnalytics = () => {
     if (!distinctId) return;
     tryCatch(() => {
       gtag('config', GA_ID, { user_id: distinctId, email: distinctId });
-      fbq('init', META_PIXEL_ID, { em: distinctId });
+      if (metaEnabled()) fbq('init', META_PIXEL_ID, { em: distinctId });
     }, '[Analytics] Failed to identify visitor:');
     posthog?.identify(
       distinctId,

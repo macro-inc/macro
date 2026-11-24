@@ -133,6 +133,8 @@ impl<S: crate::store::Storage> Engine<S> {
                     .collect(),
             ),
             identity_errors: Vec::new(),
+            unwritable_response: None,
+            channel: None,
             revision,
             revision_advanced: true,
             search_changed_buckets: Some(BTreeSet::new()),

@@ -252,6 +252,56 @@ describe('Task.create', () => {
     ]);
   });
 
+  test('sends both dates with their time of day when asked', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      return Response.json({
+        documentId: '0198a4cc-e138-7670-a308-a6b766602722',
+      });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+
+    await macro.tasks.create({
+      name: 'Plan the launch',
+      assignees: [],
+      dueDate: new Date('2026-11-27T08:00:00.000Z'),
+      startDate: new Date('2026-11-23T08:00:00.000Z'),
+      withTimes: true,
+    });
+
+    expect((await requests[0].json()).propertyValues).toEqual([
+      {
+        propertyId: '00000001-0000-0000-0000-000000000002',
+        value: {
+          type: 'select_option',
+          option_id: '00000001-0000-0000-0002-000000000001',
+        },
+      },
+      {
+        propertyId: '00000001-0000-0000-0000-000000000004',
+        value: {
+          type: 'date',
+          value: '2026-11-27T08:00:00.000Z',
+          has_time: true,
+        },
+      },
+      {
+        propertyId: '00000001-0000-0000-0000-000000000015',
+        value: {
+          type: 'date',
+          value: '2026-11-23T08:00:00.000Z',
+          has_time: true,
+        },
+      },
+    ]);
+  });
+
   test('assigns the creator when an initiative is given without assignees', async () => {
     const requests: Request[] = [];
     globalThis.fetch = (async (input, init) => {
@@ -767,7 +817,7 @@ describe('Task.create options', () => {
         body: 'Signing in sends you back to the login page.',
       } as unknown as { name: string }),
     ).rejects.toThrow(
-      'tasks.create does not take `title`, `body`; its options are `name`, `markdown`, `project`, `initiative`, `assignees`, `dueDate`, `startDate`, `team`, `shareWithTeam`.',
+      'tasks.create does not take `title`, `body`; its options are `name`, `markdown`, `project`, `initiative`, `assignees`, `dueDate`, `startDate`, `withTimes`, `team`, `shareWithTeam`.',
     );
     expect(requests).toHaveLength(0);
   });

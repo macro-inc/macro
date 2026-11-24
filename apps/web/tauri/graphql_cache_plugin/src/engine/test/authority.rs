@@ -13,6 +13,7 @@ async fn bind(handle: &EngineHandle) {
             variables: Variables::new(),
             data: json!({"user":{"id":"viewer"}}),
             identity: Some("viewer".into()),
+            channel_commit: None,
         })
         .await
         .unwrap();
@@ -68,6 +69,7 @@ fn native_implicit_retirement_notifies_other_windows_before_returning_content() 
                 variables: Variables::new(),
                 data: json!({"user": {"id": "viewer"}}),
                 identity: Some("viewer".into()),
+                channel_commit: None,
             })
             .await
             .is_err()
@@ -103,6 +105,7 @@ fn native_account_replacement_still_notifies_under_the_lock_and_rejects_old_writ
                 variables: Variables::new(),
                 data: json!({"user":{"id":"replacement"}}),
                 identity: Some("replacement".into()),
+                channel_commit: None,
             })
             .await
             .unwrap();
@@ -120,6 +123,7 @@ fn native_account_replacement_still_notifies_under_the_lock_and_rejects_old_writ
                     variables: Variables::new(),
                     data: json!({"user":{"id":"viewer"}}),
                     identity: Some("viewer".into()),
+                    channel_commit: None,
                 })
                 .await
                 .is_err()
@@ -216,6 +220,7 @@ fn native_generation_boundary_rejects_old_writes_but_settles_authored_commands()
                         variables: super::variables(),
                         data: soup_data(false),
                         identity: Some("viewer".into()),
+                        channel_commit: None,
                     })
                     .await
                     .is_err()
@@ -302,6 +307,7 @@ fn native_generation_boundary_rejects_old_writes_but_settles_authored_commands()
                 variables,
                 data,
                 identity: None,
+                channel_commit: None,
             })
             .await
             .unwrap();
@@ -339,7 +345,7 @@ fn native_authoritative_mutations_keep_unrelated_property_ownership_without_pare
             writer.write(WriteRequest { origin_op_id: None, registration: None,
                 query: "mutation Set($input: SetEntityPropertyInput!) { setEntityProperty(input: $input) { __typename id propertyDefinitionId } }".into(), operation_name: Some("Set".into()),
                 variables: json!({"input":{"entityId":"owner","entityType":kind}}).as_object().unwrap().clone(),
-                data: json!({"setEntityProperty":{"__typename":"GraphqlProperty","id":id,"propertyDefinitionId":"definition"}}), identity: None }).await.unwrap();
+                data: json!({"setEntityProperty":{"__typename":"GraphqlProperty","id":id,"propertyDefinitionId":"definition"}}), identity: None, channel_commit: None }).await.unwrap();
         }
         handle
             .transition_authority("profile", allowed.generation, "team:denied".into())
@@ -379,6 +385,7 @@ fn native_first_non_denied_proof_preserves_offline_mail() {
                     variables: Variables::new(),
                     data: data.clone(),
                     identity: Some("viewer".into()),
+                    channel_commit: None,
                 })
                 .await
                 .unwrap();

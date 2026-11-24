@@ -204,13 +204,13 @@ export function renderEntityResolverSchema(
         }
         lines.push('      ],');
       }
+      // Biome keeps a list of several multi-segment paths one per line and
+      // joins any other list that fits the line width.
       const pathsLine = `      argumentPaths: [${field.argumentPaths.map(tuple).join(', ')}],`;
-      // Biome, like Prettier, always breaks an array of two or more arrays
-      // that each hold more than one element.
-      const alwaysBreaks =
+      const matrix =
         field.argumentPaths.length > 1 &&
         field.argumentPaths.every((path) => path.length > 1);
-      if (!alwaysBreaks && pathsLine.length <= FORMATTER_LINE_WIDTH) {
+      if (!matrix && pathsLine.length <= FORMATTER_LINE_WIDTH) {
         lines.push(pathsLine);
       } else {
         lines.push('      argumentPaths: [');

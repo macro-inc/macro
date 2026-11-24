@@ -1,4 +1,5 @@
 use super::{HydrationResultWire, commit_settlement};
+use cache_core::channel_timeline::{ChannelCommitOutcome, ChannelCommitStatus};
 
 #[test]
 fn a_commit_the_device_cannot_store_settles_with_its_own_code() {
@@ -88,6 +89,7 @@ fn scoped_first_binding_preserves_the_generation_without_notifying_windows() {
                         data,
                         identity,
                         None,
+                        None,
                     )
                     .await
                     .unwrap();
@@ -102,6 +104,7 @@ fn scoped_first_binding_preserves_the_generation_without_notifying_windows() {
                         None,
                         data,
                         identity,
+                        None,
                         None,
                     )
                     .await
@@ -118,6 +121,7 @@ fn scoped_first_binding_preserves_the_generation_without_notifying_windows() {
                             data,
                             identity,
                             hydration_scope: scope,
+                            channel_commit: None,
                         },
                         None,
                     )
@@ -161,17 +165,31 @@ fn hydration_results_preserve_the_native_advancement_bit() {
                 data: serde_json::json!({"cursor": null}),
                 revision: "7".to_string(),
                 revision_advanced,
+                channel: Some(ChannelCommitOutcome {
+                    channel_id: "c1".to_string(),
+                    seq: Some("4".to_string()),
+                    outcome: ChannelCommitStatus::Gap,
+                }),
             },
             HydrationResultWire::Void {
                 unchanged_views: vec!["window".into()],
                 search_changed_buckets: ["note".into()].into(),
                 revision: "7".to_string(),
                 revision_advanced,
+                channel: Some(ChannelCommitOutcome {
+                    channel_id: "c1".to_string(),
+                    seq: Some("4".to_string()),
+                    outcome: ChannelCommitStatus::Gap,
+                }),
             },
         ] {
             let json = serde_json::to_value(result).unwrap();
             assert_eq!(json["revisionAdvanced"], revision_advanced);
             assert_eq!(json["revision"], "7");
+            assert_eq!(
+                json["channel"],
+                serde_json::json!({"channelId": "c1", "seq": "4", "outcome": "gap"})
+            );
             assert_eq!(json["unchangedViews"], serde_json::json!(["window"]));
             assert_eq!(json["searchChangedBuckets"], serde_json::json!(["note"]));
             assert!(json.get("revision_advanced").is_none());
@@ -325,4 +343,232 @@ fn legacy_payloads_omit_generation_through_the_invoke_handler() {
             );
         }
     }
+}
+
+#[test]
+fn only_a_well_formed_traceparent_names_an_upstream_trace() {
+    let id = "4bf92f3577b34da6a3ce929d0e0e4736";
+    assert_eq!(
+        super::upstream_trace_id(Some(&format!("00-{id}-00f067aa0ba902b7-01"))),
+        Some(id)
+    );
+    for malformed in [
+        format!("00-{id}-00f067aa0ba902b7-0\0"),
+        format!("00-{id}-00f067aa0ba902b7-0z"),
+        format!("00-{id}-00f067aa0ba902b7"),
+        format!("00-{id}-00f067aa0ba902b7-01-"),
+        "secret text".to_owned(),
+    ] {
+        assert_eq!(
+            super::upstream_trace_id(Some(&malformed)),
+            None,
+            "{malformed:?}"
+        );
+    }
+    assert_eq!(super::upstream_trace_id(None), None);
+}
+
+/// The bundled schema with a `runtimeLabel` of `declared` on users.
+fn labelled(declared: &str) -> std::sync::Arc<cache_core::meta::Schema> {
+    cache_core::meta::Schema::from_sdl(&format!(
+        "{}\nextend type GraphqlUser {{ runtimeLabel: {declared} }}",
+        cache_core::meta::BUNDLED_SCHEMA_SDL
+    ))
+    .unwrap()
+}
+
+const LABEL_QUERY: &str = "query { user { id runtimeLabel } }";
+
+/// Writes a user with a label through `handle`.
+async fn write_label(handle: &crate::engine::EngineHandle) {
+    handle
+        .write(crate::engine::WriteRequest {
+            origin_op_id: None,
+            registration: None,
+            query: LABEL_QUERY.into(),
+            operation_name: None,
+            variables: serde_json::Map::new(),
+            data: serde_json::json!({"user": {"id": "viewer", "runtimeLabel": "OTA"}}),
+            identity: None,
+            channel_commit: None,
+        })
+        .await
+        .unwrap();
+}
+
+async fn label_hits(handle: &crate::engine::EngineHandle) -> bool {
+    matches!(
+        handle
+            .read(
+                None,
+                LABEL_QUERY.into(),
+                None,
+                serde_json::Map::new(),
+                vec![],
+            )
+            .await
+            .unwrap(),
+        crate::engine::ReadResultWire::Hit { .. }
+    )
+}
+
+#[test]
+fn an_older_builds_cache_upgrades_against_its_schema_file_and_the_file_goes() {
+    pollster::block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let written = labelled("String");
+        let (storage, _, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, written.clone());
+        write_label(&handle).await;
+        handle.shutdown().unwrap();
+        // What an older build leaves: a storage 12 file, and the schema its
+        // records were written under beside it.
+        let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
+        let mut storage = database.open("scope").unwrap();
+        cache_turso::migration_test_hooks::rewrite_as_storage_12(&mut storage).unwrap();
+        storage.try_close().unwrap();
+        let legacy = dir.path().join("schema.json");
+        std::fs::write(&legacy, serde_json::to_vec(written.artifact()).unwrap()).unwrap();
+
+        // The bundle an OTA rollback returns to lacks the label; the file
+        // says the records hold one, so they stay and keep answering.
+        let bundled = cache_core::meta::bundled_schema();
+        let (storage, adoption, _) = super::open_cache(dir.path(), "scope", &bundled).unwrap();
+        assert_eq!(storage.upgraded_from_storage_version(), Some(12));
+        assert_eq!(
+            adoption.change,
+            Some(cache_core::schema_change::Tier::Compatible)
+        );
+        assert_eq!(adoption.dropped_records, 0);
+        assert!(!legacy.exists());
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, adoption.schema);
+        assert!(label_hits(&handle).await);
+        handle.shutdown().unwrap();
+    });
+}
+
+#[test]
+fn an_unreadable_schema_file_drops_the_records_it_described() {
+    // The bundled guess at what wrote a cache is for one that left no
+    // schema file; one it cannot read could name any older schema.
+    pollster::block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let written = labelled("String");
+        let (storage, _, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, written.clone());
+        write_label(&handle).await;
+        handle.shutdown().unwrap();
+        let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
+        let mut storage = database.open("scope").unwrap();
+        cache_turso::migration_test_hooks::rewrite_as_storage_12(&mut storage).unwrap();
+        storage.try_close().unwrap();
+        std::fs::write(dir.path().join("schema.json"), b"{").unwrap();
+
+        let (storage, adoption, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        assert_eq!(
+            adoption.change,
+            Some(cache_core::schema_change::Tier::Reset(
+                cache_core::schema_change::ResetReason::Unreadable
+            ))
+        );
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, adoption.schema);
+        assert!(!label_hits(&handle).await);
+        handle.shutdown().unwrap();
+    });
+}
+
+#[test]
+fn a_build_that_retypes_a_field_opens_without_that_types_records() {
+    // Native init used to refuse a build whose schema changed a stored
+    // type's shape, leaving the webview on the network; now the type's
+    // records go and the rest of the cache opens.
+    pollster::block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let written = labelled("String");
+        let (storage, _, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, written);
+        write_label(&handle).await;
+        assert!(label_hits(&handle).await);
+        handle.shutdown().unwrap();
+
+        let retyped = labelled("[String]");
+        let (storage, adoption, _) = super::open_cache(dir.path(), "scope", &retyped).unwrap();
+        let Some(cache_core::schema_change::Tier::Types { changed, .. }) = &adoption.change else {
+            panic!("{:?}", adoption.change);
+        };
+        assert!(changed.contains("GraphqlUser"), "{changed:?}");
+        assert!(adoption.dropped_records > 0);
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, adoption.schema);
+        assert!(!label_hits(&handle).await);
+        handle.install_schema(&retyped).await.unwrap();
+        handle.shutdown().unwrap();
+    });
+}
+
+#[test]
+fn a_native_open_reports_what_it_did_to_the_cache() {
+    pollster::block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let written = labelled("String");
+        let (storage, _, fresh) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        assert_eq!(fresh.change, "unchanged");
+        assert!(!fresh.physical_reset);
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, written);
+        write_label(&handle).await;
+        handle.shutdown().unwrap();
+
+        let retyped = labelled("[String]");
+        let (storage, _, report) = super::open_cache(dir.path(), "scope", &retyped).unwrap();
+        assert_eq!(report.change, "types");
+        assert!(report.changed_types > 0);
+        assert!(report.dropped_records > 0);
+        assert!(!report.physical_reset);
+        // The webview reads it as the worker's `schemaChange`.
+        let wire = serde_json::to_value(&report).unwrap();
+        assert_eq!(wire["change"], "types");
+        assert_eq!(wire["physicalReset"], false);
+        assert!(wire["changedTypes"].as_u64().unwrap() > 0);
+        assert!(wire.get("resetReason").is_none());
+        storage.try_close().unwrap();
+    });
+}
+
+#[test]
+fn a_file_replaced_as_it_opens_reports_its_replacement() {
+    pollster::block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let written = labelled("String");
+        let (storage, _, _) = super::open_cache(dir.path(), "scope-1", &written).unwrap();
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, written.clone());
+        write_label(&handle).await;
+        handle.shutdown().unwrap();
+
+        // Another scope's file cannot be opened, so the open replaces it.
+        let (storage, adoption, report) =
+            super::open_cache(dir.path(), "scope-2", &written).unwrap();
+        assert!(report.physical_reset);
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, adoption.schema);
+        assert!(!label_hits(&handle).await);
+        handle.shutdown().unwrap();
+    });
+}
+
+#[test]
+fn a_cache_that_cannot_adopt_the_schema_in_place_reports_its_replacement() {
+    pollster::block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let written = labelled("String");
+        let (storage, _, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, written.clone());
+        write_label(&handle).await;
+        handle.shutdown().unwrap();
+        cache_turso::migration_test_hooks::corrupt_next_adoption();
+
+        let (storage, adoption, report) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        assert!(report.physical_reset);
+        assert_eq!(report.change, "unchanged");
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, adoption.schema);
+        assert!(!label_hits(&handle).await);
+        handle.shutdown().unwrap();
+    });
 }

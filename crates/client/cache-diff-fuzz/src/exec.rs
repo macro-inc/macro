@@ -926,6 +926,8 @@ impl<'a> Exec<'a> {
                 data.clone(),
                 Some(self.identity.clone()),
                 scope,
+                #[cfg(channel_commits)]
+                None,
             )
             .await?;
         Ok(json!({
@@ -956,6 +958,8 @@ impl<'a> Exec<'a> {
                 variables: variables.clone(),
                 data: data.clone(),
                 identity: Some(self.identity.clone()),
+                #[cfg(channel_commits)]
+                channel_commit: None,
             })
             .await?;
         serde_json::to_value(result).map_err(|error| error.to_string())

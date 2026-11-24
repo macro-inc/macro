@@ -7,6 +7,17 @@ import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
 import { entitySearch } from '../search/options';
 import { Team } from '../teams/team';
+import {
+  type LogTimeOptions,
+  logTime,
+  type StartTimerOptions,
+  startTimer,
+  type TimeEntriesOptions,
+  type TimerStart,
+  timeEntries,
+  timeLogged,
+} from '../time/task-time';
+import type { TimeEntry } from '../time/time-entry';
 import { User } from '../users/user';
 
 /**
@@ -88,6 +99,13 @@ export class Task extends Document {
        * `dueDate` is saved as the due date.
        */
       startDate?: Date;
+      /**
+       * Keeps the time of day of `startDate` and `dueDate`, making each an
+       * exact moment (a 2 to 4 PM block) instead of a whole day. A time the
+       * person gives is in their time zone unless they name another: build the
+       * Date with that zone's UTC offset on that date.
+       */
+      withTimes?: boolean;
       /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
       team?: Team;
       /** Defaults to team sharing, or private when the session cannot share. */
@@ -106,6 +124,7 @@ export class Task extends Document {
       assignees: true,
       dueDate: true,
       startDate: true,
+      withTimes: true,
       team: true,
       shareWithTeam: true,
     });
@@ -254,6 +273,52 @@ export class Task extends Document {
   }
 
   /**
+   * Log time you spent on this task, as yourself; needs edit access, and an
+   * entry is at most 24 hours. `date` is the day in your own calendar
+   * (`YYYY-MM-DD`, today in UTC when omitted). The task's Time logged grows by
+   * `minutes`.
+   *
+   * @example
+   * await task.logTime({ minutes: 90, date: '2026-11-20', note: 'Review' });
+   *
+   * @write
+   */
+  logTime(opts: LogTimeOptions): Promise<TimeEntry> {
+    return logTime(this.client, this, opts);
+  }
+
+  /**
+   * Everyone's time entries on this task, newest day first, auto-paginated;
+   * `maxItems` caps the total.
+   *
+   * @readonly
+   */
+  timeEntries(opts?: TimeEntriesOptions): AsyncGenerator<TimeEntry> {
+    return timeEntries(this.client, this, opts);
+  }
+
+  /**
+   * The task's Time logged: the minutes of all its entries.
+   *
+   * @readonly
+   */
+  timeLogged(): Promise<number> {
+    return timeLogged(this.client, this);
+  }
+
+  /**
+   * Start your timer on this task, first stopping and saving any timer you
+   * have running, on this task too (`stopped`); check `macro.time.timer()`
+   * first. Needs edit access. A running timer past 8 hours throws
+   * `TimerOverLimitError` instead, naming that timer to resolve first.
+   *
+   * @write
+   */
+  startTimer(opts?: StartTimerOptions): Promise<TimerStart> {
+    return startTimer(this.client, this, opts);
+  }
+
+  /**
    * The task's URL in the Macro web app.
    *
    * @readonly
@@ -275,6 +340,14 @@ export class Task extends Document {
  * (creator assigned, Not started). Sending any value replaces those defaults,
  * so the defaults are spelled out here.
  */
+function dateValue(date: Date, withTime: boolean | undefined) {
+  return {
+    type: 'date' as const,
+    value: date.toISOString(),
+    ...(withTime ? { has_time: true } : {}),
+  };
+}
+
 async function initialProperties(
   client: MacroClient,
   opts: Parameters<typeof Task.create>[1],
@@ -312,13 +385,13 @@ async function initialProperties(
   if (opts.dueDate) {
     values.push({
       propertyId: DUE_DATE_PROPERTY_ID,
-      value: { type: 'date', value: opts.dueDate.toISOString() },
+      value: dateValue(opts.dueDate, opts.withTimes),
     });
   }
   if (opts.startDate) {
     values.push({
       propertyId: START_DATE_PROPERTY_ID,
-      value: { type: 'date', value: opts.startDate.toISOString() },
+      value: dateValue(opts.startDate, opts.withTimes),
     });
   }
   return values;

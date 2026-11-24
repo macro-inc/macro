@@ -1,4 +1,5 @@
 use async_lock::Mutex;
+use cache_core::channel_timeline::{ChannelCommitOutcome, ChannelTimelineCommit};
 use cache_core::codec::{
     CACHE_FORMAT_VERSION, CACHE_SCHEMA_COMPATIBILITY_EPOCH, UNVERSIONED_STORAGE_VERSIONS,
     cache_database_name, legacy_cache_database_name,
@@ -22,8 +23,9 @@ use cache_core::search::SearchRequest;
 use cache_core::store::QueueDiagnosticsAvailability;
 use cache_core::value::EntityKey;
 use cache_turso::{
-    PhysicalResetReason, QueuedMutationCount, TursoStorage, TursoStorageCloseOutcome,
-    TursoStorageError, TursoStorageOpenOutcome, WalPosition, count_queued_mutations,
+    PhysicalResetReason, QueuedMutationCount, SchemaAdoption, TursoStorage,
+    TursoStorageCloseOutcome, TursoStorageError, TursoStorageOpenOutcome, Unrecorded, WalPosition,
+    count_queued_mutations,
 };
 use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
@@ -141,6 +143,7 @@ fn recovery_outcome(reason: PhysicalResetReason) -> CacheOpenOutcome {
 struct JsWriteContext {
     origin_op_id: Option<String>,
     registration: Option<JsQueryRegistration>,
+    channel_commit: Option<ChannelTimelineCommit>,
 }
 
 #[derive(Deserialize)]
@@ -160,6 +163,8 @@ struct JsWriteResult {
     field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     identity_errors: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unwritable_response: Option<String>,
     revision: String,
     revision_advanced: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -170,6 +175,8 @@ struct JsWriteResult {
     revalidations: Vec<QueryRevalidation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     mutation_uuid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    channel: Option<ChannelCommitOutcome>,
 }
 
 #[derive(Serialize)]
@@ -185,6 +192,8 @@ struct JsHydrationWriteResult {
     revalidations: Vec<QueryRevalidation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     mutation_uuid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    channel: Option<ChannelCommitOutcome>,
     /// A write committed between `prepareHydrate` and `commitHydrate`, so the
     /// commit read the projections again.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -202,6 +211,7 @@ struct HydrateRequest {
     /// Parsed after the projections are read, so a request that is wrong in
     /// both ways fails on its projections first, as `hydrateQuery` always did.
     scope: Option<HydrationScope>,
+    channel: Option<ChannelTimelineCommit>,
 }
 
 impl HydrateRequest {
@@ -211,14 +221,16 @@ impl HydrateRequest {
         variables: JsValue,
         data: JsValue,
         identity: Option<String>,
+        channel_commit: JsValue,
     ) -> Result<Self, JsValue> {
         Ok(Self {
             query,
             operation_name,
             variables: parse_variables(variables)?,
-            data: serde_wasm_bindgen::from_value(data).map_err(err_js)?,
+            data: json_value_from_js(data)?,
             identity,
             scope: None,
+            channel: serde_wasm_bindgen::from_value(channel_commit).map_err(err_js)?,
         })
     }
 
@@ -229,6 +241,7 @@ impl HydrateRequest {
             variables: &self.variables,
             data: &self.data,
             identity: self.identity.as_deref(),
+            channel: self.channel.as_ref(),
         }
     }
 }
@@ -538,6 +551,7 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
         unchanged_views: None,
         field_changes: result.field_changes,
         identity_errors: result.identity_errors,
+        unwritable_response: result.unwritable_response,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
         search_changed_buckets: result.search_changed_buckets,
@@ -550,10 +564,13 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
         reset: result.reset,
         revalidations: result.revalidations,
         mutation_uuid: result.mutation_uuid,
+        channel: result.channel,
     }
 }
 
 struct CacheState {
+    /// Hears of changed channels from this engine and every reset of it.
+    on_channels_changed: Option<js_sys::Function>,
     selections: RecordSelectionCache,
     engine: Option<BrowserEngine>,
     mail_generation: String,
@@ -828,14 +845,7 @@ impl CacheState {
             }
             (None, None) => {
                 engine
-                    .hydrate_query_with_projections(
-                        write.query,
-                        write.operation_name,
-                        write.variables,
-                        write.data,
-                        write.identity,
-                        projections,
-                    )
+                    .hydrate_query_with_projections(write, projections)
                     .await
             }
         };
@@ -870,6 +880,7 @@ impl CacheState {
             reset: result.write_result.reset,
             revalidations: result.write_result.revalidations,
             mutation_uuid: result.write_result.mutation_uuid,
+            channel: result.write_result.channel,
             projections_reread,
             data: result.data,
         })
@@ -1006,7 +1017,7 @@ const BROWSER_HOT_CAPACITY: usize = 2_500;
 /// SDL, which was a large part of starting an engine; they were sorted,
 /// validated and hashed when the engine was built, so it only decodes them.
 /// The worker keeps the bundled schema only once an engine is built with it
-/// (`build_engine`), so a caller whose open was refused can still configure
+/// (`adopted_engine`), so a caller whose open was refused can still configure
 /// another schema.
 fn runtime_schema() -> Result<std::sync::Arc<cache_core::meta::Schema>, JsValue> {
     match RUNTIME_SCHEMA.with(|slot| slot.borrow().clone()) {
@@ -1021,20 +1032,86 @@ fn decode_bundled_schema() -> Result<std::sync::Arc<cache_core::meta::Schema>, J
         .map_err(err_js)
 }
 
-fn build_engine(
-    storage: TursoStorage,
+/// What adopting the worker's schema did to an opened cache, for the host's
+/// open span (`TursoStorage::adopt_schema`).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsSchemaChange {
+    /// `unchanged`, or the tier's name.
+    change: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reset_reason: Option<&'static str>,
+    changed_types: usize,
+    dropped_records: u64,
+    incomplete_documents: u64,
+    retired_overlays: u64,
+    adopt_ms: f64,
+}
+
+impl JsSchemaChange {
+    fn new(adoption: &SchemaAdoption, adopt_ms: f64) -> Self {
+        Self {
+            change: adoption.outcome(),
+            reset_reason: adoption.reset_reason().map(<&'static str>::from),
+            changed_types: match &adoption.change {
+                Some(cache_core::schema_change::Tier::Types { changed, .. }) => changed.len(),
+                Some(_) | None => 0,
+            },
+            dropped_records: adoption.dropped_records,
+            incomplete_documents: adoption.incomplete_documents,
+            retired_overlays: adoption.retired_overlays,
+            adopt_ms,
+        }
+    }
+}
+
+/// Brings freshly opened storage to the worker's schema and builds its engine
+/// with the schema adoption returns: the worker's plus the stored definitions
+/// kept records may still hold values of. A cache that cannot take the schema
+/// is reset and opened empty under the same owner lock.
+async fn adopted_engine(
+    scope: &str,
+    opened: OpenedStorage,
     hot_capacity: Option<u32>,
     schema: std::sync::Arc<cache_core::meta::Schema>,
-) -> BrowserEngine {
-    let storage = wrap_storage(storage);
+) -> Result<(BrowserEngine, CacheOpenOutcome, JsSchemaChange), JsValue> {
     // A schema configured while storage opened wins, as it always has.
-    let schema = RUNTIME_SCHEMA.with(|slot| slot.borrow_mut().get_or_insert(schema).clone());
-    Engine::with_schema(
-        storage,
+    let incoming = RUNTIME_SCHEMA.with(|slot| slot.borrow_mut().get_or_insert(schema).clone());
+    let inputs = soup_filter_cache_adapter::projection_inputs();
+    let started = js_sys::Date::now();
+    let OpenedStorage { storage, outcome } = opened;
+    let (storage, outcome, adoption) =
+        match storage.adopt_schema(&incoming, &inputs, Unrecorded::Guess) {
+            Ok(adoption) => (storage, outcome, adoption),
+            Err(error) if error.requires_physical_reset() => {
+                let reset = error
+                    .physical_reset_reason()
+                    .map_or(CacheOpenOutcome::ResetIncompatible, recovery_outcome);
+                let owner = close_storage(wrap_storage(storage), true).await?;
+                let OpenedStorage { storage, .. } = open_storage(scope, owner).await?;
+                match storage.adopt_schema(&incoming, &inputs, Unrecorded::Guess) {
+                    Ok(adoption) => (storage, reset, adoption),
+                    Err(_) => {
+                        let owner = close_storage(wrap_storage(storage), true).await?;
+                        owner.release().await.map_err(err_js)?;
+                        return Err(reset_required_js_error());
+                    }
+                }
+            }
+            Err(error) => {
+                let owner = close_storage(wrap_storage(storage), false).await?;
+                owner.release().await.map_err(err_js)?;
+                return Err(err_js(error));
+            }
+        };
+    let change = JsSchemaChange::new(&adoption, js_sys::Date::now() - started);
+    let engine = Engine::with_schema(
+        wrap_storage(storage),
         hot_capacity.map_or(BROWSER_HOT_CAPACITY, |c| c as usize),
-        schema,
+        adoption.schema,
     )
-    .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners)
+    .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners);
+    Ok((engine, outcome, change))
 }
 
 fn validate_hot_capacity(hot_capacity: Option<u32>) -> Result<(), JsValue> {
@@ -1199,16 +1276,18 @@ async fn open_cache_inner(
     recovery_wipe: bool,
     storage_grant: Option<js_sys::Function>,
     if_available: bool,
-) -> Result<(CacheEngine, CacheOpenOutcome), JsValue> {
+) -> Result<(CacheEngine, CacheOpenOutcome, JsSchemaChange), JsValue> {
     validate_hot_capacity(hot_capacity)?;
     let schema = runtime_schema()?;
-    let OpenedStorage { storage, outcome } =
+    let opened =
         acquire_storage(&scope, recovery_wipe, storage_grant.as_ref(), if_available).await?;
+    let (engine, outcome, change) = adopted_engine(&scope, opened, hot_capacity, schema).await?;
     Ok((
         CacheEngine {
             state: Rc::new(Mutex::new(CacheState {
+                on_channels_changed: None,
                 selections: RecordSelectionCache::default(),
-                engine: Some(build_engine(storage, hot_capacity, schema)),
+                engine: Some(engine),
                 mail_generation: soup_filter_cache_adapter::mail::new_generation(),
                 scope,
                 hot_capacity,
@@ -1224,10 +1303,15 @@ async fn open_cache_inner(
             ops: Rc::new(RefCell::new(OpInterner::default())),
         },
         outcome,
+        change,
     ))
 }
 
-fn cache_open_result(engine: CacheEngine, outcome: CacheOpenOutcome) -> Result<JsValue, JsValue> {
+fn cache_open_result(
+    engine: CacheEngine,
+    outcome: CacheOpenOutcome,
+    change: &JsSchemaChange,
+) -> Result<JsValue, JsValue> {
     let result = js_sys::Object::new();
     js_sys::Reflect::set(
         &result,
@@ -1239,6 +1323,7 @@ fn cache_open_result(engine: CacheEngine, outcome: CacheOpenOutcome) -> Result<J
         &JsValue::from_str("outcome"),
         &JsValue::from_str(outcome.as_str()),
     )?;
+    js_sys::Reflect::set(&result, &JsValue::from_str("schemaChange"), &to_js(change)?)?;
     Ok(result.into())
 }
 
@@ -1249,7 +1334,7 @@ fn cache_open_result(engine: CacheEngine, outcome: CacheOpenOutcome) -> Result<J
 pub async fn open_cache(scope: String, hot_capacity: Option<u32>) -> Result<CacheEngine, JsValue> {
     open_cache_inner(scope, hot_capacity, false, None, false)
         .await
-        .map(|(engine, _)| engine)
+        .map(|(engine, ..)| engine)
 }
 
 /// Additive open API returning the engine and payload-free recovery outcome.
@@ -1273,7 +1358,7 @@ pub async fn open_cache_with_outcome(
     on_owner_lock_acquired: Option<js_sys::Function>,
     if_available: Option<bool>,
 ) -> Result<JsValue, JsValue> {
-    let (engine, outcome) = open_cache_inner(
+    let (engine, outcome, change) = open_cache_inner(
         scope,
         hot_capacity,
         false,
@@ -1281,7 +1366,7 @@ pub async fn open_cache_with_outcome(
         if_available.unwrap_or(false),
     )
     .await?;
-    cache_open_result(engine, outcome)
+    cache_open_result(engine, outcome, &change)
 }
 
 /// Acquires the canonical owner once, recovery-wipes before any Turso open,
@@ -1293,7 +1378,7 @@ pub async fn open_cache_for_recovery(
 ) -> Result<CacheEngine, JsValue> {
     open_cache_inner(scope, hot_capacity, true, None, false)
         .await
-        .map(|(engine, _)| engine)
+        .map(|(engine, ..)| engine)
 }
 
 /// Additive recovery-open API returning the engine and coarse wipe outcome.
@@ -1306,7 +1391,7 @@ pub async fn open_cache_for_recovery_with_outcome(
     on_owner_lock_acquired: Option<js_sys::Function>,
     if_available: Option<bool>,
 ) -> Result<JsValue, JsValue> {
-    let (engine, outcome) = open_cache_inner(
+    let (engine, outcome, change) = open_cache_inner(
         scope,
         hot_capacity,
         true,
@@ -1314,7 +1399,7 @@ pub async fn open_cache_for_recovery_with_outcome(
         if_available.unwrap_or(false),
     )
     .await?;
-    cache_open_result(engine, outcome)
+    cache_open_result(engine, outcome, &change)
 }
 
 /// Physical database identity this build opens for `scope`; it also names the
@@ -1504,7 +1589,7 @@ pub fn cache_build_info() -> Result<JsValue, JsValue> {
     })
 }
 
-fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
+fn to_js<T: Serialize + ?Sized>(value: &T) -> Result<JsValue, JsValue> {
     value
         .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
         .map_err(|e| JsValue::from_str(&e.to_string()))
@@ -1540,17 +1625,55 @@ fn query_update_values(
 }
 
 fn has_unsafe_json_integer(value: &serde_json::Value) -> bool {
-    const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
     match value {
-        serde_json::Value::Number(number) => {
-            !number.is_f64()
-                && number
-                    .as_i64()
-                    .is_none_or(|n| !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&n))
-        }
+        serde_json::Value::Number(number) => is_unsafe_integer(number),
         serde_json::Value::Array(values) => values.iter().any(has_unsafe_json_integer),
         serde_json::Value::Object(values) => values.values().any(has_unsafe_json_integer),
         _ => false,
+    }
+}
+
+/// An integer outside JS's safe range.
+fn is_unsafe_integer(number: &serde_json::Number) -> bool {
+    const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
+    !number.is_f64()
+        && number
+            .as_i64()
+            .is_none_or(|n| !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&n))
+}
+
+/// A JSON value from JS, as `serde_wasm_bindgen` reads it: written by the
+/// host's `JSON.stringify` and parsed here once, which avoids a Wasm/JS
+/// crossing for every nested field and array element. A value that
+/// `JSON.stringify` cannot write, or whose text does not parse back (a lone
+/// surrogate), is read the old way. Both read numbers as the JS value they
+/// are, so an integer past the safe range becomes a float here too. A
+/// property whose value is `undefined`, which `JSON.parse` never produces,
+/// is left out where the old way read it as null.
+fn json_value_from_js(value: JsValue) -> Result<serde_json::Value, JsValue> {
+    if let Some(text) = js_sys::JSON::stringify(&value)
+        .ok()
+        .and_then(|text| text.as_string())
+        && let Ok(mut parsed) = serde_json::from_str(&text)
+    {
+        unsafe_integers_to_floats(&mut parsed);
+        return Ok(parsed);
+    }
+    serde_wasm_bindgen::from_value(value).map_err(err_js)
+}
+
+fn unsafe_integers_to_floats(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Number(number) if is_unsafe_integer(number) => {
+            if let Some(float) = number.as_f64().and_then(serde_json::Number::from_f64) {
+                *number = float;
+            }
+        }
+        serde_json::Value::Array(values) => values.iter_mut().for_each(unsafe_integers_to_floats),
+        serde_json::Value::Object(values) => {
+            values.values_mut().for_each(unsafe_integers_to_floats)
+        }
+        _ => {}
     }
 }
 
@@ -2129,6 +2252,7 @@ impl CacheEngine {
                 variables: &vars,
                 data: &data,
                 identity: identity.as_deref(),
+                channel: context.channel_commit.as_ref(),
             };
             let registration =
                 registration
@@ -2196,8 +2320,10 @@ impl CacheEngine {
     }
 
     /// Normalizes and stores a query response while returning only fields not
-    /// marked `@cacheOnly` in the GraphQL document.
+    /// marked `@cacheOnly` in the GraphQL document. `channelCommit` is what the
+    /// response proves about a channel, committed with it.
     #[wasm_bindgen(js_name = hydrateQuery)]
+    #[expect(clippy::too_many_arguments, reason = "a JavaScript call's arguments")]
     pub fn hydrate_query(
         &self,
         query: String,
@@ -2206,13 +2332,21 @@ impl CacheEngine {
         data: JsValue,
         identity: Option<String>,
         hydration_scope: JsValue,
+        channel_commit: JsValue,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let request = HydrateRequest::parse(query, operation_name, variables, data, identity)?;
+            let request = HydrateRequest::parse(
+                query,
+                operation_name,
+                variables,
+                data,
+                identity,
+                channel_commit,
+            )?;
             let prepared = state.prepare_hydrate(request, hydration_scope).await?;
             to_js(&state.commit_hydrate(prepared, &ops).await?)
         })
@@ -2227,6 +2361,7 @@ impl CacheEngine {
     /// reset or an authority transition it reads the projections again
     /// first. A close drops the kept hydrate.
     #[wasm_bindgen(js_name = prepareHydrate)]
+    #[expect(clippy::too_many_arguments, reason = "a JavaScript call's arguments")]
     pub fn prepare_hydrate(
         &self,
         query: String,
@@ -2235,13 +2370,21 @@ impl CacheEngine {
         data: JsValue,
         identity: Option<String>,
         hydration_scope: JsValue,
+        channel_commit: JsValue,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.prepared_hydrate = None;
             state.ensure_callable()?;
-            let request = HydrateRequest::parse(query, operation_name, variables, data, identity)?;
+            let request = HydrateRequest::parse(
+                query,
+                operation_name,
+                variables,
+                data,
+                identity,
+                channel_commit,
+            )?;
             let prepared = state.prepare_hydrate(request, hydration_scope).await?;
             state.prepared_hydrate = Some(prepared);
             Ok(JsValue::UNDEFINED)
@@ -2666,13 +2809,6 @@ impl CacheEngine {
                 serde_json::json!({})
             };
 
-            let projections = authoritative_projection_mutations(
-                &state.engine_mut()?.schema_snapshot(),
-                &query,
-                operation_name.as_deref(),
-                &projection_data,
-            )
-            .map_err(err_js)?;
             // The passes below share one normalization of the response.
             let response_schema = state.engine_mut()?.schema_snapshot();
             let response = WriteResponse::new(
@@ -2682,8 +2818,22 @@ impl CacheEngine {
                 &vars,
                 &projection_data,
             );
-            let projections = write_passes(state.engine_mut()?, &response, true, projections).await;
-            let projections = state.write_passes_result(projections)?;
+            // The engine settles a response that does not normalize without
+            // its content, so nothing is projected from it.
+            let projections = if response.normalizes() {
+                let projections = authoritative_projection_mutations(
+                    &response_schema,
+                    &query,
+                    operation_name.as_deref(),
+                    &projection_data,
+                )
+                .map_err(err_js)?;
+                let projections =
+                    write_passes(state.engine_mut()?, &response, true, projections).await;
+                state.write_passes_result(projections)?
+            } else {
+                Vec::new()
+            };
             let result = state
                 .engine_mut()?
                 .commit_optimistic_write_in_generation(
@@ -2695,6 +2845,7 @@ impl CacheEngine {
                         variables: &vars,
                         data: &data,
                         identity: None,
+                        channel: None,
                     },
                     projections,
                     generation,
@@ -2938,14 +3089,19 @@ impl CacheEngine {
                     return Err(error);
                 }
             };
-            let storage = match open_storage(&scope, owner).await {
-                Ok(opened) => opened.storage,
+            let engine = match open_storage(&scope, owner).await {
+                Ok(opened) => adopted_engine(&scope, opened, hot_capacity, schema).await,
+                Err(error) => Err(error),
+            };
+            let engine = match engine {
+                Ok((engine, ..)) => engine,
                 Err(error) => {
                     state.reset_required = true;
                     return Err(error);
                 }
             };
-            state.engine = Some(build_engine(storage, hot_capacity, schema));
+            state.engine = Some(engine);
+            state.listen_to_channels();
             state.mail_generation = soup_filter_cache_adapter::mail::new_generation();
             state.reset_required = false;
             Ok(JsValue::UNDEFINED)

@@ -80,6 +80,8 @@ import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type CacheReadPriority,
   type CacheRevision,
+  type ChannelCommitArgs,
+  type ChannelCommitOutcome,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
   isAdmittedEnqueueUncertainError,
@@ -181,6 +183,12 @@ declare module '@urql/core' {
      * rereads rank as ordinary reads, behind those of mounted views.
      */
     backgroundReader?: true;
+    /**
+     * What a network result proves about a channel, stored in the transaction
+     * that stores the result. Not read from mutations: the queue replays those
+     * without a context.
+     */
+    channelCommit?: (data: unknown) => ChannelCommitArgs | undefined;
   }
 }
 
@@ -204,6 +212,11 @@ export type NormalizedCacheResultMetadata =
       revision?: CacheRevision;
       /** Local-only acknowledgement; never rejects or republishes response data. */
       persistence?: Promise<CacheRevision | undefined>;
+      /**
+       * What the context's channel commit did; undefined when nothing of it was
+       * stored. Never rejects. Present whenever the context made a commit.
+       */
+      channelCommit?: Promise<ChannelCommitOutcome | undefined>;
     }
   | { source: 'normalized-cache-hit' }
   | { source: 'normalized-cache-patch' }
@@ -224,11 +237,13 @@ export function normalizedCacheResultMetadata(
     return { source };
   }
   if (source !== 'live-network') return;
-  const { revision, persistence, cacheEffectsApplied } = metadata as {
-    cacheEffectsApplied?: unknown;
-    revision?: unknown;
-    persistence?: unknown;
-  };
+  const { revision, persistence, cacheEffectsApplied, channelCommit } =
+    metadata as {
+      channelCommit?: unknown;
+      cacheEffectsApplied?: unknown;
+      revision?: unknown;
+      persistence?: unknown;
+    };
   return {
     source,
     ...(typeof cacheEffectsApplied === 'boolean'
@@ -237,6 +252,13 @@ export function normalizedCacheResultMetadata(
     ...(isCacheRevision(revision) ? { revision } : {}),
     ...(isThenable(persistence)
       ? { persistence: persistence as Promise<CacheRevision | undefined> }
+      : {}),
+    ...(isThenable(channelCommit)
+      ? {
+          channelCommit: channelCommit as Promise<
+            ChannelCommitOutcome | undefined
+          >,
+        }
       : {}),
   };
 }
@@ -250,6 +272,12 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
     typeof (value as { then?: unknown }).then === 'function'
   );
 }
+
+/** What storing a query's network result answered. */
+type StoredQueryResult = {
+  revision: CacheRevision;
+  channel: ChannelCommitOutcome | undefined;
+};
 
 function withResultMetadata(
   result: OperationResult,
@@ -1379,14 +1407,36 @@ export function normalizedCacheExchange(
         return await mutationQueue.admit(op, enqueue, epoch);
       }
 
+      /** A result's channel commit; a failing caller only loses the commit. */
+      function channelCommitOf(
+        result: OperationResult
+      ): ChannelCommitArgs | undefined {
+        const op = result.operation;
+        if (op.kind === 'mutation' || result.data == null || result.error)
+          return undefined;
+        try {
+          return op.context.channelCommit?.(result.data);
+        } catch (error) {
+          options.onCacheError?.(error, op);
+          return undefined;
+        }
+      }
+
       /** Applies operation cache effects serially and isolates every failure. */
       async function applyOperationCacheEffects(
         op: Operation,
         effects: CacheEffect[],
         isCurrent: () => boolean = () => true,
-        span?: Span
+        span?: Span,
+        channel?: {
+          commit: ChannelCommitArgs;
+          stored: (outcome: ChannelCommitOutcome | undefined) => void;
+        }
       ): Promise<boolean> {
         let applied = true;
+        // The commit goes with the frame's last write, and only once everything
+        // before it is stored: it says the device holds the whole frame.
+        const lastWrite = effects.findLast((effect) => effect.kind === 'write');
         const generation =
           typeof op.context.cacheSessionGeneration === 'string'
             ? op.context.cacheSessionGeneration
@@ -1403,13 +1453,16 @@ export function normalizedCacheExchange(
           );
           try {
             if (effect.kind === 'write') {
-              await host.writeQuery({
+              const write = await host.writeQuery({
                 generation,
                 query: queryText(op),
                 operationName: operationName(op),
                 variables: op.variables as Record<string, unknown> | undefined,
                 data: effect.data,
+                channelCommit:
+                  effect === lastWrite && applied ? channel?.commit : undefined,
               });
+              if (effect === lastWrite) channel?.stored(write.channel);
             } else {
               await host.deleteRecords([effect.key], generation);
             }
@@ -1435,8 +1488,9 @@ export function normalizedCacheExchange(
       async function persistQueryResult(
         result: OperationResult,
         state: QueryState,
-        resultVersion: number
-      ): Promise<CacheRevision | undefined> {
+        resultVersion: number,
+        channelCommit: ChannelCommitArgs | undefined
+      ): Promise<StoredQueryResult | undefined> {
         const op = result.operation;
         const releaseTurn = await acquireQueryResultTurn(op.key);
         const reportError = (error: unknown): void => {
@@ -1480,6 +1534,7 @@ export function normalizedCacheExchange(
             data: result.data,
             identity: options.extractIdentity?.(result.data),
             registerDependencies: isActive(),
+            channelCommit,
           };
           const retained: RetainedReplacementFallback | undefined =
             result.error === undefined && result.hasNext !== true && isActive()
@@ -1530,7 +1585,10 @@ export function normalizedCacheExchange(
             if (state.retainedReplacementFallback === retained) {
               state.retainedReplacementFallback = undefined;
             }
-            return deletion?.revision ?? write.revision;
+            return {
+              revision: deletion?.revision ?? write.revision,
+              channel: write.channel,
+            };
           } catch (error) {
             reportError(error);
             if (
@@ -1678,6 +1736,7 @@ export function normalizedCacheExchange(
           };
         }
 
+        const channelCommit = channelCommitOf(result);
         const output =
           op.kind === 'query'
             ? withResultMetadata(result, { source: 'live-network' })
@@ -1694,6 +1753,7 @@ export function normalizedCacheExchange(
           const previousEffects =
             subscriptionEffectChains.get(op.key) ?? Promise.resolve(true);
           const generation = subscriptionGenerations.get(op.key);
+          let outcome: ChannelCommitOutcome | undefined;
           const effects = runSubscriptionCacheEffects(
             result,
             previousEffects,
@@ -1704,7 +1764,13 @@ export function normalizedCacheExchange(
                 () =>
                   generation !== undefined &&
                   subscriptionGenerations.get(op.key) === generation,
-                span
+                span,
+                channelCommit && {
+                  commit: channelCommit,
+                  stored: (stored) => {
+                    outcome = stored;
+                  },
+                }
               )
           );
           subscriptionEffectChains.set(op.key, effects);
@@ -1713,6 +1779,9 @@ export function normalizedCacheExchange(
             return withResultMetadata(result, {
               source: 'live-network',
               cacheEffectsApplied,
+              ...(channelCommit
+                ? { channelCommit: Promise.resolve(outcome) }
+                : {}),
             });
           } finally {
             if (subscriptionEffectChains.get(op.key) === effects) {
@@ -1749,6 +1818,7 @@ export function normalizedCacheExchange(
               data: result.data,
               identity: options.extractIdentity?.(result.data),
               entityResolvers,
+              channelCommit,
             });
             const deletion = await deleteReportedRecords(result);
             return withResultMetadata(
@@ -1759,11 +1829,14 @@ export function normalizedCacheExchange(
               {
                 source: 'live-network',
                 revision: deletion?.revision ?? hydration.revision,
+                ...(channelCommit
+                  ? { channelCommit: Promise.resolve(hydration.channel) }
+                  : {}),
               }
             );
           } catch (error) {
             options.onCacheError?.(error, op);
-            return {
+            const failed = {
               ...result,
               data: undefined,
               error: new CombinedError({
@@ -1771,6 +1844,12 @@ export function normalizedCacheExchange(
                   error instanceof Error ? error : new Error(String(error)),
               }),
             };
+            return channelCommit
+              ? withResultMetadata(failed, {
+                  source: 'live-network',
+                  channelCommit: Promise.resolve(undefined),
+                })
+              : failed;
           }
         } else if (op.kind === 'query') {
           const state = queryState(op.key);
@@ -1804,13 +1883,16 @@ export function normalizedCacheExchange(
           // Publication, not persistence, supersedes an older cache snapshot.
           // A failed network request still permits a slower offline cache hit.
           if (result.data != null && !result.error) state.cacheReadVersion += 1;
-          const persistence =
+          const stored =
             op.context.persistResult === false
               ? Promise.resolve(undefined)
-              : persistQueryResult(result, state, version);
+              : persistQueryResult(result, state, version, channelCommit);
           return withResultMetadata(result, {
             source: 'live-network',
-            persistence,
+            persistence: stored.then((answer) => answer?.revision),
+            ...(channelCommit
+              ? { channelCommit: stored.then((answer) => answer?.channel) }
+              : {}),
           });
         } else if (op.kind === 'mutation') {
           const attempt = queueAttemptOf(op);

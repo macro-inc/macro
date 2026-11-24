@@ -52,6 +52,7 @@ import {
   type CacheEngineHydrationResult,
   type CacheOpenOutcome,
   type CacheOpenResult,
+  type CacheOpenSchemaChange,
   type CacheWalCheckpoint,
   loadCacheWasm,
 } from './wasm-module';
@@ -834,7 +835,8 @@ export class CacheWorkerCore {
         request.variables,
         request.data,
         request.identity,
-        request.hydrationScope
+        request.hydrationScope,
+        request.channelCommit
       );
     }
     await prepare(
@@ -843,7 +845,8 @@ export class CacheWorkerCore {
       request.variables,
       request.data,
       request.identity,
-      request.hydrationScope
+      request.hydrationScope,
+      request.channelCommit
     );
     await this.runReadsBeforeHydrateCommit();
     const step = engine.stepHydrate?.bind(engine);
@@ -918,6 +921,8 @@ export class CacheWorkerCore {
         this.executingAuthority = before;
       }
       const storesContent = cacheRequestStamp(request.kind) === 'captured';
+      // A channel eviction removes by age, not by what a response named, so it
+      // runs under any session.
       const removes =
         request.kind === 'invalidate' || request.kind === 'delete-records';
       // A queued command settles under its own stamp even once that is stale.
@@ -1115,7 +1120,7 @@ export class CacheWorkerCore {
           : { ...result, revision: parseCacheRevision(result.revision) };
       })
       .with({ kind: 'channel-timeline-commit' }, async (request) => {
-        const { channelSeq, ...result } =
+        const { channel, ...result } =
           await this.requireEngine().channelTimelineCommit(request.commit);
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
@@ -1123,7 +1128,7 @@ export class CacheWorkerCore {
           kind: 'committed',
           revision: result.revision,
           changed: result.changed,
-          channelSeq,
+          channel,
         };
         return committed;
       })
@@ -1154,6 +1159,7 @@ export class CacheWorkerCore {
           {
             originOpId: request.originOpId,
             registration: request.registration,
+            channelCommit: request.channelCommit,
           },
           request.query,
           request.operationName,
@@ -1181,14 +1187,22 @@ export class CacheWorkerCore {
               : {}),
           });
         }
+        const channel =
+          result.channel === undefined ? {} : { channel: result.channel };
         const hydration: HydrationResult & Pick<WriteResult, 'reset'> =
           result.data === null
-            ? { kind: 'void', revision: result.revision, reset: result.reset }
+            ? {
+                kind: 'void',
+                revision: result.revision,
+                reset: result.reset,
+                ...channel,
+              }
             : {
                 kind: 'data',
                 data: result.data,
                 revision: result.revision,
                 reset: result.reset,
+                ...channel,
               };
         return hydration;
       })
@@ -1586,6 +1600,7 @@ export class CacheWorkerCore {
         : undefined;
       try {
         let openOutcome: CacheOpenOutcome;
+        let schemaChange: CacheOpenSchemaChange | undefined;
         if (awaitStorageGrant && onOwnerLockBusy) {
           const open = this.options.recoveryOpen
             ? wasm.openCacheForRecoveryWithOutcome
@@ -1610,6 +1625,7 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
+          schemaChange = opened.schemaChange;
         } else if (this.options.recoveryOpen) {
           if (wasm.openCacheForRecoveryWithOutcome) {
             const opened = await wasm.openCacheForRecoveryWithOutcome(
@@ -1619,6 +1635,7 @@ export class CacheWorkerCore {
             );
             this.engine = opened.engine;
             openOutcome = opened.outcome;
+            schemaChange = opened.schemaChange;
           } else {
             this.engine = await wasm.openCacheForRecovery(scope, hotCapacity);
             openOutcome = 'reset-storage-uncertain';
@@ -1631,6 +1648,7 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
+          schemaChange = opened.schemaChange;
         } else {
           this.engine = await wasm.openCache(scope, hotCapacity);
           openOutcome = 'opened-existing';
@@ -1639,6 +1657,9 @@ export class CacheWorkerCore {
           // A stale artifact opened storage without asking the coordinator.
           throw new Error('cache WASM does not support the owner-lock grant');
         }
+        await this.engine.onChannelsChanged((changes) =>
+          this.push({ kind: 'channels-changed', changes })
+        );
         this.options.onInitializationOutcome?.(openOutcome);
         this.telemetry.record({
           name: 'graphql_cache.schema_init',
@@ -1646,6 +1667,17 @@ export class CacheWorkerCore {
           outcome: 'success',
           errorCode: 'none',
           openOutcome,
+          ...(schemaChange === undefined
+            ? {}
+            : {
+                schemaChange: schemaChange.change,
+                schemaResetReason: schemaChange.resetReason,
+                schemaChangedTypes: schemaChange.changedTypes,
+                schemaDroppedRecords: schemaChange.droppedRecords,
+                schemaIncompleteDocuments: schemaChange.incompleteDocuments,
+                schemaRetiredOverlays: schemaChange.retiredOverlays,
+                schemaAdoptMs: schemaChange.adoptMs,
+              }),
           durationMs: this.now() - schemaStartedAt,
         });
         await this.refreshQueueDiagnostics(true);

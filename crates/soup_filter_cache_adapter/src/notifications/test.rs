@@ -75,6 +75,7 @@ async fn write<S: cache_core::predicate::PredicateIndexStorage>(
                 variables: &vars,
                 data,
                 identity: Some("viewer"),
+                channel: None,
             },
             projections,
         )
