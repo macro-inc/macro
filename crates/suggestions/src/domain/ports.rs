@@ -17,6 +17,7 @@ use super::model::{
 };
 use super::resolution::{ResolutionEvent, Resolved};
 use super::run::{Advanced, RunState, SessionEvent};
+use super::topic::{NameTopic, StoredTopic};
 
 /// Limits a write must stay within, checked where it is stored so two
 /// writes at once can't pass them together.
@@ -90,6 +91,24 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'_>,
         dedup_key: &str,
     ) -> impl Future<Output = Result<Option<Suggestion>, Self::Err>> + Send;
+
+    /// Those of the person's topics `keys` that exist.
+    fn topics(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        keys: &[String],
+    ) -> impl Future<Output = Result<Vec<StoredTopic>, Self::Err>> + Send;
+
+    /// Store `topic` for the person, replacing the name and reason it had, as
+    /// `session` names it at `at`; false when its generation has named
+    /// `limit` others already.
+    fn name_topic(
+        &self,
+        session: &GenerationSession,
+        topic: &NameTopic,
+        limit: u32,
+        at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// How many suggestions generation `generation` added or brought back.
     fn added_in(&self, generation: Uuid) -> impl Future<Output = Result<u32, Self::Err>> + Send;
@@ -554,6 +573,15 @@ pub trait SuggestionApi: Send + Sync + 'static {
         correlation: Option<Uuid>,
         id: Uuid,
         request: RewriteSuggestion,
+    ) -> impl Future<Output = Result<SuggestionWriteOutcome, SuggestionError>> + Send;
+
+    /// Name a topic suggestions may belong to, or change the name and reason
+    /// of the one with its key.
+    fn name_topic(
+        &self,
+        principal: &CreationPrincipal,
+        correlation: Option<Uuid>,
+        request: NameTopic,
     ) -> impl Future<Output = Result<SuggestionWriteOutcome, SuggestionError>> + Send;
 
     /// Retire an open suggestion that no longer matters.

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO suggestion_topic\n             (user_id, key, name, reason, session_id, generation_id, created_at, updated_at)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, $7)\n           ON CONFLICT (user_id, key) DO UPDATE\n           SET name = EXCLUDED.name, reason = EXCLUDED.reason,\n               session_id = EXCLUDED.session_id, generation_id = EXCLUDED.generation_id,\n               updated_at = EXCLUDED.updated_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "227d4330a359499a6a7dddae601025df610a367927a5f5fba615a3ef6c2ee769"
+}

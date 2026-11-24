@@ -216,6 +216,7 @@ const ANY_WRITE: &[(&str, &str)] = &[
 /// tools and drafting email. Paths as the SDK sends them, `{…}` one segment.
 const GENERATION_WRITES: &[(&str, &str)] = &[
     ("POST", "/suggestions"),
+    ("PUT", "/suggestions/topics"),
     ("PATCH", "/suggestions/{id}"),
     ("POST", "/suggestions/{id}/retire"),
     ("PUT", "/suggestions/{id}/draft"),

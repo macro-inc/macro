@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.key, t.name, t.reason, t.updated_at, s.settled_at AS \"settled_at?\"\n           FROM unnest($2::text[]) AS wanted(key)\n           CROSS JOIN LATERAL (\n               SELECT * FROM suggestion_topic\n               WHERE user_id = $1 AND key = wanted.key\n               LIMIT 1\n           ) t\n           LEFT JOIN LATERAL (\n               SELECT i.state_changed_at AS settled_at FROM suggestion i\n               WHERE i.user_id = t.user_id AND i.topic_key = t.key\n                 AND i.state IN ('done', 'resolved')\n               ORDER BY i.state_changed_at DESC\n               LIMIT 1\n           ) s ON true",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "settled_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "6fa311703d9e8d060fb614e8fc4b6e283e3400a6998e92e88afb1196bb998e5d"
+}

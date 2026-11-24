@@ -9,3 +9,4 @@ pub mod prompt;
 pub mod resolution;
 pub mod run;
 pub mod service;
+pub mod topic;

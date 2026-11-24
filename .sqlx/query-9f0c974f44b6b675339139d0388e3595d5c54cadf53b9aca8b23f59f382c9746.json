@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,\n                              i.categories, i.state, i.state_reason, i.created_at, i.updated_at,\n                              i.state_changed_at,\n                              p.prompt AS \"prompt?\", p.run_mode AS \"run_mode?\", p.sends AS \"sends?\",\n                              e.action AS \"action?\", e.waiting_since AS \"waiting_since?\",\n                              e.waiting_from AS \"waiting_from?\", e.draft_preview AS \"draft_preview?\",\n                              r.routine_suggestion_id AS \"routine_suggestion_id?\"\n                       FROM suggestion i\n                       LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id\n                       LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id\n                       LEFT JOIN suggestion_routine r ON r.suggestion_id = i.id\n                       WHERE i.user_id = $1\n                         AND (i.state IN ('proposed', 'accepted')\n                              OR (i.state = 'done' AND i.state_changed_at >= $2))",
+  "query": "SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,\n                              i.categories, i.state, i.state_reason, i.created_at, i.updated_at,\n                              i.state_changed_at,\n                              p.prompt AS \"prompt?\", p.run_mode AS \"run_mode?\", p.sends AS \"sends?\",\n                              e.action AS \"action?\", e.waiting_since AS \"waiting_since?\",\n                              e.waiting_from AS \"waiting_from?\", e.draft_preview AS \"draft_preview?\",\n                              r.routine_suggestion_id AS \"routine_suggestion_id?\",\n                              i.topic_key,\n                              (SELECT t.name FROM suggestion_topic t\n                               WHERE t.user_id = i.user_id AND t.key = i.topic_key) AS topic_name\n                       FROM suggestion i\n                       LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id\n                       LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id\n                       LEFT JOIN suggestion_routine r ON r.suggestion_id = i.id\n                       WHERE i.user_id = $1 AND i.dedup_key = $2",
   "describe": {
     "columns": [
       {
@@ -102,12 +102,22 @@
         "ordinal": 19,
         "name": "routine_suggestion_id?",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 20,
+        "name": "topic_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "topic_name",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
         "Text",
-        "Timestamptz"
+        "Text"
       ]
     },
     "nullable": [
@@ -130,8 +140,10 @@
       true,
       true,
       true,
-      false
+      false,
+      true,
+      null
     ]
   },
-  "hash": "2411dbfc7af93bc5c06a09e1e95fbed3c79cb2836dab92080a10dfeca8069514"
+  "hash": "9f0c974f44b6b675339139d0388e3595d5c54cadf53b9aca8b23f59f382c9746"
 }

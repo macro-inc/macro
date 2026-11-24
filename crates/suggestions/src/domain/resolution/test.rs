@@ -87,6 +87,7 @@ impl Harness {
             summary: "They asked for a headcount.".to_owned(),
             importance: 50,
             categories: Vec::new(),
+            topic: None,
             about,
             prompt: match kind {
                 NewKind::Prompt { .. } => Some("Draft the reply.".to_owned()),

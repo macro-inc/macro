@@ -16,6 +16,7 @@ use crate::domain::ports::{FoundDraft, ReplyWaits};
 use crate::outbound::pg_suggestion_repo::PgSuggestionRepo;
 
 pub(crate) mod runs;
+mod topics;
 
 pub(crate) const OWNER: &str = "macro|suggestions-owner@macro.com";
 const OTHER: &str = "macro|suggestions-other@macro.com";
@@ -288,6 +289,7 @@ fn prompt_suggestion(key: &str, title: &str) -> NewSuggestion {
         summary: "Three supplier quotes arrived this week.".to_owned(),
         importance: 70,
         categories: vec![Category::SaveMoney, Category::SaveMoney],
+        topic: None,
         about: vec![Target {
             entity_type: EntityType::EmailThread,
             entity_id: "thread-1".to_owned(),
@@ -309,6 +311,7 @@ pub(crate) fn entity_suggestion(key: &str) -> NewSuggestion {
         summary: "They asked for a headcount by Friday.".to_owned(),
         importance: 80,
         categories: vec![Category::Important],
+        topic: None,
         about: vec![Target {
             entity_type: EntityType::EmailThread,
             entity_id: "thread-2".to_owned(),

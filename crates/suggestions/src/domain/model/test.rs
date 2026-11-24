@@ -187,6 +187,7 @@ fn suggestion(status: SuggestionStatus) -> Suggestion {
         categories: Vec::new(),
         state: SuggestionState::Proposed,
         state_reason: None,
+        topic: None,
         about: Vec::new(),
         produced: Vec::new(),
         created_at: now,

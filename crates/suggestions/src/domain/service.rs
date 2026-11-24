@@ -7,7 +7,7 @@
 //! problems the session can read and fix. Every accepted write is logged in
 //! the change log with the values before and after and the session's reason.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -32,12 +32,14 @@ use super::ports::{
     SuggestionAccess, SuggestionApi, SuggestionAudience, SuggestionDrafts, SuggestionRepo, Written,
 };
 use super::prompt;
+use super::topic::{NameTopic, TopicChange, topic_keys, topics_of};
 use recent::Recent;
 
 mod recent;
 mod runs;
 #[cfg(test)]
 pub(crate) mod test;
+mod topics;
 
 /// The PostHog flag that turns suggestions on for a person.
 pub const SUGGESTIONS_FLAG: &str = "enable-suggestions";
@@ -454,9 +456,13 @@ where
         while let Some((suggestion, check)) = checked.next().await {
             match check {
                 Ok(true) => viewable.shown.push(suggestion),
-                Ok(false) => viewable.hidden += 1,
+                Ok(false) => {
+                    viewable.hidden += 1;
+                    viewable.missing_from.extend(topic_keys([&suggestion]));
+                }
                 Err(error) => {
                     viewable.unchecked += 1;
+                    viewable.missing_from.extend(topic_keys([&suggestion]));
                     tracing::warn!(
                         ?error,
                         suggestion.id = %suggestion.id,
@@ -508,6 +514,9 @@ struct Viewable {
     hidden: usize,
     /// Those whose items couldn't be checked.
     unchecked: usize,
+    /// The topics of the ones left out: their reason may be about those
+    /// items, so it is left out too.
+    missing_from: HashSet<String>,
 }
 
 /// Why a running suggestion's prompt and `sends` stay as they are.
@@ -602,6 +611,7 @@ where
         suggestions.hidden = tracing::field::Empty,
         suggestions.unchecked = tracing::field::Empty,
         suggestions.new = tracing::field::Empty,
+        suggestions.topics = tracing::field::Empty,
         suggestions.routines_unread = tracing::field::Empty,
     ), err)]
     async fn feed(
@@ -650,6 +660,15 @@ where
         span.record("suggestions.unchecked", open.unchecked + done.unchecked);
         span.record("suggestions.new", new);
         let counts = FeedCounts::of(open.shown.iter().chain(&done.shown));
+        let topics = match limit {
+            Some(_) => None,
+            None => {
+                let stored = self.stored_topics(user, topic_keys(&open.shown)).await?;
+                let topics = topics_of(&open.shown, &stored, &open.missing_from);
+                span.record("suggestions.topics", topics.len());
+                Some(topics)
+            }
+        };
         // A limited read is a glance at the best open ones: no done list.
         let (mut suggestions, mut done): (Vec<Suggestion>, _) = match limit {
             Some(limit) => (open.shown.into_iter().take(limit).collect(), None),
@@ -667,6 +686,7 @@ where
         Ok(SuggestionFeed {
             suggestions,
             done,
+            topics,
             counts,
         })
     }
@@ -1007,6 +1027,7 @@ where
         suggestion.generation.id = tracing::field::Empty,
         suggestion.generation.trace_id = tracing::field::Empty,
         suggestions.count = tracing::field::Empty,
+        suggestions.topics = tracing::field::Empty,
     ), err)]
     async fn review(
         &self,
@@ -1035,9 +1056,13 @@ where
         closed.sort_by(|a, b| b.state_changed_at.cmp(&a.state_changed_at));
         let open_count = u32::try_from(open.len()).unwrap_or(u32::MAX);
         open.append(&mut closed);
+        let stored = self.stored_topics(&session.user, topic_keys(&open)).await?;
+        let topics = topics_of(&open, &stored, &HashSet::new());
+        tracing::Span::current().record("suggestions.topics", topics.len());
         tracing::Span::current().record("suggestions.count", open.len());
         Ok(SuggestionsReview {
             suggestions: open,
+            topics,
             open: open_count,
             open_limit: OPEN_LIMIT,
             new_left: NEW_PER_GENERATION.saturating_sub(added),
@@ -1109,6 +1134,10 @@ where
             None => None,
         };
         self.inaccessible(&user, &about, &mut problems).await?;
+        let topic = match &request.topic {
+            Some(key) => self.named_topic(&user, key, &mut problems).await?,
+            None => None,
+        };
         if !problems.is_empty() {
             return Ok(rejected(&span, problems));
         }
@@ -1118,6 +1147,7 @@ where
             summary,
             importance,
             categories: check::categories(request.categories),
+            topic,
             about,
             prompt,
             sends,
@@ -1324,6 +1354,13 @@ where
         if let Some(categories) = request.categories {
             content.categories = check::categories(categories);
         }
+        match request.topic {
+            TopicChange::Keep => {}
+            TopicChange::Clear => content.topic = None,
+            TopicChange::To(key) => {
+                content.topic = self.named_topic(&user, &key, &mut problems).await?;
+            }
+        }
         if let Some(about) = request.about {
             if about.is_empty() && existing.kind.name() == KindName::Entity {
                 problems
@@ -1375,6 +1412,22 @@ where
         }
         span.record("suggestion.outcome", "rewritten");
         self.reread(&user, id).await
+    }
+
+    #[tracing::instrument(name = "suggestions.name_topic", skip_all, fields(
+        agent.session.id = tracing::field::Empty,
+        suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
+        suggestion.outcome = tracing::field::Empty,
+        suggestion.problems = tracing::field::Empty,
+    ), err)]
+    async fn name_topic(
+        &self,
+        principal: &CreationPrincipal,
+        correlation: Option<Uuid>,
+        request: NameTopic,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
+        self.name(principal, correlation, request).await
     }
 
     #[tracing::instrument(name = "suggestions.retire", skip_all, fields(

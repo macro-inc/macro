@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT i.id AS \"id!\", i.kind AS \"kind!\", i.dedup_key AS \"dedup_key!\",\n                              i.title AS \"title!\", i.summary AS \"summary!\",\n                              i.importance AS \"importance!\", i.categories AS \"categories!\",\n                              i.state AS \"state!\", i.state_reason,\n                              i.created_at AS \"created_at!\", i.updated_at AS \"updated_at!\",\n                              i.state_changed_at AS \"state_changed_at!\",\n                              p.prompt AS \"prompt?\", p.run_mode AS \"run_mode?\", p.sends AS \"sends?\",\n                              e.action AS \"action?\", e.waiting_since AS \"waiting_since?\",\n                              e.waiting_from AS \"waiting_from?\", e.draft_preview AS \"draft_preview?\",\n                              r.routine_suggestion_id AS \"routine_suggestion_id?\"\n                       FROM (\n                           SELECT * FROM suggestion\n                           WHERE user_id = $1 AND state IN ('proposed', 'accepted')\n                           UNION ALL\n                           (SELECT * FROM suggestion\n                            WHERE user_id = $1 AND state NOT IN ('proposed', 'accepted')\n                            ORDER BY state_changed_at DESC\n                            LIMIT $2)\n                       ) i\n                       LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id\n                       LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id\n                       LEFT JOIN suggestion_routine r ON r.suggestion_id = i.id",
+  "query": "SELECT i.id AS \"id!\", i.kind AS \"kind!\", i.dedup_key AS \"dedup_key!\",\n                              i.title AS \"title!\", i.summary AS \"summary!\",\n                              i.importance AS \"importance!\", i.categories AS \"categories!\",\n                              i.state AS \"state!\", i.state_reason,\n                              i.created_at AS \"created_at!\", i.updated_at AS \"updated_at!\",\n                              i.state_changed_at AS \"state_changed_at!\",\n                              p.prompt AS \"prompt?\", p.run_mode AS \"run_mode?\", p.sends AS \"sends?\",\n                              e.action AS \"action?\", e.waiting_since AS \"waiting_since?\",\n                              e.waiting_from AS \"waiting_from?\", e.draft_preview AS \"draft_preview?\",\n                              r.routine_suggestion_id AS \"routine_suggestion_id?\",\n                              i.topic_key,\n                              (SELECT t.name FROM suggestion_topic t\n                               WHERE t.user_id = i.user_id AND t.key = i.topic_key) AS topic_name\n                       FROM (\n                           SELECT * FROM suggestion\n                           WHERE user_id = $1 AND state IN ('proposed', 'accepted')\n                           UNION ALL\n                           (SELECT * FROM suggestion\n                            WHERE user_id = $1 AND state NOT IN ('proposed', 'accepted')\n                            ORDER BY state_changed_at DESC\n                            LIMIT $2)\n                       ) i\n                       LEFT JOIN suggestion_prompt p ON p.suggestion_id = i.id\n                       LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id\n                       LEFT JOIN suggestion_routine r ON r.suggestion_id = i.id",
   "describe": {
     "columns": [
       {
@@ -102,6 +102,16 @@
         "ordinal": 19,
         "name": "routine_suggestion_id?",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 20,
+        "name": "topic_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "topic_name",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -130,8 +140,10 @@
       true,
       true,
       true,
-      true
+      true,
+      null,
+      null
     ]
   },
-  "hash": "c8d1bbd88252a134f3a6a5c0b614e6aa1610b88f8561c1f18d94c8285f885e92"
+  "hash": "70e1d2a3df836a5fb4fe18f127561f0649006e468ae37d7b74948c0d2935aa02"
 }

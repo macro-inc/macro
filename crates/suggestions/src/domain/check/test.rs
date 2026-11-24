@@ -62,6 +62,7 @@ fn a_new_suggestions_kind_has_its_own_fields_only() {
         summary: "s".to_owned(),
         importance: 1,
         categories: Vec::new(),
+        topic: None,
         about: Vec::new(),
         prompt: None,
         run_mode: None,
