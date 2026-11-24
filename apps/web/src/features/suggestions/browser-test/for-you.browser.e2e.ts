@@ -215,6 +215,25 @@ test('a topic missing from a cached feed is still asked for once it is read agai
   await expect(page).toHaveURL(/topic=customer/);
 });
 
+test('a linked row that a feed read moves under a topic is not scrolled to again', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 260 });
+  await page.goto('/?scenario=cached&suggestion=suggestion-quiet');
+  const scroller = page.locator('section[aria-label="Today"]');
+  const top = () => scroller.evaluate((element) => element.scrollTop);
+  await expect.poll(top).toBeGreaterThan(0);
+  await scroller.evaluate((element) => element.scrollTo({ top: 0 }));
+
+  await page.getByRole('button', { name: 'Read feed' }).click();
+  await expect(
+    page.locator(
+      '[data-suggestion-group]:not([data-suggestion-group=""]) [data-suggestion="suggestion-quiet"]'
+    )
+  ).toBeVisible();
+  expect(await top()).toBe(0);
+});
+
 test('reading the feed again leaves a topic where it was scrolled to', async ({
   page,
 }) => {

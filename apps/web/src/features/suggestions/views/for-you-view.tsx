@@ -144,10 +144,20 @@ export function ForYouView(props: {
     props.feed.topics().find((other) => other.key === props.topicKey);
   const shownTopicKey = createMemo(() => topic()?.key);
   // One that groups nothing leaves the list shown, and isn't asked for any
-  // more: rows that bring it back later don't take the page over.
+  // more: rows that bring it back later don't take the page over. The server
+  // is asked first, since a cached feed may be from before the topic.
+  const missing = createMemo(() => {
+    const kind = view().kind;
+    const known = kind === 'rows' || kind === 'empty';
+    return known && !shownTopicKey() ? props.topicKey : undefined;
+  });
+  const letGo = async (key: string) => {
+    const read = await props.feed.reread();
+    if (read && missing() === key) props.onTopicGone();
+  };
   createEffect(() => {
-    const gone = props.feed.topicsKnown() && !shownTopicKey();
-    if (props.topicKey && gone) untrack(() => props.onTopicGone());
+    const key = missing();
+    if (key) fireAndForget(letGo(key), 'suggestions.topic_gone');
   });
   const groups = () => props.feed.groups(props.list, topic());
   const name = () => {
@@ -259,15 +269,23 @@ export function ForYouView(props: {
 
   // Rows are kept by suggestion id, so a feed read or a busy flag updates a
   // row in place: focus stays, and the scroll to the one asked for runs once.
+  // A row that changes groups is made anew, and doesn't scroll again.
+  let scrolledTo: string | undefined;
+  createEffect(() => {
+    if (props.focusedId !== scrolledTo) scrolledTo = undefined;
+  });
   const row = (entry: Accessor<FeedEntry>) => (
     <li
       class="scroll-mt-4"
       ref={(element) => {
         if (untrack(entry).suggestion.id !== props.focusedId) return;
 
-        onElementConnect(element, () =>
-          element.scrollIntoView({ block: 'start' })
-        );
+        onElementConnect(element, () => {
+          if (scrolledTo === props.focusedId) return;
+
+          scrolledTo = props.focusedId;
+          element.scrollIntoView({ block: 'start' });
+        });
       }}
     >
       <SuggestionRow

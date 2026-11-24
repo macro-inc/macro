@@ -54,7 +54,7 @@ function ForYouPage() {
         )
       }
       onTopicGone={() =>
-        setSearch({ topic: undefined }, { history: 'replace' })
+        setSearch({ view: undefined, topic: undefined }, { history: 'replace' })
       }
       routines={routines}
       parts={SUGGESTION_ITEM_PARTS}

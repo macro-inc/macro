@@ -202,8 +202,10 @@ export function useSuggestionsSource(): SuggestionsSource {
 
   return {
     feed: shown,
-    current: () =>
-      feed.isSuccess && feed.fetchStatus === 'idle' && !feed.isStale,
+    reread: async () => {
+      const read = await feed.refetch({ cancelRefetch: false });
+      return read.isSuccess;
+    },
     failed: () => feed.isError && shown() === undefined,
     retry: () => fireAndForget(refresh(), 'suggestions'),
     refresh,

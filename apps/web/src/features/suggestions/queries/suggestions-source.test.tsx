@@ -37,6 +37,8 @@ const COUNTS = { open: 0, running: 0, failed: 0, done: 1 };
 
 const server = vi.hoisted(() => ({
   feedFails: false,
+  /** How many times the feed was read. */
+  reads: 0,
   listed: undefined as WireSuggestion[] | undefined,
   /** The next feed reads, in turn, wait on these before they answer. */
   gates: [] as Promise<void>[],
@@ -52,6 +54,7 @@ vi.mock('@service-scheduled-action/client', () => ({
   scheduledActionClient: {
     suggestionGeneration: async () => ok({ state: 'idle' }),
     listSuggestions: async () => {
+      server.reads += 1;
       const failing = server.feedFails;
       const listed = server.listed;
       await server.gates.shift();
@@ -102,6 +105,7 @@ function decoded(wire: WireSuggestion): Suggestion {
 
 beforeEach(() => {
   server.feedFails = false;
+  server.reads = 0;
   server.listed = undefined;
   server.gates = [];
   server.dismissFails = false;
@@ -427,28 +431,34 @@ it('drops a read of the routine ideas that was out before the dismissal', async 
   ]);
 });
 
-it('is current only while it holds the server’s latest answer', async () => {
-  const { client, source } = mount(60_000);
-  expect(source.current()).toBe(false);
-  await waitFor(() => expect(source.current()).toBe(true));
+it('rereads a cached feed from the server, and says whether it could', async () => {
+  // Fresh for a minute: nothing else reads the feed again.
+  const { source } = mount(60_000);
+  await waitFor(() => expect(source.feed()).toBeDefined());
+  const reads = server.reads;
 
-  // Asked again: what it holds may be out of date until the answer.
+  expect(await source.reread()).toBe(true);
+  expect(server.reads).toBe(reads + 1);
+
+  server.feedFails = true;
+  expect(await source.reread()).toBe(false);
+  expect(source.feed()).toBeDefined();
+});
+
+it('waits for a read already out instead of starting another', async () => {
+  const { source } = mount(60_000);
+  await waitFor(() => expect(source.feed()).toBeDefined());
   let answer: () => void = () => {};
   server.gates.push(
     new Promise<void>((resolve) => {
       answer = resolve;
     })
   );
-  const { queryKey } = suggestionsKeys.feed('user-1');
-  fireAndForget(client.invalidateQueries({ queryKey }), 'test');
-  await waitFor(() => expect(source.current()).toBe(false));
-  expect(source.feed()).toBeDefined();
+  const reads = server.reads;
+  const first = source.reread();
+  const second = source.reread();
   answer();
-  await waitFor(() => expect(source.current()).toBe(true));
 
-  // A read that failed leaves the feed shown, and not known to be current.
-  server.feedFails = true;
-  await client.invalidateQueries({ queryKey });
-  expect(source.current()).toBe(false);
-  expect(source.feed()).toBeDefined();
+  expect(await Promise.all([first, second])).toEqual([true, true]);
+  expect(server.reads).toBe(reads + 1);
 });

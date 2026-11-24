@@ -11,10 +11,10 @@ export type SuggestionsSource = {
   /** The feed in the server's order, with its counts; undefined until loaded. */
   feed: Accessor<SuggestionFeed | undefined>;
   /**
-   * Whether the feed is the server's latest answer: false for a cached one
-   * being read again, or one the last read failed to replace.
+   * Read the feed from the server, or wait for the read already out. Answers
+   * whether it was read: the feed shown may be a cached one until then.
    */
-  current: Accessor<boolean>;
+  reread(): Promise<boolean>;
   /** Nothing to show because loading failed. */
   failed: Accessor<boolean>;
   retry(): void;
