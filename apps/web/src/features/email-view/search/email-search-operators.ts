@@ -1,3 +1,4 @@
+import * as EmailValidator from 'email-validator';
 import { match } from 'ts-pattern';
 
 /**
@@ -231,6 +232,13 @@ const isLabelKey = (key: string): key is EmailSearchLabelKey =>
 
 /** Someone `from:`, `to:`, `cc:` or `bcc:` can name. */
 export type EmailSearchPerson = { id: string; email: string; name?: string };
+
+/**
+ * Whether mail can come from or go to `email`: a valid address outside the
+ * reserved `.invalid` domain, which agent teammates' addresses use.
+ */
+export const canMailAddress = (email: string) =>
+  EmailValidator.validate(email) && !/\.invalid$/i.test(email);
 
 /** A mailbox label or a Macro tag that `label:` and `in:` can name. */
 export type EmailSearchLabel = { name: string; kind: 'label' | 'tag' };

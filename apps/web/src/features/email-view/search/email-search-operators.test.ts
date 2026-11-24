@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  canMailAddress,
   completeEmailSearchOperator,
   emailSearchCompletionText,
   isUnfinishedEmailSearchOperator,
@@ -201,5 +202,13 @@ describe('matchEmailSearchLabels', () => {
       'Receipts/Travel',
       'Respond',
     ]);
+  });
+});
+
+describe('canMailAddress', () => {
+  it('keeps addresses mail can reach and leaves out agent teammates', () => {
+    expect(canMailAddress('ana@example.com')).toBe(true);
+    expect(canMailAddress('ada-246c21@agents.macro.invalid')).toBe(false);
+    expect(canMailAddress('not an address')).toBe(false);
   });
 });

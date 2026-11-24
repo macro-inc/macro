@@ -3,12 +3,12 @@ import { useTagSets } from '@property/tags/tag-sets-context';
 import { useContactRecipientSource } from '@queries/contacts/recipient-source';
 import { useEmailUserLabelsQuery } from '@queries/email/labels';
 import { ApiLabelType } from '@service-email/generated/schemas';
-import * as EmailValidator from 'email-validator';
 import { type Accessor, createMemo } from 'solid-js';
 import { emailSearchValueBeingTyped } from '../search/create-email-search-suggestions';
-import type {
-  EmailSearchLabel,
-  EmailSearchPerson,
+import {
+  canMailAddress,
+  type EmailSearchLabel,
+  type EmailSearchPerson,
 } from '../search/email-search-operators';
 
 /**
@@ -37,7 +37,7 @@ export function useEmailSearchValues(search: Accessor<string>): {
     const seen = new Set<string>();
     return recipients.items().flatMap((user) => {
       const email = user.data.email.trim().toLowerCase();
-      if (seen.has(email) || !EmailValidator.validate(email)) return [];
+      if (seen.has(email) || !canMailAddress(email)) return [];
       seen.add(email);
       const name = user.data.name?.trim();
       return [
