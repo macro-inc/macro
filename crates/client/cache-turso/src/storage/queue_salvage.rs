@@ -181,6 +181,8 @@ struct ImportMarker {
     id: Uuid,
     rounds: u32,
     imported_at_ms: i64,
+    /// Whether the import was: pages may not have heard that it was not.
+    complete: bool,
 }
 
 impl ImportMarker {
@@ -190,6 +192,7 @@ impl ImportMarker {
             id: parts.next()?.parse().ok()?,
             rounds: parts.next()?.parse().ok()?,
             imported_at_ms: parts.next()?.parse().ok()?,
+            complete: parts.next()?.parse().ok()?,
         })
     }
 }
@@ -282,7 +285,10 @@ fn import(
         "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
         vec![
             text(IMPORT_MARKER_KEY),
-            text(&format!("{} {} {now_ms}", queue.id, queue.rounds)),
+            text(&format!(
+                "{} {} {now_ms} {}",
+                queue.id, queue.rounds, imported.complete
+            )),
         ],
     )?;
     Ok(imported)

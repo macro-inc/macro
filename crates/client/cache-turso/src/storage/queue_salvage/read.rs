@@ -164,7 +164,7 @@ fn read_database(connection: &Db, scope: &str, now_ms: i64) -> Result<Held, Turs
         queue: SalvagedQueue {
             id: Uuid::now_v7(),
             source: metadata_record(connection, STORAGE_GENERATION_META_KEY)?,
-            complete: true,
+            complete: marker.is_none_or(|marker| marker.complete),
             rounds: marker.map_or(1, |marker| marker.next_rounds(now_ms)),
             sequence: sequence(connection)?,
             rows: Vec::new(),

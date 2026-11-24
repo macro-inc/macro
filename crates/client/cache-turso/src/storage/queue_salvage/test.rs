@@ -459,6 +459,22 @@ fn a_database_that_was_never_wiped_keeps_its_own_queue() {
 }
 
 #[test]
+fn a_queue_that_lost_its_ids_says_so_after_another_wipe() {
+    block_on(async {
+        let mut storage = fresh();
+        enqueue(&mut storage, "First").await;
+        let queue = carried(&storage);
+        let mut served = fresh();
+        enqueue(&mut served, "Second").await;
+        assert!(!served.import_queue(&queue, 0).unwrap().complete);
+        let queue = salvage(&served).queue.unwrap();
+        let mut next = fresh();
+        let imported = next.import_queue(&through_file(&queue), 0).unwrap();
+        assert_eq!((imported.kept, imported.complete), (2, false));
+    });
+}
+
+#[test]
 fn a_queue_not_imported_yet_survives_another_wipe() {
     block_on(async {
         let mut storage = fresh();
