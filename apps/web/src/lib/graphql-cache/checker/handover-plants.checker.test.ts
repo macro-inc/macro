@@ -8,6 +8,7 @@ import { CoordinatorCore } from '../worker/coordinator-core';
 import { CacheCoordinatorPageAdapter } from '../worker/coordinator-page-adapter';
 import { explains, explore, violationKey } from './explore';
 import { KNOWN_VIOLATIONS } from './known-violations';
+import { Sim } from './sim';
 import { type FaultKind, usePlant } from './world';
 
 vi.mock('../app-build', async () => {
@@ -58,6 +59,18 @@ describe('a known violation', () => {
     expect(explains(key(['close owner'], true), key(['close owner']))).toBe(
       false
     );
+  });
+});
+
+describe('a state', () => {
+  it('is told from one whose timers have longer to go', () => {
+    const states = [0, 500].map((elapsed) => {
+      const sim = new Sim();
+      sim.setTimeout(() => {}, 1_000);
+      sim.advanceTo(sim.now + elapsed);
+      return sim.timerSummary();
+    });
+    expect(states[0]).not.toBe(states[1]);
   });
 });
 

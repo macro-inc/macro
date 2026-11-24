@@ -21,7 +21,8 @@ export type Bound = {
   prune?: boolean;
 };
 
-type Budget = { faults: number; delays: number };
+/** What may still be injected: how much, and for how long. */
+type Budget = { faults: number; delays: number; ms: number };
 
 type StepRecord = {
   choice: number;
@@ -32,6 +33,8 @@ type StepRecord = {
   delays: number;
   /** Of the state before the step; none on the replayed part of a run. */
   signature: string | undefined;
+  /** How much of the fault phase was left before the step. */
+  msLeft: number;
 };
 
 export type RunResult = {
@@ -235,6 +238,7 @@ export async function runSchedule(
         faultStart,
         delays,
         signature,
+        msLeft: start + scenario.horizonMs - world.sim.now,
       });
       choices.push(choice);
       if (choice < faultStart) {
@@ -263,7 +267,7 @@ export async function runSchedule(
 }
 
 /** What a run's replayed part spent of its bound; what follows it is default. */
-function budgetLeft(bound: Bound, replayed: StepRecord[]): Budget {
+function budgetLeft(bound: Bound, replayed: StepRecord[]): Omit<Budget, 'ms'> {
   let { maxFaults: faults, maxDelays: delays } = bound;
   for (const record of replayed) {
     if (record.choice >= record.faultStart) faults -= 1;
@@ -272,7 +276,7 @@ function budgetLeft(bound: Bound, replayed: StepRecord[]): Budget {
   return { faults, delays };
 }
 
-const canBranch = (record: StepRecord, left: Budget): boolean =>
+const canBranch = (record: StepRecord, left: Omit<Budget, 'ms'>): boolean =>
   (left.faults > 0 && record.options > record.faultStart) ||
   (left.delays > 0 && record.delays > 0);
 
@@ -285,7 +289,8 @@ function covered(
   const earlier = branched.get(signature) ?? [];
   if (
     earlier.some(
-      ({ faults, delays }) => faults >= left.faults && delays >= left.delays
+      ({ faults, delays, ms }) =>
+        faults >= left.faults && delays >= left.delays && ms >= left.ms
     )
   )
     return true;
@@ -338,7 +343,11 @@ export async function explore(
     for (let index = prefix.length; index < result.records.length; index += 1) {
       const record = result.records[index];
       if (record?.signature === undefined || !canBranch(record, left)) continue;
-      if (bound.prune !== false && covered(branched, record.signature, left)) {
+      const budget = { ...left, ms: record.msLeft };
+      if (
+        bound.prune !== false &&
+        covered(branched, record.signature, budget)
+      ) {
         report.pruned += 1;
         continue;
       }

@@ -1033,7 +1033,8 @@ export class World {
   /**
    * The state a run is in, for skipping schedules that reach it again: what
    * every context has handled, what is on its way, the locks, the databases
-   * and the armed timers in order. Heartbeats and the time are left out.
+   * and how long each armed timer has to go. Heartbeats a context handled are
+   * left out.
    */
   signature(): string {
     const contexts = this.sim.contexts.map(
