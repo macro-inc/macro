@@ -20,7 +20,11 @@ import {
   type CatalogMutationCallbacks,
   createCatalogMutation,
 } from './catalog/mutation';
-import { registerCatalogReader } from './catalog/readers';
+import {
+  catalogReadPolicy,
+  noteCatalogResult,
+  registerCatalogReader,
+} from './catalog/readers';
 import {
   addPropertyOption,
   cachedTagSet,
@@ -47,14 +51,18 @@ export function useTagsQuery(): CatalogListResult<TagSetResponse> {
     variables,
     () => ({
       client: getGraphqlSoupClient(),
-      requestPolicy: 'cache-and-network',
+      requestPolicy: catalogReadPolicy(stamp.key()),
       keepPreviousData: false,
       select: (data) => data.user.tagSets.flatMap((set) => toTagSet(set) ?? []),
-      onResult: stamp.onResult,
+      onResult: (result) => {
+        stamp.onResult(result);
+        noteCatalogResult('tags', result);
+      },
     })
   );
   registerCatalogReader({
     kind: 'tags',
+    key: stamp.key,
     definitions: () =>
       (query.data ?? []).flatMap((set) =>
         set.definition

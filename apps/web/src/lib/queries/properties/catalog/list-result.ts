@@ -65,6 +65,8 @@ export function createListedAt<V extends AnyVariables>(
   document: DocumentInput<unknown, V>,
   variables: Accessor<V | undefined>
 ): CatalogListStamp & {
+  /** urql's key for the current read; undefined while paused. */
+  key: Accessor<number | undefined>;
   onResult(result: OperationResult<unknown, AnyVariables>): void;
 } {
   const currentKey = createMemo(() => {
@@ -82,6 +84,7 @@ export function createListedAt<V extends AnyVariables>(
     );
   };
   return {
+    key: currentKey,
     listedAt,
     refusal() {
       const key = currentKey();

@@ -526,16 +526,19 @@ describe('option order', () => {
     const dispose = createRoot((dispose) => {
       registerCatalogReader({
         kind: 'options',
+        key: () => 1,
         propertyDefinitionId: () => 'def-1',
         refresh: refresh('options of def-1'),
       });
       registerCatalogReader({
         kind: 'options',
+        key: () => 2,
         propertyDefinitionId: () => 'def-2',
         refresh: refresh('options of def-2'),
       });
       registerCatalogReader({
         kind: 'definitions',
+        key: () => 3,
         variables: () => ({ scope: 'ALL' }),
         withOptions: true,
         definitionIds: () => ['def-1'],
@@ -543,6 +546,7 @@ describe('option order', () => {
       });
       registerCatalogReader({
         kind: 'definitions',
+        key: () => 4,
         variables: () => ({ scope: 'ALL' }),
         withOptions: false,
         definitionIds: () => ['def-1'],
@@ -550,6 +554,7 @@ describe('option order', () => {
       });
       registerCatalogReader({
         kind: 'tags',
+        key: () => 5,
         definitions: () => [{ scope: 'USER', definitionId: 'def-1' }],
         refresh: refresh('tags'),
       });
@@ -649,6 +654,7 @@ describe('option order', () => {
     const dispose = createRoot((dispose) => {
       registerCatalogReader({
         kind: 'options',
+        key: () => 6,
         propertyDefinitionId: () => 'def-1',
         refresh: () => {
           reloads.push('def-1');
@@ -659,6 +665,7 @@ describe('option order', () => {
       });
       registerCatalogReader({
         kind: 'options',
+        key: () => 7,
         propertyDefinitionId: () => 'def-2',
         refresh: async () => {
           reloads.push('def-2');
