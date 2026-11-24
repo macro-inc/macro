@@ -288,6 +288,12 @@ pub(crate) fn report_message(report: &SyncReport) -> String {
     } else {
         message.push_str(" Every version found is recorded.");
     }
+    let unidentified: usize = report.items.iter().map(|item| item.unidentified.len()).sum();
+    if unidentified > 0 {
+        message.push_str(&format!(
+            " {unidentified} versions have a file type Autodesk did not name; they are not recorded, and a later sync tries them again."
+        ));
+    }
     message.push_str(" Items with status `busy`, `rate_limited` or `failed` can be synced again later; `document_gone` means the user deleted the document, and `import` makes a new one.");
     message
 }

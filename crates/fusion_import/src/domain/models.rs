@@ -530,6 +530,9 @@ pub struct ItemReport {
     pub already_imported: u32,
     /// Versions that were not imported, and why.
     pub skipped: Vec<SkippedVersion>,
+    /// Numbers of versions whose file type Autodesk did not say. They are
+    /// not recorded, so a later sync tries them again.
+    pub unidentified: Vec<u32>,
     /// Versions still to import; call `sync` again for them.
     pub remaining: u32,
 }
@@ -544,6 +547,7 @@ impl ItemReport {
             imported_now: 0,
             already_imported: 0,
             skipped: Vec::new(),
+            unidentified: Vec::new(),
             remaining: 0,
         }
     }

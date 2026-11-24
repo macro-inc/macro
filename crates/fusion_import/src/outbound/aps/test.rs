@@ -272,6 +272,69 @@ async fn versions_carry_their_storage_and_extension_across_pages() {
     );
 }
 
+/// A versions page with one version, written here: no published example
+/// shows a Fusion design's version.
+fn one_version(attributes: serde_json::Value, storage_id: &str) -> String {
+    serde_json::json!({
+        "jsonapi": {"version": "1.0"},
+        "links": {"self": {"href": "/data/v1/projects/p/items/i/versions"}},
+        "data": [{
+            "type": "versions",
+            "id": "urn:adsk.wipprod:fs.file:vf.design?version=1",
+            "attributes": attributes,
+            "relationships": {
+                "storage": {"data": {"type": "objects", "id": storage_id}}
+            }
+        }]
+    })
+    .to_string()
+}
+
+#[tokio::test]
+async fn a_design_named_without_a_suffix_takes_its_stored_objects_extension() {
+    let page = one_version(
+        serde_json::json!({"name": "Bracket", "displayName": "Bracket", "versionNumber": 1}),
+        "urn:adsk.objects:os.object:wip.dm.prod/2a6d61f2-f1a9-4f6c-8f2b-6e3b0d0f6f0e.f3d",
+    );
+    let (_fake, reader) = reader([answer(StatusCode::OK, &page)]).await;
+
+    let versions = reader.versions(&project(), &item_id()).await.unwrap();
+
+    // The import resolves `f3d` to a Fusion design document
+    // (`domain::service::test::a_fusion_design_version_imports_as_an_f3d_document`).
+    assert_eq!(versions[0].extension.as_deref(), Some("f3d"));
+}
+
+#[tokio::test]
+async fn a_fusion_design_version_with_no_other_hint_is_f3d() {
+    let page = one_version(
+        serde_json::json!({
+            "name": "Bracket",
+            "versionNumber": 1,
+            "extension": {"type": "versions:autodesk.fusion360:Design", "version": "1.0"}
+        }),
+        "urn:adsk.objects:os.object:wip.dm.prod/2a6d61f2-f1a9-4f6c-8f2b-6e3b0d0f6f0e",
+    );
+    let (_fake, reader) = reader([answer(StatusCode::OK, &page)]).await;
+
+    let versions = reader.versions(&project(), &item_id()).await.unwrap();
+
+    assert_eq!(versions[0].extension.as_deref(), Some("f3d"));
+}
+
+#[tokio::test]
+async fn a_version_with_no_hint_of_its_type_has_no_extension() {
+    let page = one_version(
+        serde_json::json!({"name": "Bracket", "versionNumber": 1}),
+        "urn:adsk.objects:os.object:wip.dm.prod/2a6d61f2-f1a9-4f6c-8f2b-6e3b0d0f6f0e",
+    );
+    let (_fake, reader) = reader([answer(StatusCode::OK, &page)]).await;
+
+    let versions = reader.versions(&project(), &item_id()).await.unwrap();
+
+    assert_eq!(versions[0].extension, None);
+}
+
 #[tokio::test]
 async fn a_signed_download_names_the_object_and_answers_one_url() {
     let (fake, reader) = reader([answer(StatusCode::OK, SIGNED_COMPLETE)]).await;

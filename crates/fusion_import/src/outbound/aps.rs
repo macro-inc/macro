@@ -40,6 +40,12 @@ pub const AUTODESK_APP: &str = "autodesk";
 /// APS's API origin.
 const APS_API_URL: &str = "https://developer.api.autodesk.com";
 
+/// The `attributes.extension.type` of a Fusion design's version.
+const FUSION_DESIGN_VERSION: &str = "versions:autodesk.fusion360:Design";
+
+/// The file extension of a Fusion design.
+const FUSION_DESIGN_EXTENSION: &str = "f3d";
+
 /// How users know the provider, in upstream errors.
 const SERVICE: &str = "Autodesk";
 
@@ -434,8 +440,16 @@ fn item(resource: Resource, included: &[Resource]) -> Option<FusionItem> {
     })
 }
 
-/// A version. Its extension is APS's `fileType`, or the one its name ends
-/// in; its storage is where `relationships.storage` points.
+/// The extension `path` ends in, if any.
+fn path_extension(path: &str) -> Option<String> {
+    Some(Path::new(path).extension()?.to_str()?.to_owned())
+}
+
+/// A version, with its storage where `relationships.storage` points and
+/// its extension from, in order: APS's `fileType`; the stored object's key
+/// (`<uuid>.f3d`); `f3d` for a Fusion design version; the version name's
+/// suffix. Fusion design names rarely end in an extension, and a name like
+/// "Bracket v2.1" would give a wrong one, so the name comes last.
 fn version(resource: Resource) -> Option<FusionVersion> {
     let Resource {
         id,
@@ -443,18 +457,22 @@ fn version(resource: Resource) -> Option<FusionVersion> {
         relationships,
         ..
     } = resource;
-    let extension = attributes
-        .file_type
-        .clone()
-        .or_else(|| {
-            let name = attributes.name.as_deref()?;
-            Some(Path::new(name).extension()?.to_str()?.to_owned())
-        })
-        .map(|extension| extension.to_ascii_lowercase());
     let storage = relationships
         .storage
         .and_then(|storage| storage.data)
         .and_then(|data| StorageObject::parse(&data.id));
+    let fusion_design = attributes
+        .extension
+        .as_ref()
+        .and_then(|extension| extension.kind.as_deref())
+        == Some(FUSION_DESIGN_VERSION);
+    let extension = attributes
+        .file_type
+        .clone()
+        .or_else(|| path_extension(&storage.as_ref()?.object_key))
+        .or_else(|| fusion_design.then(|| FUSION_DESIGN_EXTENSION.to_owned()))
+        .or_else(|| path_extension(attributes.name.as_deref()?))
+        .map(|extension| extension.to_ascii_lowercase());
     let created_at = attributes
         .create_time
         .as_deref()
@@ -514,6 +532,14 @@ struct Attributes {
     create_time: Option<String>,
     storage_size: Option<u64>,
     file_type: Option<String>,
+    extension: Option<ExtensionAttribute>,
+}
+
+/// A resource's `attributes.extension`: which kind of item or version it is.
+#[derive(Deserialize)]
+struct ExtensionAttribute {
+    #[serde(rename = "type")]
+    kind: Option<String>,
 }
 
 impl Attributes {

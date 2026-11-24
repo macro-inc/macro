@@ -11386,6 +11386,11 @@ export interface ItemReport {
    */
   skipped: SkippedVersion[];
   /**
+   * Numbers of versions whose file type Autodesk did not say. They are
+   * not recorded, so a later sync tries them again.
+   */
+  unidentified: number[];
+  /**
    * Versions still to import; call `sync` again for them.
    */
   remaining: number;

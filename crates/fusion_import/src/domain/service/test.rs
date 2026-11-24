@@ -576,6 +576,7 @@ async fn a_first_import_makes_one_document_with_every_version_oldest_first() {
                 imported_now: 3,
                 already_imported: 0,
                 skipped: vec![],
+                unidentified: vec![],
                 remaining: 0,
             }],
             remaining: 0,
@@ -1077,4 +1078,51 @@ async fn a_sync_of_named_items_has_no_cursor() {
 
     assert_eq!(report.remaining, 2);
     assert_eq!(report.next_cursor, None);
+}
+
+#[tokio::test]
+async fn a_fusion_design_version_imports_as_an_f3d_document() {
+    let world = World::with_items(&[("bracket", 0)]);
+    let design = FusionVersion {
+        extension: Some("f3d".into()),
+        storage: Some(StorageObject {
+            bucket_key: "wip.dm.prod".into(),
+            object_key: "bracket-v1.f3d".into(),
+        }),
+        ..stl("bracket", 1)
+    };
+    world.add_version(design, "bracket");
+
+    let report = import(&world, &["bracket"]).await;
+
+    assert_eq!(report.items[0].imported_now, 1);
+    let (_, file_type, versions) = &world.documents.contents()[0];
+    assert_eq!(*file_type, FileType::F3d);
+    assert_eq!(*versions, vec![bytes_of("bracket", 1)]);
+}
+
+#[tokio::test]
+async fn a_version_of_unknown_type_is_not_recorded_and_is_tried_again() {
+    let world = World::with_items(&[("bracket", 2)]);
+    let unknown = FusionVersion {
+        extension: None,
+        ..stl("bracket", 3)
+    };
+    world.add_version(unknown, "bracket");
+
+    let first = import(&world, &["bracket"]).await;
+    let again = world
+        .service()
+        .sync(&user(), SyncScope::All { from: None })
+        .await
+        .unwrap();
+
+    assert_eq!(first.items[0].imported_now, 2);
+    assert_eq!(first.items[0].unidentified, vec![3]);
+    assert_eq!(first.items[0].skipped, vec![]);
+    assert_eq!(first.items[0].remaining, 0);
+    assert_eq!(world.repo.row(&item_id("bracket")).versions.len(), 2);
+    // Still unrecorded, so a sync looks at it again rather than writing it off.
+    assert_eq!(again.items[0].unidentified, vec![3]);
+    assert_eq!(world.fetched(), 2);
 }

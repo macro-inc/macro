@@ -57,6 +57,9 @@ items by id with `nextCursor`.
 
 - `fixtures/` are Autodesk's published examples, not recordings
   (`fixtures/README.md`); replace them once the live test has run.
+- A version's extension comes from `fileType`, the stored object's key, the
+  Fusion design type (`f3d`), then its name; one with none is never recorded
+  (`unidentified`), so a later sync retries it.
 - Only Macro 3D file types are imported (`cad_file_type`): PDF and image
   documents serve their first version, so later versions would never show.
 - A presigned download URL is a credential: never log it (`SignedUrl` redacts

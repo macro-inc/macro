@@ -25,7 +25,8 @@ What the examples don't show, and a recording must confirm:
 
 - `fileType` and `storageSize` on versions: documented, but absent from the
   versions example (the item example's included version has `fileType`). The
-  client falls back to the extension of the version's `name`.
+  client falls back to the stored object's key, then to `f3d` for a Fusion
+  design version, then to the version name's extension.
 - A last page: every paged example carries `links.next`. Tests make the last
   page by removing `links.next` from a parsed copy, so the files stay verbatim.
 - What a Fusion design's version looks like (`f3d` or no file extension) and

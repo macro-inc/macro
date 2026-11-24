@@ -410,7 +410,13 @@ where
                 break;
             }
 
-            let record = self.import_version(sync, version, budget).await?;
+            let Some(record) = self.import_version(sync, version, budget).await? else {
+                // Autodesk named no file type: not recorded, so a later
+                // sync (or a later fix to how types are read) tries again.
+                report.remaining = report.remaining.saturating_sub(1);
+                report.unidentified.push(version.number);
+                continue;
+            };
             self.repo
                 .record_version(user, &sync.item.item_id, &record)
                 .await
@@ -432,13 +438,14 @@ where
     }
 
     /// Decide one version's outcome, downloading and storing it when it can
-    /// be imported. Only a download spends `budget`.
+    /// be imported, or `None` when its file type is unknown and nothing is
+    /// recorded. Only a download spends `budget`.
     async fn import_version(
         &self,
         sync: &mut ItemSync<'_, C::Reader>,
         version: &FusionVersion,
         budget: &mut Budget,
-    ) -> Result<VersionRecord, ItemFailure> {
+    ) -> Result<Option<VersionRecord>, ItemFailure> {
         let record = |outcome| VersionRecord {
             version_id: version.id.clone(),
             number: version.number,
@@ -450,32 +457,35 @@ where
         let skip = |reason| record(RecordedOutcome::Skipped(reason));
 
         let Some(storage) = &version.storage else {
-            return Ok(skip(SkipReason::Unavailable));
+            return Ok(Some(skip(SkipReason::Unavailable)));
         };
-        let Some(version_type) = version.extension.as_deref().and_then(cad_file_type) else {
-            return Ok(skip(SkipReason::UnsupportedFormat));
+        let Some(extension) = version.extension.as_deref() else {
+            return Ok(None);
+        };
+        let Some(version_type) = cad_file_type(extension) else {
+            return Ok(Some(skip(SkipReason::UnsupportedFormat)));
         };
         // A document has one file type; a version of another can't join it.
         if sync
             .file_type
             .is_some_and(|document_type| document_type != version_type)
         {
-            return Ok(skip(SkipReason::UnsupportedFormat));
+            return Ok(Some(skip(SkipReason::UnsupportedFormat)));
         }
         if version.size.is_some_and(|size| size > MAX_VERSION_BYTES) {
-            return Ok(skip(SkipReason::TooLarge));
+            return Ok(Some(skip(SkipReason::TooLarge)));
         }
 
         budget.spend_download();
         let signed = match sync.reader.signed_download(storage).await {
             Ok(signed) => signed,
             Err(ApsError::NotFound | ApsError::Forbidden) => {
-                return Ok(skip(SkipReason::Unavailable));
+                return Ok(Some(skip(SkipReason::Unavailable)));
             }
             Err(error) => return Err(ItemFailure::Aps(error)),
         };
         if signed.size.is_some_and(|size| size > MAX_VERSION_BYTES) {
-            return Ok(skip(SkipReason::TooLarge));
+            return Ok(Some(skip(SkipReason::TooLarge)));
         }
         let bytes = match self
             .downloads
@@ -484,14 +494,14 @@ where
             .map_err(ItemFailure::Download)?
         {
             Download::Bytes(bytes) => bytes,
-            Download::TooLarge => return Ok(skip(SkipReason::TooLarge)),
+            Download::TooLarge => return Ok(Some(skip(SkipReason::TooLarge))),
         };
 
         let document_version_id = self.store(sync, version_type, bytes).await?;
         sync.file_type = Some(version_type);
-        Ok(record(RecordedOutcome::Imported {
+        Ok(Some(record(RecordedOutcome::Imported {
             document_version_id,
-        }))
+        })))
     }
 
     /// Put `bytes` in the item's document, creating it for the first version.

@@ -11441,6 +11441,7 @@ export const ImportFromFusionResponse = z.any().superRefine((x, ctx) => {
                 }),
               })
             ),
+            unidentified: z.array(z.number().int().gte(0)),
             remaining: z.number().int().gte(0),
           })
         ),
