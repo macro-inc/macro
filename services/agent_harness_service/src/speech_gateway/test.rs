@@ -27,7 +27,7 @@ impl BrainAuthenticator for OneAgent {
     fn authenticate<'a>(&'a self, key: &'a str) -> BrainLookup<'a> {
         Box::pin(async move {
             if key == "mak_down" {
-                return Err(rootcause::report!("database down"));
+                return Err(rootcause::report!("database down").into());
             }
             Ok((key == AGENT_KEY).then(|| BrainCaller {
                 user_id: MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned(),
