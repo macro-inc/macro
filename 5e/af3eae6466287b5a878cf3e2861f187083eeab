@@ -1,0 +1,21 @@
+apps/web/src/lib/service-clients/service-storage/fileTypeMap.ts
+  s_03d00e081a8572::t_c2fcf85e521cf0 570-575
+crates/model_file_type/src/lib.rs
+  s_03d00e081a8572::t_94692434c78954 744-750
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5eaf3eae6466287b5a878cf3e2861f187083eeab",
+  "prompts": {},
+  "sessions": {
+    "s_03d00e081a8572": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e7981497-4e28-471e-b12b-3d7f00524230",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
