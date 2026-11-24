@@ -24,7 +24,11 @@ import type { CompanyDomainChange } from '../core/company';
 import { contactCompanySummary } from '../core/contact';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
-import { listCanIncludeCrm, listCanIncludeCrmContacts } from './list-refresh';
+import {
+  listCanIncludeCrm,
+  listCanIncludeCrmContacts,
+  listReadsCrmEmail,
+} from './list-refresh';
 import {
   updateVisibilityDetails,
   visibilityDetailsFilter,
@@ -623,7 +627,9 @@ export function useSetEmailSyncMutation(deps: CrmRecordDependencies) {
           // The server changes which email the company's lists may show.
           refreshActiveGraphqlSoupQueries({
             where: (body) =>
-              listCanIncludeCrm(body) || isCompanyEmailBody(body, domains),
+              listCanIncludeCrm(body) ||
+              listReadsCrmEmail(body) ||
+              isCompanyEmailBody(body, domains),
           }),
           deps.client.invalidateQueries({
             queryKey: crmKeys.company(companyId).queryKey,
