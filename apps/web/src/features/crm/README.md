@@ -121,12 +121,16 @@ app's other side panels; neither has a duplicate visibility toggle. Record
 details rows use the side panel's label/value grid
 (`SidePanel.Grid`/`SidePanel.Row`), so their labels and values share the
 Properties rows' text size, muted label style and label column; long names and
-domains wrap. The References empty and error states are muted lines at the
-section's text edge, like the Lists section's. A company's Properties pin
-Stage, Owner and Revenue before the team's custom properties; a contact's list
-only custom properties (a phone number, a LinkedIn link), since the built-in CRM
-properties are company-only. Both use the shared `EntityPropertiesSection` and
-the same edit rule.
+domains wrap. References rows (`RecordItemList` with `panel`) are the side
+panel's own item rows, like a document's References: icon and title in 12px
+text, 32px tall, starting at the section's text edge, with no list metadata,
+and they open their item like the list rows do; its loading rows take the same
+shape. The References empty and error states are muted lines at the same edge,
+like the Lists section's. A company's Properties pin Stage, Owner and Revenue
+before the team's custom properties; a contact's list only custom properties (a
+phone number, a LinkedIn link), since the built-in CRM properties are
+company-only. Both use the shared `EntityPropertiesSection` and the same edit
+rule.
 
 Contact headers and Record details share `ContactEmailField` and
 `ContactCompanyField`. The email field lists every address as a Tasks-style

@@ -5,6 +5,12 @@ import type { ItemListSource } from '../context/crm-sources';
 import { RecordItemList } from './record-item-list';
 
 const mounted = vi.hoisted(() => vi.fn());
+const openEntity = vi.hoisted(() => vi.fn());
+const workspace = vi.hoisted(() => ({
+  current: undefined as
+    | { host: { record: { openItem: ReturnType<typeof vi.fn> } } }
+    | undefined,
+}));
 
 vi.mock('@app/features/next-soup/soup-view/date-group-heading', () => ({
   DateGroupHeading: (props: { label: string }) => (
@@ -21,6 +27,11 @@ vi.mock('@entity', () => ({
   },
   ListEntityMetadataQueryProvider: (props: ParentProps) => props.children,
   ListLayoutProvider: (props: ParentProps) => props.children,
+  EntityRowIcon: () => null,
+  createEntityDraggable: () => () => {},
+  EntityRowTitle: (props: { entity: { name: string } }) => (
+    <span>{props.entity.name}</span>
+  ),
 }));
 vi.mock('@ui', () => ({
   cn: (...classes: (string | undefined)[]) => classes.filter(Boolean).join(' '),
@@ -50,13 +61,17 @@ vi.mock('../../../lib/primitives/infinite-scroll-sentinel', () => ({
 }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
-    createNavigation: () => ({ openEntity: vi.fn() }),
+    createNavigation: () => ({ openEntity }),
   }),
+}));
+vi.mock('../context/workspace-context', () => ({
+  useOptionalCrmWorkspace: () => workspace.current,
 }));
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  workspace.current = undefined;
 });
 
 function source(overrides: Partial<ItemListSource>): ItemListSource {
@@ -76,6 +91,36 @@ function source(overrides: Partial<ItemListSource>): ItemListSource {
     ...overrides,
   };
 }
+
+it('opens an information panel row on click and on Enter', () => {
+  mounted.mockClear();
+  openEntity.mockClear();
+  render(() => <RecordItemList source={source({})} empty="Nothing" panel />);
+
+  const row = screen.getByRole('button', { name: 'Kickoff notes' });
+  fireEvent.click(row);
+  fireEvent.keyDown(row, { key: 'Enter' });
+  expect(openEntity).toHaveBeenCalledTimes(2);
+  expect(mounted).not.toHaveBeenCalled();
+});
+
+it('hands a panel row click or key to the workspace with its modifiers', () => {
+  const openItem = vi.fn(
+    (_entity: unknown, _event?: MouseEvent | KeyboardEvent) => true
+  );
+  workspace.current = { host: { record: { openItem } } };
+  openEntity.mockClear();
+  render(() => <RecordItemList source={source({})} empty="Nothing" panel />);
+
+  const row = screen.getByRole('button', { name: 'Kickoff notes' });
+  fireEvent.click(row, { shiftKey: true });
+  fireEvent.keyDown(row, { key: 'Enter', metaKey: true });
+  expect(openItem).toHaveBeenCalledTimes(2);
+  expect(openItem.mock.calls[0][0]).toMatchObject({ id: 'doc-1' });
+  expect(openItem.mock.calls[0][1]).toMatchObject({ shiftKey: true });
+  expect(openItem.mock.calls[1][1]).toMatchObject({ metaKey: true });
+  expect(openEntity).not.toHaveBeenCalled();
+});
 
 it('replaces cached rows and retries the query after a failed refetch', () => {
   const failed = source({ isError: true });

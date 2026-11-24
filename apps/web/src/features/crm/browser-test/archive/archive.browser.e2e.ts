@@ -22,8 +22,8 @@ function settle(page: Page) {
 }
 
 /** Opens the information panel and waits for it to stop moving. */
-async function openDetails(page: Page, kind: string) {
-  await page.goto(`/?kind=${kind}`);
+async function openDetails(page: Page, kind: string, query = '') {
+  await page.goto(`/?kind=${kind}${query}`);
   await page.getByRole('button', { name: 'Show details', exact: true }).click();
   await expect(
     page.getByRole('region', { name: 'Record details' })
@@ -418,5 +418,39 @@ test('Details rows and the references empty state use the panel type scale', asy
     expect(
       Math.abs((await textStart(empty)) - (await textStart(propertyLabel)))
     ).toBeLessThan(2);
+  }
+});
+
+test('References rows use the panel type scale, text edge and row height', async ({
+  page,
+}) => {
+  const style = (locator: Locator) =>
+    locator.evaluate((element) => {
+      const computed = getComputedStyle(element);
+      return { fontSize: computed.fontSize, fontWeight: computed.fontWeight };
+    });
+  for (const kind of ['contact', 'company']) {
+    await openDetails(page, kind, '&refs');
+    const references = page.getByRole('button', {
+      name: 'References',
+      exact: true,
+    });
+    if ((await references.getAttribute('aria-expanded')) !== 'true')
+      await references.click();
+    const region = page.getByRole('region', { name: 'References' });
+    const row = region.getByRole('button', { name: 'Kickoff notes' });
+    await expect(row).toBeVisible();
+    await settle(page);
+    const propertyLabel = page
+      .getByRole('region', { name: 'Properties' })
+      .getByText('Phone', { exact: true });
+    const title = row.getByText('Kickoff notes', { exact: true });
+    expect(await style(title)).toEqual(await style(propertyLabel));
+    expect(
+      Math.abs((await textStart(row)) - (await textStart(propertyLabel)))
+    ).toBeLessThan(2);
+    const height = (await row.boundingBox())!.height;
+    expect(height).toBeGreaterThanOrEqual(28);
+    expect(height).toBeLessThanOrEqual(32);
   }
 });
