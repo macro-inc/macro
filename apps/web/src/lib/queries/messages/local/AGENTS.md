@@ -22,7 +22,10 @@ TanStack path in `../` runs untouched.
   timelines and threads to reread (`onChanged`). A drop ends a scheduled
   catch-up still out, and a newer one replaces it: a changes page read before
   can land after a frame of the next connection and write older records over
-  it. A window or a thread that
+  it. On one connection, a last page out while a newer frame stored records is
+  read again (`MAX_PAGE_REREADS`), and past that the next catch-up repairs from
+  it. Only the request can be interrupted: a commit the device takes always
+  records its sequence and tells the views. A window or a thread that
   failed to load, and an older or newer page that failed, load again when the
   connection comes back (`watchReconnect`, started before each request, so a
   request that fails after the connection is already back loads again at

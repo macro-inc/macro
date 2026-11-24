@@ -175,6 +175,9 @@ function setup() {
     requests,
     changed,
     release,
+    disconnect() {
+      stream.disconnected();
+    },
     reconnect() {
       stream.disconnected();
       stream.connected();
@@ -227,7 +230,8 @@ it('reconnect cancels the old HTTP page and replays from the committed page', as
     expect(test.seq()).toBe('8');
     expect([...test.records.values()]).toEqual(['edited while offline']);
     expect(test.commits.some(({ reset }) => reset)).toBe(false);
-    expect(test.changed).toHaveBeenCalledTimes(1);
+    // Once for the page the replaced catch-up committed, once for the replay.
+    expect(test.changed).toHaveBeenCalledTimes(2);
     expect(errors).not.toHaveBeenCalled();
     await expect(test.runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe(
       'current'
@@ -384,6 +388,198 @@ it('disposing a scheduled catch-up cancels the real HTTP query without a sync er
     expect(test.seq()).toBe('5');
     expect(test.commits).toEqual([]);
     expect(errors).not.toHaveBeenCalled();
+  } finally {
+    test.stop();
+  }
+});
+it('publishes the committed removal if the socket drops before the commit settles', async () => {
+  vi.useFakeTimers();
+  const test = setup();
+  const id = graphqlMessage(6).id;
+  const key = `GraphqlChannelMessage:${id}`;
+  const commit = test.host.channelTimelineCommit;
+  const ready = Promise.withResolvers<void>();
+  const finish = Promise.withResolvers<void>();
+  try {
+    vi.spyOn(test.host, 'channelTimelineCommit').mockImplementationOnce(
+      async (args) => {
+        ready.resolve();
+        await finish.promise;
+        return commit(args);
+      }
+    );
+
+    await vi.advanceTimersByTimeAsync(600);
+    test.requests[0].answer(delta('6', { removedIds: [id] }));
+    await vi.advanceTimersByTimeAsync(20);
+    await ready.promise;
+    test.disconnect();
+    await vi.advanceTimersByTimeAsync(20);
+    finish.resolve();
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(test.seq()).toBe('6');
+    expect(test.records.has(key)).toBe(false);
+    expect(test.changed).toHaveBeenCalledTimes(1);
+  } finally {
+    finish.resolve();
+    test.stop();
+  }
+});
+
+it('reconnect starts from the durable sequence while its earlier commit acknowledgement is delayed', async () => {
+  vi.useFakeTimers();
+  const test = setup();
+  const commit = test.host.channelTimelineCommit;
+  const ack = Promise.withResolvers<void>();
+  try {
+    vi.spyOn(test.host, 'channelTimelineCommit').mockImplementationOnce(
+      async (args) => {
+        const result = await commit(args);
+        await ack.promise;
+        return result;
+      }
+    );
+    await vi.advanceTimersByTimeAsync(600);
+    test.requests[0].answer(delta('6', { removedIds: [graphqlMessage(6).id] }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.seq()).toBe('6');
+
+    test.disconnect();
+    await vi.advanceTimersByTimeAsync(20);
+    ack.resolve();
+    await vi.advanceTimersByTimeAsync(20);
+    test.reconnect();
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(test.requests).toHaveLength(2);
+    const replay = test.requests[1];
+    // The server is now 1000 changes ahead of the durable cursor, but 1001 ahead of the in-memory cursor.
+    replay.answer(
+      replay.after === '5'
+        ? delta('1006', { resetRequired: true })
+        : delta('206', { hasMore: true })
+    );
+    await vi.advanceTimersByTimeAsync(40);
+    expect(test.commits.some(({ reset }) => reset)).toBe(false);
+  } finally {
+    ack.resolve();
+    test.stop();
+  }
+});
+
+it('an ensureCurrent waiter cannot use the permit while an interrupted held-frame commit is outstanding', async () => {
+  vi.useFakeTimers();
+  const test = setup();
+  const commit = test.host.channelTimelineCommit;
+  const ready = Promise.withResolvers<void>();
+  const ack = Promise.withResolvers<void>();
+  try {
+    vi.spyOn(test.host, 'channelTimelineCommit').mockImplementation(
+      async (args) => {
+        if (
+          args.seq?.kind === 'advance' &&
+          args.seq.from === '7' &&
+          args.seq.to === '8'
+        ) {
+          const result = await commit(args);
+          ready.resolve();
+          await ack.promise;
+          return result;
+        }
+        return commit(args);
+      }
+    );
+
+    await vi.advanceTimersByTimeAsync(20);
+    test.push('8', graphqlMessage(8));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.requests.map(({ after }) => after)).toEqual(['5']);
+    test.requests[0].answer(delta('7', { messages: [graphqlMessage(7)] }));
+    await vi.advanceTimersByTimeAsync(20);
+    await ready.promise;
+    expect(test.seq()).toBe('8');
+
+    const waiter = test.runtime.ensureCurrent(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.requests).toHaveLength(1);
+    test.reconnect();
+    await vi.advanceTimersByTimeAsync(40);
+    const concurrentCursors = test.requests.slice(1).map(({ after }) => after);
+
+    ack.resolve();
+    await vi.advanceTimersByTimeAsync(600);
+    for (let index = 1; index < test.requests.length; index += 1) {
+      const request = test.requests[index];
+      request.answer(
+        delta('8', {
+          messages: request.after === '8' ? [] : [graphqlMessage(8)],
+        })
+      );
+      await vi.advanceTimersByTimeAsync(20);
+    }
+    await waiter;
+    expect(test.seq()).toBe('8');
+    expect(concurrentCursors).toEqual([]);
+  } finally {
+    ack.resolve();
+    test.stop();
+  }
+});
+
+it('reads a page again when a newer frame stored an edit while the page was out', async () => {
+  vi.useFakeTimers();
+  const test = setup();
+  const older = graphqlMessage(6, { content: 'older edit' });
+  const newer = graphqlMessage(6, { content: 'newer edit' });
+  const key = `GraphqlChannelMessage:${newer.id}`;
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.requests.map(({ after }) => after)).toEqual(['5']);
+    test.push('7', newer);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.records.get(key)).toBe(newer.content);
+
+    // Read before the edit, the page lands after it and writes the older one.
+    test.requests[0].answer(delta('6', { messages: [older] }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.requests.map(({ after }) => after)).toEqual(['5', '6']);
+    test.requests[1].answer(delta('7', { messages: [newer] }));
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(test.records.get(key)).toBe(newer.content);
+    expect(test.seq()).toBe('7');
+    await expect(test.runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe(
+      'current'
+    );
+    expect(test.requests).toHaveLength(2);
+  } finally {
+    test.stop();
+  }
+});
+
+it('leaves a repair when every reread lands under a newer frame', async () => {
+  vi.useFakeTimers();
+  const test = setup();
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    for (let round = 0; round < 3; round += 1) {
+      const seq = 7 + round;
+      test.push(String(seq), graphqlMessage(6, { content: `edit ${seq}` }));
+      await vi.advanceTimersByTimeAsync(20);
+      test.requests[round].answer(delta(String(seq - 1)));
+      await vi.advanceTimersByTimeAsync(20);
+    }
+    // Three pages out, each overtaken; the catch-up stops and schedules one
+    // that replays from the last page.
+    expect(test.requests.map(({ after }) => after)).toEqual(['5', '6', '7']);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.requests.map(({ after }) => after)).toEqual([
+      '5',
+      '6',
+      '7',
+      '8',
+    ]);
   } finally {
     test.stop();
   }

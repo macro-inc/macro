@@ -38,6 +38,11 @@ export const CATCH_UP_DEBOUNCE_MS = 250;
 export const CATCH_UP_JITTER_MS = 250;
 /** Frames held past a gap, waiting for the frames before them. */
 const MAX_HELD_FRAMES = 50;
+/**
+ * Times a catch-up reads a page again because a newer frame stored records
+ * while the page was out; past that, the next catch-up repairs from there.
+ */
+const MAX_PAGE_REREADS = 2;
 
 export type ChannelSyncHost = Pick<
   CacheHost,
@@ -69,6 +74,8 @@ export type ChannelCatchUpOutcome =
 
 /** A frame waiting for the ones before it, with the session that stored it. */
 type HeldFrame = { frame: ChannelFrame; generation: string };
+/** A changes page out, and the frames that stored records while it was. */
+type PageOut = { newestFrame: bigint | undefined; frames: bigint[] };
 
 type ChannelState = {
   /** Stored sequence: undefined until read, null when the device holds nothing. */
@@ -99,6 +106,16 @@ type ChannelState = {
   sweepable: boolean;
   /** Counts forgets, so a row write acknowledged across one marks nothing. */
   forgets: number;
+  /**
+   * The changes pages out for this channel, each with the newest frame that
+   * stored records while it was out.
+   */
+  pagesOut: Set<PageOut>;
+  /**
+   * Frames a page read after they stored covers: it wrote their records as
+   * they are now, so they need no repair.
+   */
+  covered: Set<bigint>;
   debounce?: Fiber.Fiber<unknown, unknown>;
 };
 
@@ -155,6 +172,7 @@ function forgetState(state: ChannelState): void {
   state.held.clear();
   state.repairFrom = undefined;
   state.sweepable = false;
+  state.covered.clear();
   state.forgets += 1;
 }
 
@@ -201,6 +219,8 @@ export function createChannelSyncRuntime(
         seenSeq: undefined,
         sweepable: false,
         forgets: 0,
+        pagesOut: new Set(),
+        covered: new Set(),
       };
       channels.set(channelId, state);
     }
@@ -343,6 +363,24 @@ export function createChannelSyncRuntime(
   });
 
   /**
+   * A catch-up ended: the views reread what it changed, an interrupted one's
+   * commits included, and a repair it left behind (its pages kept landing
+   * under newer frames) runs once things settle.
+   */
+  const settled = (
+    channelId: string,
+    exit: Exit.Exit<ChannelCatchUpOutcome, unknown>,
+    progress: { committed: boolean }
+  ) => {
+    const state = stateOf(channelId);
+    const outcome = Exit.isSuccess(exit) ? exit.value : undefined;
+    if (progress.committed || (outcome && outcome !== 'current'))
+      notifyChanged(channelId);
+    if (isConnected && state.repairFrom !== undefined && !state.current)
+      scheduleCatchUp(channelId, 'gap');
+  };
+
+  /**
    * Catches a channel up in a `channel.catch_up` span of its own, a child of
    * `trace` when the catch-up was asked for in one: the runtime's Effect
    * spans reach no exporter, and its requests run in fibers that carry no
@@ -358,7 +396,17 @@ export function createChannelSyncRuntime(
         const open = () => Telemetry.span('channel.catch_up');
         return trace ? trace.run(open) : open();
       }),
-      (span) => catchUpIn(span, channelId, reason),
+      // Only the request can be interrupted: a commit the device takes is
+      // always recorded, so the sequence and the views follow it.
+      (span) =>
+        Effect.uninterruptibleMask((restore) => {
+          const progress = { committed: false };
+          return catchUpIn(span, channelId, reason, restore, progress).pipe(
+            Effect.onExit((exit) =>
+              Effect.sync(() => settled(channelId, exit, progress))
+            )
+          );
+        }),
       (span, exit) =>
         Effect.sync(() => {
           if (Exit.isSuccess(exit))
@@ -373,7 +421,11 @@ export function createChannelSyncRuntime(
   const catchUpIn = Effect.fn('channel.catch_up')(function* (
     span: Span,
     channelId: string,
-    reason: 'gap' | 'reconnect' | 'open'
+    reason: 'gap' | 'reconnect' | 'open',
+    interruptible: <A, E, R>(
+      effect: Effect.Effect<A, E, R>
+    ) => Effect.Effect<A, E, R>,
+    progress: { committed: boolean }
   ) {
     const state = stateOf(channelId);
     span.setAttr('channel.id', channelId);
@@ -387,11 +439,20 @@ export function createChannelSyncRuntime(
     const repair = state.repairFrom;
     let after = repair !== undefined && repair < from ? repair : from;
     let changes = 0;
-    for (let page = 0; page < MAX_CHANGE_PAGES; page += 1) {
-      // Interrupted (the runtime disposed), the request ends with the span.
-      const delta = yield* Effect.tryPromise((signal) =>
-        span.run(() => deps.fetchChanges(channelId, after.toString(), signal))
-      );
+    let rereads = 0;
+    // Frames past an overtaken page: the page read again after them covers
+    // those it commits through.
+    const covering: bigint[] = [];
+    for (let page = 0; page < MAX_CHANGE_PAGES + rereads; page += 1) {
+      const out: PageOut = { newestFrame: undefined, frames: [] };
+      state.pagesOut.add(out);
+      // Interrupted (replaced, the socket dropped, the runtime disposed), the
+      // request ends with the span.
+      const delta = yield* interruptible(
+        Effect.tryPromise((signal) =>
+          span.run(() => deps.fetchChanges(channelId, after.toString(), signal))
+        )
+      ).pipe(Effect.ensuring(Effect.sync(() => state.pagesOut.delete(out))));
       if (delta.resetRequired) break;
       changes +=
         delta.messages.length +
@@ -416,6 +477,7 @@ export function createChannelSyncRuntime(
           generation
         );
         if (committed.kind !== 'committed') break;
+        progress.committed = true;
         state.seq = parseSeq(committed.channelSeq);
         // Gone meanwhile (evicted or reset): nothing to catch up.
         if (state.seq === null) return 'not-held' as const;
@@ -426,10 +488,31 @@ export function createChannelSyncRuntime(
         }
       }
       after = to;
+      // A newer frame stored its records while the page was out, so the page
+      // may have written older ones over them: read again from the page,
+      // which carries each record as it is now. A page with more after it is
+      // read again by the next one.
+      const overwritten =
+        !delta.hasMore && out.newestFrame !== undefined && out.newestFrame > to;
+      if (overwritten && rereads < MAX_PAGE_REREADS) {
+        covering.push(...out.frames.filter((seq) => seq > to));
+        rereads += 1;
+        continue;
+      }
       if (!delta.hasMore) {
         if (state.repairFrom === repair) state.repairFrom = undefined;
+        for (const seq of covering) if (seq <= to) state.covered.add(seq);
+        // Still overwritten: the next catch-up repairs from the page.
+        if (
+          overwritten &&
+          (state.repairFrom === undefined || to < state.repairFrom)
+        ) {
+          state.repairFrom = to;
+        }
         yield* applyHeld(channelId, state);
-        if (epoch === socketEpoch && isConnected) state.current = true;
+        if (!overwritten && epoch === socketEpoch && isConnected)
+          state.current = true;
+        span.setAttr('catch_up.rereads', rereads);
         span.setAttr('catch_up.pages', page + 1);
         span.setAttr('catch_up.changes', changes);
         return changes > 0 || (state.seq ?? from) !== from
@@ -480,14 +563,7 @@ export function createChannelSyncRuntime(
             : catchUp(channelId, reason, trace)
         )
       )
-      .pipe(
-        Effect.tap((outcome) =>
-          Effect.sync(() => {
-            if (outcome !== 'current') notifyChanged(channelId);
-          })
-        ),
-        Effect.withSpan('channel.sync.locked_catch_up')
-      );
+      .pipe(Effect.withSpan('channel.sync.locked_catch_up'));
   };
 
   /** Catches up a channel on screen once things settle. */
@@ -541,7 +617,9 @@ export function createChannelSyncRuntime(
       Effect.gen(function* () {
         const current = state.seq;
         if (current === null || current === undefined) return 'not-held';
-        if (stored && (late || seq <= current)) {
+        // Read again by its catch-up after it stored: nothing to repair.
+        const covered = state.covered.delete(seq) && !late;
+        if (stored && !covered && (late || seq <= current)) {
           // Its records replaced newer ones the device held: replay the
           // changes from before it, which carry each record as it is now.
           const before = seq - 1n;
@@ -590,6 +668,16 @@ export function createChannelSyncRuntime(
   return {
     onFrame(frame, stored, generation) {
       if (disposed) return;
+      // Told at once, not from the frame's fiber: a changes page that lands
+      // after this frame's records may have written older ones over them.
+      const seq = stored ? parseSeq(frame.seq) : null;
+      if (seq !== null) {
+        for (const out of channels.get(frame.channelId)?.pagesOut ?? []) {
+          out.frames.push(seq);
+          if (out.newestFrame === undefined || seq > out.newestFrame)
+            out.newestFrame = seq;
+        }
+      }
       fork(
         handleFrame(frame, stored, generation ?? deps.generation()).pipe(
           Effect.tap((outcome) =>
@@ -614,6 +702,7 @@ export function createChannelSyncRuntime(
         // next connection and write older records over it: end it, and the
         // reconnect, or the next open, reads from the stored sequence.
         if (state.debounce) Effect.runFork(Fiber.interrupt(state.debounce));
+        state.covered.clear();
       }
     },
     onConnected() {
