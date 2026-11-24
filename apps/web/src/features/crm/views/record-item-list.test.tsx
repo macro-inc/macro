@@ -21,9 +21,12 @@ vi.mock('@entity', () => ({
   ListEntity: (props: {
     entity: { name: string };
     referencePropertyIds?: readonly string[];
+    onClick?: (event: MouseEvent) => void;
   }) => {
     mounted(props.referencePropertyIds);
-    return <div>{props.entity.name}</div>;
+    return (
+      <div onClick={(event) => props.onClick?.(event)}>{props.entity.name}</div>
+    );
   },
   ListEntityMetadataQueryProvider: (props: ParentProps) => props.children,
   ListLayoutProvider: (props: ParentProps) => props.children,
@@ -121,6 +124,28 @@ it('hands a panel row click or key to the workspace with its modifiers', () => {
   expect(openItem.mock.calls[1][1]).toMatchObject({ metaKey: true });
   expect(openEntity).not.toHaveBeenCalled();
 });
+
+it.each([
+  { layout: 'list', panel: false },
+  { layout: 'panel', panel: true },
+])(
+  'opens a shift-clicked $layout row in a new split when the workspace declines it',
+  (row) => {
+    const openItem = vi.fn(
+      (_entity: unknown, event?: MouseEvent | KeyboardEvent) => !event?.shiftKey
+    );
+    workspace.current = { host: { record: { openItem } } };
+    openEntity.mockClear();
+    render(() => (
+      <RecordItemList source={source({})} empty="Nothing" panel={row.panel} />
+    ));
+
+    fireEvent.click(screen.getByText('Kickoff notes'), { shiftKey: true });
+    expect(openEntity).toHaveBeenCalledTimes(1);
+    expect(openEntity.mock.calls[0][0]).toMatchObject({ id: 'doc-1' });
+    expect(openEntity.mock.calls[0][1]).toEqual({ newSplit: true });
+  }
+);
 
 it('replaces cached rows and retries the query after a failed refetch', () => {
   const failed = source({ isError: true });

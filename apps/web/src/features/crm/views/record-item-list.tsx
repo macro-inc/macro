@@ -66,7 +66,8 @@ export function RecordItemList(props: {
   const { openEntity } = useCrmContext().createNavigation();
   const workspace = useOptionalCrmWorkspace();
   const open = (entity: EntityData, event?: MouseEvent | KeyboardEvent) => {
-    if (!workspace?.host.record.openItem(entity, event)) openEntity(entity);
+    if (!workspace?.host.record.openItem(entity, event))
+      openEntity(entity, { newSplit: event?.shiftKey });
   };
   // Reading `data` before the first page resolves would suspend the tab.
   const items = () =>
