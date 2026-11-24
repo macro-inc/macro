@@ -43,7 +43,9 @@ a new provider ID needs the corresponding pricing configuration.
 When retiring a model, map it to its replacement in `RETIRED_MODELS`
 (`model_access.rs`) and in the web's `RETIRED_MODELS` (`model.ts`). The backend
 upgrades retired ids when a session opens or resumes and when a chat message
-arrives; the web upgrades saved chats, drafts and the remembered agent model.
+arrives; the web upgrades saved chats, drafts and the remembered agent model,
+and shows a Macro agent or routine saved on a retired id as its replacement
+(`currentModelId`).
 Migrate saved selections as well, in a later pull request that merges once the
 code that knows the replacement has deployed: migrations run before services
 deploy, and the running code may not know the new id. Routines
