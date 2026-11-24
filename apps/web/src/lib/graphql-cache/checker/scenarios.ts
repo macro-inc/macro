@@ -12,6 +12,7 @@ export const EVERY_FAULT: FaultKind[] = [
   'kill',
   'crash-engine',
   'restart-coordinator',
+  'crash-process',
   'freeze',
   'thaw',
   'bfcache',

@@ -657,6 +657,7 @@ describe('coordinator runtime protocol', () => {
   it.each([
     { ...version, kind: 'registered', tabId: 'tab' },
     { ...version, kind: 'registered', tabId: 'tab', ownerElsewhere: true },
+    { ...version, kind: 'registered', tabId: 'tab', coordinatorLockName: 'a' },
     {
       ...version,
       kind: 'become-owner',
@@ -705,6 +706,20 @@ describe('coordinator runtime protocol', () => {
           kind: 'registered',
           tabId: 'tab',
           ownerElsewhere,
+        }).ok
+      ).toBe(false);
+    }
+  );
+
+  it.each(['', 1, null])(
+    'rejects a registration whose coordinatorLockName is %s',
+    (coordinatorLockName) => {
+      expect(
+        validateCoordinatorToTabEnvelope({
+          ...version,
+          kind: 'registered',
+          tabId: 'tab',
+          coordinatorLockName,
         }).ok
       ).toBe(false);
     }

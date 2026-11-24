@@ -279,7 +279,7 @@ test('an owner page that dies while writes arrive leaves every accepted write qu
   const runsEngine = (target: typeof page) => target.workers().length > 0;
   let owner = await open(page);
   const everAccepted: string[] = [];
-  for (const [round, killAfterMs] of [0, 0, 20, 60, 150].entries()) {
+  for (const killAfterMs of [0, 0, 20, 60, 150]) {
     const writer = await open(await context.newPage());
     const generation = await writer.evaluate(() =>
       window.cacheLifecycleHarness.storageGeneration()
@@ -292,10 +292,9 @@ test('an owner page that dies while writes arrive leaves every accepted write qu
     await expect.poll(accepted).toBeGreaterThan(3);
     await writer.waitForTimeout(killAfterMs);
     expect([runsEngine(owner), runsEngine(writer)]).toEqual([true, false]);
-    // The first page's process also runs the coordinator, which a crash ends;
-    // other pages don't recover from that yet. Playwright crashes Chromium only.
-    if (round === 0 || testInfo.project.name.includes('firefox'))
-      await owner.close();
+    // The first page's process also runs the coordinator, which a crash ends.
+    // Playwright crashes Chromium only.
+    if (testInfo.project.name.includes('firefox')) await owner.close();
     else await crash(owner);
     const before = await accepted();
     await expect
@@ -321,6 +320,57 @@ test('an owner page that dies while writes arrive leaves every accepted write qu
     ).toBe(generation);
     owner = writer;
   }
+});
+
+test('pages left by the crash of the one that started the coordinator get their cache back', async ({
+  context,
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name.includes('firefox'),
+    'Playwright crashes Chromium only'
+  );
+  const path = `${harnessPath(testInfo.project.name, 'cache-lifecycle.html')}?treatment=true&scope=${crypto.randomUUID()}`;
+  const open = async (target: typeof page): Promise<typeof page> => {
+    await expect(async () => {
+      await target.goto(path);
+      await target.evaluate(() => window.cacheLifecycleHarness.startSingle());
+    }).toPass();
+    return target;
+  };
+  const first = await open(page);
+  const left = [
+    await open(await context.newPage()),
+    await open(await context.newPage()),
+  ];
+  const generation = await first.evaluate(() =>
+    window.cacheLifecycleHarness.storageGeneration()
+  );
+  const devtools = await context.newCDPSession(first);
+  const crashed = first.waitForEvent('crash');
+  devtools.send('Page.crash').catch(() => undefined);
+  await crashed;
+
+  for (const target of left) {
+    await expect
+      .poll(
+        () =>
+          target.evaluate(() =>
+            window.cacheLifecycleHarness.read().then(
+              (answer) => answer,
+              () => 'refused'
+            )
+          ),
+        { timeout: 20_000 }
+      )
+      .toEqual({ kind: 'miss' });
+    expect(
+      await target.evaluate(() =>
+        window.cacheLifecycleHarness.storageGeneration()
+      )
+    ).toBe(generation);
+  }
+  expect(left.flatMap((target) => target.workers())).toHaveLength(1);
 });
 
 test('a silently terminated engine still recovers after releasing its owner lock', async ({

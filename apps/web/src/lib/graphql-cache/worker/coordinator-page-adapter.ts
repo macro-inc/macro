@@ -226,6 +226,7 @@ export class CacheCoordinatorPageAdapter {
   private rejectRegistration: ((error: Error) => void) | undefined;
   private readonly queuedRequests: CacheRequest[] = [];
   private releaseLivenessLock: (() => void) | undefined;
+  private coordinatorWatch: AbortController | undefined;
   private disposePromise: Promise<void> | undefined;
   private resolveDispose: (() => void) | undefined;
   private gracefulTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -619,6 +620,16 @@ export class CacheCoordinatorPageAdapter {
           return;
         }
         this.registered = true;
+        if (message.coordinatorLockName) {
+          this.coordinatorWatch = new AbortController();
+          fireAndForget(
+            this.watchCoordinator(
+              message.coordinatorLockName,
+              this.coordinatorWatch.signal
+            ),
+            'graphql-cache-coordinator'
+          );
+        }
         // Another visible tab runs the engine: this one compiled ahead for a
         // worker it will not start. Elected later, its worker compiles.
         if (message.ownerElsewhere) dropPrefetchedCompiledEngine();
@@ -1113,7 +1124,32 @@ export class CacheCoordinatorPageAdapter {
     }
   }
 
+  /**
+   * A crashed coordinator closes no port and sends nothing: the browser only
+   * frees its lock. Shared, so that a frozen page given the lock keeps no other
+   * page from noticing.
+   */
+  private async watchCoordinator(
+    lockName: string,
+    signal: AbortSignal
+  ): Promise<void> {
+    try {
+      await (this.lockManager ?? navigator.locks).request(
+        lockName,
+        { mode: 'shared', signal },
+        () => undefined
+      );
+    } catch (error) {
+      if (signal.aborted) return;
+      throw error;
+    }
+    if (signal.aborted) return;
+    this.failTerminal(new WorkerRestartedError('cache coordinator ended'));
+  }
+
   private closeCoordinatorPort(): void {
+    this.coordinatorWatch?.abort();
+    this.coordinatorWatch = undefined;
     this.visibility?.removeEventListener(
       'visibilitychange',
       this.onVisibilityChange

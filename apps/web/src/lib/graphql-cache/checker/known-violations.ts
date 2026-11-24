@@ -71,9 +71,14 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
       'L1:cache not back (recovery-required, stopped superseded, probe read not made)',
     ]
   ),
-  ...(['close owner', 'kill owner', 'bfcache owner'] as const).flatMap(
-    (fault) => known(SUPERSEDED_AT_STARTUP, [fault], [UNSERVED])
-  ),
+  ...(
+    [
+      'close owner',
+      'kill owner',
+      'crash-process owner',
+      'bfcache owner',
+    ] as const
+  ).flatMap((fault) => known(SUPERSEDED_AT_STARTUP, [fault], [UNSERVED])),
   ...known(
     FILES_BUSY,
     ['hold-files'],

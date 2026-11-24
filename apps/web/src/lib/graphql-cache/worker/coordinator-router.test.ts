@@ -3190,6 +3190,48 @@ describe('registration acknowledgement', () => {
     ]);
   });
 
+  it('names the one lock it holds for its life, once it holds it', async () => {
+    const held = Promise.withResolvers<void>();
+    const holdCoordinatorLock = vi.fn((_lockName: string) => held.promise);
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => undefined,
+      holdCoordinatorLock,
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    const registering = register(router, tabA, 'tab-a');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(registered(tabA)).toEqual([]);
+
+    held.resolve();
+    await registering;
+    await register(router, tabB, 'tab-b');
+    expect(holdCoordinatorLock).toHaveBeenCalledOnce();
+    const [[coordinatorLockName]] = holdCoordinatorLock.mock.calls;
+    expect(coordinatorLockName).toMatch(/^graphql-cache-coordinator:.+/);
+    expect([...registered(tabA), ...registered(tabB)]).toMatchObject([
+      { tabId: 'tab-a', coordinatorLockName },
+      { tabId: 'tab-b', coordinatorLockName },
+    ]);
+  });
+
+  it('registers a tab without a lock name when the lock is refused', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => undefined,
+      holdCoordinatorLock: async () => {
+        throw new Error('refused');
+      },
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a');
+    expect(registered(tab)).toEqual([
+      { ...version, kind: 'registered', tabId: 'tab-a' },
+    ]);
+  });
+
   it('says nothing of a hidden owner, which a joining visible tab takes over', async () => {
     const router = newRouter();
     const tabA = new FakePort();

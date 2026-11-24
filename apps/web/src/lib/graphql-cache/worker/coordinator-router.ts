@@ -30,6 +30,7 @@ import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CoordinatorToEngineEnvelope,
   type CoordinatorToTabEnvelope,
+  coordinatorLivenessLockName,
   databaseOwnerLockName,
   type EngineFatalCode,
   type EngineOpenOutcome,
@@ -84,6 +85,7 @@ export interface CoordinatorRouterOptions {
   hideGraceMs?: number;
   handoffReadTimeoutMs?: number;
   verifyTabLockHeld?: (lockName: string) => Promise<boolean>;
+  holdCoordinatorLock?: (lockName: string) => Promise<void>;
   verifyOwnerLockHeld?: (lockName: string) => Promise<boolean>;
   /** Names of every Web Lock currently held in this storage partition. */
   queryHeldLockNames?: () => Promise<string[]>;
@@ -210,6 +212,18 @@ export async function queryHeldLockNames(): Promise<string[]> {
   );
 }
 
+/** Takes a lock that ends only with this worker. Resolves once it is held. */
+export function holdLockForLife(lockName: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    navigator.locks
+      .request(lockName, { mode: 'exclusive' }, () => {
+        resolve();
+        return new Promise<never>(() => undefined);
+      })
+      .catch(reject);
+  });
+}
+
 /** Waits for the page's liveness lock to be released or abandoned. */
 export function watchTabLivenessLock(
   lockName: string,
@@ -281,6 +295,9 @@ export class CoordinatorRouter {
   private readonly heartbeatTimeoutMs: number;
   private readonly hideGraceMs: number;
   private readonly verifyTabLockHeld: (lockName: string) => Promise<boolean>;
+  private readonly holdCoordinatorLock: (lockName: string) => Promise<void>;
+  /** The lock's name, once held. */
+  private coordinatorLock: Promise<string | undefined> | undefined;
   private readonly verifyOwnerLockHeld: (lockName: string) => Promise<boolean>;
   private readonly queryHeldLockNames: () => Promise<string[]>;
   private readonly watchTabLock: (
@@ -330,6 +347,7 @@ export class CoordinatorRouter {
     this.hideGraceMs = options.hideGraceMs ?? DEFAULT_HIDE_GRACE_MS;
     this.verifyTabLockHeld =
       options.verifyTabLockHeld ?? verifyExclusiveLockHeld;
+    this.holdCoordinatorLock = options.holdCoordinatorLock ?? holdLockForLife;
     this.verifyOwnerLockHeld =
       options.verifyOwnerLockHeld ?? verifyExclusiveLockHeld;
     this.queryHeldLockNames = options.queryHeldLockNames ?? queryHeldLockNames;
@@ -503,9 +521,14 @@ export class CoordinatorRouter {
       tabId: message.tabId,
     };
     this.pendingRegistrations.set(port, registration);
+    this.coordinatorLock ??= this.takeCoordinatorLock();
     let lockHeld = false;
+    let coordinatorLockName: string | undefined;
     try {
-      lockHeld = await this.verifyTabLockHeld(message.livenessLockName);
+      [lockHeld, coordinatorLockName] = await Promise.all([
+        this.verifyTabLockHeld(message.livenessLockName),
+        this.coordinatorLock,
+      ]);
     } catch {
       if (
         registration.cancelled ||
@@ -582,6 +605,7 @@ export class CoordinatorRouter {
         kind: 'registered',
         tabId: message.tabId,
         ...(ownerElsewhere ? { ownerElsewhere: true } : {}),
+        ...(coordinatorLockName === undefined ? {} : { coordinatorLockName }),
       })
     );
     if (
@@ -607,6 +631,17 @@ export class CoordinatorRouter {
     if (!actions.some((action) => action.kind === 'elect-owner')) {
       const progress = this.startupProgress();
       if (progress) this.postToTab(message.tabId, progress);
+    }
+  }
+
+  /** Without it pages work, but don't notice this coordinator's end. */
+  private async takeCoordinatorLock(): Promise<string | undefined> {
+    const lockName = coordinatorLivenessLockName(crypto.randomUUID());
+    try {
+      await this.holdCoordinatorLock(lockName);
+      return lockName;
+    } catch (error) {
+      reportCoordinatorTaskFailure(error);
     }
   }
 

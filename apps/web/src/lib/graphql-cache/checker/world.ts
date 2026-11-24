@@ -144,6 +144,12 @@ class Coordinator {
     );
   }
 
+  /** Its process is gone: the ports stay open, and nobody says so. The next
+   * page to connect starts another. */
+  crash(): void {
+    this.world.sim.kill(this.context);
+  }
+
   /** Safari reconnects live page ports to a fresh, empty worker global. */
   restart(): void {
     this.world.sim.kill(this.context);
@@ -477,8 +483,9 @@ export class Page {
 
 /**
  * What can happen to the origin. `close` runs the page's `pagehide`; `kill`
- * ends it with no event, as a crash or a discarded tab does. `crash-engine`
- * ends a page's engine worker and tells nobody. `bfcache` navigates away with
+ * ends it with no event, as a crash or a discarded tab does. `crash-process`
+ * ends the coordinator its build runs along with it. `crash-engine` ends a
+ * page's engine worker and tells nobody. `bfcache` navigates away with
  * the page kept, frozen, and `restore` comes back to it. `expire-session` signs
  * a page out for a second. `hold-owner-lock` has another context keep the
  * database's lock for 5 s, `hold-files` has one keep its files open for 15 s
@@ -492,6 +499,7 @@ export type FaultKind =
   | 'kill'
   | 'crash-engine'
   | 'restart-coordinator'
+  | 'crash-process'
   | 'freeze'
   | 'thaw'
   | 'expire-session'
@@ -826,7 +834,7 @@ export class World {
         .with('online', () => !context.onLine)
         .with('crash-engine', () => this.enginesOf(page).length > 0)
         .with('close', () => !context.frozen)
-        .with('kill', () => true)
+        .with('kill', 'crash-process', () => true)
         .with(
           'expire-session',
           () => page.host !== undefined && !context.frozen && !page.closing
@@ -919,10 +927,23 @@ export class World {
         page.closing = true;
         this.endPage(page);
       })
+      .with('crash-process', () => {
+        page.closing = true;
+        this.endPage(page);
+        this.crashCoordinator(page.context.buildTime);
+      })
       .with('expire-session', () => inPage(() => page.expireSession()))
       .otherwise((other) => {
         throw new Error(`${other} is not a page fault`);
       });
+  }
+
+  private crashCoordinator(buildTime: number): void {
+    for (const [name, coordinator] of this.coordinators) {
+      if (coordinator.buildTime !== buildTime) continue;
+      coordinator.crash();
+      this.coordinators.delete(name);
+    }
   }
 
   private endPage(page: Page): void {

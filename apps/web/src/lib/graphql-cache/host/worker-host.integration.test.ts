@@ -19,6 +19,7 @@ import {
   LinkedMessageChannel,
   LinkedMessagePort,
   optimisticMutation,
+  originLocks,
 } from './worker-host.integration-helpers';
 
 const PAGEHIDE_MUTATION = gql`
@@ -229,6 +230,11 @@ class IntegrationSharedWorker {
     });
   }
 
+  /** Its process is gone: no port closes, and nothing is sent. */
+  crash(): void {
+    this.port.peer?.close();
+  }
+
   fail(message: string): void {
     this.onerror?.call(
       {} as AbstractWorker,
@@ -245,8 +251,10 @@ describe('worker CacheHost coordinator integration', () => {
   const hostInitGates = new Map<number, Promise<void>>();
   const enqueueGates = new Map<string, Promise<void>>();
   let router: CoordinatorRouter;
+  let locks: ReturnType<typeof originLocks>;
 
   beforeEach(() => {
+    locks = originLocks();
     localStorage.clear();
     logs.length = 0;
     dedicatedWorkers.length = 0;
@@ -323,13 +331,7 @@ describe('worker CacheHost coordinator integration', () => {
       }
     );
     vi.stubGlobal('navigator', {
-      locks: {
-        request: async (
-          name: string,
-          _options: LockOptions,
-          callback: (lock: Lock | null) => unknown
-        ) => await callback({ name, mode: 'exclusive' } as Lock),
-      },
+      locks,
       storage: { getDirectory: vi.fn() },
     });
   });
@@ -394,6 +396,50 @@ describe('worker CacheHost coordinator integration', () => {
     expect(onInitializationError).not.toHaveBeenCalled();
     host.dispose();
   });
+
+  it.each(['owner', 'follower'])(
+    'connects the $0 again when the coordinator dies without a word',
+    async (role) => {
+      const record = vi.fn();
+      const owner = createWorkerCacheHost({
+        scope: 'integration-scope',
+        requestTimeoutMs: 1_000,
+        telemetry: { record, flush: vi.fn() },
+      });
+      await owner.readQuery({ opKey: 7, query: 'query Seven { seven }' });
+      const host =
+        role === 'owner'
+          ? owner
+          : createWorkerCacheHost({
+              scope: 'integration-scope',
+              requestTimeoutMs: 1_000,
+            });
+      await host.currentRevision();
+      router = new CoordinatorRouter({
+        verifyTabLockHeld: async () => true,
+        watchTabLock: () => () => undefined,
+      });
+      const connected = sharedWorkers.length;
+      for (const worker of sharedWorkers) worker.crash();
+      const unanswered = host.readQuery({ query: 'query Eight { eight }' });
+      const rejected = expect(unanswered).rejects.toMatchObject({
+        errorCode: 'owner-epoch-lost',
+      });
+      locks.abandon('graphql-cache-coordinator:');
+
+      await rejected;
+      await expect(
+        host.readQuery({ opKey: 7, query: 'query Seven { seven }' })
+      ).resolves.toEqual({ kind: 'miss' });
+      expect(sharedWorkers).toHaveLength(2 * connected);
+      expect(dedicatedWorkers[0]?.terminated).toBe(true);
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({ ownerEvent: 'coordinator-restarted' })
+      );
+      if (host !== owner) host.dispose();
+      owner.dispose();
+    }
+  );
 
   it('retries registration when the coordinator restarts before acknowledging it', async () => {
     const registering = Promise.withResolvers<void>();

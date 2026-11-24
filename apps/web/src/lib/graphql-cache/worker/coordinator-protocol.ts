@@ -162,6 +162,8 @@ export type CoordinatorToTabEnvelope =
       /** Another visible tab's engine is starting or running as this tab
        * joins, so this tab is not about to own the cache. */
       ownerElsewhere?: true;
+      /** Held for the coordinator's life: free means it is gone. */
+      coordinatorLockName?: string;
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
@@ -1143,9 +1145,12 @@ export function validateCoordinatorToTabEnvelope(
           'kind',
           'tabId',
           'ownerElsewhere',
+          'coordinatorLockName',
         ]) &&
         isNonEmptyString(value.tabId) &&
-        (value.ownerElsewhere === undefined || value.ownerElsewhere === true)
+        (value.ownerElsewhere === undefined || value.ownerElsewhere === true) &&
+        (value.coordinatorLockName === undefined ||
+          isNonEmptyString(value.coordinatorLockName))
       ) {
         return pass(value as CoordinatorToTabEnvelope);
       }
@@ -1571,6 +1576,11 @@ const TAB_LIVENESS_LOCK_PREFIX = 'graphql-cache-tab:';
 
 export const tabLivenessLockName = (scope: string, tabId: string): string =>
   `${TAB_LIVENESS_LOCK_PREFIX}${scope}:${tabId}`;
+
+/** Each coordinator has its own, so one that is gone never shares a name with
+ * the one that replaced it. */
+export const coordinatorLivenessLockName = (coordinatorId: string): string =>
+  `graphql-cache-coordinator:${coordinatorId}`;
 
 /** The tab id in a liveness lock name for `scope`, if it is one. */
 export function tabIdFromLivenessLockName(

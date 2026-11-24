@@ -13,6 +13,7 @@ import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   cacheDatabaseIdentity,
 } from './coordinator-protocol';
+import { WorkerRestartedError } from './effect-worker-transport';
 
 class FakeCoordinatorPort extends EventTarget {
   readonly messages: Array<{ message: unknown; transfer: Transferable[] }> = [];
@@ -255,6 +256,79 @@ describe('CacheCoordinatorPageAdapter', () => {
       'visibilitychange',
       expect.any(Function)
     );
+  });
+
+  describe('the coordinator lock', () => {
+    const COORDINATOR_LOCK = 'graphql-cache-coordinator:a';
+
+    async function watching() {
+      let free: (() => void) | undefined;
+      let mode: LockMode | undefined;
+      let signal: AbortSignal | undefined;
+      const port = new FakeCoordinatorPort();
+      const worker = new FakeWorker();
+      const error = vi.fn();
+      const adapter = createCacheCoordinatorPageAdapter({
+        scope: 'scope',
+        tabId: 'tab-a',
+        lockManager: {
+          request: async (
+            name: string,
+            options: LockOptions,
+            callback: (lock: Lock | null) => unknown
+          ) => {
+            if (name === COORDINATOR_LOCK) {
+              ({ mode, signal } = options);
+              await new Promise<void>((resolve, reject) => {
+                free = resolve;
+                signal?.addEventListener('abort', () => reject(signal?.reason));
+              });
+            }
+            return await callback({ name, mode: 'exclusive' });
+          },
+        } as unknown as Pick<LockManager, 'request'>,
+        createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+        createDedicatedWorker: () => worker,
+        onTerminalError: error,
+      });
+      const started = adapter.start();
+      await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+      port.receive({
+        ...version,
+        kind: 'registered',
+        tabId: 'tab-a',
+        coordinatorLockName: COORDINATOR_LOCK,
+      });
+      await started;
+      expect(mode).toBe('shared');
+      return {
+        adapter,
+        port,
+        worker,
+        error,
+        free: () => free?.(),
+        aborted: () => signal?.aborted,
+      };
+    }
+
+    it('ends the connection, and the engine, as a restart when the coordinator is gone', async () => {
+      const { port, worker, error, free } = await watching();
+      port.receive(election(1));
+      free();
+      await vi.waitFor(() => expect(error).toHaveBeenCalledOnce());
+      expect(error).toHaveBeenCalledWith(expect.any(WorkerRestartedError));
+      expect(worker.terminated).toBe(true);
+      expect(port.closed).toBe(true);
+    });
+
+    it('stops waiting for it when the page lets go', async () => {
+      const { adapter, error, aborted } = await watching();
+      expect(aborted()).toBe(false);
+      await adapter.dispose({ graceful: false });
+      expect(aborted()).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(error).not.toHaveBeenCalled();
+    });
   });
 
   it('forwards startup phases once, ignores stale epochs, and rejects a backwards phase', async () => {
