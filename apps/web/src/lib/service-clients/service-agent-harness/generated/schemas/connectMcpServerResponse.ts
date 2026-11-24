@@ -4,21 +4,20 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ConnectorStatus } from './connectorStatus';
 
 /**
  * Response from [`ConnectMcpServer`].
  */
 export interface ConnectMcpServerResponse {
-  /** Whether the user already had this server before the call. */
-  alreadyConnected: boolean;
-  /** Whether the server holds the user's sign-in. */
-  authenticated: boolean;
-  /** Whether the server's tools are turned on. */
+  /** Whether its tools are turned on. */
   enabled: boolean;
-  /** The server's display name. */
+  /** The connector's display name. */
   serverName: string;
+  /** Where the user stands with it. */
+  status: ConnectorStatus;
   /** What happened and what the user still has to do. */
   summary: string;
-  /** The server's URL. */
+  /** The server's URL, normalized. */
   url: string;
 }

@@ -1,4 +1,4 @@
-import { ViewSidebar } from '@app/components/view-shell';
+import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import type { FilterID } from '@app/features/next-soup/filters';
 import type { FilterContext } from '@app/features/next-soup/filters/configs';
@@ -27,7 +27,15 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { Dropdown, type TabOption, Tabs } from '@ui';
-import { batch, createMemo, For, Match, Show, Switch } from 'solid-js';
+import {
+  batch,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 
 const useCurrentListView = () => {
   const panel = useSplitPanelOrThrow();
@@ -44,9 +52,9 @@ const useCurrentListView = () => {
  * Tabs actually shown for a view. `VIEW_TAB_LISTS` is the full superset (the
  * tab/preset consistency tests key off it); flag-gated entries are dropped
  * here so every tab surface — segmented control, collapsed dropdown, mobile
- * pills, and the number/cycle hotkeys — agrees on which tabs exist.
+ * pills, and the Tab and number keys — agrees on which tabs exist.
  */
-export const useVisibleViewTabs = () => {
+const useVisibleViewTabs = () => {
   return (view: TabbedListView): TabOption<string>[] => VIEW_TAB_LISTS[view];
 };
 
@@ -224,13 +232,50 @@ export const SoupViewTabs = () => {
   );
 };
 
+/**
+ * Tab, Shift+Tab and 1–9 for a view's header tabs, registered with them so
+ * a view whose tabs live elsewhere (Calls' sidebar) gets none.
+ */
+const useSoupViewTabKeys = (
+  view: () => TabbedListView | undefined,
+  tabs: () => HTMLElement | undefined
+) => {
+  const panel = useSplitPanelOrThrow();
+  const { applyTabPreset } = useApplyPreset();
+  const { activeTab } = useSoupView();
+  const visibleViewTabs = useVisibleViewTabs();
+  const options = () => {
+    const v = view();
+    return v ? visibleViewTabs(v) : [];
+  };
+
+  useViewTabHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    tabs,
+    ids: () => options().map((option) => option.value),
+    activeId: () => {
+      const v = view();
+      return activeTab() ?? (v ? VIEW_TAB_PRESETS[v].default : undefined);
+    },
+    setActiveId: (id) => {
+      const v = view();
+      if (v) applyTabPreset(v, id);
+    },
+    label: (id) => options().find((option) => option.value === id)?.label ?? id,
+  });
+};
+
 const ViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
   const visibleViewTabs = useVisibleViewTabs();
+  const [tabs, setTabs] = createSignal<HTMLElement>();
+  useSoupViewTabKeys(() => props.view, tabs);
 
   return (
     <Tabs
+      ref={setTabs}
       aria-label="View tabs"
       class="shrink-0"
       options={visibleViewTabs(props.view)}
@@ -262,10 +307,12 @@ export const CollapsedSoupViewTabs = () => {
     const value = activeTab() ?? (v ? VIEW_TAB_PRESETS[v].default : undefined);
     return options().find((option) => option.value === value) ?? options()[0];
   };
+  const [trigger, setTrigger] = createSignal<HTMLElement>();
+  useSoupViewTabKeys(view, trigger);
 
   return (
     <Dropdown placement="bottom-start">
-      <Dropdown.Trigger variant="secondary" size="md">
+      <Dropdown.Trigger ref={setTrigger} variant="secondary" size="md">
         {selected()?.label}
         <CaretDownIcon class="size-3 text-ink-extra-muted" />
       </Dropdown.Trigger>
@@ -345,5 +392,3 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
     </div>
   );
 };
-
-export { type TabbedListView, VIEW_TAB_LISTS };

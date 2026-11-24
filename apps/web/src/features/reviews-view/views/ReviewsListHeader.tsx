@@ -1,4 +1,6 @@
 import { ListHeader } from '@app/components/view-shell/ListHeader';
+import { useViewTabHotkeys } from '@app/components/view-shell/use-view-tab-hotkeys';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { createLabelCollapse } from '@core/signal/create-label-collapse';
 import { cn } from '@ui';
 import {
@@ -11,7 +13,10 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { ReviewsStatusTabs } from '../components/ReviewsStatusTabs';
+import {
+  REVIEWS_STATUS_TABS,
+  ReviewsStatusTabs,
+} from '../components/ReviewsStatusTabs';
 import type { ReviewsStatusTabId } from '../reviews-types';
 
 /**
@@ -38,6 +43,20 @@ export function ReviewsListHeader(props: {
   );
   const iconTabs = () => collapsed('tabs');
   keepStatusFocus(tabs, iconTabs);
+
+  const panel = useSplitPanel();
+  if (panel) {
+    useViewTabHotkeys<ReviewsStatusTabId>({
+      scopeId: panel.splitHotkeyScope,
+      enabled: () => panel.isPanelActive() && hasStatus(),
+      tabs,
+      ids: () => REVIEWS_STATUS_TABS.map((tab) => tab.value),
+      activeId: () => props.status?.value,
+      setActiveId: (id) => props.status?.onChange(id),
+      label: (id) =>
+        REVIEWS_STATUS_TABS.find((tab) => tab.value === id)?.label ?? id,
+    });
+  }
 
   return (
     <ListHeader

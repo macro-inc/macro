@@ -1,10 +1,11 @@
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
 import { EntityProvider } from '@entity';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import type { ParentProps } from 'solid-js';
 
 // Mentions are not under test: an empty Quick Access source.
@@ -32,11 +33,13 @@ export function FixtureProviders(props: ParentProps) {
     <AnalyticsContextProvider>
       <EntityProvider>
         <EmailLinksContextProvider>
-          <ChannelsContextProvider>
+          <ChannelDirectoryProvider
+            directory={staticChannelDirectory(() => [])}
+          >
             <QuickAccessContextProvider value={QUICK_ACCESS}>
               <MobileSettingsProvider>{props.children}</MobileSettingsProvider>
             </QuickAccessContextProvider>
-          </ChannelsContextProvider>
+          </ChannelDirectoryProvider>
         </EmailLinksContextProvider>
       </EntityProvider>
     </AnalyticsContextProvider>

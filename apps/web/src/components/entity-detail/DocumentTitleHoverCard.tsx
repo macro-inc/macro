@@ -1,19 +1,15 @@
-import {
-  compileToAst,
-  defineQueryFilters,
-  queryStateFrom,
-} from '@app/features/next-soup/filters/filter-store';
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import { queryReadyGate } from '@queries/gate';
-import {
-  type SoupAstItemsQueryArgs,
-  useSoupAstItemsQuery,
-} from '@queries/soup/items';
+import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { HoverCard } from '@ui';
 import { type ParentProps, Show } from 'solid-js';
+import {
+  documentMetadataArgs,
+  documentMetadataOptions,
+} from './document-metadata-query';
 
 type DocumentTitleProps = {
   documentId: string;
@@ -23,18 +19,6 @@ type DocumentTitleProps = {
   updatedAt?: DateValue | null;
 };
 
-/** One document, for its owner and timestamps. */
-function documentMetadataArgs(documentId: string): SoupAstItemsQueryArgs {
-  return {
-    params: { limit: 1 },
-    body: compileToAst(
-      queryStateFrom(
-        defineQueryFilters({ include: { documentId: [documentId] } })
-      )
-    ),
-  };
-}
-
 function DocumentTitleDetails(props: DocumentTitleProps) {
   const quickAccess = useQuickAccess();
   const cached = () => {
@@ -43,11 +27,7 @@ function DocumentTitleDetails(props: DocumentTitleProps) {
   };
   const metadata = useSoupAstItemsQuery(
     () => documentMetadataArgs(props.documentId),
-    () => ({
-      graphqlCacheFirstEntities: [
-        { entityType: 'DOCUMENT', entityId: props.documentId },
-      ],
-    })
+    () => documentMetadataOptions(props.documentId)
   );
   const resolved = () =>
     queryReadyGate(metadata)

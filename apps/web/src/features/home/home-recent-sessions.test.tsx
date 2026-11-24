@@ -6,6 +6,9 @@ import {
   RecentSessionsSection,
 } from './home-recent-sessions';
 
+const soup = vi.hoisted(() => ({
+  options: [] as unknown[],
+}));
 const navigation = vi.hoisted(() => ({
   replace: vi.fn(),
   openWithSplit: vi.fn(),
@@ -24,29 +27,34 @@ vi.mock('@core/component/EntityIcon', () => ({
   EntityIcon: () => <svg data-entity-type="chat" />,
 }));
 vi.mock('@queries/soup/items', () => ({
-  useSoupAstItemsQuery: () => ({
-    data: {
-      entities: [
-        {
-          type: 'chat',
-          id: 'gpt-chat',
-          name: 'GPT conversation',
-          model: 'openai/gpt-5.5',
-        },
-        {
-          type: 'chat',
-          id: 'claude-chat',
-          name: 'Claude conversation',
-          model: 'anthropic/claude-sonnet-5',
-        },
-        { type: 'chat', id: 'unknown-chat', name: 'Unknown conversation' },
-      ],
-    },
-  }),
+  QUICK_ACCESS_FEED_OPTIONS: { ignoresNotifications: true },
+  useSoupAstItemsQuery: (_args: unknown, options?: () => unknown) => {
+    soup.options.push(options?.());
+    return {
+      data: {
+        entities: [
+          {
+            type: 'chat',
+            id: 'gpt-chat',
+            name: 'GPT conversation',
+            model: 'openai/gpt-5.5',
+          },
+          {
+            type: 'chat',
+            id: 'claude-chat',
+            name: 'Claude conversation',
+            model: 'anthropic/claude-sonnet-5',
+          },
+          { type: 'chat', id: 'unknown-chat', name: 'Unknown conversation' },
+        ],
+      },
+    };
+  },
 }));
 
 afterEach(() => {
   cleanup();
+  soup.options.length = 0;
   vi.clearAllMocks();
 });
 
@@ -89,4 +97,9 @@ it('keeps normal clicks in the source split and opens Shift-clicks in a new spli
 
 it('reads recent chats over GraphQL, not the REST soup list', () => {
   expect(soupRestFallback(RECENT_CHATS_ARGS)).toBeUndefined();
+});
+
+it('reads recent chats without notifications, which it never shows', () => {
+  render(() => <RecentSessionsSection />);
+  expect(soup.options).toEqual([{ ignoresNotifications: true }]);
 });

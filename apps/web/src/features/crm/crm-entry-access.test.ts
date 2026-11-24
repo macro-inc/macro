@@ -15,6 +15,7 @@ vi.mock('@service-storage/crm-access-authority', () => ({
 }));
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 vi.mock('@queries/soup/items', () => ({
+  QUICK_ACCESS_FEED_OPTIONS: { ignoresNotifications: true },
   useSoupAstItemsQuery: (
     _args: unknown,
     options: typeof state.companyOptions
@@ -22,7 +23,6 @@ vi.mock('@queries/soup/items', () => ({
     state.companyOptions = options;
     return {
       isPending: false,
-      isSuccess: true,
       data: {
         entities: [
           {

@@ -5,9 +5,11 @@ import {
 } from '@app/features/next-soup/actions';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { SoupEntityContextMenu } from '@app/features/soup';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { enableTaskStartDate } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
@@ -38,10 +40,12 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
     calendar,
     dueDate: () => taskDueDatePredicate(state.dueDate, calendar()),
   });
+  const startDates = useFeatureFlag(enableTaskStartDate);
   const data = {
     ...queries,
     createAssigneeName: (id: Accessor<string>) =>
       usePropertyUserDisplay(id).name,
+    startDatesEnabled: () => startDates().enabled,
   };
 
   const viewContext = () =>

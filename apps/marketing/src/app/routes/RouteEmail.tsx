@@ -1,30 +1,23 @@
 import GoogleIcon from '@icon/google-color.svg';
 import MicrosoftIcon from '@icon/microsoft-color.svg';
-import { CrmRecordDemo } from '../../features/marketing/components/crm/CrmRecordDemo';
-import { DemoInteractionBoundary } from '../../features/marketing/components/DemoInteractionBoundary';
-import { EmailAutoTagDemo } from '../../features/marketing/components/email/EmailAutoTagDemo';
-import { EmailChatSharingDemo } from '../../features/marketing/components/email/EmailChatSharingDemo';
 import { EmailComparison } from '../../features/marketing/components/email/EmailComparison';
-import { EmailDraftStory } from '../../features/marketing/components/email/EmailDraftStory';
-import { EmailKeyboardDemo } from '../../features/marketing/components/email/EmailKeyboardDemo';
-import { EmailRoutineDemo } from '../../features/marketing/components/email/EmailRoutineDemo';
-import { EmailSignalNoiseDemo } from '../../features/marketing/components/email/EmailSignalNoiseDemo';
 import {
   FeaturePage,
   FeaturePageFaq,
   FeaturePageSection,
 } from '../../features/marketing/components/FeaturePage';
 import { HomepageClosing } from '../../features/marketing/components/HomepageClosing';
-import { PaperEmailAccounts } from '../../features/marketing/components/paper/PaperEmailAccounts';
-import { PaperFeatureGraphic } from '../../features/marketing/components/paper/PaperFeatureGraphic';
 import { ProductIntroduction } from '../../features/marketing/components/product/ProductIntroduction';
 import { ProductBrand } from '../../features/marketing/components/product/ProductPage';
 import { TutorialVideoEmbed } from '../../features/marketing/components/TutorialVideoEmbed';
-import { EmailTaskDemo } from '../../features/marketing/components/tasks/EmailTaskDemo';
 import { ctaHref, handleCtaClick } from '../utils/utilCta';
 import { setPageSeo } from '../utils/utilSeo';
-import '../../features/marketing/components/crm/crm-page.css';
 import '../../features/marketing/components/email/email-hero.css';
+import { FeaturePhoneScreens } from '../../features/marketing/components/FeatureScreenshot';
+import {
+  featureScreens,
+  phoneScreens,
+} from '../../features/marketing/core/feature-screens';
 
 const faqItems = [
   {
@@ -160,110 +153,59 @@ export function RouteEmail() {
       <ProductIntroduction product="Email" />
       <FeaturePageSection
         id="keyboard-speed"
-        demo={{
-          tone: 'email',
-        }}
         title="Navigate with Superhuman speed."
         description="We bring your emails into our own database so we’re not bottlenecked by Gmail’s API. Use J, K, and E to navigate and mark emails done, or open splits to draft and search side by side."
-      >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <EmailKeyboardDemo />}
-        />
-      </FeaturePageSection>
+        screen={featureScreens['keyboard-speed']}
+      />
       <FeaturePageSection
         id="email-accounts"
         title="All your accounts in one inbox."
         description="Triage all your email accounts in a single inbox, or one at a time. We backfill everything, so search is split-second across every account."
-      >
-        <PaperFeatureGraphic
-          height={380}
-          mobileHeight={590}
-          label="Switch between all inboxes, individual accounts, and email aliases."
-        >
-          <PaperEmailAccounts />
-        </PaperFeatureGraphic>
-      </FeaturePageSection>
+        screen={featureScreens['email-accounts']}
+      />
       <FeaturePageSection
         id="signal-noise"
-        demo={{
-          tone: 'email',
-        }}
         title="Signal vs. Noise."
         description="Signal is your important email. Noise is the newsletters, receipts, and inbound you don’t need to see first. Macro separates them for you, so you can focus on what matters."
-      >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <EmailSignalNoiseDemo />}
-        />
-      </FeaturePageSection>
+        screen={featureScreens['signal-noise']}
+      />
       <FeaturePageSection
         id="email-sharing"
-        demo={{ tone: 'email' }}
         title="Share email in Macro Chat, no screenshots."
         description="Share an email in a channel without taking a screenshot of Gmail and pasting it in Slack. Your team sees the full thread, including future replies, so they’re not asking what happened after your screenshot."
-      >
-        <EmailChatSharingDemo />
-      </FeaturePageSection>
+        screen={featureScreens['email-sharing']}
+      />
       <FeaturePageSection
         id="agentic-editing"
         title="Draft and send with Macro Agents."
         description="The agent can search prior interactions with people and build up context before drafting the email. You can iterate with it and then hit send without leaving the agent."
-      >
-        <EmailDraftStory />
-      </FeaturePageSection>
+        screen={featureScreens['agentic-editing']}
+      />
       <FeaturePageSection
         id="email-to-task"
-        demo={{
-          tone: 'email',
-        }}
         title="Turn emails into Macro Tasks."
         description="Create a task from the thread and assign it without leaving your inbox. The email stays linked as the source, so the original conversation is one click away, and you can see when it’s resolved."
-      >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <EmailTaskDemo />}
-        />
-      </FeaturePageSection>
+        screen={featureScreens['email-to-task']}
+      />
       <FeaturePageSection
         id="email-crm"
-        demo={{
-          tone: 'email',
-        }}
         title="Your Macro CRM, one click from any email."
         description="Open a company or contact record from any email to see every email between your team and that company, without opening a heavyweight CRM. Catch up on the relationship without leaving your inbox."
-      >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <CrmRecordDemo />}
-        />
-      </FeaturePageSection>
+        screen={featureScreens['email-crm']}
+      />
       <FeaturePageSection
         id="auto-tags"
         title="Unified Macro Tags across your workspace."
         description="Tag incoming email by customer, project, or topic. Use Jev, an extraction model, to set up any tags you want, or frontier AI if you’d like. The same tags work across emails, docs, and tasks."
-      >
-        <PaperFeatureGraphic
-          height={360}
-          mobileHeight={300}
-          label="An inbox with one highlighted email automatically tagged Customers and Follow up. Callouts point to each tag."
-        >
-          <EmailAutoTagDemo />
-        </PaperFeatureGraphic>
-      </FeaturePageSection>
+        screen={featureScreens['auto-tags']}
+      />
       <FeaturePageSection
         id="email-routines"
-        demo={{
-          tone: 'email',
-        }}
         title="Kick off Macro Routines from any email."
         description="Set up a routine that runs when an email arrives and kicks off work across your workspace. When an important customer email comes in, it can message an internal channel and send you a push notification."
-      >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <EmailRoutineDemo />}
-        />
-      </FeaturePageSection>
+        screen={featureScreens['email-routines']}
+      />
+      <FeaturePhoneScreens screens={phoneScreens['email']} product="Mail" />
       <EmailComparison />
       <FeaturePageFaq
         guide={{ href: '/email#guide', label: 'email' }}

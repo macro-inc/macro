@@ -1,4 +1,7 @@
 import { ImperativeDialogHost } from '@app/components/ui/components/ImperativeDialog';
+import { ChannelDirectoryProvider } from '@core/context/channels';
+import { staticChannelDirectory } from '@queries/channel/directory';
+import { directoryChannel } from '@queries/channel/tests/directory-channel';
 import {
   cleanup,
   fireEvent,
@@ -13,59 +16,19 @@ import { promptSectionChannels } from './next/SectionChannelsDialog';
 import { promptSection } from './next/SectionDialog';
 
 const device = vi.hoisted(() => ({ touch: false }));
-const availableChannels = vi.hoisted(() => [
-  {
-    id: 'first',
-    name: 'First',
-    channel_type: 'team',
-    team_id: 'team',
-    is_participant: true,
-  },
-  {
-    id: 'second',
-    name: 'Second',
-    channel_type: 'team',
-    team_id: 'team',
-    is_participant: true,
-  },
-  {
-    id: 'existing',
-    name: 'Existing',
-    channel_type: 'team',
-    team_id: 'team',
-    is_participant: true,
-  },
-  {
-    id: 'private',
-    name: 'Private',
-    channel_type: 'private',
-    is_participant: true,
-  },
-  {
-    id: 'other-team',
-    name: 'Other team',
-    channel_type: 'team',
-    team_id: 'other',
-    is_participant: true,
-  },
-  {
-    id: 'unjoined',
-    name: 'Unjoined',
-    channel_type: 'team',
-    team_id: 'team',
-    is_participant: false,
-  },
-]);
+const previewChannel = vi.hoisted(() => ({
+  id: 'first',
+  name: 'First',
+  channel_type: 'team',
+  team_id: 'team',
+  is_participant: true,
+}));
 vi.mock('@queries/channel-labels/channel-labels', () => ({
-  useAvailableSectionChannelsQuery: () => ({
-    isPending: false,
-    data: availableChannels,
-  }),
   useChannelLabelsQuery: () => ({ isPending: false, data: { teamId: 'team' } }),
   useSmartTagPreviewQuery: () => ({
     isPending: false,
     isFetching: false,
-    data: { channels: [availableChannels[0]], totalCount: 1 },
+    data: { channels: [previewChannel], totalCount: 1 },
   }),
 }));
 
@@ -90,6 +53,34 @@ vi.mock('@ui', async () => ({
     </button>
   ),
 }));
+const TEAM = { channelType: 'team', teamId: 'team' } as const;
+const CHANNELS = [
+  directoryChannel('first', { name: 'First', ...TEAM }),
+  directoryChannel('second', { name: 'Second', ...TEAM }),
+  directoryChannel('existing', { name: 'Existing', ...TEAM }),
+  directoryChannel('private', { name: 'Private', channelType: 'private' }),
+  directoryChannel('other-team', {
+    name: 'Other team',
+    channelType: 'team',
+    teamId: 'other',
+  }),
+  directoryChannel('unjoined', {
+    name: 'Unjoined',
+    ...TEAM,
+    isParticipant: false,
+  }),
+];
+
+function DialogHost() {
+  return (
+    <ChannelDirectoryProvider
+      directory={staticChannelDirectory(() => CHANNELS)}
+    >
+      <ImperativeDialogHost />
+    </ChannelDirectoryProvider>
+  );
+}
+
 beforeEach(() => {
   device.touch = false;
   vi.stubGlobal('scrollTo', vi.fn());
@@ -101,7 +92,7 @@ afterEach(() => {
 
 describe('label naming', () => {
   it('retains the name after failure, prevents duplicate submits, and closes only after saving', async () => {
-    render(() => <ImperativeDialogHost />);
+    render(() => <DialogHost />);
     let finish!: () => void;
     const onConfirm = vi
       .fn()
@@ -138,7 +129,7 @@ describe('label naming', () => {
   });
 
   it('cancel never saves, and reopening accepts a fresh name', async () => {
-    render(() => <ImperativeDialogHost />);
+    render(() => <DialogHost />);
     const onConfirm = vi.fn(async () => {});
     const props = {
       title: 'New label',
@@ -164,7 +155,7 @@ describe('label naming', () => {
 
 describe('section sharing changes', () => {
   it('blocks sharing an existing section with ineligible channels', async () => {
-    render(() => <ImperativeDialogHost />);
+    render(() => <DialogHost />);
     const onConfirm = vi.fn(async () => {});
     const dialog = promptSection({
       scope: 'personal',
@@ -190,7 +181,7 @@ describe('section sharing changes', () => {
   });
 
   it('keeps an edit open when saving is cancelled and closes after a successful retry', async () => {
-    render(() => <ImperativeDialogHost />);
+    render(() => <DialogHost />);
     const onConfirm = vi
       .fn()
       .mockResolvedValueOnce(false)
@@ -228,7 +219,7 @@ describe('section sharing changes', () => {
 describe('section name and rule editing', () => {
   it('keeps rule matches available without hover on touch devices', async () => {
     device.touch = true;
-    render(() => <ImperativeDialogHost />);
+    render(() => <DialogHost />);
     const result = promptSection({
       scope: 'personal',
       canShare: false,
@@ -251,7 +242,7 @@ describe('section name and rule editing', () => {
   });
 
   it('saves the name and replacement rule together and preserves both after a failure', async () => {
-    render(() => <ImperativeDialogHost />);
+    render(() => <DialogHost />);
     const onConfirm = vi
       .fn()
       .mockRejectedValueOnce(new Error('Save failed'))
@@ -296,7 +287,7 @@ describe('section name and rule editing', () => {
   });
 
   it('does not replace manual picks when matching is turned off before saving', async () => {
-    render(() => <ImperativeDialogHost />);
+    render(() => <DialogHost />);
     const onConfirm = vi.fn(async () => {});
     const result = promptSection({
       scope: 'personal',
@@ -333,7 +324,7 @@ describe('section name and rule editing', () => {
 
 describe('section channel selection', () => {
   it('offers only eligible additions and retries failed channels without replaying successful additions', async () => {
-    render(() => <ImperativeDialogHost />);
+    render(() => <DialogHost />);
     const onConfirm = vi
       .fn()
       .mockResolvedValueOnce(['second'])

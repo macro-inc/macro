@@ -20,10 +20,11 @@ import {
 } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { CompanyImporter } from '../context/crm-sources';
+import type { CompanyDomainChange } from '../core/company';
 import { contactCompanySummary } from '../core/contact';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
-import { listCanIncludeCrm } from './list-refresh';
+import { listCanIncludeCrm, listCanIncludeCrmContacts } from './list-refresh';
 import {
   updateVisibilityDetails,
   visibilityDetailsFilter,
@@ -111,20 +112,36 @@ function isCompanyEmailQueryKey(
   queryKey: QueryKey,
   domains: string[]
 ): boolean {
-  const body = queryKey[3] as { ecd?: unknown; ef?: unknown } | undefined;
-  if (!body) return false;
+  return isCompanyEmailBody(queryKey[3], domains);
+}
+
+/** A Soup list body that reads email on one of `domains`. */
+function isCompanyEmailBody(body: unknown, domains: string[]): boolean {
+  if (typeof body !== 'object' || body === null) return false;
   if (
+    'ecd' in body &&
     Array.isArray(body.ecd) &&
     body.ecd.some((d) => domains.includes(d as string))
   ) {
     return true;
   }
-  if (body.ef != null) {
+  if ('ef' in body && body.ef != null) {
     const serialized = JSON.stringify(body.ef);
     // Quote-wrap each domain so "example.com" can't match "sub.example.com".
     return domains.some((d) => serialized.includes(JSON.stringify(d)));
   }
   return false;
+}
+
+/** The email domains of the cached company; none when it isn't loaded. */
+function companyDomains(
+  deps: CrmRecordDependencies,
+  companyId: string
+): string[] {
+  const company = deps.client.getQueryData<CrmCompanyResponse>(
+    crmKeys.company(companyId).queryKey
+  );
+  return company?.domains.map((d) => d.domain) ?? [];
 }
 
 // Wipe (not just invalidate) the company's cached email threads. Invalidate
@@ -135,10 +152,7 @@ function wipeCompanyEmailCache(
   deps: CrmRecordDependencies,
   companyId: string
 ): void {
-  const company = deps.client.getQueryData<CrmCompanyResponse>(
-    crmKeys.company(companyId).queryKey
-  );
-  const domains = company?.domains.map((d) => d.domain) ?? [];
+  const domains = companyDomains(deps, companyId);
   if (domains.length === 0) return;
 
   deps.client.removeQueries({
@@ -262,6 +276,8 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
               queryKey: crmKeys.companyContacts(companyId).queryKey,
             }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+          // No Soup row comes back for the GraphQL cache to add.
+          refreshActiveGraphqlSoupQueries({ where: listCanIncludeCrmContacts }),
         ]);
       },
     }),
@@ -342,11 +358,87 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
             queryKey: crmKeys.company(companyId).queryKey,
           }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+          // The rename writes no Soup row, so the cache keeps the old name.
+          refreshActiveGraphqlSoupQueries({ where: listCanIncludeCrm }),
         ]);
       },
     }),
     () => deps.client
   );
+}
+
+/**
+ * Adds or removes a company domain via `PUT`/`DELETE
+ * /crm/companies/{id}/domains`. The server never changes the company's name
+ * or primary domain, so the answer replaces only the domain list of the
+ * cached company. Which of the company's contacts are on its domains changes
+ * with it, so their details and the company's Team list refresh, and soup
+ * refreshes the domains Customers listings show. Failures worth surfacing:
+ * 409 when another company has the domain (its name in the error message),
+ * 400 for a personal provider or the domain the company is named after, 403
+ * for a member removing a domain from a company whose email sync is off.
+ */
+export function useEditCompanyDomainMutation(deps: CrmRecordDependencies) {
+  return useMutation(
+    () => ({
+      // The header and Record details each edit through their own instance;
+      // one edit at a time keeps a slower response from replacing a newer list.
+      scope: { id: 'crm-company-domain-edits' },
+      mutationFn: ({
+        companyId,
+        domain,
+        change,
+      }: {
+        companyId: string;
+        domain: string;
+        change: CompanyDomainChange;
+      }) => editCompanyDomain(deps, companyId, domain, change),
+    }),
+    () => deps.client
+  );
+}
+
+async function editCompanyDomain(
+  deps: CrmRecordDependencies,
+  companyId: string,
+  domain: string,
+  change: CompanyDomainChange
+): Promise<CrmCompanyResponse> {
+  return Telemetry.span('crm.company_domain_edit', async (span) => {
+    span.setAttr('crm.record_id', companyId);
+    span.setAttr('crm.change', change);
+    const canCache = captureQueryAuthorization();
+    const write =
+      change === 'add'
+        ? deps.storage.addCompanyDomain
+        : deps.storage.removeCompanyDomain;
+    const company = await span.span('crm.company_domain_edit.save', () =>
+      throwOnErr(() => write({ companyId, domain }))
+    );
+    if (!canCache()) return company;
+
+    // A read already in flight would answer with the domains before the
+    // write and replace these.
+    await deps.client.cancelQueries({
+      queryKey: crmKeys.company(companyId).queryKey,
+    });
+    if (!canCache()) return company;
+    deps.client.setQueryData<CrmCompanyResponse>(
+      crmKeys.company(companyId).queryKey,
+      (current) => current && { ...current, domains: company.domains }
+    );
+    await span.span('crm.company_domain_edit.refresh', () =>
+      Promise.all([
+        refreshContactDetailsOfCompany(deps.client, companyId),
+        deps.client.invalidateQueries({
+          queryKey: crmKeys.companyContacts(companyId).queryKey,
+        }),
+        deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+        refreshActiveGraphqlSoupQueries({ where: listCanIncludeCrm }),
+      ])
+    );
+    return company;
+  });
 }
 
 /** Loaded contact details whose summary is of `companyId`. */
@@ -524,9 +616,15 @@ export function useSetEmailSyncMutation(deps: CrmRecordDependencies) {
       // email visibility change; the company detail query backs the panel's
       // `emailSync` empty-state text.
       onSuccess: (_data, { companyId }) => {
+        const domains = companyDomains(deps, companyId);
         wipeCompanyEmailCache(deps, companyId);
         return Promise.all([
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
+          // The server changes which email the company's lists may show.
+          refreshActiveGraphqlSoupQueries({
+            where: (body) =>
+              listCanIncludeCrm(body) || isCompanyEmailBody(body, domains),
+          }),
           deps.client.invalidateQueries({
             queryKey: crmKeys.company(companyId).queryKey,
           }),

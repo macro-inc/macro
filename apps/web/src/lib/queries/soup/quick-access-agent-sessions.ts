@@ -27,7 +27,7 @@ export const QUICK_ACCESS_AGENT_SESSIONS_ARGS: SoupAstItemsQueryArgs = {
 export function useQuickAccessAgentSessionsQuery() {
   const query = useSoupAstItemsQuery(
     () => QUICK_ACCESS_AGENT_SESSIONS_ARGS,
-    () => QUICK_ACCESS_FEED_OPTIONS
+    () => ({ ...QUICK_ACCESS_FEED_OPTIONS, staleTime: 60_000 })
   );
   const botsQuery = useBotsQuery();
   // Optional persona enrichment never holds up the session list or other entities.

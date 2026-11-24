@@ -12,6 +12,8 @@ import {
 } from '@queries/soup/items';
 import { createMemo } from 'solid-js';
 
+const STALE_TIME = 5 * 60 * 1000;
+
 /** Snippet documents only, recently opened first. */
 export const QUICK_ACCESS_SNIPPETS_ARGS: SoupAstItemsQueryArgs = {
   params: { limit: 500, sort_method: 'viewed_updated' },
@@ -32,7 +34,7 @@ export const QUICK_ACCESS_SNIPPETS_ARGS: SoupAstItemsQueryArgs = {
 export function useQuickAccessSnippetsQuery() {
   const query = useSoupAstItemsQuery(
     () => QUICK_ACCESS_SNIPPETS_ARGS,
-    () => QUICK_ACCESS_FEED_OPTIONS
+    () => ({ ...QUICK_ACCESS_FEED_OPTIONS, staleTime: STALE_TIME })
   );
 
   const snippets = createMemo<SnippetEntity[]>(() =>

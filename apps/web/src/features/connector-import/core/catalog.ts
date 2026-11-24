@@ -112,7 +112,7 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
         name: 'GitHub',
         detail: 'Issues',
         icon: IconGithub as ImportIcon,
-        // Connects through the GitHub account link (an overlaid app).
+        // Connects through the Macro GitHub account link.
       },
       {
         appSlug: 'trello',
@@ -141,7 +141,8 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
       {
         appSlug: 'hubspot',
         name: 'HubSpot',
-        detail: 'Companies and contacts',
+        detail: 'Companies, contacts and deals',
+        ledger: 'hubspot',
         icon: IconHubSpot as ImportIcon,
       },
       {

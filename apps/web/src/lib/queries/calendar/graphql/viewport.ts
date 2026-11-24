@@ -42,7 +42,8 @@ export type CalendarCacheFallback =
   | 'fetch-error'
   /**
    * The cache could not apply the changes since a REST answer already on
-   * screen, so its week may be older; it answers only if REST fails too.
+   * screen or a change it was told of, so its week may be older; it answers
+   * only if REST fails too.
    */
   | 'behind';
 
@@ -289,7 +290,7 @@ export async function readCalendarViewport(
     span: TraceSpan;
     signal?: AbortSignal;
     fetchPage?: FetchCalendarOccurrencePage;
-    /** Brings the cache forward after a REST answer or a failed delta. */
+    /** Brings the cache forward after a REST answer or a change notice. */
     sync?: CatchUpSource;
   }
 ): Promise<CalendarViewportRead> {

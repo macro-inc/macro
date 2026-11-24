@@ -48,6 +48,7 @@ export function MobileProjectDetailHeader(props: ProjectDetailHeaderProps) {
         <div class="shrink-0 px-4 pb-2 pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
           <ProjectSectionTabs
             compact={() => false}
+            sections={props.sections}
             section={props.section}
             onChange={props.onSectionChange}
           />

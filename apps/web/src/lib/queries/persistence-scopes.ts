@@ -1,26 +1,40 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isTauri } from '@core/util/platform';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
-import { hashKey, partialMatchKey, type QueryKey } from '@tanstack/query-core';
+import { partialMatchKey, type QueryKey } from '@tanstack/query-core';
 import { authKeys } from './auth/keys';
 import { hasCachedUserIdentity } from './auth/user-info-cache';
 import { calendarKeys } from './calendar/keys';
 import { channelKeys } from './channel/keys';
 import { createPersistenceKey, type PersistScope } from './persistence';
-import { createPerQueryIDBStore } from './persistence/per-query-idb';
+import {
+  createPerQueryIDBStore,
+  type StringKeyPrefix,
+} from './persistence/per-query-idb';
 import { soupKeys } from './soup/keys';
+
+/**
+ * The REST channel list and channel activity reads earlier versions saved in
+ * the channel store, under the account and before keys named one. No query
+ * asks for them now, so nothing would ever expire them.
+ */
+const RETIRED_CHANNEL_QUERY_PREFIXES: readonly StringKeyPrefix[] = [
+  ['channel', 'activity'],
+  ['channel', 'listChannels'],
+];
 
 export function shouldPersistChannelQuery(queryKey: QueryKey): boolean {
   if (partialMatchKey(queryKey, channelKeys.mentions._def)) return true;
   // Legacy unscoped payloads and disabled (unknown-account) queries cannot
   // establish ownership, so neither is eligible for persistence.
-  return [channelKeys.activity._def, channelKeys.listChannels._def].some(
-    (prefix) =>
-      partialMatchKey(queryKey, prefix) &&
-      queryKey.length === prefix.length + 1 &&
-      typeof queryKey[prefix.length] === 'string' &&
-      queryKey[prefix.length] !== ''
+  const prefix = channelKeys.directory._def;
+  return (
+    partialMatchKey(queryKey, prefix) &&
+    queryKey.length === prefix.length + 1 &&
+    typeof queryKey[prefix.length] === 'string' &&
+    queryKey[prefix.length] !== ''
   );
 }
 
@@ -46,13 +60,12 @@ export function createQueryPersistenceScopes(
   const scopedKey = (name: string) =>
     createPersistenceKey(`${name}-${accountScope}`, 1);
   const channels = createPerQueryIDBStore({ dbName: scopedKey('channels') });
-  // Saved before keys named their account; no query has these hashes to expire them.
-  for (const key of [
-    channelKeys.activity._def,
-    channelKeys.listChannels._def,
-  ]) {
-    channels.remove(hashKey(key));
-  }
+  // By key range, so a launch with nothing left to delete reads no entry and
+  // the restores queued behind it barely wait.
+  fireAndForget(
+    channels.removeKeyPrefixes(RETIRED_CHANNEL_QUERY_PREFIXES),
+    'query-persistence'
+  );
 
   return [
     {

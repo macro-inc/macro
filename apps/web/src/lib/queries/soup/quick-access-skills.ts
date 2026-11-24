@@ -12,6 +12,8 @@ import {
 } from '@queries/soup/items';
 import { createMemo } from 'solid-js';
 
+const STALE_TIME = 5 * 60 * 1000;
+
 /** Skill documents only, recently opened first. */
 export const QUICK_ACCESS_SKILLS_ARGS: SoupAstItemsQueryArgs = {
   params: { limit: 500, sort_method: 'viewed_updated' },
@@ -32,7 +34,7 @@ export const QUICK_ACCESS_SKILLS_ARGS: SoupAstItemsQueryArgs = {
 export function useQuickAccessSkillsQuery() {
   const query = useSoupAstItemsQuery(
     () => QUICK_ACCESS_SKILLS_ARGS,
-    () => QUICK_ACCESS_FEED_OPTIONS
+    () => ({ ...QUICK_ACCESS_FEED_OPTIONS, staleTime: STALE_TIME })
   );
 
   const skills = createMemo<SkillEntity[]>(() =>

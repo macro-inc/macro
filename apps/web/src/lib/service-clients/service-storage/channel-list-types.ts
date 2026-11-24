@@ -1,9 +1,9 @@
-// Hand-written types for the channel-list read model returned by `GET /comms/channels`
-// (served by the comms hex). The response flattens the channel, its participants, and the
-// latest-message info into a single object, so these mirror that flattened shape using the
-// generated service-storage primitives. (Previously generated as `@service-comms`'s
-// `ApiChannelWithLatest`; service-storage's generated `SoupChannel` nests these under
-// `.channel` and is therefore not interchangeable.)
+// Hand-written types for the channel shape the REST channel list (`GET /comms/channels`)
+// returned: the channel, its participants, and the latest-message info flattened into one
+// object, using the generated service-storage primitives. The web app no longer reads that
+// list; the channel directory still projects its records into this shape for readers that
+// take it. (service-storage's generated `SoupChannel` nests these under `.channel` and is
+// therefore not interchangeable.)
 import type { AgentDmProfile } from './generated/schemas/agentDmProfile';
 import type { Channel } from './generated/schemas/channel';
 import type { ChannelParticipant } from './generated/schemas/channelParticipant';
@@ -26,9 +26,3 @@ export type ApiChannelWithLatest = ChannelWithParticipants &
     interacted_at?: string | null;
     viewed_at?: string | null;
   };
-
-/** A cursor-paginated page from the channel-list endpoint. */
-export type ApiChannelListPage = {
-  items: ApiChannelWithLatest[];
-  next_cursor: string | null;
-};

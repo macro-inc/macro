@@ -1,3 +1,6 @@
+/** Adding a company domain, or removing one. */
+export type CompanyDomainChange = 'add' | 'remove';
+
 /** Values consumed by company detail surfaces. */
 export type CrmCompany = {
   type: 'crm_company';

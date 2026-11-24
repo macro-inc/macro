@@ -157,10 +157,9 @@ export function SearchbarInput(
       props.onDismiss?.();
       return true;
     })
-    .onTab((event) => {
-      event.preventDefault();
-      return true;
-    })
+    // Declining the key leaves Tab to focus order; having a handler at all
+    // keeps the editor's tab indentation out of this single-line field.
+    .onTab(() => false)
     .use((lex) =>
       lex.registerCommand(
         KEY_ARROW_DOWN_COMMAND,

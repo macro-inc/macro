@@ -26,13 +26,14 @@ import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { makePersistedState } from '@app/lib/persistence';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
+import { holdRowPress } from '@components/app/mobile/rowPress';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import type { PreviewSelection } from '@components/app/previewTarget';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -59,10 +60,6 @@ import {
   untrack,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import {
-  persistSoupNavigationTouchHighlight,
-  soupNavigationTouchHighlight,
-} from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { InboxListEntity } from '../../next-soup/soup-view/views/inbox/InboxListEntity';
 import {
   markChannelNotificationsSeenOnOpen,
@@ -117,11 +114,15 @@ function HomeTutorial() {
 /** Compact notification list used by the Notifications workspace. */
 export function HomeList(props: HomeListProps) {
   const inlinePreviewLayout = useInlinePreviewLayout();
-  const channels = useChannelsContext();
-  const channelName = (entity: WithNotification<EntityData>) =>
-    entity.type === 'channel_thread'
-      ? getChannelThreadName(entity, channels.channelsById())
-      : undefined;
+  const directory = useChannelDirectory();
+  const channelName = (entity: WithNotification<EntityData>) => {
+    if (entity.type !== 'channel_thread') return undefined;
+    const current = loadedChannel(directory.lookup(entity.channelId));
+    return getChannelThreadName(
+      entity,
+      current ? { [current.id]: current } : {}
+    );
+  };
   const {
     state,
     composerFocusRequest,
@@ -254,8 +255,8 @@ export function HomeList(props: HomeListProps) {
   ) {
     markEntitySeen(entity);
 
-    const finishTouchHighlight = options.event
-      ? persistSoupNavigationTouchHighlight(options.event)
+    const releaseRowPress = options.event
+      ? holdRowPress(options.event)
       : undefined;
 
     try {
@@ -266,7 +267,7 @@ export function HomeList(props: HomeListProps) {
         mergeHistory: options.mergeHistory,
       });
     } finally {
-      finishTouchHighlight?.();
+      releaseRowPress?.();
     }
   }
 
@@ -281,7 +282,7 @@ export function HomeList(props: HomeListProps) {
   );
 
   // The tutorial introduces Home; search results are not Home's list.
-  const showsTutorial = () => state.tab !== 'noise' && !state.search.trim();
+  const showsTutorial = () => state.tab === 'signal' && !state.search.trim();
 
   let scrollOffset = DEFAULT_HOME_LIST_STATE.scrollOffset;
   const readListState = (): HomeListStateSnapshot => ({
@@ -684,10 +685,7 @@ export function HomeList(props: HomeListProps) {
 
               <Match when={true}>
                 <div
-                  ref={(element) => {
-                    setViewport(element);
-                    soupNavigationTouchHighlight(element);
-                  }}
+                  ref={setViewport}
                   class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none pb-[max(0.5rem,var(--mobile-content-inset-bottom,0px))]"
                   onScroll={checkNearEnd}
                 >
@@ -756,15 +754,14 @@ export function HomeList(props: HomeListProps) {
                                     when={isTouchDevice()}
                                     fallback={
                                       <HomeListEntity
-                                        itemTitle={state.tab === 'recent'}
                                         channelName={channelName(
                                           entityRow().entity
                                         )}
                                         timestamp={
-                                          state.tab === 'noise'
-                                            ? (entityRow().entity.notifiedAt ??
+                                          state.tab === 'signal'
+                                            ? entityRow().entity.sortTs
+                                            : (entityRow().entity.notifiedAt ??
                                               entityRow().entity.sortTs)
-                                            : entityRow().entity.sortTs
                                         }
                                         entity={entityRow().entity}
                                         occurrenceKey={entityRow().id}

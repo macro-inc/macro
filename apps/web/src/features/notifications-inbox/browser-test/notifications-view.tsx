@@ -14,7 +14,7 @@ import {
   type SplitPanelContextType,
 } from '@components/app/split-layout/context';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
 import {
@@ -28,6 +28,7 @@ import { EntityProvider } from '@entity';
 import type { NotificationSource } from '@notifications';
 import type { UnifiedNotification } from '@notifications/types';
 import { authKeys } from '@queries/auth/keys';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { MutationUndoProvider, useMutationUndoContext } from '@queries/undo';
@@ -184,6 +185,7 @@ const inboxContext: NotificationsInboxContext = {
   senderName: () => undefined,
   openUrl: () => {},
   filterStorage: { read: () => null, write: () => {} },
+  displayStorage: { read: () => null, write: () => {} },
 };
 
 const ROUTER = { href: () => '', panes: () => [] } as unknown as SplitRouter;
@@ -266,14 +268,19 @@ render(
     <QueryClientProvider client={queryClient}>
       <AnalyticsContextProvider>
         <PosthogProvider>
-          {/* The desktop preview reads these; touch shows no preview. */}
+          {/* The desktop preview and Condensed rows read these. */}
           <GlobalAppStateProvider
-            notificationSource={{} as NotificationSource}
+            // Condensed rows are Home's, which read who the viewer muted.
+            notificationSource={
+              { mutedEntities: () => [] } as unknown as NotificationSource
+            }
             blockOrchestrator={{} as BlockOrchestrator}
           >
             <EntityProvider>
               <UserContextProvider>
-                <ChannelsContextProvider>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
                   <EmailLinksContextProvider>
                     <MobileSettingsProvider>
                       <MutationUndoProvider>
@@ -286,7 +293,7 @@ render(
                       </MutationUndoProvider>
                     </MobileSettingsProvider>
                   </EmailLinksContextProvider>
-                </ChannelsContextProvider>
+                </ChannelDirectoryProvider>
               </UserContextProvider>
             </EntityProvider>
           </GlobalAppStateProvider>

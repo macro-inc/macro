@@ -146,3 +146,21 @@ it('decodes tracker tasks and projects while isolating review ids', () => {
     { id: 'e', kind: 'project' },
   ]);
 });
+
+it('decodes HubSpot pipelines, companies, contacts and deals', () => {
+  const kinds = decodePlanEntries(
+    [
+      { ...row, id: 'p', source: 'hubspot', kind: 'hubspot_pipeline' },
+      { ...row, id: 'c', source: 'hubspot', kind: 'hubspot_company' },
+      { ...row, id: 'n', source: 'hubspot', kind: 'hubspot_contact' },
+      { ...row, id: 'd', source: 'hubspot', kind: 'hubspot_deal' },
+    ],
+    'review'
+  ).map((entry) => [entry.id, entry.kind]);
+  expect(kinds).toEqual([
+    ['p', 'pipeline'],
+    ['c', 'company'],
+    ['n', 'contact'],
+    ['d', 'deal'],
+  ]);
+});

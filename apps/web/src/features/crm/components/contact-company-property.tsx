@@ -2,24 +2,27 @@ import { t } from '@app/lib/i18n';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
+import { PropertyEmpty } from '@property/extractors/PropertyEmpty';
 import { propertyPillClasses } from '@property/extractors/property-pill-classes';
-import { Badge, Button, ConfirmDialog, Dialog, Dropdown, Tooltip } from '@ui';
+import { Button, ButtonGroup, ConfirmDialog, Dialog, Dropdown } from '@ui';
 import { createSignal, onCleanup, Show, Suspense } from 'solid-js';
-import {
-  contactPropertyIconTouchTarget,
-  contactPropertyTouchTarget,
-} from './contact-property-styles';
+import { contactPropertyTouchTarget } from './contact-property-styles';
 
 /**
- * A singleton company relation with separate edit and navigation actions.
- * `editable` offers link and switch; `removable` offers Remove company, which
- * asks for confirmation before it saves.
+ * A singleton company relation drawn like a task's Project: one split pill
+ * whose name opens the company and whose caret changes it. `editable` offers
+ * link and switch; `removable` offers Remove company, which asks for
+ * confirmation before it saves. Without either the caret is hidden. No company
+ * shows the empty property, which opens the picker when one can be linked.
  */
 export function ContactCompanyProperty(props: {
+  /** The header draws property pills framed; Record details draws them ghost. */
+  surface: 'header' | 'details';
   companyId: string | null | undefined;
   companyName: string | undefined;
   editable: boolean;
@@ -28,7 +31,14 @@ export function ContactCompanyProperty(props: {
   lockedReason: string | undefined;
   /** Null removes the company. */
   save(companyId: string | null): Promise<void>;
-  openCompany(event: MouseEvent): void;
+  /**
+   * Opens the company from its name. The press keeps focus where it is, so
+   * the split showing the company stays active once the router hands it over.
+   */
+  openCompany: {
+    onMouseDown(event: MouseEvent): void;
+    onClick(event: MouseEvent): void;
+  };
   errorMessage(error: unknown): string;
 }) {
   const [open, setOpen] = createSignal(false);
@@ -38,7 +48,7 @@ export function ContactCompanyProperty(props: {
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string>();
   let triggerElement: HTMLButtonElement | undefined;
-  let valueElement: HTMLSpanElement | undefined;
+  let valueElement: HTMLElement | undefined;
   let active = true;
   onCleanup(() => {
     active = false;
@@ -181,66 +191,116 @@ export function ContactCompanyProperty(props: {
       </div>
     </>
   );
-  const trigger = () => (
-    <Tooltip
-      label={
-        props.companyName ??
-        (props.companyId ? t('crm.company') : t('crm.addCompany'))
+  const variant = () => (props.surface === 'header' ? 'secondary' : 'ghost');
+  const name = () => props.companyName ?? t('crm.company');
+  // Touch keeps focus where it was, so the keyboard doesn't rise.
+  const keepTouchFocus = (event: Event) => {
+    if (isTouchDevice()) event.preventDefault();
+  };
+  // A button group clips its segments, so on touch they take the group's own
+  // 36px height, as a task's Project pill does, rather than a 24px face with a
+  // larger target. The name's tooltip gives it in full and, when the company
+  // can't change, the reason why.
+  const linkedFace = () => (
+    <ButtonGroup
+      variant={variant()}
+      finish={props.surface === 'header' ? 'raised' : undefined}
+      size="xs"
+      class="min-w-0 max-w-full border-0"
+    >
+      <ButtonGroup.Button
+        ref={valueElement}
+        class="group/company-link min-w-0 shrink justify-start gap-1 touch:min-w-11 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/20"
+        aria-label={t('entityActions.openEntityNamed', { name: name() })}
+        tooltip={{
+          content: (
+            <span class="flex min-w-0 flex-col gap-0.5">
+              <span class="ph-no-capture text-ink">{name()}</span>
+              <Show when={!actionable() && props.lockedReason}>
+                {(reason) => <span>{reason()}</span>}
+              </Show>
+            </span>
+          ),
+        }}
+        onMouseDown={(event: MouseEvent) =>
+          props.openCompany.onMouseDown(event)
+        }
+        onClick={(event: MouseEvent) => props.openCompany.onClick(event)}
+      >
+        <BuildingsIcon class="size-3 shrink-0 not-touch:group-hover/company-link:hidden not-touch:group-focus-visible/company-link:hidden" />
+        <ArrowUpRightIcon class="hidden size-3 shrink-0 not-touch:group-hover/company-link:block not-touch:group-focus-visible/company-link:block" />
+        <span class="ph-no-capture min-w-0 max-w-60 truncate">{name()}</span>
+      </ButtonGroup.Button>
+      <Show when={actionable()}>
+        <ButtonGroup.Divider />
+        <ButtonGroup.Button
+          ref={triggerElement}
+          size="icon-xs"
+          class="focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/20"
+          aria-label={t('crm.editContactCompany')}
+          aria-expanded={open()}
+          aria-haspopup="dialog"
+          onPointerDown={keepTouchFocus}
+          onMouseDown={keepTouchFocus}
+          onClick={() => changeOpen(true)}
+        >
+          <CaretDownIcon class="size-3 shrink-0" />
+        </ButtonGroup.Button>
+      </Show>
+    </ButtonGroup>
+  );
+  const emptyFace = () => (
+    <Show
+      when={actionable()}
+      fallback={
+        <span
+          ref={valueElement}
+          tabIndex={-1}
+          class={propertyPillClasses({
+            variant: variant(),
+            size: 'xs',
+            readOnly: true,
+            empty: true,
+            class:
+              'h-6 min-w-0 focus-visible:ring-2 focus-visible:ring-accent/20',
+          })}
+        >
+          <PropertyEmpty label={t('crm.noCompany')} />
+        </span>
       }
     >
       <button
         ref={triggerElement}
         type="button"
         class={propertyPillClasses({
-          empty: !props.companyId,
+          variant: variant(),
+          size: 'xs',
+          empty: true,
           class: `min-w-0 shrink ${contactPropertyTouchTarget}`,
         })}
-        aria-label={
-          props.companyId ? t('crm.editContactCompany') : t('crm.addCompany')
-        }
+        aria-label={t('crm.addCompany')}
         aria-expanded={open()}
         aria-haspopup="dialog"
-        onPointerDown={(event) => {
-          if (isTouchDevice()) event.preventDefault();
-        }}
-        onMouseDown={(event) => {
-          if (isTouchDevice()) event.preventDefault();
-        }}
+        onPointerDown={keepTouchFocus}
+        onMouseDown={keepTouchFocus}
         onClick={() => changeOpen(true)}
       >
-        <BuildingsIcon class="size-3 shrink-0" />
-        <span class="truncate">
-          {props.companyName ??
-            (props.companyId ? t('crm.company') : t('crm.addCompany'))}
-        </span>
+        <PropertyEmpty
+          label={
+            props.surface === 'header' ? t('crm.company') : t('crm.noCompany')
+          }
+        />
       </button>
-    </Tooltip>
+    </Show>
+  );
+  const face = () => (
+    <Show when={props.companyId} fallback={emptyFace()}>
+      {linkedFace()}
+    </Show>
   );
   return (
-    <div class="flex min-w-0 max-w-full items-center gap-1">
-      <Show
-        when={actionable()}
-        fallback={
-          <Tooltip
-            label={props.lockedReason ?? ''}
-            disabled={!props.lockedReason}
-          >
-            <Badge
-              ref={valueElement}
-              tabIndex={-1}
-              variant="ghost"
-              size="sm"
-              class="min-w-0 shrink focus-visible:ring-2 focus-visible:ring-accent/20"
-            >
-              <BuildingsIcon class="size-3 shrink-0" />
-              <span class="truncate">
-                {props.companyName ??
-                  (props.companyId ? t('crm.company') : t('crm.noCompany'))}
-              </span>
-            </Badge>
-          </Tooltip>
-        }
-      >
+    <div class="flex min-w-0 max-w-full items-center">
+      <Show when={actionable()} fallback={face()}>
         <Show
           when={isTouchDevice()}
           fallback={
@@ -251,7 +311,7 @@ export function ContactCompanyProperty(props: {
               placement="bottom-start"
               fitViewport
             >
-              {trigger()}
+              {face()}
               <Show when={open()}>
                 <EditorPopover onClose={() => changeOpen(false)}>
                   {editor()}
@@ -260,7 +320,7 @@ export function ContactCompanyProperty(props: {
             </Dropdown>
           }
         >
-          {trigger()}
+          {face()}
           <Show when={!props.editable && open()}>
             <Dialog
               open
@@ -293,18 +353,6 @@ export function ContactCompanyProperty(props: {
             <PickerSheet.Body>{editor()}</PickerSheet.Body>
           </PickerSheet.Root>
         </Show>
-      </Show>
-      <Show when={props.companyId}>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          class={contactPropertyIconTouchTarget}
-          aria-label={t('crm.goToCompany')}
-          tooltip={t('crm.goToCompany')}
-          onClick={props.openCompany}
-        >
-          <ArrowSquareOutIcon class="size-3 shrink-0" />
-        </Button>
       </Show>
       <ConfirmDialog
         open={confirmingRemoval()}

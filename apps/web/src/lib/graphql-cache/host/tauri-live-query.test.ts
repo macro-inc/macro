@@ -4,7 +4,13 @@ const { invoke, listen } = vi.hoisted(() => ({
   invoke: vi.fn(),
   listen: vi.fn(),
 }));
-vi.mock('@tauri-apps/api/core', () => ({ invoke }));
+// Request ids differ per call; these tests check the payloads without them.
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (command: string, args: Record<string, unknown> = {}) => {
+    const { requestId: _, ...payload } = args;
+    return invoke(command, payload);
+  },
+}));
 vi.mock('@tauri-apps/api/event', () => ({ listen, emit: vi.fn() }));
 
 import { testAuthority } from '../authority-fixture';

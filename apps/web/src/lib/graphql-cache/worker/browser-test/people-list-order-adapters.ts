@@ -9,3 +9,4 @@ function noServer(): never {
 export const fetchContactDirectoryPage = noServer;
 export const fetchContactDirectoryByIds = noServer;
 export const fetchContactReferencePage = noServer;
+export const fetchContactNamedPeople = noServer;

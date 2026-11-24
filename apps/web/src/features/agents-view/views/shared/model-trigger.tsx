@@ -6,11 +6,22 @@ import { useUnifiedModelSelector } from '../../components/unified-model-selector
 import { speedTier } from '../../core/model-selection';
 import { MACRO_PERSONA_ID } from '../../core/roster';
 
-export function UnifiedModelTrigger(props: { children: JSX.Element }) {
+export function UnifiedModelTrigger(props: {
+  children: JSX.Element;
+  /** The menu is open: its tooltip would cover the menu's search field. */
+  menuOpen?: boolean;
+}) {
   const state = useUnifiedModelSelector();
   const custom = () => state.agent && state.agent.id !== MACRO_PERSONA_ID;
-  const name = () =>
-    custom() ? state.agent?.name : catalogModelLabel(state.model, state.models);
+  const model = () => catalogModelLabel(state.model, state.models);
+  // A custom agent's label may hide its model, so the tooltip names both.
+  const name = () => {
+    if (!custom()) return model();
+    // An agent with no model of its own reads as its name alone.
+    return state.model
+      ? `${state.agent?.name} · ${model()}`
+      : state.agent?.name;
+  };
   const effort = () =>
     state.effort?.options.length && state.effort.options.length > 1
       ? state.effort.options.find(
@@ -29,7 +40,9 @@ export function UnifiedModelTrigger(props: { children: JSX.Element }) {
       .filter(Boolean)
       .join(', ');
   return (
-    <Tooltip.Root>
+    // Above the trigger, aligned to its end: below it, it covered the mode
+    // chips, and centred above, the start of the prompt's last line.
+    <Tooltip.Root placement="top-end" disabled={props.menuOpen}>
       <Tooltip.Trigger as="span" class="min-w-0 max-w-full">
         {props.children}
       </Tooltip.Trigger>

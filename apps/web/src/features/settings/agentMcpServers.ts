@@ -3,10 +3,10 @@ import type { ConnectionState } from './integration-ui';
 
 /** A catalog entry reduced to what the agent stores. */
 export function catalogEntryToMcpServer(entry: {
-  app_slug: string;
-  display_name: string;
+  slug: string;
+  name: string;
 }): AgentMcpServer {
-  return { app_slug: entry.app_slug, server_name: entry.display_name };
+  return { app_slug: entry.slug, server_name: entry.name };
 }
 
 /** Appends `server` unless an entry with its slug is already listed. */

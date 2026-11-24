@@ -30,8 +30,8 @@ export class PipelineNamespace {
   }
 
   /**
-   * List accessible pipelines with each one's fields in column order and its
-   * version, in one call. A select field lists its options, so Stage lists the
+   * List accessible pipelines with their fields and versions. One call gives
+   * each one's fields in column order and its version. A select field lists its options, so Stage lists the
    * pipeline's stages from first to last; a tracked pipeline's first field
    * names its company or contact. Use it instead of reading each pipeline's
    * table or running a `find` per pipeline just to learn its fields.
@@ -79,8 +79,8 @@ export class PipelineNamespace {
   }
 
   /**
-   * Every entry (deal) tracking one of these companies or contacts, across
-   * the caller's pipelines; pipelines without one are left out.
+   * Every entry (deal) tracking one of these companies or contacts. It reads
+   * across the caller's pipelines; pipelines without one are left out.
    *
    * @readonly
    */

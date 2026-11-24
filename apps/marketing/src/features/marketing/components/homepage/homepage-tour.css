@@ -1,0 +1,180 @@
+/* Give the interactive tour the widest frame on the homepage. */
+.homepage-tour {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: min(100% - 48px, 800px);
+  aspect-ratio: 16 / 9;
+  margin: 0 auto;
+  padding: 24px 32px 0;
+  border-radius: 32px;
+  corner-shape: squircle;
+  background: #141414;
+  box-shadow: inset 0 0 0 1px #ffffff14;
+}
+
+.homepage-tour-wallpapers,
+.homepage-tour-wallpapers > div {
+  position: absolute;
+  inset: 0;
+}
+
+.homepage-tour-wallpapers { z-index: -1; }
+
+.homepage-tour-wallpapers > div {
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+
+.homepage-tour-wallpapers > div[data-active='true'] { opacity: 1; }
+
+.homepage-tour-wallpapers svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.homepage-tour-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+/* Frosted pills over the wallpaper, as the app's own segmented controls. */
+.homepage-tour-tabs,
+.homepage-tour .homepage-tour-next {
+  background: rgb(12 12 14 / 46%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: inset 0 0 0 1px #ffffff24;
+}
+
+.homepage-tour-tabs {
+  --fade-start: 0px;
+  --fade-end: 0px;
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-radius: 999px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent 100%);
+}
+
+.homepage-tour-tabs::-webkit-scrollbar { display: none; }
+.homepage-tour-tabs[data-fade-start='true'] { --fade-start: 48px; }
+.homepage-tour-tabs[data-fade-end='true'] { --fade-end: 48px; }
+
+.homepage-tour .homepage-tour-tabs button {
+  position: relative;
+  overflow: hidden;
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: 500 14.5px/1 'Inter Variable', Inter, sans-serif;
+  white-space: nowrap;
+}
+
+.homepage-tour .homepage-tour-tabs button:hover { background: #ffffff1f; }
+
+.homepage-tour .homepage-tour-tabs button[aria-selected='true'] {
+  background: #fff;
+  color: #000;
+}
+
+/* Progress toward the next module while the tour plays on its own. */
+.homepage-tour-tabs[data-playing='true'] button[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: #61a3e6;
+  transform-origin: left;
+  animation: homepage-tour-progress 5s linear both;
+}
+
+@keyframes homepage-tour-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.homepage-tour .homepage-tour-next {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+}
+
+.homepage-tour .homepage-tour-next:hover { background: rgb(12 12 14 / 66%); }
+
+.homepage-tour-next svg {
+  width: 18px;
+  height: 18px;
+}
+
+.homepage-tour :is(button):focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.homepage-tour-screen {
+  position: relative;
+  aspect-ratio: 1700 / 916;
+}
+
+.homepage-tour-screen img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 400ms ease;
+  filter: drop-shadow(0 2px 5px #0006) drop-shadow(0 30px 56px #0008);
+}
+
+.homepage-tour-screen img[data-active='true'] { opacity: 1; }
+
+@media (max-width: 699px) {
+  .homepage-tour {
+    width: calc(100% - 22px);
+    aspect-ratio: auto;
+    padding: 14px 0 0 22px;
+    border-radius: 20px;
+  }
+
+  .homepage-tour-bar {
+    justify-content: flex-start;
+    margin-bottom: 14px;
+    padding-right: 11px;
+  }
+
+  .homepage-tour-tabs { padding: 4px; }
+  .homepage-tour .homepage-tour-tabs button { min-height: 29px; padding-inline: 14px; font-size: 12px; }
+  .homepage-tour .homepage-tour-next { width: 37px; height: 37px; }
+
+  /* Keep the left side readable on phones without enlarging the window on tablets. */
+  .homepage-tour-screen {
+    width: min(180%, 650px);
+    margin-bottom: -6%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .homepage-tour-wallpapers > div,
+  .homepage-tour-screen img { transition: none; }
+
+  .homepage-tour-tabs[data-playing='true'] button[aria-selected='true']::after { display: none; }
+}

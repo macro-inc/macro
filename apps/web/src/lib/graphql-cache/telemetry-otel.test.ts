@@ -36,6 +36,7 @@ describe('cache OpenTelemetry sink', () => {
       resetAttempt: 'wipe-before-open',
       queueDepth: 4,
       oldestAgeMs: 25,
+      walFrames: 512,
       durationMs: 12,
     });
 
@@ -56,6 +57,35 @@ describe('cache OpenTelemetry sink', () => {
       'cache.duration_ms': 12,
       'cache.queue_depth': 4,
       'cache.oldest_age_ms': 25,
+      'cache.wal_frames': 512,
+    });
+    expect(span.end).toHaveBeenCalledOnce();
+  });
+
+  it('exports a slow request with its kind and queue wait', () => {
+    createOtelCacheTelemetrySink().emit({
+      browserFamily: 'chromium',
+      browserVersion: '152',
+      appVersion: '0.1',
+      backend: 'turso-wasm-opfs',
+      rolloutCohort: 'treatment',
+      name: 'graphql_cache.slow_request',
+      operationCategory: 'read',
+      requestKind: 'read',
+      outcome: 'success',
+      errorCode: 'none',
+      queueWaitMs: 9_000,
+      durationMs: 3,
+      queueDepth: 1,
+    });
+
+    expect(anonymousSpan).toHaveBeenCalledWith('graphql_cache.slow_request');
+    expect(Object.fromEntries(span.setAttr.mock.calls)).toMatchObject({
+      'cache.operation_category': 'read',
+      'cache.request_kind': 'read',
+      'cache.queue_wait_ms': 9_000,
+      'cache.duration_ms': 3,
+      'cache.queue_depth': 1,
     });
     expect(span.end).toHaveBeenCalledOnce();
   });

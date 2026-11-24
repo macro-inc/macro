@@ -1,4 +1,5 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { TaskTimerButton } from '@app/features/time-tracking/task-timer-button';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { Show } from 'solid-js';
@@ -7,11 +8,11 @@ import { useMarkdownName } from '../component/MarkdownNameProvider';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
 /**
- * Dispatch Agent, on a task, and Ask Macro, shown before Share in a desktop
- * document header.
+ * Dispatch Agent and Start timer, on a task, and Ask Macro, shown before Share
+ * in a desktop document header.
  */
 export function MarkdownHeaderActions() {
-  const { documentId, kind } = useMarkdownDocument();
+  const { documentId, kind, permissions } = useMarkdownDocument();
   const { displayName } = useMarkdownName();
 
   return (
@@ -19,6 +20,9 @@ export function MarkdownHeaderActions() {
       <div class="flex shrink-0 items-center gap-1">
         <Show when={kind() === 'task'}>
           <DispatchAgentButton showPrimaryLabel />
+          <Show when={permissions.canEdit()}>
+            <TaskTimerButton taskId={documentId()} />
+          </Show>
         </Show>
         <HeaderActionGroup label="Actions">
           <AskMacroButton

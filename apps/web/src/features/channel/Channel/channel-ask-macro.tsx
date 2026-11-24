@@ -1,7 +1,7 @@
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { t } from '@app/lib/i18n';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannel } from '@core/context/channels';
 import { type Accessor, Show } from 'solid-js';
 
 /**
@@ -13,16 +13,15 @@ export function useChannelAskMacroEntity(
   channelId: Accessor<string>,
   fallbackName?: Accessor<string | undefined>
 ) {
-  const ctx = useChannelsContext();
+  const channel = useChannel(channelId);
   return () => {
-    const id = channelId();
-    const channel = ctx.channelsById()[id];
-    if (!channel) return undefined;
+    const current = channel();
+    if (!current) return undefined;
     return {
       type: 'channel' as const,
-      id,
-      name: channel.name ?? fallbackName?.() ?? 'New Channel',
-      channelType: channel.channel_type,
+      id: current.id,
+      name: current.name ?? fallbackName?.() ?? 'New Channel',
+      channelType: current.channelType,
     };
   };
 }

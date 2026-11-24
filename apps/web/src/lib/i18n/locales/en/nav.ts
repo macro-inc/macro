@@ -50,7 +50,7 @@ export default {
   more: 'More',
   moreOptions: 'More options',
   create: 'Create',
-  getMobileApp: 'Get the mobile app',
+  downloads: 'Downloads',
   help: 'Help',
   helpMessage: 'Message support',
   helpCall: 'Book a call',

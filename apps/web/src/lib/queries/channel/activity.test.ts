@@ -4,18 +4,17 @@ import { recordChannelActivity } from '@service-storage/graphql-channel-activity
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { authKeys } from '../auth/keys';
 import { recordChannelViewWhenIdle } from './activity';
-import { channelKeys } from './keys';
 
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
 });
-vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 vi.mock('@service-storage/graphql-channel-activity', () => ({
   recordChannelActivity: vi.fn(),
 }));
 
 const recordActivity = vi.mocked(recordChannelActivity);
+const directory = { recordView: vi.fn() };
 // Past the idle wait, well short of the query cache's garbage collection.
 const flushIdle = () => vi.advanceTimersByTimeAsync(2_000);
 
@@ -48,7 +47,7 @@ afterEach(() => {
 });
 
 it('records a view only after the current work yields', async () => {
-  recordChannelViewWhenIdle('a');
+  recordChannelViewWhenIdle('a', directory);
   expect(recordActivity).not.toHaveBeenCalled();
 
   await flushIdle();
@@ -59,9 +58,9 @@ it('records a view only after the current work yields', async () => {
 });
 
 it('sends one request for views of a channel that are still pending', async () => {
-  recordChannelViewWhenIdle('a');
-  recordChannelViewWhenIdle('b');
-  recordChannelViewWhenIdle('a');
+  recordChannelViewWhenIdle('a', directory);
+  recordChannelViewWhenIdle('b', directory);
+  recordChannelViewWhenIdle('a', directory);
 
   await flushIdle();
   expect(recordActivity.mock.calls.map(([args]) => args.channelId)).toEqual([
@@ -70,26 +69,23 @@ it('sends one request for views of a channel that are still pending', async () =
   ]);
 });
 
-it('writes the recorded row into the activity list instead of refetching it', async () => {
-  queryClient.setQueryData<ApiActivity[]>(
-    channelKeys.activity('user').queryKey,
-    [
-      activity('a', '2026-01-01T00:00:00Z'),
-      activity('c', '2026-01-01T00:00:00Z'),
-    ]
-  );
-
-  recordChannelViewWhenIdle('a');
-  recordChannelViewWhenIdle('b');
+it('shows the recorded view on the channel in the directory', async () => {
+  recordChannelViewWhenIdle('a', directory);
   await flushIdle();
 
-  expect(
-    queryClient.getQueryData<ApiActivity[]>(
-      channelKeys.activity('user').queryKey
-    )
-  ).toEqual([
-    activity('a', '2026-02-01T00:00:00Z'),
-    activity('c', '2026-01-01T00:00:00Z'),
-    activity('b', '2026-02-01T00:00:00Z'),
-  ]);
+  expect(directory.recordView).toHaveBeenCalledExactlyOnceWith(
+    'a',
+    '2026-02-01T00:00:00Z'
+  );
+});
+
+it('shows nothing when the view was recorded for an account since signed out', async () => {
+  recordChannelViewWhenIdle('a', directory);
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    id: 'someone-else',
+    authenticated: true,
+  });
+  await flushIdle();
+
+  expect(directory.recordView).not.toHaveBeenCalled();
 });

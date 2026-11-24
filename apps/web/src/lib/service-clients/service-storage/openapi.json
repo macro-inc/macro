@@ -8975,6 +8975,196 @@
         }
       }
     },
+    "/crm/companies/{company_id}/domains": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::company_domains"],
+        "summary": "Add a domain the organization uses to a company, so mail and new contacts\nfrom it are filed under this company instead of a company of its own. Any\nteam member who can see the company may add one. The company's name and\nprimary domain stay. Refused for a personal or generic email provider\n(400) and for a domain another company of the team tracks (409, naming it\nwhen the caller can see it). Returns the company without its contacts.\nIdempotent.",
+        "operationId": "add_crm_company_domain",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The company to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyDomainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmCompanyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyDomainTakenResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::company_domains"],
+        "summary": "Remove a domain from a company. Contacts, their addresses and mail stay;\nlater mail from the domain is filed as it was before the domain was\nadded. The domain the company is named after stays until the company is\nrenamed (400). Removing a domain from a company whose email sync is off\nrequires an admin or owner (403). Returns the company without its\ncontacts. Idempotent.",
+        "operationId": "remove_crm_company_domain",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The company to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyDomainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmCompanyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies/{company_id}/email-sync": {
       "put": {
         "tags": ["crm::inbound::axum_router::set_email_sync"],
@@ -30220,6 +30410,963 @@
         }
       }
     },
+    "/time/entries/{entry_id}": {
+      "delete": {
+        "tags": ["time_tracking"],
+        "summary": "Delete one's own time entry.",
+        "operationId": "delete_time_entry",
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "description": "The entry's id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskTimeTotal"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["time_tracking"],
+        "summary": "Change one's own time entry.",
+        "operationId": "update_time_entry",
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "description": "The entry's id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTimeEntryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoggedTime"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time/export": {
+      "get": {
+        "tags": ["time_tracking"],
+        "summary": "A scope's entries over a period as CSV text, oldest day first: one row\nper entry with its day, person (as an email), task, minutes, hours, note\nand source. Capped at 10,000 entries and 16 MiB; `complete` is false when\nentries were left out. May miss writes from the last few seconds.",
+        "operationId": "export_time",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Whose time to read.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TimeScopeName"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "description": "The project, with `scope=project` only.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "The first day, `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "The last day, `YYYY-MM-DD`, at most 365 days after `from`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeExport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time/summary": {
+      "get": {
+        "tags": ["time_tracking"],
+        "summary": "A scope's time over a period: the total, totals by the first grouping,\neach split by the second, and the second grouping's totals. Only tasks\nthe caller can see count, out of the Trash; a scope past 5,000 tasks is\nread to the first 5,000 and answers `complete: false`.",
+        "operationId": "get_time_summary",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Whose time to read.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TimeScopeName"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "description": "The project, with `scope=project` only.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "The first day, `YYYY-MM-DD`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "The last day, `YYYY-MM-DD`, at most 365 days after `from`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "description": "What the totals are grouped by.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TimeGrouping"
+            }
+          },
+          {
+            "name": "thenBy",
+            "in": "query",
+            "description": "What each group is split by; another grouping than `groupBy`.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TimeGrouping"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time/tasks/{task_id}/entries": {
+      "get": {
+        "tags": ["time_tracking"],
+        "summary": "List a task's time entries, newest day first, with its Time logged.",
+        "operationId": "list_time_entries",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "description": "The task document's id.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Entries per page, 1 to 200; 50 when omitted.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 200,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "cursorDate",
+            "in": "query",
+            "description": "The `date` of the previous page's `nextCursor`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "cursorId",
+            "in": "query",
+            "description": "The `id` of the previous page's `nextCursor`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeEntryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["time_tracking"],
+        "summary": "Log typed time on a task. Resending the same `id` returns the stored entry.",
+        "operationId": "log_time",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "description": "The task document's id.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogTimeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoggedTime"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time/timer": {
+      "get": {
+        "tags": ["time_tracking"],
+        "summary": "The caller's running timer, if any, and the server's clock.",
+        "operationId": "get_timer",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimerState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time/timer/discard": {
+      "post": {
+        "tags": ["time_tracking"],
+        "summary": "Discard the caller's timer; nothing is saved.",
+        "operationId": "discard_timer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscardTimerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time/timer/start": {
+      "post": {
+        "tags": ["time_tracking"],
+        "summary": "Start timing a task. A timer running on another task stops and is saved in\nthe same call, unless it ran past the limit (`timer_over_limit`).",
+        "operationId": "start_timer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartTimerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartedTimer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time/timer/stop": {
+      "post": {
+        "tags": ["time_tracking"],
+        "summary": "Stop the caller's timer and save its entry. A timer past the limit needs\n`endedAt` or `logAll`. Stopping a timer that already stopped returns its\nentry; one that was discarded returns `logged: null`.",
+        "operationId": "stop_timer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StopTimerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoppedTimer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeTrackingApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user-api-keys": {
       "get": {
         "tags": ["user-api-keys"],
@@ -36560,6 +37707,37 @@
           }
         }
       },
+      "ChannelBotParticipant": {
+        "type": "object",
+        "description": "A bot's membership in a channel, stored under the principal `bot|<id>`.",
+        "required": ["channel_id", "bot_id", "role", "joined_at"],
+        "properties": {
+          "bot_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Participant bot id."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id for the participant membership."
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the bot joined the channel."
+          },
+          "left_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Timestamp when the bot left the channel, if any."
+          },
+          "role": {
+            "$ref": "#/components/schemas/ParticipantRole",
+            "description": "Participant role in the channel."
+          }
+        }
+      },
       "ChannelCreatedMetadata": {
         "type": "object",
         "description": "Metadata for [`ChannelTopicEvent::Created`].",
@@ -36654,7 +37832,7 @@
           },
           "is_participant": {
             "type": ["boolean", "null"],
-            "description": "Filter by whether the requesting user is an active participant of the channel.\nPresence of this filter also widens the candidate set to team channels of the\nuser's teams that they have not joined, so `false` matches those channels.\nNone to ignore (participant channels only, today's default)."
+            "description": "Filter by whether the requesting user is an active participant of the channel.\nPresence of this filter also widens the candidate set to team channels of the\nuser's teams that they have not joined, so `false` matches those channels,\nand, when the filter admits only channels it names by id, to public\nchannels too. Soup listings apply the filter and its widening; channel\nsearch (`/search`) reads only the channels the user joined and ignores it.\nNone to ignore (participant channels only, today's default)."
           },
           "mentions": {
             "type": "array",
@@ -37179,7 +38357,7 @@
           },
           {
             "type": "object",
-            "description": "A channel's metadata was updated (rename).",
+            "description": "A channel's settings were patched (a rename, a team conversion, or an\nauto-join change), or the bots in it changed; the names are equal when\nit was not a rename.",
             "required": ["metadata", "event_type"],
             "properties": {
               "event_type": {
@@ -37188,7 +38366,7 @@
               },
               "metadata": {
                 "$ref": "#/components/schemas/ChannelUpdatedMetadata",
-                "description": "A channel's metadata was updated (rename)."
+                "description": "A channel's settings were patched (a rename, a team conversion, or an\nauto-join change), or the bots in it changed; the names are equal when\nit was not a rename."
               }
             }
           },
@@ -37276,7 +38454,7 @@
           },
           "channel_name": {
             "type": ["string", "null"],
-            "description": "New channel name."
+            "description": "Stored channel name after the update; equal to `previous_name` when\nthe update was not a rename."
           },
           "previous_name": {
             "type": ["string", "null"],
@@ -37315,6 +38493,13 @@
         "description": "Channel metadata together with its participants.",
         "required": ["channel", "participants"],
         "properties": {
+          "bot_participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelBotParticipant"
+            },
+            "description": "Bots that are participants in the channel."
+          },
           "channel": {
             "$ref": "#/components/schemas/Channel",
             "description": "Channel metadata."
@@ -37328,7 +38513,7 @@
             "items": {
               "$ref": "#/components/schemas/ChannelParticipant"
             },
-            "description": "Participants in the channel."
+            "description": "Participants in the channel. Bots are in `bot_participants`."
           }
         }
       },
@@ -38446,6 +39631,37 @@
           "nextCursor": {
             "type": ["string", "null"],
             "description": "Cursor for the next page; absent on the last page."
+          }
+        }
+      },
+      "CompanyDomainRequest": {
+        "type": "object",
+        "description": "One of a company's domains. It travels in the body, as a contact's\naddresses do.",
+        "required": ["domain"],
+        "properties": {
+          "domain": {
+            "type": "string",
+            "description": "A bare domain such as \"example.com\": no scheme, path or email. An\nidentical retry is accepted."
+          }
+        }
+      },
+      "CompanyDomainTakenResponse": {
+        "type": "object",
+        "description": "The 409 answer when another company of the team already tracks the domain.",
+        "required": ["message"],
+        "properties": {
+          "companyId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The company that tracks the domain. Absent when the caller cannot see\nit: an archived company, for a team member."
+          },
+          "companyName": {
+            "type": ["string", "null"],
+            "description": "That company's display name, when the caller can see it."
+          },
+          "message": {
+            "type": "string",
+            "description": "What happened, naming the other company when the caller can see it."
           }
         }
       },
@@ -41281,6 +42497,19 @@
             "description": "Recipient."
           }
         }
+      },
+      "DiscardTimerRequest": {
+        "type": "object",
+        "description": "Discard the caller's timer.",
+        "required": ["timerId"],
+        "properties": {
+          "timerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The timer to discard."
+          }
+        },
+        "additionalProperties": false
       },
       "DocumentAiEditFailed": {
         "type": "object",
@@ -45727,6 +46956,21 @@
             },
             "description": "Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default."
           },
+          "exclude_views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailSearchView"
+            },
+            "description": "Leave out the threads in these mailbox views. Search only."
+          },
+          "favorite": {
+            "type": ["boolean", "null"],
+            "description": "True for the caller's favorite threads only, false to leave them out.\nSearch only."
+          },
+          "has_attachment": {
+            "type": ["boolean", "null"],
+            "description": "True for threads with an attachment on any message, false for threads\nwith none. Search only."
+          },
           "importance": {
             "type": ["boolean", "null"],
             "description": "Filter by email importance. None to not filter. True to show only important emails\n(drafts, personal, sent, or uncategorized). False to show only unimportant emails\n(those categorized as promotions, social, updates, or forums)."
@@ -45741,6 +46985,13 @@
           "is_read": {
             "type": ["boolean", "null"],
             "description": "Filter by the email thread's read flag, independently of notification state."
+          },
+          "label_names": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailLabelMatch"
+            },
+            "description": "Tags or labels each thread must carry, or must not, by name, as typing\n`label:` or `in:<name>` into the search does. A name matches the\ncaller's tags with that label and the labels with that name in the\ncaller's inboxes, ignoring case; a name that is neither matches\nnothing. Search only."
           },
           "link_ids": {
             "type": "array",
@@ -45774,9 +47025,26 @@
             },
             "description": "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
           },
+          "sent_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Only messages sent at or after this instant. Mail with no sent time\nnever matches. Search only."
+          },
+          "sent_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Only messages sent before this instant. Mail with no sent time never\nmatches. Search only."
+          },
           "shared": {
             "$ref": "#/components/schemas/SharedEmailFilter",
             "description": "Controls whether shared email threads are included in results.\nDefaults to \"exclude\" (only the user's own threads)."
+          },
+          "text_matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailTextMatch"
+            },
+            "description": "Words or phrases each message must contain, or must not, in one part\nof it, as typing `subject:`, `from:`, `to:`, `cc:`, `bcc:` or a minus\ninto the search does. Search only."
           },
           "view": {
             "oneOf": [
@@ -46003,6 +47271,21 @@
           }
         ],
         "description": "One positive whole-thread selector; denials always take precedence."
+      },
+      "EmailLabelMatch": {
+        "type": "object",
+        "description": "A tag or provider label that an email thread must, or must not, carry,\nnamed by its label.",
+        "required": ["name"],
+        "properties": {
+          "exclude": {
+            "type": "boolean",
+            "description": "Leave out the threads that carry it instead."
+          },
+          "name": {
+            "type": "string",
+            "description": "The label of one of the caller's tags, or the name of a label in one\nof the caller's inboxes, ignoring case."
+          }
+        }
       },
       "EmailPolicyActorKind": {
         "type": "string",
@@ -46712,7 +47995,31 @@
       "EmailSearchView": {
         "type": "string",
         "description": "A mailbox view the Email list scopes a search to, as its tabs do.",
-        "enum": ["sent", "drafts"]
+        "enum": ["sent", "drafts", "calendar"]
+      },
+      "EmailTextMatch": {
+        "type": "object",
+        "description": "A word or phrase that must, or must not, appear in one part of a message.",
+        "required": ["part", "text"],
+        "properties": {
+          "exclude": {
+            "type": "boolean",
+            "description": "Leave out the messages that match instead."
+          },
+          "part": {
+            "$ref": "#/components/schemas/EmailTextPart",
+            "description": "The part of the message matched."
+          },
+          "text": {
+            "type": "string",
+            "description": "One word, matched as a search word is (a prefix unless the search is\nexact), or several words, matched as an adjacent phrase."
+          }
+        }
+      },
+      "EmailTextPart": {
+        "type": "string",
+        "description": "The part of an email message a search condition matches.",
+        "enum": ["any", "subject", "from", "to", "cc", "bcc"]
       },
       "EmptyResponse": {
         "type": "object",
@@ -53135,6 +54442,11 @@
             "format": "uuid",
             "description": "Priority option id, or unset."
           },
+          "startDate": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Start timestamp, or unset."
+          },
           "status": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -53950,6 +55262,62 @@
           }
         ],
         "description": "Location response with content lifecycle metadata."
+      },
+      "LogTimeRequest": {
+        "type": "object",
+        "description": "Typed time to log on a task.",
+        "required": ["date", "minutes"],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The logger's calendar day for the work, `YYYY-MM-DD`."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the work ended, after `startedAt`."
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "A UUIDv7 chosen by the client, so a retry logs once; generated when omitted."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Length in whole minutes, 1 to 1440.",
+            "maximum": 1440,
+            "minimum": 1
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "What the time was spent on, up to 2000 characters."
+          },
+          "startedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the work started; given with `endedAt` or not at all."
+          }
+        },
+        "additionalProperties": false
+      },
+      "LoggedTime": {
+        "type": "object",
+        "description": "An entry and its task's Time logged after the write that returned it.",
+        "required": ["entry", "totalMinutes"],
+        "properties": {
+          "entry": {
+            "$ref": "#/components/schemas/TimeEntry",
+            "description": "The entry as stored."
+          },
+          "totalMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The task's Time logged, in minutes.",
+            "minimum": 0
+          }
+        }
       },
       "MacroUserIdStr": {
         "type": "string"
@@ -59995,9 +61363,13 @@
           },
           {
             "type": "object",
-            "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}",
+            "description": "Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set",
             "required": ["value", "type"],
             "properties": {
+              "has_time": {
+                "type": "boolean",
+                "description": "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+              },
               "type": {
                 "type": "string",
                 "enum": ["Date"]
@@ -60005,7 +61377,7 @@
               "value": {
                 "type": "string",
                 "format": "date-time",
-                "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}"
+                "description": "Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set"
               }
             }
           },
@@ -61162,6 +62534,27 @@
         },
         "additionalProperties": false
       },
+      "RunningTimer": {
+        "type": "object",
+        "description": "A person's running timer.",
+        "required": ["id", "taskId", "startedAt"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The timer's id, kept by the entry it becomes."
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it started, by the server's clock."
+          },
+          "taskId": {
+            "type": "string",
+            "description": "The task being timed."
+          }
+        }
+      },
       "S3ObjectInfo": {
         "type": "object",
         "required": ["bucket", "key"],
@@ -61854,9 +63247,12 @@
           },
           {
             "type": "object",
-            "description": "Date and time value",
+            "description": "Date value. `has_time: true` makes it an exact instant; `false` or no\nflag makes it a whole day, shown as the day its instant falls on in the\nviewer's time zone.",
             "required": ["value", "type"],
             "properties": {
+              "has_time": {
+                "type": "boolean"
+              },
               "type": {
                 "type": "string",
                 "enum": ["date"]
@@ -66333,6 +67729,54 @@
         },
         "additionalProperties": false
       },
+      "StartTimerRequest": {
+        "type": "object",
+        "description": "Start timing a task.",
+        "required": ["taskId"],
+        "properties": {
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "A UUIDv7 chosen by the client, so a retry starts once; generated when omitted."
+          },
+          "startedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "An earlier start within the last 24 hours; only Undo on a switch sends it."
+          },
+          "taskId": {
+            "type": "string",
+            "description": "The task to time."
+          },
+          "timeZone": {
+            "type": ["string", "null"],
+            "description": "IANA zone whose day a stopped previous timer's entry takes; UTC when omitted."
+          }
+        },
+        "additionalProperties": false
+      },
+      "StartedTimer": {
+        "type": "object",
+        "description": "A started timer, and the entry saved for the timer it replaced.",
+        "required": ["timer"],
+        "properties": {
+          "stopped": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LoggedTime",
+                "description": "The previous timer's saved entry, when starting stopped one."
+              }
+            ]
+          },
+          "timer": {
+            "$ref": "#/components/schemas/RunningTimer",
+            "description": "The timer now running."
+          }
+        }
+      },
       "StarterDatabase": {
         "type": "object",
         "description": "Starter result. A missing database means the user already started or removed it.",
@@ -66364,6 +67808,49 @@
           "how_to_guide_id": {
             "type": "string",
             "description": "Id of the user's \"Macro how to guide\"."
+          }
+        }
+      },
+      "StopTimerRequest": {
+        "type": "object",
+        "description": "Stop the caller's timer.",
+        "required": ["timerId"],
+        "properties": {
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the person stopped working, for a timer past the limit."
+          },
+          "logAll": {
+            "type": "boolean",
+            "description": "Log all the time until now, for a timer past the limit."
+          },
+          "timeZone": {
+            "type": ["string", "null"],
+            "description": "IANA zone whose calendar day the entry takes; UTC when omitted."
+          },
+          "timerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The timer to stop."
+          }
+        },
+        "additionalProperties": false
+      },
+      "StoppedTimer": {
+        "type": "object",
+        "description": "The entry a stop saved, or none when the timer was discarded.",
+        "properties": {
+          "logged": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LoggedTime",
+                "description": "The saved entry and its task's Time logged."
+              }
+            ]
           }
         }
       },
@@ -67317,6 +68804,19 @@
         },
         "additionalProperties": false
       },
+      "TaskTimeTotal": {
+        "type": "object",
+        "description": "A task's Time logged.",
+        "required": ["totalMinutes"],
+        "properties": {
+          "totalMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The task's Time logged, in minutes.",
+            "minimum": 0
+          }
+        }
+      },
       "TeamAvailability": {
         "type": "object",
         "description": "Availability for exactly the members selected by the domain service.",
@@ -67922,6 +69422,357 @@
           }
         }
       },
+      "TimeEntry": {
+        "type": "object",
+        "description": "Time a person logged on a task.",
+        "required": [
+          "id",
+          "taskId",
+          "userId",
+          "date",
+          "minutes",
+          "source",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was logged."
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The logger's own calendar day for the work."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the work ended, given exactly when `started_at` is."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The entry's id; a timer's entry keeps the timer's id."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Length in whole minutes; the truth even when a start and end are given.",
+            "minimum": 0
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "What the time was spent on."
+          },
+          "source": {
+            "$ref": "#/components/schemas/TimeEntrySource",
+            "description": "How the entry was made."
+          },
+          "startedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the work started, if known."
+          },
+          "taskId": {
+            "type": "string",
+            "description": "The task document the time was spent on."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it last changed."
+          },
+          "userId": {
+            "type": "string",
+            "description": "Who logged it."
+          }
+        }
+      },
+      "TimeEntryCursor": {
+        "type": "object",
+        "description": "Where a page of entries continues: after this day and id, newest first.",
+        "required": ["date", "id"],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The day of the last entry returned."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the last entry returned."
+          }
+        }
+      },
+      "TimeEntryPage": {
+        "type": "object",
+        "description": "A task's entries, newest day first, with its Time logged.",
+        "required": ["entries", "totalMinutes"],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeEntry"
+            },
+            "description": "Entries of this page."
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TimeEntryCursor",
+                "description": "Where the next page starts; absent on the last page."
+              }
+            ]
+          },
+          "totalMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The task's Time logged, in minutes.",
+            "minimum": 0
+          }
+        }
+      },
+      "TimeEntrySource": {
+        "type": "string",
+        "description": "How a time entry was made.",
+        "enum": ["manual", "timer"]
+      },
+      "TimeExport": {
+        "type": "object",
+        "description": "A scope's entries over a period as CSV text.",
+        "required": ["csv", "rows", "complete"],
+        "properties": {
+          "complete": {
+            "type": "boolean",
+            "description": "False when entries were left out: past 10,000 entries or 16 MiB, or\npast the first 5,000 tasks of the scope."
+          },
+          "csv": {
+            "type": "string",
+            "description": "The CSV: one row per entry, oldest day first."
+          },
+          "rows": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Entries written.",
+            "minimum": 0
+          }
+        }
+      },
+      "TimeGroup": {
+        "type": "object",
+        "description": "The total of one group, and its split by the second grouping.",
+        "required": ["key", "minutes", "taskCount", "rows"],
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/TimeGroupKey",
+            "description": "What the group is for."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes logged in the group.",
+            "minimum": 0
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeTotal"
+            },
+            "description": "The group's totals by the second grouping, in report order; empty\nwithout one."
+          },
+          "taskCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tasks with time in the group.",
+            "minimum": 0
+          }
+        }
+      },
+      "TimeGroupKey": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "One person's time.",
+            "required": ["userId", "by"],
+            "properties": {
+              "by": {
+                "type": "string",
+                "enum": ["person"]
+              },
+              "userId": {
+                "type": "string",
+                "description": "The person."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The time on one task.",
+            "required": ["taskId", "by"],
+            "properties": {
+              "by": {
+                "type": "string",
+                "enum": ["task"]
+              },
+              "taskId": {
+                "type": "string",
+                "description": "The task document."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The time logged for one day.",
+            "required": ["date", "by"],
+            "properties": {
+              "by": {
+                "type": "string",
+                "enum": ["day"]
+              },
+              "date": {
+                "type": "string",
+                "format": "date",
+                "description": "The loggers' calendar day."
+              }
+            }
+          }
+        ],
+        "description": "What one total is for."
+      },
+      "TimeGrouping": {
+        "type": "string",
+        "description": "What a report's totals are grouped by.",
+        "enum": ["person", "task", "day"]
+      },
+      "TimeScopeName": {
+        "type": "string",
+        "description": "Whose time a report reads.",
+        "enum": ["project", "mine", "team"]
+      },
+      "TimeSummary": {
+        "type": "object",
+        "description": "The time a scope logged over a period.",
+        "required": [
+          "from",
+          "to",
+          "totalMinutes",
+          "taskCount",
+          "complete",
+          "groups",
+          "thenTotals"
+        ],
+        "properties": {
+          "complete": {
+            "type": "boolean",
+            "description": "False when the scope held more than 5,000 tasks and only the first\n5,000 were read."
+          },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "description": "The first day of the period."
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeGroup"
+            },
+            "description": "Totals by the first grouping, in report order: days in calendar order,\npeople and tasks with the most time first. For the caller's own and\ntheir team's time grouped by person, every current member has a group,\nwith or without time."
+          },
+          "scopeTaskCount": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "For a project, its tasks the caller can see that are out of the\nTrash, with time or not; absent for other scopes.",
+            "minimum": 0
+          },
+          "taskCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tasks with time in the period.",
+            "minimum": 0
+          },
+          "thenTotals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimeTotal"
+            },
+            "description": "Totals by the second grouping across all groups, in report order;\nempty without one."
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "description": "The last day of the period."
+          },
+          "totalMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes logged in the period.",
+            "minimum": 0
+          }
+        }
+      },
+      "TimeTotal": {
+        "type": "object",
+        "description": "A total of minutes.",
+        "required": ["key", "minutes"],
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/TimeGroupKey",
+            "description": "What the total is for."
+          },
+          "minutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minutes logged.",
+            "minimum": 0
+          }
+        }
+      },
+      "TimeTrackingApiError": {
+        "type": "object",
+        "description": "Error body of the time tracking endpoints.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/TimeTrackingErrorCode",
+            "description": "Machine-readable failure category."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable failure description."
+          },
+          "timer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunningTimer",
+                "description": "The timer that ran past the limit, with `timer_over_limit`."
+              }
+            ]
+          }
+        }
+      },
+      "TimeTrackingErrorCode": {
+        "type": "string",
+        "description": "Machine-readable reason a time tracking request failed.",
+        "enum": [
+          "not_found",
+          "forbidden",
+          "not_author",
+          "invalid_input",
+          "timer_over_limit",
+          "conflict",
+          "unavailable",
+          "internal"
+        ]
+      },
       "TimelineActivity": {
         "type": "object",
         "description": "A displayable fact returned together with a message page.",
@@ -67947,6 +69798,29 @@
           },
           "payload": {
             "description": "The action's stored payload."
+          }
+        }
+      },
+      "TimerState": {
+        "type": "object",
+        "description": "The caller's timer, if any, and the server's clock to count it from.",
+        "required": ["serverNow"],
+        "properties": {
+          "serverNow": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The server's current time."
+          },
+          "timer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunningTimer",
+                "description": "The running timer."
+              }
+            ]
           }
         }
       },
@@ -68800,6 +70674,39 @@
             "type": "integer",
             "format": "int64",
             "description": "Revision observed when editing began."
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateTimeEntryRequest": {
+        "type": "object",
+        "description": "Changes to one's own entry. Omitted fields stay; `null` clears a note or span.",
+        "properties": {
+          "date": {
+            "type": ["string", "null"],
+            "format": "date",
+            "description": "A new day, `YYYY-MM-DD`."
+          },
+          "endedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "A new end, or `null` to clear the span; changed with `startedAt`."
+          },
+          "minutes": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "A new length in whole minutes, 1 to 1440.",
+            "maximum": 1440,
+            "minimum": 1
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "A new note, or `null` for none."
+          },
+          "startedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "A new start, or `null` to clear the span; changed with `endedAt`."
           }
         },
         "additionalProperties": false

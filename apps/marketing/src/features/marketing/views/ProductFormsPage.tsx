@@ -1,23 +1,9 @@
-import CheckIcon from '@icon/system/regular/check.svg';
-import DatabaseIcon from '@icon/system/regular/database.svg';
-import LinkIcon from '@icon/system/regular/link.svg';
-import FormIcon from '@phosphor/clipboard-text.svg';
-import { For } from 'solid-js';
 import { setPageSeo } from '../../../app/utils/utilSeo';
-import { FeatureDemoBackdrop } from '../components/FeatureDemoBackdrop';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
-import { FormBookingGraphic } from '../components/forms/FormBookingGraphic';
+import { FeaturePhoneScreens } from '../components/FeatureScreenshot';
 import { HomepageClosing } from '../components/HomepageClosing';
-import { HomepageConversation } from '../components/HomepageConversation';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
-import '../components/forms/form-stories.css';
-
-const questions = ['Name', 'Company', 'Team size'];
-const responses = [
-  ['Dana', 'Northpeak', '40'],
-  ['Priya', 'Fieldnote', '12'],
-  ['Noah', 'Tidewater', '8'],
-];
+import { featureScreens, phoneScreens } from '../core/feature-screens';
 
 export default function ProductFormsPage() {
   setPageSeo({
@@ -40,150 +26,27 @@ export default function ProductFormsPage() {
           id="forms-databases"
           title="Forms populate Macro Databases."
           description="Each question is a column, and every response is a row. Responses appear as they come in. Open the database to sort, filter, and work with the answers."
-        >
-          <div
-            class="forms-story forms-story-responses"
-            role="img"
-            aria-label="A demo-request form with Name, Company, and Team size questions. Submitted answers appear as rows in its connected database."
-          >
-            <FeatureDemoBackdrop />
-            <div class="forms-card forms-question-card">
-              <div class="forms-card-label">
-                <FormIcon /> Book a demo
-              </div>
-              <h3>Tell us about your team.</h3>
-              <For each={questions}>
-                {(question) => (
-                  <div class="forms-question">
-                    <span>{question}</span>
-                    <div class="forms-answer">
-                      {question === 'Team size'
-                        ? '12'
-                        : question === 'Name'
-                          ? 'Priya'
-                          : 'Fieldnote'}
-                    </div>
-                  </div>
-                )}
-              </For>
-              <span class="forms-submit">Submit</span>
-            </div>
-            <div class="forms-card forms-response-card">
-              <div class="forms-card-label">
-                <DatabaseIcon /> Demo requests <span>3 responses</span>
-              </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Company</th>
-                    <th>Team size</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <For each={responses}>
-                    {(row) => (
-                      <tr>
-                        <For each={row}>{(cell) => <td>{cell}</td>}</For>
-                      </tr>
-                    )}
-                  </For>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </FeaturePageSection>
+          screen={featureScreens['forms-databases']}
+        />
         <FeaturePageSection
           id="forms-booking"
           title="Integrated with Macro Booking Links."
           description="Add a gate to qualify requests, then a booking link as the last step. People who pass the gate can choose a time after their response is saved."
-        >
-          <FormBookingGraphic />
-        </FeaturePageSection>
+          screen={featureScreens['forms-booking']}
+        />
         <FeaturePageSection
           id="forms-agents"
           title="Create forms with Macro Agents."
           description="Describe the questions, qualification rules, and booking link you need. Your agent can create the form and edit it as your needs change."
-        >
-          <div
-            class="forms-story forms-story-agent"
-            role="img"
-            aria-label="Julia asks Macro to create a demo-request form with three questions, a minimum team size of five, and a product-demo booking link."
-          >
-            <FeatureDemoBackdrop />
-            <div class="forms-conversation" inert aria-hidden="true">
-              <HomepageConversation
-                messages={[
-                  {
-                    person: 'julia',
-                    text: (
-                      <>
-                        <span class="forms-mention">@Macro</span> make a
-                        demo-request form. Ask for name, company, and team size.
-                        Teams of 5 or more can book our product demo.
-                      </>
-                    ),
-                  },
-                ]}
-              />
-            </div>
-            <div class="forms-card forms-agent-card">
-              <div class="forms-card-label">
-                <FormIcon /> Book a demo <span>Draft</span>
-              </div>
-              <For each={questions}>
-                {(question) => (
-                  <div class="forms-draft-row">
-                    <CheckIcon />
-                    {question}
-                  </div>
-                )}
-              </For>
-              <div class="forms-draft-row">
-                <CheckIcon />
-                Team size is at least 5
-              </div>
-              <div class="forms-draft-row">
-                <LinkIcon />
-                Product demo · 30 min
-              </div>
-              <p>Ready to review and share.</p>
-            </div>
-          </div>
-        </FeaturePageSection>
+          screen={featureScreens['forms-agents']}
+        />
         <FeaturePageSection
           id="forms-sharing"
           title="Share a form with your own branding."
           description="Add your logo and accent color. Share with specific people or a channel in Macro Chat, or let anyone with the link respond without signing in."
-        >
-          <div
-            class="forms-story forms-story-sharing"
-            role="img"
-            aria-label="Form settings show a custom logo, a coral accent color, and two audience options: invited people or anyone with the link."
-          >
-            <FeatureDemoBackdrop />
-            <div class="forms-card forms-settings-card">
-              <div class="forms-card-label">
-                <FormIcon /> Form settings
-              </div>
-              <h3>Make it yours.</h3>
-              <div class="forms-branding">
-                <span class="forms-example-logo">N</span>
-                <div>
-                  Northpeak<small>Logo</small>
-                </div>
-                <span class="forms-color-chip" /> <span>#E98276</span>
-              </div>
-              <div class="forms-audience">
-                <span>Who can respond</span>
-                <span>Invited people</span>
-                <span class="forms-selected">
-                  <CheckIcon /> Anyone with the link
-                </span>
-              </div>
-            </div>
-          </div>
-        </FeaturePageSection>
+          screen={featureScreens['forms-sharing']}
+        />
+        <FeaturePhoneScreens screens={phoneScreens['forms']} product="Forms" />
         <FeaturePageFaq
           id="forms-questions"
           title="Questions about forms"

@@ -12,6 +12,8 @@ import {
 } from '@queries/soup/items';
 import { createMemo } from 'solid-js';
 
+const STALE_TIME = 5 * 60 * 1000;
+
 /**
  * Initiatives only, recently opened first. Initiatives are opt-in server-side
  * and have no filter field, so the include literal is written directly.
@@ -34,7 +36,7 @@ export const QUICK_ACCESS_INITIATIVES_ARGS: SoupAstItemsQueryArgs = {
 export function useQuickAccessInitiativesQuery() {
   const query = useSoupAstItemsQuery(
     () => QUICK_ACCESS_INITIATIVES_ARGS,
-    () => QUICK_ACCESS_FEED_OPTIONS
+    () => ({ ...QUICK_ACCESS_FEED_OPTIONS, staleTime: STALE_TIME })
   );
 
   const initiatives = createMemo<InitiativeEntity[]>(() =>

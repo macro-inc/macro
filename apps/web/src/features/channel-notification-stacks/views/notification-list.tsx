@@ -22,7 +22,7 @@ import {
 
 /** The gutter the toggle needs: itself plus its inset from the pane's edge. */
 const TOGGLE_MIN_GUTTER = 72;
-/** The gutter a docked list needs to keep its labels to two or three lines. */
+/** The gutter a docked list needs to fit most labels in their two lines. */
 const DOCKED_MIN_GUTTER = 240;
 /** The list's inset from the pane's left edge. */
 const EDGE_INSET = 12;

@@ -12,6 +12,7 @@ import {
 import { isDocumentEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import {
+  QUICK_ACCESS_FEED_OPTIONS,
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
@@ -23,6 +24,8 @@ import type {
   FigLibrarySource,
 } from '../context/fig-libraries';
 
+const STALE_TIME = 60 * 1000;
+
 /** Fig designs only, recently opened first. */
 export const FIG_LIBRARY_DESIGNS_ARGS: SoupAstItemsQueryArgs = {
   params: { limit: 200, sort_method: 'viewed_updated' },
@@ -33,7 +36,10 @@ export const FIG_LIBRARY_DESIGNS_ARGS: SoupAstItemsQueryArgs = {
 
 /** The designs `documentId`'s file may use as libraries. */
 export function useFigLibrarySource(documentId: string): FigLibrarySource {
-  const query = useSoupAstItemsQuery(() => FIG_LIBRARY_DESIGNS_ARGS);
+  const query = useSoupAstItemsQuery(
+    () => FIG_LIBRARY_DESIGNS_ARGS,
+    () => ({ ...QUICK_ACCESS_FEED_OPTIONS, staleTime: STALE_TIME })
+  );
   const documents = createMemo<FigLibraryDocument[] | undefined>(() => {
     if (!queryReadyGate(query)) return undefined;
     return query.data.entities

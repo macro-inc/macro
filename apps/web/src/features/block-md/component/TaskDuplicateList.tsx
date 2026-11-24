@@ -78,7 +78,11 @@ function SimilarTasksInner(props: {
     () => taskDuplicatesArgs(ids()),
     // Keep the shown matches while the next ids load, so the section never
     // collapses between keystrokes.
-    () => ({ enabled: ids().length > 0, keepPreviousData: true })
+    () => ({
+      enabled: ids().length > 0,
+      keepPreviousData: true,
+      staleTime: 30 * 1000,
+    })
   );
 
   // A page and the ranking it was read for. A page takes the current ranking

@@ -29,7 +29,11 @@ export function usePropertySelection(
         // generic property pickers.
         property.valueType !== 'TAG' &&
         // Entity panels show Project separately; explicit draft catalogs can include it.
-        (property.id !== SYSTEM_PROPERTY_IDS.PROJECT || includeProject())
+        (property.id !== SYSTEM_PROPERTY_IDS.PROJECT || includeProject()) &&
+        // Start Date is set through the due date's picker and its own row.
+        property.id !== SYSTEM_PROPERTY_IDS.START_DATE &&
+        // Time logged is the sum of a task's time entries, never set by hand.
+        property.id !== SYSTEM_PROPERTY_IDS.TIME_LOGGED
     );
 
     // Then apply search filter

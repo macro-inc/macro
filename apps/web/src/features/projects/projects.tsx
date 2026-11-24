@@ -16,6 +16,7 @@ import {
 import {
   enableEntityAppearance,
   enableGantt,
+  enableTaskStartDate,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -41,6 +42,7 @@ import {
 import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import { useProjectSavedViews } from './context/project-saved-views-context';
 import {
+  type ProjectsContext,
   ProjectsProvider,
   useProjectsContext,
 } from './context/projects-context';
@@ -57,14 +59,18 @@ import { ProjectAssignment } from './views/project-assignment';
 import { ProjectsCollection } from './views/projects-collection';
 
 /** The production capabilities, for hosts outside the Projects view. */
-export function createProjectsContext() {
+export function createProjectsContext(): ProjectsContext {
   const userId = useUserId();
-  return createProjectSources(
-    initiativeClient,
-    { client: getGraphqlSoupClient, cacheHost: getGraphqlSoupCacheHost },
-    queryClient,
-    userId
-  );
+  const startDates = useFeatureFlag(enableTaskStartDate);
+  return {
+    ...createProjectSources(
+      initiativeClient,
+      { client: getGraphqlSoupClient, cacheHost: getGraphqlSoupCacheHost },
+      queryClient,
+      userId
+    ),
+    startDatesEnabled: () => startDates().enabled,
+  };
 }
 
 export function Projects(props: ParentProps) {
