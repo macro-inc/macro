@@ -26,7 +26,13 @@ function ReportPerson(props: { userId: string }): JSX.Element {
   const name = () => getDisplayName(tryMacroId(props.userId));
   return (
     <span class="flex min-w-0 items-center gap-2">
-      <UserIcon id={props.userId} name={name()} size="sm" suppressClick />
+      <UserIcon
+        id={props.userId}
+        name={name()}
+        size="sm"
+        suppressClick
+        showTooltip={false}
+      />
       <span class="truncate">{name()}</span>
     </span>
   );
