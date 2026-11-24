@@ -449,7 +449,10 @@ function ScrollSheetFrame(
           // Closing hands taps to the page; a closed forced-mounted sheet
           // takes no room at all.
           phase() === 'closing' && 'pointer-events-none',
-          phase() === 'closed' && 'hidden'
+          phase() === 'closed' && 'hidden',
+          // Session-replay masking belongs to the whole dialog, as it did
+          // when the sheet was the dialog element itself.
+          local.class?.split(/\s+/).includes('ph-no-capture') && 'ph-no-capture'
         )}
       >
         <Show when={sheet.scrim()}>
