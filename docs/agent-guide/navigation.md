@@ -1195,8 +1195,7 @@ Reviews and Scheduling can be moved into the dock when enabled. Scheduling
 opens `/app/scheduling`, highlights while active, and uses header islands for its
 section and Personal/team owner drawers; it does not add a search-scope pill.
 
-Dock navigation, Search, filter pills, and create-menu taps do not trigger
-haptics. Buttons activate on click/release. Holding a button only shows its
+No dock, Search, filter pill, or create-menu tap triggers haptics. Buttons activate on click/release. Holding a button only shows its
 pressed state; cancelling the touch does not navigate. More views also opens on
 release so holding its trigger cannot drag or dismiss the opening sheet. Mouse,
 keyboard, and assistive activation use the normal click behavior.
@@ -1298,21 +1297,13 @@ Project opens the native project composer; Folder remains the Files folder actio
 
 ## Mobile glass feedback
 
-In the native iOS app, glass presses animate the enclosing surface over 300ms.
-Round buttons grow by 28%; horizontal and vertical pills and grouped controls
-extend their glass fill and rim by up to 6px per edge, with 18% icon growth around
-each icon's center. The Duo navigation pill keeps this bounded expansion when tall.
-Labels and layout stay fixed; icons remain visually aligned through release.
-Selecting or deselecting a pill updates its fill and text together, including
-during release or a rapid second tap. The fill changes with a radial spotlight
-centered on the touch, brightening the surface in both light and dark themes.
-The spotlight follows the finger while it moves within the surface, updating
-at most once per animation frame.
-These iOS surfaces omit the native tap highlight; the spotlight supplies feedback.
-Release, cancellation, dragging outside, or losing window focus restores the
-surface. Disabled controls stay still; reduced motion keeps only the static
-color feedback. Android and web keep normal tap feedback without this expansion
-or spotlight.
+Glass buttons, inputs, the dock, and header islands look and respond the same
+in the iOS app, the Android app, and a mobile browser. Their edge is an even 1px
+hairline with no bevel or highlight, and a press shows the normal tap feedback:
+surfaces do not grow, spotlight, or trigger haptics. In dark mode the dock,
+header islands, pills, and composers are 88% opaque over a backdrop blur, so
+content scrolling beneath them shows through softly; light mode keeps them
+opaque.
 
 ## Routines
 

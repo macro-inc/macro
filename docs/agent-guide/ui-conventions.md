@@ -222,10 +222,9 @@ and navigation lists use a linear 32px top fade as content scrolls
 beneath the header. The fade grows with the scroll
 offset and clears at the top; it does not blur content or change mobile fades.
 
-On touch, glass rims stay highlighted around most of the perimeter, with short soft gaps
-at the top-right and bottom-left corners. Light themes keep a soft highlight
-through those corners so they are only slightly dimmer. The iOS app also uses shared
-[glass press feedback](navigation.md#mobile-glass-feedback).
+On touch, glass surfaces draw an even 1px hairline edge with no highlight or
+bevel, and dark mode shows the content behind floating chrome through a blur
+(see [mobile glass feedback](navigation.md#mobile-glass-feedback)).
 
 ## Selection controls
 

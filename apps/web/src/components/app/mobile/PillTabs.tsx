@@ -124,7 +124,9 @@ export function PillButton(
       class={cn(
         PILL_CLASS,
         local.iconOnly && ICON_PILL_CLASS,
-        local.active ? 'bg-ink text-surface' : 'bg-chrome text-ink-extra-muted',
+        local.active
+          ? 'bg-ink text-surface'
+          : 'bg-chrome-glass text-ink-extra-muted',
         local.class
       )}
       {...rest}

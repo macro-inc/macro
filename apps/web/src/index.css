@@ -245,6 +245,9 @@ body.tauri-ios {
   --color-dialog: var(--color-surface-2);
   --color-menu: var(--color-surface-2);
   --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
+  /* Floating touch chrome (dock, header islands, composers): translucent over
+     its backdrop blur in dark mode, opaque wherever there is no blur. */
+  --color-chrome-glass: color-mix(in oklch, var(--color-chrome) var(--raised-glass-alpha, 100%), transparent);
   --color-tooltip: var(--color-surface-2);
   --color-toast: var(--color-surface-2);
   --color-input: transparent;
@@ -435,6 +438,9 @@ body.tauri-ios {
   /* Touch surfaces keep their translucent fill; desktop overrides it below
      while retaining the shared glass rim and shadow. */
   --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
+  /* Floating touch chrome (dock, header islands, composers): translucent over
+     its backdrop blur in dark mode, opaque wherever there is no blur. */
+  --color-chrome-glass: color-mix(in oklch, var(--color-chrome) var(--raised-glass-alpha, 100%), transparent);
   --color-tooltip: var(--color-surface-2);
   --color-toast: var(--color-surface-2);
   --color-input: transparent;
@@ -751,24 +757,18 @@ body.tauri-ios {
     /* Colors and strengths stay here; utilities own blur, dimensions, and
        --glass-scale so control sizes share the same material. */
     --glass-tint: var(--color-content-1);
-    --glass-press-tint: var(--color-content-1);
     --glass-shade-color: var(--color-surface-0);
     --glass-shadow-alpha: 0.55;
     --glass-highlight-base: 6%;
     --glass-shade-base: 40%;
-    --glass-rim-strong-base: 13.5%;
-    --glass-rim-soft-base: 9%;
-    --glass-rim-shade-base: 0%;
-    --glass-rim-gap-ratio: 0;
+    /* Dark touch chrome lets the blurred content behind it show through. */
+    --raised-glass-alpha: 88%;
     --glass-desktop-outline: rgb(0 0 0 / 0.4);
     --glass-desktop-inner-edge: rgb(255 255 255 / 0.08);
     --glass-desktop-top-edge: rgb(255 255 255 / 0.12);
     /* Dark desktop glass separates by its outline; light adds a cast shadow. */
     --glass-desktop-cast-alpha: 0;
     --elevated-control-scale: 0.4;
-    /* Mobile chrome has two diagonal reflections with quiet opposing corners. */
-    --island-rim-strong: 28%;
-    --island-rim-soft: 12%;
   }
 
   /* Preserve the darker thread rail only on an explicitly dark document. */
@@ -814,17 +814,11 @@ body.tauri-ios {
   /* Light document glass keeps its existing root-only scope. */
   &:is(html) {
     --glass-tint: white;
-    --glass-press-tint: white;
     --glass-shade-color: var(--color-content-0);
     --glass-shadow-alpha: 0.28;
     --glass-highlight-base: 55%;
     --glass-shade-base: 8%;
-    --glass-rim-strong-base: 52.5%;
-    --glass-rim-soft-base: 30%;
-    /* A faint ink rim keeps white reflections legible on pale surfaces. */
-    --glass-rim-shade-base: 7%;
-    /* Keep quiet corners close to the highlight instead of exposing a dark rim. */
-    --glass-rim-gap-ratio: 0.85;
+    --raised-glass-alpha: 100%;
     --glass-desktop-outline: var(--color-edge-frame);
     --glass-desktop-inner-edge: rgb(255 255 255 / 0.6);
     --glass-desktop-top-edge: rgb(255 255 255 / 0.9);
@@ -832,8 +826,6 @@ body.tauri-ios {
        shadow, and give controls a full 1px edge like a bordered input. */
     --glass-desktop-cast-alpha: var(--glass-shadow-alpha);
     --elevated-control-scale: 1;
-    --island-rim-strong: 75%;
-    --island-rim-soft: 40%;
 
     &:not([data-touch-device='true']) {
       --color-control-raised: color-mix(in oklch, var(--color-surface-2) 98%, var(--color-content-0));
@@ -908,6 +900,7 @@ html[data-touch-device='true'] {
 html:not([data-touch-device="true"]),
 html:not([data-touch-device="true"]) [data-invert] {
   --color-menu-glass: var(--color-menu);
+  --raised-glass-alpha: 100%;
 }
 
 @custom-variant mobile {
@@ -946,8 +939,8 @@ html:not([data-touch-device='true']) {
    utility so it composes with variants — `mobile:island` — instead of
    hand-prefixing each part. */
 @utility island {
-  /* Both themes share the diagonal rim; light mode keeps a soft cast shadow. */
-  @apply min-h-[40px] min-w-[40px] bg-chrome text-ink glass light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
+  /* Both themes share the flat glass edge; light mode keeps a soft cast shadow. */
+  @apply min-h-[40px] min-w-[40px] bg-chrome-glass text-ink glass light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
 
   --glass-blur: 18px;
   --glass-saturate: 1.5;
@@ -957,38 +950,19 @@ html:not([data-touch-device='true']) {
     --glass-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow),
       var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
-
-  /* Keep a bright rim around most of the shape, with short soft gaps at the
-     top-right and bottom-left, including wide pills. Glass owns the mask. */
-  --glass-rim-background: linear-gradient(
-    to bottom right,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 0%,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 42%,
-    color-mix(in oklch, var(--glass-tint) calc(var(--island-rim-soft) * var(--glass-rim-gap-ratio)), transparent) 49%,
-    color-mix(in oklch, var(--glass-tint) calc(var(--island-rim-soft) * var(--glass-rim-gap-ratio)), transparent) 51%,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 58%,
-    color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 100%
-  );
 }
 
-/* Glass chrome: backdrop blur, a soft cast shadow, and a specular rim drawn as a 1px
-   gradient masked to the border box (a plain `border` can't fade along its
-   length). Shape and background come from the consumer, so this composes with
-   any radius — the rim inherits it — and with variants (`mobile:glass`).
+/* Glass chrome: backdrop blur, a soft cast shadow, and a flat 1px rim masked
+   to the border box. Shape and background come from the consumer, so this
+   composes with any radius — the rim inherits it — and with variants
+   (`mobile:glass`).
 
    Desktop surfaces use a fine dark outline, a faint inner edge, and a brighter
-   top edge with the small ambient shadow. Touch keeps its specular treatment.
-   Consumers can override the rim without owning its pseudo-element. */
+   top edge with the small ambient shadow. Touch stays flat, as in a mobile
+   browser: an even hairline and no bevel. Consumers can override the rim
+   without owning its pseudo-element. */
 @utility glass {
-  --glass-rim-background: linear-gradient(
-    to bottom right,
-    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-strong-base) * var(--glass-scale)), transparent) 0%,
-    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale)), transparent) 42%,
-    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale) * var(--glass-rim-gap-ratio)), transparent) 49%,
-    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale) * var(--glass-rim-gap-ratio)), transparent) 51%,
-    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale)), transparent) 58%,
-    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale)), transparent) 100%
-  );
+  --glass-rim-background: var(--color-edge-frame);
   position: relative;
   /* The masked rim owns the outer edge. Even a transparent border would
      inset the absolute pseudo-element by a pixel. Override Surface inline
@@ -1020,7 +994,6 @@ html:not([data-touch-device='true']) {
     border-radius: inherit;
     padding: 1px;
     background: var(--glass-rim-background);
-    background-color: color-mix(in oklch, var(--glass-shade-color) calc(var(--glass-rim-shade-base) * var(--glass-scale)), transparent);
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
@@ -1047,7 +1020,6 @@ html:not([data-touch-device='true']) {
         oklch(0 0 0 / calc(var(--glass-desktop-cast-alpha) * var(--glass-shadow-scale, var(--glass-scale))));
     --glass-backdrop: none;
     --glass-rim-background: none;
-    --glass-rim-shade-base: 0%;
     --glass-shadow: var(--shadow-elevated);
   }
 }
@@ -1196,141 +1168,6 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
 @utility avatar-edge {
   outline: 1px solid var(--color-avatar-edge);
   outline-offset: -1px;
-}
-
-/* Background utilities supply the same live color to the host and its glass
-   layer. Keep arbitrary colors typed (bg-[color:...] / bg-(color:...)); an
-   inline glass fill uses --glass-fill. Unrelated backgrounds render normally. */
-@utility bg-* {
-  --glass-fill: --value(--color-*, [color], "transparent");
-  --glass-fill: color-mix(in oklab, --value(--color-*, [color]) calc(--modifier(number) * 1%), transparent);
-  --glass-fill: color-mix(in oklab, --value(--color-*, [color]) calc(--modifier([number]) * 100%), transparent);
-  --glass-fill: color-mix(in oklab, --value(--color-*, [color]) --modifier([percentage]), transparent);
-}
-
-@utility bg-current {
-  --glass-fill: currentColor;
-}
-
-@utility bg-inherit {
-  --glass-fill: inherit;
-}
-
-/* Each control owns its fill; pseudo-elements inherit it normally. */
-@layer base {
-  :is(button, a, [role='button'], [role='tab'], [data-mobile-dock-island], [data-header-island], [data-slot='button-group']) {
-    --glass-fill: transparent;
-  }
-}
-
-@property --press-light {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
-}
-
-@property --press-spread {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.45;
-}
-
-@property --press-expansion {
-  syntax: "<length>";
-  inherits: true;
-  initial-value: 0px;
-}
-
-/* Native iOS press paint layers belong to the material, including channel inputs.
-   ::before paints the live fill, shadow and tap-centered sheen; ::after keeps
-   the glass rim. No child nodes, computed-style snapshots or release cleanup.
-   Keep this scope in sync with glassPress.ts's surface selection.
-   Only iOS WebKit knows -webkit-touch-callout, so other browsers drop the block
-   instead of testing every element against it on each restyle. */
-@supports (-webkit-touch-callout: none) {
-  html[data-platform='ios'][data-touch-device='true'] :is(
-    [data-glass-input],
-    [data-input] [data-composer-collapsed],
-    [data-mobile-dock-island],
-    [data-header-island],
-    [data-slot='button-group']:is(.glass, [class~='touch:glass']),
-    :is(button, a, [role='button'], [role='tab']):is(.glass, [class~='touch:glass'], .island, [class~='touch:island'])
-  ) {
-    /* The shimmer replaces native tap feedback only on these press surfaces. */
-    -webkit-tap-highlight-color: transparent;
-    --press-expansion: 0px;
-    position: relative;
-    isolation: isolate;
-    overflow: visible;
-    background-color: transparent !important;
-    backdrop-filter: none;
-    box-shadow: none;
-    scale: 1;
-    transform-origin: center;
-    transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1),
-      --press-expansion 300ms cubic-bezier(0.22, 1, 0.36, 1);
-
-    & button {
-      scale: 1 !important;
-    }
-
-    &::before {
-      content: "";
-      position: absolute;
-      z-index: -1;
-      pointer-events: none;
-      background-color: color-mix(in oklch, var(--glass-press-tint) calc(8% * var(--press-light)), var(--glass-fill));
-      background-image: radial-gradient(
-        circle calc(var(--press-shimmer-size, 100px) * var(--press-spread) / 2)
-        at calc(var(--press-x, 50%) + var(--press-expansion)) calc(var(--press-y, 50%) + var(--press-expansion)),
-        color-mix(in oklch, var(--glass-press-tint) calc(28% * var(--press-light)), transparent),
-        color-mix(in oklch, var(--glass-press-tint) calc(12% * var(--press-light)), transparent) 45%,
-        transparent 100%
-      );
-      backdrop-filter: var(--glass-backdrop, none);
-      box-shadow: var(--glass-shadow, none);
-      transition: --press-light 220ms ease-out,
-        --press-spread 350ms cubic-bezier(0.22, 1, 0.36, 1);
-    }
-
-    &::before, &::after {
-      inset: calc(-1 * var(--press-expansion));
-      border-radius: inherit;
-    }
-
-    & svg {
-      scale: 1;
-      transform-origin: center;
-      transform-box: view-box;
-      transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1);
-    }
-
-    &[data-glass-press]::before {
-      --press-light: 1;
-    }
-
-    @media (prefers-reduced-motion: no-preference) {
-      &[data-glass-press='round'] {
-        scale: var(--press-scale);
-      }
-      &[data-glass-press='wide'] {
-        --press-expansion: var(--press-outset);
-
-        & svg {
-          scale: 1.18;
-        }
-      }
-      &[data-glass-press]::before {
-        --press-spread: 1;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      &, &::before, &::after, & svg {
-        transition: none;
-      }
-    }
-  }
 }
 
 @layer base {

@@ -66,11 +66,11 @@ read their code, and follow that pattern rather than inventing a new one.
   handles instead drag after a small movement with no hold delay and reserve
   scrolling for the rest of the row. Horizontal swipes ignore the left edge
   (iOS back swipe).
-- Keep navigation, filter pills, and create-menu taps silent; keep haptics for
-  long press and use `hapticImpact('light')` for valid message/AI sends. Navigation
-  acts on click so held or cancelled touches do nothing. `glass` and `island`
-  controls and channel inputs get iOS-app-only press animation from
-  `installGlassPress`; reuse it and keep Android and web free of the effect.
+- Add no haptics and no native-only press animation: the iOS and Android apps
+  look and respond like a mobile browser, with normal tap feedback. Navigation
+  acts on click so held or cancelled touches do nothing. Touch `glass` and
+  `island` surfaces draw a flat hairline edge; tune floating chrome through the
+  theme tokens (`--color-chrome-glass`, `--raised-glass-alpha`), not per component.
 
 ## Sheets, menus, and dialogs
 

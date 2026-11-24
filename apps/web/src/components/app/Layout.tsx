@@ -82,7 +82,6 @@ import { InitialInteractiveOnboardingModal } from './InitialInteractiveOnboardin
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
-import { installGlassPress } from './mobile/glassPress';
 import { MobileDockRow } from './mobile/MobileDockRow';
 import { installRowPress } from './mobile/rowPress';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
@@ -171,7 +170,6 @@ export function RootFrame(props: ParentProps) {
   });
 
   onMount(() => {
-    onCleanup(installGlassPress());
     onCleanup(installRowPress());
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();

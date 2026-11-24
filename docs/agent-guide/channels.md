@@ -566,10 +566,9 @@ The new-message compose screen and channel message/reply inputs use the same
 attachment and send controls on mobile and desktop. On phones, the `+` drawer
 offers `Format text` beneath `Mention` to toggle the formatting ribbon.
 iOS uses the native media attachment picker.
-In the iOS app, both collapsed and expanded channel inputs use the shared
-[glass press spotlight](navigation.md#mobile-glass-feedback). Tap the editor and its
-enabled actions to check the highlight; the caret, draft, keyboard, and action
-timing should remain unchanged. Flat embedded inputs keep their host's surface.
+Collapsed and expanded channel inputs use the shared
+[mobile glass](navigation.md#mobile-glass-feedback) edge, with normal tap
+feedback. Flat embedded inputs keep their host's surface.
 Short top-level drafts place attachment, message text, and send on one row on
 both mobile and desktop. Text that wraps onto a second line, explicit line
 breaks, non-paragraph blocks (lists, blockquotes, headings, etc.), and attachments
