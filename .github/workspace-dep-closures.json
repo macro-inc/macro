@@ -5542,6 +5542,15 @@
       "crates/macro_env_var",
       "crates/workspace-hack"
     ],
+    "database_row_search": [
+      "crates/bot_id",
+      "crates/channel_sender",
+      "crates/cowlike",
+      "crates/database_row_search",
+      "crates/macro_user_id",
+      "crates/mention_utils",
+      "crates/workspace-hack"
+    ],
     "database_sql": [
       "crates/bot_id",
       "crates/cowlike",

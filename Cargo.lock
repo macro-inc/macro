@@ -6378,6 +6378,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "database_row_search"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_db_migrator",
+ "mention_utils",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "database_sql"
 version = "0.1.0"
 dependencies = [
@@ -14176,6 +14192,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "strum 0.27.2",
+ "uuid",
  "workspace-hack",
 ]
 

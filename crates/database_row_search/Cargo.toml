@@ -1,0 +1,22 @@
+[package]
+edition = "2024"
+name = "database_row_search"
+publish = false
+version = "0.1.0"
+
+# Postgres reads for database row search: the searchable text of rows, shared
+# by the indexer and the search-time exposure gate. Kept light so
+# `search_service` can depend on it without the `databases` crate.
+[dependencies]
+chrono = { workspace = true }
+mention_utils = { path = "../mention_utils" }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true }
