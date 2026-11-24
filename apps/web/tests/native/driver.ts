@@ -189,15 +189,21 @@ export async function expectAccountInitials(
 }
 
 /**
- * The Email list header's controls that the pane cuts off: each must lie
- * inside its top bar and be the element at its own center, so a control laid
- * out past the bar's edge, or clipped by the scrolling actions row, is listed.
+ * The controls of the list header holding Search `searchLabel` that the pane
+ * cuts off: each must lie inside its top bar and be the element at its own
+ * center, so a control laid out past the bar's edge, or clipped by the
+ * scrolling actions row, is listed.
  */
-export async function clippedEmailHeaderControls(browser: Browser) {
-  return browser.execute(() => {
-    const search = document.querySelector('[aria-label="Search email"]');
+export async function clippedHeaderControls(
+  browser: Browser,
+  searchLabel: string
+) {
+  return browser.execute((label) => {
+    const search = document.querySelector(
+      `[aria-label="${CSS.escape(label)}"]`
+    );
     const bar = search?.closest('[data-view-shell-top-bar]');
-    if (!bar) return ['no Email list header with Search email'];
+    if (!bar) return [`no list header with ${label}`];
     const edge = bar.getBoundingClientRect();
     return [...bar.querySelectorAll('button, label')]
       .map((control) => ({ control, box: control.getBoundingClientRect() }))
@@ -218,5 +224,5 @@ export async function clippedEmailHeaderControls(browser: Browser) {
         ({ control, box }) =>
           `${control.getAttribute('aria-label') ?? control.textContent?.trim()} at ${Math.round(box.left)}..${Math.round(box.right)} in a header ending at ${Math.round(edge.right)}`
       );
-  });
+  }, searchLabel);
 }

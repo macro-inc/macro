@@ -6,7 +6,7 @@ import { type Browser, remote } from 'webdriverio';
 import {
   assertNativeRecords,
   checkpoints,
-  clippedEmailHeaderControls,
+  clippedHeaderControls,
   expectAccountInitials,
   expectRows,
   nativeHttpReachable,
@@ -125,9 +125,13 @@ async function capture(prefix = 'webview') {
   }
 }
 
-/** Fails with the cut-off controls unless the Email header settles showing all of them. */
-async function expectEmailHeaderFits(
+/**
+ * Fails with the cut-off controls unless the list header holding Search
+ * `searchLabel` settles showing all of them.
+ */
+async function expectHeaderFits(
   session: Browser,
+  searchLabel: string,
   prefix: string,
   width: string
 ) {
@@ -135,7 +139,7 @@ async function expectEmailHeaderFits(
   try {
     await session.waitUntil(
       async () => {
-        clipped = await clippedEmailHeaderControls(session);
+        clipped = await clippedHeaderControls(session, searchLabel);
         return clipped.length === 0;
       },
       { timeout: 5000 }
@@ -143,7 +147,7 @@ async function expectEmailHeaderFits(
   } catch (error) {
     await capture(prefix);
     throw new Error(
-      `Email header controls cut off at ${width}: ${clipped.join('; ')}`,
+      `Header controls beside ${searchLabel} cut off at ${width}: ${clipped.join('; ')}`,
       { cause: error }
     );
   }
@@ -260,19 +264,53 @@ try {
   // comes back once there is room.
   const windowSize = await browser.getWindowSize();
   await browser.setWindowSize(400, 900);
-  await expectEmailHeaderFits(browser, 'narrow-header', '400px');
+  await expectHeaderFits(browser, 'Search email', 'narrow-header', '400px');
   await browser.setWindowSize(windowSize.width, windowSize.height);
   await browser
     .$('button[aria-label$="reading pane"]')
     .waitForDisplayed({ timeout: 5000 });
-  await expectEmailHeaderFits(
+  await expectHeaderFits(
     browser,
+    'Search email',
     'restored-header',
     'the restored window'
   );
   console.log(
     'PASS: Email header fits a 400px window and restores its view options'
   );
+
+  // Tasks' header gives up its layout and view options, never New or Search,
+  // as the window narrows, and shows them again once there is room.
+  await browser.$('button[aria-label="Tasks"]').click();
+  await browser
+    .$('[aria-label="Search tasks"]')
+    .waitForDisplayed({ timeout: 30_000 });
+  for (const width of [520, 480, 440, 400]) {
+    await browser.setWindowSize(width, 900);
+    await expectHeaderFits(
+      browser,
+      'Search tasks',
+      `narrow-tasks-header-${width}`,
+      `${width}px`
+    );
+  }
+  await browser.setWindowSize(windowSize.width, windowSize.height);
+  await browser.$('button[aria-label="Group by"]').waitForDisplayed({
+    timeout: 5000,
+  });
+  await expectHeaderFits(
+    browser,
+    'Search tasks',
+    'restored-tasks-header',
+    'the restored window'
+  );
+  console.log(
+    'PASS: Tasks header fits 520px to 400px windows and restores its controls'
+  );
+  await browser.$('button[aria-label="Email"]').click();
+  await browser
+    .$('[aria-label="Search email"]')
+    .waitForDisplayed({ timeout: 30_000 });
 
   assert.equal(await nativeHttpReachable(browser, fixture.origin), true);
   assert(
