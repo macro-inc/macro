@@ -181,9 +181,18 @@ impl Store {
         let mut file = options.open(&partial).await?;
 
         // Each chunk is written as it arrives, so a quit keeps what came.
-        while let Some(chunk) = response.chunk().await? {
-            file.write_all(&chunk).await?;
+        let transfer = async {
+            while let Some(chunk) = response.chunk().await? {
+                file.write_all(&chunk).await?;
+            }
+            Ok::<_, Error>(())
         }
+        .await;
+        // A tokio file finishes its last write in the background, so a failed
+        // transfer would return before its bytes are saved, and the next
+        // attempt could find fewer of them.
+        file.flush().await?;
+        transfer?;
         file.sync_all().await?;
         drop(file);
         tokio::fs::rename(&partial, self.directory.join(COMPLETE)).await?;
