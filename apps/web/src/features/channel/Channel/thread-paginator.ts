@@ -83,23 +83,24 @@ export function createThreadPaginator(paging: TimelinePaging): ThreadPaginator {
     state.setIs(true);
 
     try {
-      // A load this paginator did not start holds the direction (a window
-      // read again). Ask once it lets go: the list asks only when it reaches a
-      // new edge, so a request dropped here would wait for the next scroll.
-      // Another load can take the direction before this one resumes: wait
-      // again then, or that load would refuse this one.
-      if (isFetching()) {
-        while (isFetching()) {
-          // Ownerless: a caller's owner going away would reject the wait.
-          await runWithOwner(null, () =>
-            until(() => !isFetching() || disposed())
-          );
-          if (disposed()) return;
-        }
-        state.setMore(hasMore());
-        if (!hasMore()) return;
-      }
       do {
+        // A load this paginator did not start holds the direction (a window
+        // read again), before its first page or between two. Ask once it
+        // lets go: the list asks only when it reaches a new edge, so a
+        // request dropped here would wait for the next scroll. Another load
+        // can take the direction before this one resumes: wait again then, or
+        // that load would refuse this one.
+        if (isFetching()) {
+          while (isFetching()) {
+            // Ownerless: a caller's owner going away would reject the wait.
+            await runWithOwner(null, () =>
+              until(() => !isFetching() || disposed())
+            );
+            if (disposed()) return;
+          }
+          state.setMore(hasMore());
+          if (!hasMore()) return;
+        }
         state.setIsPending(false);
         await paginateFn();
       } while (hasMore() && state.pending());

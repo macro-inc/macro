@@ -70,6 +70,29 @@ describe('createThreadPaginator', () => {
     expect(loadOlder).toHaveBeenCalledTimes(1);
   });
 
+  it('waits for the direction before a scroll queued behind its own load', async () => {
+    const { setLoadingOlder, loadOlder, paginator } = paging();
+    let finish!: () => void;
+    loadOlder.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finish = resolve))
+    );
+    const asked = paginator.shiftPaginate();
+    await Promise.resolve();
+    expect(loadOlder).toHaveBeenCalledTimes(1);
+    // A scroll queues behind it, then a window read again takes the direction
+    // before that load answers.
+    await paginator.shiftPaginate();
+    setLoadingOlder(true);
+    finish();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(loadOlder).toHaveBeenCalledTimes(1);
+
+    setLoadingOlder(false);
+    await asked;
+    expect(loadOlder).toHaveBeenCalledTimes(2);
+  });
+
   it('lets a waiting request go when the list goes away mid-load', async () => {
     const { setLoadingOlder, loadOlder, paginator, dispose } = paging();
     setLoadingOlder(true);
