@@ -12,14 +12,12 @@ export function HomepageFounderLetter() {
           At our last startup things started breaking right around twenty
           people. Engineering, sales, and marketing each picked their own tools,
           so our context ended up scattered across Slack, email, docs, meetings,
-          and a dozen SaaS apps held together with glue. We were paying for all
-          of them separately and nothing worked as one system.
+          and a dozen SaaS apps held together with glue and MCP.
         </p>
         <p>
-          We built Macro to be one open source system for the whole company.
-          Email, chat, docs, tasks, calendar, calls, and CRM live together in
-          one workspace so your software bill drops, your data stays yours, and
-          your team and agents can actually work off the same shared memory.
+          We built Macro to be one open source system for our whole company, to
+          save money and unify everything into one place for our team and our
+          agents.
         </p>
       </div>
       <footer class="homepage-founder-letter-signature">
