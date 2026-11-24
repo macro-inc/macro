@@ -110,7 +110,7 @@ export function searchRowHost(
  * rather than shrinking a scrolled list back to its first page. */
 export function createProjectedList<T extends { id: string }>(options: {
   host: Pick<CacheHost, 'search'> &
-    Partial<Pick<CacheHost, 'onCacheGenerationChanged'>>;
+    Partial<Pick<CacheHost, 'onCacheGenerationChanged' | 'onOwnerReady'>>;
   /** A reactive getter can change the allowed buckets as feature flags load. */
   buckets: readonly Bucket[];
   revision: Accessor<number>;
@@ -158,7 +158,7 @@ export function createProjectedList<T extends { id: string }>(options: {
   // The search stays pending and the replacement engine still replays it
   // whenever it arrives; this only stops telling the user that an answer is
   // on its way. It runs from the start of the attempt because a host that is
-  // waiting for an owner has paused its own read timeouts.
+  // waiting for an owner counts its read timeouts only while the page is shown.
   const stopWaitingAtLimit = (request: Request) => {
     clearTimeout(request.giveUpTimer);
     request.giveUpTimer = setTimeout(() => {
@@ -336,6 +336,18 @@ export function createProjectedList<T extends { id: string }>(options: {
     });
   });
   onCleanup(() => stopWatchingEngine?.());
+
+  // A first answer can also end while a slow first owner is still starting, or
+  // while the owner stays the same.
+  const stopWatchingOwner = options.host.onOwnerReady?.(() => {
+    queueMicrotask(() => {
+      const request = current;
+      if (!request || request.answered || request.busy) return;
+
+      fireAndForget(fetchPages(request, request.pages, false), 'quick-access');
+    });
+  });
+  onCleanup(() => stopWatchingOwner?.());
 
   createEffect(() => {
     options.revision();
