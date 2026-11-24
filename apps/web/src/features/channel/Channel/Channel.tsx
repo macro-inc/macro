@@ -463,7 +463,7 @@ export function Channel(props: ChannelProps) {
 
   const threadPaginator = createThreadPaginator(
     timeline,
-    targetMessageController.loadAroundMessageId
+    targetMessageController.windowKey
   );
   const messageEditor = createMessageEditor({
     parent: () => ({ type: 'channel', id: (() => props.channelId)() }),

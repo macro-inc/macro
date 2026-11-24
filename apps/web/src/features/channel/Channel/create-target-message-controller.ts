@@ -5,7 +5,7 @@ import {
   getMessageTimelineQueryKey,
   type MessageTimelineData,
 } from '@queries/messages/timeline';
-import { type Accessor, untrack } from 'solid-js';
+import { type Accessor, createSignal, untrack } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   activeTargetMessageId,
@@ -103,21 +103,33 @@ export function createTargetMessageController(
     );
   };
 
+  // The window the list shows, which `loadAround` alone cannot name: two
+  // latest windows share its `undefined`, and the scroll ack's promotion
+  // clears it while the list keeps the window it had. A target outside the
+  // loaded window and a reset (a channel change, or a missing target falling
+  // back to latest) replace the window.
+  const [windowKey, setWindowKey] = createSignal(0);
+  const replaceWindow = () => setWindowKey((n) => n + 1);
+
   return {
     activeTargetMessageId: () => activeTargetMessageId(state()),
     activeTargetMessageReplyId: () => activeTargetMessageReplyId(state()),
     loadAroundMessageId: () => state().loadAround,
+    windowKey,
     pendingScrollTargetId: () => pendingScrollTargetId(state(), ready()),
     pendingTargetReplyId: () => pendingTargetReplyId(state()),
     hasPendingElementScroll: () => hasPendingElementScroll(state(), ready()),
 
-    goToMessage: (messageId: string, replyId?: string) =>
+    goToMessage: (messageId: string, replyId?: string) => {
+      const before = untrack(state).loadAround;
       machine.dispatch({
         t: 'navigate',
         target: { messageId, replyId },
         targetLoaded: untrack(() => options.messageKeys().includes(messageId)),
         ready: untrack(ready),
-      }),
+      });
+      if (untrack(state).loadAround !== before) replaceWindow();
+    },
     completePendingScroll: (messageId: string) => {
       const before = state();
       machine.dispatch({ t: 'root-scroll-done', messageId });
@@ -142,7 +154,10 @@ export function createTargetMessageController(
     },
     clearActiveTarget: (messageId: string) =>
       machine.dispatch({ t: 'release', messageId }),
-    reset: () => machine.dispatch({ t: 'reset' }),
+    reset: () => {
+      machine.dispatch({ t: 'reset' });
+      replaceWindow();
+    },
   };
 }
 

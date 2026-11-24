@@ -226,11 +226,52 @@ describe('pagination restore', () => {
     dispose();
   });
 
+  it('keeps the window when the scroll ack promotes it', () => {
+    queryClient.setQueryData(
+      getMessageTimelineQueryKey({ type: 'channel', id: CHANNEL }, 'm1'),
+      aroundData
+    );
+    const { controller, ready, dispose } = mount({ targetMessageId: 'm1' });
+    ready(['m1']);
+    const window = controller.windowKey();
+
+    controller.completePendingScroll('m1');
+    expect(controller.loadAroundMessageId()).toBeUndefined();
+    expect(controller.windowKey()).toBe(window);
+    dispose();
+  });
+
   it('keeps the anchor when there is nothing to restore', () => {
     const { controller, ready, dispose } = mount({ targetMessageId: 'm1' });
     ready(['m1']);
     controller.completePendingScroll('m1');
     expect(controller.loadAroundMessageId()).toBe('m1');
+    dispose();
+  });
+});
+
+describe('window key', () => {
+  it('names a new window for a target outside the loaded one', () => {
+    const { controller, ready, dispose } = mount();
+    ready(['m1']);
+    const latest = controller.windowKey();
+
+    controller.goToMessage('m1');
+    expect(controller.windowKey()).toBe(latest);
+    controller.goToMessage('old');
+    expect(controller.windowKey()).not.toBe(latest);
+    dispose();
+  });
+
+  it('names a new latest window when a missing target falls back to it', () => {
+    const { controller, ready, dispose } = mount();
+    ready(['m1']);
+    const latest = controller.windowKey();
+
+    controller.goToMessage('missing');
+    controller.reset();
+    expect(controller.loadAroundMessageId()).toBeUndefined();
+    expect(controller.windowKey()).not.toBe(latest);
     dispose();
   });
 });

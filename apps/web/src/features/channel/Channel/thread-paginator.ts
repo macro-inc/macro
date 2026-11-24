@@ -58,9 +58,10 @@ export type TimelinePaging = {
 };
 
 /**
- * `windowKey` names the window the list shows (the message it opened
- * around): a scroll asked in one window never pages another, which a jump to
- * a target replaces it with while this paginator lives on.
+ * `windowKey` names the window the list shows: a scroll asked in one window
+ * never pages another, which a jump to a target replaces it with while this
+ * paginator lives on. It must change whenever the window is replaced, and only
+ * then (the target controller's `windowKey`).
  */
 export function createThreadPaginator(
   paging: TimelinePaging,
@@ -116,8 +117,14 @@ export function createThreadPaginator(
           state.setMore(hasMore());
           if (!hasMore()) return;
         }
-        // The list jumped to another window (a search result) meanwhile.
-        if (!Object.is(windowKey(), askedIn)) return;
+        // The list jumped to another window (a search result) meanwhile: this
+        // request is stale, but a scroll queued in the new window still pages.
+        if (!Object.is(windowKey(), askedIn)) {
+          if (!state.pending() || !Object.is(windowKey(), state.queuedIn))
+            return;
+          askedIn = state.queuedIn;
+          continue;
+        }
         state.setIsPending(false);
         await paginateFn();
         askedIn = state.queuedIn;

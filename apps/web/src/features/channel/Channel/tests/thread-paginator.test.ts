@@ -148,6 +148,19 @@ describe('createThreadPaginator', () => {
     expect(loadOlder).toHaveBeenCalledTimes(2);
   });
 
+  it('pages a scroll asked in the new window while an old one waits on a load', async () => {
+    const { setLoadingOlder, setTarget, loadOlder, paginator } = paging();
+    setLoadingOlder(true);
+    const asked = paginator.shiftPaginate();
+    setTarget('search-hit');
+    await paginator.shiftPaginate();
+    setLoadingOlder(false);
+    await asked;
+
+    expect(loadOlder).toHaveBeenCalledTimes(1);
+    expect(paginator.isShifting()).toBe(false);
+  });
+
   it('asks for no queued page once the list goes away', async () => {
     const { loadOlder, paginator, dispose } = paging();
     let finish!: () => void;
