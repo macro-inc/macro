@@ -741,7 +741,12 @@ connected primary mailbox, **Team blacklist**, and **My blacklist** before
 historical and future messages, excluding blocked threads. The same controls
 are in CRM settings and **Email contribution settings** on a company. A
 changed or reconnecting mailbox requires a fresh review; a disconnected mailbox
-cannot opt in.
+cannot opt in. While sharing is off and no mailbox is linked, the row reads
+**No email connected** with a **Connect email** button. It closes the privacy
+dialog, if one is open, and opens the app's add-inbox provider picker; in
+**Settings > CRM** it opens the picker directly. Once the mailbox links, even in
+place without a reload, the row shows it with sharing still off until the
+member opts in.
 
 When selective contribution is enabled, **Sharing rules** sits below **Your
 email contribution** and above the blacklists and excluded threads. **Edit JSON**,
