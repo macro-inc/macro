@@ -8,15 +8,12 @@ import { useSearchInputFocus } from '@property/utils';
 import { Badge, Button, buttonClasses, Input, Tooltip } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { CompanyDomainChange } from '../core/company';
-import {
-  createValueChange,
-  ValueEditor,
-  ValueError,
-} from './contact-email-property';
+import { ValueEditor, ValueError } from './contact-email-property';
 import {
   contactPropertyIconTouchTarget,
   contactPropertyTouchTarget,
 } from './contact-property-styles';
+import { createValueChange } from './value-change';
 
 type ChangeDomain = (
   domain: string,

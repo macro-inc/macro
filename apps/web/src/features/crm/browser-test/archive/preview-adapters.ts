@@ -31,6 +31,13 @@ import { companyContactsPage } from '../company-contacts-page';
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 export const analytics = { track() {} };
 export async function invalidateCachedCrmContacts() {}
+// The company picker's server search answers with nothing, so the fixture's
+// own companies are all it lists and no request leaves the page.
+export const searchClient = {
+  async search() {
+    return ok({ results: [], next_cursor: null });
+  },
+};
 export async function fetchCrmContacts() {
   return { contacts: [], nextCursor: null };
 }
@@ -70,7 +77,7 @@ let company: CrmCompanyResponse = {
   updatedAt: '2026-10-15',
   contacts: [],
 };
-const PERSONAL_DOMAIN = 'gmail.com';
+const PERSONAL_DOMAIN = 'example.net';
 // `independent` is a business address away from the company's domain.
 const domain = params.has('personal')
   ? PERSONAL_DOMAIN

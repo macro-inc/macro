@@ -1,13 +1,19 @@
 import '../../../../index.css';
+import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { SidePanel } from '@components/app/side-panel';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { storageServiceClient as Storage } from '@service-storage/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
 import { match } from 'ts-pattern';
+// The fixture aliases `@core/context/user` to its picker stub; the company
+// picker's entity display reads the real context.
+import { UserContextProvider } from '../../../../lib/core/context/user';
 import { RecordOverview } from '../../components/record-overview';
 import { RecordTabs } from '../../components/record-tabs';
 import {
@@ -34,6 +40,7 @@ import {
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const params = new URLSearchParams(location.search);
+applyTheme(params.get('theme') === 'light' ? 'Macro Light' : 'Macro Dark');
 const kind = params.get('kind') === 'company' ? 'company' : 'contact';
 const selectorType: EntityType | EntityType[] | null | undefined = match(
   params.get('selector')
@@ -152,7 +159,12 @@ function Fixture() {
 render(
   () => (
     <QueryClientProvider client={client}>
-      <Fixture />
+      {/* The company picker shows channel and user names. */}
+      <ChannelDirectoryProvider directory={staticChannelDirectory(() => [])}>
+        <UserContextProvider>
+          <Fixture />
+        </UserContextProvider>
+      </ChannelDirectoryProvider>
     </QueryClientProvider>
   ),
   document.getElementById('root')!

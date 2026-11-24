@@ -133,34 +133,46 @@ company-only. Both use the shared `EntityPropertiesSection` and the same edit
 rule.
 
 Contact headers and Record details share `ContactEmailField` and
-`ContactCompanyField`. The email field lists every address as a Tasks-style
-pill, primary first; each pill opens Make primary and Remove, and a trailing
-control adds another: an Add email pill while blank, then a 24px ghost icon
-button in extra-muted ink, named and tooltipped Add email, like the property
-panel's add-value button but with the 12px glyph these controls use. Focused, it
-brightens and takes the address pills' ring. The addresses wrap among
-themselves inside one Email group, so the add button ends the addresses' last
-line instead of taking a line of its own in Record details, and a long address
-truncates there. The add control stays one element across both forms,
-so focus returned after the first address lands on it. The company pill offers
-Add company to any contact without a company, switches only for a
-personal-provider primary with no address on the company's domain, and offers
-Remove company whenever no address
-is on the company's domain (`companyDomain === false`), behind the shared
-confirmation dialog. The single address in `companyDomainEmails`
-shows no Remove, and a company-domain contact keeps a read-only company value
-with its reason in a tooltip. These fields come only from the REST contact
-detail; a response without `emails` or `companyDomain` stays read-only.
-The separate Go to button navigates without selecting.
-Keep these property controls at a 24px visible face with 12px type/icons;
-reserve separate 44px touch targets with transparent expansion and margins.
-Desktop uses the property popover and entity picker; touch uses the shared dialog
-and picker sheet. Drafts remain visible on rejection, pending saves cannot be
-repeated, and record identity keys retire drafts when the record changes.
-After a desktop email change, return focus to the control that started it, or
-to the add control once its address is gone. Property popovers are menus, which
-send Tab to their last control; the address editors stop that so Tab reaches
-each action. Only committed responses update contact details (the address list
+`ContactCompanyField`, drawn like task properties. In the header the email
+field is one pill, like a task's Tags or Assignees: the primary address, `+N`
+for the others and a caret, with every address in a hover card; a blank contact
+shows the empty property. Record details lists one line per address, each with
+an envelope icon and the Primary badge on the primary, then the side panel's add
+pill (Add email); the Email label sits in the same label column, on the first
+address's line rather than centred on the list. A row shows only the
+actions it can take: Remove (the side panel's trash) unless the address links
+the company, then Make primary (a pin) unless it is the primary. Rows reserve no
+room for them: on desktop they take room while the row is hovered or focused
+(the address then ends in an ellipsis and Primary stays), and on touch they
+always show. The header pill, an address or Add email opens the email editor,
+an add field above the same rows; adding keeps the field for the next address
+while the contact can take one. The single address in `companyDomainEmails`
+shows no Remove and nothing in its place.
+
+The company is one split pill, like a task's Project: its name opens the
+company (Shift opens a new split, without selecting) and its caret opens the
+picker, with Remove company at its foot. A contact without a company shows the
+empty property (Company in the header, No company in Record details), which
+offers Add company. The picker switches only for a personal-provider primary
+with no address on the company's domain, and Remove company shows whenever no
+address is on the company's domain (`companyDomain === false`), behind the
+shared confirmation dialog. A company-domain contact shows no caret, with its
+reason in a tooltip. These fields come only from the REST contact detail; a
+response without `emails` or `companyDomain` stays read-only, apart from a blank
+contact adding its first address.
+Header faces stay at 24px with 12px type/icons and reserve separate 44px touch
+targets with transparent expansion and margins, except the company's split
+pill: a button group clips its segments, so on touch it takes the group's 36px
+height, as a task's Project pill does. Record details rows take the side
+panel's 36px touch rows. Desktop uses the property popover and entity picker; touch uses the
+shared dialog and picker sheet. Drafts remain visible on rejection, pending
+saves cannot be repeated, and record identity keys retire drafts when the record
+changes, and an editor stays open while its change saves so the outcome shows.
+After a desktop change, focus returns to the control that started it:
+the pill, the address, or Add email once its address is gone; in Record details
+Make primary leaves focus on the address and Remove moves it to Add email.
+Property popovers are menus, which send Tab to their last control; the email
+editor stops that so Tab reaches each action. Only committed responses update contact details (the address list
 and company eligibility included), both company lists, address lookups and
 normalized contact fields, with session and stale-response fences. A lookup
 keeps naming the contact only while the contact holds the looked-up address.
@@ -169,9 +181,11 @@ email-attachment participant leaf per address; the server rejects the whole
 Emails request when an address is no longer the contact's, so both read the
 committed list.
 
-A company's Record details lists its domains with `CompanyDomainField`, built
-like the email field from the same `record-value-editor` shell: one pill per
-domain, primary first, each opening Remove, and a trailing Add domain control.
+A company's header and Record details list its domains with
+`CompanyDomainField`, on the email field's editor shell (`ValueEditor` in
+`contact-email-property.tsx`) and pending-change helper (`value-change.ts`):
+one pill per domain, primary first, each opening Remove, and a trailing Add
+domain control.
 Only the committed response updates the cached company's domain list; the
 company's contact details and Team list refresh with it, since which contacts
 sit on the company's domains changes, and so does Soup. A refused add keeps its
