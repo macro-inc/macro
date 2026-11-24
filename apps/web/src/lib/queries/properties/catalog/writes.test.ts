@@ -26,8 +26,8 @@ const soup = vi.hoisted(() => ({
   reload: undefined as Partial<OperationResult> | undefined,
   /** The client's answer to a cache-only read; nothing when unset. */
   cacheOnly: undefined as Partial<OperationResult> | undefined,
-  /** Runs while a cache-only read is answered. */
-  duringCacheOnly: undefined as (() => void) | undefined,
+  /** Tells reactive readers of the login session that it changed. */
+  loginChanged: () => {},
   /** The cache store's answers to reads of the tag sets, in order; then a miss. */
   cachedReads: [] as unknown[],
   session: 1,
@@ -49,7 +49,6 @@ vi.mock('@service-storage/graphql-soup', () => ({
         if (context?.requestPolicy === 'network-only')
           return soup.reload ?? { data: undefined };
         if (context?.requestPolicy !== 'cache-only') return { data: undefined };
-        soup.duringCacheOnly?.();
         return soup.cacheOnly ?? { data: undefined };
       },
     }),
@@ -73,9 +72,17 @@ vi.mock('@app/lib/urql-solid/authorization', async (importOriginal) => ({
   crmSnapshotAuthorization: () => ({ epoch: soup.epoch, paused: false }),
 }));
 
-vi.mock('../../auth/account-scope', () => ({
-  queryAccountSession: () => soup.session,
-}));
+vi.mock('../../auth/account-scope', async () => {
+  const { createSignal } = await import('solid-js');
+  const [changes, setChanges] = createSignal(0);
+  soup.loginChanged = () => setChanges((count) => count + 1);
+  return {
+    queryAccountSession: () => {
+      changes();
+      return soup.session;
+    },
+  };
+});
 
 import { CatalogMutationError, isCatalogErrorCode } from './errors';
 import { registerCatalogReader } from './readers';
@@ -103,7 +110,6 @@ beforeEach(() => {
   soup.optimistic.mockReset();
   soup.reload = undefined;
   soup.cacheOnly = undefined;
-  soup.duringCacheOnly = undefined;
   soup.cachedReads = [];
   soup.session = 1;
   soup.definitionCached = true;
@@ -384,8 +390,9 @@ describe('a write started offline', () => {
     onlineManager.setOnline(false);
     try {
       queueingHost();
-      // the queue never settles it here, so the test does not wait for it
-      const added = addPropertyOption('def-1', TAG);
+      // the queue never settles it here, so the test does not wait for it;
+      // a later test's login change ends it
+      const added = outcomeOf(addPropertyOption('def-1', TAG));
       await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
       expect(added).toBeInstanceOf(Promise);
     } finally {
@@ -606,7 +613,6 @@ describe('option order', () => {
         kind: 'tags',
         key: () => 5,
         definitions: () => [{ scope: 'USER', definitionId: 'def-1' }],
-        sets: () => [],
         refresh: refresh('tags'),
       });
       return dispose;
@@ -906,46 +912,56 @@ describe('provisioning while the cache cannot answer', () => {
     await expect(ensured).resolves.toMatchObject({ scope: 'user' });
   });
 
-  it('takes the set a tag list shows when the cache answers nothing', async () => {
+  it('finds a set the cache holds, only for the login the flow began in', async () => {
     queueingHost();
-    const shown = {
-      scope: 'team',
-      definition: { id: 'def-team' },
-      options: [],
-    } as unknown as Awaited<ReturnType<typeof ensureTagSet>>;
-    let failed = false;
-    const dispose = createRoot((dispose) => {
-      registerCatalogReader({
-        kind: 'tags',
-        key: () => 7,
-        definitions: () => [{ scope: 'TEAM', definitionId: 'def-team' }],
-        sets: () => (failed ? [] : [shown]),
-        refresh: async () => {},
-      });
-      return dispose;
-    });
-    try {
-      // Not from a failed list, even when the cache read's miss reaches the
-      // list and clears its error.
-      failed = true;
-      soup.duringCacheOnly = () => {
-        failed = false;
+    soup.cacheOnly = { data: { user: { tagSets: [provisioned] } } };
+    expect(await cachedTagSet('user')).toMatchObject({ scope: 'user' });
+    expect(await cachedTagSet('user', soup.session - 1)).toBeUndefined();
+    // A cache that answers nothing sends the caller to the server.
+    soup.cacheOnly = undefined;
+    expect(await cachedTagSet('user')).toBeUndefined();
+  });
+
+  it('drops a provisioned set when another login takes over while it is read back', async () => {
+    queueingHost();
+    soup.result = { data: { ensureTagSet: provisioned } };
+    soup.reload = { data: { user: { tagSets: [provisioned] } } };
+    let reads = 0;
+    if (soup.host)
+      soup.host.readQuery = async () => {
+        reads += 1;
+        if (reads === 1) return { kind: 'miss' };
+        soup.session = 2;
+        return { kind: 'hit', data: { user: { tagSets: [provisioned] } } };
       };
-      expect(await cachedTagSet('team')).toBeUndefined();
-      soup.duringCacheOnly = undefined;
-      expect(await cachedTagSet('team')).toBe(shown);
-      expect(await cachedTagSet('user')).toBeUndefined();
-      // Not for a flow another login took over.
-      expect(await cachedTagSet('team', soup.session - 1)).toBeUndefined();
-      // Nor when the cache answers that the set is not provisioned.
-      soup.cacheOnly = {
-        data: {
-          user: { tagSets: [{ scope: 'TEAM', definition: null, options: [] }] },
-        },
-      };
-      expect(await cachedTagSet('team')).toBeUndefined();
-    } finally {
-      dispose();
-    }
+    const outcome = await outcomeOf(ensureTagSet('user'));
+    expect(isCatalogErrorCode(outcome, 'ACCOUNT_CHANGED')).toBe(true);
+  });
+});
+
+describe('a queued write when another login takes over', () => {
+  // Logout may retire the cache before it reports the write: the waiter must
+  // not hang, and the old login's write is not the page's to report.
+  it('stops waiting for an add and drops it', async () => {
+    queueingHost();
+    const added = outcomeOf(addPropertyOption('def-1', TAG));
+    await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
+    soup.session = 2;
+    soup.loginChanged();
+    expect(isCatalogErrorCode(await added, 'ACCOUNT_CHANGED')).toBe(true);
+  });
+
+  it('reports no late failure for a predicted write', async () => {
+    const settle = queueingHost();
+    soup.mutation.mockImplementation(() => ({
+      toPromise: async () => ({ queued: 'tx-1' }),
+    }));
+    const late = vi.fn();
+    await updatePropertyOption('def-1', 'opt-1', { value: 'Renamed' }, late);
+    soup.session = 2;
+    soup.loginChanged();
+    settle({ transactionId: 'tx-1', status: 'permanently-failed', error: 'x' });
+    await settle.drained();
+    expect(late).not.toHaveBeenCalled();
   });
 });

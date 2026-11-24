@@ -12,7 +12,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { normalizedCacheResultMetadata } from '@graphql-cache/index';
 import { queryAccountSession } from '@queries/auth/account-scope';
-import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import type {
   GraphqlPropertyDefinitionScope,
   GraphqlPropertyEntityType,
@@ -51,8 +50,6 @@ type ReaderVariant =
         scope: 'USER' | 'TEAM';
         definitionId: string;
       }>;
-      /** The sets the list shows now, unless its read failed. */
-      sets: () => readonly TagSetResponse[];
     };
 
 export type CatalogReader = ReaderVariant & {
