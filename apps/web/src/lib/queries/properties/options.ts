@@ -16,7 +16,11 @@ import {
   type CatalogMutationCallbacks,
   createCatalogMutation,
 } from './catalog/mutation';
-import { registerCatalogReader } from './catalog/readers';
+import {
+  catalogReadPolicy,
+  noteCatalogResult,
+  registerCatalogReader,
+} from './catalog/readers';
 import {
   addPropertyOption,
   deletePropertyOption,
@@ -41,14 +45,18 @@ export function usePropertyOptionsQuery(
     variables,
     () => ({
       client: getGraphqlSoupClient(),
-      requestPolicy: 'cache-and-network',
+      requestPolicy: catalogReadPolicy(stamp.key()),
       keepPreviousData: false,
       select: (data) => toPropertyOptions(data.user.propertyOptions),
-      onResult: stamp.onResult,
+      onResult: (result) => {
+        stamp.onResult(result);
+        noteCatalogResult('options', result);
+      },
     })
   );
   registerCatalogReader({
     kind: 'options',
+    key: stamp.key,
     propertyDefinitionId: () => variables()?.propertyDefinitionId,
     refresh: () => query.refetch({ requestPolicy: 'network-only' }),
   });

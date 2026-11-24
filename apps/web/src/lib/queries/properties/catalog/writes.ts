@@ -92,6 +92,7 @@ import {
 import {
   type CatalogReader,
   catalogReaders,
+  markCatalogStale,
   refreshCatalogReaders,
   refreshCatalogReadersInBackground,
 } from './readers';
@@ -373,6 +374,9 @@ export async function deletePropertyDefinition(
           .toPromise(),
       { waitForCommit: false, serverAnswered: !usingCache(), onLateFailure }
     );
+    // An editor mounted for the deleted definition asks the server again,
+    // which refuses it, rather than showing the options the cache holds.
+    markCatalogStale(['options']);
     span.setAttr('property.outcome', outcome.kind);
   });
 }

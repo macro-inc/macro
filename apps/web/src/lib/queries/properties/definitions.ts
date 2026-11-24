@@ -15,6 +15,7 @@ import {
   type PropertyCatalogDefinitionsWithOptionsQuery,
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import type { AnyVariables, OperationResult } from '@urql/core';
 import { type Accessor, createMemo, untrack } from 'solid-js';
 import { offlineAsSuccess } from './catalog/list-result';
 import {
@@ -27,6 +28,9 @@ import {
   createCatalogMutation,
 } from './catalog/mutation';
 import {
+  catalogReadKey,
+  catalogReadPolicy,
+  noteCatalogResult,
   refreshCatalogReaders,
   registerCatalogReader,
 } from './catalog/readers';
@@ -63,11 +67,6 @@ export type PropertyDefinitionsQuery = UrqlQueryResult<
   PropertyDefinitionResponse[]
 >;
 
-const READ_OPTIONS = {
-  requestPolicy: 'cache-and-network',
-  keepPreviousData: false,
-} as const;
-
 /**
  * The viewer's property definitions in the server's order, read live from
  * the normalized cache. With `includeOptions` (fixed per call site), each
@@ -95,24 +94,35 @@ export function useListPropertiesQuery(
     }
   );
   const withOptions = untrack(() => params().includeOptions);
+  const key = createMemo(() =>
+    catalogReadKey(
+      withOptions
+        ? PropertyCatalogDefinitionsWithOptionsDocument
+        : PropertyCatalogDefinitionsDocument,
+      variables()
+    )
+  );
+  const readOptions = () => ({
+    requestPolicy: catalogReadPolicy(key()),
+    keepPreviousData: false,
+    client: getGraphqlSoupClient(),
+    onResult: (result: OperationResult<unknown, AnyVariables>) =>
+      noteCatalogResult('definitions', result),
+  });
   const query = withOptions
     ? createLiveQuery(
         PropertyCatalogDefinitionsWithOptionsDocument,
         variables,
-        () => ({
-          ...READ_OPTIONS,
-          client: getGraphqlSoupClient(),
-          select: definitionsWithOptions,
-        })
+        () => ({ ...readOptions(), select: definitionsWithOptions })
       )
     : createLiveQuery(PropertyCatalogDefinitionsDocument, variables, () => ({
-        ...READ_OPTIONS,
-        client: getGraphqlSoupClient(),
+        ...readOptions(),
         select: definitionsOnly,
       }));
 
   registerCatalogReader({
     kind: 'definitions',
+    key,
     variables,
     withOptions,
     definitionIds: () =>
