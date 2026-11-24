@@ -46,6 +46,7 @@ export function useRoutineRowMenuActions(
       toast.alert(
         match(operation)
           .with('run', () => t('routineMenu.runFailed'))
+          .with('stop', () => t('routinesList.stopFailed'))
           .with('duplicate', () => t('routineMenu.duplicateFailed'))
           .with('keep', () => t('routineMenu.keepFailed'))
           .exhaustive(),
@@ -110,6 +111,8 @@ export function useRoutineRowMenuActions(
     onOpenInNewTab: openInNewTab && ((row) => openInNewTab(row.id)),
     onRun: (row) => operations.run(row.id),
     runPending: (row) => operations.runPending(row.id),
+    onStop: (row) => operations.stop(row.id),
+    stopPending: (row) => operations.stopPending(row.id),
     onDuplicate: (row) => operations.duplicate(row.id),
     onKeep: (row) => operations.keepAsOwn(row.id),
     onCopyLink: (row) =>

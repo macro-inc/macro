@@ -180,6 +180,54 @@ test('disconnected mailbox cannot opt in while exclusions remain editable', asyn
   ).toBeEnabled();
 });
 
+test('disconnected mailbox connects from the dialog by keyboard and stays unshared', async ({
+  page,
+}, testInfo) => {
+  const phone = testInfo.project.name === 'phone';
+  if (phone) await page.setViewportSize({ width: 320, height: 740 });
+  await page.goto('/?disconnected');
+  const settings = page.getByRole('button', {
+    name: 'Email settings',
+    exact: true,
+  });
+  await settings.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('No email connected')).toBeVisible();
+  const connect = dialog.getByRole('button', {
+    name: 'Connect email',
+    exact: true,
+  });
+  await expect(connect).toBeVisible();
+  const box = await connect.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box && viewport && box.x + box.width <= viewport.width).toBe(true);
+  // The dialog opens on its title. The desktop header's Close button comes
+  // next; the phone drawer has no Close button, so the mailbox row is first.
+  await expect(
+    dialog.getByRole('heading', { name: 'Contribute your emails to CRM' })
+  ).toBeFocused();
+  if (!phone) await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(connect).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByTestId('mailbox-connections')).toHaveText('1');
+  await settings.click();
+  await expect(dialog.getByText('member@example.com')).toBeVisible();
+  await expect(dialog.getByText('Sharing off')).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Connect email', exact: true })
+  ).toHaveCount(0);
+  await expect(
+    dialog.getByRole('button', {
+      name: 'Share my emails with CRM',
+      exact: true,
+    })
+  ).toBeEnabled();
+  await expect(page.getByTestId('last-change')).toHaveText('');
+});
+
 test('banner opens review using the device input mode', async ({
   page,
 }, testInfo) => {

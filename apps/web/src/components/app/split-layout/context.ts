@@ -97,6 +97,11 @@ export function getSplitFileMenuActionSections(
 export type SplitPanelContextType = {
   handle: SplitHandle;
   splitHotkeyScope: string;
+  /**
+   * The split's own scope. An inline preview gives its content a narrower
+   * `splitHotkeyScope`, which a key pressed on the split itself never reaches.
+   */
+  splitRootHotkeyScope?: string;
   /** Whether mounted block content is rendered in a passive inline preview. */
   isInlinePreview?: boolean;
   isPanelActive: Accessor<boolean>;

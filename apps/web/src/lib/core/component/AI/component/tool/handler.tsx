@@ -1,8 +1,10 @@
 import {
+  addCompanyDomainHandler,
   createCompanyHandler,
   createContactHandler,
   getCompanyHandler,
   listCompaniesHandler,
+  removeCompanyDomainHandler,
 } from '@app/features/crm/crm-tool-renderers';
 import { pipelineToolHandlers } from '@app/features/crm/pipeline-tool-renderers';
 import {
@@ -119,6 +121,7 @@ import { getThreadHandler } from './GetThread';
 import {
   createImportEntityHandler,
   deleteImportEntityHandler,
+  importFromHubspotHandler,
   importFromJiraHandler,
   importFromLinearHandler,
   importFromNotionHandler,
@@ -195,6 +198,7 @@ import {
 import { subagentHandler } from './Subagent';
 import { getTeamAvailabilityHandler } from './TeamAvailability';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
+import { timeTrackingHandlers } from './TimeTracking';
 import {
   type RenderContext,
   type ToolEnding,
@@ -214,6 +218,7 @@ import {
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   ...initiativeToolHandlers,
+  ...timeTrackingHandlers,
   ExecuteCode: executeCodeHandler,
   DescribeCodeTools: describeCodeToolsHandler,
   ReadCodeDocs: readCodeDocsHandler,
@@ -268,11 +273,14 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ImportFromNotion: importFromNotionHandler,
   ImportFromLinear: importFromLinearHandler,
   ImportFromJira: importFromJiraHandler,
+  ImportFromHubspot: importFromHubspotHandler,
   ImportNotionPage: importNotionPageHandler,
   ConnectMcpServer: connectMcpServerHandler,
   GetCompany: getCompanyHandler,
   CreateCompany: createCompanyHandler,
   CreateContact: createContactHandler,
+  AddCompanyDomain: addCompanyDomainHandler,
+  RemoveCompanyDomain: removeCompanyDomainHandler,
   GetEntityProperties: getEntityPropertiesHandler,
   ListCompanies: listCompaniesHandler,
   ...pipelineToolHandlers,

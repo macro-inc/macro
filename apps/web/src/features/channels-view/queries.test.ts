@@ -759,9 +759,10 @@ describe('channel sidebar cache hydration', () => {
   });
 });
 describe('channel list failures', () => {
-  const failedQuery = (entities: ChannelEntity[]) =>
+  const failedQuery = (entities: ChannelEntity[], hasPageData = false) =>
     ({
       isEnabled: true,
+      hasPageData,
       isPending: false,
       isLoading: false,
       isFetching: false,
@@ -781,6 +782,21 @@ describe('channel list failures', () => {
       );
       expect(sources.direct_messages.items()).toEqual([]);
       expect(sources.direct_messages.error()).toBeInstanceOf(Error);
+      return dispose;
+    });
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+
+  it('keeps a cached empty page empty, not failed, when its refresh fails', () => {
+    useSoupAstItemsQuery.mockImplementation(() => failedQuery([], true));
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'direct_messages',
+        () => 'updated_at'
+      );
+      expect(sources.direct_messages.items()).toEqual([]);
+      expect(sources.direct_messages.error()).toBeUndefined();
       return dispose;
     });
     dispose();

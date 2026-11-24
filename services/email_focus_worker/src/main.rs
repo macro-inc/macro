@@ -9,9 +9,10 @@
 //! Focus is due, stores both in `email_thread_focus`, and tells the inbox's
 //! readers through the connection gateway. Every minute it looks for inboxes
 //! that joined the rollout and fills them from the last window of mail; an
-//! hourly sweep catches what the event stream missed. Its rollout numbers
-//! (cost, failures, delays) go to CloudWatch as `Macro/EmailFocus` once a
-//! minute.
+//! hourly sweep catches what the event stream missed. Backfills and sweeps
+//! keep to a TypeSafe token budget and slow down when TypeSafe pushes back;
+//! new mail never waits on it. Its rollout numbers (cost, failures, delays)
+//! go to CloudWatch as `Macro/EmailFocus` once a minute.
 
 mod config;
 mod metrics;
@@ -31,6 +32,8 @@ mod outbound {
     pub mod jev_classifier;
     pub mod memory_profile;
     pub mod metered;
+    pub mod paced;
+    pub mod token_budget;
 }
 
 use std::{sync::Arc, time::Duration};
@@ -61,6 +64,8 @@ use crate::{
         jev_classifier::{self, JevFocusClassifier},
         memory_profile::MemoryProfiles,
         metered::{MeteredClassifier, MeteredRecorder, Prices, TimedStore},
+        paced::{PacedClassifier, SpendingRecorder},
+        token_budget::{Rates, TokenBudget},
     },
 };
 
@@ -126,6 +131,9 @@ async fn main() -> Result<(), Report> {
         ConnectionGatewayUrl::new()?.to_string(),
     );
     let activity = PgActivityRepo::new(db.clone());
+    // Shared by every Jev call, so backfills and sweeps keep inside
+    // TypeSafe's rate limits with live mail taking what it needs.
+    let budget = Arc::new(TokenBudget::new(Rates::default()));
     let service = Arc::new(FocusService::new(
         TimedStore::new(FocusPgRepository(db.clone()), metrics.clone()),
         MemoryProfiles::new(
@@ -133,14 +141,21 @@ async fn main() -> Result<(), Report> {
             PgCalendarRepository::new(db.clone()),
         ),
         MeteredClassifier::new(
-            JevFocusClassifier::new(JevClassifier::new(
-                provider,
-                Arc::new(MeteredRecorder::new(
-                    ai_usage::pg_recorder_with_enforcement(db.clone(), enforcement),
-                    metrics.clone(),
-                    Arc::clone(&prices),
+            PacedClassifier::new(
+                JevFocusClassifier::new(JevClassifier::new(
+                    provider,
+                    Arc::new(SpendingRecorder::new(
+                        Arc::new(MeteredRecorder::new(
+                            ai_usage::pg_recorder_with_enforcement(db.clone(), enforcement),
+                            metrics.clone(),
+                            Arc::clone(&prices),
+                        )),
+                        Arc::clone(&budget),
+                    )),
                 )),
-            )),
+                budget,
+                metrics.clone(),
+            ),
             metrics.clone(),
         ),
         CoalescingNotifier::new(

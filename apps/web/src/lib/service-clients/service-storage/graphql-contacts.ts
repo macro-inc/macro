@@ -16,6 +16,9 @@ import {
   ContactDirectoryPageDocument,
   type ContactDirectoryPageQuery,
   type ContactDirectoryPageQueryVariables,
+  ContactNamedPeopleDocument,
+  type ContactNamedPeopleQuery,
+  type ContactNamedPeopleQueryVariables,
   ContactReferencePageDocument,
   type ContactReferencePageQuery,
   type ContactReferencePageQueryVariables,
@@ -94,6 +97,25 @@ export async function fetchContactDirectoryPage(
   signal.throwIfAborted();
   if (result.error) throw result.error;
   if (!result.data) throw new Error('Contact directory returned no data');
+  return result.data;
+}
+
+/** The people typed text names across the viewer's whole directory, ranked by
+ * the server, at most 50 and without a continuation. Fetch-only. */
+export async function fetchContactNamedPeople(
+  variables: ContactNamedPeopleQueryVariables,
+  signal: AbortSignal
+): Promise<ContactNamedPeopleQuery> {
+  signal.throwIfAborted();
+  const result = await getGraphqlSoupNetworkClient()
+    .query(ContactNamedPeopleDocument, variables, {
+      requestPolicy: 'network-only',
+      fetchOptions: { signal },
+    })
+    .toPromise();
+  signal.throwIfAborted();
+  if (result.error) throw result.error;
+  if (!result.data) throw new Error('Named contacts returned no data');
   return result.data;
 }
 

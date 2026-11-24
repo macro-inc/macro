@@ -1,0 +1,25 @@
+[package]
+name = "graphql_time_tracking"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-graphql = { workspace = true, features = ["dataloader"] }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+futures = { workspace = true }
+graphql_common = { path = "../graphql_common" }
+graphql_soup = { path = "../graphql_soup" }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+serde_json = { workspace = true }
+time_tracking = { path = "../time_tracking", default-features = false }
+tokio = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+graphql_permission = { path = "../graphql_permission" }
+tokio = { workspace = true, features = ["macros", "rt"] }

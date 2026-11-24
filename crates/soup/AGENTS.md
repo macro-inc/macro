@@ -202,8 +202,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   (`fetch_user_source_ids`); never restate the source rule in SQL. Both paths
   must return identical pages: the query test helper installs the triggers,
   backfills the table from the fixture, audits it, and runs every case on both.
-  The migrations install no maintenance triggers; feed tests load
-  `fixtures/source_items_triggers.sql` first, which also marks the empty table
+  Feed tests load `fixtures/source_items_triggers.sql` first, which installs
+  the triggers whatever the migrations did and marks the empty table
   backfilled. Rollout: `SOURCE_ITEMS_ROLLOUT.md`.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.

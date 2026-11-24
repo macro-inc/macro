@@ -4,6 +4,8 @@ mod database_rows;
 mod initiatives;
 mod options_batch;
 mod project_agents;
+mod start_and_due;
+mod time_logged;
 
 use super::service_impl::PropertiesServiceImpl;
 use crate::domain::error::PropertiesErr;

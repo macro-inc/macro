@@ -89,6 +89,7 @@ fn test_sort_unified_search_results() {
             snippet: None,
             is_read: false,
             inbox_visible: true,
+            has_received_mail: true,
             is_draft: false,
             is_important: false,
             properties: None,

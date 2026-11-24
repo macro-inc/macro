@@ -7,7 +7,6 @@ import {
 import {
   useViewControlHotkeys,
   useViewShell,
-  useViewTabHotkeys,
 } from '@app/components/view-shell';
 import {
   type ChannelPreviewSelection,
@@ -120,11 +119,6 @@ const BROWSE_QUERY_SCOPES = [
   'channels',
   'direct_messages',
 ] as const;
-const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
-const CHANNEL_TAB_IDS_WITH_THREADS: ChannelsTab[] = [
-  ...CHANNEL_TAB_IDS,
-  'threads',
-];
 const DM_LOADING_PREVIEW_OFFSET = 80;
 
 export type ChannelsRailProps = {
@@ -619,7 +613,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         isLabelOpen,
         order: state.sectionOrder,
         channelById,
-        unreadChannelIds: channelActivity.unreadChannelIds(),
+        unreadChannelIds: channelActivity.unreadOrMentionedChannelIds(),
         referenceStatuses: referenceStatuses(),
       }
     );
@@ -880,14 +874,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
     onCleanup(() => cancelAnimationFrame(frame));
   });
 
-  useViewTabHotkeys({
-    scopeId: panel.splitHotkeyScope,
-    enabled: () => panel.isPanelActive() && !sectionsEnabled(),
-    ids: () =>
-      threadsEnabled() ? CHANNEL_TAB_IDS_WITH_THREADS : CHANNEL_TAB_IDS,
-    activeId: tab,
-    setActiveId: selectTab,
-  });
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,

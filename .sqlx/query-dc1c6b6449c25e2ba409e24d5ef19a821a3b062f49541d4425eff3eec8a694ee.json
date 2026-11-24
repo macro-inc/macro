@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT id, task_id, user_id, entry_date, minutes, note, started_at, ended_at,\n                           source AS \"source: TimeEntrySource\", created_at, updated_at\n                    FROM time_entry\n                    WHERE task_id = $1\n                      AND (entry_date, id) < ($2, $3)\n                    ORDER BY entry_date DESC, id DESC\n                    LIMIT $4\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "task_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "entry_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "source: TimeEntrySource",
+        "type_info": {
+          "Custom": {
+            "name": "time_entry_source",
+            "kind": {
+              "Enum": [
+                "manual",
+                "timer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Date",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "dc1c6b6449c25e2ba409e24d5ef19a821a3b062f49541d4425eff3eec8a694ee"
+}

@@ -274,3 +274,27 @@ fn a_programs_prompt_is_marked_as_a_programs() {
     assert_eq!(prompt(ControlPrincipal::Program), PrompterKind::Program);
     assert_eq!(prompt(ControlPrincipal::User), PrompterKind::User);
 }
+
+/// Only the harness withholds a prompt's content from traces: a caller that
+/// asks for it is refused, whoever it is.
+#[test]
+fn no_caller_can_withhold_a_prompts_content() {
+    let action: AgentAction = serde_json::from_value(serde_json::json!({
+        "type": "prompt", "prompt": "draft", "withholdContent": true
+    }))
+    .unwrap();
+    assert!(matches!(&action, AgentAction::Prompt(prompt) if prompt.withhold_content));
+    for principal in [ControlPrincipal::User, ControlPrincipal::Program] {
+        assert!(matches!(
+            ControlEvent::authorized(
+                action.clone(),
+                None,
+                None,
+                None,
+                principal,
+                access(AccessLevel::Owner),
+            ),
+            Err(AgentSessionError::Forbidden)
+        ));
+    }
+}

@@ -225,6 +225,18 @@ describe('CRM item URLs', () => {
     }
   );
 
+  it('treats a document link without a file type as an unknown file, not a note', () => {
+    expect(crmItemRoute.claim?.({ itemType: 'document', itemId })).toEqual({
+      namespace: 'block',
+      id: `unknown:${itemId}`,
+    });
+    expect(resolveMention(appUrl(`/companies/document/${itemId}`))).toEqual({
+      id: itemId,
+      block: 'unknown',
+      params: {},
+    });
+  });
+
   it('claims a compact task as the same document as its generic and Tasks URLs', () => {
     const decoded = crmRecordItemParams.safeParse(
       leafOf(`companies/company/${companyId}/tasks/${itemId}`)?.params

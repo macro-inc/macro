@@ -67,7 +67,10 @@ sync rather than remote search. A tab with no usable local cache (unsupported
 browser, or a cache taken over by a newer build) lists server contact pages while
 online instead of showing options as unavailable. The server does not rank those
 pages, so the first page of a typed search also reads the people the text names
-and lists them first: the server's exact name matches, a whole typed address,
+and lists them first: the server's named people (with `enable-named-contact-search`,
+the first 50 people in the whole directory whose name the text names exactly
+or by word starts, ranked by the server as `contactsNamedBy`; without it, only the exact
+name matches among the first 2,000 contacts), a whole typed address,
 the viewer's teammates (the roster is looked up by ID, so a teammate is found
 in a directory of any size), and anyone on the page itself, when a word of
 their name starts with each typed word. They are ordered direct-message

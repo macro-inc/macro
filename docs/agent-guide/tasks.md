@@ -11,7 +11,9 @@ The main Tasks list (List layout, not project or CRM task lists) starts with the
 The single-row desktop header contains the title, `Filter`, a separate
 `Task layout` single-select icon group for `List`, `Board`, and enabled `Gantt`,
 `Sort`, `Group`, `New`, and an expandable Search icon
-(`Ctrl+F` opens it). The active-filter count sits beside the filter icon inside
+(`Ctrl+F` opens it). A pane too narrow for those actions hides the layout
+group, then Sort and Group, before New or Search would leave the pane; each
+comes back once there is room (`s` sorts only while Sort shows). The active-filter count sits beside the filter icon inside
 its button, without overlapping the icon or the group border;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 Project, and Tags submenus. They use the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
@@ -345,7 +347,7 @@ empty. Cancel leaves the previous filter unchanged. Status remains independent:
 select Completed or Canceled explicitly to include closed tasks in a date filter.
 The mobile controls use the same options and date-range dialog in the sliders drawer.
 
-**Group → Due date** puts No due date first, then uses non-overlapping viewer-local calendar buckets:
+**Group → Due date** uses non-overlapping viewer-local calendar buckets, with No due date last:
 Overdue is before today's midnight; Today and Tomorrow cover those entire days;
 Next 7 days covers D+2 through D+7; Later starts at D+8; No due date includes
 missing and cleared dates. Relative filters and groups refresh at local midnight,
@@ -365,11 +367,185 @@ refreshes at local midnight, on timezone changes, and app resume.
 Date selections persist with the navigation entry and round-trip through
 `tasks.dueDate`, `tasks.dueStart`, and `tasks.dueEnd` URL parameters.
 
+With `enable-task-start-date`, lists sort, filter, and group by Start date the
+same way: **Starts soonest** and **Starts furthest away** sort (missing starts
+last, never reversed); **Filter → Start date** offers Started, Today, Tomorrow,
+Next 7 days, Later, Has start date, No start date, and Custom range, and combines
+with the due-date filter; **Group → Start date** uses the same buckets, Started
+being before today's midnight and No start date last. Both No due date and No
+start date headers show the slashed calendar. The selections round-trip
+through `tasks.startDate`, `tasks.startFrom`, and `tasks.startTo`, the entry
+state, and saved task views (`startDate` in the definition). There is no Start
+date column: the Due date column shows the range. Boards show Status columns
+when grouped by Start date, as for the other list-only groupings, and the Gantt
+does not move bars between Start date groups. With the flag off, the Start date
+choices are hidden, and once the flag is known off (not while it loads) a stored
+start grouping runs as the tab's default grouping, a start sort as Updated, and
+a start filter not at all; the URL and saved view keep what they hold.
+
+### Start dates
+
+Behind `enable-task-start-date` (on in dev), tasks and projects have a Start Date
+(system property `00000001-0000-0000-0000-000000000015`) beside Due Date. It is
+optional: nothing is backfilled, and a task without one looks as it always has.
+With a start, the Due date pill under the title, the list's Due date cell, the
+board card, a project's header pill and its list row read as one range,
+`Nov 23 → Nov 27` (`Nov 23 →` with no due date, and one date when both fall on
+the same day); overdue colours follow the due date only. The Properties panel (desktop and the phone sheet) keeps Start Date
+and Due Date as separate rows, Start Date directly above Due Date.
+Every one of them opens the same picker: Start and Due fields over the date
+suggestions, which set the active field and close the picker as a due date's
+did; **Custom date…** opens a calendar that picks the range. There a start moves
+on to the due date, a due date closes the picker, and a day on the far side of
+the other end moves that end instead, so the range never runs backwards. The
+footer shows the length (`5 days`) with **Clear start** and **Clear both**. The
+task composer's Due date pill opens the same picker (a stacked sheet on phones).
+Start Date is never offered in Add property menus. With the flag off nothing
+shows it, apart from a row already set (by an agent or the SDK), which the
+Properties panel lists like any other property.
+
+**Add time**, under the calendar, gives both ends a time of day (`has_time` on
+the stored value): the start takes the next full hour and the due date an hour
+after it, as a new calendar event does. The picker then lists clock times for
+the active field (**Set start time…** / **Set end time…**; typed times such as
+`3p` work); due times on the start's day show the length each gives (`1h`,
+`1h 30min`). A new start time moves the due date with it, keeping the length;
+**Change day** moves the active end to another day, keeping its time. Times
+follow the calendar's 12/24-hour setting. The footer then reads `2h` with
+**Remove time**, which makes both ends whole days again, and **Clear both**.
+With times, the pills read `Nov 26, 2:00 – 4:00 PM` (`Nov 26, 2:00 PM →
+Nov 28, 4:00 PM` across days); list cells, board cards and project rows write
+times compactly, as calendar events do (`Nov 26, 2–4pm`), and across days show
+the days alone (`Nov 26 → Nov 28`); the Properties rows show `Nov 26, 2pm`.
+When only one end has a time (an agent set a due time on a task with a
+whole-day start), the other end reads as a day: `Nov 20 → Nov 30, 3:00 PM`. A due date with a time is overdue from that moment.
+When a pick moves the start past the saved due date, the picker saves the due
+date first, so the server's start rule never clamps the new start. A date without a time is read and
+written exactly as before. Agents set a time with `date_has_time` on
+SetEntityProperty; the SDK with `tasks.create({ dueDate, startDate, withTimes:
+true })` or `setProperty` with `has_time: true`.
+
+Writers other than the picker (agents, the SDK, quick input, routines, the
+board's deadline move) go through one server rule: the start never lands after
+the due date. A start set after it is saved as the due date, a due date set
+before the start moves the start to it, and neither write is refused.
+
 Verify dates around midnight and a daylight-saving transition. Check both sort
 directions with tied and undated tasks. Filter during local and service search,
 then edit or clear a due date: loaded rows move between buckets immediately,
 and refetches correct complete counts and previously absent tasks. Gantt's
 saved-date semantics do not change.
+
+## Time logged
+
+Behind `enable-time-tracking`. A task's property row has a Time pill
+(`InlineTaskTimeLogged` in `Notebook.tsx`, from `features/time-tracking`)
+showing Time logged, the sum of the task's entries, or "Time" when nothing is
+logged. On desktop it opens a popover: a length input that reads `1h 30m`,
+`1.5h`, `90m`, `1:30` or a bare number of hours and shows what it understood
+(Enter logs it for today), one-tap 15m/30m/1h/2h, Custom entry (length, day,
+optional start and end, note) and the entries by day with day totals. On
+touch it opens a bottom sheet with the one-tap lengths, Custom entry and the
+entries; swipe one's own entry right to edit it, left to delete it. Only
+people with edit access log; everyone who can see the task sees its entries;
+only an entry's author changes or deletes it. Time logged never shows as a
+generic property row or details row, and the Add property picker never offers
+it; with the flag off nothing about time shows. Typed entries save at once and wait offline in the durable
+queue; the entry id is the replay key.
+
+### Timer
+
+One timer per person, stored on the server. Start timer is in a desktop task's
+header (beside Dispatch Agent, for people who can edit), the first control of
+the Time popover and sheet, and a row in the phone title menu; while the task
+is timed each of them shows the live count and stops it. The running timer
+shows in the desktop rail (a card with Stop and log, Open task, Discard) and
+above the phone dock (`timer` float region; the name opens the task, the square
+stops it), on every screen, and its count shows beside the task on its row,
+board card and pill. Stopping saves an entry and toasts "Logged 42m on …" with
+Edit; starting on another task stops and saves the first and toasts what it
+saved with Undo (discard the new timer, restart the first from its original
+start, then delete the entry it saved; if that delete fails, the restarted
+timer is discarded so the entry stays the one record). A timer past eight
+hours is refused on stop:
+the dialog sets when you stopped, logs all of it (up to 24 hours) or discards
+it. Timer changes are refused offline, and one that gets no answer (the
+request failed, so it may still have landed) re-reads the running timer before
+the next press; the change is never resent. When the server shows it landed,
+the app says nothing (no failure, and no saved-entry toast or Undo, since the
+reply that held them is lost). Other sessions of the same person
+re-read on the gateway's `time_tracking_changed`, and every session re-reads
+when its live connection comes back.
+
+To test the over-limit dialog, start a timer through the API with `startedAt`
+nine hours back (the start accepts any time in the last 24 hours), then stop it
+in the app.
+
+Verify on a local stack at desktop 1440 and phone 390 with touch, as an editor
+and a view-only teammate (a task shared with the team at view level, its edit
+link turned off): log each accepted form, a one-tap length and a custom entry
+on another day; edit and delete one's own; the teammate sees entries and no
+input; a log made offline lands once after reconnecting.
+
+### Time on a project
+
+With `enable-time-tracking` on, desktop and tablet projects get a **Time** tab
+after Overview and Tasks (`features/time-tracking/project-time.tsx`, mounted by
+`views/project-workspace.tsx`; route section `time`). Its row holds the period
+(This week, Last week, This month, Last month, This year; weeks start on the
+calendar's Week starts on preference), Person / Task / Day, and Export CSV.
+Below are three figures: the period's total ("Logged in November"), this
+week's total whatever the period, and Tasks with time out of the project's
+tasks the viewer can see. Rows open to what is underneath: a person to their
+tasks, a task to its people, a day to its tasks; a task row (or a task's
+Open task button) opens the task in the project's place, with the project in
+its breadcrumb (on desktop and a tablet), or, with Shift or on a phone, as a
+task in a split. Totals are summed on the server (`GraphqlUser.timeSummary`, which reads
+the primary) and read again after the viewer logs time anywhere. Export
+downloads the period's entries as the server's CSV (`GET /time/export`), and
+says so when it left entries out. A project past the report's task
+cap says its totals leave some tasks out. Phones keep the one-page project: a
+Time row under Discussion opens a sheet with the period, its total, people
+(each opening to their tasks) and the tasks with the most time; no export.
+With the flag off there is no tab or row, and a `time` link shows Overview.
+
+### Time in Tasks
+
+With `enable-time-tracking` on, the Tasks sidebar has a **Time** section under
+Projects with **My week** and **Team** (`tasks/time/week`, `tasks/time/team`;
+`features/time-tracking/tasks-time.tsx`). The week starts on the calendar's
+Week starts on preference, Saturday and Sunday hide with its Show weekends
+off, and ‹ › step a week at a time with **This week** to come back; a week
+outside this year is named with its year. Day columns read weekday first
+(`Mon 23`), as in the calendar's week view. With
+weekends hidden the week reads Monday to Friday, so every total, on desktop
+and phone, counts only the days shown.
+
+- Desktop **My week** is a timesheet: the viewer's tasks with time that week
+  down the side, the days across, each task's total on the right and each
+  day's at the bottom. Clicking a cell opens that task's entries for the day
+  and a length field: Enter logs a new entry on that task and day (typing never
+  overwrites the entries already there; edit or delete them from the list, as
+  in a task's Time popover). A task the viewer can only view lists its
+  entries without the length field. **Add task** puts a task on the sheet
+  before it has time; **Start timer** asks for a task and starts the timer on
+  it. A task name opens the task in the week's place
+  (`tasks/time/week/task/<id>`); its breadcrumb reads My week and, like
+  closing the task, returns to the week. Shift-click opens it in a new split,
+  and a task already open in another split is brought forward there. Below
+  about 830px the grid scrolls sideways rather than squeeze out the task
+  names.
+- **Team** is the same grid by person: every current member of the viewer's
+  team, read-only, counting only tasks the viewer can see.
+- Phones and tablets show **My week** as the week's days, each with its total
+  and tasks; **Log time** asks for a task, then opens that task's Time sheet.
+  Team lists each member opening to their days; a member with no time is a
+  plain row with a dash. On a tablet a task tapped in My week opens in the
+  preview pane beside the week, as in the Tasks list; on a phone it opens on
+  its own.
+
+The grid reads the primary and reads again after the viewer's own writes (and
+their other sessions'), so a cell just typed shows its new total at once.
 
 ## Import from Linear
 
@@ -428,8 +604,10 @@ Verify layout-only, grouping-only, and sort-only save/reset, duplicate and reloa
 
 Choose **Gantt** in the **Task layout** group to see task timelines.
 The same option is available in a project's Tasks section. The timeline uses
-Created at as the start and Due date as the end; no separate Start date is
-created or saved. Bars without a due date fade to transparent at the right edge.
+Created at as the start and Due date as the end. With `enable-task-start-date`,
+a bar starts at the task's Start Date, or at Created at for a task without one,
+and a task whose dates have times draws at those times, with the hours zoom
+available. Bars without a due date fade to transparent at the right edge.
 The fade affects only the bar fill; labels remain visible.
 Their displayed tail is a visual placeholder, not a saved deadline. Invalid or
 missing start dates and due dates before creation are identified rather than
@@ -514,8 +692,16 @@ Left-edge rebasing preserves the current visible date immediately; right-edge
 extension does not write the scroll position. Click a task label or bar to open
 the task; right-click either for the same actions as its list item.
 
-Timeline dates are read-only: bars have no resize handles or end-date editing.
-Created at stays fixed, and moving a bar between groups does not shift its dates.
+Timeline dates are read-only with the start-date flag off: bars have no resize
+handles or end-date editing, Created at stays fixed, and moving a bar between
+groups does not shift its dates. With the flag on, a bar with a due date can be
+dragged across to move both dates, or by either edge to move one; a drag that
+starts mostly up or down still moves it to another group. Only the ends that
+moved are saved, the due date first when the new start passes the saved one. A
+task without a Start Date gains one only when its start edge moves. Whole days
+move by days; a bar with times moves by the zoom's step (days at week and month
+zoom), keeping each end's time of day, and an end saved without a time stays a
+whole day.
 
 When grouped by Status, Priority, Assignee, or Project, drag a task's list item or
 bar into another visible group to change that property. Projects support Status,
@@ -547,8 +733,7 @@ This works with no loaded rows too. Release opens the composer rather than
 immediately creating a task; Escape cancels the selection.
 In a project's Tasks section, creation preserves that project and its edit gate.
 The Projects collection offers the same interaction with the project composer.
-There is no Start date property, so the selection sets only Due date; Created at
-remains automatic. New selections begin today or later, so creation never produces
+The selection sets only Due date, not Start Date; Created at remains automatic. New selections begin today or later, so creation never produces
 an end before Created at. Existing overdue items remain unchanged.
 
 The timeline reuses the list's filtered, sorted, grouped rows and collapsed
@@ -607,7 +792,8 @@ Layout, primary sort, sort direction, and grouping are reflected in `tasks.layou
 `tasks.sort`, `tasks.sortReversed`, and `tasks.groupBy` search parameters.
 Explicit URL values override saved preferences; back/forward navigation
 restores the corresponding controls, including the layout.
-Columns are 336px wide. Each column loads its next page when the end of its cards
+Columns are 21rem wide, so they follow the text size (336px at the default 16px).
+Each column loads its next page when the end of its cards
 scrolls into view; a failed page shows **Retry** at the bottom of that column.
 Ungrouped results, such as a search, load their next page from the end of any
 column.
@@ -1134,6 +1320,9 @@ controls on the right. Built-in scopes and saved views stay in the shared Tasks
 sidebar, without header tabs or a saved-view selector. In project detail, the phone title island shows the project appearance
 and name; its actions share, copy the link, or rename when editing is allowed.
 Phone detail stays one page rather than switching Overview and Tasks.
+On desktop, Tab, Shift+Tab, `1` and `2` (`3` for Time, with time tracking on) switch Overview and Tasks while the
+keyboard is on the project (its task list, or nothing focused); in a field,
+the description or on a button, Tab is focus order.
 Projects use the same list rows, property cells, selection, group headers, and
 keyboard navigation as Tasks. On touch devices, where the list fills a phone or
 a tablet's narrow list pane, there are no column headings and no checkbox
@@ -1170,7 +1359,8 @@ On desktop, **Project layout** offers **List** and **Gantt**. Gantt shows one
 bar per visible project from Created at to Due date, using the same search,
 filters, sort, grouping, and pagination as the project list. Click a project
 label or bar to open its overview. Right-click either for its project list menu.
-The same timeline settings and read-only dates apply as in task Gantt.
+The same timeline settings apply as in task Gantt, and with the start-date flag
+on, project bars start at the Start Date and drag the same way.
 **Load more projects** continues the chart.
 The selection persists in `projects.layout` and restores with the navigation
 entry. Projects without a due date have explicitly open-ended bars. Mobile
@@ -1233,7 +1423,7 @@ Closing the popover without submitting keeps the underlying view open.
 Opening a project from Tasks keeps the Tasks workspace and its navigation.
 Home rows instead preview it inline with a Home return breadcrumb; touch and
 explicit split activation still use this full Tasks workspace. Desktop and
-tablet keep Overview/Tasks tabs, with compact icons when space is limited.
+tablet keep Overview/Tasks tabs (and Time with time tracking on), with compact icons when space is limited.
 Phones keep the one-page project layout and caret-only Back, project-title,
 Share, and Details header islands. The project-title menu retains Change icon,
 Copy Link, Share, and permission-aware project actions. On desktop/tablet Overview, Cmd+K also
@@ -1336,7 +1526,7 @@ its Project set to this project (change or clear it like any property), and the
 create request carries it, so there is no separate assignment step. The new row
 appears once the task is created. Desktop and tablet section tabs stay unchanged. Phones show one page:
 title and property pills, a description of up to eight lines with Show more /
-Show less, a Discussion entry, then Tasks. The description uses the largest
+Show less, a Discussion entry, a Time row (with time tracking on), then Tasks. The description uses the largest
 five-to-eight-line preview that leaves the Tasks heading and the first row's top
 above the floating controls. Empty descriptions show the full placeholder without
 clamping or Show more. The property row contains only property pills; open the

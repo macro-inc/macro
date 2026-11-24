@@ -1425,9 +1425,100 @@ pub async fn run() -> anyhow::Result<()> {
         redis.clone(),
     )
     .await?;
-    let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> = Arc::new(
-        anthropic_gateway::brain::PgBrainAuthenticator::new(pool.clone()),
+    let computer_tasks = tokio_util::task::TaskTracker::new();
+    // Watching and driving agents' screens; the hold below keeps an agent's
+    // brain waiting while a person drives its computer.
+    let guest_files = computers::screen::guest_files::GuestFiles::new(
+        computer_operator
+            .clone()
+            .map(|operator| computers::screen::guest_files::Guest {
+                exec: operator.clone(),
+                power: operator,
+            }),
+        &computer_tasks,
+        service_shutdown.clone(),
     );
+    let unfrozen_drives = guest_files.unfrozen_drives();
+    let screens: Arc<computers::screen::Screens> =
+        Arc::new(computer_screen::domain::service::ScreenService::new(
+            computer_screen::outbound::pg::PgScreenRepo::new(pool.clone()),
+            guest_files,
+            computer_screen::outbound::lease_changes::PgLeaseChanges::listen(
+                pool.clone(),
+                &computer_tasks,
+                service_shutdown.clone(),
+            )
+            .await,
+            computers::screen::access::HarnessScreenAccess::new(
+                Arc::new(computers::harness_service(&pool)),
+                feature_flags
+                    .clone()
+                    .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+                    .unwrap_or_default()
+                    .with_allowlist(config.computer_rollout_allowlist()?),
+                hosted_runtimes::outbound::pg::PgComputerAgents::new(pool.clone()),
+            ),
+            computers::screen::access::MacroPeople::new(pool.clone()),
+        ));
+    // Freezes again (while live) or ends drives a renewal found unfrozen:
+    // each computer's one at a time, the latest request coalesced.
+    if let Some(mut unfrozen_drives) = unfrozen_drives {
+        let refreezes = computers::screen::refreezes::Refreezes::new(
+            {
+                let screens = Arc::clone(&screens);
+                Arc::new(move |computer, drive| {
+                    let screens = Arc::clone(&screens);
+                    Box::pin(async move {
+                        if let Err(error) = screens.refreeze(computer, &drive).await {
+                            tracing::warn!(error = ?error, "could not freeze an unfrozen drive's agent again");
+                        }
+                    })
+                })
+            },
+            computer_tasks.clone(),
+        );
+        let shutdown = service_shutdown.clone();
+        computer_tasks.spawn(async move {
+            loop {
+                let unfrozen = tokio::select! {
+                    () = shutdown.cancelled() => return,
+                    unfrozen = unfrozen_drives.recv() => unfrozen,
+                };
+                let Some(unfrozen) = unfrozen else {
+                    return;
+                };
+                refreezes.request(unfrozen.computer_id, unfrozen.drive);
+            }
+        });
+    }
+    // Releases lapsed leases and retries owed thaws, in case the process that
+    // should have thawed died first. One span per round.
+    {
+        let screens = Arc::clone(&screens);
+        let shutdown = service_shutdown.clone();
+        computer_tasks.spawn(async move {
+            let mut every = tokio::time::interval(computer_screen::domain::service::REAP_EVERY);
+            loop {
+                tokio::select! {
+                    () = shutdown.cancelled() => return,
+                    _ = every.tick() => {}
+                }
+                if let Err(error) = screens.reap().await {
+                    tracing::warn!(error = ?error, "could not reap computer screen leases");
+                }
+            }
+        });
+    }
+    // Every /brain/* route authenticates through this one, held while a
+    // person drives the agent's computer.
+    let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> =
+        Arc::new(anthropic_gateway::brain::HeldBrains::new(
+            Arc::new(anthropic_gateway::brain::PgBrainAuthenticator::new(
+                pool.clone(),
+            )),
+            Arc::clone(&screens),
+            service_shutdown.clone(),
+        ));
     // Both brain routes serve only agents with agent teammates on for their
     // creator.
     let brain_rollout = feature_flags
@@ -1460,10 +1551,10 @@ pub async fn run() -> anyhow::Result<()> {
             anthropic_gateway::ANTHROPIC_API_URL,
             &config.anthropic_api_key,
         )?
-        .with_brains(brains, brain_rollout),
+        .with_brains(brains, brain_rollout)
+        .with_screen_notices(Arc::clone(&screens)),
     )
     .merge(speech_gateway::router(speech.clone()));
-    let computer_tasks = tokio_util::task::TaskTracker::new();
     let sign_in_ahead = Arc::new(std::sync::OnceLock::new());
     let runtimes = RuntimeRegistry::with_presence(
         Arc::new(computers::ComputerPresence::new(
@@ -2192,6 +2283,23 @@ pub async fn run() -> anyhow::Result<()> {
         feature_flags.clone(),
     )
     .await?;
+    let screen_router = computer_operator.as_ref().map(|operator| {
+        computers::screen::router(computers::screen::ScreenRoutes {
+            screens: Arc::clone(&screens),
+            tunnel: Arc::new(computers::screen::tunnel::FleetTunnel::new(
+                Arc::clone(operator) as _,
+                computer_tasks.clone(),
+            )),
+            waker: Arc::clone(operator) as _,
+            medias: computers::screen::ScreenMedias {
+                vnc: Arc::new(computers::screen::media::VncMedia),
+            },
+            shutdown: service_shutdown.clone(),
+            authorization_state: MacroAuthorizationState::new(Arc::new(
+                authorization_service.clone(),
+            )),
+        })
+    });
     let http_shutdown = service_shutdown.clone();
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
@@ -2211,10 +2319,12 @@ pub async fn run() -> anyhow::Result<()> {
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
             .with_claude_access(match &computer_operator {
-                Some(operator) => computer_claude.merge(computers::moves::router(
-                    Arc::clone(operator),
-                    MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
-                )),
+                Some(operator) => computer_claude
+                    .merge(computers::moves::router(
+                        Arc::clone(operator),
+                        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                    ))
+                    .merge(screen_router.unwrap_or_default()),
                 None => computer_claude,
             })
             .with_capabilities(capabilities)

@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BookingEventTypeDailyLimit } from './bookingEventTypeDailyLimit';
+import type { BookingEventTypeEmailLinkId } from './bookingEventTypeEmailLinkId';
 import type { BookingQuestion } from './bookingQuestion';
 import type { SchedulingMode } from './schedulingMode';
 
@@ -34,6 +35,11 @@ export interface BookingEventType {
    * @minimum 0
    */
   durationMinutes: number;
+  /** Connected inbox whose primary calendar takes this link's bookings, so
+the event lands there and its invitation comes from that address.
+Absent books on the host's primary inbox. Personal links only: team
+links book on each host's primary inbox. */
+  emailLinkId?: BookingEventTypeEmailLinkId;
   /** Whether new bookings are accepted. */
   enabled: boolean;
   /** Generate a Google Meet conference. Mutually exclusive with a Macro call. */

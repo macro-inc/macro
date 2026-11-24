@@ -129,7 +129,7 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
             // consumers hear about it. The write is internal: it records no activity.
             let tasks = self
                 .system_properties
-                .project_task_ids(id.as_uuid())
+                .project_task_ids(id.as_uuid(), None)
                 .await
                 .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))?;
             for task_id in tasks {
@@ -158,7 +158,7 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
     fn project_tasks(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<String>> {
         Box::pin(async move {
             self.system_properties
-                .project_task_ids(id.as_uuid())
+                .project_task_ids(id.as_uuid(), None)
                 .await
                 .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))
         })
@@ -278,6 +278,7 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
                 SystemPropertyKey::PRIORITY_UUID,
                 SystemPropertyKey::ASSIGNEES_UUID,
                 SystemPropertyKey::DUE_DATE_UUID,
+                SystemPropertyKey::START_DATE_UUID,
             ];
             let mut output = HashMap::new();
             for batch in receipts.chunks(100) {
@@ -313,8 +314,12 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
                                     refs.into_iter().map(|entity| entity.entity_id).collect()
                             }
                             (Some(SystemPropertyKey::DueDate), Some(PropertyValue::Date(date))) => {
-                                snapshot.due_date = Some(date)
+                                snapshot.due_date = Some(date.at())
                             }
+                            (
+                                Some(SystemPropertyKey::StartDate),
+                                Some(PropertyValue::Date(date)),
+                            ) => snapshot.start_date = Some(date.at()),
                             _ => (),
                         }
                     }

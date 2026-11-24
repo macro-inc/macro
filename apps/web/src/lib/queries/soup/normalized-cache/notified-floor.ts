@@ -13,8 +13,12 @@ import { createStampFloors } from './stamp-floors';
 // Entity mappers read both network and optimistic snapshots. Reading our own
 // stamp must not retire the guard before a replica-stale refetch completes.
 const NOTIFIED_FLOOR_RETENTION_MS = 5 * 60 * 1000;
+// Reactive: a GraphQL notified list maps each row in its own computation and
+// has no cache record a notification patches, so a loaded row moves up only
+// when its mapping reads the risen floor again.
 const notifiedFloors = createStampFloors({
   retainForMs: NOTIFIED_FLOOR_RETENTION_MS,
+  reactive: true,
 });
 
 /** Record a delivered notification's time as the entity's floor. */

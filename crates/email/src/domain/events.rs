@@ -685,11 +685,26 @@ impl EmailMacroEvent {
         )
     }
 
+    /// Build a request to reindex one thread whose stored state changed
+    /// without a more specific event.
+    pub fn thread_reindex_requested(
+        link_id: Uuid,
+        owner: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Self {
+        Self::threads_reindex_requested(ThreadsReindexRequestedMetadata {
+            link_id,
+            owner,
+            thread_ids: vec![thread_id],
+            reason: ThreadsReindexReason::ProviderChanged,
+        })
+    }
+
     /// Map a thread-scoped label change onto the semantic event for that
     /// label: INBOX/TRASH/UNREAD/STARRED/SPAM become dedicated thread-state
-    /// events, IMPORTANT/SENT/DRAFT and category labels publish nothing
-    /// (`None`), and any other (user) label becomes a
-    /// `thread_labels_updated` diff.
+    /// events, any other user label becomes a `thread_labels_updated` diff,
+    /// and IMPORTANT/SENT/DRAFT and category labels, which have no event of
+    /// their own, only request the thread's reindex: search indexes them too.
     pub fn thread_label_change(
         link_id: Uuid,
         owner: MacroUserIdStr<'static>,
@@ -698,10 +713,10 @@ impl EmailMacroEvent {
         label: LabelRef,
         added: bool,
         origin: EmailEventOrigin,
-    ) -> Option<Self> {
+    ) -> Self {
         use crate::domain::models::label::system_labels;
 
-        let event = match label.provider_label_id.as_str() {
+        match label.provider_label_id.as_str() {
             system_labels::UNREAD => Self::thread_read(ThreadReadMetadata {
                 link_id,
                 owner,
@@ -742,10 +757,14 @@ impl EmailMacroEvent {
                 spam: added,
                 origin,
             }),
-            system_labels::IMPORTANT | system_labels::SENT | system_labels::DRAFT => return None,
+            system_labels::IMPORTANT | system_labels::SENT | system_labels::DRAFT => {
+                Self::thread_reindex_requested(link_id, owner, thread_id)
+            }
             // Gmail category tabs (CATEGORY_PERSONAL/SOCIAL/...) are
             // provider system labels, not user labels.
-            l if l.starts_with("CATEGORY_") => return None,
+            l if l.starts_with("CATEGORY_") => {
+                Self::thread_reindex_requested(link_id, owner, thread_id)
+            }
             _ => {
                 let (added, removed) = if added {
                     (vec![label], vec![])
@@ -762,8 +781,7 @@ impl EmailMacroEvent {
                     origin,
                 })
             }
-        };
-        Some(event)
+        }
     }
 
     /// Build an event from a topic-specific event variant.

@@ -9,15 +9,20 @@ first. The flag is on in dev and comes from PostHog elsewhere;
 dev default, so a local stack shows the view only with
 `VITE_ENABLE_GRAPHQL_SOUP=true` (or the flag from PostHog). With the flag off the
 route redirects to Home once flags load, and `g i` stays on Home; with it on,
-Home keeps `g h`. With `enable-new-home` on (desktop), this route is New Home's
-Notifications tab instead and the rail's bell gives way to New Home; see
-[New Home](home.md#new-home).
+Home keeps `g h`. The retired New Home view's `/app/new-home` and its saved
+`new-home` splits open this view.
 
 With unified notifications on, the outer rail and mobile dock show unread dots
 from the inbox's `notificationInboxUnreadUpdates` subscription. The updates
 follow reads, done, clears and new activity within about a second on each open
-tab. With unified notifications off, the buttons use their earlier presence
-checks.
+tab. Home and the bell light for any unread row and Mail for unread mail rows, as
+Notifications lists them. Chat lights only for what its sidebar shows: a channel
+row with an unseen top-level message or a mention, thread mentions included. A
+thread reply, a reaction or a ping is unread in Notifications and on Home and the
+bell without lighting Chat; an invite is listed, and is never unread. Against a
+server from before `chatCount` the client drops that field and Chat lights for
+every unread channel row. With unified notifications off, the buttons use their
+earlier presence checks.
 The notification service makes no row for activity it receives while a type
 is turned off in Settings → Notifications ("New email", say), whichever the
 flag. With unified notifications on, rows made before stay unread, and keep
@@ -27,8 +32,8 @@ setting and goes out at once.
 Unread numbers are off by default in every environment while their accuracy is
 under investigation. Set `VITE_ENABLE_NAVIGATION_UNREAD_COUNTS=true` for a
 frontend build to show numbers alongside the unified inbox. The Notifications
-button counts all unread rows, Channels counts channel rows, and Mail counts
-mail rows. Counts above 99 show as `99+`. Home keeps a dot on the desktop rail.
+button counts all unread rows, Chat counts the channel rows that light it, and
+Mail counts mail rows. Counts above 99 show as `99+`. Home keeps a dot on the desktop rail.
 On the mobile dock the Home bell opens Notifications and carries the total.
 
 Each list row is one row of the server's notification inbox
@@ -152,8 +157,17 @@ Clearing either kind takes such a row whole. The trigger counts selected kinds;
 changing All or Unread. Choices persist per user across reloads. Old saved hidden
 kinds convert to the kinds that remained visible; an old empty hidden list becomes
 no selection. Selections without matching rows show **No notifications match
-these filters**. The gear beside the filter opens **Settings → Notifications**,
-which decides what is delivered at all (including push and email).
+these filters**.
+
+**Display options** (sliders, beside the filter and Clear, desktop only) offers
+**Condensed** and **Notification settings…**. Condensed (kept per user) shows
+each row as Home's row for the same entity: icon and name; the reply icon and
+"who in #channel" for any row about a thread (replies, mentions, reactions);
+"who commented on" for a comment. On hover the time shows and Mark done takes
+the unread dot's place. Condensed rows sit under Home's date dividers, and a
+condensed stack stays one row. **Notification settings…** opens **Settings →
+Notifications**, which decides what is delivered at all (including push and
+email). Touch has no Display options and always shows full rows.
 
 On touch devices the dock's bell (**Notifications**) opens this view with the
 flag on, as the list alone under the floating controls Home, Email, Tasks and Drive

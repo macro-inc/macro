@@ -1,3 +1,4 @@
+import type * as FeatureFlags from '@core/constant/featureFlags';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -21,7 +22,8 @@ vi.mock('@components/app/split-layout/view-restoration', () => ({
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => ({ handle: { captureEntryState: vi.fn() } }),
 }));
-vi.mock('@core/constant/featureFlags', () => ({
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof FeatureFlags>()),
   isFeatureEnabled: () => true,
 }));
 vi.mock('./route-adapter', () => ({

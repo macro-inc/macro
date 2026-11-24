@@ -8,7 +8,7 @@ import {
 } from '../../utils/utilCta';
 import { heroEntrance } from '../../utils/utilHeroEntrance';
 import { LinkBookDemo } from '../buttons/LinkBookDemo';
-import { FormMobileSignup } from '../forms/FormMobileSignup';
+import { LinkGetStarted } from '../buttons/LinkGetStarted';
 import { SsgDesktop, SsgMobile } from '../utils/SsgGate';
 import { HomeHeroBackdrop } from './HomeAppPreview';
 import { HomeDesktopFeatureCarousel } from './HomeDesktopFeatureCarousel';
@@ -156,10 +156,6 @@ export function SectionHomeSimple() {
                 Documents people and agents can edit live. Search across your
                 work, and give agents the tools to change it.
               </h2>
-              {/* Email capture inline in the hero. Signup itself happens on
-                desktop, so the phone's job is just to hand us an address —
-                asking for it here converts far better than sending the
-                visitor off to load the app first. */}
               <div
                 data-hero-signup
                 style={{
@@ -171,7 +167,7 @@ export function SectionHomeSimple() {
                   width: '100%',
                 }}
               >
-                <FormMobileSignup buttonName="hero_get_started" />
+                <LinkGetStarted buttonName="hero_get_started" />
                 <LinkBookDemo buttonName="hero_book_demo" />
               </div>
             </div>

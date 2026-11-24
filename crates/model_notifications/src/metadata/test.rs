@@ -141,9 +141,12 @@ fn channel_reaction_formats_push_copy() {
         reaction
             .format_title(Some(uid("macro|teo@macro.com")))
             .unwrap(),
-        "teo reacted with 👍 to “This is a useful message”"
+        "teo"
     );
-    assert_eq!(reaction.format_body(None).unwrap(), "#general");
+    assert_eq!(
+        reaction.format_body(None).unwrap(),
+        "Reacted 👍 to: “This is a useful message”\n#general"
+    );
     let apns = reaction
         .as_apns(
             Some(uid("macro|teo@macro.com")),
@@ -157,17 +160,70 @@ fn channel_reaction_formats_push_copy() {
             title: Some(ref title),
             body: Some(ref body),
             ..
-        })) if title == "teo reacted with 👍 to “This is a useful message”"
-            && body == "#general"
+        })) if title == "teo"
+            && body == "Reacted 👍 to: “This is a useful message”\n#general"
     ));
 
     let mut multiline = channel_reaction();
     multiline.message_content = "First line\nsecond line".to_string();
     assert_eq!(
-        multiline
-            .format_title(Some(uid("macro|teo@macro.com")))
-            .unwrap(),
-        "teo reacted with 👍 to “First line second line”"
+        multiline.format_body(None).unwrap(),
+        "Reacted 👍 to: “First line second line”\n#general"
+    );
+}
+
+#[test]
+fn channel_reaction_shortens_a_long_message_and_keeps_the_emoji_whole() {
+    let mut long = channel_reaction();
+    long.emoji = "🧑🏽‍💻".to_string();
+    long.message_content = "word ".repeat(40);
+    let body = long.format_body(None).unwrap();
+    let (reacted, place) = body.split_once('\n').unwrap();
+    assert!(reacted.starts_with("Reacted 🧑🏽‍💻 to: “word word"));
+    assert!(reacted.ends_with("…”"));
+    assert_eq!(
+        reacted.chars().count(),
+        "Reacted 🧑🏽‍💻 to: “”…".chars().count() + CHANNEL_REACTION_EXCERPT_MAX_CHARS
+    );
+    assert_eq!(place, "#general");
+}
+
+#[test]
+fn channel_reaction_never_cuts_a_character_in_half() {
+    let mut flag = channel_reaction();
+    flag.message_content = format!("{}🇨🇦 and more", "a".repeat(79));
+    let body = flag.format_body(None).unwrap();
+    assert_eq!(
+        body,
+        format!("Reacted 👍 to: “{}🇨🇦…”\n#general", "a".repeat(79))
+    );
+}
+
+#[test]
+fn channel_reaction_keeps_a_character_of_many_marks_within_the_push_budget() {
+    let mut marks = channel_reaction();
+    marks.message_content = format!("ok a{}", "\u{301}".repeat(2100));
+    let body = marks.format_body(None).unwrap();
+    assert_eq!(body, "Reacted 👍 to: “ok …”\n#general");
+}
+
+#[test]
+fn channel_reaction_to_a_message_without_text_names_your_message() {
+    let mut attachment = channel_reaction();
+    attachment.message_content = String::new();
+    assert_eq!(
+        attachment.format_body(None).unwrap(),
+        "Reacted 👍 to your message\n#general"
+    );
+}
+
+#[test]
+fn channel_reaction_in_a_direct_message_names_no_place() {
+    let mut dm = channel_reaction();
+    dm.common.channel_type = ChannelType::DirectMessage;
+    assert_eq!(
+        dm.format_body(None).unwrap(),
+        "Reacted 👍 to: “This is a useful message”"
     );
 }
 

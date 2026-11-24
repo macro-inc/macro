@@ -31,7 +31,7 @@ export function SearchAskAiButton() {
   };
 
   const askAiHotkey = registerHotkey({
-    hotkey: 'tab',
+    hotkey: 'cmd+enter',
     hotkeyToken: TOKENS.soup.askAi,
     scopeId: panel.splitHotkeyScope,
     description: 'Ask AI',

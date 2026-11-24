@@ -36,6 +36,8 @@ import { PropertyValueIcon } from './PropertyValueIcon';
 type PropertyTooltipProps = ParentProps<{
   property: Property;
   trailingAction?: JSX.Element;
+  /** The text the pill shows in place of the value, such as a date range. */
+  valueText?: string;
 }>;
 
 /**
@@ -47,6 +49,7 @@ export const PropertyTooltip = (props: PropertyTooltipProps): JSX.Element => {
     <TooltipWrapper
       property={props.property}
       trailingAction={props.trailingAction}
+      valueText={props.valueText}
     >
       <Switch>
         <Match when={isStringProperty(props.property) && props.property}>
@@ -59,7 +62,9 @@ export const PropertyTooltip = (props: PropertyTooltipProps): JSX.Element => {
           {(property) => <BooleanTooltipContent property={property()} />}
         </Match>
         <Match when={isDateProperty(props.property) && props.property}>
-          {(property) => <DateTooltipContent property={property()} />}
+          {(property) => (
+            <DateTooltipContent property={property()} text={props.valueText} />
+          )}
         </Match>
         <Match when={isDateRangeProperty(props.property) && props.property}>
           {(property) => <DateRangeTooltipContent property={property()} />}
@@ -87,7 +92,8 @@ const TooltipWrapper = (props: PropertyTooltipProps) => {
     props.property.valueType === 'ENTITY' &&
     props.property.specificEntityType === 'INITIATIVE';
   const stacked = () => !singleSelect() || isProject();
-  const hasValue = () => propertyHasValue(props.property);
+  const hasValue = () =>
+    Boolean(props.valueText) || propertyHasValue(props.property);
   const trailingAction = children(() => props.trailingAction);
   return (
     <Show
@@ -188,14 +194,17 @@ const BooleanTooltipContent = (props: {
 
 const DateTooltipContent = (props: {
   property: Property & { valueType: 'DATE' };
+  text?: string;
 }) => {
   const displayValue = () =>
-    formatPropertyValue(props.property, props.property.value);
+    props.text ?? formatPropertyValue(props.property, props.property.value);
 
   return (
     <div class="flex items-center gap-1.5 flex-wrap">
       <ValueContainer>
-        <span class="truncate max-w-37.5">{displayValue()}</span>
+        <span class={props.text ? 'truncate max-w-72' : 'truncate max-w-37.5'}>
+          {displayValue()}
+        </span>
       </ValueContainer>
     </div>
   );

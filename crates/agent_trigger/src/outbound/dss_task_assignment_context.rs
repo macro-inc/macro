@@ -111,6 +111,7 @@ impl<Properties: TaskProperties> TaskAssignmentContext for DssTaskAssignmentCont
             markdown,
             status: property(SystemPropertyKey::Status).and_then(selected_option),
             priority: property(SystemPropertyKey::Priority).and_then(selected_option),
+            start: property(SystemPropertyKey::StartDate).and_then(date),
             due: property(SystemPropertyKey::DueDate).and_then(date),
             assignee_ids: property(SystemPropertyKey::Assignees)
                 .map(users)
@@ -135,7 +136,7 @@ fn selected_option(property: &EntityPropertyInfo) -> Option<String> {
 
 fn date(property: &EntityPropertyInfo) -> Option<DateTime<Utc>> {
     match property.value {
-        Some(PropertyValue::Date(date)) => Some(date),
+        Some(PropertyValue::Date(date)) => Some(date.at()),
         _ => None,
     }
 }

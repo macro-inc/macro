@@ -6,12 +6,16 @@ const invokeMock = vi.hoisted(() => vi.fn());
 const authorityMock = vi.hoisted(() => vi.fn());
 const listenMock = vi.hoisted(() => vi.fn());
 const emitMock = vi.hoisted(() => vi.fn());
+const requestIdMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: (command: string, args: Record<string, unknown> = {}) => {
+    // Request ids differ per call: recorded apart, so payload checks omit them.
+    const { requestId, ...payload } = args;
+    if (requestId !== undefined) requestIdMock(command, requestId);
     if (command === 'graphql_cache_current_authority')
-      return authorityMock(String(args.identity));
-    return invokeMock(command, args);
+      return authorityMock(String(payload.identity));
+    return invokeMock(command, payload);
   },
 }));
 vi.mock('@tauri-apps/api/event', () => ({
@@ -1356,6 +1360,53 @@ describe('createTauriCacheHost', () => {
       await vi.dynamicImportSettled();
       await vi.advanceTimersByTimeAsync(60);
       await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('abandons natively only the read it stopped waiting for', async () => {
+    vi.useFakeTimers();
+    try {
+      const host = createTauriCacheHost({
+        scope: 'scope-1',
+        requestTimeoutMs: 50,
+      });
+      invokeMock.mockImplementation(
+        (command: string, args: Record<string, unknown>) => {
+          if (command === 'graphql_cache_read' && args.query === '{ hung }')
+            return new Promise(() => {});
+          // Binaries without the command reject it; nothing may surface.
+          if (command === 'graphql_cache_abandon')
+            return Promise.reject(
+              new Error('Command graphql_cache_abandon not found')
+            );
+          return Promise.resolve(
+            command === 'graphql_cache_read' ? { kind: 'miss' } : null
+          );
+        }
+      );
+
+      await host.readQuery({ query: '{ answered }' });
+      const hung = host.readQuery({ query: '{ hung }' });
+      const assertion = expect(hung).rejects.toThrow(
+        'graphql cache ipc timeout: graphql_cache_read'
+      );
+      await vi.dynamicImportSettled();
+      await vi.advanceTimersByTimeAsync(60);
+      await assertion;
+
+      const sent = requestIdMock.mock.calls.filter(
+        ([command]) => command === 'graphql_cache_read'
+      );
+      expect(sent).toHaveLength(2);
+      const [[, answered], [, timedOut]] = sent;
+      expect(answered).not.toBe(timedOut);
+      expect(
+        requestIdMock.mock.calls.filter(
+          ([command]) => command === 'graphql_cache_abandon'
+        )
+      ).toEqual([['graphql_cache_abandon', timedOut]]);
     } finally {
       vi.useRealTimers();
     }

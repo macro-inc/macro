@@ -12,8 +12,8 @@ use ai_usage::{
 };
 use chrono::{DateTime, Utc};
 use email::domain::focus::{
-    FocusClassifier, FocusClassifierError, FocusInbox, FocusInboxOwner, FocusMail, FocusRecord,
-    FocusStore, StaleThread, ThreadFocus,
+    ClassifierLane, FocusClassifier, FocusClassifierError, FocusInbox, FocusInboxOwner, FocusMail,
+    FocusRecord, FocusStore, StaleThread, ThreadFocus,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -183,10 +183,14 @@ impl<C: FocusClassifier> FocusClassifier for MeteredClassifier<C> {
         thread_id: Uuid,
         input: &Value,
         questions: &[&'static str],
+        lane: ClassifierLane,
     ) -> Result<Vec<f32>, FocusClassifierError> {
         self.metrics.add(Metric::ClassifierCalls, 1.0);
         let outcome = UnlessDone::new(&self.metrics, Metric::ClassifierUnavailable);
-        let answer = self.inner.answer(owner, thread_id, input, questions).await;
+        let answer = self
+            .inner
+            .answer(owner, thread_id, input, questions, lane)
+            .await;
         outcome.finish(match &answer {
             Ok(_) => None,
             Err(FocusClassifierError::Unavailable) => Some(Metric::ClassifierUnavailable),

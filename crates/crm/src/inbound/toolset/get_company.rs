@@ -24,7 +24,7 @@ use crate::domain::{
 };
 
 use super::{
-    CrmToolContext, ToolCompanyStage, company_view_receipt, crm_error, extract_company_crm_props,
+    CrmToolContext, ToolCompanyStage, company_receipt, crm_error, extract_company_crm_props,
     load_stage_option_catalog,
 };
 
@@ -158,7 +158,7 @@ where
 
         let company_id = self.company_id.to_string();
 
-        let (receipt, team_id) = company_view_receipt(
+        let (receipt, team_id) = company_receipt::<ViewAccessLevel, _>(
             &*service_context.entity_access_service,
             &request_context,
             self.company_id,
@@ -173,7 +173,7 @@ where
             .ok_or_else(|| crm_error(CrmError::CompanyNotFoundForTeam))?;
 
         // Asserted rather than minted: view access to this company was just
-        // verified by `company_view_receipt`.
+        // verified by `company_receipt`.
         let properties_access =
             EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
                 request_context.user_id.clone(),
@@ -189,7 +189,7 @@ where
                 internal_error: e.into(),
             })?;
 
-        // `company_view_receipt` resolved `team_id` from the
+        // `company_receipt` resolved `team_id` from the
         // ownership row that granted access, so the caller's membership of
         // that team is proven; Member is the floor every member satisfies.
         let team_receipt = EntityAccessReceipt::try_new_authenticated_user(

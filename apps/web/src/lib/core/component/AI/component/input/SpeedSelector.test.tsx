@@ -83,7 +83,7 @@ it('renders nothing for a model with only standard', () => {
 
 it('falls back to standard where the preferred tier is not offered', () => {
   setPreferredSpeed('priority');
-  expect(speedForModel(Model.gpt61Sol, preferredSpeed())).toBe('priority');
+  expect(speedForModel(Model.gpt62Sol, preferredSpeed())).toBe('priority');
   expect(speedForModel(Model.opus55, preferredSpeed())).toBe('standard');
   expect(nativeSpeeds(['standard', 'priority'])).toEqual([
     'standard',

@@ -10,6 +10,7 @@ test-support = []
 [dependencies]
 feature_flags = { path = "../feature_flags" }
 import_linear = { path = "../import_linear" }
+import_hubspot = { path = "../import_hubspot" }
 import_jira = { path = "../import_jira" }
 
 macro_entrypoint = { path = "../macro_entrypoint" }
@@ -25,6 +26,7 @@ ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
 collab_surface = { path = "../collab_surface", features = ["postgres"] }
 initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }
 initiative_description = { path = "../initiative_description" }
+time_tracking = { path = "../time_tracking", features = ["outbound", "toolset"] }
 activity = { path = "../activity", default-features = false, features = ["json_schema", "outbound", "reads"] }
 agent = { path = "../agent" }
 agent_session = { path = "../agent_session", features = ["ai_tools"] }

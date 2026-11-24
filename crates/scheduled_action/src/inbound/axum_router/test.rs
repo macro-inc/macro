@@ -567,6 +567,7 @@ async fn foreign_owner_can_neither_read_nor_manage_and_list_is_empty() {
         ("PUT", format!("{url}/enabled"), json!({"enabled": false})),
         ("DELETE", url.clone(), Value::Null),
         ("POST", format!("{url}/execute"), Value::Null),
+        ("POST", format!("{url}/stop"), Value::Null),
         ("GET", format!("{url}/history"), Value::Null),
         ("GET", format!("{url}/code-upgrades"), Value::Null),
     ] {
@@ -966,6 +967,20 @@ async fn grants_do_not_allow_nonowners_to_manage_routines() {
     );
     assert_eq!(
         request(&app, "DELETE", &url, "owner", Value::Null).await.0,
+        StatusCode::NO_CONTENT
+    );
+}
+
+#[tokio::test]
+async fn the_owner_stopping_a_routine_that_is_not_running_gets_no_content() {
+    let app = router(true);
+    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", cron_action()).await;
+    let url = format!(
+        "/scheduled-actions/{}/stop",
+        created["id"].as_str().unwrap()
+    );
+    assert_eq!(
+        request(&app, "POST", &url, "owner", Value::Null).await.0,
         StatusCode::NO_CONTENT
     );
 }

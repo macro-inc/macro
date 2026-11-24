@@ -1,6 +1,6 @@
 //! Entity-from-argument resolver behavior against the real Soup schema.
 
-use cache_core::engine::{Engine, NetworkWrite, QueryRegistration, ReadResult};
+use cache_core::engine::{Engine, EngineError, NetworkWrite, QueryRegistration, ReadResult};
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::store::InMemoryStorage;
 use cache_core::value::EntityKey;
@@ -454,6 +454,100 @@ fn network_write_registers_matching_synthetic_dependencies_without_a_read() {
             .await
             .unwrap();
         assert_eq!(write.affected_ops, [41].into());
+    });
+}
+
+#[test]
+fn a_write_normalized_beforehand_registers_what_a_normalizing_write_does() {
+    block_on(async {
+        let variables = direct_variables(json!("thread-1"));
+        let resolvers = [resolver()];
+        let registration = Some(QueryRegistration {
+            op_id: 41,
+            entity_resolvers: &resolvers,
+        });
+        let data = json!({
+            "viewer": {
+                "id": "user-1",
+                "thread": {
+                    "__typename": "GraphqlSoupEmailThread",
+                    "id": "thread-1",
+                    "emailName": "Before",
+                    "ownerId": "user-1"
+                }
+            }
+        });
+        let input = NetworkWrite {
+            query: DIRECT_EMAIL_QUERY,
+            operation_name: Some("EmailThread"),
+            variables: &variables,
+            data: &data,
+            identity: None,
+        };
+        let update_variables = object(json!({ "input": { "threadId": "thread-1" } }));
+        let update = json!({
+            "markEmailThreadSeen": {
+                "__typename": "GraphqlSoupEmailThread",
+                "id": "thread-1",
+                "name": "After",
+                "ownerId": "user-1"
+            }
+        });
+
+        let mut writes = Vec::new();
+        for normalize_first in [false, true] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            let first = if normalize_first {
+                let normalized = engine.normalize_network(registration, input).unwrap();
+                assert!(!normalized.updates().is_empty());
+                engine
+                    .write_normalized_query(Some(41), input, normalized, Vec::new())
+                    .await
+            } else {
+                engine
+                    .write_query_with_registration(Some(41), registration, input)
+                    .await
+            }
+            .unwrap();
+            let second = engine
+                .write_query(
+                    Some(2),
+                    UPDATE_EMAIL_MUTATION,
+                    Some("UpdateEmail"),
+                    &update_variables,
+                    &update,
+                    None,
+                )
+                .await
+                .unwrap();
+            assert_eq!(second.affected_ops, [41].into());
+            writes.push(format!("{first:?}\n{second:?}"));
+        }
+        assert_eq!(writes[0], writes[1]);
+    });
+}
+
+#[test]
+fn a_response_normalized_before_a_schema_install_is_refused() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let variables = direct_variables(json!("thread-1"));
+        let data = json!({ "viewer": { "id": "user-1", "thread": null } });
+        let input = NetworkWrite {
+            query: DIRECT_EMAIL_QUERY,
+            operation_name: Some("EmailThread"),
+            variables: &variables,
+            data: &data,
+            identity: None,
+        };
+        let normalized = engine.normalize_network(None, input).unwrap();
+        let schema = engine.schema_snapshot();
+        engine.install_schema(&schema).unwrap();
+        let error = engine
+            .write_normalized_query(None, input, normalized, Vec::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(error, EngineError::StaleNormalization), "{error}");
     });
 }
 

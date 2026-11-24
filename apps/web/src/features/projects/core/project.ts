@@ -85,4 +85,28 @@ export const canDeleteProject = (project: Pick<Project, 'access'>) =>
 export const canDiscussProject = (project: ProjectDetail) =>
   project.access !== 'view';
 
-export type ProjectSection = 'overview' | 'tasks';
+export type ProjectSection = 'overview' | 'tasks' | 'time';
+
+export function isProjectSection(value: unknown): value is ProjectSection {
+  return value === 'overview' || value === 'tasks' || value === 'time';
+}
+
+/** A project's sections: Time only while time tracking is on. */
+export function projectSections(
+  timeTracking: boolean
+): readonly ProjectSection[] {
+  return timeTracking ? ['overview', 'tasks', 'time'] : ['overview', 'tasks'];
+}
+
+/**
+ * The section a project route shows: a Time link opened with time tracking
+ * off shows the Overview. A flag still loading is not off.
+ */
+export function shownProjectSection(
+  section: ProjectSection,
+  timeTracking: { enabled: boolean; loading: boolean }
+): ProjectSection {
+  if (section !== 'time' || timeTracking.enabled || timeTracking.loading)
+    return section;
+  return 'overview';
+}

@@ -22,7 +22,8 @@ export type KanbanScrollSnapshot = {
 type KanbanVirtualizerOptions = {
   keys: Accessor<readonly (string | number)[]>;
   getScrollElement: () => HTMLDivElement | undefined;
-  estimateSize: number;
+  /** Size of an unmeasured item. A function is reread after `measure()`. */
+  estimateSize: number | (() => number);
   gap: number;
   overscan: number;
   paddingStart?: number;
@@ -92,7 +93,10 @@ export function createKanbanVirtualizer(options: KanbanVirtualizerOptions) {
     },
     getScrollElement: () => scrollElement() ?? null,
     horizontal: options.direction === 'horizontal',
-    estimateSize: () => options.estimateSize,
+    estimateSize: () =>
+      typeof options.estimateSize === 'function'
+        ? options.estimateSize()
+        : options.estimateSize,
     gap: options.gap,
     overscan: options.overscan,
     paddingStart: options.paddingStart,

@@ -227,6 +227,9 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
             ...baseProperty,
             valueType: 'DATE',
             value: new Date(dateVal),
+            ...('has_time' in propertyValue && propertyValue.has_time
+              ? { hasTime: true }
+              : {}),
           };
         }
       }
@@ -365,6 +368,29 @@ export function buildTaskProjectDefaultProperty(): Property {
       is_system: true,
       owner: { scope: 'system' },
       specific_entity_type: 'INITIATIVE',
+      created_at: EPOCH_ZERO.toISOString(),
+      updated_at: EPOCH_ZERO.toISOString(),
+    },
+  });
+}
+
+/**
+ * Placeholder for a task's or project's Start Date, which only exists once
+ * someone sets one. Lets the dates picker and the details row show and set
+ * it; setting a value upserts the real row.
+ */
+export function buildStartDateDefaultProperty(): Property {
+  return soupPropertyToProperty({
+    id: `pending:${SYSTEM_PROPERTY_IDS.START_DATE}`,
+    definition: {
+      id: SYSTEM_PROPERTY_IDS.START_DATE,
+      display_name: 'Start Date',
+      data_type: 'DATE',
+      is_metadata: false,
+      is_multi_select: false,
+      is_system: true,
+      owner: { scope: 'system' },
+      specific_entity_type: null,
       created_at: EPOCH_ZERO.toISOString(),
       updated_at: EPOCH_ZERO.toISOString(),
     },

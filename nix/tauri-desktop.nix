@@ -458,7 +458,7 @@
         # filtered Cargo source used by crane.
         cargoRoot = ../.;
         cargoLock = ../apps/web/tauri/Cargo.lock;
-        # cache-core's build script generates metadata from the GraphQL schema.
+        # cache-schema embeds and fingerprints the GraphQL schema at build time.
         # Non-Cargo inputs must be added explicitly to crane's app fileset.
         extraFileset = lib.fileset.unions [
           ../static_assets/schema.graphql
@@ -1534,6 +1534,9 @@
         tauri-desktop-cef-app = tauriDesktopCefApp;
         tauri-desktop-dmg = tauriDesktopDmg;
         tauri-desktop-apple-linker-smoke = tauriDesktopDmgAppleLinkerSmoke;
+        # The linker the DMG build links with, for Cargo runs outside Nix builds
+        # (Desktop QA macOS's cargo test) where Nix's cctools ld crashes too.
+        tauri-desktop-apple-linker = tauriDesktopDmgAppleLinker;
       };
     };
 }

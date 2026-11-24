@@ -570,6 +570,10 @@ await macro.routines.create({
 
 Event triggers use `{ type: 'events', filters: [{ events, entities, condition }] }`;
 `entities` takes typed references such as `{ type: 'document', entity: doc }`.
+A filter on `email.message_received` alone can take `inboxes`, `Link` handles from
+`macro.email.links()`, to watch only those of the owner's inboxes; without it, it
+watches every inbox the owner reads. `routine.trigger()` returns picked inboxes as
+`Link` handles too.
 Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.
 `routine.update(options)` replaces task and trigger settings; `delete()` removes it.
 Routines run as their owner, so share one as a template instead:

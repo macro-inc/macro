@@ -541,11 +541,16 @@ export class CoordinatorRouter {
     connection = { port, cancelLivenessWatch };
     this.tabs.set(message.tabId, connection);
     this.portTabs.set(port, message.tabId);
+    // Lets the tab drop an engine it compiled ahead for a worker it won't start.
+    const ownerElsewhere = this.coreValue.ownedByAnotherVisibleTab(
+      message.tabId
+    );
     this.postToTab(
       message.tabId,
       envelope<CoordinatorToTabEnvelope>({
         kind: 'registered',
         tabId: message.tabId,
+        ...(ownerElsewhere ? { ownerElsewhere: true } : {}),
       })
     );
     if (

@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { ResultAsync } from 'neverthrow';
 
 export type BundleDebugInfo = {
   bundleBuild: number;
@@ -11,9 +12,8 @@ export type BundleDebugInfo = {
 const MIN_TIMESTAMP_MS = Date.UTC(2020, 0, 1);
 
 function timestampDate(ms: number | undefined): Date | undefined {
-  return ms && Number.isFinite(ms) && ms >= MIN_TIMESTAMP_MS
-    ? new Date(ms)
-    : undefined;
+  if (!ms || !Number.isFinite(ms) || ms < MIN_TIMESTAMP_MS) return undefined;
+  return new Date(ms);
 }
 
 /**
@@ -23,11 +23,11 @@ function timestampDate(ms: number | undefined): Date | undefined {
  * no build date to report.
  */
 export async function getNativeBuildDate(): Promise<Date | undefined> {
-  try {
-    return timestampDate(await invoke<number>('get_native_build_time'));
-  } catch {
-    return undefined;
-  }
+  const built = await ResultAsync.fromPromise(
+    invoke<number>('get_native_build_time'),
+    (error) => error
+  );
+  return built.isOk() ? timestampDate(built.value) : undefined;
 }
 
 /** When the active OTA bundle was built; undefined while the embedded bundle runs. */
