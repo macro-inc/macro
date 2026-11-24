@@ -186,11 +186,15 @@ impl AgentSessionNotificationRecipient for Controls {
 struct Apps(Arc<Mutex<Vec<String>>>);
 
 impl ConnectedApps for Apps {
-    async fn connected_app_slugs(
+    async fn all_connected(
         &self,
         _: &MacroUserIdStr<'static>,
-    ) -> anyhow::Result<Vec<String>> {
-        Ok(self.0.lock().unwrap().clone())
+        apps: &[&str],
+    ) -> anyhow::Result<bool> {
+        let connected = self.0.lock().unwrap();
+        Ok(apps
+            .iter()
+            .all(|app| connected.iter().any(|held| held == app)))
     }
 }
 

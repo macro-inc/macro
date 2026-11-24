@@ -46,10 +46,10 @@ impl HarnessBindings for Arc<FakeBindings> {
     }
 }
 
-fn connections(
+fn connections<Sender>(
     bindings: Arc<FakeBindings>,
-    registry: &Arc<RuntimeRegistry<ContainerSender>>,
-) -> HarnessKeyedConnections<Arc<FakeBindings>, ContainerSender> {
+    registry: &Arc<RuntimeRegistry<Sender>>,
+) -> HarnessKeyedConnections<Arc<FakeBindings>, Sender> {
     HarnessKeyedConnections::new(bindings, Arc::clone(registry))
 }
 
@@ -539,6 +539,56 @@ async fn a_dial_initializes_and_reports_the_sessions_its_runtime_lists() {
             .collect::<Vec<_>>(),
         [SessionId::from("acp-1"), SessionId::from("acp-2")]
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_redial_closes_the_displaced_socket_while_a_session_still_holds_it() {
+    use agent_runtime_protocol::domain::channel::Channel;
+    use agent_runtime_protocol::outbound::websocket::ServerTransport;
+    use futures::StreamExt;
+    use tokio_tungstenite::tungstenite::Message;
+
+    let transport: Arc<ServerTransport<ToRuntimeMessage, ToServerMessage>> =
+        Arc::new(ServerTransport::new());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = Arc::clone(&transport).into_router();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await });
+    let (mut displaced_runtime, _) = tokio_tungstenite::connect_async(format!("ws://{address}"))
+        .await
+        .expect("the runtime dials");
+    let accepted = transport.accept().await.expect("the dial is accepted");
+
+    let registry = RuntimeRegistry::new();
+    registry.attach(HarnessId::TEST_A, accepted);
+    let bound = connections(
+        Arc::new(FakeBindings::bound(BotId::TEST_A, HarnessId::TEST_A)),
+        &registry,
+    );
+    let _session = bound
+        .bind(BotId::TEST_A, AgentSessionId::TEST_A)
+        .await
+        .expect("the first dial is bindable");
+
+    let (redial, _redialed_runtime) = Channel::<ToRuntimeMessage, ToServerMessage>::duplex();
+    registry.attach(HarnessId::TEST_A, redial);
+
+    // The session still holds the displaced connection's sender, which used
+    // to keep its socket open - and pinging - until the runtime next spoke.
+    let closed = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            match displaced_runtime.next().await {
+                Some(Ok(Message::Close(_)) | Err(_)) | None => break,
+                Some(Ok(_)) => {}
+            }
+        }
+    })
+    .await;
+    assert!(
+        closed.is_ok(),
+        "the displaced runtime should see its socket close so it knows to redial"
+    );
+    server.abort();
 }
 
 /// Presence that keeps rows the way the Postgres adapter does: a dial inserts

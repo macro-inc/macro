@@ -40,15 +40,12 @@ where
         return Ok(());
     }
 
-    ctx.effects
-        .connect(&link.macro_id, connections)
-        .await
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::SqsEnqueueFailed,
-                source: e.context("Failed to enqueue contacts message"),
-            })
-        })?;
+    ctx.effects.connect(link, connections).await.map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::SqsEnqueueFailed,
+            source: e.context("Failed to enqueue contacts message"),
+        })
+    })?;
 
     Ok(())
 }

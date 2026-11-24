@@ -34,17 +34,31 @@ export const restarter =
  * Records that this boot was healthy: the HEAD it is running, as one line in
  * `file` (MUPPET_LAST_GOOD_FILE), written atomically. Call it once the
  * behavior is built, its credentials read, presence open and its sources
- * started. Returns the SHA.
+ * started; it waits until chat is `listening` too (its stream open and a
+ * round trip to Macro worked), and throws if `deadline` comes first, so a
+ * boot that can't hear is a failed one the launcher counts. Returns the SHA.
  */
 export const markHealthy = async ({
   git,
   disk,
   file,
+  listening,
+  deadline,
 }: {
   readonly git: (args: readonly string[]) => ReturnType<Git>;
   readonly disk: Pick<Disk, 'write'>;
   readonly file: string;
+  readonly listening: () => Promise<void>;
+  readonly deadline: () => Promise<void>;
 }): Promise<string> => {
+  const heard = await Promise.race([
+    listening().then(() => true),
+    deadline().then(() => false),
+  ]);
+  if (!heard)
+    throw new Error(
+      "not listening: chat's event stream didn't open, or Macro didn't answer, in time"
+    );
   const head = await git(['rev-parse', '--verify', 'HEAD']);
   const sha = head.stdout.trim();
   if (head.code !== 0 || sha === '')

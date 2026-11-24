@@ -43,11 +43,7 @@ pub(crate) struct ApiDependencies {
     pub config: crate::config::Config,
     pub db: sqlx::PgPool,
     pub sqs_client: sqs_client::SQS,
-    pub contacts_ingress: Arc<
-        contacts::domain::service::SqsContactsIngress<
-            contacts::outbound::ingress::SqsContactsQueue,
-        >,
-    >,
+    pub contacts_ingress: Arc<crate::composition::ContactsProducer>,
     pub s3_client: s3_client::S3,
     pub gmail_client: gmail_client::GmailClient,
     pub redis_client: crate::util::redis::RedisClient,
@@ -60,6 +56,8 @@ pub(crate) struct ApiDependencies {
     /// Drained at shutdown with the broker's publishes: calendar refreshes
     /// follow a committed write, so they go out on it too.
     pub event_broker_tracker: TaskTracker,
+    /// Set from `enable-outlook-notified-message-reads` by the server.
+    pub notified_message_reads: email::domain::mailbox::watches::NotifiedMessageReads,
 }
 
 /// Wires the services for the production listener.
@@ -80,6 +78,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         jwt_args,
         macro_event_broker,
         event_broker_tracker,
+        notified_message_reads,
     } = deps;
     let gmail_api_repository = GmailApiClientRepository::new(gmail_client.clone());
 
@@ -373,9 +372,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             ),
         ),
         mailbox_notifications: Arc::new(
-            email::domain::mailbox::watches::MailboxWatchNotifications(
+            email::domain::mailbox::watches::MailboxWatchNotifications::new(
                 email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
-            ),
+            )
+            .with_message_reads(notified_message_reads),
         ),
         inbox_catalog,
         inbox_health: Arc::new(crate::composition::inbox_health(

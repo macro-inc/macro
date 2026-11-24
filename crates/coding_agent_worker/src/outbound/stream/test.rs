@@ -87,10 +87,10 @@ async fn connect_yields_typed_envelopes_and_skips_keep_alives_and_junk() {
 
     assert_eq!(stream.last_event_id(), None);
     let first = stream.next_event().await.expect("read").expect("first");
-    assert_eq!(first, Envelope { n: 1 });
+    assert_eq!(first, StreamNext::Event(Envelope { n: 1 }));
     assert_eq!(stream.last_event_id(), Some("evt-1"));
     let second = stream.next_event().await.expect("read").expect("second");
-    assert_eq!(second, Envelope { n: 2 });
+    assert_eq!(second, StreamNext::Event(Envelope { n: 2 }));
     assert!(stream.next_event().await.expect("closed").is_none());
 
     // The owner comes from the server, so the stream is scoped to the team.
@@ -204,6 +204,122 @@ async fn bound_agents_are_sorted_unique_and_dated_by_the_service() {
     // A second before the service's `Date`, which has whole seconds.
     let date = chrono::DateTime::parse_from_rfc2822("Tue, 17 Nov 2026 22:00:04 GMT").unwrap();
     assert_eq!(agents.read_by, Some(std::time::SystemTime::from(date)));
+}
+
+/// An SSE body that sends `chunks`, then stays open and silent.
+fn body(
+    chunks: &'static [&'static str],
+) -> impl Stream<Item = Result<&'static str, reqwest::Error>> + Send + 'static {
+    futures::stream::iter(chunks.iter().copied().map(Ok)).chain(futures::stream::pending())
+}
+
+const HEARTBEAT: &str = "event: heartbeat\ndata: {}\n\n";
+const KEEP_ALIVE: &str = ": keep-alive\n\n";
+
+#[test]
+fn the_heartbeat_interval_comes_from_the_header_only() {
+    let mut headers = reqwest::header::HeaderMap::new();
+    assert_eq!(heartbeat_interval(&headers), None);
+    headers.insert(STREAM_HEARTBEAT_HEADER, "20".parse().unwrap());
+    assert_eq!(heartbeat_interval(&headers), Some(Duration::from_secs(20)));
+    for unusable in ["0", "soon", "-5"] {
+        headers.insert(STREAM_HEARTBEAT_HEADER, unusable.parse().unwrap());
+        assert_eq!(heartbeat_interval(&headers), None, "{unusable}");
+    }
+}
+
+/// A heartbeating service whose stream carries only keep-alive comments has a
+/// dead event source: the stream ends half an interval after the third missed
+/// heartbeat came due.
+#[tokio::test(start_paused = true)]
+async fn a_heartbeating_stream_that_goes_silent_stalls_after_three_missed_heartbeats() {
+    let interval = Duration::from_secs(20);
+    let mut stream = EventStream::<Envelope>::new(
+        body(&[KEEP_ALIVE, KEEP_ALIVE, KEEP_ALIVE, KEEP_ALIVE]),
+        Some(interval),
+    );
+    let started = tokio::time::Instant::now();
+
+    let error = stream.next_event().await.expect_err("a stall");
+
+    assert!(format!("{error}").contains("stalled"), "{error}");
+    assert_eq!(started.elapsed(), Duration::from_secs(70));
+}
+
+/// Old server, new macrod: without the header nothing says the event source
+/// is alive, so a silent stream stays open as before.
+#[tokio::test(start_paused = true)]
+async fn a_stream_without_the_header_never_stalls() {
+    let mut stream = EventStream::<Envelope>::new(body(&[KEEP_ALIVE]), None);
+
+    assert!(
+        tokio::time::timeout(Duration::from_secs(3600), stream.next_event())
+            .await
+            .is_err(),
+        "a service that does not heartbeat must not be reconnected to"
+    );
+}
+
+/// The heartbeat after two missed ones arrives exactly three intervals after
+/// the last: it keeps the stream open rather than racing its deadline.
+#[tokio::test(start_paused = true)]
+async fn two_missed_heartbeats_do_not_stall_the_stream() {
+    let interval = Duration::from_secs(20);
+    let (sender, receiver) = futures::channel::mpsc::unbounded();
+    let mut stream = EventStream::<Envelope>::new(receiver, Some(interval));
+
+    tokio::time::advance(interval * 3).await;
+    sender.unbounded_send(Ok(HEARTBEAT)).unwrap();
+
+    assert_eq!(
+        stream.next_event().await.unwrap(),
+        Some(StreamNext::Heartbeat)
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn heartbeats_keep_a_quiet_stream_open_and_never_move_the_cursor() {
+    let interval = Duration::from_secs(20);
+    let (sender, receiver) = futures::channel::mpsc::unbounded();
+    let mut stream = EventStream::<Envelope>::new(receiver, Some(interval));
+
+    sender
+        .unbounded_send(Ok("id: evt-1\ndata: {\"n\":1}\n\n"))
+        .unwrap();
+    assert_eq!(
+        stream.next_event().await.unwrap(),
+        Some(StreamNext::Event(Envelope { n: 1 }))
+    );
+    for _ in 0..10 {
+        tokio::time::advance(interval).await;
+        sender.unbounded_send(Ok(HEARTBEAT)).unwrap();
+        assert_eq!(
+            stream.next_event().await.unwrap(),
+            Some(StreamNext::Heartbeat)
+        );
+    }
+    assert_eq!(stream.last_event_id(), Some("evt-1"));
+}
+
+/// A caller busy past the deadline still reads what arrived meanwhile.
+#[tokio::test(start_paused = true)]
+async fn a_heartbeat_that_arrived_while_the_caller_was_busy_is_not_a_stall() {
+    let interval = Duration::from_secs(20);
+    let mut stream = EventStream::<Envelope>::new(body(&[HEARTBEAT]), Some(interval));
+
+    tokio::time::advance(interval * (STALL_AFTER_MISSED_HEARTBEATS + 1)).await;
+
+    assert_eq!(
+        stream.next_event().await.unwrap(),
+        Some(StreamNext::Heartbeat)
+    );
+}
+
+/// New server, old macrod: the heartbeat's `{}` data does not decode as a
+/// trigger envelope, which older macrod skips with a debug log.
+#[test]
+fn a_heartbeat_is_not_a_trigger_envelope() {
+    assert!(serde_json::from_str::<crate::trigger::TriggerEvent>("{}").is_err());
 }
 
 #[tokio::test(start_paused = true)]

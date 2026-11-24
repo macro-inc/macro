@@ -48,6 +48,14 @@ const PROPERTIES: PropertyT[] = [
   },
   {
     ...BASE,
+    propertyId: 'long-link',
+    propertyDefinitionId: 'long-link',
+    displayName: 'Long link',
+    valueType: 'LINK',
+    value: ['https://www.a-long-subdomain-that-truncates.example.com/profile'],
+  },
+  {
+    ...BASE,
     propertyId: 'flag',
     propertyDefinitionId: 'flag',
     displayName: 'Done',

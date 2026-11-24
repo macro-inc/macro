@@ -68,6 +68,8 @@ const loadedAt = Date.now();
 const usage =
   'usage: bin/agent <run|list|describe|exec|guard|function> [input]';
 const presenceLog = 'presence';
+/** How long a boot may take to hear Macro before it counts as failed. */
+const listeningDeadlineMs = 3 * 60_000;
 const openState = 1;
 
 const [command, ...rest] = process.argv.slice(2);
@@ -106,6 +108,9 @@ const run = async (): Promise<void> => {
       traceStart(
         process.env,
         async (phase) => {
+          // The online report comes later, when presence opens; it still
+          // belongs to the start, so Macro's side joins the setup trace.
+          const startContext = Telemetry.captureContext();
           await phase('agent.start.checks', async () => {
             await configured(claude);
             await configured(sandboxProgram);
@@ -124,13 +129,25 @@ const run = async (): Promise<void> => {
           // Once presence is open, the agent tells Macro it is up: its row turns
           // Running and its inviter hears it is ready.
           const online = reportsOnline({
-            post: async () =>
-              (
-                await fetch(`${hosts.auth}${onlineRoute}`, {
-                  method: 'POST',
-                  headers: { 'x-macro-user-api-key': apiKey },
-                })
-              ).status,
+            post: () =>
+              startContext.run(() =>
+                Telemetry.span(
+                  'agent.online.report',
+                  { kind: 'client' },
+                  async (span) => {
+                    const headers: Record<string, string> = {
+                      'x-macro-user-api-key': apiKey,
+                    };
+                    span.injectTraceHeaders(headers);
+                    const { status } = await fetch(
+                      `${hosts.auth}${onlineRoute}`,
+                      { method: 'POST', headers }
+                    );
+                    span.setAttr('http.response.status_code', status);
+                    return status;
+                  }
+                )
+              ),
             log: (entry) => void base.log.event(presenceLog, entry),
           });
           // The agent shows online in Macro for as long as it runs.
@@ -167,14 +184,17 @@ const run = async (): Promise<void> => {
           const started = outsideStart.run(() =>
             assistant.run(parallel({ systemPrompt, ...scripts }))
           );
-          // Built, credentials read, presence open and sources started: a healthy
-          // boot, so the launcher's rollback starts from this HEAD.
+          // Built, credentials read, presence open, sources started and chat
+          // hearing Macro: a healthy boot, so the launcher's rollback starts
+          // from this HEAD. One that can't hear in time exits, as a failed boot.
           await phase('agent.start.healthy', () =>
             markHealthy({
               git: (args) =>
                 base.shell.run(gitCommand('git', base.config.root, args)),
               disk: base.disk,
               file: files.lastGood,
+              listening: assistant.decorations.chat.listening,
+              deadline: () => Bun.sleep(listeningDeadlineMs),
             })
           );
           // Wrapped, so the start's span ends here instead of awaiting the loop.

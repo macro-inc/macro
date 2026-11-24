@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use axum::Router;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use connectors::{ConnectionManagementService, McpConnectionsService};
 use email_service_client::EmailServiceClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::OwnerGrantPolicy;
@@ -548,7 +549,7 @@ impl SchedulingRuntime {
     clippy::too_many_arguments,
     reason = "each argument is a separate resource the composition root shares with scheduling; bundling them only moves the list"
 )]
-pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
+pub async fn build<Ingress, S>(
     config: Config,
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
@@ -556,8 +557,12 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
     search: search_service_client::SearchServiceClient,
-    routine_connect: Option<Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>,
-) -> Result<SchedulingRuntime> {
+    connectors: Arc<S>,
+) -> Result<SchedulingRuntime>
+where
+    Ingress: notification::domain::service::NotificationIngress,
+    S: McpConnectionsService + ConnectionManagementService,
+{
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
     let generation_ready = ready.clone();
@@ -860,10 +865,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         // A routine's draft may require the apps its owner connected,
         // counted as saving and every run count them.
         .with_apps(Arc::new(
-            crate::routine_sessions::PipedreamConnectedApps::new(
-                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
-                routine_connect.clone(),
-            ),
+            crate::routine_sessions::RoutineConnectedApps::new(Arc::clone(&connectors)),
         ))
         .with_finding(DraftFinding {
             model: Arc::new(routine_drafting::RouterDraftModels {
@@ -930,10 +932,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                     config.internal_api_key.to_string(),
                     EmailServiceUrl::new()?.to_string(),
                 )),
-                apps: crate::routine_sessions::PipedreamConnectedApps::new(
-                    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
-                    routine_connect,
-                ),
+                apps: crate::routine_sessions::RoutineConnectedApps::new(connectors),
                 teams: entity_access::outbound::PgAccessRepository::new(db.clone()),
                 crm: crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
             }),

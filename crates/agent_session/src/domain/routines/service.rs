@@ -99,19 +99,20 @@ where
         if matches!(persona, SelectedPersona::External { .. }) {
             return Err(RoutineSessionError::AppsUnsupported);
         }
-        let connected = self
-            .apps
-            .connected_app_slugs(&selection.owner)
-            .await
-            .map_err(|error| {
-                tracing::warn!(error = ?error, "could not list a routine owner's connected apps");
-                RoutineSessionError::OperationFailed
-            })?;
-        if selection
+        let required: Vec<&str> = selection
             .mcp_servers
             .iter()
-            .all(|server| connected.contains(&server.app_slug))
-        {
+            .map(|server| server.app_slug.as_str())
+            .collect();
+        let connected = self
+            .apps
+            .all_connected(&selection.owner, &required)
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = ?error, "could not read a routine owner's connected apps");
+                RoutineSessionError::OperationFailed
+            })?;
+        if connected {
             Ok(())
         } else {
             Err(RoutineSessionError::AppNotConnected)

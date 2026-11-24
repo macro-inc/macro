@@ -1,12 +1,17 @@
+import type { EntityData } from '@entity';
 import type { storageServiceClient as Storage } from '@service-storage/client';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { QueryClient } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { type Accessor, createSignal } from 'solid-js';
-import type { CompanyContactsFilter } from '../../context/crm-sources';
+import type {
+  CompanyContactsFilter,
+  ItemListSource,
+} from '../../context/crm-sources';
 import {
   useCompanyQuery,
+  useEditCompanyDomainMutation,
   useSetCompanyHiddenMutation,
   useSetCompanyNameMutation,
   useSetEmailSyncMutation,
@@ -26,6 +31,9 @@ import { companyContactsPage } from '../company-contacts-page';
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 export const analytics = { track() {} };
 export async function invalidateCachedCrmContacts() {}
+export async function fetchCrmContacts() {
+  return { contacts: [], nextCursor: null };
+}
 // This fixture verifies REST/UI integration; normalized-cache fencing has separate exchange tests.
 export const prepareCrmVisibilityWrite = () => ({
   isCurrent: () => true,
@@ -103,9 +111,12 @@ let contacts: CrmContactResponse[] = ['Example person', 'Second person'].map(
       : [
           `person${index + 1}@${domain}`,
           ...(params.has('several') && index === 0
-            ? [`person1@${PERSONAL_DOMAIN}`, 'person1.alt@example.org'].filter(
-                (email) => email !== `person1@${domain}`
-              )
+            ? [
+                `person1@${PERSONAL_DOMAIN}`,
+                params.has('long')
+                  ? 'person1.with.a.much.longer.mailbox.name@example.org'
+                  : 'person1.alt@example.org',
+              ].filter((email) => email !== `person1@${domain}`)
             : []),
         ];
     const full = identity(
@@ -275,6 +286,40 @@ export const storageServiceClient = {
     contacts = contacts.map((contact) => ({ ...contact, hidden }));
     return ok(undefined);
   },
+  async addCompanyDomain({ domain }) {
+    const added = domain.trim().toLowerCase();
+    // Another company of the team already has this one.
+    if (added === 'example.net')
+      return err([{ code: 'CONFLICT', message: 'Second company' }]);
+    if (!(await save()))
+      return err([{ code: 'BAD_REQUEST', message: 'Save rejected' }]);
+    if (!company.domains.some((held) => held.domain === added))
+      company = {
+        ...company,
+        domains: [
+          ...company.domains,
+          {
+            id: `domain-${company.domains.length + 1}`,
+            companyId: company.id,
+            domain: added,
+            createdAt: '2026-11-23',
+          },
+        ],
+      };
+    return ok({ ...company, contacts: [] });
+  },
+  async removeCompanyDomain({ domain }) {
+    // The company is named after its primary domain.
+    if (company.domains[0]?.domain === domain)
+      return err([{ code: 'BAD_REQUEST', message: 'Save rejected' }]);
+    if (!(await save()))
+      return err([{ code: 'FORBIDDEN', message: 'Save rejected' }]);
+    company = {
+      ...company,
+      domains: company.domains.filter((held) => held.domain !== domain),
+    };
+    return ok({ ...company, contacts: [] });
+  },
   async setCompanyName({ name }) {
     company = { ...company, name };
     return ok(undefined);
@@ -302,6 +347,8 @@ export const storageServiceClient = {
   | 'setCompanyHidden'
   | 'setContactHidden'
   | 'setCompanyName'
+  | 'addCompanyDomain'
+  | 'removeCompanyDomain'
   | 'setContactName'
   | 'setEmailSync'
 >;
@@ -309,6 +356,16 @@ const deps = {
   client,
   storage: storageServiceClient as unknown as typeof Storage,
 };
+const references: EntityData[] = ['Kickoff notes', 'Pricing review'].map(
+  (name, index) => ({
+    type: 'document',
+    id: `reference-${index + 1}`,
+    name,
+    fileType: 'md',
+    ownerId: '',
+    updatedAt: '2026-10-15T12:00:00Z',
+  })
+);
 export const useCrmContext = () => ({
   userId: () => 'user-1',
   isTeamAdmin: () => () => role() !== 'member',
@@ -323,7 +380,20 @@ export const useCrmContext = () => ({
   renameContact: () => useSetContactNameMutation(deps),
   editContactEmail: () => useSetContactEmailMutation(deps),
   editContactCompany: () => useSetContactCompanyMutation(deps),
+  editCompanyDomain: () => useEditCompanyDomainMutation(deps),
   setEmailSync: () => useSetEmailSyncMutation(deps),
+  createRecordReferences: (): ItemListSource => ({
+    isPending: false,
+    isEnabled: true,
+    isLoading: false,
+    data: { entities: params.has('refs') ? references : [] },
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isError: false,
+    isFetchNextPageError: false,
+    fetchNextPage: async () => undefined,
+    refetch: async () => undefined,
+  }),
   createNavigation: () => ({
     openWithSplit(target: { id: string }) {
       location.search = `?kind=company&companyArchived&opened=${target.id}`;

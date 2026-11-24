@@ -8,14 +8,23 @@ import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/
 import type { CalendarOccurrenceResponse } from '@service-storage/generated/schemas/calendarOccurrenceResponse';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
+import { ResultAsync } from 'neverthrow';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
 import {
   markCalendarCacheUnsupported,
   useGraphqlCalendarHost,
 } from './graphql/flag';
-import { readCalendarRange } from './graphql/range';
-import { calendarCacheAnswered } from './graphql/readiness';
-import { activeCalendarSyncController } from './graphql/sync-controller';
+import {
+  CALENDAR_CACHE_READ_DEADLINE_MS,
+  calendarCacheAnswered,
+  recordCalendarRestAnswer,
+  withinDeadline,
+} from './graphql/readiness';
+import {
+  activeCalendarSyncController,
+  type CalendarSyncController,
+} from './graphql/sync-controller';
+import { readCalendarViewport } from './graphql/viewport';
 import { type CalendarOccurrenceQueryRange, calendarKeys } from './keys';
 
 export type { CalendarOccurrenceQueryRange } from './keys';
@@ -111,6 +120,53 @@ export async function fetchCalendarOccurrences(
   };
 }
 
+/** A viewport read over REST while calendars do not read the cache. */
+async function fetchRestViewport(
+  range: CalendarOccurrenceQueryRange,
+  signal: AbortSignal
+): Promise<CalendarOccurrencesData> {
+  const data = await fetchCalendarOccurrences(range, signal);
+  // The cache taking over later seeds from this answer.
+  recordCalendarRestAnswer();
+  return data;
+}
+
+/**
+ * Reads a viewport through the cache, from REST whenever the cache cannot
+ * answer, and records which path answered on the calendar load's trace.
+ */
+async function readCachedCalendarOccurrences(
+  host: CacheHost,
+  range: CalendarOccurrenceQueryRange,
+  signal: AbortSignal
+): Promise<CalendarOccurrencesData> {
+  return Telemetry.span(
+    'calendar.occurrences.read',
+    { sampling: 'perf' },
+    async (span) => {
+      const read = await ResultAsync.fromPromise(
+        readCalendarViewport(host, range, {
+          fetchRest: fetchCalendarOccurrences,
+          span,
+          signal,
+          sync: activeCalendarSyncController(),
+        }),
+        (error) => error
+      );
+      if (read.isErr()) {
+        if (!signal.aborted) span.error(read.error);
+        throw read.error;
+      }
+      if (read.value.source === 'rest') {
+        recordCalendarRestAnswer();
+        if (read.value.fallback === 'unsupported')
+          markCalendarCacheUnsupported(host);
+      }
+      return read.value.data;
+    }
+  );
+}
+
 // Cached callbacks close over the resolved host, range and flags only.
 function calendarOccurrencesQueryOptions(
   host: CacheHost | undefined,
@@ -134,14 +190,11 @@ function calendarOccurrencesQueryOptions(
       CalendarOccurrencesQueryKey
     >({
       queryKey: keys._ctx.graphql.queryKey,
-      queryFn: async ({ signal }: { signal: AbortSignal }) => {
+      queryFn: ({ signal }: { signal: AbortSignal }) => {
         if (!range) {
           throw new Error('Calendar occurrence range is unavailable');
         }
-        const read = await readCalendarRange(host, range, { signal });
-        if (read.kind === 'range') return read.data;
-        if (read.kind === 'unsupported') markCalendarCacheUnsupported(host);
-        return fetchCalendarOccurrences(range, signal);
+        return readCachedCalendarOccurrences(host, range, signal);
       },
       enabled,
       staleTime,
@@ -173,7 +226,7 @@ function calendarOccurrencesQueryOptions(
         throw new Error('Calendar occurrence range is unavailable');
       }
 
-      return fetchCalendarOccurrences(range, signal);
+      return fetchRestViewport(range, signal);
     },
     enabled,
     staleTime,
@@ -201,12 +254,15 @@ export function useCalendarOccurrencesQuery(
     const queryKey = calendarKeys.occurrences(userId ?? '', range)._ctx.graphql
       .queryKey;
     onCleanup(
-      subscribeToVisibleCacheChanges(host, () =>
-        activeQueryClient.invalidateQueries(
+      subscribeToVisibleCacheChanges(host, () => {
+        // A read now would only reach REST again, which a change in the
+        // cache cannot bring forward.
+        if (activeCalendarSyncController()?.canCatchUp() === false) return;
+        return activeQueryClient.invalidateQueries(
           { queryKey },
           { cancelRefetch: false }
-        )
-      )
+        );
+      })
     );
   });
 
@@ -243,25 +299,55 @@ export function useCalendarOccurrencesQuery(
   });
 }
 
+async function runDeltaForRefresh(
+  controller: CalendarSyncController
+): Promise<'synced' | 'failed'> {
+  const run = await ResultAsync.fromPromise(
+    controller.runDelta(),
+    (error) => error
+  );
+  if (run.isOk()) return 'synced';
+  console.warn('Calendar delta sync failed', run.error);
+  return 'failed';
+}
+
 /**
  * Refetches every mounted occurrence viewport. With calendar reads on the
  * cache, the delta runs first so the viewports see the change that prompted
  * the refresh rather than the cache from before it. A cache still starting
- * would hold the delta, so the viewports refetch without it. The refetch is
- * skipped when `stillCurrent` turns false while the delta runs.
+ * would hold the delta, so the viewports refetch without it, from REST; the
+ * first read the cache answers afterwards runs the delta before it. A delta
+ * that fails, or is still running at the read deadline (a cache waiting on
+ * another tab), does not hold the refetch: the change is noticed, so reads
+ * wait for the delta or go to REST instead of answering from the older
+ * cache. The refetch is skipped when `stillCurrent` turns false while the
+ * delta runs.
  */
 export async function invalidateCalendarOccurrences(
   stillCurrent: () => boolean = () => true
 ) {
-  const controller = activeCalendarSyncController();
-  if (controller?.answering()) {
-    await controller.runDelta().catch((error) => {
-      console.warn('Calendar delta sync failed', error);
+  return Telemetry.span('calendar.occurrences_refresh', async (span) => {
+    const controller = activeCalendarSyncController();
+    span.setAttr('calendar.transport', controller ? 'graphql' : 'rest');
+    controller?.noticeChange();
+    if (controller?.answering()) {
+      span.setAttr(
+        'calendar.delta.outcome',
+        await withinDeadline(
+          runDeltaForRefresh(controller),
+          CALENDAR_CACHE_READ_DEADLINE_MS
+        )
+      );
+    } else if (controller) {
+      span.setAttr('calendar.delta.outcome', 'cache_starting');
+    }
+    if (!stillCurrent()) {
+      span.setAttr('calendar.refresh.superseded', true);
+      return;
+    }
+    return queryClient.invalidateQueries({
+      queryKey: calendarKeys.occurrences._def,
     });
-  }
-  if (!stillCurrent()) return;
-  return queryClient.invalidateQueries({
-    queryKey: calendarKeys.occurrences._def,
   });
 }
 

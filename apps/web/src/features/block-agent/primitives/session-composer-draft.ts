@@ -172,6 +172,7 @@ export function createSessionAttachmentTracker(
   return {
     attachments: tracker.attachments,
     hasPending: tracker.hasPending,
+    isFull: tracker.isFull,
     addAttachment: (attachment) => {
       tracker.addAttachment(attachment);
       persist();

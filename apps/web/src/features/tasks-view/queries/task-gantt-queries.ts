@@ -1,5 +1,12 @@
+import type { GanttCreation } from '@app/components/gantt/create-gantt-creation';
 import type { GanttGroupMove } from '@app/components/gantt/gantt-group-drag';
 import type { TaskEntityWithProperties } from '@entity';
+import {
+  buildStartDateDefaultProperty,
+  soupPropertyToProperty,
+} from '@entity/extractors-property/property-helpers';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import { rescheduledStartDue } from '@property/utils/start-due';
 import { toPropertyDefinitionDomain } from '@property/utils/transforms';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
@@ -11,6 +18,7 @@ import {
   taskBoardPropertyId,
   toBoardTask,
 } from './task-board';
+import { taskGanttDates, taskGanttWholeDay } from './task-gantt';
 import type { TasksDataSourceItem } from './use-tasks-query';
 
 /** Leaves authorization to property saves, matching task-list editing. */
@@ -20,7 +28,9 @@ export function createTaskGanttQueries(options: {
 }) {
   const grouping = () => {
     const group = options.grouping();
-    return group === 'none' || group === 'date' ? undefined : group;
+    return group === 'none' || group === 'date' || group === 'start_date'
+      ? undefined
+      : group;
   };
   const tasks = createMemo(() => {
     const result = new Map<string, TaskEntityWithProperties>();
@@ -103,8 +113,62 @@ export function createTaskGanttQueries(options: {
     return { group, property, task, boardMove };
   };
 
+  const canReschedule = (id: string) => {
+    const task = tasks().get(id);
+    return (
+      !!task && !saving().includes(id) && taskGanttDates(task, true).end != null
+    );
+  };
+
   return {
     canDrag,
+    canReschedule,
+    /** Saves the dates a timeline bar was dropped at, the ends that moved only. */
+    async reschedule(id: string, range: GanttCreation) {
+      const task = tasks().get(id);
+      if (!task || !canReschedule(id))
+        throw new Error('Task is no longer editable');
+      const end = (definitionId: string) =>
+        task.properties?.find(
+          (property) => property.definition.id === definitionId
+        );
+      const start = end(SYSTEM_PROPERTY_IDS.START_DATE);
+      const due = end(SYSTEM_PROPERTY_IDS.DUE_DATE);
+      if (!due) throw new Error('Task has no due date to move');
+      const dates = taskGanttDates(task, true);
+      if (dates.start == null) throw new Error('Task has no start to move');
+      const ends = rescheduledStartDue(
+        {
+          start: new Date(dates.start),
+          due: dates.end ? new Date(dates.end) : null,
+          wholeDay: taskGanttWholeDay(task),
+        },
+        range
+      );
+      if (!ends.length) return;
+      setSaving((ids) => [...ids, id]);
+      try {
+        await save.mutateAsync({
+          properties: ends.map(({ field, value, hasTime }) => ({
+            entityId: id,
+            entityType: 'TASK' as const,
+            property:
+              field === 'due'
+                ? soupPropertyToProperty(due)
+                : start
+                  ? soupPropertyToProperty(start)
+                  : buildStartDateDefaultProperty(),
+            apiValues: {
+              valueType: 'DATE' as const,
+              value,
+              ...(hasTime ? { hasTime: true } : {}),
+            },
+          })),
+        });
+      } finally {
+        setSaving((ids) => ids.filter((saved) => saved !== id));
+      }
+    },
     canMove: (move: GanttGroupMove) => !!resolveMove(move),
     async moveGroup(move: GanttGroupMove) {
       const resolved = resolveMove(move);

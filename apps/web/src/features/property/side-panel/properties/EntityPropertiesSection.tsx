@@ -5,6 +5,7 @@ import {
 } from '@components/app/side-panel/SidePanel';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Plus from '@icon/system/regular/plus.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { Property as PropertyNS, useProperty } from '@property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { EntityLinkPill } from '@property/component/EntityLinkPill';
@@ -19,21 +20,26 @@ import {
 } from '@property/context/PropertiesContext';
 import { resolvePinnedPropertyIds } from '@property/core/pinned-property-ids';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
+import { StartDueEditor } from '@property/editors/popover/StartDueEditor';
 import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { isTaggableEntityType, TagsRow } from '@property/tags';
 import type {
+  DateApiValue,
+  DateProperty,
   Property,
   PropertyApiValues,
   PropertyDefinitionDomain,
 } from '@property/types';
-import { getEntityValues, hasValue } from '@property/utils';
+import { getEntityValues, hasValue, isDateProperty } from '@property/utils';
+import { type DateField, dateFieldOf } from '@property/utils/start-due';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Key } from '@solid-primitives/keyed';
 import { Badge, Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
+import { ResultAsync } from 'neverthrow';
 import {
   createEffect,
   createMemo,
@@ -89,6 +95,8 @@ export interface EntityPropertiesSectionProps {
    * team has its own stage set.
    */
   hidePropertyDefinitionIds?: string[];
+  /** Start Date and Due Date rows open one picker for both, each on its own end. */
+  pairStartAndDue?: () => boolean;
 }
 
 export {
@@ -110,7 +118,12 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     props.entityType,
     props.includeMetadata ?? false
   );
-  const allProperties = useAllProperties();
+  // The definitions this entity can take: the same list Add property asks for,
+  // so it is already loaded when the picker opens.
+  const allProperties = useAllProperties(
+    () => true,
+    () => props.entityType
+  );
   const [pendingDefinitionIds, setPendingDefinitionIds] = createSignal<
     Set<string>
   >(new Set());
@@ -163,6 +176,11 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     // Pins control the title row only. The panel lists every assigned property.
     const visible = mergedProperties().filter((property) => {
       if (tagDefinitionIds().has(property.propertyDefinitionId)) {
+        return false;
+      }
+      // Time logged is the sum of a task's entries: the Time pill shows and
+      // changes it, never a generic number row.
+      if (property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.TIME_LOGGED) {
         return false;
       }
       if (props.propertyFilter && !props.propertyFilter(property)) {
@@ -287,7 +305,14 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   };
   const saveOne = async (property: Property, apiValues: PropertyApiValues) => {
     await savePropertyValues(property, apiValues);
-    await props.onPropertiesChanged?.();
+    // The value is saved; a refresh failing afterwards is not a failed save.
+    const refreshed = await ResultAsync.fromPromise(
+      Promise.resolve(props.onPropertiesChanged?.()),
+      (error) => error
+    );
+    if (refreshed.isErr()) {
+      Telemetry.error(refreshed.error, { surface: 'property-side-panel' });
+    }
   };
   const refreshCollection = async (outcome: CollectionSaveOutcome) => {
     // The cache already holds a committed save; a network read could bring a
@@ -301,6 +326,23 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     saveProperty: (property, value) => saveOne(property, value),
     saveDate: (property, date) =>
       saveOne(property, { valueType: 'DATE', value: date }),
+  };
+
+  const dateEnd = (field: DateField): DateProperty | undefined => {
+    const definitionId =
+      field === 'start'
+        ? SYSTEM_PROPERTY_IDS.START_DATE
+        : SYSTEM_PROPERTY_IDS.DUE_DATE;
+    const property = mergedProperties().find(
+      (candidate) => candidate.propertyDefinitionId === definitionId
+    );
+    return property && isDateProperty(property) ? property : undefined;
+  };
+  const otherDateEnd = (property: Property) => {
+    if (!props.pairStartAndDue?.()) return undefined;
+    const field = dateFieldOf(property.propertyDefinitionId);
+    if (!field) return undefined;
+    return dateEnd(field === 'start' ? 'due' : 'start');
   };
 
   const canShowProperties = () => !error() || properties().length > 0;
@@ -349,6 +391,8 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                   entityId={props.entityId}
                   getEmptyLabel={props.getEmptyLabel}
                   property={property()}
+                  otherDateEnd={() => otherDateEnd(property())}
+                  saveOtherDateEnd={(end, value) => saveOne(end, value)}
                   canRemoveFromEntity={
                     !defaultPinnedDefinitionIds().has(
                       property().propertyDefinitionId
@@ -584,6 +628,12 @@ function SidePanelPropertyRow(props: {
   onRemovePendingProperty: (property: Property) => void;
   onPropertyPinned?: (propertyId: string) => void;
   property: Property;
+  /** The other end of a Start Date or Due Date row that opens both. */
+  otherDateEnd?: () => DateProperty | undefined;
+  saveOtherDateEnd?: (
+    property: DateProperty,
+    value: DateApiValue
+  ) => Promise<unknown>;
 }) {
   const ctx = usePropertiesContext();
   const t = () => props.property.valueType;
@@ -656,12 +706,31 @@ function SidePanelPropertyRow(props: {
                     </PropertyRowActions.Provider>
                   </Match>
                 </Switch>
-                <PropertyNS.PopoverEditor
-                  entitySelfFilter={{
-                    entityType: ctx.entityType,
-                    blockId: props.entityId,
-                  }}
-                />
+                <Show
+                  when={props.otherDateEnd?.()}
+                  fallback={
+                    <PropertyNS.PopoverEditor
+                      entitySelfFilter={{
+                        entityType: ctx.entityType,
+                        blockId: props.entityId,
+                      }}
+                    />
+                  }
+                >
+                  {(other) => (
+                    <StartDueEditor
+                      field={
+                        dateFieldOf(props.property.propertyDefinitionId) ??
+                        'due'
+                      }
+                      other={() => props.otherDateEnd?.() ?? other()}
+                      saveOther={(end, value) =>
+                        props.saveOtherDateEnd?.(end, value) ??
+                        Promise.resolve()
+                      }
+                    />
+                  )}
+                </Show>
               </>
             )}
           </PropertyNS.Root>

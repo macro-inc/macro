@@ -9,6 +9,10 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
+  AddCompanyDomain: {
+    call: types.AddCompanyDomain;
+    response: types.CompanyDomainsResponse;
+  };
   AddSharedCalendarEvent: {
     call: types.AddSharedCalendarEvent;
     response: types.ToolCalendarEvent;
@@ -325,6 +329,7 @@ type ToolParserMap = {
     response: types.ListTeamMembersResponse;
   };
   LoadTools: { call: types.LoadTools; response: types.LoadToolsResponse };
+  LogTime: { call: types.LogTime; response: types.LogTimeResponse };
   ManageAgentSession: {
     call: types.ManageAgentSession;
     response: types.SessionActionResult;
@@ -446,9 +451,17 @@ type ToolParserMap = {
     response: types.SpreadsheetResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  ReadTimeEntries: {
+    call: types.ReadTimeEntries;
+    response: types.ReadTimeEntriesResponse;
+  };
   ReadWordDocument: {
     call: types.ReadWordDocument;
     response: types.WordDocumentResponse;
+  };
+  RemoveCompanyDomain: {
+    call: types.RemoveCompanyDomain;
+    response: types.CompanyDomainsResponse;
   };
   RemoveFromPipeline: {
     call: types.RemoveFromPipeline;
@@ -561,6 +574,10 @@ type ToolParserMap = {
 };
 
 const toolParserMap = {
+  AddCompanyDomain: {
+    call: schemas.AddCompanyDomain,
+    response: schemas.CompanyDomainsResponse,
+  },
   AddSharedCalendarEvent: {
     call: schemas.AddSharedCalendarEvent,
     response: schemas.ToolCalendarEvent,
@@ -907,6 +924,7 @@ const toolParserMap = {
     response: schemas.ListTeamMembersResponse,
   },
   LoadTools: { call: schemas.LoadTools, response: schemas.LoadToolsResponse },
+  LogTime: { call: schemas.LogTime, response: schemas.LogTimeResponse },
   ManageAgentSession: {
     call: schemas.ManageAgentSession,
     response: schemas.SessionActionResult,
@@ -1046,9 +1064,17 @@ const toolParserMap = {
     response: schemas.SpreadsheetResponse,
   },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
+  ReadTimeEntries: {
+    call: schemas.ReadTimeEntries,
+    response: schemas.ReadTimeEntriesResponse,
+  },
   ReadWordDocument: {
     call: schemas.ReadWordDocument,
     response: schemas.WordDocumentResponse,
+  },
+  RemoveCompanyDomain: {
+    call: schemas.RemoveCompanyDomain,
+    response: schemas.CompanyDomainsResponse,
   },
   RemoveFromPipeline: {
     call: schemas.RemoveFromPipeline,
@@ -1187,6 +1213,10 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
+  AddCompanyDomain: {
+    call: types.AddCompanyDomain;
+    response: types.CompanyDomainsResponse;
+  };
   AddSharedCalendarEvent: {
     call: types.AddSharedCalendarEvent;
     response: types.ToolCalendarEvent;
@@ -1503,6 +1533,7 @@ type ToolDataMap = {
     response: types.ListTeamMembersResponse;
   };
   LoadTools: { call: types.LoadTools; response: types.LoadToolsResponse };
+  LogTime: { call: types.LogTime; response: types.LogTimeResponse };
   ManageAgentSession: {
     call: types.ManageAgentSession;
     response: types.SessionActionResult;
@@ -1624,9 +1655,17 @@ type ToolDataMap = {
     response: types.SpreadsheetResponse;
   };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  ReadTimeEntries: {
+    call: types.ReadTimeEntries;
+    response: types.ReadTimeEntriesResponse;
+  };
   ReadWordDocument: {
     call: types.ReadWordDocument;
     response: types.WordDocumentResponse;
+  };
+  RemoveCompanyDomain: {
+    call: types.RemoveCompanyDomain;
+    response: types.CompanyDomainsResponse;
   };
   RemoveFromPipeline: {
     call: types.RemoveFromPipeline;

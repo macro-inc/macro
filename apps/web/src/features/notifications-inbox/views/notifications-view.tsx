@@ -33,7 +33,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import { formatTimestamp } from '@entity/utils/timestamp';
 import CheckIcon from '@icon/system/regular/check.svg';
-import GearSixIcon from '@icon/system/regular/gear-six.svg';
 import type { UnifiedNotification } from '@notifications/types';
 import { useMutationUndoContext } from '@queries/undo';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -58,6 +57,7 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { InboxClearDrawer } from '../components/inbox-clear-drawer';
 import { InboxClearMenu } from '../components/inbox-clear-menu';
 import { InboxDateHeader } from '../components/inbox-date-header';
+import { InboxDisplayMenu } from '../components/inbox-display-menu';
 import { InboxFilterDrawer } from '../components/inbox-filter-drawer';
 import { InboxFilterMenu } from '../components/inbox-filter-menu';
 import {
@@ -99,6 +99,7 @@ import {
   isInboxRow,
   isInboxStackItem,
 } from '../primitives/inbox-date-headers';
+import { createCondensedPreference } from '../primitives/inbox-display';
 import { createInboxFilters } from '../primitives/inbox-filters';
 import { createInboxList } from '../primitives/inbox-list';
 import {
@@ -116,7 +117,6 @@ import {
 } from './inbox-notices';
 import { calendarSelection, previewTargetFor } from './inbox-preview-target';
 import { InboxRowAvatar } from './inbox-row-avatar';
-import type { NotificationsFrame } from './notifications-frame';
 import { NotificationsNoneSelected } from './notifications-none-selected';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
@@ -131,8 +131,6 @@ export type NotificationsViewProps = {
   ) => void;
   /** Open the settings that decide which notifications are delivered. */
   onOpenSettings: () => void;
-  /** The host's frame, which also replaces the Settings button. */
-  frame?: NotificationsFrame;
   /** Where the shown row is kept, so opening one is a history entry. */
   shownRow: InboxShownRowLocation;
   /** Calendar events show in the content area through the view's calendar route. */
@@ -179,18 +177,24 @@ export function NotificationsView(props: NotificationsViewProps) {
     ...INBOX_ANNOUNCEMENTS,
   });
 
-  createEffect(() =>
-    panel.handle.setDisplayName(props.frame?.title() ?? t('nav.notifications'))
-  );
-  const condensed = () => props.frame?.condensed() ?? false;
+  createEffect(() => panel.handle.setDisplayName(t('nav.notifications')));
+  const display = createCondensedPreference(context.displayStorage);
+  // Condensed is a desktop display option; touch, which has no Display
+  // options to turn it off, always shows full rows.
+  const condensed = () => !isTouchDevice() && display.condensed();
 
-  // A frame numbers All and Unread among its own tabs.
-  useViewTabHotkeys({
+  const [statusTabs, setStatusTabs] = createSignal<HTMLElement>();
+  useViewTabHotkeys<InboxStatus>({
     scopeId: panel.splitHotkeyScope,
-    enabled: () => !props.frame && panel.isPanelActive(),
+    enabled: panel.isPanelActive,
+    tabs: statusTabs,
     ids: () => INBOX_STATUSES,
     activeId: () => filters.filters().status,
     setActiveId: filters.setStatus,
+    label: (status) =>
+      status === 'all'
+        ? t('notificationsInbox.statusAll')
+        : t('notificationsInbox.statusUnread'),
   });
 
   const [filterOpen, setFilterOpen] = createSignal(false);
@@ -217,9 +221,6 @@ export function NotificationsView(props: NotificationsViewProps) {
   const isUnfolded = (id: string) => !condensed() && stacks.isExpanded(id);
   const listItems = createInboxListItems(rows, isUnfolded);
   const sectionEnds = createMemo(() => inboxSectionEnds(listItems()));
-  const anyStackOpen = createMemo(() =>
-    rows().some((row) => row.count > 1 && isUnfolded(row.id))
-  );
   const rowsById = createMemo(
     () => new Map(rows().map((row) => [row.id, row] as const))
   );
@@ -678,11 +679,6 @@ export function NotificationsView(props: NotificationsViewProps) {
           unseen={card.row().unseen}
           highlighted={highlighted()}
           endsSection={sectionEnds().has(card.row().id)}
-          receded={
-            anyStackOpen() &&
-            !stacks.isExpanded(card.row().id) &&
-            !highlighted()
-          }
           onHover={() => list.focus.set(card.row().id, { reason: 'hover' })}
           onClick={(event) =>
             list.activate.key(card.row().id, {
@@ -1009,18 +1005,14 @@ export function NotificationsView(props: NotificationsViewProps) {
           <Show when={!isTouchDevice()} fallback={touchLayout()}>
             <div class="size-full min-h-0 bg-panel">
               <ViewShell.Root
-                asidePreferenceKey={
-                  props.frame?.list.asidePreferenceKey ?? 'notifications'
-                }
+                asidePreferenceKey="notifications"
                 // Rows read as sentences, so the list starts wider than a nav
-                // rail; a frame shares one list width across its views.
-                aside={
-                  props.frame?.list.aside ?? {
-                    width: 360,
-                    max: 480,
-                    preserveDuringResize: false,
-                  }
-                }
+                // rail.
+                aside={{
+                  width: 360,
+                  max: 480,
+                  preserveDuringResize: false,
+                }}
                 // Narrow, the list and what it opens take turns.
                 asideList={{
                   open:
@@ -1032,46 +1024,21 @@ export function NotificationsView(props: NotificationsViewProps) {
                 resizable
               >
                 <ViewShell.Aside class="flex flex-col bg-panel">
-                  <Show
-                    when={props.frame}
-                    fallback={
-                      <InboxListHeader
-                        actions={
-                          <>
-                            {listActions()}
-                            <Button
-                              size="icon-xs"
-                              variant="ghost"
-                              aria-label={t('notificationsInbox.settings')}
-                              tooltip={t('notificationsInbox.settings')}
-                              onClick={() => props.onOpenSettings()}
-                            >
-                              <GearSixIcon class="size-4" />
-                            </Button>
-                          </>
-                        }
-                      />
+                  <InboxListHeader
+                    actions={
+                      <>
+                        {listActions()}
+                        <InboxDisplayMenu
+                          condensed={condensed()}
+                          onCondensedChange={display.setCondensed}
+                          onOpenSettings={() => props.onOpenSettings()}
+                        />
+                      </>
                     }
-                  >
-                    {(frame) =>
-                      frame().header({
-                        actions: listActions(),
-                        status: () => filters.filters().status,
-                        onStatusChange: filters.setStatus,
-                        closePreview: () => closePreview(),
-                      })
-                    }
-                  </Show>
-                  {/* In a frame, All and Unread line up with its New Chat
-                      button and tabs. */}
-                  <div
-                    class={
-                      props.frame
-                        ? 'shrink-0 px-(--sidebar-gutter) pb-1'
-                        : 'shrink-0 px-3 pb-1'
-                    }
-                  >
+                  />
+                  <div class="shrink-0 px-3 pb-1">
                     <InboxStatusTabs
+                      ref={setStatusTabs}
                       status={filters.filters().status}
                       onChange={filters.setStatus}
                     />
@@ -1099,11 +1066,7 @@ export function NotificationsView(props: NotificationsViewProps) {
                         fallback={() => (
                           <Show
                             when={previewTarget()}
-                            fallback={
-                              props.frame?.idle() ?? (
-                                <NotificationsNoneSelected />
-                              )
-                            }
+                            fallback={<NotificationsNoneSelected />}
                           >
                             <PreviewPanel
                               target={previewTarget()}

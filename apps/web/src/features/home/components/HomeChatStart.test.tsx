@@ -58,9 +58,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 function renderHome() {
-  return render(() => (
-    <HomeChatStart title="Home" onStartedSession={() => {}} />
-  ));
+  return render(() => <HomeChatStart />);
 }
 
 describe('Home agent composer alignment', () => {

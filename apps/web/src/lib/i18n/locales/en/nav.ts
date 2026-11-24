@@ -44,17 +44,13 @@ export default {
   manyUnreadNotifications: {
     other: 'More than {{count}} unread notifications',
   },
-  unseenItems: {
-    one: '{{count}} unseen item',
-    other: '{{count}} unseen items',
-  },
   activeCall: 'Active call',
   returnToCall: 'Return to call',
   nextMeeting: 'Next meeting: {{time}}',
   more: 'More',
   moreOptions: 'More options',
   create: 'Create',
-  getMobileApp: 'Get the mobile app',
+  downloads: 'Downloads',
   help: 'Help',
   helpMessage: 'Message support',
   helpCall: 'Book a call',

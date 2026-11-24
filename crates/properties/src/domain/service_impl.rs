@@ -2,6 +2,7 @@
 
 mod helpers;
 mod options;
+mod start_and_due;
 mod task_properties;
 
 use std::collections::{HashMap, HashSet};
@@ -55,7 +56,8 @@ use super::ports::{
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
 
 use helpers::{
-    extract_option_ids_from_property_value, is_property_applicable_to, retain_caller_visible_tags,
+    extract_option_ids_from_property_value, is_property_applicable_to, reject_derived_property,
+    retain_caller_visible_tags,
 };
 
 // Database cells must commit with their table version and change journal.
@@ -659,6 +661,7 @@ where
         value: Option<SetPropertyValue>,
         source: Option<PropertyChangeSource>,
     ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
+        reject_derived_property(property_definition_id)?;
         require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let entity_id = access.entity_id();
@@ -783,6 +786,16 @@ where
                 .await?;
         }
 
+        let property_value = self
+            .keep_start_on_or_before_due(
+                access,
+                entity_type,
+                property_definition_id,
+                property_value,
+                source.as_ref(),
+            )
+            .await?;
+
         let snapshot = self
             .repository
             .upsert_entity_property(
@@ -896,6 +909,7 @@ where
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
+        reject_derived_property(property_definition_id)?;
         require_generic_property_target(access.entity_type())?;
         let property_definition = self
             .repository
@@ -963,6 +977,7 @@ where
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
+        reject_derived_property(property_definition_id)?;
         require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let mutation = self
@@ -1004,6 +1019,9 @@ where
         access: &EditReceipt,
         updates: Vec<EntityPropertyOptionUpdate>,
     ) -> Result<Vec<EntityPropertyOptionSelection>, PropertiesErr> {
+        for update in &updates {
+            reject_derived_property(update.property_definition_id)?;
+        }
         require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let entity_type = subject.storage_entity_type;
@@ -1074,6 +1092,7 @@ where
         add_option_ids: Vec<Uuid>,
         remove_option_ids: Vec<Uuid>,
     ) -> Result<Vec<EntityOptionUpdateOutcome>, PropertiesErr> {
+        reject_derived_property(property_definition_id)?;
         // Validate the shared delta once. A missing property, a single-select
         // property, or an invalid added option is a client error in the request
         // itself, so it fails the whole call rather than producing per-entity
@@ -1978,6 +1997,7 @@ where
             .await
             .map_err(anyhow::Error::from)?
             .ok_or(PropertiesErr::EntityPropertyNotFound)?;
+        reject_derived_property(property_info.property_definition_id)?;
 
         let subject = self.resolve_subject(access).await?;
 

@@ -67,7 +67,7 @@ export function getAttachmentKindFromFile(file: {
   name: string;
   mimeType?: string;
   type?: string;
-}): InputAttachmentKind {
+}): Exclude<InputAttachmentKind, 'audio'> {
   const mimeType = file.mimeType ?? file.type ?? '';
   if (mimeType.startsWith('image/')) return 'image';
   if (mimeType.startsWith('video/')) return 'video';

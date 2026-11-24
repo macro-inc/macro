@@ -1,6 +1,8 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useLogout } from '@core/auth/logout';
 import { UserIcon } from '@core/component/UserIcon';
+import { enableAgentNotifications } from '@core/constant/featureFlags';
 import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -16,6 +18,7 @@ import { useTeamSettingsGroups } from './teamSettingsGroups';
 export function MobileSettings() {
   const settings = useMobileSettings();
   const macroComputers = useMacroComputersRollout();
+  const agentNotifications = useFeatureFlag(enableAgentNotifications);
   // Always mounted on phones; read the providers only once settings open.
   const outlook = useOutlookAvailable(settings.open);
   const { groups, searchGroups } = useSettingsTabs();
@@ -42,6 +45,7 @@ export function MobileSettings() {
       emailRowStyle={false}
       outlook={outlook()}
       macroComputers={macroComputers().enabled}
+      agentNotifications={agentNotifications().enabled}
       name={displayName()}
       email={email() ?? ''}
       avatar={

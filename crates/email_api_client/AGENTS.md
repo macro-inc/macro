@@ -152,7 +152,20 @@ Outlook (Microsoft Graph) outbound adapters.
   failed:" prefix, since nothing was sent. It warns `refused to split an
   Outlook event body too large to parse whole` with `body_bytes`. Find the blocks in one walk of the tree, never by checking
   each `div`'s ancestors: that reads an ancestor's classes once per `div`
-  inside it, seconds of CPU for a body within the parse bounds.
+  inside it, seconds of CPU for a body within the parse bounds. Macro's
+  description editor drops the `me-email*` markers, laying the block out as
+  plain paragraphs and the line breaks Graph puts between tags, so a
+  replacement carrying an edited description (`without_meeting`) removes the
+  top-level run around the join link whose texts, ignoring whitespace, match
+  the saved block's (textless parts only between them), and refuses one with
+  the link or a part of the block anywhere else. An ordinary description
+  edit (`preserve_meeting_details`) removes that run the same way and writes
+  Outlook's own block from the current body back in its place, so the block
+  keeps its markers; a description it cannot separate is written as given.
+- A replacement lays the editor's unsaved changes over the copied event
+  with the same `patch_body` an Outlook update sends, so its create body holds
+  no field the copy or an update does not already send. A series that moves
+  takes its saved repeat rule again from the new start.
 - The Outlook calendar normalizer (`outlook/calendar/normalize.rs`,
   `recurrence.rs`) fails with `Rejected`, which names the Graph property
   path (`recurrence.range.endDate`, `instances.start.dateTime`), built only

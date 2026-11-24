@@ -1,10 +1,12 @@
 use crate::api::context::ApiContext;
+use crate::service::user::signup_meta::SignupClickIds;
 use axum::{
     Json,
     extract::{Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode, header::USER_AGENT},
     response::{IntoResponse, Redirect, Response},
 };
+use macro_middleware::tracking::ClientIp;
 use model::response::ErrorResponse;
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
@@ -39,6 +41,12 @@ pub(crate) struct LoginQueryParams {
     /// Whether this sign-in started on the agent signup page.
     #[serde(default)]
     is_agent: bool,
+    /// Meta browser id (`_fbp`) from the page that started sign-in.
+    #[serde(default)]
+    fbp: Option<String>,
+    /// Meta click id (`_fbc`) from the page that started sign-in.
+    #[serde(default)]
+    fbc: Option<String>,
 }
 
 pub(crate) fn is_allowed_original_url(url: &Url) -> bool {
@@ -119,11 +127,13 @@ fn sign_in_prompt(idp_name: &str) -> Option<&'static str> {
             (status = 500, body=ErrorResponse),
         )
     )]
-// `query` is skipped: original_url is client-controlled (query/fragment may
-// carry tokens) and login_hint is a user email — neither belongs in span fields.
-#[tracing::instrument(skip(ctx, query), fields(idp_name = ?query.idp_name, idp_id = ?query.idp_id, is_mobile = query.is_mobile, is_agent = query.is_agent))]
+// `query` and `headers` are skipped: original_url and login_hint can carry
+// tokens or an email, and the header map can carry a session cookie.
+#[tracing::instrument(skip(ctx, query, headers), fields(idp_name = ?query.idp_name, idp_id = ?query.idp_id, is_mobile = query.is_mobile, is_agent = query.is_agent))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
+    headers: HeaderMap,
+    ip_context: ClientIp,
     query: Query<LoginQueryParams>,
 ) -> Result<Response, Response> {
     let Query(LoginQueryParams {
@@ -134,6 +144,8 @@ pub async fn handler(
         is_mobile,
         referral_code,
         is_agent,
+        fbp,
+        fbc,
     }) = query;
 
     let original_url = original_url.map(|url| url.0);
@@ -227,6 +239,29 @@ pub async fn handler(
         || state.original_url.is_some()
         || state.referral_code.is_some())
     .then_some(state);
+
+    // The create-user webhook does not see this browser. Stash click ids for
+    // this address and user agent. A different browser at the same address
+    // cannot read or delete the slot.
+    let click_ids = SignupClickIds::from_parts(
+        fbp.as_deref(),
+        fbc.as_deref(),
+        headers
+            .get(USER_AGENT)
+            .and_then(|value| value.to_str().ok()),
+    );
+    if let Some(user_agent) = click_ids.client_user_agent.as_deref()
+        && click_ids.has_click_id()
+    {
+        let ip = ip_context.origin_ip().to_string();
+        if let Err(error) = ctx
+            .macro_cache_client
+            .stash_signup_meta(&ip, user_agent, &click_ids.to_json())
+            .await
+        {
+            tracing::warn!(error = ?error, "failed to stash signup meta attribution");
+        }
+    }
 
     // Generate code
     let sso_url = match prompt {

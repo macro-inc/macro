@@ -112,12 +112,7 @@ const featureSources: Record<string, string> = {
   '/forms': 'features/marketing/views/ProductFormsPage.tsx',
 };
 const otherPages = [
-  [
-    '/',
-    'Home',
-    'Website',
-    'features/marketing/components/homepage/MacroHero.tsx',
-  ],
+  ['/', 'Home', 'Website', 'features/setup/Homepage.tsx'],
   ['/pricing', 'Pricing', 'Website', 'app/routes/RoutePricing.tsx'],
   [
     '/replace-apps',
