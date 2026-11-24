@@ -1824,3 +1824,59 @@ fn a_store_derived_from_a_dropped_type_empties_with_its_coverage() {
     assert_eq!(calendar_rows(&storage), 0);
     storage.try_close().unwrap();
 }
+
+/// [`OLD`] with channel messages, which the channel timeline derives from.
+const CHANNELS: &str = "type Query { thing: Thing note: Note message: GraphqlChannelMessage } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String } type Note { id: ID! value: String } type GraphqlChannelMessage { id: ID! content: String }";
+
+fn hold_channel(storage: &TursoStorage) {
+    for sql in [
+        "INSERT INTO channel_timeline (record_key, channel_id, scope, sort_key, hidden, seq) VALUES ('GraphqlChannelMessage:1', 'c1', 'c:c1', '10', 0, 4)",
+        "INSERT INTO channel_removed (record_key, channel_id, seq) VALUES ('GraphqlChannelMessage:2', 'c1', 4)",
+        "INSERT INTO channel_coverage (channel_id, scope, start, end) VALUES ('c1', 'c:c1', '', '20')",
+        "INSERT INTO channel_sync (channel_id, seq, touched_at_ms) VALUES ('c1', 4, 1)",
+    ] {
+        raw_execute(storage, sql, Vec::new());
+    }
+}
+
+fn channel_rows(storage: &TursoStorage) -> i64 {
+    crate::storage::channel_timeline::TABLES
+        .iter()
+        .map(|table| count(storage, &format!("SELECT count(*) FROM {table}")))
+        .sum()
+}
+
+#[test]
+fn dropped_channel_messages_take_their_rows_coverage_removals_and_watermark() {
+    let storage = TursoStorage::open_in_memory("scope").unwrap();
+    assert_eq!(
+        adopt(&storage, CHANNELS, &ProjectionInputs::none()).change,
+        None
+    );
+    hold_channel(&storage);
+    let unrelated = CHANNELS.replace(
+        "type Thing { id: ID! value: String }",
+        "type Thing { id: ID! value: Int }",
+    );
+    let adoption = adopt(&storage, &unrelated, &ProjectionInputs::none());
+    assert_eq!(adoption.change, types(&["Thing"], false));
+    assert_eq!(channel_rows(&storage), 4);
+
+    let retyped = unrelated.replace("content: String", "content: Int");
+    let adoption = adopt(&storage, &retyped, &ProjectionInputs::none());
+    let Some(Tier::Types { changed, .. }) = &adoption.change else {
+        panic!("{:?}", adoption.change);
+    };
+    assert!(changed.contains("GraphqlChannelMessage"), "{changed:?}");
+    assert_eq!(channel_rows(&storage), 0);
+
+    hold_channel(&storage);
+    let roots = retyped.replace(
+        "type Query {",
+        "schema { query: Root mutation: Mutation } type Root {",
+    );
+    let adoption = adopt(&storage, &roots, &ProjectionInputs::none());
+    assert_eq!(adoption.change, Some(Tier::Reset(ResetReason::Roots)));
+    assert_eq!(channel_rows(&storage), 0);
+    storage.try_close().unwrap();
+}

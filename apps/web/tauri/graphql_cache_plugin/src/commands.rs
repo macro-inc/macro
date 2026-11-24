@@ -10,12 +10,12 @@
 //! worker's `{ok: false, error}` responses.
 
 use crate::engine::{
-    AffectedOperationsResultWire, CalendarRangeResultWire, ChannelCommitResultWire,
-    ChannelEvictionResultWire, ChannelTimelineResultWire, ClaimedMutationWire,
-    CommitOptimisticWriteResultWire, DeferOptimisticWriteResultWire, EngineHandle,
-    EnqueueOptimisticMutationResultWire, EntityFilterRequest, EntityFilterResult,
-    MutationUpsertKindWire, ReadResultWire, RecordSelectionResultWire,
-    RollbackOptimisticWriteResultWire, WriteRegistration, WriteRequest, WriteResultWire,
+    AffectedOperationsResultWire, CalendarRangeResultWire, ChannelEvictionResultWire,
+    ChannelTimelineResultWire, ClaimedMutationWire, CommitOptimisticWriteResultWire,
+    DeferOptimisticWriteResultWire, EngineHandle, EnqueueOptimisticMutationResultWire,
+    EntityFilterRequest, EntityFilterResult, MutationUpsertKindWire, ReadResultWire,
+    RecordSelectionResultWire, RollbackOptimisticWriteResultWire, WriteRegistration, WriteRequest,
+    WriteResultWire,
 };
 use crate::{
     CacheState, InitializedCache, emit_cache_changed, emit_cache_changed_with_hints,
@@ -23,7 +23,8 @@ use crate::{
 };
 use cache_core::calendar::{CalendarCommit, CalendarRangeRequest};
 use cache_core::channel_timeline::{
-    ChannelEviction, ChannelTimelineCommit, ChannelTimelineRequest, ChannelTimelineStats,
+    ChannelCommitOutcome, ChannelEviction, ChannelTimelineCommit, ChannelTimelineRequest,
+    ChannelTimelineStats,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -717,20 +718,20 @@ fn emit_channel_write<R: Runtime>(
     }
 }
 
-/// Applies fetched coverage, deletions and the applied change sequence of
-/// one channel, then broadcasts the deleted records like a write.
+/// Commits what is known of a channel without a response (a touch, a reset or
+/// dropped threads), then broadcasts the deleted records like a write.
 #[tauri::command]
 pub async fn graphql_cache_channel_timeline_commit<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
     generation: Option<uuid::Uuid>,
     commit: ChannelTimelineCommit,
-) -> Result<ChannelCommitResultWire, String> {
+) -> Result<WriteResultWire, String> {
     let result = engine_handle(&state)?
         .with_generation(generation)
         .channel_timeline_commit(commit)
         .await?;
-    emit_channel_write(&app, &result.write, generation);
+    emit_channel_write(&app, &result, generation);
     Ok(result)
 }
 
@@ -788,6 +789,7 @@ pub async fn graphql_cache_write<R: Runtime>(
     variables: Option<Variables>,
     data: serde_json::Value,
     identity: Option<String>,
+    channel_commit: Option<ChannelTimelineCommit>,
     traceparent: Option<String>,
 ) -> Result<WriteResultWire, String> {
     let result = engine_handle(&state)?
@@ -803,6 +805,7 @@ pub async fn graphql_cache_write<R: Runtime>(
             variables: variables.unwrap_or_default(),
             data,
             identity,
+            channel_commit,
         })
         .await?;
     emit_ops_affected(
@@ -843,6 +846,9 @@ pub enum HydrationResultWire {
         /// Whether this hydration changed the effective cache view.
         #[serde(rename = "revisionAdvanced")]
         revision_advanced: bool,
+        /// What the response's channel commit did.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        channel: Option<ChannelCommitOutcome>,
     },
     /// Every response field was cache-only.
     Void {
@@ -857,6 +863,9 @@ pub enum HydrationResultWire {
         /// Whether this hydration changed the effective cache view.
         #[serde(rename = "revisionAdvanced")]
         revision_advanced: bool,
+        /// What the response's channel commit did.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        channel: Option<ChannelCommitOutcome>,
     },
 }
 
@@ -883,6 +892,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
     variables: Option<Variables>,
     data: serde_json::Value,
     identity: Option<String>,
+    channel_commit: Option<ChannelTimelineCommit>,
     traceparent: Option<String>,
 ) -> Result<HydrationResultWire, String> {
     let result = engine_handle(&state)?
@@ -894,6 +904,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             data,
             identity,
             None,
+            channel_commit,
         )
         .await?;
     if result.write_result.reset {
@@ -926,6 +937,7 @@ pub struct ScopedHydrationRequest {
     data: serde_json::Value,
     identity: Option<String>,
     hydration_scope: cache_core::engine::HydrationScope,
+    channel_commit: Option<ChannelTimelineCommit>,
 }
 
 /// Admits a background response without switching account or data generation.
@@ -951,6 +963,7 @@ pub async fn graphql_cache_hydrate_scoped(
             request.data,
             request.identity,
             Some(request.hydration_scope),
+            request.channel_commit,
         )
         .await?;
     Ok(hydration_result(result))
@@ -964,12 +977,14 @@ fn hydration_result(result: crate::engine::HydrationWriteResultWire) -> Hydratio
             data,
             revision: result.write_result.revision,
             revision_advanced: result.write_result.revision_advanced,
+            channel: result.write_result.channel,
         },
         None => HydrationResultWire::Void {
             unchanged_views: result.unchanged_views,
             search_changed_buckets: result.search_changed_buckets,
             revision: result.write_result.revision,
             revision_advanced: result.write_result.revision_advanced,
+            channel: result.write_result.channel,
         },
     }
 }

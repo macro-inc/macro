@@ -1,4 +1,5 @@
 use super::HydrationResultWire;
+use cache_core::channel_timeline::{ChannelCommitOutcome, ChannelCommitStatus};
 
 #[test]
 fn scoped_first_binding_preserves_the_generation_without_notifying_windows() {
@@ -77,6 +78,7 @@ fn scoped_first_binding_preserves_the_generation_without_notifying_windows() {
                         data,
                         identity,
                         None,
+                        None,
                     )
                     .await
                     .unwrap();
@@ -91,6 +93,7 @@ fn scoped_first_binding_preserves_the_generation_without_notifying_windows() {
                         None,
                         data,
                         identity,
+                        None,
                         None,
                     )
                     .await
@@ -107,6 +110,7 @@ fn scoped_first_binding_preserves_the_generation_without_notifying_windows() {
                             data,
                             identity,
                             hydration_scope: scope,
+                            channel_commit: None,
                         },
                         None,
                     )
@@ -150,17 +154,31 @@ fn hydration_results_preserve_the_native_advancement_bit() {
                 data: serde_json::json!({"cursor": null}),
                 revision: "7".to_string(),
                 revision_advanced,
+                channel: Some(ChannelCommitOutcome {
+                    channel_id: "c1".to_string(),
+                    seq: Some("4".to_string()),
+                    outcome: ChannelCommitStatus::Gap,
+                }),
             },
             HydrationResultWire::Void {
                 unchanged_views: vec!["window".into()],
                 search_changed_buckets: ["note".into()].into(),
                 revision: "7".to_string(),
                 revision_advanced,
+                channel: Some(ChannelCommitOutcome {
+                    channel_id: "c1".to_string(),
+                    seq: Some("4".to_string()),
+                    outcome: ChannelCommitStatus::Gap,
+                }),
             },
         ] {
             let json = serde_json::to_value(result).unwrap();
             assert_eq!(json["revisionAdvanced"], revision_advanced);
             assert_eq!(json["revision"], "7");
+            assert_eq!(
+                json["channel"],
+                serde_json::json!({"channelId": "c1", "seq": "4", "outcome": "gap"})
+            );
             assert_eq!(json["unchangedViews"], serde_json::json!(["window"]));
             assert_eq!(json["searchChangedBuckets"], serde_json::json!(["note"]));
             assert!(json.get("revision_advanced").is_none());
@@ -361,6 +379,7 @@ async fn write_label(handle: &crate::engine::EngineHandle) {
             variables: serde_json::Map::new(),
             data: serde_json::json!({"user": {"id": "viewer", "runtimeLabel": "OTA"}}),
             identity: None,
+            channel_commit: None,
         })
         .await
         .unwrap();

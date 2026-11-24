@@ -189,10 +189,12 @@ fn upgrade_12_to_13(connection: &Db) -> Result<(), TursoStorageError> {
 
 /// Storage 14 adds the channel timeline's rows, fetched stretches and sync
 /// state, all empty: no build before it stored any.
-pub(super) const UPGRADE_13_TO_14: [&str; 5] = [
-    "CREATE TABLE channel_timeline (record_key TEXT PRIMARY KEY, channel_id TEXT NOT NULL, scope TEXT NOT NULL, sort_key TEXT NOT NULL, hidden INTEGER NOT NULL)",
+pub(super) const UPGRADE_13_TO_14: [&str; 7] = [
+    "CREATE TABLE channel_timeline (record_key TEXT PRIMARY KEY, channel_id TEXT NOT NULL, scope TEXT NOT NULL, sort_key TEXT NOT NULL, hidden INTEGER NOT NULL, seq INTEGER NOT NULL)",
     "CREATE INDEX channel_timeline_scan_idx ON channel_timeline(scope, hidden, sort_key, record_key)",
     "CREATE INDEX channel_timeline_channel_idx ON channel_timeline(channel_id, record_key)",
+    "CREATE TABLE channel_removed (record_key TEXT PRIMARY KEY, channel_id TEXT NOT NULL, seq INTEGER NOT NULL)",
+    "CREATE INDEX channel_removed_channel_idx ON channel_removed(channel_id, seq, record_key)",
     "CREATE TABLE channel_coverage (channel_id TEXT NOT NULL, scope TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL, PRIMARY KEY (channel_id, scope, start))",
     "CREATE TABLE channel_sync (channel_id TEXT PRIMARY KEY, seq INTEGER, touched_at_ms INTEGER NOT NULL)",
 ];

@@ -16,6 +16,7 @@ async fn scoped_hydration_rejects_a_late_browser_response() {
             js(serde_json::json!({"user":{"id":"viewer"}})),
             Some("viewer".into()),
             js(scope.clone()),
+            JsValue::UNDEFINED,
         )
     };
     resolved(hydrate()).await;

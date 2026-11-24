@@ -294,6 +294,7 @@ async fn apply(handle: &EngineHandle, docs: &BTreeMap<String, String>, op: &Op, 
                 variables: op.variables.clone(),
                 data: op.data.clone(),
                 identity: Some(identity.to_owned()),
+                channel_commit: None,
             })
             .await
             .map(|_| ())
@@ -332,6 +333,7 @@ async fn apply(handle: &EngineHandle, docs: &BTreeMap<String, String>, op: &Op, 
                 op.data.clone(),
                 Some(identity.to_owned()),
                 scope,
+                None,
             )
             .await
             .map(|_| ())

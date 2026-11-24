@@ -2,6 +2,10 @@ use cache_core::calendar::{
     CalendarCommit, CalendarCommitOutcome, CalendarRangeRequest, CalendarRangeSnapshot,
     CalendarRangeStorage,
 };
+use cache_core::channel_timeline::{
+    ChannelEviction, ChannelEvictionOutcome, ChannelTimelineRequest, ChannelTimelineSnapshot,
+    ChannelTimelineStats, ChannelTimelineStorage,
+};
 use cache_core::predicate::{
     OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
     PredicateQueryResult, ProjectionMutation, ProjectionState,
@@ -137,6 +141,32 @@ impl Storage for BrowserStorage {
     ) -> Result<(), Self::Error> {
         self.inner
             .put_batch_with_projections(entries, projections)
+            .await
+    }
+
+    async fn load_channel_guard(
+        &self,
+        query: &cache_core::channel_timeline::ChannelGuardQuery,
+    ) -> Result<cache_core::channel_timeline::ChannelGuard, Self::Error> {
+        self.inner.load_channel_guard(query).await
+    }
+
+    async fn load_channel_entries(
+        &self,
+        channel_id: &str,
+        entries: cache_core::channel_timeline::ChannelEntries<'_>,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.inner.load_channel_entries(channel_id, entries).await
+    }
+
+    async fn put_channel_records(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+        channel: &cache_core::channel_timeline::ChannelWrite,
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .put_channel_records(entries, projections, channel)
             .await
     }
 
@@ -281,9 +311,10 @@ impl Storage for BrowserStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
         reconciliation: OptimisticShadowReconciliation,
+        channel: &cache_core::channel_timeline::ChannelWrite,
     ) -> Result<bool, Self::Error> {
         self.inner
-            .complete_mutation_with_shadow(id, claim, entries, projections, reconciliation)
+            .complete_mutation_with_shadow(id, claim, entries, projections, reconciliation, channel)
             .await
     }
 
@@ -370,5 +401,26 @@ impl CalendarRangeStorage for BrowserStorage {
         commit: &CalendarCommit,
     ) -> Result<CalendarCommitOutcome, Self::Error> {
         self.inner.calendar_commit(commit).await
+    }
+}
+
+impl ChannelTimelineStorage for BrowserStorage {
+    async fn query_channel_timeline(
+        &self,
+        request: &ChannelTimelineRequest,
+        pending: usize,
+    ) -> Result<ChannelTimelineSnapshot, Self::Error> {
+        self.inner.query_channel_timeline(request, pending).await
+    }
+
+    async fn channel_timeline_evict(
+        &mut self,
+        eviction: &ChannelEviction,
+    ) -> Result<ChannelEvictionOutcome, Self::Error> {
+        self.inner.channel_timeline_evict(eviction).await
+    }
+
+    async fn channel_timeline_stats(&self) -> Result<ChannelTimelineStats, Self::Error> {
+        self.inner.channel_timeline_stats().await
     }
 }

@@ -10,6 +10,12 @@ fn main() {
     let out = PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("host");
     std::fs::create_dir_all(out.join("engine")).unwrap();
     let engine = read(&host.join("engine.rs"));
+    // Hosts whose writes carry a channel commit get `cfg(channel_commits)`, so
+    // the fuzzer builds against hosts from before and after that field.
+    println!("cargo::rustc-check-cfg=cfg(channel_commits)");
+    if engine.contains("pub channel_commit: Option<ChannelTimelineCommit>") {
+        println!("cargo::rustc-cfg=channel_commits");
+    }
     // The plugin's own tests stay out; the fuzzer's hooks take their place.
     let engine = engine.replace("#[cfg(test)]\nmod test;", "") + "\npub(crate) mod fuzz_hooks;\n";
     // As a `mod.rs`, so its submodules resolve next to it.

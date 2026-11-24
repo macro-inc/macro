@@ -178,6 +178,8 @@ enum DeletedRecord {
     Miss,
     Null,
     Omit,
+    /// A list that also leaves out records the cache does not hold.
+    OmitAbsent,
 }
 
 struct PendingRecord<'a> {
@@ -213,6 +215,27 @@ impl<'a> ReadSession<'a> {
             deleted_items: BTreeSet::new(),
             miss: None,
         }
+    }
+
+    /// Leaves out the suspended entries of lists that omit absent records,
+    /// once storage is known to hold none of the keys still suspended. Returns
+    /// whether nothing else is missing, so the read can resume.
+    pub(crate) fn omit_absent(&mut self) -> bool {
+        if !self
+            .pending
+            .iter()
+            .all(|pending| matches!(pending.deleted, DeletedRecord::OmitAbsent))
+        {
+            return false;
+        }
+        for pending in std::mem::take(&mut self.pending) {
+            if let Some(projection) = self.projection.as_mut() {
+                // Storing the record later rebuilds this read.
+                projection.guard(&pending.key, "__typename", None);
+            }
+            self.deleted_items.extend(pending.destination);
+        }
+        true
     }
 
     pub(crate) fn resume(
@@ -351,7 +374,7 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
         if record.fields.get(crate::identity::DELETED_FIELD) == Some(&CacheValue::Bool(true)) {
             match deleted {
                 DeletedRecord::Miss => self.mark_miss(&key, "deleted cache identity".into()),
-                DeletedRecord::Omit if self.retain_output => {
+                DeletedRecord::Omit | DeletedRecord::OmitAbsent if self.retain_output => {
                     self.deleted_items.insert(self.path.clone());
                 }
                 _ => {}
@@ -449,7 +472,7 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
                 if matches!(fields.get(storage_key.as_ref()), Some(CacheValue::Null)) {
                     return Ok(Some(Json::Null));
                 }
-                self.read_value(owner, field.node, ty, &CacheValue::Ref(key.clone()))
+                self.read_value(owner, field, ty, &CacheValue::Ref(key.clone()))
                     .map(Some)
             }
             FieldSource::Stored { key, ty } => {
@@ -458,7 +481,7 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
                     self.mark_miss(owner, key.to_string());
                     return Ok(None);
                 };
-                self.read_value(owner, field.node, ty, value).map(Some)
+                self.read_value(owner, field, ty, value).map(Some)
             }
         }
     }
@@ -472,7 +495,7 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
     fn read_value(
         &mut self,
         owner: &EntityKey<'static>,
-        field: &'document FieldNode,
+        field: &Field<'document>,
         ty: &meta::FieldType<'document>,
         value: &CacheValue,
     ) -> Result<Json, DenormalizeError> {
@@ -484,7 +507,7 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
             CacheValue::Opaque(value) => {
                 serde_json::from_str(value).map_err(|_| DenormalizeError::Shape {
                     type_name: ty.name.to_string(),
-                    field: field.name.clone(),
+                    field: field.node.name.clone(),
                 })?
             }
             CacheValue::List(items) => {
@@ -499,8 +522,10 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
             CacheValue::Ref(key) => self.read_record(
                 key,
                 ty.name,
-                &field.selection_set,
-                if ty.list {
+                &field.node.selection_set,
+                if ty.list && field.omits_absent {
+                    DeletedRecord::OmitAbsent
+                } else if ty.list {
                     DeletedRecord::Omit
                 } else if ty.nullable {
                     DeletedRecord::Null
@@ -514,7 +539,7 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
                     Some(CacheValue::String(typename)) => typename.as_str(),
                     _ => ty.name,
                 };
-                self.read_fields(owner, map, concrete, &field.selection_set, false)?
+                self.read_fields(owner, map, concrete, &field.node.selection_set, false)?
             }
         })
     }

@@ -246,6 +246,41 @@ impl Storage for ClaimFailingStorage {
         Ok(vec![None; keys.len()])
     }
 
+    async fn load_channel_guard(
+        &self,
+        query: &cache_core::channel_timeline::ChannelGuardQuery,
+    ) -> Result<cache_core::channel_timeline::ChannelGuard, Self::Error> {
+        Ok(self.inner.load_channel_guard(query).await.unwrap())
+    }
+
+    async fn load_channel_entries(
+        &self,
+        channel_id: &str,
+        entries: cache_core::channel_timeline::ChannelEntries<'_>,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        Ok(self
+            .inner
+            .load_channel_entries(channel_id, entries)
+            .await
+            .unwrap())
+    }
+
+    async fn put_channel_records(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+        channel: &cache_core::channel_timeline::ChannelWrite,
+    ) -> Result<(), Self::Error> {
+        if self.fail_next_put.swap(false, Ordering::Relaxed) {
+            return Err(std::io::Error::other("injected record write failure"));
+        }
+        Ok(self
+            .inner
+            .put_channel_records(entries, projections, channel)
+            .await
+            .unwrap())
+    }
+
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
         self.inner.delete_batch(keys).await.unwrap();
         Ok(())
@@ -337,6 +372,22 @@ impl Storage for ClaimFailingStorage {
         Ok(self
             .inner
             .complete_mutation_with_projections(id, claim, entries, projections)
+            .await
+            .unwrap())
+    }
+
+    async fn complete_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+        reconciliation: cache_core::predicate::OptimisticShadowReconciliation,
+        channel: &cache_core::channel_timeline::ChannelWrite,
+    ) -> Result<bool, Self::Error> {
+        Ok(self
+            .inner
+            .complete_mutation_with_shadow(id, claim, entries, projections, reconciliation, channel)
             .await
             .unwrap())
     }
@@ -1697,7 +1748,17 @@ fn failed_projection_read_puts_the_write_s_hot_records_back() {
         );
         assert!(
             engine
-                .hydrate_query_with_projections(QUERY, None, &vars, &page, None, vec![projection])
+                .hydrate_query_with_projections(
+                    NetworkWrite {
+                        query: QUERY,
+                        operation_name: None,
+                        variables: &vars,
+                        data: &page,
+                        identity: None,
+                        channel: None
+                    },
+                    vec![projection]
+                )
                 .await
                 .is_err()
         );
@@ -1744,6 +1805,7 @@ fn failed_staged_write_puts_unchanged_hot_records_back() {
                     variables: &vars,
                     data: &after,
                     identity: None,
+                    channel: None,
                 },
                 None,
                 &[],

@@ -11,6 +11,7 @@
 //! engine without collisions; they're interned to the engine's `u64` ids
 //! internally — the same scheme as the `cache-wasm` shell.
 
+use cache_core::channel_timeline::{ChannelCommitOutcome, ChannelTimelineCommit};
 use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
@@ -45,9 +46,7 @@ mod channel_timeline;
 mod people;
 mod soup;
 pub use calendar::CalendarRangeResultWire;
-pub use channel_timeline::{
-    ChannelCommitResultWire, ChannelEvictionResultWire, ChannelTimelineResultWire,
-};
+pub use channel_timeline::{ChannelEvictionResultWire, ChannelTimelineResultWire};
 pub use soup::{
     EntityFilterRequest, EntityFilterResult, LiveQueryResult, PredicateBaselineEntry,
     PredicateFilterResult,
@@ -102,6 +101,10 @@ pub struct WriteResultWire {
     /// Stable caller identity on settlement.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mutation_uuid: Option<String>,
+    /// What the write's channel commit did; absent without one, or when the
+    /// response reset the account it belongs to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel: Option<ChannelCommitOutcome>,
 }
 
 /// Internal hydration result used to fan out changes before returning only
@@ -403,6 +406,8 @@ pub struct WriteRequest {
     pub data: serde_json::Value,
     /// Opaque identity witness.
     pub identity: Option<String>,
+    /// What the response proves about a channel, committed with it.
+    pub channel_commit: Option<ChannelTimelineCommit>,
 }
 
 struct EngineState {
@@ -470,6 +475,7 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
         reset: result.reset,
         revalidations: result.revalidations,
         mutation_uuid: result.mutation_uuid,
+        channel: result.channel,
     }
 }
 
@@ -766,6 +772,7 @@ impl EngineHandle {
             variables,
             data,
             identity,
+            channel_commit,
         } = request;
         let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
@@ -780,6 +787,7 @@ impl EngineHandle {
             variables: &variables,
             data: &data,
             identity: identity.as_deref(),
+            channel: channel_commit.as_ref(),
         };
         let registration =
             registration
@@ -827,6 +835,10 @@ impl EngineHandle {
 
     /// Stores a query response and returns only fields not marked
     /// `@cacheOnly`.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the hydrate commands' fields, which have no other owner"
+    )]
     #[tracing::instrument(name = "graphql_cache.native.hydrate_query", skip_all, err)]
     pub async fn hydrate_query(
         &self,
@@ -836,6 +848,7 @@ impl EngineHandle {
         data: serde_json::Value,
         identity: Option<String>,
         hydration_scope: Option<HydrationScope>,
+        channel_commit: Option<ChannelTimelineCommit>,
     ) -> Result<HydrationWriteResultWire, String> {
         let write = NetworkWrite {
             query: &query,
@@ -843,6 +856,7 @@ impl EngineHandle {
             variables: &variables,
             data: &data,
             identity: identity.as_deref(),
+            channel: channel_commit.as_ref(),
         };
         let mut state = self.snapshot_hydration().await?;
         // One normalization serves the projection passes and the write, as in
@@ -970,14 +984,7 @@ impl EngineHandle {
             }
             (None, None) => {
                 engine
-                    .hydrate_query_with_projections(
-                        &query,
-                        operation_name.as_deref(),
-                        &variables,
-                        &data,
-                        identity.as_deref(),
-                        projections,
-                    )
+                    .hydrate_query_with_projections(write, projections)
                     .await
             }
         }
@@ -1253,6 +1260,7 @@ impl EngineHandle {
                     variables: &variables,
                     data: &data,
                     identity: None,
+                    channel: None,
                 },
                 projections,
                 self.generation,

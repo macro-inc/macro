@@ -421,6 +421,7 @@ async fn write_current_mail<S: PredicateIndexStorage>(
                 variables,
                 data,
                 identity: Some(VIEWER),
+                channel: None,
             },
             projections,
         )

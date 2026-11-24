@@ -47,6 +47,7 @@ async fn write<S: PredicateIndexStorage>(engine: &mut Engine<S>, data: &Value) {
                 variables: &Map::new(),
                 data,
                 identity: Some(VIEWER),
+                channel: None,
             },
             projections,
         )

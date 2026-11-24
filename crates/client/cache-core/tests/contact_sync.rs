@@ -60,6 +60,7 @@ fn in_memory_verification_preserves_empty_continuations_and_rejects_old_hydratio
             variables: variables.as_object().unwrap(),
             data: &data,
             identity: Some(viewer),
+            channel: None,
         };
         engine
             .hydrate_query_in_scope(write, &scope, vec![])

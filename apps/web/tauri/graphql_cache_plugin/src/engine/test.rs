@@ -66,6 +66,7 @@ fn scoped_native_hydration_rejects_late_pages_after_clear() {
             serde_json::json!({"user":{"id":"viewer"}}),
             Some("viewer".into()),
             Some(scope.clone()),
+            None,
         ))
     };
     assert!(!hydrate().unwrap().write_result.reset);
@@ -120,6 +121,7 @@ fn write(
         variables: variables(),
         data,
         identity: identity.map(str::to_string),
+        channel_commit: None,
     }))
     .unwrap()
 }
@@ -141,6 +143,7 @@ fn empty_write_result() -> WriteResultWire {
         field_changes: None,
         identity_errors: Vec::new(),
         unwritable_response: None,
+        channel: None,
         mutation_uuid: None,
         revision: "0".to_string(),
         revision_advanced: false,
@@ -167,6 +170,7 @@ fn query_writes_preserve_search_proof_and_viewer_field_scope_through_native_wire
         variables: other,
         data: soup_data(false),
         identity: Some("viewer".into()),
+        channel_commit: None,
     }))
     .unwrap();
     assert!(result.revision_advanced);
@@ -284,6 +288,7 @@ fn identical_hydration_does_not_advance_the_native_revision() {
             soup_data(true),
             None,
             None,
+            None,
         ))
         .unwrap()
         .write_result
@@ -303,6 +308,7 @@ fn hydration_returns_only_unmarked_fields_and_retains_entities_without_pages() {
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        None,
         None,
         None,
     ))
@@ -433,6 +439,7 @@ fn explicit_key_selection_returns_native_cache_entities() {
         variables: variables(),
         data,
         identity: None,
+        channel_commit: None,
     }))
     .unwrap();
 
@@ -485,6 +492,7 @@ fn search_uses_native_materialized_projection() {
             }
         }),
         identity: None,
+        channel_commit: None,
     }))
     .unwrap();
 
@@ -567,6 +575,7 @@ fn registered_op_is_affected_by_later_writes() {
         variables: variables(),
         data: soup_data(false),
         identity: None,
+        channel_commit: None,
     }))
     .unwrap();
 
@@ -823,6 +832,7 @@ fn native_runtime_schema_persists_across_ota_and_rejects_conflicts_without_data_
                 variables: Variables::new(),
                 data: data.clone(),
                 identity: None,
+                channel_commit: None,
             })
             .await
             .unwrap();
@@ -883,6 +893,7 @@ fn a_staged_native_hydrate_writes_and_reports_what_a_whole_one_does() {
                 data,
                 identity,
                 scope,
+                None,
             ))
             .unwrap();
             results.push(serde_json::json!({
@@ -928,6 +939,7 @@ fn a_failed_staging_read_fails_the_native_hydrate_instead_of_retrying_it_whole()
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        None,
         None,
         None,
     ));

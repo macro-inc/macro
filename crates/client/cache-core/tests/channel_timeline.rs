@@ -1,6 +1,5 @@
 use cache_core::channel_timeline::{
-    ChannelCoverage, ChannelEviction, ChannelSeqUpdate, ChannelTimelineCommit,
-    ChannelTimelineRequest, MESSAGE_TYPENAME, TIMELINE_HEAD, TIMELINE_START, TimelineSpan,
+    ChannelCommitStatus, ChannelEviction, ChannelTimelineCommit, TIMELINE_HEAD, TIMELINE_START,
 };
 use cache_core::engine::{
     BeginOptimisticWrite, Engine, EngineError, EnqueueOptimisticMutationResult, InitialClaimOutcome,
@@ -8,108 +7,46 @@ use cache_core::engine::{
 use cache_core::identity::IdentityBinding;
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::store::InMemoryStorage;
-use cache_core::value::{CacheValue, EntityKey, Record};
+use cache_core::value::EntityKey;
 use pollster::block_on;
 use serde_json::json;
 use std::convert::Infallible;
 
+#[path = "support/channels.rs"]
+#[expect(dead_code, reason = "the commit tests use the rest")]
+mod channels;
+use channels::{
+    TestEngine, changes, commit, coverage, ids, key, latest, message, page, removing, write_page,
+};
+
 const MUTATION: &str = "mutation Save { setEntityProperty { __typename id displayName } }";
 const UUID: &str = "22222222-2222-4222-8222-222222222222";
 
-fn key(id: &str) -> EntityKey<'static> {
-    EntityKey::entity(MESSAGE_TYPENAME, &[id])
-}
-
-fn text(value: &str) -> CacheValue {
-    CacheValue::String(value.into())
-}
-
-fn message(
-    channel: &str,
-    id: &str,
-    sort_key: &str,
-    thread: Option<&str>,
-) -> (EntityKey<'static>, Record) {
-    let mut record = Record::default();
-    for (field, value) in [
-        ("__typename", text(MESSAGE_TYPENAME)),
-        ("id", text(id)),
-        ("channelId", text(channel)),
-        ("sortKey", text(sort_key)),
-        ("threadId", thread.map_or(CacheValue::Null, text)),
-        ("deletedAt", CacheValue::Null),
-    ] {
-        record.fields.insert(field.into(), value);
-    }
-    (key(id), record)
-}
-
 /// Channel c1 with roots m1..m6 at sort keys 10..60, two replies under m3,
-/// and one root in channel c2.
-async fn seeded() -> Engine<InMemoryStorage> {
+/// and one root in channel c2, all read at sequence 7.
+async fn seeded() -> TestEngine {
     let mut entries = (1..=6)
         .map(|n| message("c1", &format!("m{n}"), &format!("{n}0"), None))
         .collect::<Vec<_>>();
     entries.push(message("c1", "r1", "~-31", Some("m3")));
     entries.push(message("c1", "r2", "~-32", Some("m3")));
-    entries.push(message("c2", "x1", "10", None));
     let mut engine = Engine::new(InMemoryStorage::new());
-    engine
-        .put_records_with_projections(None, entries, Vec::new())
+    write_page(&mut engine, "c1", "7", &entries, None)
+        .await
+        .unwrap();
+    let other = message("c2", "x1", "10", None);
+    write_page(&mut engine, "c2", "7", &[other], None)
         .await
         .unwrap();
     engine
-}
-
-fn latest(channel: &str, limit: u16) -> ChannelTimelineRequest {
-    ChannelTimelineRequest {
-        channel_id: channel.into(),
-        thread_root_id: None,
-        limit,
-        before: None,
-        after: None,
-        around: None,
-    }
-}
-
-fn coverage(thread: Option<&str>, start: &str, end: &str) -> ChannelCoverage {
-    ChannelCoverage {
-        thread_root_id: thread.map(Into::into),
-        span: TimelineSpan {
-            start: start.into(),
-            end: end.into(),
-        },
-    }
-}
-
-fn commit(channel: &str) -> ChannelTimelineCommit {
-    ChannelTimelineCommit {
-        channel_id: channel.into(),
-        ..ChannelTimelineCommit::default()
-    }
-}
-
-fn lower(seq: &str) -> Option<ChannelSeqUpdate> {
-    Some(ChannelSeqUpdate::Lower { seq: seq.into() })
-}
-
-fn advance(from: &str, to: &str) -> Option<ChannelSeqUpdate> {
-    Some(ChannelSeqUpdate::Advance {
-        from: from.into(),
-        to: to.into(),
-    })
-}
-
-fn ids<'a>(keys: &'a [EntityKey<'static>]) -> Vec<&'a str> {
-    keys.iter().filter_map(EntityKey::id).collect()
 }
 
 #[test]
 fn nothing_is_answered_before_a_stretch_is_committed() {
     block_on(async {
         let mut engine = seeded().await;
-        let page = engine.channel_timeline(&latest("c1", 3)).await.unwrap();
-        assert!(!page.covered && page.keys.is_empty() && page.seq.is_none());
+        let read = engine.channel_timeline(&latest("c1", 3)).await.unwrap();
+        assert!(!read.covered && read.keys.is_empty() && read.seq.is_none());
     });
 }
 
@@ -117,51 +54,47 @@ fn nothing_is_answered_before_a_stretch_is_committed() {
 fn pages_are_answered_inside_committed_stretches() {
     block_on(async {
         let mut engine = seeded().await;
-        let committed = engine
-            .channel_timeline_commit(&ChannelTimelineCommit {
-                coverage: vec![coverage(None, "40", TIMELINE_HEAD)],
-                seq: lower("7"),
-                ..commit("c1")
-            })
+        let outcome = engine
+            .channel_timeline_commit(&page("c1", "7", vec![coverage(None, "40", TIMELINE_HEAD)]))
             .await
             .unwrap();
-        assert_eq!(committed.seq.as_deref(), Some("7"));
-        assert!(committed.write.changed.is_empty());
+        assert!(outcome.changed.is_empty());
+        let outcome = outcome.channel.unwrap();
+        assert_eq!(
+            (outcome.seq.as_deref(), outcome.outcome),
+            (Some("7"), ChannelCommitStatus::Applied)
+        );
 
-        let page = engine.channel_timeline(&latest("c1", 2)).await.unwrap();
-        assert!(page.covered);
-        assert_eq!(ids(&page.keys), ["m6", "m5"]);
-        assert_eq!(page.older_cursor.as_deref(), Some("50"));
-        assert_eq!(page.newer_cursor, None);
-        assert_eq!(page.seq.as_deref(), Some("7"));
+        let read = engine.channel_timeline(&latest("c1", 2)).await.unwrap();
+        assert!(read.covered);
+        assert_eq!(ids(&read.keys), ["m6", "m5"]);
+        assert_eq!(read.older_cursor.as_deref(), Some("50"));
+        assert_eq!(read.newer_cursor, None);
+        assert_eq!(read.seq.as_deref(), Some("7"));
 
         // The next page is short: the stretch ends at m4 although m3 is cached.
         let mut older = latest("c1", 2);
-        older.before = page.older_cursor.clone();
-        let page = engine.channel_timeline(&older).await.unwrap();
-        assert_eq!(ids(&page.keys), ["m4"]);
-        assert_eq!(page.older_cursor.as_deref(), Some("40"));
+        older.before = read.older_cursor.clone();
+        let read = engine.channel_timeline(&older).await.unwrap();
+        assert_eq!(ids(&read.keys), ["m4"]);
+        assert_eq!(read.older_cursor.as_deref(), Some("40"));
         // Below the stretch the server has to answer.
         older.before = Some("40".into());
         assert!(!engine.channel_timeline(&older).await.unwrap().covered);
 
         // The fetched older page extends the stretch to the first message.
         engine
-            .channel_timeline_commit(&ChannelTimelineCommit {
-                coverage: vec![coverage(None, TIMELINE_START, "40")],
-                seq: lower("9"),
-                ..commit("c1")
-            })
+            .channel_timeline_commit(&page("c1", "9", vec![coverage(None, TIMELINE_START, "40")]))
             .await
             .unwrap();
-        let page = engine.channel_timeline(&older).await.unwrap();
-        assert_eq!(ids(&page.keys), ["m3", "m2"]);
+        let read = engine.channel_timeline(&older).await.unwrap();
+        assert_eq!(ids(&read.keys), ["m3", "m2"]);
         // A page read at a later sequence never raises the channel's.
-        assert_eq!(page.seq.as_deref(), Some("7"));
+        assert_eq!(read.seq.as_deref(), Some("7"));
         older.before = Some("20".into());
-        let page = engine.channel_timeline(&older).await.unwrap();
+        let read = engine.channel_timeline(&older).await.unwrap();
         assert_eq!(
-            (ids(&page.keys), page.older_cursor.clone()),
+            (ids(&read.keys), read.older_cursor.clone()),
             (vec!["m1"], None)
         );
 
@@ -181,29 +114,29 @@ fn jumping_to_a_message_centres_on_it_and_a_reply_lands_on_its_root() {
     block_on(async {
         let mut engine = seeded().await;
         engine
-            .channel_timeline_commit(&ChannelTimelineCommit {
-                coverage: vec![
+            .channel_timeline_commit(&page(
+                "c1",
+                "7",
+                vec![
                     coverage(None, "20", "50"),
                     coverage(Some("m3"), TIMELINE_START, TIMELINE_HEAD),
                 ],
-                seq: lower("7"),
-                ..commit("c1")
-            })
+            ))
             .await
             .unwrap();
         let mut around = latest("c1", 3);
         around.around = Some(key("r2"));
-        let page = engine.channel_timeline(&around).await.unwrap();
-        assert_eq!(ids(&page.keys), ["m4", "m3", "m2"]);
-        assert_eq!(page.older_cursor.as_deref(), Some("20"));
-        assert_eq!(page.newer_cursor.as_deref(), Some("40"));
+        let read = engine.channel_timeline(&around).await.unwrap();
+        assert_eq!(ids(&read.keys), ["m4", "m3", "m2"]);
+        assert_eq!(read.older_cursor.as_deref(), Some("20"));
+        assert_eq!(read.newer_cursor.as_deref(), Some("40"));
 
         let mut thread = latest("c1", 10);
         thread.thread_root_id = Some("m3".into());
-        let page = engine.channel_timeline(&thread).await.unwrap();
-        assert_eq!(ids(&page.keys), ["r2", "r1"]);
+        let read = engine.channel_timeline(&thread).await.unwrap();
+        assert_eq!(ids(&read.keys), ["r2", "r1"]);
         assert_eq!(
-            (page.older_cursor.clone(), page.newer_cursor.clone()),
+            (read.older_cursor.clone(), read.newer_cursor.clone()),
             (None, None)
         );
 
@@ -219,32 +152,25 @@ fn jumping_to_a_message_centres_on_it_and_a_reply_lands_on_its_root() {
 fn changes_apply_only_in_sequence() {
     block_on(async {
         let mut engine = seeded().await;
-        let apply = |seq: Option<ChannelSeqUpdate>| ChannelTimelineCommit {
-            seq,
-            ..commit("c1")
-        };
-        let stored = engine
-            .channel_timeline_commit(&apply(lower("7")))
-            .await
-            .unwrap();
-        assert_eq!(stored.seq.as_deref(), Some("7"));
-        let next = engine
-            .channel_timeline_commit(&apply(advance("7", "8")))
-            .await
-            .unwrap();
-        assert_eq!(next.seq.as_deref(), Some("8"));
-        // Change 10 arrives while 9 is missing: the stored sequence stays, so
-        // the caller knows to fetch the changes in between.
-        let gap = engine
-            .channel_timeline_commit(&apply(advance("9", "10")))
-            .await
-            .unwrap();
-        assert_eq!(gap.seq.as_deref(), Some("8"));
-        let caught_up = engine
-            .channel_timeline_commit(&apply(advance("8", "10")))
-            .await
-            .unwrap();
-        assert_eq!(caught_up.seq.as_deref(), Some("10"));
+        use ChannelCommitStatus::{Applied, Gap, Stale, Unheld};
+        for (commit, seq, outcome) in [
+            (changes("c1", "6", "7"), None, Unheld),
+            (page("c1", "7", Vec::new()), Some("7"), Applied),
+            (changes("c1", "7", "8"), Some("8"), Applied),
+            // Change 10 arrives while 9 is missing: the watermark stays, so
+            // the caller knows to fetch the changes in between.
+            (changes("c1", "9", "10"), Some("8"), Gap),
+            (changes("c1", "8", "10"), Some("10"), Applied),
+            (changes("c1", "9", "10"), Some("10"), Stale),
+        ] {
+            let write = engine.channel_timeline_commit(&commit).await.unwrap();
+            let answer = write.channel.unwrap();
+            assert_eq!(
+                (answer.seq.as_deref(), answer.outcome),
+                (seq, outcome),
+                "{commit:?}"
+            );
+        }
     });
 }
 
@@ -253,38 +179,35 @@ fn removals_dropped_threads_and_resets_delete_records() {
     block_on(async {
         let mut engine = seeded().await;
         engine
-            .channel_timeline_commit(&ChannelTimelineCommit {
-                coverage: vec![
+            .channel_timeline_commit(&page(
+                "c1",
+                "7",
+                vec![
                     coverage(None, TIMELINE_START, TIMELINE_HEAD),
                     coverage(Some("m3"), TIMELINE_START, TIMELINE_HEAD),
                 ],
-                seq: lower("7"),
-                ..commit("c1")
-            })
+            ))
             .await
             .unwrap();
 
         let removed = engine
             .channel_timeline_commit(&ChannelTimelineCommit {
-                removed_keys: vec![key("m2"), key("gone")],
                 dropped_thread_root_ids: vec!["m3".into()],
-                seq: advance("7", "8"),
-                ..commit("c1")
+                ..removing(changes("c1", "7", "8"), &["m2", "gone"])
             })
             .await
             .unwrap();
         assert_eq!(
             removed
-                .write
                 .changed
                 .iter()
                 .filter_map(EntityKey::id)
                 .collect::<Vec<_>>(),
             ["m2", "r1", "r2"]
         );
-        assert!(removed.write.revision_advanced);
-        let page = engine.channel_timeline(&latest("c1", 10)).await.unwrap();
-        assert_eq!(ids(&page.keys), ["m6", "m5", "m4", "m3", "m1"]);
+        assert!(removed.revision_advanced);
+        let read = engine.channel_timeline(&latest("c1", 10)).await.unwrap();
+        assert_eq!(ids(&read.keys), ["m6", "m5", "m4", "m3", "m1"]);
         let mut thread = latest("c1", 10);
         thread.thread_root_id = Some("m3".into());
         assert!(!engine.channel_timeline(&thread).await.unwrap().covered);
@@ -292,18 +215,20 @@ fn removals_dropped_threads_and_resets_delete_records() {
         let reset = engine
             .channel_timeline_commit(&ChannelTimelineCommit {
                 reset: true,
-                seq: lower("20"),
+                seq: Some("20".into()),
                 ..commit("c1")
             })
             .await
             .unwrap();
-        assert_eq!(reset.seq.as_deref(), Some("20"));
-        assert_eq!(reset.write.changed.len(), 5);
-        let page = engine.channel_timeline(&latest("c1", 10)).await.unwrap();
-        assert!(!page.covered);
-        assert_eq!(page.seq.as_deref(), Some("20"));
-        // Only the other channel's root is left.
-        assert_eq!(engine.storage().len(), 1);
+        let seq = reset.channel.unwrap().seq;
+        assert_eq!(seq.as_deref(), Some("20"));
+        // The five roots, and the removals of either type under two ids.
+        assert_eq!(reset.changed.len(), 5 + 4);
+        let read = engine.channel_timeline(&latest("c1", 10)).await.unwrap();
+        assert!(!read.covered);
+        assert_eq!(read.seq.as_deref(), Some("20"));
+        let left = engine.channel_timeline_stats().await.unwrap();
+        assert_eq!(left.entries, 1, "the other channel keeps its root");
     });
 }
 
@@ -314,10 +239,12 @@ fn eviction_removes_the_channels_touched_longest_ago() {
         for (channel, touched_at_ms) in [("c1", 100), ("c2", 200)] {
             engine
                 .channel_timeline_commit(&ChannelTimelineCommit {
-                    coverage: vec![coverage(None, TIMELINE_START, TIMELINE_HEAD)],
-                    seq: lower("1"),
                     touched_at_ms: Some(touched_at_ms),
-                    ..commit(channel)
+                    ..page(
+                        channel,
+                        "7",
+                        vec![coverage(None, TIMELINE_START, TIMELINE_HEAD)],
+                    )
                 })
                 .await
                 .unwrap();
@@ -412,25 +339,25 @@ fn a_pending_delete_leaves_the_page_until_it_rolls_back() {
     block_on(async {
         let mut engine = seeded().await;
         engine
-            .channel_timeline_commit(&ChannelTimelineCommit {
-                coverage: vec![coverage(None, TIMELINE_START, TIMELINE_HEAD)],
-                seq: lower("7"),
-                ..commit("c1")
-            })
+            .channel_timeline_commit(&page(
+                "c1",
+                "7",
+                vec![coverage(None, TIMELINE_START, TIMELINE_HEAD)],
+            ))
             .await
             .unwrap();
         let (transaction, claim) = enqueue_delete(&mut engine, &key("m5")).await;
-        let page = engine.channel_timeline(&latest("c1", 3)).await.unwrap();
-        assert!(page.optimistic);
-        assert_eq!(ids(&page.keys), ["m6", "m4", "m3"]);
+        let read = engine.channel_timeline(&latest("c1", 3)).await.unwrap();
+        assert!(read.optimistic);
+        assert_eq!(ids(&read.keys), ["m6", "m4", "m3"]);
 
         engine
             .rollback_optimistic_write(transaction, claim)
             .await
             .unwrap();
-        let page = engine.channel_timeline(&latest("c1", 3)).await.unwrap();
-        assert!(!page.optimistic);
-        assert_eq!(ids(&page.keys), ["m6", "m5", "m4"]);
+        let read = engine.channel_timeline(&latest("c1", 3)).await.unwrap();
+        assert!(!read.optimistic);
+        assert_eq!(ids(&read.keys), ["m6", "m5", "m4"]);
     });
 }
 
@@ -439,11 +366,11 @@ fn a_page_stays_full_when_pending_deletes_take_more_rows_than_its_lookahead() {
     block_on(async {
         let mut engine = seeded().await;
         engine
-            .channel_timeline_commit(&ChannelTimelineCommit {
-                coverage: vec![coverage(None, TIMELINE_START, TIMELINE_HEAD)],
-                seq: lower("7"),
-                ..commit("c1")
-            })
+            .channel_timeline_commit(&page(
+                "c1",
+                "7",
+                vec![coverage(None, TIMELINE_START, TIMELINE_HEAD)],
+            ))
             .await
             .unwrap();
         for id in ["m6", "m5", "m4"] {
@@ -451,18 +378,18 @@ fn a_page_stays_full_when_pending_deletes_take_more_rows_than_its_lookahead() {
         }
         // The page and its lookahead row are all pending deletes: the three
         // entries below them are held and make the page.
-        let page = engine.channel_timeline(&latest("c1", 2)).await.unwrap();
-        assert!(page.covered && page.optimistic);
-        assert_eq!(ids(&page.keys), ["m3", "m2"]);
-        assert_eq!(page.older_cursor.as_deref(), Some("20"));
+        let read = engine.channel_timeline(&latest("c1", 2)).await.unwrap();
+        assert!(read.covered && read.optimistic);
+        assert_eq!(ids(&read.keys), ["m3", "m2"]);
+        assert_eq!(read.older_cursor.as_deref(), Some("20"));
 
         let mut older = latest("c1", 2);
         older.before = Some("40".into());
         queue_delete(&mut engine, &key("m1")).await;
-        let page = engine.channel_timeline(&older).await.unwrap();
+        let read = engine.channel_timeline(&older).await.unwrap();
         // m1 is a pending delete, so nothing older follows.
-        assert_eq!(ids(&page.keys), ["m3", "m2"]);
-        assert_eq!(page.older_cursor, None);
+        assert_eq!(ids(&read.keys), ["m3", "m2"]);
+        assert_eq!(read.older_cursor, None);
     });
 }
 
@@ -478,7 +405,8 @@ fn a_dropped_thread_takes_only_its_own_channels_rows() {
             })
             .await
             .unwrap();
-        assert!(dropped.write.changed.is_empty());
-        assert_eq!(engine.storage().len(), 9);
+        assert!(dropped.changed.is_empty());
+        let held = engine.channel_timeline_stats().await.unwrap();
+        assert_eq!(held.entries, 9);
     });
 }

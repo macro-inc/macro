@@ -58,6 +58,7 @@ async fn write<S: PredicateIndexStorage>(engine: &mut Engine<S>, query: &str, da
                 variables: &Default::default(),
                 data,
                 identity: Some("macro|viewer@example.com"),
+                channel: None,
             },
             projections,
         )
@@ -406,6 +407,7 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
                 variables: &Default::default(),
                 data: &notification,
                 identity: Some("macro|viewer@example.com"),
+                channel: None,
             },
             updates,
         )

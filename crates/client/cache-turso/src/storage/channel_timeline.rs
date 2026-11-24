@@ -1,29 +1,44 @@
-//! Channel timeline index, fetched-stretch coverage, and per-channel sync state.
+//! Channel timeline index, fetched-stretch coverage, tombstones, and
+//! per-channel sync state.
 
 use super::*;
 use cache_core::channel_timeline::{
-    ACTIVITY_TYPENAME, CHANNEL_TIMELINE_PROJECTION_VERSION, ChannelCommitOutcome, ChannelEviction,
-    ChannelEvictionOutcome, ChannelTimelineCommit, ChannelTimelineRequest, ChannelTimelineRow,
+    ACTIVITY_TYPENAME, CHANNEL_TIMELINE_PROJECTION_VERSION, ChannelEntryState, ChannelEviction,
+    ChannelEvictionOutcome, ChannelSync, ChannelTimelineRequest, ChannelTimelineRow,
     ChannelTimelineSnapshot, ChannelTimelineStats, ChannelTimelineStorage, MESSAGE_TYPENAME,
-    TimelineScope, TimelineSpan, anchor_root_key, commit_coverage_by_scope, merge_spans, next_seq,
-    plan_window, project_channel_timeline,
+    TimelineScope, TimelineSpan, anchor_root_key, plan_window, project_channel_timeline,
 };
 
-pub(super) const CREATE_SCHEMA: [&str; 5] = [
-    "CREATE TABLE channel_timeline (record_key TEXT PRIMARY KEY, channel_id TEXT NOT NULL, scope TEXT NOT NULL, sort_key TEXT NOT NULL, hidden INTEGER NOT NULL)",
+pub(super) const CREATE_SCHEMA: [&str; 7] = [
+    "CREATE TABLE channel_timeline (record_key TEXT PRIMARY KEY, channel_id TEXT NOT NULL, scope TEXT NOT NULL, sort_key TEXT NOT NULL, hidden INTEGER NOT NULL, seq INTEGER NOT NULL)",
     "CREATE INDEX channel_timeline_scan_idx ON channel_timeline(scope, hidden, sort_key, record_key)",
     "CREATE INDEX channel_timeline_channel_idx ON channel_timeline(channel_id, record_key)",
+    "CREATE TABLE channel_removed (record_key TEXT PRIMARY KEY, channel_id TEXT NOT NULL, seq INTEGER NOT NULL)",
+    "CREATE INDEX channel_removed_channel_idx ON channel_removed(channel_id, seq, record_key)",
     "CREATE TABLE channel_coverage (channel_id TEXT NOT NULL, scope TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL, PRIMARY KEY (channel_id, scope, start))",
     "CREATE TABLE channel_sync (channel_id TEXT PRIMARY KEY, seq INTEGER, touched_at_ms INTEGER NOT NULL)",
 ];
 
-pub(super) const TABLES: [&str; 3] = ["channel_coverage", "channel_sync", "channel_timeline"];
-pub(super) const NAMED_INDEXES: [&str; 2] =
-    ["channel_timeline_channel_idx", "channel_timeline_scan_idx"];
+pub(super) const TABLES: [&str; 4] = [
+    "channel_coverage",
+    "channel_removed",
+    "channel_sync",
+    "channel_timeline",
+];
+pub(super) const NAMED_INDEXES: [&str; 3] = [
+    "channel_removed_channel_idx",
+    "channel_timeline_channel_idx",
+    "channel_timeline_scan_idx",
+];
 
-const ROW_UPSERT: &str = "INSERT INTO channel_timeline (record_key, channel_id, scope, sort_key, hidden) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT (record_key) DO UPDATE SET channel_id = excluded.channel_id, scope = excluded.scope, sort_key = excluded.sort_key, hidden = excluded.hidden";
+const ROW_UPSERT_PREFIX: &str =
+    "INSERT INTO channel_timeline (record_key, channel_id, scope, sort_key, hidden, seq) VALUES ";
+const ROW_UPSERT_SUFFIX: &str = " ON CONFLICT (record_key) DO UPDATE SET channel_id = excluded.channel_id, scope = excluded.scope, sort_key = excluded.sort_key, hidden = excluded.hidden, seq = excluded.seq";
+const ROW_UPDATE: &str = "UPDATE channel_timeline SET channel_id = ?2, scope = ?3, sort_key = ?4, hidden = ?5 WHERE record_key = ?1";
 const ROW_DELETE: &str = "DELETE FROM channel_timeline WHERE record_key = ?1";
-const ROW_BY_KEY: &str = "SELECT record_key, channel_id, scope, sort_key, hidden FROM channel_timeline WHERE record_key = ?1";
+const ROW_BY_KEY: &str = "SELECT record_key, channel_id, scope, sort_key, hidden, seq FROM channel_timeline WHERE record_key = ?1";
+const ALL_ROWS: &str =
+    "SELECT record_key, channel_id, scope, sort_key, hidden, seq FROM channel_timeline";
 // Both page reads stay on the (scope, hidden, sort_key) prefix and stop at
 // the limit, so a page costs the same in a 50-message and a 50,000-message
 // channel.
@@ -31,6 +46,16 @@ const ROWS_OLDER: &str = "SELECT record_key, sort_key FROM channel_timeline INDE
 const ROWS_NEWER: &str = "SELECT record_key, sort_key FROM channel_timeline INDEXED BY channel_timeline_scan_idx WHERE scope = ?1 AND hidden = 0 AND sort_key > ?2 AND sort_key <= ?3 ORDER BY sort_key ASC LIMIT ?4";
 const KEYS_BY_SCOPE: &str = "SELECT record_key FROM channel_timeline INDEXED BY channel_timeline_scan_idx WHERE scope = ?1 AND channel_id = ?2";
 const KEYS_BY_CHANNEL: &str = "SELECT record_key FROM channel_timeline INDEXED BY channel_timeline_channel_idx WHERE channel_id = ?1";
+// Runs when a channel's watermark is first set, over what previews and live
+// frames left of it.
+const KEYS_BELOW: &str = "SELECT record_key FROM channel_timeline INDEXED BY channel_timeline_channel_idx WHERE channel_id = ?1 AND seq < ?2";
+const REMOVED_UPSERT_PREFIX: &str =
+    "INSERT INTO channel_removed (record_key, channel_id, seq) VALUES ";
+const REMOVED_UPSERT_SUFFIX: &str =
+    " ON CONFLICT (record_key) DO UPDATE SET channel_id = excluded.channel_id, seq = excluded.seq";
+const REMOVED_DELETE: &str = "DELETE FROM channel_removed WHERE record_key = ?1";
+const REMOVED_BY_CHANNEL: &str = "SELECT record_key FROM channel_removed INDEXED BY channel_removed_channel_idx WHERE channel_id = ?1";
+const REMOVED_THROUGH: &str = "SELECT record_key FROM channel_removed INDEXED BY channel_removed_channel_idx WHERE channel_id = ?1 AND seq <= ?2";
 const COVERAGE_SELECT: &str =
     "SELECT start, end FROM channel_coverage WHERE channel_id = ?1 AND scope = ?2";
 const COVERAGE_INSERT: &str =
@@ -40,6 +65,7 @@ const COVERAGE_DELETE_SCOPE: &str =
 const COVERAGE_DELETE_CHANNEL: &str = "DELETE FROM channel_coverage WHERE channel_id = ?1";
 const SYNC_SELECT: &str = "SELECT seq, touched_at_ms FROM channel_sync WHERE channel_id = ?1";
 const SYNC_UPSERT: &str = "INSERT INTO channel_sync (channel_id, seq, touched_at_ms) VALUES (?1, ?2, ?3) ON CONFLICT (channel_id) DO UPDATE SET seq = excluded.seq, touched_at_ms = excluded.touched_at_ms";
+const SYNC_ENSURE: &str = "INSERT INTO channel_sync (channel_id, seq, touched_at_ms) VALUES (?1, NULL, 0) ON CONFLICT DO NOTHING";
 const SYNC_DELETE: &str = "DELETE FROM channel_sync WHERE channel_id = ?1";
 // One row per channel the device holds: small enough to scan.
 const SYNC_STALE: &str = "SELECT channel_id FROM channel_sync WHERE touched_at_ms < ?1 ORDER BY touched_at_ms ASC, channel_id ASC LIMIT ?2";
@@ -49,25 +75,33 @@ const META_SELECT: &str = "SELECT value FROM meta WHERE key = ?1";
 const META_UPSERT: &str = "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value";
 pub(super) const PROJECTION_VERSION_KEY: &str = "channel_timeline_projection_version";
 
-pub(super) const VALIDATED_SQL: [&str; 19] = [
-    ROW_UPSERT,
+/// Keys one statement looks up.
+const LOOKUP_BATCH: usize = 64;
+
+pub(super) const VALIDATED_SQL: [&str; 24] = [
+    ROW_UPDATE,
     ROW_DELETE,
     ROW_BY_KEY,
+    ALL_ROWS,
     ROWS_OLDER,
     ROWS_NEWER,
     KEYS_BY_SCOPE,
     KEYS_BY_CHANNEL,
+    KEYS_BELOW,
+    REMOVED_DELETE,
+    REMOVED_BY_CHANNEL,
+    REMOVED_THROUGH,
     COVERAGE_SELECT,
     COVERAGE_INSERT,
     COVERAGE_DELETE_SCOPE,
     COVERAGE_DELETE_CHANNEL,
     SYNC_SELECT,
     SYNC_UPSERT,
+    SYNC_ENSURE,
     SYNC_DELETE,
     SYNC_STALE,
     SYNC_COUNT,
     ROW_COUNT,
-    META_SELECT,
     META_UPSERT,
 ];
 
@@ -75,51 +109,117 @@ fn is_entry(typename: &str) -> bool {
     typename == MESSAGE_TYPENAME || typename == ACTIVITY_TYPENAME
 }
 
-/// Writes or removes the timeline row of every message and activity entry,
-/// keeping the last entry for a key exactly like the record upsert does.
+/// A stored row with the sequence of the write that stored it.
+struct HeldRow {
+    row: ChannelTimelineRow,
+    seq: i64,
+}
+
+/// What a message or activity record projects to.
+pub(super) enum Entry {
+    /// Its timeline row.
+    Row(ChannelTimelineRow),
+    /// It was deleted.
+    Deleted,
+    /// It is no timeline entry.
+    Unprojectable,
+}
+
+impl Entry {
+    /// The projection of a message or activity record; `None` for any other.
+    pub(super) fn project(key: &EntityKey<'_>, record: &Record) -> Option<Self> {
+        if !key.typename().is_some_and(is_entry) {
+            return None;
+        }
+        Some(match project_channel_timeline(key, record) {
+            Some(row) => Self::Row(row),
+            None if record.fields.get(cache_core::identity::DELETED_FIELD)
+                == Some(&cache_core::value::CacheValue::Bool(true)) =>
+            {
+                Self::Deleted
+            }
+            None => Self::Unprojectable,
+        })
+    }
+}
+
+/// Keeps the rows of written message and activity records current, keeping
+/// the last entry for a key exactly like the record upsert does. Only
+/// [`apply`] makes a row: a record of an entry without one has no known
+/// sequence.
 pub(super) fn write_rows(
     connection: &Db,
     entries: &[EncodedRecord],
 ) -> Result<(), TursoStorageError> {
-    let mut last = HashMap::new();
-    for (index, entry) in entries.iter().enumerate() {
-        if is_entry(&entry.key.typename) {
-            last.insert((entry.key.typename.as_str(), entry.key.id.as_str()), index);
+    let mut last = BTreeMap::new();
+    for entry in entries {
+        if let Some(projected) = &entry.channel_timeline {
+            last.insert(entity_key_text(&entry.key), projected);
         }
     }
     if last.is_empty() {
         return Ok(());
     }
-    let mut upsert = driver::prepare(connection, ROW_UPSERT)?;
-    let mut delete = driver::prepare(connection, ROW_DELETE)?;
-    let mut indexes = last.into_values().collect::<Vec<_>>();
-    indexes.sort_unstable();
-    for index in indexes {
-        let entry = &entries[index];
-        match &entry.channel_timeline {
-            Some(row) => {
-                require_changed(driver::execute_prepared(&mut upsert, row_values(row))?, 1)?;
+    for held in held_rows(connection, &last.keys().cloned().collect::<Vec<_>>())? {
+        let Some(projected) = last.get(held.row.record_key.as_ref()) else {
+            return Err(invariant());
+        };
+        match projected {
+            Entry::Row(row) if *row == held.row => {}
+            Entry::Row(row) => {
+                require_changed(driver::execute(connection, ROW_UPDATE, row_values(row))?, 1)?;
             }
-            None => delete_row(&mut delete, &entity_key_text(&entry.key))?,
+            Entry::Deleted => {
+                let channel_id = held.row.channel_id.as_str();
+                let watermark = load_sync(connection, channel_id)?.and_then(|sync| sync.seq);
+                let seq = watermark.map_or(held.seq, |watermark| watermark.max(held.seq));
+                delete_key(connection, ROW_DELETE, held.row.record_key.as_ref())?;
+                insert_rows(
+                    connection,
+                    REMOVED_UPSERT_PREFIX,
+                    REMOVED_UPSERT_SUFFIX,
+                    3,
+                    vec![
+                        text(held.row.record_key.as_ref()),
+                        text(channel_id),
+                        Value::from_i64(seq),
+                    ],
+                )?;
+            }
+            Entry::Unprojectable => drop_row(connection, &held.row)?,
         }
     }
     Ok(())
 }
 
-/// Removes the timeline rows of deleted message and activity records.
+/// Removes the timeline rows of message and activity records deleted for a
+/// reason the channel's changes do not explain.
 pub(super) fn delete_rows(connection: &Db, keys: &[RecordKey]) -> Result<(), TursoStorageError> {
-    let mut statement = None;
-    for key in keys.iter().filter(|key| is_entry(&key.typename)) {
-        let statement = match statement.as_mut() {
-            Some(statement) => statement,
-            None => statement.insert(driver::prepare(connection, ROW_DELETE)?),
-        };
-        delete_row(statement, &entity_key_text(key))?;
+    let keys = keys
+        .iter()
+        .filter(|key| is_entry(&key.typename))
+        .map(entity_key_text)
+        .collect::<Vec<_>>();
+    for held in held_rows(connection, &keys)? {
+        drop_row(connection, &held.row)?;
     }
     Ok(())
 }
 
-/// Removes every timeline row, stretch and sync row with the rest of the cache.
+/// Deletes a row outside a channel write. The list it was in lacks an entry
+/// from now on, so its coverage goes too.
+fn drop_row(connection: &Db, row: &ChannelTimelineRow) -> Result<(), TursoStorageError> {
+    delete_key(connection, ROW_DELETE, row.record_key.as_ref())?;
+    driver::execute(
+        connection,
+        COVERAGE_DELETE_SCOPE,
+        vec![text(&row.channel_id), text(&row.scope.storage_key())],
+    )?;
+    Ok(())
+}
+
+/// Removes every timeline row, tombstone, stretch and sync row with the rest
+/// of the cache.
 pub(super) fn clear(connection: &Db) -> Result<(), TursoStorageError> {
     for table in TABLES {
         driver::execute(connection, &format!("DELETE FROM {table}"), Vec::new())?;
@@ -139,9 +239,9 @@ pub(super) fn save_projection_version(connection: &Db) -> Result<(), TursoStorag
     Ok(())
 }
 
-/// Rebuilds the disposable timeline rows from message and activity records
-/// when the projection changed, without touching records, coverage, or sync
-/// state.
+/// Projects the stored rows again from their records when the projection
+/// changed, keeping their sequences. A row that no longer projects takes the
+/// coverage of its list with it; records, tombstones and sync state stay.
 pub(super) fn ensure_projection_version(connection: &Db) -> Result<(), TursoStorageError> {
     let versions = driver::query(connection, META_SELECT, vec![text(PROJECTION_VERSION_KEY)])?;
     if let [row] = versions.as_slice()
@@ -150,15 +250,32 @@ pub(super) fn ensure_projection_version(connection: &Db) -> Result<(), TursoStor
         return Ok(());
     }
     driver::write_transaction(connection, || {
-        driver::execute(connection, "DELETE FROM channel_timeline", Vec::new())?;
-        let mut upsert = driver::prepare(connection, ROW_UPSERT)?;
-        for typename in [MESSAGE_TYPENAME, ACTIVITY_TYPENAME] {
-            for_each_record(connection, typename, |key, record| {
-                if let Some(row) = project_channel_timeline(key, record) {
-                    require_changed(driver::execute_prepared(&mut upsert, row_values(&row))?, 1)?;
-                }
-                Ok(())
-            })?;
+        let mut held = driver::query(connection, ALL_ROWS, Vec::new())?
+            .iter()
+            .map(|row| {
+                let held = parse_row(row)?;
+                Ok((held.row.record_key.clone(), held.row))
+            })
+            .collect::<Result<BTreeMap<_, _>, TursoStorageError>>()?;
+        if !held.is_empty() {
+            for typename in [MESSAGE_TYPENAME, ACTIVITY_TYPENAME] {
+                for_each_record(connection, typename, |key, record| {
+                    let key = key.clone().into_owned();
+                    if held.contains_key(&key)
+                        && let Some(row) = project_channel_timeline(&key, record)
+                    {
+                        held.remove(&key);
+                        require_changed(
+                            driver::execute(connection, ROW_UPDATE, row_values(&row))?,
+                            1,
+                        )?;
+                    }
+                    Ok(())
+                })?;
+            }
+        }
+        for row in held.values() {
+            drop_row(connection, row)?;
         }
         save_projection_version(connection)
     })
@@ -174,12 +291,11 @@ fn row_values(row: &ChannelTimelineRow) -> Vec<Value> {
     ]
 }
 
-fn delete_row(statement: &mut driver::Prepared, key: &str) -> Result<(), TursoStorageError> {
-    let changed = driver::execute_prepared(statement, vec![text(key)])?;
-    if (0..=1).contains(&changed) {
-        Ok(())
-    } else {
-        Err(invariant())
+/// Deletes at most the one row `sql` finds by record key.
+fn delete_key(connection: &Db, sql: &str, key: &str) -> Result<(), TursoStorageError> {
+    match driver::execute(connection, sql, vec![text(key)])? {
+        0 | 1 => Ok(()),
+        _ => Err(invariant()),
     }
 }
 
@@ -188,9 +304,12 @@ fn entity_key_text(key: &RecordKey) -> String {
 }
 
 fn parse_entity(value: String) -> Result<EntityKey<'static>, TursoStorageError> {
-    RecordKey::from_entity(&EntityKey(value.as_str().into()))
-        .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Corruption))?
-        .into_entity()
+    record_key(value)?.into_entity()
+}
+
+fn record_key(value: String) -> Result<RecordKey, TursoStorageError> {
+    RecordKey::from_entity(&EntityKey(value.into()))
+        .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Corruption))
 }
 
 fn parse_scope(value: &str) -> Result<TimelineScope, TursoStorageError> {
@@ -201,21 +320,59 @@ fn parse_scope(value: &str) -> Result<TimelineScope, TursoStorageError> {
     }
 }
 
+fn parse_row(row: &[Value]) -> Result<HeldRow, TursoStorageError> {
+    if row.len() != 6 {
+        return Err(invariant());
+    }
+    Ok(HeldRow {
+        row: ChannelTimelineRow {
+            record_key: parse_entity(required_text(row, 0)?)?,
+            channel_id: required_text(row, 1)?,
+            scope: parse_scope(&required_text(row, 2)?)?,
+            sort_key: required_text(row, 3)?,
+            hidden: required_i64(row, 4)? != 0,
+        },
+        seq: required_i64(row, 5)?,
+    })
+}
+
 fn row_by_key(
     connection: &Db,
     key: &EntityKey<'_>,
 ) -> Result<Option<ChannelTimelineRow>, TursoStorageError> {
     match driver::query(connection, ROW_BY_KEY, vec![text(key.as_ref())])?.as_slice() {
         [] => Ok(None),
-        [row] if row.len() == 5 => Ok(Some(ChannelTimelineRow {
-            record_key: parse_entity(required_text(row, 0)?)?,
-            channel_id: required_text(row, 1)?,
-            scope: parse_scope(&required_text(row, 2)?)?,
-            sort_key: required_text(row, 3)?,
-            hidden: required_i64(row, 4)? != 0,
-        })),
+        [row] => Ok(Some(parse_row(row)?.row)),
         _ => Err(invariant()),
     }
+}
+
+/// Runs `select` + `IN (…)` over `keys`, a batch at a time.
+fn by_keys(
+    connection: &Db,
+    select: &str,
+    keys: &[String],
+    mut visit: impl FnMut(&[Value]) -> Result<(), TursoStorageError>,
+) -> Result<(), TursoStorageError> {
+    for keys in keys.chunks(LOOKUP_BATCH) {
+        let sql = format!(
+            "{select} WHERE record_key IN ({})",
+            sql_placeholders(keys.len())
+        );
+        for row in driver::query(connection, &sql, keys.iter().map(|key| text(key)).collect())? {
+            visit(&row)?;
+        }
+    }
+    Ok(())
+}
+
+fn held_rows(connection: &Db, keys: &[String]) -> Result<Vec<HeldRow>, TursoStorageError> {
+    let mut held = Vec::new();
+    by_keys(connection, ALL_ROWS, keys, |row| {
+        held.push(parse_row(row)?);
+        Ok(())
+    })?;
+    Ok(held)
 }
 
 fn window_rows(
@@ -365,80 +522,190 @@ fn record_keys(
         .collect()
 }
 
-/// Deletes the named records with their timeline rows and returns the keys
-/// that existed.
-fn delete_records(
+fn load_guard(
     connection: &Db,
-    doomed: BTreeSet<String>,
+    query: &ChannelGuardQuery,
+) -> Result<ChannelGuard, TursoStorageError> {
+    let mut guard = ChannelGuard::default();
+    let keys = query
+        .keys
+        .iter()
+        .map(|key| key.as_ref().to_owned())
+        .collect::<Vec<_>>();
+    for (select, removed) in [
+        (
+            "SELECT record_key, channel_id, seq FROM channel_timeline",
+            false,
+        ),
+        (
+            "SELECT record_key, channel_id, seq FROM channel_removed",
+            true,
+        ),
+    ] {
+        by_keys(connection, select, &keys, |row| {
+            let state = ChannelEntryState {
+                channel_id: required_text(row, 1)?,
+                seq: required_i64(row, 2)?,
+                removed,
+            };
+            let key = parse_entity(required_text(row, 0)?)?;
+            match guard.entries.insert(key, state) {
+                None => Ok(()),
+                Some(_) => Err(invariant()),
+            }
+        })?;
+    }
+    for channel_id in &query.channels {
+        if let Some(sync) = load_sync(connection, channel_id)? {
+            guard.sync.insert(
+                channel_id.clone(),
+                ChannelSync {
+                    channel_id: channel_id.clone(),
+                    seq: sync.seq,
+                    touched_at_ms: sync.touched_at_ms,
+                },
+            );
+        }
+    }
+    for (channel_id, scope) in &query.coverage {
+        let spans = load_coverage(connection, channel_id, scope)?;
+        if !spans.is_empty() {
+            guard
+                .coverage
+                .insert((channel_id.clone(), scope.clone()), spans);
+        }
+    }
+    Ok(guard)
+}
+
+fn load_entries(
+    connection: &Db,
+    channel_id: &str,
+    entries: ChannelEntries<'_>,
+) -> Result<Vec<String>, TursoStorageError> {
+    let seq_keys = |sql, seq| {
+        driver::query(
+            connection,
+            sql,
+            vec![text(channel_id), Value::from_i64(seq)],
+        )?
+        .iter()
+        .map(|row| required_text(row, 0))
+        .collect::<Result<Vec<_>, _>>()
+    };
+    match entries {
+        ChannelEntries::All => {
+            let mut keys = record_keys(connection, KEYS_BY_CHANNEL, &[channel_id])?;
+            keys.extend(record_keys(connection, REMOVED_BY_CHANNEL, &[channel_id])?);
+            Ok(keys)
+        }
+        ChannelEntries::HeldBelow(seq) => seq_keys(KEYS_BELOW, seq),
+        ChannelEntries::TombstonesThrough(seq) => seq_keys(REMOVED_THROUGH, seq),
+        ChannelEntries::Thread(root_id) => {
+            let scope = TimelineScope::Thread(root_id.to_owned()).storage_key();
+            record_keys(connection, KEYS_BY_SCOPE, &[&scope, channel_id])
+        }
+    }
+}
+
+/// Deletes entries with everything held of them, and returns the keys of the
+/// records that existed.
+fn delete_entries<'a>(
+    connection: &Db,
+    keys: impl IntoIterator<Item = &'a str>,
 ) -> Result<Vec<EntityKey<'static>>, TursoStorageError> {
-    let doomed = doomed
-        .into_iter()
-        .map(|key| RecordKey::from_entity(&EntityKey(key.into())))
-        .collect::<Result<Vec<_>, _>>()?;
-    let mut deleted_keys = Vec::new();
-    {
-        let mut record_statement = driver::prepare(connection, RECORD_DELETE)?;
-        for key in &doomed {
-            match driver::execute_prepared(
-                &mut record_statement,
-                vec![text(&key.typename), text(&key.id)],
-            )? {
-                0 => {}
-                1 => deleted_keys.push(parse_entity(entity_key_text(key))?),
-                _ => return Err(invariant()),
+    let mut deleted = Vec::new();
+    let mut record_statement = driver::prepare(connection, RECORD_DELETE)?;
+    let mut row_statement = driver::prepare(connection, ROW_DELETE)?;
+    let mut removed_statement = driver::prepare(connection, REMOVED_DELETE)?;
+    for key in keys {
+        let record = record_key(key.to_owned())?;
+        match driver::execute_prepared(
+            &mut record_statement,
+            vec![text(&record.typename), text(&record.id)],
+        )? {
+            0 => {}
+            1 => deleted.push(record.into_entity()?),
+            _ => return Err(invariant()),
+        }
+        for statement in [&mut row_statement, &mut removed_statement] {
+            if !(0..=1).contains(&driver::execute_prepared(statement, vec![text(key)])?) {
+                return Err(invariant());
             }
         }
     }
-    delete_rows(connection, &doomed)?;
-    Ok(deleted_keys)
+    Ok(deleted)
 }
 
-fn apply_commit(
-    connection: &Db,
-    commit: &ChannelTimelineCommit,
-) -> Result<ChannelCommitOutcome, TursoStorageError> {
-    let channel_id = commit.channel_id.as_str();
-    let mut doomed = BTreeSet::new();
-    if commit.reset {
-        doomed.extend(record_keys(connection, KEYS_BY_CHANNEL, &[channel_id])?);
+/// Applies a decided channel write in the transaction of the records it
+/// belongs to, before they are written.
+pub(super) fn apply(connection: &Db, write: &ChannelWrite) -> Result<(), TursoStorageError> {
+    if !write.deleted.is_empty() {
+        delete_entries(connection, write.deleted.iter().map(AsRef::as_ref))?;
+    }
+    for channel_id in &write.uncovered {
         driver::execute(connection, COVERAGE_DELETE_CHANNEL, vec![text(channel_id)])?;
     }
-    doomed.extend(
-        commit
-            .removed_keys
-            .iter()
-            .map(|key| key.as_ref().to_owned()),
-    );
-    for root_id in &commit.dropped_thread_root_ids {
-        let scope = TimelineScope::Thread(root_id.clone()).storage_key();
-        doomed.extend(record_keys(
-            connection,
-            KEYS_BY_SCOPE,
-            &[&scope, channel_id],
-        )?);
-        driver::execute(
-            connection,
-            COVERAGE_DELETE_SCOPE,
-            vec![text(channel_id), text(&scope)],
-        )?;
+    for tombstone in &write.tombstones {
+        delete_key(connection, ROW_DELETE, tombstone.record_key.as_ref())?;
     }
-    let deleted_keys = delete_records(connection, doomed)?;
-
-    for (scope, spans) in commit_coverage_by_scope(commit) {
-        let held = load_coverage(connection, channel_id, &scope)?;
-        let scope = scope.storage_key();
+    insert_rows(
+        connection,
+        REMOVED_UPSERT_PREFIX,
+        REMOVED_UPSERT_SUFFIX,
+        3,
+        write
+            .tombstones
+            .iter()
+            .flat_map(|tombstone| {
+                [
+                    text(tombstone.record_key.as_ref()),
+                    text(&tombstone.channel_id),
+                    Value::from_i64(tombstone.seq),
+                ]
+            })
+            .collect(),
+    )?;
+    for row in &write.rows {
+        delete_key(connection, REMOVED_DELETE, row.row.record_key.as_ref())?;
+    }
+    insert_rows(
+        connection,
+        ROW_UPSERT_PREFIX,
+        ROW_UPSERT_SUFFIX,
+        6,
+        write
+            .rows
+            .iter()
+            .flat_map(|row| {
+                row_values(&row.row)
+                    .into_iter()
+                    .chain([Value::from_i64(row.seq)])
+            })
+            .collect(),
+    )?;
+    let channels = write
+        .rows
+        .iter()
+        .map(|row| row.row.channel_id.as_str())
+        .collect::<BTreeSet<_>>();
+    for channel_id in channels {
+        driver::execute(connection, SYNC_ENSURE, vec![text(channel_id)])?;
+    }
+    for coverage in &write.coverage {
+        let scope = coverage.scope.storage_key();
         driver::execute(
             connection,
             COVERAGE_DELETE_SCOPE,
-            vec![text(channel_id), text(&scope)],
+            vec![text(&coverage.channel_id), text(&scope)],
         )?;
-        let mut insert = driver::prepare(connection, COVERAGE_INSERT)?;
-        for span in merge_spans(held.into_iter().chain(spans)) {
+        for span in &coverage.spans {
             require_changed(
-                driver::execute_prepared(
-                    &mut insert,
+                driver::execute(
+                    connection,
+                    COVERAGE_INSERT,
                     vec![
-                        text(channel_id),
+                        text(&coverage.channel_id),
                         text(&scope),
                         text(&span.start),
                         text(&span.end),
@@ -448,26 +715,18 @@ fn apply_commit(
             )?;
         }
     }
-
-    let stored = load_sync(connection, channel_id)?;
-    let stored_seq = stored.as_ref().and_then(|sync| sync.seq);
-    let stored_touch = stored.as_ref().map_or(0, |sync| sync.touched_at_ms);
-    let seq = next_seq(stored_seq, commit);
-    let touched_at_ms = commit
-        .touched_at_ms
-        .map_or(stored_touch, |touched| touched.max(stored_touch));
-    if stored.is_none() || seq != stored_seq || touched_at_ms != stored_touch {
+    for sync in &write.sync {
         driver::execute(
             connection,
             SYNC_UPSERT,
             vec![
-                text(channel_id),
-                seq.map_or(Value::Null, Value::from_i64),
-                Value::from_i64(touched_at_ms),
+                text(&sync.channel_id),
+                sync.seq.map_or(Value::Null, Value::from_i64),
+                Value::from_i64(sync.touched_at_ms),
             ],
         )?;
     }
-    Ok(ChannelCommitOutcome { deleted_keys, seq })
+    Ok(())
 }
 
 fn apply_eviction(
@@ -490,12 +749,12 @@ fn apply_eviction(
     channel_ids.truncate(max_channels);
     let mut doomed = BTreeSet::new();
     for channel_id in &channel_ids {
-        doomed.extend(record_keys(connection, KEYS_BY_CHANNEL, &[channel_id])?);
+        doomed.extend(load_entries(connection, channel_id, ChannelEntries::All)?);
         driver::execute(connection, COVERAGE_DELETE_CHANNEL, vec![text(channel_id)])?;
         driver::execute(connection, SYNC_DELETE, vec![text(channel_id)])?;
     }
     Ok(ChannelEvictionOutcome {
-        deleted_keys: delete_records(connection, doomed)?,
+        deleted_keys: delete_entries(connection, doomed.iter().map(String::as_str))?,
         channel_ids,
         has_more,
     })
@@ -505,6 +764,34 @@ fn count(connection: &Db, sql: &str) -> Result<u64, TursoStorageError> {
     match driver::query(connection, sql, Vec::new())?.as_slice() {
         [row] => u64::try_from(required_i64(row, 0)?).map_err(|_| invariant()),
         _ => Err(invariant()),
+    }
+}
+
+impl TursoStorage {
+    pub(super) fn channel_guard(
+        &self,
+        query: &ChannelGuardQuery,
+    ) -> Result<ChannelGuard, TursoStorageError> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        let result = driver::read_transaction(&connection, || load_guard(&connection, query));
+        self.latch_result(result)
+    }
+
+    pub(super) fn channel_entries(
+        &self,
+        channel_id: &str,
+        entries: ChannelEntries<'_>,
+    ) -> Result<Vec<EntityKey<'static>>, TursoStorageError> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        let result = driver::read_transaction(&connection, || {
+            load_entries(&connection, channel_id, entries)?
+                .into_iter()
+                .map(parse_entity)
+                .collect()
+        });
+        self.latch_result(result)
     }
 }
 
@@ -519,21 +806,6 @@ impl ChannelTimelineStorage for TursoStorage {
         let result = driver::read_transaction(&connection, || {
             query_snapshot(&connection, request, pending)
         });
-        self.latch_result(result)
-    }
-
-    async fn channel_timeline_commit(
-        &mut self,
-        commit: &ChannelTimelineCommit,
-    ) -> Result<ChannelCommitOutcome, Self::Error> {
-        self.require_healthy()?;
-        let result = (|| {
-            commit
-                .validate()
-                .map_err(|_| TursoStorageError::InvalidInput)?;
-            let connection = self.connection();
-            driver::write_transaction(&connection, || apply_commit(&connection, commit))
-        })();
         self.latch_result(result)
     }
 
@@ -583,6 +855,16 @@ pub(super) fn validate_schema(connection: &Db) -> Result<(), TursoStorageError> 
             column("scope", "TEXT", true, 0),
             column("sort_key", "TEXT", true, 0),
             column("hidden", "INTEGER", true, 0),
+            column("seq", "INTEGER", true, 0),
+        ],
+    )?;
+    validate_table_columns(
+        connection,
+        "channel_removed",
+        &[
+            column("record_key", "TEXT", false, 1),
+            column("channel_id", "TEXT", true, 0),
+            column("seq", "INTEGER", true, 0),
         ],
     )?;
     validate_table_columns(
@@ -623,6 +905,14 @@ pub(super) fn validate_schema(connection: &Db) -> Result<(), TursoStorageError> 
                 &["channel_id", "record_key"][..],
             ),
         ],
+    )?;
+    validate_named_indexes(
+        connection,
+        "channel_removed",
+        &[(
+            "channel_removed_channel_idx",
+            &["channel_id", "seq", "record_key"][..],
+        )],
     )?;
     for table in TABLES {
         validate_table_constraints(connection, table, false)?;

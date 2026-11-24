@@ -22,17 +22,6 @@ pub enum ChannelTimelineResultWire {
     },
 }
 
-/// Mirrors `ChannelTimelineCommitResult` in the frontend protocol.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChannelCommitResultWire {
-    /// Records the commit deleted, as an ordinary write.
-    #[serde(flatten)]
-    pub write: WriteResultWire,
-    /// Applied change sequence of the channel after the commit.
-    pub channel_seq: Option<String>,
-}
-
 /// Mirrors `ChannelTimelineEvictResult` in the frontend protocol.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -64,12 +53,12 @@ impl EngineHandle {
             .map_err(|error| error.to_string())
     }
 
-    /// Applies a channel commit atomically. Callers await message hydration
-    /// before publishing coverage.
+    /// Commits what is known of a channel without a response: a touch, a reset
+    /// or dropped threads.
     pub async fn channel_timeline_commit(
         &self,
         commit: ChannelTimelineCommit,
-    ) -> Result<ChannelCommitResultWire, String> {
+    ) -> Result<WriteResultWire, String> {
         let mut state = self.snapshot_write().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let result = engine
@@ -80,12 +69,9 @@ impl EngineHandle {
             .unchanged_observed_windows()
             .await
             .unwrap_or_default();
-        let mut write = wire_write_result(ops, result.write);
+        let mut write = wire_write_result(ops, result);
         write.unchanged_views = Some(unchanged_views);
-        Ok(ChannelCommitResultWire {
-            write,
-            channel_seq: result.seq,
-        })
+        Ok(write)
     }
 
     /// Removes the channels touched longest ago with their messages.

@@ -96,6 +96,7 @@ async fn write<S: PredicateIndexStorage>(engine: &mut Engine<S>, query: &str, da
                 variables: &vars,
                 data,
                 identity: Some(VIEWER),
+                channel: None,
             },
             projections,
         )
@@ -491,6 +492,7 @@ fn identity_switch_does_not_read_old_mail_bases_but_keeps_incoming_snapshots() {
                     variables: &vars,
                     data: &incoming,
                     identity: Some("new-viewer"),
+                    channel: None,
                 },
                 projections,
             )

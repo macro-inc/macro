@@ -174,11 +174,14 @@ async fn seed<S: PredicateIndexStorage>(engine: &mut Engine<S>) {
     .unwrap();
     engine
         .hydrate_query_with_projections(
-            &query,
-            Some("SoupBackfill"),
-            &vars,
-            &data,
-            Some("viewer"),
+            NetworkWrite {
+                query: &query,
+                operation_name: Some("SoupBackfill"),
+                variables: &vars,
+                data: &data,
+                identity: Some("viewer"),
+                channel: None,
+            },
             projections,
         )
         .await
@@ -326,6 +329,7 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
                     variables: &vars,
                     data: &data,
                     identity: Some("viewer"),
+                    channel: None,
                 },
                 projections,
             )

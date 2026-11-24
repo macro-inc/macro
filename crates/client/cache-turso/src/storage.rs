@@ -1,6 +1,7 @@
 use crate::driver::{self, Db, WalCheckpoint, WalPosition};
 use crate::key::RecordKey;
 use crate::{PhysicalResetReason, TursoStorageError};
+use cache_core::channel_timeline::{ChannelEntries, ChannelGuard, ChannelGuardQuery, ChannelWrite};
 use cache_core::codec::{
     CACHE_FORMAT_VERSION, MIGRATABLE_CACHE_FORMAT_VERSIONS, cache_namespace,
     decode_format_3_record, decode_record, decode_record_updates, encode_record,
@@ -1262,7 +1263,7 @@ impl Storage for TursoStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<(), Self::Error> {
-        self.put_encoded_with_projections(|| prepare_records(entries), projections)
+        self.put_encoded_with_projections(|| prepare_records(entries), projections, None)
     }
 
     async fn put_records_with_projections(
@@ -1273,6 +1274,35 @@ impl Storage for TursoStorage {
         self.put_encoded_with_projections(
             || prepare_records(entries.iter().map(|(key, record)| (key, record))),
             projections,
+            None,
+        )
+    }
+
+    async fn load_channel_guard(
+        &self,
+        query: &ChannelGuardQuery,
+    ) -> Result<ChannelGuard, Self::Error> {
+        self.channel_guard(query)
+    }
+
+    async fn load_channel_entries(
+        &self,
+        channel_id: &str,
+        entries: ChannelEntries<'_>,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.channel_entries(channel_id, entries)
+    }
+
+    async fn put_channel_records(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+        channel: &ChannelWrite,
+    ) -> Result<(), Self::Error> {
+        self.put_encoded_with_projections(
+            || prepare_records(entries.iter().map(|(key, record)| (key, record))),
+            projections,
+            Some(channel),
         )
     }
 
@@ -1793,6 +1823,7 @@ impl Storage for TursoStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
         reconciliation: OptimisticShadowReconciliation,
+        channel: &ChannelWrite,
     ) -> Result<bool, Self::Error> {
         self.require_healthy()?;
         let result = (|| {
@@ -1808,6 +1839,7 @@ impl Storage for TursoStorage {
                     return Ok(false);
                 }
                 require_layer(&connection, sql_id)?;
+                channel_timeline::apply(&connection, channel)?;
                 {
                     let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
                     for (index, entry) in entries.iter().enumerate() {
@@ -3857,7 +3889,7 @@ fn initialize(
 /// The digest of `sqlite_schema` in a database this build creates; see
 /// [`schema_digest`]. `fresh_database_has_the_pinned_schema_digest` fails with
 /// the new value whenever the schema or how turso records it changes.
-const FRESH_SCHEMA_DIGEST: u128 = 0x14051d207312396d9a1c9bcae771a4c5;
+const FRESH_SCHEMA_DIGEST: u128 = 0xe053e4f26786df12287472fb253d7f6c;
 
 /// Whether the database holds exactly the schema this build creates.
 /// Every statement that creates a fresh file's schema, in order.
@@ -5578,7 +5610,7 @@ struct EncodedRecord {
     value: Vec<u8>,
     search_documents: Vec<SearchDocument>,
     calendar_range: Option<cache_core::calendar::CalendarRangeRow>,
-    channel_timeline: Option<cache_core::channel_timeline::ChannelTimelineRow>,
+    channel_timeline: Option<channel_timeline::Entry>,
     contact: Option<Record>,
 }
 
@@ -5589,12 +5621,16 @@ impl TursoStorage {
         &mut self,
         prepare: impl FnOnce() -> Result<Vec<EncodedRecord>, TursoStorageError>,
         projections: Vec<ProjectionMutation>,
+        channel: Option<&ChannelWrite>,
     ) -> Result<(), TursoStorageError> {
         self.require_healthy()?;
         let result = (|| {
             let mut entries = prepare()?;
             let connection = self.connection();
             driver::write_transaction(&connection, || {
+                if let Some(channel) = channel {
+                    channel_timeline::apply(&connection, channel)?;
+                }
                 // Several records per statement: on a cold write, running one
                 // statement per record cost more than the rows it wrote.
                 let mut written = 0;
@@ -5647,9 +5683,7 @@ where
                 search_documents: project_encoded_search_documents(key, record, &value),
                 value,
                 calendar_range: cache_core::calendar::project_calendar_range(key, record),
-                channel_timeline: cache_core::channel_timeline::project_channel_timeline(
-                    key, record,
-                ),
+                channel_timeline: channel_timeline::Entry::project(key, record),
                 contact: key.as_ref().starts_with("GraphqlContact:").then(|| Record {
                     fields: record
                         .fields

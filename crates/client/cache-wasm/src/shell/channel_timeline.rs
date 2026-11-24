@@ -19,14 +19,6 @@ struct JsChannelTimelineResult {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct JsChannelCommitResult {
-    #[serde(flatten)]
-    write: JsWriteResult,
-    channel_seq: Option<String>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 struct JsChannelEvictionResult {
     #[serde(flatten)]
     write: JsWriteResult,
@@ -56,9 +48,8 @@ impl CacheEngine {
         })
     }
 
-    /// Atomically applies fetched coverage, deletions and the applied change
-    /// sequence of one channel. Resolves like `writeQuery`, plus the
-    /// channel's sequence after the commit.
+    /// Commits what is known of a channel without a response: a touch, a reset
+    /// or dropped threads. Resolves like `writeQuery`.
     #[wasm_bindgen(js_name = channelTimelineCommit)]
     pub fn channel_timeline_commit(&self, commit: JsValue) -> js_sys::Promise {
         let state = self.state.clone();
@@ -75,12 +66,9 @@ impl CacheEngine {
                 .unchanged_observed_windows()
                 .await
                 .unwrap_or_default();
-            let mut write = js_write_result(result.write, &ops.borrow());
+            let mut write = js_write_result(result, &ops.borrow());
             write.unchanged_views = Some(unchanged_views);
-            to_js(&JsChannelCommitResult {
-                write,
-                channel_seq: result.seq,
-            })
+            to_js(&write)
         })
     }
 

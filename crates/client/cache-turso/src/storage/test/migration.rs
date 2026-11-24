@@ -186,6 +186,27 @@ fn storage_11_cache_is_upgraded_in_place_keeping_records_queue_and_generation() 
     });
 }
 
+fn channel_message(id: &str) -> (EntityKey<'static>, Record) {
+    let mut record = Record::default();
+    for (field, value) in [
+        ("__typename", "GraphqlChannelMessage"),
+        ("id", id),
+        ("channelId", "c1"),
+        ("sortKey", "10"),
+    ] {
+        record.fields.insert(
+            field.into(),
+            cache_core::value::CacheValue::String(value.into()),
+        );
+    }
+    for field in ["threadId", "deletedAt"] {
+        record
+            .fields
+            .insert(field.into(), cache_core::value::CacheValue::Null);
+    }
+    (EntityKey::entity("GraphqlChannelMessage", &[id]), record)
+}
+
 /// The channel timeline tables arrive empty, beside a channel message an
 /// older build had stored: it has no stamp, so it is no timeline entry.
 #[test]
@@ -196,6 +217,8 @@ fn storage_13_cache_gains_empty_channel_tables_and_keeps_its_messages() {
         let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
         let mut storage = database.open("scope").unwrap();
         populate(&mut storage).await;
+        let message = channel_message("m1");
+        storage.put_batch(vec![message.clone()]).await.unwrap();
         let fresh_schema = schema_rows(&storage.connection());
         test_hooks::rewrite_as_storage_13(&mut storage).unwrap();
         assert_ne!(schema_rows(&storage.connection()), fresh_schema);
@@ -216,13 +239,26 @@ fn storage_13_cache_gains_empty_channel_tables_and_keeps_its_messages() {
             cache_core::channel_timeline::ChannelTimelineStats::default()
         );
         assert_eq!(
-            storage.get_batch(&[key("Thing:7")]).await.unwrap(),
-            vec![Some(record("value 7"))]
+            storage
+                .get_batch(&[key("Thing:7"), message.0.clone()])
+                .await
+                .unwrap(),
+            vec![Some(record("value 7")), Some(message.1.clone())]
         );
+        let write = cache_core::channel_timeline::ChannelWrite {
+            rows: vec![cache_core::channel_timeline::ChannelRowWrite {
+                row: cache_core::channel_timeline::project_channel_timeline(&message.0, &message.1)
+                    .unwrap(),
+                seq: 3,
+            }],
+            ..Default::default()
+        };
         storage
-            .put_batch(vec![(key("Thing:8"), record("value 8"))])
+            .put_channel_records(&[message], Vec::new(), &write)
             .await
             .unwrap();
+        let stats = storage.channel_timeline_stats().await.unwrap();
+        assert_eq!((stats.channels, stats.entries), (1, 1));
         storage.try_close().unwrap();
     });
 }

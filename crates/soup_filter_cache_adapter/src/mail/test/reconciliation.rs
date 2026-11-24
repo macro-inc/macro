@@ -68,6 +68,7 @@ async fn persist<S: PredicateIndexStorage>(
                 variables: vars,
                 data,
                 identity: Some(VIEWER),
+                channel: None,
             },
             projections,
         )

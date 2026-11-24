@@ -7,10 +7,21 @@
 //! and a per-channel watermark records how far the channel's change sequence
 //! has been applied to those stretches.
 
+mod commit;
 mod coverage;
+mod sequence;
 mod window;
 
+pub use commit::{
+    ChannelCommitOutcome, ChannelCommitStatus, ChannelCoverage, ChannelTimelineCommit,
+    ChannelWatermark,
+};
 pub use coverage::{covering_span, merge_spans};
+pub(crate) use sequence::coverage_writes;
+pub use sequence::{
+    ChannelCoverageWrite, ChannelEntries, ChannelEntryState, ChannelGuard, ChannelGuardQuery,
+    ChannelRowWrite, ChannelSync, ChannelTombstone, ChannelWrite, TOMBSTONE_REPLAY, admits,
+};
 pub use window::{WindowPlan, anchor_root_key, compose_channel_window, plan_window, read_limit};
 
 use crate::identity::{ALIAS_FIELD, DELETED_FIELD};
@@ -18,7 +29,7 @@ use crate::store::Storage;
 use crate::value::{CacheNumber, CacheValue, EntityKey, Record};
 use maybe_send::MaybeSend;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 /// Normalized typename of one channel message, root or reply.
@@ -161,6 +172,24 @@ fn string_field<'a>(record: &'a Record, field: &str) -> Option<&'a str> {
     }
 }
 
+/// Server sequence of each channel entry one response dates.
+pub type ChannelStamps = BTreeMap<EntityKey<'static>, i64>;
+
+/// Whether `key` names a message or a system row.
+pub fn is_channel_entry(key: &EntityKey<'_>) -> bool {
+    matches!(key.typename(), Some(MESSAGE_TYPENAME | ACTIVITY_TYPENAME))
+}
+
+/// The channel a record of an entry names.
+pub fn entry_channel_id(record: &Record) -> Option<&str> {
+    string_field(record, "channelId")
+}
+
+/// A change sequence as the server sends it: a non-negative decimal string.
+pub fn parse_seq(value: &str) -> Option<i64> {
+    value.parse().ok().filter(|seq| *seq >= 0)
+}
+
 /// Whether `value` can be a server sort key: non-empty printable ASCII, so it
 /// sorts strictly between [`TIMELINE_START`] and [`TIMELINE_HEAD`].
 pub fn is_sort_key(value: &str) -> bool {
@@ -280,154 +309,6 @@ pub struct ChannelTimelineResult {
     pub optimistic: bool,
 }
 
-/// How a commit moves a channel's applied change sequence.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum ChannelSeqUpdate {
-    /// A fetched page was read at `seq`. Everything held for the channel is
-    /// only known current to the lower of this and the stored sequence.
-    Lower {
-        /// Channel sequence read before the page, as a decimal string.
-        seq: String,
-    },
-    /// Changes `from + 1 ..= to` were written. Applied only when the stored
-    /// sequence is exactly `from`, so a gap is never skipped.
-    Advance {
-        /// Sequence the changes continue from, as a decimal string.
-        from: String,
-        /// Sequence the changes reach, as a decimal string.
-        to: String,
-    },
-}
-
-impl ChannelSeqUpdate {
-    fn parsed(&self) -> Option<ParsedSeqUpdate> {
-        let parse = |value: &str| value.parse::<i64>().ok().filter(|seq| *seq >= 0);
-        match self {
-            Self::Lower { seq } => parse(seq).map(ParsedSeqUpdate::Lower),
-            Self::Advance { from, to } => {
-                let (from, to) = (parse(from)?, parse(to)?);
-                (to >= from).then_some(ParsedSeqUpdate::Advance { from, to })
-            }
-        }
-    }
-}
-
-enum ParsedSeqUpdate {
-    Lower(i64),
-    Advance { from: i64, to: i64 },
-}
-
-/// A fetched stretch of the channel's timeline or of one of its threads.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChannelCoverage {
-    /// Thread root whose replies were fetched; `None` for the channel's roots.
-    #[serde(default)]
-    pub thread_root_id: Option<String>,
-    /// The fetched stretch.
-    #[serde(flatten)]
-    pub span: TimelineSpan,
-}
-
-/// One atomic change to a channel's coverage, cached entries and sync state.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChannelTimelineCommit {
-    /// Channel the commit applies to.
-    pub channel_id: String,
-    /// Stretches whose entries were fully fetched and written.
-    #[serde(default)]
-    pub coverage: Vec<ChannelCoverage>,
-    /// Entries that no longer exist on the server at all.
-    #[serde(default)]
-    pub removed_keys: Vec<EntityKey<'static>>,
-    /// Threads whose cached replies and coverage are dropped.
-    #[serde(default)]
-    pub dropped_thread_root_ids: Vec<String>,
-    /// Change to the applied sequence, after the deletions.
-    #[serde(default)]
-    pub seq: Option<ChannelSeqUpdate>,
-    /// When the channel was last opened or prewarmed, in Unix milliseconds.
-    /// Eviction removes the channels touched longest ago.
-    #[serde(default)]
-    pub touched_at_ms: Option<i64>,
-    /// Deletes every cached entry, all coverage and the applied sequence of
-    /// the channel before applying the rest of the commit.
-    #[serde(default)]
-    pub reset: bool,
-}
-
-impl ChannelTimelineCommit {
-    /// Validates ids, keys, spans and sequence values before storage is touched.
-    pub fn validate(&self) -> Result<(), ChannelTimelineError> {
-        if self.channel_id.is_empty() {
-            return Err(ChannelTimelineError::InvalidKey);
-        }
-        let items =
-            self.coverage.len() + self.removed_keys.len() + self.dropped_thread_root_ids.len();
-        if items > MAX_CHANNEL_COMMIT_ITEMS {
-            return Err(ChannelTimelineError::TooLarge);
-        }
-        for coverage in &self.coverage {
-            let span = &coverage.span;
-            let start_ok = span.start == TIMELINE_START || is_sort_key(&span.start);
-            let end_ok = span.end == TIMELINE_HEAD || is_sort_key(&span.end);
-            if !start_ok || !end_ok || span.start > span.end {
-                return Err(ChannelTimelineError::InvalidSpan);
-            }
-            if coverage.thread_root_id.as_deref() == Some("") {
-                return Err(ChannelTimelineError::InvalidKey);
-            }
-        }
-        let is_entry = |key: &EntityKey<'_>| {
-            matches!(key.typename(), Some(MESSAGE_TYPENAME | ACTIVITY_TYPENAME))
-                && key.id().is_some_and(|id| !id.is_empty())
-        };
-        if !self.removed_keys.iter().all(is_entry)
-            || self.dropped_thread_root_ids.iter().any(String::is_empty)
-        {
-            return Err(ChannelTimelineError::InvalidKey);
-        }
-        if self.seq.as_ref().is_some_and(|seq| seq.parsed().is_none()) {
-            return Err(ChannelTimelineError::InvalidSeq);
-        }
-        Ok(())
-    }
-
-    /// The scope a coverage entry of this commit belongs to.
-    pub fn coverage_scope(&self, coverage: &ChannelCoverage) -> TimelineScope {
-        match &coverage.thread_root_id {
-            Some(root_id) => TimelineScope::Thread(root_id.clone()),
-            None => TimelineScope::Channel(self.channel_id.clone()),
-        }
-    }
-}
-
-/// Applied sequence after `commit`, given the `stored` one.
-pub fn next_seq(stored: Option<i64>, commit: &ChannelTimelineCommit) -> Option<i64> {
-    let base = if commit.reset { None } else { stored };
-    match commit.seq.as_ref().and_then(ChannelSeqUpdate::parsed) {
-        None => base,
-        Some(ParsedSeqUpdate::Lower(seq)) => Some(base.map_or(seq, |stored| stored.min(seq))),
-        Some(ParsedSeqUpdate::Advance { from, to }) => match base {
-            Some(stored) if stored == from => Some(to),
-            // A reset leaves nothing the skipped changes could have touched.
-            None if commit.reset => Some(to),
-            other => other,
-        },
-    }
-}
-
-/// What one channel commit left behind.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct ChannelCommitOutcome {
-    /// Normalized records deleted from storage.
-    pub deleted_keys: Vec<EntityKey<'static>>,
-    /// Applied sequence of the channel after the commit.
-    pub seq: Option<i64>,
-}
-
 /// Removes the channels nobody opened for longest.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -484,35 +365,17 @@ pub enum ChannelTimelineError {
     /// More than one of before, after and around, or a malformed cursor.
     #[error("channel timeline window is malformed")]
     InvalidWindow,
-    /// A sequence value is not a non-negative decimal.
+    /// A sequence value is not a non-negative decimal, or a part of the commit
+    /// needs one and has none.
     #[error("invalid channel change sequence")]
     InvalidSeq,
+    /// The parts of the commit contradict each other: coverage without a
+    /// watermark it was read at, or a reset that continues from a sequence.
+    #[error("channel timeline commit contradicts itself")]
+    InvalidCommit,
     /// The commit exceeds [`MAX_CHANNEL_COMMIT_ITEMS`].
     #[error("channel timeline commit has more than {MAX_CHANNEL_COMMIT_ITEMS} items")]
     TooLarge,
-}
-
-/// Records every scope of `commit` whose coverage changes, with the spans to add.
-pub fn commit_coverage_by_scope(
-    commit: &ChannelTimelineCommit,
-) -> Vec<(TimelineScope, Vec<TimelineSpan>)> {
-    let scopes = commit
-        .coverage
-        .iter()
-        .map(|coverage| commit.coverage_scope(coverage))
-        .collect::<BTreeSet<_>>();
-    scopes
-        .into_iter()
-        .map(|scope| {
-            let spans = commit
-                .coverage
-                .iter()
-                .filter(|coverage| commit.coverage_scope(coverage) == scope)
-                .map(|coverage| coverage.span.clone())
-                .collect();
-            (scope, spans)
-        })
-        .collect()
 }
 
 /// Storage capability for the channel timeline projection.
@@ -528,12 +391,6 @@ pub trait ChannelTimelineStorage: Storage {
         request: &ChannelTimelineRequest,
         pending: usize,
     ) -> impl Future<Output = Result<ChannelTimelineSnapshot, Self::Error>> + MaybeSend;
-
-    /// Applies a validated commit in one write transaction.
-    fn channel_timeline_commit(
-        &mut self,
-        commit: &ChannelTimelineCommit,
-    ) -> impl Future<Output = Result<ChannelCommitOutcome, Self::Error>> + MaybeSend;
 
     /// Removes the least recently touched channels in one write transaction.
     fn channel_timeline_evict(

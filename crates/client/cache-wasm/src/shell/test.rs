@@ -9,6 +9,7 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
+mod channel_timeline;
 mod hydration_scope;
 mod mail_projection;
 mod people;
@@ -334,6 +335,7 @@ fn empty_js_write_result() -> JsWriteResult {
         field_changes: None,
         identity_errors: Vec::new(),
         unwritable_response: None,
+        channel: None,
         mutation_uuid: None,
         revision: "0".to_string(),
         revision_advanced: false,
@@ -1276,6 +1278,7 @@ async fn backfill_supplement_failure_does_not_commit_or_advance_revision() {
             })),
             Some("user-1".into()),
             JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -1301,6 +1304,7 @@ async fn backfill_supplement_failure_does_not_commit_or_advance_revision() {
             }
         })),
         Some("user-1".into()),
+        JsValue::UNDEFINED,
         JsValue::UNDEFINED,
     ))
     .await
@@ -3033,6 +3037,7 @@ fn hydrate_backfill(engine: &CacheEngine) -> js_sys::Promise {
         backfill_page(),
         Some("user-1".into()),
         JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
     )
 }
 
@@ -3043,6 +3048,7 @@ fn prepare_backfill(engine: &CacheEngine) -> js_sys::Promise {
         backfill_variables(),
         backfill_page(),
         Some("user-1".into()),
+        JsValue::UNDEFINED,
         JsValue::UNDEFINED,
     )
 }
@@ -3225,6 +3231,7 @@ async fn a_prepared_hydrate_keeps_the_scope_it_was_given() {
             backfill_page(),
             Some("user-1".into()),
             scope.clone(),
+            JsValue::UNDEFINED,
         )
     };
     let scope_of = |generation: String| {
@@ -3240,6 +3247,7 @@ async fn a_prepared_hydrate_keeps_the_scope_it_was_given() {
             backfill_page(),
             Some("user-1".into()),
             scope_of(generation),
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -3410,6 +3418,7 @@ async fn a_failed_prepare_leaves_nothing_to_commit() {
         ),
         Some("user-1".into()),
         JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
     ))
     .await
     .expect_err("an incomplete required projection rejects");
@@ -3471,6 +3480,7 @@ async fn run_steps(engine: &CacheEngine, steps: &[Step]) {
                     })),
                     Some("user-1".into()),
                     JsValue::UNDEFINED,
+                    JsValue::UNDEFINED,
                 ))
                 .await;
             }
@@ -3489,6 +3499,7 @@ async fn run_steps(engine: &CacheEngine, steps: &[Step]) {
                         }
                     })),
                     Some("user-1".into()),
+                    JsValue::UNDEFINED,
                     JsValue::UNDEFINED,
                 ))
                 .await;
@@ -3581,6 +3592,7 @@ async fn assert_page_commit_is_hydrate_after(
             page(),
             Some("user-1".into()),
             JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
         )
     };
     let engine = fresh_engine(scope).await;
@@ -3613,6 +3625,7 @@ async fn assert_page_commit_is_hydrate_after(
             backfill_variables(),
             page(),
             Some("user-1".into()),
+            JsValue::UNDEFINED,
             JsValue::UNDEFINED,
         ))
         .await;

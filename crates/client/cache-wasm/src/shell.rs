@@ -1,4 +1,5 @@
 use async_lock::Mutex;
+use cache_core::channel_timeline::{ChannelCommitOutcome, ChannelTimelineCommit};
 use cache_core::codec::{
     CACHE_FORMAT_VERSION, CACHE_SCHEMA_COMPATIBILITY_EPOCH, UNVERSIONED_STORAGE_VERSIONS,
     cache_database_name, legacy_cache_database_name,
@@ -142,6 +143,7 @@ fn recovery_outcome(reason: PhysicalResetReason) -> CacheOpenOutcome {
 struct JsWriteContext {
     origin_op_id: Option<String>,
     registration: Option<JsQueryRegistration>,
+    channel_commit: Option<ChannelTimelineCommit>,
 }
 
 #[derive(Deserialize)]
@@ -173,6 +175,8 @@ struct JsWriteResult {
     revalidations: Vec<QueryRevalidation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     mutation_uuid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    channel: Option<ChannelCommitOutcome>,
 }
 
 #[derive(Serialize)]
@@ -188,6 +192,8 @@ struct JsHydrationWriteResult {
     revalidations: Vec<QueryRevalidation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     mutation_uuid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    channel: Option<ChannelCommitOutcome>,
     /// A write committed between `prepareHydrate` and `commitHydrate`, so the
     /// commit read the projections again.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -205,6 +211,7 @@ struct HydrateRequest {
     /// Parsed after the projections are read, so a request that is wrong in
     /// both ways fails on its projections first, as `hydrateQuery` always did.
     scope: Option<HydrationScope>,
+    channel: Option<ChannelTimelineCommit>,
 }
 
 impl HydrateRequest {
@@ -214,6 +221,7 @@ impl HydrateRequest {
         variables: JsValue,
         data: JsValue,
         identity: Option<String>,
+        channel_commit: JsValue,
     ) -> Result<Self, JsValue> {
         Ok(Self {
             query,
@@ -222,6 +230,7 @@ impl HydrateRequest {
             data: serde_wasm_bindgen::from_value(data).map_err(err_js)?,
             identity,
             scope: None,
+            channel: serde_wasm_bindgen::from_value(channel_commit).map_err(err_js)?,
         })
     }
 
@@ -232,6 +241,7 @@ impl HydrateRequest {
             variables: &self.variables,
             data: &self.data,
             identity: self.identity.as_deref(),
+            channel: self.channel.as_ref(),
         }
     }
 }
@@ -554,6 +564,7 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
         reset: result.reset,
         revalidations: result.revalidations,
         mutation_uuid: result.mutation_uuid,
+        channel: result.channel,
     }
 }
 
@@ -832,14 +843,7 @@ impl CacheState {
             }
             (None, None) => {
                 engine
-                    .hydrate_query_with_projections(
-                        write.query,
-                        write.operation_name,
-                        write.variables,
-                        write.data,
-                        write.identity,
-                        projections,
-                    )
+                    .hydrate_query_with_projections(write, projections)
                     .await
             }
         };
@@ -874,6 +878,7 @@ impl CacheState {
             reset: result.write_result.reset,
             revalidations: result.write_result.revalidations,
             mutation_uuid: result.write_result.mutation_uuid,
+            channel: result.write_result.channel,
             projections_reread,
             data: result.data,
         })
@@ -2206,6 +2211,7 @@ impl CacheEngine {
                 variables: &vars,
                 data: &data,
                 identity: identity.as_deref(),
+                channel: context.channel_commit.as_ref(),
             };
             let registration =
                 registration
@@ -2273,8 +2279,10 @@ impl CacheEngine {
     }
 
     /// Normalizes and stores a query response while returning only fields not
-    /// marked `@cacheOnly` in the GraphQL document.
+    /// marked `@cacheOnly` in the GraphQL document. `channelCommit` is what the
+    /// response proves about a channel, committed with it.
     #[wasm_bindgen(js_name = hydrateQuery)]
+    #[expect(clippy::too_many_arguments, reason = "a JavaScript call's arguments")]
     pub fn hydrate_query(
         &self,
         query: String,
@@ -2283,13 +2291,21 @@ impl CacheEngine {
         data: JsValue,
         identity: Option<String>,
         hydration_scope: JsValue,
+        channel_commit: JsValue,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let request = HydrateRequest::parse(query, operation_name, variables, data, identity)?;
+            let request = HydrateRequest::parse(
+                query,
+                operation_name,
+                variables,
+                data,
+                identity,
+                channel_commit,
+            )?;
             let prepared = state.prepare_hydrate(request, hydration_scope).await?;
             to_js(&state.commit_hydrate(prepared, &ops).await?)
         })
@@ -2304,6 +2320,7 @@ impl CacheEngine {
     /// reset or an authority transition it reads the projections again
     /// first. A close drops the kept hydrate.
     #[wasm_bindgen(js_name = prepareHydrate)]
+    #[expect(clippy::too_many_arguments, reason = "a JavaScript call's arguments")]
     pub fn prepare_hydrate(
         &self,
         query: String,
@@ -2312,13 +2329,21 @@ impl CacheEngine {
         data: JsValue,
         identity: Option<String>,
         hydration_scope: JsValue,
+        channel_commit: JsValue,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.prepared_hydrate = None;
             state.ensure_callable()?;
-            let request = HydrateRequest::parse(query, operation_name, variables, data, identity)?;
+            let request = HydrateRequest::parse(
+                query,
+                operation_name,
+                variables,
+                data,
+                identity,
+                channel_commit,
+            )?;
             let prepared = state.prepare_hydrate(request, hydration_scope).await?;
             state.prepared_hydrate = Some(prepared);
             Ok(JsValue::UNDEFINED)
@@ -2779,6 +2804,7 @@ impl CacheEngine {
                         variables: &vars,
                         data: &data,
                         identity: None,
+                        channel: None,
                     },
                     projections,
                     generation,

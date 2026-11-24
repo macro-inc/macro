@@ -199,6 +199,7 @@ async fn write<S: PredicateIndexStorage>(
                 variables: vars,
                 data,
                 identity: Some(identity),
+                channel: None,
             },
             projections,
         )

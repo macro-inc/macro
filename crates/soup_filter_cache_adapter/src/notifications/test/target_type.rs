@@ -143,6 +143,7 @@ async fn seen_and_done_reach_the_parent<S: PredicateIndexStorage>(storage: S, qu
                 variables: &variables(),
                 data: &data,
                 identity: Some("viewer"),
+                channel: None,
             },
             updates,
         )

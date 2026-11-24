@@ -89,21 +89,25 @@ impl<S: Storage> Engine<S> {
         }
         let doc = Self::document(&mut self.docs, write.query)?;
         let op = doc.operation(write.operation_name)?;
-        let updates = match normalized
+        let NormalizeResult {
+            mut updates,
+            channel_stamps,
+            ..
+        } = match normalized
             .take_if(|normalized| std::sync::Arc::ptr_eq(&normalized.schema, &self.schema))
         {
             Some(normalized) => {
-                let mut updates = normalized.result.updates;
+                let mut result = normalized.result;
                 Self::complete_network_records(
                     &self.schema,
                     self.response_records,
                     op,
                     (write.variables, write.data),
-                    &mut updates,
+                    &mut result.updates,
                     false,
                     fence.is_some(),
                 )?;
-                updates
+                result
             }
             None => {
                 let entity_resolvers = EntityResolverLookup::compile(&self.schema, &[])?;
@@ -119,10 +123,12 @@ impl<S: Storage> Engine<S> {
                     false,
                     fence.is_some(),
                 )?
-                .updates
             }
         };
-        let plan = self.plan_persist(updates, projections).await?;
+        let admission = self
+            .admit_channel_entries(&mut updates, &channel_stamps, write.channel, Refused::Drop)
+            .await?;
+        let plan = self.plan_persist(updates, admission, projections).await?;
         Ok(Some(StagedHydrate {
             data,
             plan,
@@ -167,6 +173,7 @@ impl<S: Storage> Engine<S> {
             revision_advanced,
             search_changed_buckets,
             viewer_fields,
+            channel,
         } = self.apply_persist(plan, projections).await?;
         let affected_ops = self.deps.ops_for_changes(&changed, &viewer_fields);
         if fence.is_some() {
@@ -177,6 +184,7 @@ impl<S: Storage> Engine<S> {
                 field_changes: Some(field_changes),
                 identity_errors: Vec::new(),
                 unwritable_response: None,
+                channel,
                 mutation_uuid: None,
                 revision,
                 revision_advanced,

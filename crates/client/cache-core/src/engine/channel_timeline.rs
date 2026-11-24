@@ -1,25 +1,16 @@
 //! Local channel timeline reads, commits and eviction.
 
-use super::{Engine, EngineError, WriteResult, effective_records, layer_keys};
+use super::channel_write::Refused;
+use super::{ComposedChanges, Engine, EngineError, WriteResult, effective_records, layer_keys};
 use crate::channel_timeline::{
-    ChannelEviction, ChannelTimelineCommit, ChannelTimelineRequest, ChannelTimelineResult,
-    ChannelTimelineRow, ChannelTimelineStats, ChannelTimelineStorage, MESSAGE_TYPENAME,
-    compose_channel_window, project_channel_timeline,
+    ChannelEviction, ChannelStamps, ChannelTimelineCommit, ChannelTimelineRequest,
+    ChannelTimelineResult, ChannelTimelineRow, ChannelTimelineStats, ChannelTimelineStorage,
+    MESSAGE_TYPENAME, compose_channel_window, project_channel_timeline,
 };
+use crate::normalize::RecordUpdates;
 use crate::revision::Revisioned;
 use crate::value::EntityKey;
 use std::collections::{BTreeSet, HashMap};
-
-/// Result of one channel commit.
-#[derive(Debug)]
-pub struct ChannelCommitResult {
-    /// Records the commit deleted, as an ordinary cache write.
-    pub write: WriteResult,
-    /// Applied change sequence of the channel after the commit, as a decimal
-    /// string. A caller that asked to advance from another sequence sees the
-    /// unchanged value here and must fetch the changes in between.
-    pub seq: Option<String>,
-}
 
 /// Result of one eviction pass.
 #[derive(Debug)]
@@ -75,22 +66,45 @@ impl<S: ChannelTimelineStorage> Engine<S> {
             .collect())
     }
 
-    /// Atomically applies coverage, deletions and the applied sequence of one
-    /// channel. Records the commit deletes are evicted and reported as changed.
+    /// Applies a commit that comes with no response: a touch, dropped threads,
+    /// removed entries or a reset.
     pub async fn channel_timeline_commit(
         &mut self,
         commit: &ChannelTimelineCommit,
-    ) -> Result<ChannelCommitResult, EngineError<S::Error>> {
+    ) -> Result<WriteResult, EngineError<S::Error>> {
         commit.validate()?;
         self.ensure_revision_can_advance()?;
-        let outcome = self
-            .storage
-            .channel_timeline_commit(commit)
-            .await
-            .map_err(EngineError::Storage)?;
-        Ok(ChannelCommitResult {
-            write: self.record_deletions(outcome.deleted_keys)?,
-            seq: outcome.seq.map(|seq| seq.to_string()),
+        self.hydrate_optimistic().await?;
+        let mut updates = RecordUpdates::new();
+        let admission = self
+            .admit_channel_entries(
+                &mut updates,
+                &ChannelStamps::new(),
+                Some(commit),
+                Refused::Drop,
+            )
+            .await?;
+        let ComposedChanges {
+            persisted,
+            visible_changed,
+        } = self
+            .persist_composed(updates, admission, Vec::new())
+            .await?;
+        Ok(WriteResult {
+            affected_ops: self
+                .deps
+                .ops_for_changes(&visible_changed, &persisted.viewer_fields),
+            field_changes: Some(persisted.field_changes),
+            identity_errors: Vec::new(),
+            unwritable_response: None,
+            channel: persisted.channel,
+            mutation_uuid: None,
+            revision: persisted.revision,
+            revision_advanced: persisted.revision_advanced,
+            search_changed_buckets: Some(persisted.search_changed_buckets),
+            changed: persisted.changed,
+            reset: false,
+            revalidations: Vec::new(),
         })
     }
 

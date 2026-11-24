@@ -344,6 +344,7 @@ fn cross_operation_invalidation() {
                     variables: &vars(10),
                     data: &page(&[("doc-1", "A")]),
                     identity: None,
+                    channel: None,
                 },
             )
             .await
@@ -424,6 +425,7 @@ fn incomplete_registered_write_is_conservatively_affected() {
                     variables: &vars(10),
                     data: &json!({ "user": { "id": "user-1" } }),
                     identity: None,
+                    channel: None,
                 },
             )
             .await
@@ -470,6 +472,7 @@ fn incomplete_registered_write_is_conservatively_affected() {
                     variables: &vars(10),
                     data: &page(&[("doc-1", "Complete")]),
                     identity: None,
+                    channel: None,
                 },
             )
             .await

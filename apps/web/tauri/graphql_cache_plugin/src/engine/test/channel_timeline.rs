@@ -22,13 +22,17 @@ fn channel_pages_commits_and_eviction_cross_the_ipc_boundary() {
     let commit: ChannelTimelineCommit = serde_json::from_value(serde_json::json!({
         "channelId": "c1",
         "coverage": [{ "start": "", "end": "\u{10FFFF}" }],
-        "seq": { "kind": "lower", "seq": "3" },
+        "seq": "3",
+        "watermark": { "kind": "lower" },
         "touchedAtMs": 10,
     }))
     .unwrap();
     let committed =
         serde_json::to_value(block_on(handle.channel_timeline_commit(commit)).unwrap()).unwrap();
-    assert_eq!(committed["channelSeq"], "3");
+    assert_eq!(
+        committed["channel"],
+        serde_json::json!({ "channelId": "c1", "seq": "3", "outcome": "applied" })
+    );
     assert_eq!(committed["revisionAdvanced"], true);
     assert_eq!(committed["changed"], serde_json::json!([]));
 
@@ -52,11 +56,79 @@ fn channel_pages_commits_and_eviction_cross_the_ipc_boundary() {
 }
 
 #[test]
+fn a_response_and_its_channel_commit_are_stored_together() {
+    const PAGE: &str = "query Page($input: ChannelTimelineInput!) { user { __typename id channelTimeline(input: $input) { __typename seq entries { __typename ... on GraphqlChannelMessage { __typename id channelId sortKey threadId deletedAt content } } } } }";
+    let page_input =
+        || Variables::from_iter([("input".into(), serde_json::json!({ "channelId": "c1" }))]);
+    let response = |seq: &str, id: &str| {
+        serde_json::json!({"user": {"__typename": "GraphqlUser", "id": "u1", "channelTimeline": {
+            "__typename": "GraphqlChannelTimelinePage",
+            "seq": seq,
+            "entries": [{
+                "__typename": "GraphqlChannelMessage",
+                "id": id,
+                "channelId": "c1",
+                "sortKey": format!("10{id}"),
+                "threadId": null,
+                "deletedAt": null,
+                "content": id,
+            }],
+        }}})
+    };
+    let commit = |value| Some(serde_json::from_value(value).unwrap());
+    let handle = spawn_handle();
+    let written = block_on(handle.write(WriteRequest {
+        origin_op_id: None,
+        registration: None,
+        query: PAGE.into(),
+        operation_name: None,
+        variables: page_input(),
+        data: response("5", "1"),
+        identity: None,
+        channel_commit: commit(serde_json::json!({
+            "channelId": "c1",
+            "seq": "5",
+            "watermark": { "kind": "lower" },
+            "coverage": [{ "start": "", "end": "\u{10FFFF}" }],
+        })),
+    }))
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(written).unwrap()["channel"],
+        serde_json::json!({ "channelId": "c1", "seq": "5", "outcome": "applied" })
+    );
+    let hydrated = block_on(handle.hydrate_query(
+        PAGE.into(),
+        None,
+        page_input(),
+        response("6", "2"),
+        None,
+        None,
+        commit(serde_json::json!({
+            "channelId": "c1",
+            "seq": "6",
+            "watermark": { "kind": "advance", "from": "5" },
+            "removedIds": ["1"],
+        })),
+    ))
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(hydrated.write_result).unwrap()["channel"],
+        serde_json::json!({ "channelId": "c1", "seq": "6", "outcome": "applied" })
+    );
+    let held = page(&handle);
+    assert_eq!(held["covered"], true);
+    assert_eq!(held["seq"], "6");
+    assert_eq!(held["keys"].as_array().unwrap().len(), 1, "{held}");
+}
+
+#[test]
 fn invalid_channel_commits_are_rejected() {
     let handle = spawn_handle();
     let commit: ChannelTimelineCommit = serde_json::from_value(serde_json::json!({
         "channelId": "c1",
-        "seq": { "kind": "advance", "from": "5", "to": "4" },
+        "seq": "4",
+        "watermark": { "kind": "advance", "from": "5" },
     }))
     .unwrap();
     assert!(block_on(handle.channel_timeline_commit(commit)).is_err());

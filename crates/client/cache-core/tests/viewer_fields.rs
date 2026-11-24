@@ -45,6 +45,7 @@ async fn write(
                 variables: vars,
                 data,
                 identity: Some("viewer"),
+                channel: None,
             },
         )
         .await

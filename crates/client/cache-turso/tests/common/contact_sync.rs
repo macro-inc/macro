@@ -103,6 +103,7 @@ pub async fn contract<S: Storage>(storage: S) -> S {
         variables: &variables,
         data: &data,
         identity: Some(VIEWER),
+        channel: None,
     };
     assert!(matches!(
         engine.hydrate_query_in_scope(write, &scope, vec![]).await,

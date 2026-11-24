@@ -100,6 +100,7 @@ fn a_staged_hydrate_commits_as_the_whole_hydrate() {
                     variables: &variables,
                     data: &data,
                     identity,
+                    channel: None,
                 };
                 // The staged side reads between its halves, so before its write.
                 whole
@@ -108,11 +109,14 @@ fn a_staged_hydrate_commits_as_the_whole_hydrate() {
                     .unwrap();
                 let expected = whole
                     .hydrate_query_with_projections(
-                        QUERY,
-                        None,
-                        &variables,
-                        &data,
-                        identity,
+                        NetworkWrite {
+                            query: QUERY,
+                            operation_name: None,
+                            variables: &variables,
+                            data: &data,
+                            identity: identity,
+                            channel: None,
+                        },
                         Vec::new(),
                     )
                     .await
@@ -141,11 +145,14 @@ fn a_staged_hydrate_commits_as_the_whole_hydrate() {
                             .unwrap();
                         steps
                             .hydrate_query_with_projections(
-                                QUERY,
-                                None,
-                                &variables,
-                                &data,
-                                identity,
+                                NetworkWrite {
+                                    query: QUERY,
+                                    operation_name: None,
+                                    variables: &variables,
+                                    data: &data,
+                                    identity: identity,
+                                    channel: None,
+                                },
                                 Vec::new(),
                             )
                             .await
@@ -195,6 +202,7 @@ fn a_write_between_the_halves_makes_a_staged_hydrate_stale() {
                     variables: &variables,
                     data: &second,
                     identity: Some("viewer"),
+                    channel: None,
                 },
                 None,
                 &[],
@@ -234,6 +242,7 @@ fn a_schema_installed_between_the_halves_makes_a_staged_hydrate_stale() {
             variables: &variables,
             data: &data,
             identity: Some("viewer"),
+            channel: None,
         };
         let staged = engine
             .stage_hydrate(write, None, &[])
@@ -277,6 +286,7 @@ fn a_staged_hydrate_holds_its_hot_records_until_it_commits() {
             variables: &variables,
             data: &data,
             identity: Some("viewer"),
+            channel: None,
         };
 
         let staged = engine
@@ -324,6 +334,7 @@ fn a_hydrate_that_binds_the_account_is_not_staged() {
             variables: &variables,
             data: &data,
             identity: Some("viewer"),
+            channel: None,
         };
         assert!(
             engine
@@ -372,6 +383,7 @@ fn a_mutation_is_not_staged_and_reads_no_storage() {
             variables: &variables,
             data: &data,
             identity: None,
+            channel: None,
         };
         assert!(
             engine

@@ -1,5 +1,6 @@
 //! Write path: response JSON → normalized records.
 
+use crate::channel_timeline::{ChannelStamps, is_channel_entry, parse_seq};
 use crate::deps::{DependencyTracker, QueryDependencies};
 use crate::document::{
     FieldNode, MissingVariable, Operation, OperationKind, Selection, resolve_args, resolve_args_key,
@@ -43,6 +44,9 @@ pub enum NormalizeError {
 /// records.
 pub type RecordUpdates = BTreeMap<EntityKey<'static>, Record>;
 
+/// The field that dates the channel entries beneath the object holding it.
+const SEQ_FIELD: &str = "seq";
+
 /// Whether response-derived dependencies exactly describe a future cache read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DependencyCompleteness {
@@ -53,6 +57,8 @@ pub(crate) enum DependencyCompleteness {
 /// Normalized updates and dependencies captured without reading records back.
 pub(crate) struct NormalizeResult {
     pub updates: RecordUpdates,
+    /// Server sequence of each channel entry the response dates.
+    pub channel_stamps: ChannelStamps,
     pub dependencies: QueryDependencies,
     pub completeness: DependencyCompleteness,
 }
@@ -72,11 +78,19 @@ impl DependencyCapture<'_> {
 struct WriteContext<'a, 'resolver, 'op, 'schema> {
     variables: &'a serde_json::Map<String, Json>,
     records: &'a mut RecordUpdates,
+    channel_stamps: &'a mut ChannelStamps,
+    /// The `seq` of the nearest enclosing response object that has one.
+    channel_seq: Option<i64>,
     dependencies: &'a mut DependencyCapture<'resolver>,
     plans: WritePlans<'op, 'schema>,
 }
 
-type PlannedFields<'op, 'schema> = Arc<[(&'op FieldNode, Option<FieldMeta<'schema>>)]>;
+/// The fields to write, and which of them is the sequence of the channel
+/// entries beneath the object.
+struct PlannedFields<'op, 'schema> {
+    fields: Vec<(&'op FieldNode, Option<FieldMeta<'schema>>)>,
+    seq: Option<&'op FieldNode>,
+}
 
 /// The fields one selection set applies to a concrete type, with their schema
 /// shapes, found once per normalization instead of once per response object.
@@ -84,7 +98,7 @@ type PlannedFields<'op, 'schema> = Arc<[(&'op FieldNode, Option<FieldMeta<'schem
 struct WritePlans<'op, 'schema> {
     // The address identifies a selection slice of the prepared operation, which
     // stays alive and unchanged for the whole normalization.
-    selections: HashMap<(usize, usize), HashMap<String, PlannedFields<'op, 'schema>>>,
+    selections: HashMap<(usize, usize), HashMap<String, Arc<PlannedFields<'op, 'schema>>>>,
 }
 
 impl<'op, 'schema> WritePlans<'op, 'schema> {
@@ -93,7 +107,7 @@ impl<'op, 'schema> WritePlans<'op, 'schema> {
         schema: &'schema crate::meta::Schema,
         selections: &'op [Selection],
         concrete: &str,
-    ) -> PlannedFields<'op, 'schema> {
+    ) -> Arc<PlannedFields<'op, 'schema>> {
         let types = self
             .selections
             .entry((selections.as_ptr() as usize, selections.len()))
@@ -103,10 +117,13 @@ impl<'op, 'schema> WritePlans<'op, 'schema> {
         }
         let mut nodes = Vec::new();
         collect_fields(schema, selections, concrete, &mut nodes);
-        let fields: PlannedFields<'op, 'schema> = nodes
-            .into_iter()
-            .map(|node| (node, schema.field_meta(concrete, &node.name)))
-            .collect();
+        let fields = Arc::new(PlannedFields {
+            seq: nodes.iter().copied().find(|node| node.name == SEQ_FIELD),
+            fields: nodes
+                .into_iter()
+                .map(|node| (node, schema.field_meta(concrete, &node.name)))
+                .collect(),
+        });
         types.insert(concrete.to_owned(), Arc::clone(&fields));
         fields
     }
@@ -153,6 +170,7 @@ pub(crate) fn normalize_with_dependencies(
         });
     };
     let mut records = RecordUpdates::new();
+    let mut channel_stamps = ChannelStamps::new();
     let mut root = Record::default();
     let mut dependencies = DependencyCapture {
         keys: QueryDependencies::default(),
@@ -170,6 +188,8 @@ pub(crate) fn normalize_with_dependencies(
         &mut WriteContext {
             variables,
             records: &mut records,
+            channel_stamps: &mut channel_stamps,
+            channel_seq: None,
             dependencies: &mut dependencies,
             plans: WritePlans::default(),
         },
@@ -179,6 +199,7 @@ pub(crate) fn normalize_with_dependencies(
     }
     Ok(NormalizeResult {
         updates: records,
+        channel_stamps,
         dependencies: dependencies.keys,
         completeness: dependencies.completeness,
     })
@@ -377,8 +398,12 @@ fn write_object_fields<'op, 'schema>(
     );
 
     let fields = context.plans.fields(schema, selections, concrete);
+    let enclosing_seq = context.channel_seq;
+    if let Some(seq) = fields.seq.and_then(|seq| data.get(&seq.response_key)) {
+        context.channel_seq = seq.as_str().and_then(parse_seq);
+    }
 
-    for &(f, fmeta) in fields.iter() {
+    for &(f, fmeta) in &fields.fields {
         if f.name == "__typename" {
             continue; // handled above
         }
@@ -438,6 +463,7 @@ fn write_object_fields<'op, 'schema>(
             }
         }
     }
+    context.channel_seq = enclosing_seq;
     Ok(())
 }
 
@@ -558,6 +584,16 @@ fn normalize_object<'op, 'schema>(
                 Some(&key),
                 context,
             )?;
+            if let Some(seq) = context.channel_seq
+                && is_channel_entry(&key)
+            {
+                // The content is as new as the oldest answer that carries it.
+                context
+                    .channel_stamps
+                    .entry(key.clone())
+                    .and_modify(|stamp| *stamp = seq.min(*stamp))
+                    .or_insert(seq);
+            }
             merge_into(context.records, key.clone(), record);
             Ok(CacheValue::Ref(key))
         }
