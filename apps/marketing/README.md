@@ -122,7 +122,9 @@ in the router, preload map, site search, and prerender list.
 
 Hero descriptions fill their available width up to the shared maximum rather
 than shrink-wrapping their text, so Safari does not wrap a planned desktop line
-before the explicit line break. Phone copy remains free to wrap.
+before the explicit line break. Keep hero descriptions slightly narrower than
+the H1 across 2–3 balanced lines with no 1–3 word hanging last line; tune copy
+rather than changing font size. Phone copy remains free to wrap.
 
 The Email hero uses side-by-side Google and Microsoft signup links, matching the onboarding provider buttons and retaining the shared signup journey and CTA tracking. On phones, shorten the visible labels to provider names while keeping full accessible labels. Omit the separate provider compatibility caption and duplicated provider illustration section.
 

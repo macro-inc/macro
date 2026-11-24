@@ -67,7 +67,7 @@ export function RouteGithub() {
       <div class="github-page">
         <ProductHero
           product="GitHub"
-          title={'From bug report\nto merged PR.'}
+          title="From bug report to merged PR."
           description="Review diffs, read review comments, and merge PRs right inside Macro so engineering work stays beside the thread that started it."
           cta="github_hero_get_started"
           tutorial="github"

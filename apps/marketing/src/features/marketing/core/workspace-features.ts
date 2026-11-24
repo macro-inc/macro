@@ -157,7 +157,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     product: 'Snippets',
     title: 'Reusable snippets.',
     description:
-      'Reusable markdown replies, checklists, and agent prompts shared across your team—type ; anywhere to drop one in.',
+      'Shared markdown replies, checklists, and prompts you can insert anywhere with ;.',
     heading: 'Save replies as reusable snippets.',
     detail:
       'Save a common reply or meeting template with its headings, checklists, and tables. Keep it personal or let your team use and edit it too.',
@@ -251,7 +251,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     product: 'Booking links',
     title: 'Team booking links.',
     description:
-      'Team scheduling and round-robin booking links built right into your workspace—no Calendly subscription or guest account needed.',
+      'Team and round-robin scheduling built into Macro—no Calendly subscription or guest account needed.',
     heading: 'Book one teammate or the whole team.',
     detail:
       'Find a time when everyone is free or use round robin to book one available teammate. Set working hours, time between meetings, minimum notice, and a daily booking limit.',
