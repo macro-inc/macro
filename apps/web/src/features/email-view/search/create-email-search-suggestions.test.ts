@@ -1,8 +1,16 @@
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, expect, it } from 'vitest';
-import { createEmailSearchSuggestions } from './create-email-search-suggestions';
+import {
+  createEmailSearchSuggestions,
+  type EmailSearchSuggestions,
+} from './create-email-search-suggestions';
 
 beforeEach(() => localStorage.clear());
+
+const recentListed = (suggestions: EmailSearchSuggestions) =>
+  suggestions
+    .listed()
+    .map((row) => (row.kind === 'recent' ? row.search : `view:${row.scope}`));
 
 function setup(initialSearch = '') {
   const [search, setSearch] = createSignal(initialSearch);
@@ -10,6 +18,7 @@ function setup(initialSearch = '') {
     userId: () => 'user-a',
     search,
     setSearch,
+    scopeAvailable: (scope) => scope !== 'focus',
   });
   return { search, setSearch, suggestions };
 }
@@ -25,7 +34,7 @@ it('remembers a search once the field is left with it', () => {
 
     setSearch('');
     suggestions.setFocused(true);
-    expect(suggestions.listed()).toEqual(['budget']);
+    expect(recentListed(suggestions)).toEqual(['budget']);
     dispose();
   });
 });
@@ -37,11 +46,11 @@ it('lists recent searches only while the field has focus', () => {
     suggestions.setFocused(false);
     setSearch('');
 
-    expect(suggestions.listed()).toEqual([]);
+    expect(recentListed(suggestions)).toEqual([]);
     expect(suggestions.count()).toBe(0);
 
     suggestions.setFocused(true);
-    expect(suggestions.listed()).toEqual(['invoice']);
+    expect(recentListed(suggestions)).toEqual(['invoice']);
     dispose();
   });
 });
@@ -56,12 +65,12 @@ it('runs the picked search and keeps the active row inside the list', () => {
     suggestions.setFocused(false);
     setSearch('');
     suggestions.setFocused(true);
-    expect(suggestions.listed()).toEqual(['budget', 'quarterly budget']);
+    expect(recentListed(suggestions)).toEqual(['budget', 'quarterly budget']);
 
     suggestions.setActive(1);
     setSearch('q');
     // Typing narrowed the list to one row.
-    expect(suggestions.listed()).toEqual(['quarterly budget']);
+    expect(recentListed(suggestions)).toEqual(['quarterly budget']);
     expect(suggestions.active()).toBe(0);
 
     suggestions.pick(0);
@@ -90,6 +99,71 @@ it('waits for a picked search until its results are taken or the field is used a
     suggestions.setFocused(false);
     suggestions.setFocused(true);
     expect(suggestions.awaitsPickedResults()).toBe(false);
+    dispose();
+  });
+});
+
+it('lists the views an in: being typed can name, leaving out ones the person lacks', () => {
+  createRoot((dispose) => {
+    const { search, setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+
+    setSearch('invoice in:');
+    expect(recentListed(suggestions)).toEqual([
+      'view:inbox',
+      'view:signal',
+      'view:noise',
+      'view:favorites',
+      'view:sent',
+      'view:drafts',
+      'view:calendar',
+      'view:shared',
+      'view:archived',
+    ]);
+    setSearch('invoice in:s');
+    expect(recentListed(suggestions)).toEqual([
+      'view:signal',
+      'view:sent',
+      'view:shared',
+    ]);
+
+    // Picking one finishes the in: where it was typed and keeps the words.
+    expect(suggestions.editsQuery?.(1)).toBe(true);
+    suggestions.pick(1);
+    expect(search()).toBe('invoice in:sent ');
+    expect(suggestions.awaitsPickedResults()).toBe(false);
+    dispose();
+  });
+});
+
+it('remembers a search as it ran, leaving out an in: still being typed', () => {
+  createRoot((dispose) => {
+    const { setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+    setSearch('invoice in:s');
+    suggestions.setFocused(false);
+
+    setSearch('');
+    suggestions.setFocused(true);
+    expect(recentListed(suggestions)).toEqual(['invoice']);
+    dispose();
+  });
+});
+
+it('remembers a search with its in: filter, and never the filter alone', () => {
+  createRoot((dispose) => {
+    const { setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+    setSearch('in:sent ');
+    suggestions.setFocused(false);
+
+    suggestions.setFocused(true);
+    setSearch('in:sent invoice');
+    suggestions.setFocused(false);
+
+    setSearch('');
+    suggestions.setFocused(true);
+    expect(recentListed(suggestions)).toEqual(['in:sent invoice']);
     dispose();
   });
 });

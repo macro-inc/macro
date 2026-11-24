@@ -17,7 +17,7 @@ verified live against a local stack (`just run_local`, which needs no terminal: 
 | [tasks.md](tasks.md) | Task list and creation dialog |
 | [view-tours.md](view-tours.md) | Desktop feature flyovers, dismissal, targeting, and embedded videos |
 | [reminders.md](reminders.md) | Email snoozing, the reminder command menu, delivery, and safe failure verification |
-| [home.md](home.md) | Home, New Home, and the mobile Notifications inbox |
+| [home.md](home.md) | Home and the mobile Notifications inbox |
 | [email.md](email.md) | Mail: threads, read state, trash, cached filtering, reminders |
 | [calendar.md](calendar.md) | Calendar views, Scheduling workspace, booking links, events, and invitations in email |
 | [search.md](search.md) | Search |

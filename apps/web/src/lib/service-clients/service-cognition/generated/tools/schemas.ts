@@ -3,6 +3,17 @@
  */
 import { z } from 'zod/v3';
 
+export const AddCompanyDomain = z.object({
+  companyId: z.string().uuid(),
+  domain: z.string(),
+});
+
+export const CompanyDomainsResponse = z.object({
+  companyId: z.string().uuid(),
+  name: z.union([z.string(), z.null()]).optional(),
+  domains: z.array(z.string()),
+});
+
 export const AddSharedCalendarEvent = z.object({
   eventId: z.string().uuid(),
   calendarId: z.union([z.string().uuid(), z.null()]).optional(),
@@ -1530,6 +1541,7 @@ export const SearchToolResponse = z.object({
                 snippet: z.union([z.string(), z.null()]).optional(),
                 is_read: z.boolean(),
                 inbox_visible: z.boolean(),
+                has_received_mail: z.boolean().optional(),
                 is_draft: z.boolean(),
                 is_important: z.boolean(),
                 id: z.string().uuid(),
@@ -2043,6 +2055,7 @@ export const CreateBookingLink = z
             location: z.string(),
             macroCall: z.boolean().optional(),
             googleMeet: z.boolean(),
+            emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
             enabled: z.boolean(),
             mode: z.any().superRefine((x, ctx) => {
               const schemas = [
@@ -2129,6 +2142,7 @@ export const BookingLinkResult = z.object({
           location: z.string(),
           macroCall: z.boolean().optional(),
           googleMeet: z.boolean(),
+          emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
           enabled: z.boolean(),
           mode: z.any().superRefine((x, ctx) => {
             const schemas = [
@@ -6073,6 +6087,7 @@ export const EditBookingLink = z
             location: z.string(),
             macroCall: z.boolean().optional(),
             googleMeet: z.boolean(),
+            emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
             enabled: z.boolean(),
             mode: z.any().superRefine((x, ctx) => {
               const schemas = [
@@ -11970,6 +11985,15 @@ export const ListBookingLinksResult = z.object({
       ),
     })
   ),
+  accounts: z.array(
+    z
+      .object({
+        emailLinkId: z.string().uuid(),
+        emailAddress: z.string(),
+        videoMeetings: z.boolean(),
+      })
+      .strict()
+  ),
   links: z.array(
     z.object({
       profileId: z.string().uuid(),
@@ -11986,6 +12010,7 @@ export const ListBookingLinksResult = z.object({
               location: z.string(),
               macroCall: z.boolean().optional(),
               googleMeet: z.boolean(),
+              emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
               enabled: z.boolean(),
               mode: z.any().superRefine((x, ctx) => {
                 const schemas = [
@@ -14569,6 +14594,7 @@ export const BookingSettingsResult = z.object({
         location: z.string(),
         macroCall: z.boolean().optional(),
         googleMeet: z.boolean(),
+        emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
         enabled: z.boolean(),
         scheduleId: z.string().uuid(),
         mode: z.any().superRefine((x, ctx) => {
@@ -18475,6 +18501,11 @@ export const ReadWordDocument = z.object({
   count: z.union([z.number().int().gte(0), z.null()]).optional(),
 });
 
+export const RemoveCompanyDomain = z.object({
+  companyId: z.string().uuid(),
+  domain: z.string(),
+});
+
 export const RemoveFromPipeline = z.object({
   pipelineId: z.string().uuid(),
   entryIds: z.array(z.string().uuid()).optional(),
@@ -19878,6 +19909,7 @@ export const UpdateBookingSettings = z
           location: z.string(),
           macroCall: z.boolean().optional(),
           googleMeet: z.boolean(),
+          emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
           enabled: z.boolean(),
           scheduleId: z.string().uuid(),
           mode: z.any().superRefine((x, ctx) => {

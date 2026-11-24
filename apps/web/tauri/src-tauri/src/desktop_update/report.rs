@@ -38,12 +38,25 @@ pub enum Outcome {
     UpToDate,
     /// The feed offers a newer version; its download starts now.
     UpdateFound { target_version: String },
+    /// The feed offers a newer version built for a newer OS than this
+    /// computer runs, so it is not downloaded.
+    NeedsNewerOs {
+        target_version: String,
+        /// The feed's `minimumSystemVersion` for this platform.
+        minimum_system_version: String,
+    },
     /// The update downloaded and its signature verified. It installs on quit.
     Downloaded {
         target_version: String,
         download_ms: u32,
+        /// The update's size, including any `resumed_bytes`.
         #[cfg_attr(test, specta(type = specta_typescript::Number))]
         download_bytes: u64,
+        /// Bytes an earlier launch or attempt had saved, which this one kept
+        /// instead of downloading again. Equals `download_bytes` when the
+        /// saved download was complete.
+        #[cfg_attr(test, specta(type = specta_typescript::Number))]
+        resumed_bytes: u64,
     },
     /// Reading the feed failed. Counts every failure since the last success.
     CheckFailed {

@@ -78,6 +78,7 @@ import {
 import { EntityPropertyEditor } from './entity-property-editor';
 import { useAllProperties } from './hooks/useAllProperties';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
+import { LinkPropertyEditor } from './link-property-editor';
 import {
   closePropertyEditor,
   hasPropertyEditorPropertyAddedHandler,
@@ -1368,6 +1369,17 @@ function PropertyValueEditor(props: {
     );
   });
 
+  // A definition says nothing about the value a saved item already holds, so
+  // until the item's properties are read its links are unknown, not empty.
+  const savedValueState = (): 'known' | 'loading' | 'failed' => {
+    const property = resolvedProperty();
+    if (props.properties || !singleEntity()) return 'known';
+    if (property && 'value' in property) return 'known';
+    // A refused project read answers with an empty list and an error.
+    if (entityPropertiesQuery.error) return 'failed';
+    return entityPropertiesQuery.data === undefined ? 'loading' : 'known';
+  };
+
   const handleSubmit = (
     value: string | number | boolean | Date | EntityReference
   ) => {
@@ -1435,10 +1447,22 @@ function PropertyValueEditor(props: {
           setInputType={props.setInputType}
         />
       </Match>
-      <Match when={propertyType() === 'LINK'}>
-        <div class="p-4 text-center text-ink-muted">
-          Link editing not yet implemented
-        </div>
+      <Match when={propertyType() === 'LINK' && resolvedProperty()}>
+        {(property) => (
+          <LinkPropertyEditor
+            property={property()}
+            searchValue={props.searchValue}
+            selectedIndex={props.selectedIndex}
+            setSelectedIndex={props.setSelectedIndex}
+            onSave={props.onSave}
+            setKeybindings={props.setKeybindings}
+            setPlaceholder={props.setPlaceholder}
+            selectedEntityCount={
+              props.properties ? 1 : props.selectedEntities.length
+            }
+            savedValueState={savedValueState()}
+          />
+        )}
       </Match>
     </Switch>
   );

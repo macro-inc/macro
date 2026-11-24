@@ -25,6 +25,7 @@ import type { GanttRescheduleEdge } from './gantt-interaction';
 import {
   formatGanttInstant,
   formatGanttTimeRange,
+  type GanttTimedEnd,
   type GanttTimes,
   ganttTimedBarGeometry,
   toGanttInstant,
@@ -61,6 +62,8 @@ export function GanttBar(
      * zoom and by quarter hours at hours zoom.
      */
     timed?: boolean;
+    /** On a timed bar, the end saved without a time, which reads as its day. */
+    wholeDay?: GanttTimedEnd;
     /**
      * Makes a dated bar draggable to a new range, and its edges resizable:
      * inclusive days, or instants for a timed bar. The bar keeps the dragged
@@ -88,6 +91,7 @@ export function GanttBar(
     'end',
     'deadlineWarning',
     'timed',
+    'wholeDay',
     'onReschedule',
     'regroup',
     'tint',
@@ -163,7 +167,7 @@ export function GanttBar(
       {(bar) => {
         const dates = () => {
           const exact = timedRange();
-          if (exact) return formatGanttTimeRange(exact);
+          if (exact) return formatGanttTimeRange(exact, local.wholeDay);
           return `${formatGanttDay(bar().start)} → ${bar().end === undefined ? 'No end date' : formatGanttDay(bar().end!)}`;
         };
         const description = () =>
@@ -171,7 +175,7 @@ export function GanttBar(
         const dragged = () => {
           const exact = timedRange();
           if (exact)
-            return `${formatGanttInstant(exact.start)} → ${formatGanttInstant(exact.end)}`;
+            return `${formatGanttInstant(exact.start, local.wholeDay === 'start')} → ${formatGanttInstant(exact.end, local.wholeDay === 'end')}`;
           return `${formatGanttDay(bar().start)} → ${bar().end === undefined ? '' : formatGanttDay(bar().end!)}`;
         };
         const position = () => ({

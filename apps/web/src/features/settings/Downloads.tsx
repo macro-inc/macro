@@ -10,10 +10,10 @@ import { buttonClasses, CopyButton, Tabs } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
+  DESKTOP_DOWNLOAD_URLS,
   DESKTOP_PLATFORMS,
   type DesktopPlatform,
   detectDesktopPlatform,
-  FALLBACK_DOWNLOAD_URLS,
 } from './core/desktop-downloads';
 import {
   SettingsCard,
@@ -21,8 +21,9 @@ import {
   SettingsRow,
   SettingsSection,
 } from './primitives';
-import { useDesktopInstallersQuery } from './queries/desktop-installers';
 
+// The website's /download page has copies of these QR codes
+// (apps/marketing/src/assets/mobile-qr); change both together.
 const STORES = {
   ios: {
     device: 'iPhone',
@@ -97,22 +98,15 @@ function requirement(platform: DesktopPlatform | undefined): string {
 /**
  * The detected platform's installer leads; the other is a secondary choice.
  * A computer Macro has no installer for (Windows, ChromeOS) gets both as
- * equals. Until GitHub answers, the pinned fallback installers are linked.
+ * equals.
  */
 function DesktopDownload() {
   const analytics = useAnalytics();
-  const installers = useDesktopInstallersQuery();
   const detected = detectDesktopPlatform(navigator.userAgent);
 
   const platforms = detected
     ? [detected, ...DESKTOP_PLATFORMS.filter((p) => p !== detected)]
     : DESKTOP_PLATFORMS;
-
-  const url = (platform: DesktopPlatform) => {
-    // A failed refetch keeps the installers GitHub last listed.
-    const resolved = installers.isPending ? undefined : installers.data;
-    return (resolved ?? FALLBACK_DOWNLOAD_URLS)[platform];
-  };
 
   return (
     <SettingsSection
@@ -129,7 +123,7 @@ function DesktopDownload() {
             <For each={platforms}>
               {(platform) => (
                 <a
-                  href={url(platform)}
+                  href={DESKTOP_DOWNLOAD_URLS[platform]}
                   class={buttonClasses({
                     variant: platform === detected ? 'primary' : 'secondary',
                     size: 'md',

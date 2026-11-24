@@ -213,10 +213,14 @@ impl ServerHandler for InternalTools {
             agent_session_id = tracing::field::Empty,
         );
         genai_telemetry::propagation::set_parent_from_mcp(&span, &context.meta);
-        self.run_tool(request, context)
-            .instrument(span)
-            .await
-            .inspect_err(|error| log_error_response(McpMethod::CallTool, error))
+        // A turn whose content stays off traces asks the same of its tools.
+        let withheld = genai_telemetry::propagation::mcp_withholds_content(&context.meta);
+        genai_telemetry::withhold_content_if(
+            withheld,
+            self.run_tool(request, context).instrument(span),
+        )
+        .await
+        .inspect_err(|error| log_error_response(McpMethod::CallTool, error))
     }
 }
 
@@ -283,7 +287,7 @@ impl InternalTools {
                     &serde_json::Value::Object(request.arguments.unwrap_or_default()),
                 )
                 .await
-                .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
+                .map_err(refused_call)?;
             let result = match result {
                 Ok(value) => CallToolResult::structured(value),
                 Err(error) => CallToolResult::error(vec![ContentBlock::text(error.description)]),
@@ -310,7 +314,7 @@ impl InternalTools {
                         &serde_json::Value::Object(request.arguments.unwrap_or_default()),
                     )
                     .await
-                    .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
+                    .map_err(refused_call)?;
                 let result = match result {
                     // A failed program is a completed execution with a receipt.
                     // MCP errors discard structured content in some runtimes.
@@ -340,9 +344,7 @@ impl InternalTools {
             )
             .await
             .map_err(|error| match error {
-                ai_toolset::ToolSetError::Deserialization(error) => {
-                    rmcp::ErrorData::invalid_params(error.to_string(), None)
-                }
+                ai_toolset::ToolSetError::Deserialization(error) => invalid_arguments(error),
                 ai_toolset::ToolSetError::NotFound(message) => {
                     rmcp::ErrorData::resource_not_found(message, None)
                 }
@@ -353,6 +355,102 @@ impl InternalTools {
         };
         Ok(result.into())
     }
+}
+
+/// rmcp's error for a call a toolset refused before running it, for the
+/// review and code-mode tools; the session tools map a missing tool to
+/// `resource_not_found` themselves.
+fn refused_call(error: ai_toolset::ToolSetError) -> rmcp::ErrorData {
+    match error {
+        ai_toolset::ToolSetError::Deserialization(error) => invalid_arguments(error),
+        error => rmcp::ErrorData::invalid_params(error.to_string(), None),
+    }
+}
+
+/// A tool call whose arguments don't fit, as rmcp returns and logs it.
+/// serde quotes the value it refused, so inside
+/// `genai_telemetry::withhold_content` it says only what the input wanted;
+/// the model still has the tool's schema to correct them by.
+fn invalid_arguments(error: serde_json::Error) -> rmcp::ErrorData {
+    let message = if genai_telemetry::content_withheld() {
+        format!(
+            "error deserializing tool call (possible hallucination): {}; the value is withheld with the call's content",
+            misfit_without_value(&error)
+        )
+    } else {
+        ai_toolset::ToolSetError::Deserialization(error).to_string()
+    };
+    rmcp::ErrorData::invalid_params(message, None)
+}
+
+/// serde's account of arguments that don't fit, without the value. Its own
+/// messages say what came (`string "…"` quotes it), then what the input
+/// wanted, which comes from the tool's input type, as does the name of a
+/// missing or repeated field. Arguments are read from a parsed value, so
+/// there is no line or column to give. What was wanted is kept only in
+/// serde's own shapes (`names_list`, `plain_description`); a message of any
+/// other shape, such as a custom one, says only its kind. A custom message
+/// in serde's shape that put the value, unquoted, after "expected" would
+/// pass; the tool inputs here never build one.
+fn misfit_without_value(error: &serde_json::Error) -> String {
+    let text = error.to_string();
+    let field = |prefix: &str| {
+        text.strip_prefix(prefix)
+            .and_then(|rest| rest.strip_suffix('`'))
+            .filter(|name| {
+                !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            })
+            .map(|name| format!("{prefix}{name}`"))
+    };
+    if let Some(field) = field("missing field `").or_else(|| field("duplicate field `")) {
+        return field;
+    }
+    for (kind, fits) in [
+        ("invalid type", plain_description as fn(&str) -> bool),
+        ("invalid value", plain_description),
+        ("invalid length", plain_description),
+        ("unknown variant", names_list),
+        ("unknown field", names_list),
+    ] {
+        let Some(rest) = text.strip_prefix(kind) else {
+            continue;
+        };
+        // The last separator: the value can hold the words too. A name
+        // serde quotes raw can end the message as well, when nothing fits
+        // ("there are no fields"), so what follows must be serde's shape.
+        return match rest.rsplit_once(", expected ") {
+            Some((_, wanted)) if fits(wanted) => format!("{kind}, expected {wanted}"),
+            _ => kind.to_owned(),
+        };
+    }
+    format!("a {:?} error", error.classify())
+}
+
+/// A type's own description of what it reads (`u64`, `a sequence`,
+/// `struct ExecuteCode`): no quotes, so no quoted value.
+fn plain_description(text: &str) -> bool {
+    !text.is_empty()
+        && text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || " _,.:<>()-".contains(c))
+}
+
+/// serde's list of the names that fit, each from the input type:
+/// `` `a` ``, `` `a` or `b` ``, or `` one of `a`, `b`, `c` ``.
+fn names_list(text: &str) -> bool {
+    let list = text.strip_prefix("one of ").unwrap_or(text);
+    list.split(", ")
+        .flat_map(|part| part.split(" or "))
+        .all(|name| {
+            name.strip_prefix('`')
+                .and_then(|name| name.strip_suffix('`'))
+                .is_some_and(|name| {
+                    !name.is_empty()
+                        && name
+                            .chars()
+                            .all(|c| c.is_ascii_alphanumeric() || "_-.".contains(c))
+                })
+        })
 }
 
 /// The receipt as structured content, which Macro's own agent reads with its

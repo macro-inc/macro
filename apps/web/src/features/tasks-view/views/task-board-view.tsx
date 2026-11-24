@@ -1,3 +1,4 @@
+import { TaskTimerCount } from '@app/features/time-tracking/task-timer-count';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -240,6 +241,7 @@ export function TaskBoardView(props: {
         >
           {task().name || 'Untitled task'}
         </button>
+        <TaskTimerCount taskId={task().id} />
         <div data-kanban-no-drag class="flex shrink-0 items-center">
           {renderProperty(task, readOnly, SYSTEM_PROPERTY_IDS.ASSIGNEES, true)}
         </div>

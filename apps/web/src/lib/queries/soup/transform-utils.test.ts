@@ -1,7 +1,9 @@
 import { canMarkNotDone } from '@app/features/next-soup/actions/can-mark-not-done';
+import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createSearchResponseItemMapper,
   isDisplayableSoupItem,
   mapApiSoupItemToEntity,
 } from './transform-utils';
@@ -197,6 +199,65 @@ describe('email soup entities', () => {
       expect(canMarkNotDone(entity)).toBe(offered);
     }
   );
+});
+
+describe('email search results', () => {
+  it.each([true, false])(
+    'carries whether a thread out of the inbox ever received mail (%s)',
+    (hasReceivedMail) => {
+      const result = {
+        type: 'email',
+        id: 'thread',
+        thread_id: 'thread',
+        link_id: 'inbox',
+        owner_id: 'owner',
+        user_id: 'owner',
+        name: 'Quarterly invoice',
+        participants: [],
+        email_message_search_results: [],
+        created_at: '2026-09-01T00:00:00Z',
+        updated_at: '2026-09-01T00:00:00Z',
+        inbox_visible: false,
+        has_received_mail: hasReceivedMail,
+        is_draft: false,
+        is_important: false,
+        is_read: true,
+      } satisfies UnifiedSearchResponseItem;
+
+      const [entity] = createSearchResponseItemMapper([])(result, 'invoice');
+
+      expect(entity).toMatchObject({
+        type: 'email',
+        done: true,
+        hasReceivedMail,
+      });
+      expect(entity && canMarkNotDone(entity)).toBe(hasReceivedMail);
+    }
+  );
+
+  it('treats a result without the field (an older server or a saved tool result) as received', () => {
+    const result = {
+      type: 'email',
+      id: 'thread',
+      thread_id: 'thread',
+      link_id: 'inbox',
+      owner_id: 'owner',
+      user_id: 'owner',
+      name: 'Quarterly invoice',
+      participants: [],
+      email_message_search_results: [],
+      created_at: '2026-09-01T00:00:00Z',
+      updated_at: '2026-09-01T00:00:00Z',
+      inbox_visible: false,
+      is_draft: false,
+      is_important: false,
+      is_read: true,
+    } satisfies UnifiedSearchResponseItem;
+
+    const [entity] = createSearchResponseItemMapper([])(result, 'invoice');
+
+    expect(entity && canMarkNotDone(entity)).toBe(true);
+  });
 });
 
 describe('initiative soup entities', () => {

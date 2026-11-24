@@ -274,4 +274,35 @@ describe('time formats', () => {
       'Fri, Oct 9, 9:00 AM'
     );
   });
+
+  it('reads an end saved without a time as its day', () => {
+    expect(
+      formatGanttTimeRange(
+        { start: new Date(2026, 9, 9), end: new Date(2026, 9, 13, 17) },
+        'start'
+      )
+    ).toBe('Oct 9 → Oct 13, 5 PM');
+    expect(
+      formatGanttTimeRange(
+        { start: new Date(2026, 9, 9, 9), end: new Date(2026, 9, 13) },
+        'end'
+      )
+    ).toBe('Oct 9, 9 AM → Oct 13');
+    expect(
+      formatGanttTimeRange(
+        { start: new Date(2026, 9, 9), end: new Date(2026, 9, 9, 17) },
+        'start'
+      )
+    ).toBe('Oct 9, 5 PM');
+    expect(
+      formatGanttTimeRange(
+        {
+          start: new Date(2026, 9, 9, 9),
+          end: new Date(2026, 9, 9, 23, 59, 59, 999),
+        },
+        'end'
+      )
+    ).toBe('Oct 9, 9 AM → Oct 9');
+    expect(formatGanttInstant(new Date(2026, 9, 9), true)).toBe('Fri, Oct 9');
+  });
 });

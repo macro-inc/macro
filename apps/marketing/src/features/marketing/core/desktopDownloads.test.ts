@@ -1,23 +1,22 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import downloadRedirects from '../../../../seo/download-redirects.json';
 import {
-  desktopPlatformOrder,
-  desktopReleaseVersion,
+  DESKTOP_DOWNLOAD_URLS,
+  DESKTOP_PLATFORMS,
   detectPhonePlatform,
   detectVisitorPlatform,
-  FALLBACK_DOWNLOAD_URLS,
-  fetchDesktopDownloadUrls,
+  installerPlatform,
   phonePlatformOrder,
-  releaseDownloadUrls,
 } from './desktopDownloads';
 
-const macos = {
-  name: 'Macro-2.5.0-aarch64-darwin.dmg',
-  browser_download_url: 'https://example.com/mac.dmg',
-};
-const linux = {
-  name: 'Macro-2.5.0-x86_64-linux.AppImage',
-  browser_download_url: 'https://example.com/linux.AppImage',
-};
+describe('DESKTOP_DOWNLOAD_URLS', () => {
+  it('links every platform to an edge redirect', () => {
+    for (const platform of DESKTOP_PLATFORMS)
+      expect(Object.keys(downloadRedirects)).toContain(
+        DESKTOP_DOWNLOAD_URLS[platform]
+      );
+  });
+});
 
 describe('detectVisitorPlatform', () => {
   it.each([
@@ -27,10 +26,21 @@ describe('detectVisitorPlatform', () => {
     ['Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'windows'],
     ['Mozilla/5.0 (Linux; Android 14; Pixel 8)', undefined],
     ['Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', undefined],
-    ['Mozilla/5.0 (X11; CrOS x86_64)', undefined],
+    ['Mozilla/5.0 (X11; CrOS x86_64 14541.0.0)', undefined],
     ['', undefined],
   ])('detects %s', (userAgent, platform) => {
     expect(detectVisitorPlatform(userAgent)).toBe(platform);
+  });
+});
+
+describe('iPad', () => {
+  // iPadOS Safari's default, desktop-class user agent.
+  const IPAD = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)';
+
+  it('is a phone platform, not a Mac, when the screen is touch', () => {
+    expect(detectVisitorPlatform(IPAD, 5)).toBeUndefined();
+    expect(detectPhonePlatform(IPAD, 5)).toBe('ios');
+    expect(detectVisitorPlatform(IPAD, 0)).toBe('macos');
   });
 });
 
@@ -51,121 +61,14 @@ describe('phone platforms', () => {
   });
 });
 
-describe('desktopPlatformOrder', () => {
-  it('lists the visitor platform first', () => {
-    expect(desktopPlatformOrder('linux')).toEqual(['linux', 'macos']);
-    expect(desktopPlatformOrder('macos')).toEqual(['macos', 'linux']);
+describe('installerPlatform', () => {
+  it('names the installer for a computer Macro publishes one for', () => {
+    expect(installerPlatform('macos')).toBe('macos');
+    expect(installerPlatform('linux')).toBe('linux');
   });
 
-  it('keeps the default order for other platforms', () => {
+  it('has none for other computers', () => {
     for (const visitor of ['windows', undefined] as const)
-      expect(desktopPlatformOrder(visitor)).toEqual(['macos', 'linux']);
-  });
-});
-
-describe('fetchDesktopDownloadUrls', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('reads installers from the releases API', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => Response.json([{ assets: [macos, linux] }]))
-    );
-    await expect(fetchDesktopDownloadUrls()).resolves.toEqual({
-      macos: macos.browser_download_url,
-      linux: linux.browser_download_url,
-    });
-  });
-
-  it('falls back to verified installers when GitHub fails', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('rate limited', { status: 403 }))
-    );
-    await expect(fetchDesktopDownloadUrls()).resolves.toEqual(
-      FALLBACK_DOWNLOAD_URLS
-    );
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        throw new TypeError('offline');
-      })
-    );
-    await expect(fetchDesktopDownloadUrls()).resolves.toEqual(
-      FALLBACK_DOWNLOAD_URLS
-    );
-  });
-});
-
-describe('desktopReleaseVersion', () => {
-  it('uses the selected installer release, including fallback installers', () => {
-    expect(desktopReleaseVersion(FALLBACK_DOWNLOAD_URLS.macos)).toBe(
-      'v2026.11.19.1'
-    );
-    expect(
-      desktopReleaseVersion(
-        'https://github.com/macro-inc/macro/releases/download/v2026.10.7.0/Macro-2.5.0-x86_64-linux.AppImage'
-      )
-    ).toBe('v2026.10.7.0');
-    expect(
-      desktopReleaseVersion('https://example.com/mac.dmg')
-    ).toBeUndefined();
-  });
-});
-
-describe('releaseDownloadUrls', () => {
-  it('finds desktop installers behind a newer CLI-only release', () => {
-    expect(
-      releaseDownloadUrls([
-        {
-          assets: [
-            {
-              name: 'macrod-v2026.10.6.1-macos-aarch64.tar.gz',
-              browser_download_url: 'https://example.com/cli.tar.gz',
-            },
-          ],
-        },
-        { assets: [macos, linux] },
-      ])
-    ).toEqual({
-      macos: macos.browser_download_url,
-      linux: linux.browser_download_url,
-    });
-  });
-
-  it('selects each platform independently during partial uploads', () => {
-    expect(
-      releaseDownloadUrls([
-        { assets: [macos] },
-        {
-          assets: [
-            { ...macos, browser_download_url: 'https://example.com/old.dmg' },
-            linux,
-          ],
-        },
-      ])
-    ).toEqual({
-      macos: macos.browser_download_url,
-      linux: linux.browser_download_url,
-    });
-  });
-
-  it('excludes draft and prerelease installers', () => {
-    expect(
-      releaseDownloadUrls([
-        { draft: true, assets: [macos, linux] },
-        { prerelease: true, assets: [macos, linux] },
-      ])
-    ).toEqual(FALLBACK_DOWNLOAD_URLS);
-  });
-
-  it('keeps direct installer fallbacks when assets are missing', () => {
-    expect(releaseDownloadUrls([])).toEqual(FALLBACK_DOWNLOAD_URLS);
-    expect(releaseDownloadUrls([{}, { assets: [linux] }])).toEqual({
-      macos: FALLBACK_DOWNLOAD_URLS.macos,
-      linux: linux.browser_download_url,
-    });
-    expect(FALLBACK_DOWNLOAD_URLS.macos).toMatch(/\/download\/.*\.dmg$/);
-    expect(FALLBACK_DOWNLOAD_URLS.linux).toMatch(/\/download\/.*\.AppImage$/);
+      expect(installerPlatform(visitor)).toBeUndefined();
   });
 });

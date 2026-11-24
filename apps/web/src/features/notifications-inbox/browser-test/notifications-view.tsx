@@ -185,6 +185,7 @@ const inboxContext: NotificationsInboxContext = {
   senderName: () => undefined,
   openUrl: () => {},
   filterStorage: { read: () => null, write: () => {} },
+  displayStorage: { read: () => null, write: () => {} },
 };
 
 const ROUTER = { href: () => '', panes: () => [] } as unknown as SplitRouter;
@@ -267,9 +268,12 @@ render(
     <QueryClientProvider client={queryClient}>
       <AnalyticsContextProvider>
         <PosthogProvider>
-          {/* The desktop preview reads these; touch shows no preview. */}
+          {/* The desktop preview and Condensed rows read these. */}
           <GlobalAppStateProvider
-            notificationSource={{} as NotificationSource}
+            // Condensed rows are Home's, which read who the viewer muted.
+            notificationSource={
+              { mutedEntities: () => [] } as unknown as NotificationSource
+            }
             blockOrchestrator={{} as BlockOrchestrator}
           >
             <EntityProvider>
