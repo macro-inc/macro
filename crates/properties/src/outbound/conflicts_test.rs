@@ -84,8 +84,8 @@ async fn repeated_seed_options_are_a_conflict_and_write_nothing(pool: Pool<Postg
         matches!(err, PropertiesErr::DuplicateOptionValue),
         "{err:?}"
     );
-    let stored: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM property_definitions WHERE display_name = 'Phase'",
+    let stored = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM property_definitions WHERE display_name = 'Phase'"#,
     )
     .fetch_one(&pool)
     .await
@@ -171,19 +171,23 @@ async fn a_replayed_add_answers_with_its_option_after_a_rename(pool: Pool<Postgr
 /// primary keys are left out: their ids are minted by the server.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_conflict_arms_name_every_unique_index_but_the_keys(pool: Pool<Postgres>) {
-    let indexes: Vec<(String, String)> = sqlx::query_as(
-        "SELECT table_class.relname::text, index_class.relname::text
-         FROM pg_index
-         JOIN pg_class table_class ON table_class.oid = pg_index.indrelid
-         JOIN pg_class index_class ON index_class.oid = pg_index.indexrelid
-         WHERE pg_index.indisunique
-           AND NOT pg_index.indisprimary
-           AND table_class.relname IN ('property_definitions', 'property_options')
-         ORDER BY 1, 2",
+    let indexes: Vec<(String, String)> = sqlx::query!(
+        r#"SELECT table_class.relname::text AS "table_name!",
+                  index_class.relname::text AS "index_name!"
+           FROM pg_index
+           JOIN pg_class table_class ON table_class.oid = pg_index.indrelid
+           JOIN pg_class index_class ON index_class.oid = pg_index.indexrelid
+           WHERE pg_index.indisunique
+             AND NOT pg_index.indisprimary
+             AND table_class.relname IN ('property_definitions', 'property_options')
+           ORDER BY 1, 2"#,
     )
     .fetch_all(&pool)
     .await
-    .unwrap();
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.table_name, row.index_name))
+    .collect();
     let named: Vec<(String, String)> = DEFINITION_NAME_INDEXES
         .iter()
         .map(|index| ("property_definitions", index))
@@ -195,4 +199,33 @@ async fn the_conflict_arms_name_every_unique_index_but_the_keys(pool: Pool<Postg
         .map(|(table, index)| (table.to_string(), (*index).to_string()))
         .collect();
     assert_eq!(indexes, named);
+}
+
+/// A promoted tag keeps its option id under another definition, so a delete
+/// that names the option's old definition is told the option is elsewhere,
+/// not that it is gone.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn a_delete_naming_another_definition_is_told_the_option_lives_on(pool: Pool<Postgres>) {
+    let service = service(pool);
+    let priority: Uuid = PERSONAL_PRIORITY.parse().unwrap();
+    let option = Uuid::now_v7();
+    service
+        .add_property_option_with_id(&user_1(), None, priority, option, &add("Medium"))
+        .await
+        .unwrap();
+    let other = service
+        .create_property_definition(&user_1(), None, &select("Phase", &["Lead"]))
+        .await
+        .unwrap();
+    let err = service
+        .delete_property_option(&user_1(), None, other.id, option)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, PropertiesErr::OptionInAnotherDefinition),
+        "{err:?}"
+    );
 }

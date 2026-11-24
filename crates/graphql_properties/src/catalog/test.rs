@@ -478,6 +478,7 @@ async fn refusals_carry_their_rest_status_class() {
         ),
         (PropertiesErr::NotFound, "NOT_FOUND"),
         (PropertiesErr::OptionNotFound, "NOT_FOUND"),
+        (PropertiesErr::OptionInAnotherDefinition, "NOT_FOUND"),
         (PropertiesErr::DuplicateOptionValue, "CONFLICT"),
         (PropertiesErr::DuplicateDefinitionName, "CONFLICT"),
         (PropertiesErr::ReservedName("Tags"), "CONFLICT"),
@@ -641,6 +642,22 @@ async fn a_delete_of_something_already_gone_answers_with_its_deletion() {
             json!({ "graphqlTypeName": type_name, "entityId": id.to_string() })
         );
     }
+}
+
+#[tokio::test]
+async fn a_delete_of_an_option_that_lives_on_elsewhere_fails() {
+    // A promoted tag keeps its id: answering the stale delete as a deletion
+    // would evict the live option from the cache.
+    let (data, errors) = run(
+        FakeWriter::refusing(PropertiesErr::OptionInAnotherDefinition),
+        &format!(
+            r#"mutation {{ deletePropertyOption(propertyDefinitionId: "{DEFINITION}", optionId: "{OPTION}") {{ entityId }} }}"#
+        ),
+    )
+    .await;
+    assert_eq!(data, json!(null));
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0]["code"], json!("NOT_FOUND"));
 }
 
 #[tokio::test]

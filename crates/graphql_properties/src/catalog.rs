@@ -285,6 +285,7 @@ fn catalog_error(err: PropertiesErr) -> async_graphql::Error {
         PropertiesErr::Validation(_) => "BAD_REQUEST",
         PropertiesErr::NotFound
         | PropertiesErr::OptionNotFound
+        | PropertiesErr::OptionInAnotherDefinition
         | PropertiesErr::EntityPropertyNotFound => "NOT_FOUND",
         PropertiesErr::DuplicateOptionValue
         | PropertiesErr::DuplicateDefinitionName
@@ -307,6 +308,8 @@ fn catalog_error(err: PropertiesErr) -> async_graphql::Error {
 
 /// A delete whose target is gone has the outcome it asked for. Not found also
 /// covers a row the caller does not own; both answer alike, as both 404 alike.
+/// An option that lives on under another definition is not gone: answering
+/// its deletion would evict it from the cache.
 fn already_gone(err: PropertiesErr) -> Result<(), PropertiesErr> {
     match err {
         PropertiesErr::NotFound | PropertiesErr::OptionNotFound => {

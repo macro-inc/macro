@@ -103,6 +103,7 @@ pub fn properties_err_status(e: &PropertiesErr) -> StatusCode {
         PropertiesErr::Validation(_) => StatusCode::BAD_REQUEST,
         PropertiesErr::NotFound
         | PropertiesErr::OptionNotFound
+        | PropertiesErr::OptionInAnotherDefinition
         | PropertiesErr::EntityPropertyNotFound => StatusCode::NOT_FOUND,
         PropertiesErr::DuplicateOptionValue
         | PropertiesErr::DuplicateDefinitionName

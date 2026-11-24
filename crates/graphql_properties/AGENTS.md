@@ -28,8 +28,13 @@ edge.
   call as its REST route, with the same team receipt and managed-definition
   guard (`properties::ManagedTeamDefinitions`); refusals carry
   `extensions.code` (`BAD_REQUEST`, `NOT_FOUND`, `CONFLICT`, `FORBIDDEN`,
-  `INTERNAL`), deletes answer `GraphqlCacheDeletion`, and a promotion name
-  conflict is a `GraphqlTagPromotionConflict` result, not an error.
+  `INTERNAL`), and a promotion name conflict is a
+  `GraphqlTagPromotionConflict` result, not an error. Deletes answer
+  `GraphqlCacheDeletion`, also when the target is already gone, so a queued
+  delete sent again after a lost reply settles; an option that lives on under
+  another definition (a promoted tag keeps its id) is refused `NOT_FOUND`
+  instead. A taken name or option value is `CONFLICT`; `addPropertyOption`
+  sent again with its id answers with the option it made.
 - `src/loaders.rs`: `EntityPropertiesLoader` batching.
 
 ## Scope

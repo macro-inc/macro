@@ -1756,7 +1756,7 @@ where
             .ok_or(PropertiesErr::OptionNotFound)?;
 
         if option.property_definition_id != property_definition_id {
-            return Err(PropertiesErr::OptionNotFound);
+            return Err(PropertiesErr::OptionInAnotherDefinition);
         }
 
         let mutations = self

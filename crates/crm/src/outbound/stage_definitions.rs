@@ -111,7 +111,9 @@ fn stage_store_error(err: PropertiesErr) -> CrmError {
             CrmError::InvalidRequest("a stage with that label already exists".into())
         }
         PropertiesErr::Validation(message) => CrmError::InvalidRequest(message),
-        PropertiesErr::NotFound | PropertiesErr::OptionNotFound => {
+        PropertiesErr::NotFound
+        | PropertiesErr::OptionNotFound
+        | PropertiesErr::OptionInAnotherDefinition => {
             CrmError::InvalidRequest("stage not found for the team".into())
         }
         other => CrmError::StorageLayerError(other.into()),
