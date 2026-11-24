@@ -619,8 +619,12 @@ fn stop_ends_a_waiting_run_while_reads_proceed_between_pages() {
     let running = tauri::async_runtime::spawn({
         let (runs, weak, plan) = (runs.clone(), handle.downgrade(), plan.clone());
         async move {
-            runs.start(weak, plan, move |_| {
-                let _ = written_tx.send(());
+            // The `lane` line publishes first; only the page's publication
+            // means it was written.
+            runs.start(weak, plan, move |publication| {
+                if matches!(publication, SyncPublication::Hydrated { .. }) {
+                    let _ = written_tx.send(());
+                }
             })
             .await
         }
@@ -777,44 +781,48 @@ fn the_body_is_read_ahead_while_pages_are_written() {
 }
 
 #[test]
-fn read_ahead_stops_at_the_byte_budget_until_pages_are_applied() {
-    let handle = engine();
-    let first = ndjson(&[soup_page("tasks", 0, &[1, 2], Some("c1"))]);
-    let opener = Arc::new(FakeOpener::default());
-    opener.responses.lock().unwrap().push_back((
-        200,
-        vec![
-            Chunk::Bytes(first.clone()),
-            Chunk::Bytes(ndjson(&[soup_page("tasks", 1, &[3, 4], Some("c2"))])),
-            Chunk::Bytes(ndjson(&[soup_page("tasks", 2, &[5], None)])),
-            Chunk::Bytes(ndjson(&[lane_done("tasks", 3, 5), end()])),
-        ],
-    ));
-    // The first chunk fills the budget; the reader holds the next one until
-    // the first is applied.
-    let runs = SyncRuns {
-        read_ahead_bytes: first.len(),
-        publish_interval: Duration::ZERO,
-        ..SyncRuns::default()
+fn read_ahead_stops_at_the_byte_budget_until_a_chunk_is_applied() {
+    let log = BodyLog::default();
+    let body = FakeBody {
+        chunks: VecDeque::from([
+            Chunk::Bytes(b"first".to_vec()),
+            Chunk::Bytes(b"second".to_vec()),
+            Chunk::Bytes(b"third".to_vec()),
+        ]),
+        log: log.clone(),
     };
-    runs.install_opener(opener.clone());
-    let reads = opener.bodies.clone();
-    let reads_at_first_write = Arc::new(AtomicUsize::new(0));
-    let (published, publish) = recorder_waiting({
-        let reads_at_first_write = reads_at_first_write.clone();
-        move || reads_at_first_write.store(reads.reads(), Ordering::SeqCst)
-    });
-    let plan = args();
+    let (chunks_tx, mut chunks) = mpsc::unbounded_channel();
+    // The read timeout needs a runtime's timer; the test polls by hand.
+    let runtime = tauri::async_runtime::handle();
+    let _entered = runtime.inner().enter();
+    let mut reader = Box::pin(read_ahead(
+        Box::new(body),
+        BodyDecoder::Identity,
+        Arc::new(Semaphore::new(5)),
+        5,
+        STALL_TIMEOUT,
+        CancellationToken::new(),
+        chunks_tx,
+    ));
+    let mut context = std::task::Context::from_waker(std::task::Waker::noop());
 
-    let outcome = block_on(runs.start(handle.downgrade(), plan, publish));
+    // The first chunk fills the budget: the reader reads the second and
+    // waits for room to hand it over.
+    assert!(reader.as_mut().poll(&mut context).is_pending());
+    assert_eq!(log.reads(), 2);
+    let first = chunks.try_recv().unwrap().unwrap();
+    assert_eq!(first.bytes, b"first");
+    assert!(chunks.try_recv().is_err());
+    assert!(reader.as_mut().poll(&mut context).is_pending());
+    assert_eq!(log.reads(), 2);
 
-    assert!(
-        matches!(outcome, SyncRunOutcome::Completed(_)),
-        "{outcome:?}"
-    );
-    assert!(reads_at_first_write.load(Ordering::SeqCst) <= 2);
-    assert_eq!(opener.bodies.reads(), 4);
-    assert_eq!(published.lock().unwrap().len(), 6);
+    // Applying the first chunk returns its budget: the second goes over and
+    // the reader reads on, until the second fills the budget in turn.
+    drop(first);
+    assert!(reader.as_mut().poll(&mut context).is_pending());
+    assert_eq!(log.reads(), 3);
+    assert_eq!(chunks.try_recv().unwrap().unwrap().bytes, b"second");
+    assert!(chunks.try_recv().is_err());
 }
 
 #[test]
