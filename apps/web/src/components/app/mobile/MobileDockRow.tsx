@@ -24,6 +24,7 @@ import {
   type NavigationUnread,
   useNavigationUnread,
 } from '../use-navigation-unread';
+import { DockTabLens } from './DockTabLens';
 import { MobileDockButton } from './MobileDockButton';
 import { MobileDockIsland } from './MobileDockIsland';
 import { MobileDrawer } from './MobileDrawer';
@@ -244,6 +245,44 @@ function MobileNavigationDockRow(props: { vertical?: boolean }) {
     }
   };
 
+  // The bar's buttons; the selected one is at the lens's rest.
+  const activeIndex = () => {
+    const visible = dockViews().slice(0, visibleCount());
+    const index = visible.findIndex((view) => view.id === activeView());
+    if (index >= 0) return index;
+    return dockViews().some((view) => view.id === activeView())
+      ? visible.length
+      : -1;
+  };
+  const DockTabs = () => (
+    <>
+      <For each={dockViews().slice(0, visibleCount())}>
+        {(button) => (
+          <MobileDockButton
+            icon={
+              activeView() === button.id
+                ? (button.iconActive ?? button.icon)
+                : button.icon
+            }
+            ariaLabel={button.label}
+            active={activeView() === button.id}
+            unread={unread.has(button.id)}
+            unreadCount={unread.count(button.id)}
+            onClick={() => navigate(button.id)}
+          />
+        )}
+      </For>
+      <MoreViewsDrawer
+        views={dockViews()}
+        visibleCount={visibleCount()}
+        onMove={move}
+        isActive={(id) => activeView() === id}
+        unread={unread}
+        onNavigate={navigate}
+      />
+    </>
+  );
+
   return (
     <div
       class={cn(
@@ -264,30 +303,11 @@ function MobileNavigationDockRow(props: { vertical?: boolean }) {
             `calc(${dockViews().length + 1} * var(--mobile-chrome-button-size))`,
         }}
       >
-        <For each={dockViews().slice(0, visibleCount())}>
-          {(button) => (
-            <MobileDockButton
-              icon={
-                activeView() === button.id
-                  ? (button.iconActive ?? button.icon)
-                  : button.icon
-              }
-              ariaLabel={button.label}
-              active={activeView() === button.id}
-              unread={unread.has(button.id)}
-              unreadCount={unread.count(button.id)}
-              onClick={() => navigate(button.id)}
-            />
-          )}
-        </For>
-        <MoreViewsDrawer
-          views={dockViews()}
-          visibleCount={visibleCount()}
-          onMove={move}
-          isActive={(id) => activeView() === id}
-          unread={unread}
-          onNavigate={navigate}
-        />
+        <Show when={!props.vertical} fallback={<DockTabs />}>
+          <DockTabLens activeIndex={activeIndex()}>
+            <DockTabs />
+          </DockTabLens>
+        </Show>
       </MobileDockIsland>
       <MobileDockIsland class="shrink-0">
         <MobileDockButton

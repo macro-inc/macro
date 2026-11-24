@@ -71,6 +71,12 @@ read their code, and follow that pattern rather than inventing a new one.
   acts on click so held or cancelled touches do nothing. `glass` and `island`
   controls and channel inputs get iOS-app-only press animation from
   `installGlassPress`; reuse it and keep Android and web free of the effect.
+- Move touch chrome only with scrolling or `transform`/`scale`/`opacity`
+  transitions: iOS runs those on the compositor at 120 Hz, while touch events,
+  `requestAnimationFrame`, layout and custom-property transitions are capped
+  at 60 Hz. Something that follows a finger is scrolled content, as the dock's
+  tab lens is (`DockTabLens`: a snap-point scroller whose buttons stay sticky).
+
 ## Sheets, menus, and dialogs
 
 - Use `@ui` `Dialog` and `ConfirmDialog`; they become drawers on phones.
