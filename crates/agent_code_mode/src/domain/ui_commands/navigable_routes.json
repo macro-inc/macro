@@ -80,6 +80,8 @@
     {"route":"view-agents-archive","navigable":true,"segments":["agents","archive"]},
     {"route":"mail-compose","navigable":false,"segments":["mail","new"]},
     {"route":"tasks-projects","navigable":true,"segments":["tasks","projects"]},
+    {"route":"view-calendar-search","navigable":true,"segments":["calendar","search"]},
+    {"route":"view-calendar-settings","navigable":true,"segments":["calendar","settings"]},
     {"route":"drive-tab","navigable":true,"segments":["drive",":"]},
     {"route":"settings","navigable":false,"segments":["settings",":"]},
     {"route":"routine-detail","navigable":true,"segments":["routines",":"]},
