@@ -1904,7 +1904,9 @@ describe('GraphQL Soup browser cache session gate', () => {
       () => inspection.promise
     );
     const retry = soup.retryGraphqlCacheInitialization();
+    // Resuming, but hidden until its queue is readable.
     expect(soup.graphqlDraftQueueBlocked()).toBe(true);
+    expect(soup.getGraphqlSoupCacheHost()).toBeUndefined();
     inspection.resolve([]);
     await retry;
     expect(soup.graphqlDraftQueueBlocked()).toBe(false);
@@ -2218,6 +2220,42 @@ describe('GraphQL Soup browser cache session gate', () => {
     soup.getGraphqlSoupClient();
     expect(soup.getGraphqlSoupCacheHost()).toBeUndefined();
     expect(soup.getGraphqlCacheHost()).toBeUndefined();
+  });
+
+  it('blocks queued writes while its host is out, not while the cache is off', async () => {
+    const soup = await import('./graphql-soup');
+    // Out through an outage: built, but not serving.
+    mocks.createWorkerCacheHost.mockImplementationOnce(() => ({
+      ...mocks.host,
+      disabled: true,
+    }));
+    soup.getGraphqlSoupClient();
+    expect(soup.getGraphqlSoupCacheHost()).toBeUndefined();
+    expect(soup.graphqlDraftQueueBlocked()).toBe(true);
+
+    vi.resetModules();
+    mocks.enabled = false;
+    const off = await import('./graphql-soup');
+    off.getGraphqlSoupClient();
+    expect(off.getGraphqlSoupCacheHost()).toBeUndefined();
+    expect(off.graphqlDraftQueueBlocked()).toBe(false);
+  });
+
+  it('ends the session for its readers once sign-out clears the login cookie', async () => {
+    const soup = await import('./graphql-soup');
+    const { createMemo, createRoot } = await import('solid-js');
+    const reader = createRoot((dispose) => ({
+      dispose,
+      active: createMemo(() => soup.graphqlSoupSessionActive()),
+    }));
+    expect(reader.active()).toBe(true);
+    // Sign-out clears the cookie before it wipes the cache.
+    mocks.signedIn = false;
+    expect(soup.graphqlSoupSessionActive()).toBe(false);
+    mocks.signedIn = true;
+    soup.setGraphqlSoupSessionActive(false);
+    expect(reader.active()).toBe(false);
+    reader.dispose();
   });
 
   it('retires a failed host so the replaced client degrades instead of rejecting', async () => {
