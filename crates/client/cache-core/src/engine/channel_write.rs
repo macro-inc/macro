@@ -131,8 +131,11 @@ impl ChannelAdmission {
                         self.note_change(&channel_id, ChannelChangeKind::Changed);
                         self.write.uncovered.push(channel_id);
                     }
+                    let uncovered = &self.write.uncovered;
                     for write in &mut self.write.coverage {
-                        write.spans.clear();
+                        if uncovered.contains(&write.channel_id) {
+                            write.spans.clear();
+                        }
                     }
                 }
             }
@@ -381,6 +384,26 @@ impl<S: Storage> Engine<S> {
         let mut pending = layer_keys(&self.optimistic);
         pending.retain(is_channel_entry);
         pending
+    }
+
+    /// The pending entries known removed.
+    pub(super) async fn removed_under_pending(
+        &self,
+    ) -> Result<BTreeSet<EntityKey<'static>>, EngineError<S::Error>> {
+        let query = ChannelGuardQuery {
+            keys: self.pending_channel_entries(),
+            ..ChannelGuardQuery::default()
+        };
+        if query.keys.is_empty() {
+            return Ok(query.keys);
+        }
+        let guard = self
+            .storage
+            .load_channel_guard(&query)
+            .await
+            .map_err(EngineError::Storage)?;
+        let removed = guard.entries.into_iter().filter(|(_, state)| state.removed);
+        Ok(removed.map(|(key, _)| key).collect())
     }
 
     async fn channel_entries(

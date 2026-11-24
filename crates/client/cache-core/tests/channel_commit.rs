@@ -551,6 +551,20 @@ fn a_pending_edit_of_an_entry_that_leaves_the_device_shows_nothing_of_it() {
 #[test]
 fn a_pending_edit_never_brings_back_an_entry_known_removed() {
     block_on(async {
+        let mut engine = held_with_mutations().await;
+        queue(&mut engine, &saying(root("m2", "20"), "pending"), false).await;
+        let removal = removing(changes("c1", "10", "11"), &["m2"]);
+        apply(&mut engine, "11", &[], &removal).await;
+        engine
+            .channel_timeline_evict(&ChannelEviction {
+                touched_before_ms: 1,
+                max_channels: 5,
+            })
+            .await
+            .unwrap();
+        apply(&mut engine, "20", &[root("m1", "10")], &whole("20")).await;
+        assert_eq!(roots(&mut engine).await, covered(&["m1"]));
+
         for held in [true, false] {
             let mut engine = held_with_mutations().await;
             let queued = if held { "m2" } else { "m9" };

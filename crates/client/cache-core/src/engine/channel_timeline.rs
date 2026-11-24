@@ -116,9 +116,11 @@ impl<S: ChannelTimelineStorage> Engine<S> {
     ) -> Result<ChannelEvictionResult, EngineError<S::Error>> {
         eviction.validate()?;
         self.ensure_revision_can_advance()?;
+        self.hydrate_optimistic().await?;
+        let kept = self.removed_under_pending().await?;
         let outcome = self
             .storage
-            .channel_timeline_evict(eviction)
+            .channel_timeline_evict(eviction, &kept)
             .await
             .map_err(EngineError::Storage)?;
         let write = self.record_deletions(outcome.deleted_keys)?;

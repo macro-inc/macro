@@ -423,7 +423,7 @@ fn pages_read_inside_the_stretch_holding_their_anchor() {
 }
 
 #[test]
-fn writes_persist_across_reopen_and_eviction_takes_everything() {
+fn writes_persist_across_reopen_and_eviction_takes_all_but_what_it_keeps() {
     block_on(async {
         let database = TursoMemoryDatabase::new("channel-commit.db");
         let mut storage = database.open("scope").unwrap();
@@ -460,15 +460,18 @@ fn writes_persist_across_reopen_and_eviction_takes_everything() {
         let stats = storage.channel_timeline_stats().await.unwrap();
         assert_eq!((stats.channels, stats.entries), (2, 8));
         let evicted = storage
-            .channel_timeline_evict(&ChannelEviction {
-                touched_before_ms: 150,
-                max_channels: 5,
-            })
+            .channel_timeline_evict(
+                &ChannelEviction {
+                    touched_before_ms: 150,
+                    max_channels: 5,
+                },
+                &BTreeSet::from([key("m2")]),
+            )
             .await
             .unwrap();
         assert_eq!(evicted.channel_ids, ["c1"]);
-        // The seven held entries and the record of the removed one.
-        assert_eq!(evicted.deleted_keys.len(), 8);
+        // The seven held entries; the removal asked for stays.
+        assert_eq!(evicted.deleted_keys.len(), 7);
         assert!(!evicted.has_more);
         assert_eq!(
             storage
@@ -477,9 +480,12 @@ fn writes_persist_across_reopen_and_eviction_takes_everything() {
                 .unwrap(),
             ChannelTimelineSnapshot::default()
         );
-        assert_eq!(states(&storage, &["m1", "m2"]).await, [None, None]);
+        assert_eq!(
+            states(&storage, &["m1", "m2"]).await,
+            [None, Some((8, true))]
+        );
         assert_eq!(scalar(&storage, ROW_COUNT), 1);
-        assert_eq!(scalar(&storage, "SELECT COUNT(*) FROM records"), 1);
+        assert_eq!(scalar(&storage, "SELECT COUNT(*) FROM records"), 2);
         assert_eq!(scalar(&storage, SYNC_COUNT), 1);
         assert_eq!(scalar(&storage, "SELECT COUNT(*) FROM channel_coverage"), 1);
     });
@@ -649,10 +655,13 @@ fn an_invalid_eviction_never_opens_a_transaction() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("channel-invalid").unwrap();
         let error = storage
-            .channel_timeline_evict(&ChannelEviction {
-                touched_before_ms: 1,
-                max_channels: 0,
-            })
+            .channel_timeline_evict(
+                &ChannelEviction {
+                    touched_before_ms: 1,
+                    max_channels: 0,
+                },
+                &BTreeSet::new(),
+            )
             .await
             .unwrap_err();
         assert!(!error.requires_physical_reset());

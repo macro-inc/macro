@@ -117,8 +117,7 @@ stretch counts only when the page lists it or the device's coverage already
 reaches it. A response without a `seq` never adds a row. A row has one `seq`
 for the whole record, so every selection of a message under a `seq` uses the same
 fragment, and one response selects a message under a `seq` or not. The removal of
-an entry a queued write changes is kept until the write settles, or the channel
-is evicted.
+an entry a queued write changes is kept until the write settles.
 `onChannelChanged` names the channels each transaction changed, in every tab.
 
 ## Storage upgrades

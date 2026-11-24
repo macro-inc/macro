@@ -29,7 +29,7 @@ use crate::store::Storage;
 use crate::value::{CacheNumber, CacheValue, EntityKey, Record};
 use maybe_send::MaybeSend;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 
 /// Normalized typename of one channel message, root or reply.
@@ -392,10 +392,12 @@ pub trait ChannelTimelineStorage: Storage {
         pending: usize,
     ) -> impl Future<Output = Result<ChannelTimelineSnapshot, Self::Error>> + MaybeSend;
 
-    /// Removes the least recently touched channels in one write transaction.
+    /// Removes the least recently touched channels in one write transaction,
+    /// without the entries of `kept`.
     fn channel_timeline_evict(
         &mut self,
         eviction: &ChannelEviction,
+        kept: &BTreeSet<EntityKey<'static>>,
     ) -> impl Future<Output = Result<ChannelEvictionOutcome, Self::Error>> + MaybeSend;
 
     /// Counts what the index holds.
