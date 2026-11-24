@@ -1,3 +1,4 @@
+import { createThreadPaginator } from '@app/features/channel/Channel/thread-paginator';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import type {
@@ -2000,6 +2001,119 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       cached.resolve();
       replacementCached.resolve();
       mounted.dispose();
+    }
+  });
+
+  const mountWithTwoFailedPages = async () => {
+    const rows = messages(70);
+    const second = Promise.withResolvers<ServerPage>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockReturnValueOnce(second.promise);
+    const mounted = mount({ rows, fetchPage });
+    await settledOnDevice(mounted.runtime);
+    mounted.setHeld(false);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    return { mounted, second, fetchPage };
+  };
+
+  it('keeps the second failure marked until its own retry deadline', async () => {
+    const { mounted, second, fetchPage } = await mountWithTwoFailedPages();
+    const retry = Promise.withResolvers<void>();
+    const stop = createRoot((dispose) => {
+      let retried = false;
+      createEffect(
+        on(mounted.timeline.olderFailed, (failed) => {
+          if (!failed || retried) return;
+          retried = true;
+          retry.resolve(mounted.timeline.loadOlder());
+        })
+      );
+      return dispose;
+    });
+
+    try {
+      const first = mounted.timeline.loadOlder();
+      await vi.advanceTimersByTimeAsync(0);
+      await first;
+      expect(fetchPage).toHaveBeenCalledTimes(2);
+      second.reject(new TypeError('Still offline'));
+      await retry.promise;
+      expect(mounted.timeline.olderFailed()).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(mounted.timeline.olderFailed()).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(mounted.timeline.olderFailed()).toBe(false);
+    } finally {
+      stop();
+      mounted.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels an older wait when a new page starts after failure publication', async () => {
+    const { mounted, second, fetchPage } = await mountWithTwoFailedPages();
+    try {
+      const first = mounted.timeline.loadOlder();
+      await vi.advanceTimersByTimeAsync(0);
+      await first;
+      expect(mounted.timeline.olderFailed()).toBe(true);
+      const retry = mounted.timeline.loadOlder();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fetchPage).toHaveBeenCalledTimes(2);
+      second.reject(new TypeError('Still offline'));
+      await retry;
+
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(mounted.timeline.olderFailed()).toBe(true);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(mounted.timeline.olderFailed()).toBe(false);
+    } finally {
+      mounted.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('starts pagination in the replacement window while the old page store is pending', async () => {
+    const rows = messages(150);
+    const cached = Promise.withResolvers<void>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(serverPage(rows, 50, 100, cached.promise))
+      .mockResolvedValueOnce(serverPage(rows, 0, 50));
+    const mounted = mount({ rows, fetchPage });
+    const [windowKey, setWindowKey] = createSignal(0);
+    const { paginator, dispose } = createRoot((dispose) => ({
+      paginator: createThreadPaginator(mounted.timeline, windowKey),
+      dispose,
+    }));
+    let oldScroll: Promise<void> | undefined;
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      oldScroll = paginator.shiftPaginate();
+      await until(() => ids(mounted.timeline).length === 100);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+
+      mounted.setHeld(true);
+      setWindowKey(1);
+      await mounted.timeline.retry();
+      expect(ids(mounted.timeline)).toHaveLength(50);
+      expect(mounted.timeline.isLoadingOlder()).toBe(false);
+      mounted.setHeld(false);
+      await paginator.shiftPaginate();
+
+      // Advance the already-queued work while keeping the old store blocked.
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fetchPage).toHaveBeenCalledTimes(2);
+    } finally {
+      cached.resolve();
+      if (oldScroll) await oldScroll;
+      dispose();
+      mounted.dispose();
+      vi.useRealTimers();
     }
   });
 });

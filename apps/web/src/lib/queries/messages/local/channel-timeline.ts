@@ -330,7 +330,6 @@ export function createLocalChannelTimeline(
   /** Clears a failed page once its wait ends, unless stopped meanwhile. */
   const retryAfterWait = async (direction: PageDirection) => {
     const retry = pageRetries[direction];
-    retry.failures += 1;
     const wait = new AbortController();
     retry.wait = wait;
     const ms = Math.min(
@@ -342,6 +341,8 @@ export function createLocalChannelTimeline(
     } catch {
       return;
     }
+    // A later failure armed its own wait.
+    if (retry.wait !== wait) return;
     retry.wait = undefined;
     setState('pageFailed', direction, false);
   };
@@ -417,6 +418,24 @@ export function createLocalChannelTimeline(
     }
     deps.runtime.noteServerRead(channelId, seq, epoch, loaded.readSeq);
     return seq === null ? 'unheld' : 'held';
+  };
+
+  /**
+   * Settles the page as `settle` does, or `aborted` once a load that replaces
+   * this one aborts it: nothing then waits for a replaced window's store.
+   */
+  const settleUnlessAborted = async (
+    loaded: LoadedChannelPage,
+    epoch: number,
+    token: number,
+    signal: AbortSignal
+  ) => {
+    try {
+      return await untilAborted(settle(loaded, epoch, token), signal);
+    } catch (error) {
+      if (signal.aborted) return 'aborted';
+      throw error;
+    }
   };
 
   const load = (around: string | undefined): Promise<void> => {
@@ -516,16 +535,9 @@ export function createLocalChannelTimeline(
     });
     // Pages can load from here on, while the window is still storing.
     const givenUpBefore = givenUp;
-    let settled: Awaited<ReturnType<typeof settle>>;
-    try {
-      // A load that replaces this one aborts it: nothing then waits for this
-      // window's store, as going to the live end does.
-      settled = await untilAborted(settle(loaded, epoch, token), signal);
-    } catch (error) {
-      if (signal.aborted) return;
-      throw error;
-    }
-    if (token !== loadToken) return;
+    // Going to the live end waits for the window that replaced this one.
+    const settled = await settleUnlessAborted(loaded, epoch, token, signal);
+    if (settled === 'aborted' || token !== loadToken) return;
     if (settled === 'session-changed' || settled === 'yielded') {
       // The new session can store what the old one could not, and a read
       // after the delete can hold what it reads.
@@ -644,8 +656,9 @@ export function createLocalChannelTimeline(
         }
       })
     );
-    const settled = await settle(loaded, epoch, token);
-    return token === loadToken ? settled : 'stale';
+    // A window loaded since aborts the wait, so paging in it starts at once.
+    const settled = await settleUnlessAborted(loaded, epoch, token, signal);
+    return settled === 'aborted' || token !== loadToken ? 'stale' : settled;
   };
 
   /**
@@ -804,8 +817,20 @@ export function createLocalChannelTimeline(
       })
     );
     // A view answering that update may have closed this window or loaded
-    // another, which stopped its watches.
+    // another, which stopped this call's watches.
     if (token !== loadToken) return;
+    followOutcome(direction, outcome, watch);
+  };
+
+  /** What a page that ended in the current window leaves to follow. */
+  const followOutcome = (
+    direction: PageDirection,
+    outcome: PageOutcome,
+    watch: ReturnType<typeof watchReconnect>
+  ) => {
+    if (outcome === 'failed') pageRetries[direction].failures += 1;
+    // A view that asked for this page again owns the watches and the wait.
+    if (state[direction === 'older' ? 'loadingOlder' : 'loadingNewer']) return;
     if (outcome === 'done') {
       stopPageRetry(direction, true);
       watch.stop();
