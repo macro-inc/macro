@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT database_id\n            FROM database_entities\n            WHERE database_id = ANY($1)\n                AND trashed_at IS NULL\n            ORDER BY updated_at DESC, database_id\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "database_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6fca49cc77dfcfb59c6eb5bc3ccbf1ac611e3938c268e221f23be9c53320686b"
+}

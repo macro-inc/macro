@@ -93,6 +93,29 @@ impl DatabaseRowSource for DatabaseRowPgSource {
             .collect())
     }
 
+    async fn most_recent_databases(
+        &self,
+        database_ids: &[Uuid],
+        limit: usize,
+    ) -> Result<Vec<Uuid>, Report> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        sqlx::query_scalar!(
+            r#"
+            SELECT database_id
+            FROM database_entities
+            WHERE database_id = ANY($1)
+                AND trashed_at IS NULL
+            ORDER BY updated_at DESC, database_id
+            LIMIT $2
+            "#,
+            database_ids,
+            limit,
+        )
+        .fetch_all(&self.primary_db)
+        .await
+        .map_err(|error| Report::new(error).into_dynamic())
+    }
+
     async fn propose(&self, request: ProposalRequest<'_>) -> Result<Vec<ProposedRow>, Report> {
         let positions = self
             .opensearch

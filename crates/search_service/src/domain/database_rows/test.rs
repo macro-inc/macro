@@ -13,6 +13,7 @@ struct FakeSource {
     current: Vec<CurrentRow>,
     proposal_requests: Mutex<Vec<(Option<RowPosition>, u32)>>,
     current_reads: Mutex<Vec<Uuid>>,
+    proposed_databases: Mutex<Vec<Vec<Uuid>>>,
 }
 
 impl DatabaseRowSource for FakeSource {
@@ -26,7 +27,20 @@ impl DatabaseRowSource for FakeSource {
         Ok(self.viewable_databases.clone())
     }
 
+    async fn most_recent_databases(
+        &self,
+        database_ids: &[Uuid],
+        limit: usize,
+    ) -> Result<Vec<Uuid>, Report> {
+        // Newest first is the reverse of the order the fake lists them in.
+        Ok(database_ids.iter().rev().take(limit).copied().collect())
+    }
+
     async fn propose(&self, request: ProposalRequest<'_>) -> Result<Vec<ProposedRow>, Report> {
+        self.proposed_databases
+            .lock()
+            .expect("lock")
+            .push(request.database_ids.to_vec());
         self.proposal_requests
             .lock()
             .expect("lock")
@@ -344,4 +358,30 @@ async fn stops_at_the_round_bound_without_promising_a_next_page() {
     assert_eq!(page.next, None);
     assert_eq!(page.stats.rounds, MAX_ROUNDS);
     assert!(page.stats.bound_reached);
+}
+
+#[tokio::test]
+async fn a_caller_past_the_cap_searches_the_most_recent_databases() {
+    // The fake lists databases oldest first; the newest are the last ones.
+    let databases: Vec<Uuid> = (0..MAX_SEARCHED_DATABASES as u128 + 5)
+        .map(|n| Uuid::from_u128(0x10_0000 + n))
+        .collect();
+    let newest = *databases.last().expect("databases");
+    let oldest = databases[0];
+    let source = FakeSource {
+        viewable_databases: databases,
+        index: vec![proposed(1)],
+        viewable: HashSet::from([row_id(1)]),
+        current: vec![current(1, "Acme Corp", &[])],
+        ..Default::default()
+    };
+
+    let (page, source) = page(source, 10, None).await;
+
+    assert!(page.stats.databases_capped);
+    assert_eq!(page.rows.len(), 1);
+    let searched = source.proposed_databases.lock().expect("lock");
+    assert_eq!(searched[0].len(), MAX_SEARCHED_DATABASES);
+    assert!(searched[0].contains(&newest));
+    assert!(!searched[0].contains(&oldest));
 }

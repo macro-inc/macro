@@ -51,6 +51,16 @@ impl DatabaseRowSource for StaleIndex {
         self.postgres.viewable_database_ids(viewer).await
     }
 
+    async fn most_recent_databases(
+        &self,
+        database_ids: &[Uuid],
+        limit: usize,
+    ) -> Result<Vec<Uuid>, Report> {
+        self.postgres
+            .most_recent_databases(database_ids, limit)
+            .await
+    }
+
     async fn propose(&self, request: ProposalRequest<'_>) -> Result<Vec<ProposedRow>, Report> {
         // The index honours the database filter and resumes after `after`,
         // in its order: the order of `proposals`.
@@ -440,4 +450,59 @@ async fn the_next_page_comes_only_from_a_row_the_caller_may_see(pool: PgPool) {
     let viewer = search(&pool, "viewer@example.com", "acme", 1).await;
     assert_eq!(shown(&viewer), vec![ACME_ROW]);
     assert_eq!(viewer.next, None);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("database_rows"))
+)]
+async fn crm_storage_rows_are_never_shown_even_with_a_grant(pool: PgPool) {
+    // The viewer holds a grant on the CRM storage database, which has no
+    // database entity.
+    let source = source(&pool, every_acme_proposal());
+    let user_id = "macro|viewer@example.com".to_string();
+    let user = MacroUserId::parse_from_str(&user_id)
+        .expect("user id")
+        .lowercase();
+    let viewer = source.viewer(&user).await.expect("viewer");
+
+    assert!(
+        !source
+            .viewable_database_ids(&viewer)
+            .await
+            .expect("databases")
+            .contains(&CRM_STORAGE)
+    );
+    assert!(
+        source
+            .viewable_rows(&viewer, &[CRM_ROW])
+            .await
+            .expect("rows")
+            .is_empty()
+    );
+    assert!(
+        source
+            .current_rows(&[CRM_ROW])
+            .await
+            .expect("current")
+            .is_empty()
+    );
+    let page = search(&pool, "viewer@example.com", "acme", 10).await;
+    assert!(!shown(&page).contains(&CRM_ROW));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("database_rows"))
+)]
+async fn the_most_recent_databases_are_live_ones_newest_first(pool: PgPool) {
+    let source = source(&pool, Vec::new());
+
+    let newest = source
+        .most_recent_databases(&[ARCHIVE, CRM_STORAGE, ACCOUNTS], 10)
+        .await
+        .expect("databases");
+
+    // The archive is in the Trash and CRM storage has no database entity.
+    assert_eq!(newest, vec![ACCOUNTS]);
 }

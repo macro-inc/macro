@@ -37,7 +37,7 @@ pub(crate) const MAX_ROUNDS: u8 = 5;
 
 /// Most databases one search narrows the index to. Each is a term in the
 /// OpenSearch filter, which refuses more than 65,536; a caller past it
-/// searches the first ones by id.
+/// searches the ones most recently updated.
 pub(crate) const MAX_SEARCHED_DATABASES: usize = 10_000;
 
 /// Fewest rows proposed per read, so a small page still skips past a few
@@ -104,6 +104,14 @@ pub(crate) trait DatabaseRowSource {
     fn viewable_database_ids(
         &self,
         viewer: &Self::Viewer,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+
+    /// The `limit` of `database_ids` updated most recently, for a caller who
+    /// views more databases than one search reaches.
+    fn most_recent_databases(
+        &self,
+        database_ids: &[Uuid],
+        limit: usize,
     ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
     /// Rows the index proposes, in its order. Fewer than `limit` means there
@@ -181,7 +189,12 @@ impl<Source: DatabaseRowSource> DatabaseRowSearch<Source> {
             return Ok(RowPage::default());
         }
         let databases_capped = database_ids.len() > MAX_SEARCHED_DATABASES;
-        database_ids.truncate(MAX_SEARCHED_DATABASES);
+        if databases_capped {
+            database_ids = self
+                .0
+                .most_recent_databases(&database_ids, MAX_SEARCHED_DATABASES)
+                .await?;
+        }
 
         // One more row than the page returns proves a next page exists.
         let wanted = limit as usize + 1;
