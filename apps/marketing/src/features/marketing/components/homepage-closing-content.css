@@ -21,7 +21,12 @@
 .homepage-testimonial-name { color: var(--color-ink); font-weight: 500; }
 .homepage-blog { width: min(800px, calc(100% - 64px)); margin-inline: auto; padding: 24px 0 20px; border-top: 1px solid var(--color-edge-muted); }
 .homepage-blog + .homepage-feature-end,
-.feature-page[data-product-spacing=true] .homepage-blog + .homepage-feature-end { margin-top: 0; }
+.feature-page[data-product-spacing=true] .homepage-blog + .homepage-feature-end,
+.macro-home-scroll:has(> .homepage-resources) .homepage-blog + .homepage-feature-end {
+  width: min(800px, calc(100% - 64px));
+  margin: 0 auto;
+  padding-top: 88px;
+}
 .homepage-blog > header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
 .homepage-blog h2, .homepage-blog > header > a { font-family: 'Inter Variable', var(--font-sans); font-size: 13px; font-weight: 370; line-height: 20px; letter-spacing: normal; color: var(--color-ink-muted); }
 .homepage-blog h2 { margin: 0; }
@@ -48,12 +53,18 @@
 @media (max-width: 767px) {
   .homepage-testimonials { padding: 56px 12px; }
   .homepage-testimonials figure { gap: 32px; }
+  .homepage-blog + .homepage-feature-end,
+  .feature-page[data-product-spacing=true] .homepage-blog + .homepage-feature-end,
+  .macro-home-scroll:has(> .homepage-resources) .homepage-blog + .homepage-feature-end { padding-top: 56px; }
 }
 /* Phones: a full list of posts under a homepage-style slab heading instead of
    a one-row carousel that shows a single title and clips the next. */
 @media (max-width: 699px) {
   .homepage-testimonials,
-  .homepage-blog { width: calc(100% - 32px); max-width: 540px; }
+  .homepage-blog,
+  .homepage-blog + .homepage-feature-end,
+  .feature-page[data-product-spacing=true] .homepage-blog + .homepage-feature-end,
+  .macro-home-scroll:has(> .homepage-resources) .homepage-blog + .homepage-feature-end { width: calc(100% - 32px); max-width: 540px; }
   .homepage-blog { padding: 48px 8px 32px; }
   .homepage-blog > header { align-items: baseline; gap: 20px; margin-bottom: 20px; }
   .homepage-blog h2 { color: var(--color-ink); font-family: 'Roboto Slab Variable', display, serif; font-size: 28px; font-weight: calc(315 + var(--cream-slab-weight-increase, 0)); line-height: 1.25; letter-spacing: -.035em; }
