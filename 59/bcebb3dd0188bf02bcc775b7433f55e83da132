@@ -1,0 +1,19 @@
+crates/documents/src/domain/ports.rs
+  s_daac47ed1cb766::t_92e95273288b5c 43-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "59bcebb3dd0188bf02bcc775b7433f55e83da132",
+  "prompts": {},
+  "sessions": {
+    "s_daac47ed1cb766": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5cc4efcb-4b26-48d2-bf9c-aaee3d38345e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
