@@ -553,6 +553,19 @@ and phone, counts only the days shown.
 The grid reads the primary and reads again after the viewer's own writes (and
 their other sessions'), so a cell just typed shows its new total at once.
 
+Every task a time view lists (a project's Time tab and phone sheet, desktop
+My week, the phone and tablet My week) reads as its Tasks list row: priority
+then status before the name, drawn by the list's own `TaskPropertyControl`
+at the list's spacing, and the viewer's running timer after the name. They
+only show the values, as a task's status does on the timeline: a press on
+them opens the task like the rest of the row, and the task is where they
+change. Editing them in place would need each task's permission, which the
+server checks one task at a time, on reports of up to thousands of tasks.
+They come from the summary's task (`TimeSummaryTaskFields`), the cached task
+document the Tasks list also reads, so a status or priority changed
+elsewhere shows on an open report. A task put on the sheet with Add task
+shows them once it has time logged.
+
 ## Import from Linear
 
 Use **Import from Linear** in the Tasks tour/actions menu, or open

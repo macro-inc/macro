@@ -223,9 +223,18 @@ async fn reconnect_stages_exact_attempt_and_fences_rotation_only_after_adoption(
             .await
             .unwrap()
     );
-    repo.release_refresh(&refreshed, stale_lease, true)
-        .await
-        .unwrap();
+    assert!(
+        repo.release_refresh(&refreshed, stale_lease, true)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !repo
+            .release_refresh(&refreshed, stale_lease, true)
+            .await
+            .unwrap(),
+        "a lease already released changes nothing"
+    );
     assert!(
         !repo
             .acquire_refresh(&refreshed, Uuid::new_v4())
