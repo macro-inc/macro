@@ -414,7 +414,13 @@ export function createLocalChannelTimeline(
       deps.runtime.noteStoredSeq(channelId, seq);
       return 'held';
     }
-    deps.runtime.noteServerRead(channelId, seq, epoch, loaded.readSeq);
+    deps.runtime.noteServerRead(
+      channelId,
+      seq,
+      epoch,
+      loaded.readSeq,
+      stored.removed
+    );
     return seq === null ? 'unheld' : 'held';
   };
 

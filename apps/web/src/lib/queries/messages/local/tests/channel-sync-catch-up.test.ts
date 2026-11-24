@@ -1897,3 +1897,58 @@ it('keeps the retry wait when reads find the device behind during an outage', as
     vi.unstubAllGlobals();
   }
 });
+
+it('replays what a read on this connection stored an older snapshot over', async () => {
+  vi.useFakeTimers();
+  const { test, latest } = await caughtUpToSix();
+  const key = `GraphqlChannelMessage:${latest.id}`;
+  try {
+    // A window fetched before the catch-up stores after it, lowering the
+    // device: no frame repeats the change the catch-up applied.
+    test.records.set(key, 'old snapshot at 5');
+    const lowered = await test.host.channelTimelineCommit({
+      channelId: CHANNEL_ID,
+      seq: { kind: 'lower', seq: '5' },
+    });
+    expect(lowered.channelSeq).toBe('5');
+    test.runtime.noteServerRead(
+      CHANNEL_ID,
+      lowered.channelSeq,
+      test.runtime.epoch(),
+      '5'
+    );
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.requests.map(({ after }) => after)).toEqual(['5', '5']);
+    test.requests[1].answer(delta('6', { messages: [latest] }));
+    await vi.advanceTimersByTimeAsync(600);
+    expect({ seq: test.seq(), content: test.records.get(key) }).toEqual({
+      seq: '6',
+      content: latest.content,
+    });
+    expect(await test.runtime.ensureCurrent(CHANNEL_ID)).toBe('current');
+  } finally {
+    test.stop();
+  }
+});
+
+it('replays from the read when it dropped records the device held', async () => {
+  vi.useFakeTimers();
+  const { test } = await caughtUpToSix();
+  try {
+    const lowered = await test.host.channelTimelineCommit({
+      channelId: CHANNEL_ID,
+      seq: { kind: 'lower', seq: '6' },
+    });
+    test.runtime.noteServerRead(
+      CHANNEL_ID,
+      lowered.channelSeq,
+      test.runtime.epoch(),
+      '6',
+      true
+    );
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.requests.map(({ after }) => after)).toEqual(['5', '6']);
+  } finally {
+    test.stop();
+  }
+});

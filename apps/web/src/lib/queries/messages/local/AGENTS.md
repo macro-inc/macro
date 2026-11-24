@@ -14,8 +14,12 @@ TanStack path in `../` runs untouched.
 - Read: `channel-pages.ts` asks the host for a page (`channelTimeline`); a
   covered page is read by key (`readRecordsByKeys`), a miss fetches
   `ChannelTimeline` and commits its coverage and a lower sequence bound once the
-  normalized cache holds the records. Threads do the same per root
-  (`channel-thread.ts`, `ChannelThread`, coverage with `threadRootId`).
+  normalized cache holds the records. A latest page that finds rows on a
+  device without a sequence for the channel (records stored, their commit lost)
+  removes those it proves gone (`staleDeviceKeys`), since no catch-up replays
+  their deletes, and the runtime replays from the page's sequence (`removed`).
+  Threads do the same per root, without that removal (`channel-thread.ts`,
+  `ChannelThread`, coverage with `threadRootId`).
 - Follow: one runtime per host (`channel-sync-runtime.ts`) tracks the sequence
   the device holds per channel, applies subscription frames
   (`channel-stream.ts`), catches up open channels on reconnect, and tells open
@@ -29,9 +33,10 @@ TanStack path in `../` runs untouched.
   moves on every drop and connect); one that moved the device, storing an
   older snapshot over what a later catch-up applied, makes it not current and
   catches it up again, as does a read that finds the device below what it
-  read (unless one waits already, a retry included); a page out when a read
-  lowers the device below its cursor is read
-  again from there, outside the page budget. Each catch-up commit runs in a
+  read (unless one waits already, a retry included), or a read on this
+  connection that lowers the device under what it held; a page out when a read
+  lowers the device below its cursor is read again from there, outside the page
+  budget. Each catch-up commit runs in a
   `channel.catch_up.commit` span. A last page out while a newer frame stored records is
   read again (`MAX_PAGE_REREADS`); the repair is left in place until a reread
   holds (for an earlier page, until a later page reaches the frames that

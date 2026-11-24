@@ -566,7 +566,8 @@ describe('createLocalChannelTimeline', () => {
       CHANNEL_ID,
       '9',
       3,
-      '9'
+      '9',
+      undefined
     );
     expect(mounted.host.commits.at(-1)).toMatchObject({
       channelId: CHANNEL_ID,
@@ -613,7 +614,8 @@ describe('createLocalChannelTimeline', () => {
       CHANNEL_ID,
       '9',
       3,
-      '9'
+      '9',
+      undefined
     );
     // The reload never blanks the window it shows.
     expect(shown.slice(shown.indexOf(2))).not.toContain(0);

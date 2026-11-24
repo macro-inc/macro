@@ -83,7 +83,9 @@ export interface ChannelPage {
  * once no delete is pending (`afterDeletes`).
  */
 export type PageStored =
-  | { kind: 'stored'; seq: string | null }
+  // `removed`: the commit dropped records the page proved gone, so only a
+  // catch-up from its sequence replays what it dropped in error.
+  | { kind: 'stored'; seq: string | null; removed?: boolean }
   | { kind: 'session-changed' }
   | { kind: 'yielded' };
 export type LoadedChannelPage = {
@@ -285,7 +287,14 @@ function cacheArgs(request: ChannelPageRequest): ChannelTimelineCacheArgs {
 
 export type DeviceRead =
   | { kind: 'page'; page: ChannelPage; seq: string | null }
-  | { kind: 'miss'; seq: string | null }
+  | {
+      kind: 'miss';
+      seq: string | null;
+      /** Entry keys the device holds for the window, newest first. */
+      keys: readonly string[];
+      /** Whether a pending optimistic mutation shaped those keys. */
+      optimistic: boolean;
+    }
   | { kind: 'unsupported' }
   // The host failed or timed out; says nothing about what the device holds.
   | { kind: 'failed' };
@@ -297,9 +306,15 @@ export async function readDeviceChannelPage(
 ): Promise<DeviceRead> {
   const result = await host.channelTimeline(cacheArgs(request));
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
-  if (!result.covered) return { kind: 'miss', seq: result.seq };
+  const miss = {
+    kind: 'miss' as const,
+    seq: result.seq,
+    keys: result.keys,
+    optimistic: result.optimistic,
+  };
+  if (!result.covered) return miss;
   const records = await readTimelineRecords(host, result.keys);
-  if (!records) return { kind: 'miss', seq: result.seq };
+  if (!records) return miss;
   return {
     kind: 'page',
     page: {
@@ -347,6 +362,35 @@ export function serverPageCoverage(
     (latest || page.newerCursor === null ? CHANNEL_TIMELINE_HEAD : newest);
   if (start === undefined || end === undefined) return undefined;
   return { start, end };
+}
+
+/**
+ * Records a latest page proves gone: the device held them in the window with
+ * no sequence (stored by a page whose commit never landed, so no catch-up
+ * replays their deletes), and the server, read after the device, no longer
+ * lists them. Only keys at or above the oldest key both lists hold, or every
+ * key when the page reaches the start, lie inside the page's coverage.
+ */
+export function staleDeviceKeys(
+  request: Pick<ChannelPageRequest, 'before' | 'after' | 'aroundMessageId'>,
+  held: DeviceRead,
+  page: Pick<ChannelServerPage, 'entries' | 'olderCursor'>
+): string[] {
+  const latest =
+    request.before === undefined &&
+    request.after === undefined &&
+    request.aroundMessageId === undefined;
+  if (!latest || held.kind !== 'miss' || held.seq !== null) return [];
+  // A pending write shaped the device's list: its rows are not the server's yet.
+  if (held.optimistic) return [];
+  const listed = new Set(
+    page.entries.map((record) => `${record.__typename}:${record.id}`)
+  );
+  const end =
+    page.olderCursor === null
+      ? held.keys.length
+      : held.keys.findLastIndex((key) => listed.has(key));
+  return held.keys.slice(0, Math.max(end, 0)).filter((key) => !listed.has(key));
 }
 
 export interface ChannelPageDeps {
@@ -513,6 +557,7 @@ async function loadPage(
   const { page, cached } = fetched;
   span.setAttr('page.entries', page.entries.length);
   const coverage = serverPageCoverage(request, page);
+  let dropped = false;
   const commit = async (): Promise<string | null | 'yielded'> => {
     try {
       return await commitPage();
@@ -542,6 +587,10 @@ async function loadPage(
       (deps.now ?? Date.now)(),
       generation
     );
+    const removedKeys = coverage ? staleDeviceKeys(request, held, page) : [];
+    dropped = removedKeys.length > 0;
+    if (removedKeys.length > 0)
+      span.setAttr('page.stale_removed', removedKeys.length);
     const committed = await commitTouch(
       deps.touches,
       { channelId: request.channelId, touchedAtMs, generation },
@@ -550,6 +599,7 @@ async function loadPage(
           {
             channelId: request.channelId,
             ...(coverage && { coverage: [coverage] }),
+            ...(removedKeys.length > 0 && { removedKeys }),
             seq: { kind: 'lower', seq: page.seq },
             ...(touchedAtMs !== undefined && { touchedAtMs }),
           },
@@ -560,7 +610,7 @@ async function loadPage(
   };
   // A child of the page's span: the page answers before the device stores it.
   const store = (child: Span): Promise<PageStored> =>
-    storedOutcome(commit(), child);
+    storedOutcome(commit(), child, () => dropped);
   return {
     page: {
       entries: pageEntries(page.entries),
@@ -580,7 +630,8 @@ async function loadPage(
  */
 async function storedOutcome(
   commit: Promise<string | null | 'yielded'>,
-  span: Span
+  span: Span,
+  dropped: () => boolean
 ): Promise<PageStored> {
   try {
     const seq = await commit;
@@ -589,7 +640,7 @@ async function storedOutcome(
       return { kind: 'yielded' };
     }
     span.setAttr('page.stored', seq === null ? 'unheld' : 'held');
-    return { kind: 'stored', seq };
+    return { kind: 'stored', seq, ...(dropped() && { removed: true }) };
   } catch (error) {
     if (cacheSessionChanged(error)) {
       span.setAttr('page.stored', 'session-changed');

@@ -165,13 +165,15 @@ export interface ChannelSyncRuntime {
    * `epoch`: the stored sequence it committed is current if the socket stayed
    * up since, and the device held no older sequence than the read. A device
    * that kept an older one also kept what changed between the two, which only
-   * a catch-up replays.
+   * a catch-up replays; so does a device the read dropped records from
+   * (`removed`: what it dropped may have been a change after the read).
    */
   noteServerRead(
     channelId: string,
     seq: string | null,
     epoch: number,
-    readSeq: string | null
+    readSeq: string | null,
+    removed?: boolean
   ): void;
   /** The socket epoch, which changes on every disconnect and connect. */
   epoch(): number;
@@ -998,12 +1000,12 @@ export function createChannelSyncRuntime(
       state.seq = parseSeq(seq);
       if (state.seq === null) state.current = false;
     },
-    noteServerRead(channelId, seq, epoch, readSeq) {
+    noteServerRead(channelId, seq, epoch, readSeq, removed = false) {
       const state = stateOf(channelId);
       const before = state.seq;
       state.seq = parseSeq(seq);
       const read = parseSeq(readSeq);
-      if (state.seq === null || read === null || read > state.seq) {
+      if (state.seq === null || read === null || read > state.seq || removed) {
         // Nothing stored, or the device kept rows the server has since
         // changed or deleted: only a catch-up replays those.
         state.current = false;
@@ -1022,9 +1024,14 @@ export function createChannelSyncRuntime(
         return;
       }
       // Read while frames were flowing: every later change arrives as one,
-      // unless one already went by while the device held nothing, or a
-      // repair is left for records outside what the read covered.
+      // unless one already went by while the device held nothing, a repair
+      // is left for records outside what the read covered, or the read
+      // lowered the device: it stored an older snapshot over changes a
+      // catch-up applied, which no frame repeats.
+      const lowered =
+        before !== null && before !== undefined && state.seq < before;
       if (
+        !lowered &&
         state.repairFrom === undefined &&
         (state.seenSeq === undefined || state.seenSeq <= state.seq)
       ) {

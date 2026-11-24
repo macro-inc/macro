@@ -110,7 +110,13 @@ describe('runChannelPrewarmPass', () => {
       { channelId: 'fresh', limit: PREWARM_PAGE_SIZE },
       { channelId: 'held', limit: PREWARM_PAGE_SIZE },
     ]);
-    expect(runtime.noteServerRead).toHaveBeenCalledWith('fresh', '9', 3, '9');
+    expect(runtime.noteServerRead).toHaveBeenCalledWith(
+      'fresh',
+      '9',
+      3,
+      '9',
+      undefined
+    );
     expect(runtime.noteStoredSeq).toHaveBeenCalledWith('held', '4');
     expect(runtime.ensureCurrent).toHaveBeenCalledTimes(1);
     expect(runtime.ensureCurrent).toHaveBeenCalledWith('held');

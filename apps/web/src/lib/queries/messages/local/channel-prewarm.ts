@@ -163,7 +163,13 @@ const warmChannel = (
       if (stored.kind !== 'stored') return 'failed' as const;
       const seq = stored.seq;
       if (loaded.source === 'server') {
-        deps.runtime.noteServerRead(channelId, seq, epoch, loaded.readSeq);
+        deps.runtime.noteServerRead(
+          channelId,
+          seq,
+          epoch,
+          loaded.readSeq,
+          stored.removed
+        );
         return 'fetched' as const;
       }
       deps.runtime.noteStoredSeq(channelId, seq);
