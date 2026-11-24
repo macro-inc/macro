@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::DateTime;
+use entity_access::domain::models::CurrentSources;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -40,11 +41,14 @@ struct StaleIndex {
 }
 
 impl DatabaseRowSource for StaleIndex {
-    async fn viewable_database_ids(
-        &self,
-        user: &MacroUserId<Lowercase<'_>>,
-    ) -> Result<Vec<Uuid>, Report> {
-        self.postgres.viewable_database_ids(user).await
+    type Viewer = CurrentSources;
+
+    async fn viewer(&self, user: &MacroUserId<Lowercase<'_>>) -> Result<CurrentSources, Report> {
+        self.postgres.viewer(user).await
+    }
+
+    async fn viewable_database_ids(&self, viewer: &CurrentSources) -> Result<Vec<Uuid>, Report> {
+        self.postgres.viewable_database_ids(viewer).await
     }
 
     async fn propose(&self, request: ProposalRequest<'_>) -> Result<Vec<ProposedRow>, Report> {
@@ -76,10 +80,10 @@ impl DatabaseRowSource for StaleIndex {
 
     async fn viewable_rows(
         &self,
-        user: &MacroUserId<Lowercase<'_>>,
+        viewer: &CurrentSources,
         row_ids: &[Uuid],
     ) -> Result<HashSet<Uuid>, Report> {
-        self.postgres.viewable_rows(user, row_ids).await
+        self.postgres.viewable_rows(viewer, row_ids).await
     }
 
     async fn current_rows(&self, row_ids: &[Uuid]) -> Result<Vec<CurrentRow>, Report> {

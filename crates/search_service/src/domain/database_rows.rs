@@ -35,6 +35,11 @@ mod test;
 /// ever promised by a row the caller may see.
 pub(crate) const MAX_ROUNDS: u8 = 5;
 
+/// Most databases one search narrows the index to. Each is a term in the
+/// OpenSearch filter, which refuses more than 65,536; a caller past it
+/// searches the first ones by id.
+pub(crate) const MAX_SEARCHED_DATABASES: usize = 10_000;
+
 /// Fewest rows proposed per read, so a small page still skips past a few
 /// rows the caller may not see in one read.
 const MIN_PROPOSALS_PER_ROUND: u32 = 25;
@@ -85,10 +90,20 @@ pub(crate) struct CurrentRow {
 /// Reads row search needs. Every read except [`Self::propose`] is fresh:
 /// Postgres's primary, no cache.
 pub(crate) trait DatabaseRowSource {
-    /// The databases the caller may view, to narrow what the index proposes.
-    fn viewable_database_ids(
+    /// Who searches, as their access stands when the search starts: read once
+    /// and checked against for the whole page.
+    type Viewer: Send + Sync;
+
+    /// The caller as they are now.
+    fn viewer(
         &self,
         user: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Self::Viewer, Report>> + Send;
+
+    /// The databases the viewer may view, to narrow what the index proposes.
+    fn viewable_database_ids(
+        &self,
+        viewer: &Self::Viewer,
     ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
     /// Rows the index proposes, in its order. Fewer than `limit` means there
@@ -98,11 +113,11 @@ pub(crate) trait DatabaseRowSource {
         request: ProposalRequest<'_>,
     ) -> impl Future<Output = Result<Vec<ProposedRow>, Report>> + Send;
 
-    /// Which of `row_ids` the caller may view, through their access to each
+    /// Which of `row_ids` the viewer may view, through their access to each
     /// row's database.
     fn viewable_rows(
         &self,
-        user: &MacroUserId<Lowercase<'_>>,
+        viewer: &Self::Viewer,
         row_ids: &[Uuid],
     ) -> impl Future<Output = Result<HashSet<Uuid>, Report>> + Send;
 
@@ -140,6 +155,9 @@ pub(crate) struct RowPageStats {
     pub shown: usize,
     /// It stopped at [`MAX_ROUNDS`] with proposals left and the page short.
     pub bound_reached: bool,
+    /// The caller views more than [`MAX_SEARCHED_DATABASES`] databases, so
+    /// only the first ones were searched.
+    pub databases_capped: bool,
 }
 
 pub(crate) struct DatabaseRowSearch<Source>(pub Source);
@@ -154,16 +172,25 @@ impl<Source: DatabaseRowSource> DatabaseRowSearch<Source> {
         limit: u32,
         after: Option<RowPosition>,
     ) -> Result<RowPage, Report> {
-        let database_ids = self.0.viewable_database_ids(user).await?;
-        if database_ids.is_empty() || limit == 0 {
+        if limit == 0 {
             return Ok(RowPage::default());
         }
+        let viewer = self.0.viewer(user).await?;
+        let mut database_ids = self.0.viewable_database_ids(&viewer).await?;
+        if database_ids.is_empty() {
+            return Ok(RowPage::default());
+        }
+        let databases_capped = database_ids.len() > MAX_SEARCHED_DATABASES;
+        database_ids.truncate(MAX_SEARCHED_DATABASES);
 
         // One more row than the page returns proves a next page exists.
         let wanted = limit as usize + 1;
         let proposals_per_round = (limit + 1).max(MIN_PROPOSALS_PER_ROUND);
         let mut shown: Vec<ShownRow> = Vec::new();
-        let mut stats = RowPageStats::default();
+        let mut stats = RowPageStats {
+            databases_capped,
+            ..RowPageStats::default()
+        };
         let mut read_after = after;
         let mut proposals_left = true;
 
@@ -187,7 +214,7 @@ impl<Source: DatabaseRowSource> DatabaseRowSearch<Source> {
             read_after = Some(last.position);
 
             let row_ids: Vec<Uuid> = proposed.iter().map(|row| row.row_id).collect();
-            let viewable = self.0.viewable_rows(user, &row_ids).await?;
+            let viewable = self.0.viewable_rows(&viewer, &row_ids).await?;
             // Only rows the caller may view are read at all.
             let viewable_ids: Vec<Uuid> = row_ids
                 .iter()

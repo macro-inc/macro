@@ -440,6 +440,7 @@ fn unified_search_span(
         search.database_row_proposed = tracing::field::Empty,
         search.database_row_shown = tracing::field::Empty,
         search.database_row_bound_reached = tracing::field::Empty,
+        search.database_row_databases_capped = tracing::field::Empty,
     )
 }
 

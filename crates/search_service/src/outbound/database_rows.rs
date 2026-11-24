@@ -6,6 +6,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use entity_access::domain::models::CurrentSources;
 use entity_access::domain::ports::CurrentDatabaseAccess;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use opensearch_client::OpensearchClient;
@@ -70,14 +71,20 @@ impl DatabaseRowPgSource {
 }
 
 impl DatabaseRowSource for DatabaseRowPgSource {
-    async fn viewable_database_ids(
-        &self,
-        user: &MacroUserId<Lowercase<'_>>,
-    ) -> Result<Vec<Uuid>, Report> {
+    type Viewer = CurrentSources;
+
+    async fn viewer(&self, user: &MacroUserId<Lowercase<'_>>) -> Result<CurrentSources, Report> {
+        self.entity_access
+            .current_sources(user)
+            .await
+            .map_err(|error| Report::new(error).into_dynamic())
+    }
+
+    async fn viewable_database_ids(&self, viewer: &CurrentSources) -> Result<Vec<Uuid>, Report> {
         // Every grant a database has is at least View.
         let databases = self
             .entity_access
-            .current_accessible_databases(user)
+            .current_accessible_databases(viewer)
             .await
             .map_err(|error| Report::new(error).into_dynamic())?;
         Ok(databases
@@ -118,11 +125,11 @@ impl DatabaseRowSource for DatabaseRowPgSource {
 
     async fn viewable_rows(
         &self,
-        user: &MacroUserId<Lowercase<'_>>,
+        viewer: &CurrentSources,
         row_ids: &[Uuid],
     ) -> Result<HashSet<Uuid>, Report> {
         self.entity_access
-            .current_viewable_database_rows(user, row_ids)
+            .current_viewable_database_rows(viewer, row_ids)
             .await
             .map_err(|error| Report::new(error).into_dynamic())
     }

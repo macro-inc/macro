@@ -90,6 +90,10 @@ pub(in crate::api::search) async fn search_database_rows(
         "search.database_row_bound_reached",
         page.stats.bound_reached,
     );
+    span.record(
+        "search.database_row_databases_capped",
+        page.stats.databases_capped,
+    );
 
     let cursor = match page.next {
         Some(next) => SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {

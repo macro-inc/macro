@@ -16,10 +16,13 @@ struct FakeSource {
 }
 
 impl DatabaseRowSource for FakeSource {
-    async fn viewable_database_ids(
-        &self,
-        _user: &MacroUserId<Lowercase<'_>>,
-    ) -> Result<Vec<Uuid>, Report> {
+    type Viewer = ();
+
+    async fn viewer(&self, _user: &MacroUserId<Lowercase<'_>>) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn viewable_database_ids(&self, _viewer: &()) -> Result<Vec<Uuid>, Report> {
         Ok(self.viewable_databases.clone())
     }
 
@@ -47,11 +50,7 @@ impl DatabaseRowSource for FakeSource {
             .collect())
     }
 
-    async fn viewable_rows(
-        &self,
-        _user: &MacroUserId<Lowercase<'_>>,
-        row_ids: &[Uuid],
-    ) -> Result<HashSet<Uuid>, Report> {
+    async fn viewable_rows(&self, _viewer: &(), row_ids: &[Uuid]) -> Result<HashSet<Uuid>, Report> {
         Ok(row_ids
             .iter()
             .copied()
