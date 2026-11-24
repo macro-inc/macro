@@ -165,16 +165,19 @@ impl<R: MailboxProgressRepository> MailboxProgressService<R> {
     }
 
     /// Log one health snapshot per mailbox, and the folder claim line they
-    /// share. One worker calls this per minute.
+    /// share. One worker calls this per minute. A failed read of the line
+    /// leaves the snapshots, which the sync monitors read, to go out.
     pub async fn report(&self) -> Result<usize, MailboxError> {
-        let line = self.repo.folder_line().await?;
-        tracing::info!(
-            polls_due = line.polls_due,
-            oldest_poll_due_seconds = line.oldest_poll_due_seconds,
-            import_rounds_due = line.import_rounds_due,
-            oldest_import_round_due_seconds = line.oldest_import_round_due_seconds,
-            "outlook folder line"
-        );
+        match self.repo.folder_line().await {
+            Ok(line) => tracing::info!(
+                polls_due = line.polls_due,
+                oldest_poll_due_seconds = line.oldest_poll_due_seconds,
+                import_rounds_due = line.import_rounds_due,
+                oldest_import_round_due_seconds = line.oldest_import_round_due_seconds,
+                "outlook folder line"
+            ),
+            Err(error) => tracing::warn!(error = ?error, "failed to read the Outlook folder line"),
+        }
         let backlogs = self.repo.backlogs().await?;
         for backlog in &backlogs {
             tracing::info!(
