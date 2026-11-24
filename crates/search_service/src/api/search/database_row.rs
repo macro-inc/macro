@@ -48,6 +48,30 @@ impl RowHits {
     }
 }
 
+/// The rows of a page, or, when the row search failed, no rows and the row
+/// cursor as the request sent it: a failed row search neither fails the
+/// other kinds nor ends or advances the rows, so a later page tries them
+/// again from the same place. Records the failure on the current span.
+pub(in crate::api::search) fn rows_or_unchanged(
+    result: Result<RowHits, SearchError>,
+    input_cursor: &SearchCursorOption,
+) -> RowHits {
+    match result {
+        Ok(rows) => rows,
+        Err(error) => {
+            tracing::Span::current().record("search.database_row_failed", true);
+            // Row search errors carry no query text (see `opensearch_client`'s
+            // row query), so the error is safe to log.
+            tracing::warn!(error = %error, "database row search failed; page sent without rows");
+            RowHits {
+                hits: Vec::new(),
+                items: HashMap::new(),
+                cursor: input_cursor.clone(),
+            }
+        }
+    }
+}
+
 /// The rows matching `terms` that the caller may see, resuming from
 /// `cursor`, at most `limit`. Records on the current span what filling the
 /// page read; the terms stay off it.

@@ -110,9 +110,11 @@ per-entity-type search plus a unified search across them — mounted into
   fine), email operator, or regexp/query matching. The `database_rows`
   index only proposes rows, narrowed to the databases the caller reaches now
   (at most `MAX_SEARCHED_DATABASES`, the most recently updated, a terms
-  filter; the span records when that cap cut the list); a failed shard
-  fails the search, and errors keep only OpenSearch's status and error
-  type, never a reason that could quote the query; the caller's sources are read once per search;
+  filter; the span records when that cap cut the list); a failed row search
+  (a failed shard included) sends the page with the other kinds and no rows,
+  keeps the rows cursor as the request sent it, and records
+  `search.database_row_failed`; its errors keep only OpenSearch's status and
+  error type, never a reason that could quote the query; the caller's sources are read once per search;
   `domain::database_rows` shows a row only after the primary database says,
   uncached, that the caller views its database through their current
   memberships (`CurrentDatabaseAccess`), the database is a live untrashed

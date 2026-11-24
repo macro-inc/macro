@@ -1615,3 +1615,62 @@ fn operators_count_toward_the_term_cap() {
         Err(SearchError::TooManyTerms)
     ));
 }
+
+/// What a failed row search leaves of the page and of the rows' place in the
+/// next cursor: no rows, the cursor the request sent, and the failure on the
+/// span.
+fn rows_after_failure(input: SearchCursorOption) -> (RowHits, SearchCursorOption, String) {
+    use crate::api::search::span_capture::SpanFields;
+
+    let (fields, _guard) = SpanFields::install();
+    let query_params = SearchPaginationParams {
+        page: None,
+        page_size: Some(10),
+        cursor: None,
+    };
+    let span = unified_search_span(
+        &caller(macro_authorization::CredentialOrigin::Internal),
+        &query_params,
+        &search_request("acme"),
+    );
+    let (rows, next) = span.in_scope(|| {
+        let rows = database_row::rows_or_unchanged(
+            Err(SearchError::InternalError(anyhow::anyhow!(
+                "opensearch failed 1 of 2 shards"
+            ))),
+            &input,
+        );
+        let next = compute_next_cursor(&rows.cursor, 0, rows.hits.len(), None, &input);
+        (rows, next)
+    });
+    let failed = fields.of("perform_unified_search")["search.database_row_failed"].clone();
+    (rows, next, failed)
+}
+
+#[test]
+fn a_failed_first_row_page_keeps_rows_to_try_again() {
+    let (rows, next, failed) = rows_after_failure(SearchCursorOption::NotDone(None));
+
+    assert!(rows.hits.is_empty());
+    assert!(rows.items.is_empty());
+    assert!(matches!(next, SearchCursorOption::NotDone(None)));
+    assert_eq!(failed, "true");
+}
+
+#[test]
+fn a_failed_later_row_page_neither_ends_nor_advances_rows() {
+    let shown = Uuid::now_v7();
+    let input = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: shown,
+        updated_at: ts(1000),
+    }));
+
+    let (rows, next, failed) = rows_after_failure(input);
+
+    assert!(rows.hits.is_empty());
+    let SearchCursorOption::NotDone(Some(position)) = next else {
+        panic!("the rows cursor changed: {next:?}");
+    };
+    assert_eq!(position.as_updated_at(), Some((shown, ts(1000))));
+    assert_eq!(failed, "true");
+}

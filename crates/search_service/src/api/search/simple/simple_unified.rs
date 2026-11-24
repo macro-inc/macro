@@ -441,6 +441,7 @@ fn unified_search_span(
         search.database_row_shown = tracing::field::Empty,
         search.database_row_bound_reached = tracing::field::Empty,
         search.database_row_databases_capped = tracing::field::Empty,
+        search.database_row_failed = tracing::field::Empty,
     )
 }
 
@@ -1148,7 +1149,7 @@ async fn search_unified_sources(
         hits: row_hits,
         items: mut database_rows,
         cursor: row_next_cursor,
-    } = row_results?;
+    } = database_row::rows_or_unchanged(row_results, &database_row_cursor);
 
     // Track original counts before combining
     let chat_name_count = chat_hits.len();
