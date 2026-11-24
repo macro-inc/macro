@@ -198,6 +198,69 @@ it('leaves one record of the time when Undo cannot delete the saved entry', asyn
   expect(timer.discard.mock.calls).toEqual([['timer-2'], ['timer-3']]);
 });
 
+it('finishes Undo when a step whose reply was lost did land', async () => {
+  const timer = fakeTimer(DESIGN);
+  timer.start
+    .mockResolvedValueOnce(
+      ok({
+        kind: 'committed',
+        data: {
+          timeTracking: {
+            id: 'tracking',
+            serverNow: '',
+            runningTimer: WIREFRAMES,
+          },
+          stoppedEntry: SAVED,
+          stoppedTask: null,
+        },
+      })
+    )
+    .mockResolvedValueOnce(ok({ kind: 'committed', data: undefined }));
+  timer.discard.mockResolvedValue(ok({ kind: 'committed', data: null }));
+  actionsFor(timer).start('task-b');
+  await vi.waitFor(() => expect(mocks.success).toHaveBeenCalledOnce());
+  mocks.success.mock.calls[0]?.[1].actions[0].onClick();
+  await vi.waitFor(() => expect(mocks.remove).toHaveBeenCalledOnce());
+  expect(mocks.failure).not.toHaveBeenCalled();
+});
+
+it('discards a restart whose reply was lost when Undo cannot delete the entry', async () => {
+  const timer = fakeTimer(DESIGN);
+  const restarted = { ...DESIGN, id: 'timer-3' };
+  timer.start
+    .mockResolvedValueOnce(
+      ok({
+        kind: 'committed',
+        data: {
+          timeTracking: {
+            id: 'tracking',
+            serverNow: '',
+            runningTimer: WIREFRAMES,
+          },
+          stoppedEntry: SAVED,
+          stoppedTask: null,
+        },
+      })
+    )
+    .mockImplementationOnce(async () => {
+      timer.timer = () => restarted;
+      return ok({ kind: 'committed', data: undefined });
+    });
+  timer.discard.mockResolvedValue(ok({ kind: 'committed', data: null }));
+  mocks.remove.mockResolvedValue(
+    err({ kind: 'failed', error: new Error('server error') })
+  );
+  actionsFor(timer).start('task-b');
+  await vi.waitFor(() => expect(mocks.success).toHaveBeenCalledOnce());
+  mocks.success.mock.calls[0]?.[1].actions[0].onClick();
+  await vi.waitFor(() =>
+    expect(mocks.failure).toHaveBeenCalledWith(
+      'Could not undo. Check the time logged on both tasks.'
+    )
+  );
+  expect(timer.discard.mock.calls).toEqual([['timer-2'], ['timer-3']]);
+});
+
 it('keeps the saved entry when Undo cannot start the first timer again', async () => {
   const timer = fakeTimer(DESIGN);
   timer.start

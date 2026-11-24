@@ -17,6 +17,7 @@ const TIMER: RunningTimer = {
 const query = vi.hoisted(() => ({
   refetch: vi.fn(),
   startTimer: vi.fn(),
+  stopTimer: vi.fn(),
   onChange: undefined as
     | ((change: TimeTrackingChange) => Promise<unknown>)
     | undefined,
@@ -35,7 +36,7 @@ vi.mock('../queries/timer', () => ({
     refetch: query.refetch,
   }),
   startTimer: query.startTimer,
-  stopTimer: vi.fn(),
+  stopTimer: query.stopTimer,
   discardTimer: vi.fn(),
 }));
 vi.mock('../queries/time-tracking-changes', () => ({
@@ -59,6 +60,7 @@ beforeEach(() => {
   offline = false;
   query.refetch.mockReset();
   query.startTimer.mockReset();
+  query.stopTimer.mockReset();
 });
 
 afterEach(() => {
@@ -150,10 +152,10 @@ it('shows the timer the server holds after a start whose reply is lost', async (
   );
   let reread: () => void = () => undefined;
   query.refetch.mockReturnValue(
-    new Promise<void>((resolve) => {
+    new Promise((resolve) => {
       reread = () => {
         setTimer(TIMER);
-        resolve();
+        resolve({ error: null });
       };
     })
   );
@@ -163,10 +165,64 @@ it('shows the timer the server holds after a start whose reply is lost', async (
   const again = await state.start({ taskId: 'task-1' });
   expect(again.isErr() && again.error).toMatchObject({ code: 'BUSY' });
   reread();
-  await pressed;
+  const result = await pressed;
+  expect(result.isOk() && result.value).toEqual({
+    kind: 'committed',
+    data: undefined,
+  });
   expect(state.timer()).toEqual(TIMER);
   expect(state.busy()).toBe(false);
   expect(query.startTimer).toHaveBeenCalledOnce();
+});
+
+it('keeps the failure when the lost start did not land', async () => {
+  query.startTimer.mockResolvedValue(
+    err({ kind: 'failed', error: new Error('network') })
+  );
+  query.refetch.mockResolvedValue({ error: null });
+  const result = await mountTimer().start({ taskId: 'task-1' });
+  expect(result.isErr() && result.error.kind).toBe('failed');
+});
+
+it('keeps the failure when the timer that runs started at another time', async () => {
+  query.startTimer.mockResolvedValue(
+    err({ kind: 'failed', error: new Error('network') })
+  );
+  query.refetch.mockImplementation(async () => {
+    setTimer(TIMER);
+    return { error: null };
+  });
+  const result = await mountTimer().start({
+    taskId: 'task-1',
+    startedAt: '2026-11-23T09:00:00.000Z',
+  });
+  expect(result.isErr() && result.error.kind).toBe('failed');
+});
+
+it('keeps the failure when the re-read fails too', async () => {
+  setTimer(TIMER);
+  query.stopTimer.mockResolvedValue(
+    err({ kind: 'failed', error: new Error('network') })
+  );
+  query.refetch.mockImplementation(async () => {
+    setTimer(undefined);
+    return { error: new Error('network') };
+  });
+  const result = await mountTimer().stop({ timerId: TIMER.id });
+  expect(result.isErr() && result.error.kind).toBe('failed');
+});
+
+it('counts a lost stop as done once the timer is gone', async () => {
+  setTimer(TIMER);
+  query.stopTimer.mockResolvedValue(
+    err({ kind: 'failed', error: new Error('network') })
+  );
+  query.refetch.mockImplementation(async () => {
+    setTimer(undefined);
+    return { error: null };
+  });
+  const result = await mountTimer().stop({ timerId: TIMER.id });
+  expect(result.isOk()).toBe(true);
 });
 
 it('does not re-read after a refusal the server answered', async () => {

@@ -469,7 +469,9 @@ hours is refused on stop:
 the dialog sets when you stopped, logs all of it (up to 24 hours) or discards
 it. Timer changes are refused offline, and one that gets no answer (the
 request failed, so it may still have landed) re-reads the running timer before
-the next press; the change is never resent. Other sessions of the same person
+the next press; the change is never resent. When the server shows it landed,
+the app says nothing (no failure, and no saved-entry toast or Undo, since the
+reply that held them is lost). Other sessions of the same person
 re-read on the gateway's `time_tracking_changed`, and every session re-reads
 when its live connection comes back.
 
