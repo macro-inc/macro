@@ -22,7 +22,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 29px;
 }
 
 .homepage-founder-letter-signature img {
@@ -64,6 +64,6 @@
   }
 
   .homepage-founder-letter-signature {
-    margin-top: 20px;
+    margin-top: 25px;
   }
 }
