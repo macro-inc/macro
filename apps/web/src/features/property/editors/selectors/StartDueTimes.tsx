@@ -72,9 +72,13 @@ export function StartDueTimes(props: StartDueTimesProps) {
   };
 
   const options = createMemo<TimeOption[]>(() => {
-    const { start, due } = props.dates;
+    const { start, due, wholeDay } = props.dates;
     if (props.field === 'due' && start && (!due || isSameDay(start, due))) {
-      return endTimeOptions(format(start, 'HH:mm'), props.hour12);
+      const ends = endTimeOptions(format(start, 'HH:mm'), props.hour12);
+      // Beside a date without a time there is no length to label times with.
+      return wholeDay
+        ? ends.map((option) => ({ ...option, detail: undefined }))
+        : ends;
     }
     return dayTimeOptions(props.hour12);
   });
@@ -82,9 +86,10 @@ export function StartDueTimes(props: StartDueTimesProps) {
   const optionAt = (option: TimeOption) =>
     addDays(anchorDay(), option.dayOffset);
 
+  // An end saved without a time has no current time, only the hour it is held at.
   const currentOption = () => {
     const at = value();
-    if (!at) return undefined;
+    if (!at || props.dates.wholeDay === props.field) return undefined;
     return options().find(
       (option) =>
         isSameDay(optionAt(option), at) && option.value === format(at, 'HH:mm')
@@ -130,7 +135,9 @@ export function StartDueTimes(props: StartDueTimesProps) {
 
   const move = (step: number) => {
     const all = options();
-    const index = all.findIndex((option) => option.id === highlighted());
+    let index = all.findIndex((option) => option.id === highlighted());
+    // With no row highlighted, Down starts at the first row and Up at the last.
+    if (index < 0) index = step > 0 ? -1 : 0;
     const next = all[(index + step + all.length) % all.length];
     setMoved(next?.id);
     scrollTo(next?.id);
