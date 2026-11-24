@@ -841,8 +841,8 @@ async fn a_failed_draft_is_logged_with_its_mailbox_message_and_attempts() {
         h.0.lock().unwrap().attempts = vec![attempt];
         edit(&h, "remote-edit");
         service(&h).execute_once().await.unwrap();
-        let lease = h.0.lock().unwrap().lease.clone();
-        lease
+        let state = h.0.lock().unwrap();
+        state.lease.clone()
     };
     // The other tests here reach the same callsites as this one installs its
     // subscriber, and can cache them as disabled. Once this thread has reached
