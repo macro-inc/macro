@@ -7,10 +7,26 @@
 
 import { CATALOG } from './catalog';
 import type { CardMark, FeedMarks, RoutineMark } from './judge';
-import type { FeedTruth, RoutinesTruth } from './personas';
+import type { FeedTruth, RoutinesTruth, StreamsTruth } from './personas';
+import type { EntryMark, ListScore } from './finding';
 import type { Generation } from './run';
 
 export type Section = 'routines' | 'feed';
+
+/** The fewest held-out people an aggregate is shown over: fewer would show one person's result. */
+export const MIN_HELDOUT_PEOPLE = 2;
+
+/**
+ * Whether a measure taken over `having`, the attempts of `run` that have it,
+ * is an aggregate: in a run with held-out people, only over two of them or
+ * more. Each measure asks of the attempts that have it (the timed ones, the
+ * ones whose list was read), since a run where two people scored but one was
+ * timed would show that one's time.
+ */
+export function aggregate(having: Attempt[], run: Attempt[] = having): boolean {
+  if (!run.some((attempt) => attempt.heldout)) return true;
+  return new Set(having.filter((attempt) => attempt.heldout).map((attempt) => attempt.persona)).size >= MIN_HELDOUT_PEOPLE;
+}
 
 export type Score = {
   score: number;
@@ -28,6 +44,13 @@ export type Score = {
   quality: number | null;
   /** The judge's rating of the whole feed, 1–10. */
   feedRating?: number;
+  /** Routines: drafted suggestions, and the good ones of each kind: each meets a need and has nothing wrong. */
+  drafts?: number;
+  goodDrafts?: number;
+  goodPicks?: number;
+  /** A month persona: work streams of its key that some suggestion acts on, of how many. */
+  aimed?: number;
+  workStreams?: number;
 };
 
 export type Attempt = {
@@ -41,6 +64,11 @@ export type Attempt = {
   generation: Generation;
   routineMarks?: RoutineMark[];
   feedMarks?: FeedMarks;
+  /** The work list its drafting session read, matched to the persona's streams key. */
+  findingMarks?: EntryMark[];
+  finding?: ListScore;
+  /** Its work list couldn't be judged; its routines are scored all the same. */
+  findingError?: string;
   judgeUsd: number;
   /** The bench failed, not the build (seeding, the stack or the judge), or the attempt waits to be judged. Left out of scores. */
   benchError?: string;
@@ -95,11 +123,15 @@ export function catalogFlags(generation: Generation, i: number, mark: RoutineMar
   };
 }
 
-export function scoreRoutines(generation: Generation, marks: RoutineMark[], truth: RoutinesTruth): Score {
+export function scoreRoutines(generation: Generation, marks: RoutineMark[], truth: RoutinesTruth, streams?: StreamsTruth): Score {
   const needIds = new Set(truth.needs.map((need) => need.id));
+  const work = new Set(streams?.streams.filter((stream) => stream.kind === 'work').map((stream) => stream.id));
   const found = new Set<string>();
+  const aimed = new Set<string>();
   const wrong: Record<string, number> = {};
   let bad = 0;
+  let goodDrafts = 0;
+  let goodPicks = 0;
   generation.routines.forEach((row, i) => {
     const mark = marks[i];
     // A catalog routine is scored by its key (catalogFlags); a drafted one is the judge's call.
@@ -120,9 +152,16 @@ export function scoreRoutines(generation: Generation, marks: RoutineMark[], trut
           invented: mark.invented,
         };
     for (const [name, holds] of Object.entries(flags)) count(wrong, name, holds);
-    if (Object.values(flags).some(Boolean)) bad++;
+    const flawed = Object.values(flags).some(Boolean);
+    if (flawed) bad++;
     // One that can't work or doesn't fit meets nothing: for a catalog pick, by its key too.
     if (!flags.broken && !flags.unsafe && !flags.misfit) for (const id of meets) found.add(id);
+    // Good: it meets a need of the key and nothing is wrong with it.
+    if (meets.length && !flawed) {
+      if (key) goodPicks++;
+      else goodDrafts++;
+    }
+    for (const id of mark.streams ?? []) if (work.has(id)) aimed.add(id);
   });
   const needs = truth.needs.length;
   return {
@@ -135,6 +174,10 @@ export function scoreRoutines(generation: Generation, marks: RoutineMark[], trut
     invented: wrong.invented ?? 0,
     wrong,
     quality: mean(marks.map((mark) => mark.keep)),
+    drafts: generation.routines.filter((row) => !row.catalog_key).length,
+    goodDrafts,
+    goodPicks,
+    ...(streams ? { aimed: aimed.size, workStreams: work.size } : {}),
   };
 }
 
@@ -174,7 +217,7 @@ export function scoreFeed(generation: Generation, marks: FeedMarks, truth: FeedT
 
 /** A generation the build failed (see `Generation.buildFailed`): it found nothing. */
 export function failedScore(needs: number): Score {
-  return { score: 0, needs, found: 0, missed: [], suggestions: 0, bad: 0, invented: 0, wrong: {}, quality: null };
+  return { score: 0, needs, found: 0, missed: [], suggestions: 0, bad: 0, invented: 0, wrong: {}, quality: null, drafts: 0, goodDrafts: 0, goodPicks: 0 };
 }
 
 // ---------- summaries ----------
@@ -195,8 +238,21 @@ export function summary(attempts: Attempt[]) {
   const done = scored(attempts);
   const wrong: Record<string, number> = {};
   for (const a of done) for (const [k, v] of Object.entries(a.score.wrong)) wrong[k] = (wrong[k] ?? 0) + v;
-  const first = done.map((a) => a.generation.firstMs).filter((v): v is number => v !== undefined);
-  const wall = done.map((a) => a.generation.wallMs).filter((v): v is number => v !== undefined);
+  // Each measure over the attempts that have it, and none (NaN) where those hold fewer held-out people than an aggregate needs.
+  const over = (has: (a: (typeof done)[number]) => number | undefined | null) => {
+    const having = done.filter((a) => has(a) !== undefined && has(a) !== null);
+    return aggregate(having, attempts) ? having.map((a) => has(a)!) : [];
+  };
+  const first = over((a) => a.generation.firstMs);
+  const wall = over((a) => a.generation.wallMs);
+  const last = over((a) => a.generation.lastMs);
+  const qualities = over((a) => a.score.quality);
+  const lists = done.flatMap((a) => (a.finding ? [a.finding] : []));
+  // A list the session never read scores as an empty one, so it can't make another person's list an aggregate.
+  const listsShown = aggregate(done.filter((a) => a.finding && !a.finding.unread), attempts);
+  const rated = done.filter((a) => a.score.feedRating !== undefined);
+  const listErrors = done.filter((a) => a.findingError).length;
+  const total = (f: (list: ListScore) => number) => lists.reduce((sum, list) => sum + f(list), 0);
   return {
     attempts: attempts.length,
     scored: done.length,
@@ -209,11 +265,39 @@ export function summary(attempts: Attempt[]) {
     bad: avg(done.map((a) => a.score.bad)),
     invented: avg(done.map((a) => a.score.invented)),
     wrongPerRun: Object.fromEntries(Object.entries(wrong).map(([k, v]) => [k, v / Math.max(1, done.length)])),
-    quality: avg(done.flatMap((a) => (a.score.quality === null ? [] : [a.score.quality]))),
-    feedRating: done.some((a) => a.score.feedRating !== undefined) ? avg(done.map((a) => a.score.feedRating ?? 0)) : undefined,
+    quality: qualities.length ? avg(qualities) : NaN,
+    // A generation with no rating counts 0, so a held-out rating shows only where two people or more were rated.
+    feedRating: !rated.length ? undefined : aggregate(rated, attempts) ? avg(done.map((a) => a.score.feedRating ?? 0)) : NaN,
+    // Routines runs scored before good suggestions were counted have none of these.
+    ...(done.length && done.every((a) => a.score.goodDrafts !== undefined)
+      ? {
+          drafts: avg(done.map((a) => a.score.drafts!)),
+          goodDrafts: avg(done.map((a) => a.score.goodDrafts!)),
+          goodPicks: avg(done.map((a) => a.score.goodPicks!)),
+          fiveGoodDrafts: done.filter((a) => a.score.goodDrafts! >= 5).length,
+        }
+      : {}),
+    ...(done.length && done.every((a) => a.score.aimed !== undefined)
+      ? { aimed: avg(done.map((a) => a.score.aimed!)), workStreams: avg(done.map((a) => a.score.workStreams!)) }
+      : {}),
     failedGenerations: done.filter((a) => a.generation.status !== 'ready').length,
+    // Generations run to find the work: how many drafting sessions read a list, what share of the key's work streams the lists named (none where no list was read), and how many entries named none.
+    // Where every judgement failed, `lists` is 0 and the shares are NaN: the report says none could be judged.
+    ...(lists.length || listErrors
+      ? {
+          finding: listsShown ? {
+            lists: lists.length,
+            read: lists.filter((list) => !list.unread).length,
+            errors: listErrors,
+            found: total((list) => list.found) / Math.max(1, total((list) => list.work)),
+            unreal: total((list) => list.unreal) / lists.length,
+            listed: total((list) => list.listed) / lists.length,
+          } : { withheld: new Set(done.filter((a) => a.heldout && a.finding && !a.finding.unread).map((a) => a.persona)).size, errors: listErrors },
+        }
+      : {}),
     firstMedianMs: quantile(first, 0.5),
     firstP90Ms: quantile(first, 0.9),
+    lastMedianMs: quantile(last, 0.5),
     wallMedianMs: quantile(wall, 0.5),
     usd: avg(done.map((a) => a.generation.cost.usd)),
     judgeUsd: avg(attempts.map((a) => a.judgeUsd)),
@@ -342,9 +426,46 @@ export function verdict(a: Attempt[], b: Attempt[], margins: Margins): Verdict {
       ? `score moved ${signed(s.delta)}, within the ${s.margin.toFixed(1)} noise margin or an interval that spans 0`
       : `score moved ${signed(s.delta)}, past the ${s.margin.toFixed(1)} margin`;
   const usd = contrast(a, b, (attempt) => attempt.generation.cost.usd);
-  const timed = (attempts: Attempt[]) => attempts.filter((attempt) => attempt.generation.wallMs);
-  const median = (attempts: Attempt[]) => quantile(scored(timed(attempts)).map((attempt) => attempt.generation.wallMs!), 0.5);
+  const timed = (attempts: Attempt[]) => scored(attempts).filter((attempt) => attempt.generation.wallMs);
+  // Both medians over the people timed on both sides, so the ratio sets the same people side by side.
+  const timedIn = (attempts: Attempt[]) => new Set(timed(attempts).map((attempt) => attempt.persona));
+  const both = new Set([...timedIn(a)].filter((persona) => timedIn(b).has(persona)));
+  const common = (attempts: Attempt[]) => timed(attempts).filter((attempt) => both.has(attempt.persona));
+  // A side's median shows only over two held-out people's times or more.
+  const median = (attempts: Attempt[]) => (aggregate(common(attempts), attempts) ? quantile(common(attempts).map((attempt) => attempt.generation.wallMs!), 0.5) : NaN);
   return { verdict: result, why, parts, usd: [usd.a, usd.b], usdInterval: usd.interval, wallRatio: median(b) / median(a) };
+}
+
+/**
+ * `compare`'s `--margins score,found,bad`, as `noise` prints them: three
+ * finite margins of 0 or more. A margin of 0 is a measurement (two runs that
+ * never moved); one that isn't finite would call every change noise.
+ */
+export function marginsOf(text: string): Margins {
+  const margins = text.split(',').map((margin) => (margin.trim() ? Number(margin) : NaN));
+  if (margins.length !== 3 || margins.some((margin) => !Number.isFinite(margin) || margin < 0)) {
+    throw new Error(`--margins takes score,found,bad: three finite margins of 0 or more, not ${text}`);
+  }
+  return { score: margins[0], found: margins[1], bad: margins[2] };
+}
+
+/** Most of anything the bench counts out (reps, seats, people, calls at once). */
+const MAX_COUNT = 1000;
+
+/** `value` as a whole number from 1 to `MAX_COUNT`; `what` names it in the refusal. */
+export function wholeCount(what: string, value: string | number): number {
+  const n = typeof value === 'number' ? value : /^\d+$/.test(value) ? Number(value) : NaN;
+  if (!Number.isInteger(n) || n < 1 || n > MAX_COUNT) throw new Error(`${what} takes a whole number from 1 to ${MAX_COUNT}, not ${value}`);
+  return n;
+}
+
+/** Whether `attempt`'s list couldn't be read, marking it so: its own failure, never an empty list. */
+export function unreadList(attempt: Attempt): boolean {
+  if (!attempt.generation.listError) return false;
+  attempt.findingMarks = undefined;
+  attempt.finding = undefined;
+  attempt.findingError = `reading the list: ${attempt.generation.listError}`;
+  return true;
 }
 
 /**
