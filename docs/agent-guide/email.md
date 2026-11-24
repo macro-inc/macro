@@ -134,7 +134,8 @@ complete, valid one is drawn as an operator token: accent ink on a faint accent
 tint, while `in:se` stays plain. Delete it like any text to search all mail
 again. Recent searches draw their filter the same way. Rows of a search that can reach archived
 mail (no filter, or a view other than the inbox ones and Archived) say
-`Archived` on archived threads. Check with a slow search
+`Archived` on archived threads; a thread of only sent mail or drafts was never
+in the inbox and gets no label. Check with a slow search
 that rows never blank between two queries, that switching tabs never shows
 the previous tab's rows, and that with the flag off the compact field and the
 spinner are unchanged.

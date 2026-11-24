@@ -2110,6 +2110,10 @@
                 "type": "string",
                 "format": "date-time"
               },
+              "has_received_mail": {
+                "type": "boolean",
+                "description": "Whether the thread holds mail the user received, not only mail they\nsent or drafted. A thread without any was never in the inbox, so it is\nnot archived when it is out of the inbox."
+              },
               "inbox_visible": {
                 "type": "boolean"
               },

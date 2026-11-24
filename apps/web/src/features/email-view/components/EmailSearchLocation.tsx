@@ -5,7 +5,8 @@ import { Show } from 'solid-js';
 
 /**
  * Where a search result lives, when the search reaches beyond the inbox: an
- * archived thread says so, since the inbox lists never show it.
+ * archived thread says so, since the inbox lists never show it. A thread of
+ * only sent mail or drafts was never in the inbox, so it is not archived.
  */
 export function EmailSearchLocation(props: {
   entity: EntityData;
@@ -15,7 +16,8 @@ export function EmailSearchLocation(props: {
   const archived = () =>
     props.reachesArchived &&
     props.entity.type === 'email' &&
-    props.entity.done === true;
+    props.entity.done === true &&
+    props.entity.hasReceivedMail !== false;
 
   return (
     <Show when={archived()}>

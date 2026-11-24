@@ -244,6 +244,7 @@ pub fn construct_search_result(
                     snippet: info.snippet,
                     is_read: info.is_read,
                     inbox_visible: info.inbox_visible,
+                    has_received_mail: info.has_received_mail,
                     is_draft: info.is_draft,
                     is_important: info.is_important,
                     properties,
