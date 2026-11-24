@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { quarantineCacheScope, rotateCacheScope } from './scope';
+import { rotateCacheScope } from './scope';
 
 const STORAGE_KEY = 'graphql-cache:scope';
 
@@ -54,10 +54,11 @@ describe('serialized cache scope replacement', () => {
     vi.stubGlobal('navigator', {});
     localStorage.setItem(STORAGE_KEY, 'old-scope');
 
-    await expect(quarantineCacheScope('old-scope')).resolves.toBe(
-      'quarantine:old-scope'
-    );
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('quarantine:old-scope');
+    const scope = await rotateCacheScope();
+
+    expect(scope).toEqual(expect.any(String));
+    expect(scope).not.toBe('old-scope');
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(scope);
   });
 
   it('does not use an unsafe fallback when an advertised lock fails', async () => {
@@ -66,45 +67,20 @@ describe('serialized cache scope replacement', () => {
     });
     localStorage.setItem(STORAGE_KEY, 'old-scope');
 
-    await expect(quarantineCacheScope('old-scope')).resolves.toBeUndefined();
+    await expect(rotateCacheScope()).resolves.toBeUndefined();
     expect(localStorage.getItem(STORAGE_KEY)).toBe('old-scope');
   });
 
-  it('serializes a stale S1 quarantine behind an S2 rotation', async () => {
-    const { lockManager, requests } = controlledLockManager();
-    vi.stubGlobal('navigator', { locks: lockManager });
-    vi.spyOn(crypto, 'randomUUID').mockReturnValue(
-      '22222222-2222-4222-8222-222222222222'
-    );
-    localStorage.setItem(STORAGE_KEY, 'scope-1');
-
-    const staleQuarantine = quarantineCacheScope('scope-1');
-    const rotateToScope2 = rotateCacheScope();
-    expect(requests).toHaveLength(2);
-    await requests[1]?.run();
-    await expect(rotateToScope2).resolves.toBe(
-      '22222222-2222-4222-8222-222222222222'
-    );
-    await requests[0]?.run();
-    await expect(staleQuarantine).resolves.toBeUndefined();
-
-    expect(localStorage.getItem(STORAGE_KEY)).toBe(
-      '22222222-2222-4222-8222-222222222222'
-    );
-  });
-
-  it('converges serialized failures that observed the same S1 scope', async () => {
+  it('replaces the scope only while it holds the cross-tab lock', async () => {
     const { lockManager, requests } = controlledLockManager();
     vi.stubGlobal('navigator', { locks: lockManager });
     localStorage.setItem(STORAGE_KEY, 'scope-1');
 
-    const first = quarantineCacheScope('scope-1');
-    const second = quarantineCacheScope('scope-1');
-    await requests[0]?.run();
-    await requests[1]?.run();
+    const rotated = rotateCacheScope();
+    expect(requests).toHaveLength(1);
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('scope-1');
 
-    await expect(first).resolves.toBe('quarantine:scope-1');
-    await expect(second).resolves.toBe('quarantine:scope-1');
-    expect(localStorage.getItem(STORAGE_KEY)).toBe('quarantine:scope-1');
+    await requests[0]?.run();
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(await rotated);
   });
 });
