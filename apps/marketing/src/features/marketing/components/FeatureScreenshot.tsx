@@ -164,15 +164,10 @@ export function FeaturePhoneScreens(props: {
   product: string;
 }) {
   return (
-    <section class="feature-page-section" aria-labelledby="phone-screens-title">
-      <header class="product-feature-intro">
-        <h2 id="phone-screens-title">
-          <span>On your phone.</span>
-        </h2>
-        <p>
-          {props.product} works the same in the Macro apps for iOS and Android.
-        </p>
-      </header>
+    <section
+      class="feature-page-section"
+      aria-label={`${props.product} on your phone`}
+    >
       <ul class="feature-phone-screens">
         <For each={props.screens}>
           {(screen) => (

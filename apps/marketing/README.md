@@ -370,7 +370,7 @@ When the focus is too wide for that (about 580 capture pixels or more), add a
 `narrow` frame: the same scene captured at 400×700, where the app uses its narrow
 layout, with the focus measured on the same element; phones show it instead. The
 build fails if an outline starts clipped on a phone. `FeaturePhoneScreens`
-adds an "On your phone." row of mobile captures from `phoneScreens`. Fit the cards within the desktop reading column and let the row scroll sideways on phones. Children
+adds a row of mobile captures from `phoneScreens` without a separate section heading or intro text; keep each phone card's slab title on 1 line and its Inter caption to 2–3 balanced lines. Fit the cards within the desktop reading column and let the row scroll sideways on phones. Children
 passed with a `screen` render below it, for real links, videos, and setup steps.
 Drop a section the app cannot show rather than drawing it, and keep `Macro
 <Product>` names in section copy so `ProductCopy` renders their linked mentions.

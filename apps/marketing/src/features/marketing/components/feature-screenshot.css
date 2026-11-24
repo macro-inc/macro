@@ -137,6 +137,7 @@
   margin: 0;
   color: var(--feature-copy-color, var(--color-ink-muted));
   font: 370 14px/1.55 'Inter Variable', Inter, sans-serif;
+  text-wrap: pretty;
 }
 
 /* Phones: keep app text readable and scroll the screen sideways instead. */
