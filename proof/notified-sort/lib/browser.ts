@@ -138,6 +138,11 @@ export type Lane = {
 };
 
 /** A signed-in page for `user` on `app`, with the probe loaded. */
+// Page loads a lane open or reload tries before giving up (PROOF_OPEN_ATTEMPTS):
+// under load a dev server that proxies a storm of the tabs' own backend
+// requests can take minutes to serve a page.
+const LOAD_ATTEMPTS = Number(process.env.PROOF_OPEN_ATTEMPTS ?? 4);
+
 export async function openLane(
   browser: Browser,
   app: AppServer,
@@ -188,7 +193,7 @@ export async function openLane(
       await loadProbe(page);
       break;
     } catch (error) {
-      if (attempt >= 4) throw error;
+      if (attempt >= LOAD_ATTEMPTS) throw error;
     }
   }
   } finally {
@@ -209,7 +214,7 @@ export async function reloadLane(lane: Lane, url?: string, options: { probe?: bo
         if (options.probe) await loadProbe(lane.page);
         return;
       } catch (error) {
-        if (attempt >= 4) throw error;
+        if (attempt >= LOAD_ATTEMPTS) throw error;
       }
     }
   } finally {
