@@ -389,3 +389,29 @@ fn stage_labels_fit_a_select_option_and_differ_whatever_the_case() {
     // Options are told apart without case, so "won" is a second option.
     assert_eq!(&stages[2..], ["Won", "won (2)"]);
 }
+
+#[test]
+fn a_teammates_copy_counts_as_already_imported_while_under_review() {
+    let rows = plan::rows(&inventory(), &team(), &Rules::default()).unwrap();
+    let mut linked = meta(&rows[1]);
+    linked.plan.already_imported = Some(crate::domain::models::NotionAlreadyImported {
+        by: "macro|teammate@example.com".into(),
+        entity_id: Uuid::now_v7().to_string(),
+        entity_type: "crm_company".into(),
+    });
+    let review = Uuid::now_v7();
+    let count = |status| {
+        let row = ledger_row(
+            "7:company:10",
+            ImportKind::HubspotCompany,
+            status,
+            review,
+            linked.clone(),
+        );
+        report(Some(review), [&row]).unwrap().already_imported
+    };
+    assert_eq!(count(ImportStatus::Staged), 1);
+    assert_eq!(count(ImportStatus::Imported), 1);
+    // Left out of the import: not counted.
+    assert_eq!(count(ImportStatus::Discarded), 0);
+}

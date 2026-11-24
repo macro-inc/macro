@@ -625,7 +625,8 @@ pub(in crate::domain::service) fn report<'a>(
             ImportKind::HubspotDeal => report.deals += 1,
             _ => {}
         }
-        if row.status == ImportStatus::Imported && meta.plan.already_imported.is_some() {
+        // A teammate's copy counts from the plan on, not once it is linked.
+        if row.status != ImportStatus::Discarded && meta.plan.already_imported.is_some() {
             report.already_imported += 1;
         }
         for loss in meta.losses {
