@@ -116,11 +116,11 @@ function EntryRow(props: {
     <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] content-center items-center gap-x-2 gap-y-1 px-2 py-1.5 text-sm touch:min-h-[44px]">
       <div class="flex shrink-0">{props.person.avatar(props.entry.userId)}</div>
       <div class="flex min-w-0 items-baseline gap-1">
-        <span class="min-w-0 shrink-[100] truncate font-medium text-ink">
+        <span class="min-w-0 truncate font-medium text-ink">
           {props.person.name(props.entry.userId)}
         </span>
         <Show when={detail()}>
-          <span class="min-w-0 max-w-[calc(100%-3rem)] truncate text-xs text-ink-extra-muted tabular-nums">
+          <span class="max-w-[calc(100%-3rem)] shrink-0 truncate text-xs text-ink-extra-muted tabular-nums">
             {detail()}
           </span>
         </Show>
