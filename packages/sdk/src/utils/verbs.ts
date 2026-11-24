@@ -100,6 +100,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       'updateScheduledAction detachScheduledAction rewriteSuggestion setScheduledActionAppearance',
     enabled: 'setScheduledActionEnabled activateScheduledActionTemplate',
     ran: 'executeScheduledActionNow',
+    stopped: 'stopScheduledActionRun',
     unshared: 'unshareScheduledActionTemplate',
     shared: 'shareScheduledActionTemplate',
     archived: 'retireSuggestion retireRoutineSuggestion',

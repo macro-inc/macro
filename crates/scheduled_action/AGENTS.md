@@ -523,9 +523,18 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `ActionConfigurationUpdate`, with `trigger` required; the cron-only body with a
   top-level `schedule` is gone. Rejections return serde's message, which names
   the field. Cron schedules have 6 or 7 fields.
+- `POST /scheduled-actions/{id}/stop` (owner only) stops the routine's run in
+  progress, found by its claim (`running_run`); with none running it changes
+  nothing. Any instance can serve it, so the stop goes to every instance
+  through Postgres `NOTIFY` (`outbound/pg_run_stops.rs`, the `StopRelay`
+  port) and `RunStops` (`domain/run_stops.rs`) hands it to the executor,
+  which ends that run as `RunEnd::Stopped`: its runner is cancelled, its
+  claim released and its record kept with `stopped` set and error "Stopped".
+  A stopped event run is `Interrupted`, for good. No notification is sent
+  for it. A stop sent while an instance's listener is reconnecting is lost.
 - The list response carries each routine's `last_run`, its latest finished
   run record (what each step did), so clients can flag failures and say what
-  it did; single reads omit it. Every finished run is
+  it did; single reads omit it. Every finished run but a stopped one is
   reported to the owner by the host's `RoutineRunObserver`
   (`services/agent_harness_service/src/scheduling/routine_run_notifications.rs`)
   as an inbox-only `routine_run_finished` notification.
