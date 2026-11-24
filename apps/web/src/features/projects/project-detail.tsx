@@ -41,6 +41,7 @@ import {
 } from './core/project';
 import type { ProjectRoute } from './core/route';
 import { NewProjectTaskPill } from './new-project-task';
+import { openProjectTask } from './open-project-task';
 import {
   ProjectBreadcrumbItem,
   type ProjectBreadcrumbProps,
@@ -229,36 +230,25 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                   source={source}
                   commands={commands}
                   section={shownSection()}
-                  onOpenTask={(task, options) => {
-                    const event = options?.event;
-                    if (
-                      !isTouchDevice() &&
-                      !(
-                        event?.shiftKey ||
-                        event?.metaKey ||
-                        event?.ctrlKey ||
-                        event?.altKey
-                      )
-                    ) {
-                      fireAndForget(
-                        navigate({
-                          route: projectTaskRoute,
-                          params: {
-                            projectId: props.route.id,
-                            section: shownSection(),
-                            taskId: task.id,
-                          },
-                        }),
-                        'project-detail'
-                      );
-                      return true;
-                    }
-                    layout.openWithSplit(
-                      { type: 'md', id: task.id },
-                      { preferNewSplit: options?.event?.shiftKey }
-                    );
-                    return true;
-                  }}
+                  onOpenTask={(task, options) =>
+                    openProjectTask(task.id, options, {
+                      touch: isTouchDevice(),
+                      showInProject: (taskId) =>
+                        fireAndForget(
+                          navigate({
+                            route: projectTaskRoute,
+                            params: {
+                              projectId: props.route.id,
+                              section: shownSection(),
+                              taskId,
+                            },
+                          }),
+                          'project-detail'
+                        ),
+                      openInSplit: (content, splitOptions) =>
+                        layout.openWithSplit(content, splitOptions),
+                    })
+                  }
                   onCreateTask={createTask}
                   description={
                     <ProjectDescription
