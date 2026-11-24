@@ -255,9 +255,11 @@ organization notices and inbox settings show pending or failed changes; the
 mark-as-read from opening a thread is announced only if it fails. Draft sync and
 delivery progress is silent, as on Gmail: a composer or sent message shows a
 notice only for a conflict, uncertain or rejected delivery, revoked access,
-unsavable content, or an inbox move. Use its recovery actions and check the
-provider copy before choosing an explicit resend; a resend in flight shows as
-the send button's pending state. A draft whose sync failed or could not be
+unsavable content, or an inbox move. A draft conflicts only when its content was
+edited in Outlook: a version the mailbox moved on its own (an add-in, a label
+policy) or that Macro's own archive moved still syncs and sends. Use its recovery
+actions and check the provider copy before choosing an explicit resend; a resend
+in flight shows as the send button's pending state. A draft whose sync failed or could not be
 confirmed (the "Draft could not be synced" banner) still sends: Send carries the
 editor's latest text through the outbox. Check that it sends once, with the
 latest text, and that Undo brings the draft back. A new-email draft locked by a conflict or an
@@ -1419,7 +1421,9 @@ header. Only one active send can own a draft across tabs; queued composers
 remain read-only.
 
 Queued sends remain visible in **Drafts** and their conversation with a persistent
-status and **Cancel** action. A never-attempted send can be cancelled offline.
+status and **Cancel** action. A failed send says why when its draft does: it
+changed in the mailbox, the provider rejected it or could not save it, or access
+to the inbox changed. A never-attempted send can be cancelled offline.
 If admission may have reached the server, **Cancellation pending** keeps it locked
 until the server confirms cancellation. A definitive inbox-access rejection of
 the first submission permits restoring the saved draft locally. Verify this still
