@@ -65,7 +65,8 @@ where
         let (senders, recipients, labels) = tokio::try_join!(
             self.email_repo.senders_by_message_ids(&message_ids),
             self.email_repo.recipients_by_message_ids(&message_ids),
-            self.email_repo.labels_by_message_ids(&message_ids),
+            self.email_repo
+                .labels_by_message_ids(&message_ids, Some(&actor)),
         )
         .map_err(anyhow::Error::from)?;
         let mut hydrated: std::collections::HashMap<_, _> = self
@@ -111,7 +112,7 @@ where
             .await?
         {
             log_attempt_outcome("send", &attempt, started);
-            return self.hydrate_send_attempt(link_id, attempt).await;
+            return self.hydrate_send_attempt(&actor, link_id, attempt).await;
         }
         tracing::Span::current().record("phase", "prepare");
         let prepare = async {
@@ -174,7 +175,7 @@ where
                 {
                     Some(attempt) => {
                         log_attempt_outcome("send", &attempt, started);
-                        self.hydrate_send_attempt(link_id, attempt).await
+                        self.hydrate_send_attempt(&actor, link_id, attempt).await
                     }
                     None => Err(error),
                 };
@@ -204,7 +205,7 @@ where
                 MessageSendQueuedMetadata {
                     link_id,
                     owner: link.macro_id.clone(),
-                    actor: Some(actor),
+                    actor: Some(actor.clone()),
                     message_id,
                     thread_id,
                     scheduled_send_at: send_time,
@@ -212,7 +213,7 @@ where
                 },
             ));
         }
-        self.hydrate_send_attempt(link_id, attempt).await
+        self.hydrate_send_attempt(&actor, link_id, attempt).await
     }
 
     #[tracing::instrument(skip_all, fields(%link_id, attempt_id = %attempt_id.0, phase = "authorization"), err)]
@@ -243,14 +244,14 @@ where
                 MessageSendCancelledMetadata {
                     link_id,
                     owner: link.macro_id.clone(),
-                    actor: Some(actor),
+                    actor: Some(actor.clone()),
                     message_id,
                     thread_id,
                     reason: SendCancelReason::Undo,
                 },
             ));
         }
-        self.hydrate_send_attempt(link_id, attempt).await
+        self.hydrate_send_attempt(&actor, link_id, attempt).await
     }
 
     #[tracing::instrument(skip_all, fields(%link_id, attempt_id = %attempt_id.0, phase = "authorization"), err)]
@@ -272,7 +273,10 @@ where
             .read_send_attempt(&actor, link_id, attempt_id, None)
             .await?
         {
-            Some(attempt) => self.hydrate_send_attempt(link_id, attempt).await.map(Some),
+            Some(attempt) => self
+                .hydrate_send_attempt(&actor, link_id, attempt)
+                .await
+                .map(Some),
             None => Ok(None),
         }
     }
@@ -337,6 +341,7 @@ where
 {
     async fn hydrate_send_attempt(
         &self,
+        actor: &MacroUserIdStr<'_>,
         link: Uuid,
         mut attempt: SendAttempt,
     ) -> Result<SendAttempt, EmailErr> {
@@ -351,7 +356,7 @@ where
         let (senders, recipients, labels) = tokio::try_join!(
             self.email_repo.senders_by_message_ids(&ids),
             self.email_repo.recipients_by_message_ids(&ids),
-            self.email_repo.labels_by_message_ids(&ids),
+            self.email_repo.labels_by_message_ids(&ids, Some(actor)),
         )
         .map_err(anyhow::Error::from)?;
         attempt.message = self

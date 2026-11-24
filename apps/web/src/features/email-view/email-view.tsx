@@ -54,6 +54,7 @@ import { focusEmailSearchResults } from './email-search-focus';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
 import { createEmailMobileSearch } from './primitives/create-email-mobile-search';
+import { useEmailSearchValues } from './queries/use-email-search-values';
 import type { EmailListPane } from './reader-pane';
 import { createEmailSearchSuggestions } from './search/create-email-search-suggestions';
 import { useEmailSearchScopeAvailability } from './tab-availability';
@@ -130,7 +131,13 @@ function DesktopEmailPanes(props: {
     search: () => state.search,
     setSearch: (query) => setState('search', query),
     scopeAvailable: useEmailSearchScopeAvailability(),
+    people: () => searchValues.people(),
+    labels: () => searchValues.labels(),
   });
+  const searchValues = useEmailSearchValues(
+    () => state.search,
+    () => wideSearchFlag().enabled && recentSearches.focused()
+  );
   const pickedResultsArrived = () =>
     recentSearches.awaitsPickedResults() &&
     !source.isLoading() &&
@@ -314,8 +321,8 @@ function EmailLayout(props: {
   );
 }
 
-function EmailMobileLayout(props: ParentProps) {
-  const { state, setState } = useEmailView();
+export function EmailMobileLayout(props: ParentProps) {
+  const { state, setState, registerSearchField } = useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
   const suggestions = createEmailSearchSuggestions({
@@ -323,7 +330,13 @@ function EmailMobileLayout(props: ParentProps) {
     search: () => state.search,
     setSearch: (query) => setState('search', query),
     scopeAvailable: useEmailSearchScopeAvailability(),
+    people: () => searchValues.people(),
+    labels: () => searchValues.labels(),
   });
+  const searchValues = useEmailSearchValues(
+    () => state.search,
+    () => wideSearchFlag().enabled && suggestions.focused()
+  );
   let searchInput: HTMLInputElement | undefined;
   const mobileSearch = createEmailMobileSearch({
     available: () => wideSearchFlag().enabled && canSearchEmailTab(state.tab),
@@ -339,6 +352,7 @@ function EmailMobileLayout(props: ParentProps) {
     triggerFocusInput(() => searchInput);
   };
   const closeSearch = mobileSearch.close;
+  registerSearchField({ open: searching, close: closeSearch });
   useAndroidBackNavigation(() => {
     if (!searching()) return false;
 

@@ -1,7 +1,10 @@
 //! Resolve the race between observing another holder and registering a waiter.
 use super::*;
 
-pub(super) async fn resolve<C, CF, W, WF>(claim: C, wait: W) -> Result<TeamClaim>
+pub(in crate::domain::service) async fn resolve<C, CF, W, WF>(
+    claim: C,
+    wait: W,
+) -> Result<TeamClaim>
 where
     C: Fn() -> CF,
     CF: Future<Output = Result<TeamClaim>>,

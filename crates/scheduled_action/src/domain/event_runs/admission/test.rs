@@ -55,6 +55,69 @@ async fn partial_fanout_failure_is_not_acknowledged_and_replay_is_safe() {
     assert_eq!(repo.0.lock().unwrap().pending.len(), 2);
 }
 
+/// Every span field and event field recorded while it is the default subscriber.
+#[derive(Clone, Default)]
+struct RecordedFields(Arc<std::sync::Mutex<Vec<String>>>);
+
+impl tracing::field::Visit for RecordedFields {
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        self.0
+            .lock()
+            .unwrap()
+            .push(format!("{}={value}", field.name()));
+    }
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0
+            .lock()
+            .unwrap()
+            .push(format!("{}={value:?}", field.name()));
+    }
+}
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for RecordedFields {
+    fn on_record(
+        &self,
+        _: &tracing::span::Id,
+        values: &tracing::span::Record<'_>,
+        _: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        values.record(&mut self.clone());
+    }
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        event.record(&mut self.clone());
+    }
+}
+
+#[tokio::test]
+async fn a_failed_admission_marks_its_span_without_the_report() {
+    use tracing_subscriber::layer::SubscriberExt;
+    let repo = Arc::new(Repo::default());
+    repo.0.lock().unwrap().configurations = vec![configuration()];
+    repo.0.lock().unwrap().fail_page = Some(1);
+    let service = EventAdmissionService::new(
+        repo,
+        Arc::new(Access::default()),
+        Arc::new(Delegates::default()),
+        10.try_into().unwrap(),
+    );
+    let recorded = RecordedFields::default();
+    let _subscriber =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(recorded.clone()));
+    assert!(service.ingest(&incoming()).await.is_err());
+    let fields = recorded.0.lock().unwrap();
+    assert!(
+        fields.contains(&"otel.status_code=ERROR".to_owned()),
+        "{fields:?}"
+    );
+    // The report can carry payload or database values.
+    assert!(
+        !fields
+            .iter()
+            .any(|field| field.contains("page unavailable")),
+        "{fields:?}"
+    );
+}
+
 #[tokio::test]
 async fn coarse_candidates_are_rechecked_before_access_or_admission() {
     let repo = Arc::new(Repo::default());

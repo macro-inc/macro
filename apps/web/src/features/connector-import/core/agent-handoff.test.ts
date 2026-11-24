@@ -5,14 +5,26 @@ import { IMPORT_CATEGORIES } from './catalog';
 describe('agent import handoff', () => {
   it('asks before creating and never writes back to the source', () => {
     const crm = IMPORT_CATEGORIES.crm;
-    const hubspot = crm.providers.find((p) => p.appSlug === 'hubspot')!;
-    const handoff = agentImportHandoff(crm, hubspot);
+    const salesforce = crm.providers.find(
+      (p) => p.appSlug === 'salesforce_rest_api'
+    )!;
+    const handoff = agentImportHandoff(crm, salesforce);
     expect(handoff.input).toBe(
-      'Import my most recent companies and contacts from HubSpot into the Macro CRM.'
+      'Import my most recent companies and contacts from Salesforce into the Macro CRM.'
     );
     expect(handoff.instructions).toContain('ask which ones to bring over');
     expect(handoff.instructions).toContain('CreateCompany');
     expect(handoff.instructions).toContain('never edit or delete');
+  });
+
+  it("imports HubSpot through Macro's CRM importer", () => {
+    const crm = IMPORT_CATEGORIES.crm;
+    const hubspot = crm.providers.find((p) => p.appSlug === 'hubspot')!;
+    const handoff = agentImportHandoff(crm, hubspot);
+    expect(handoff.input).toBe('Import my HubSpot CRM into Macro.');
+    expect(handoff.instructions).toContain('ImportFromHubspot');
+    expect(handoff.instructions).not.toContain('CreateCompany');
+    expect(handoff.instructions).not.toContain('CreateImportEntity');
   });
 
   it("imports the Notion workspace through Macro's importer", () => {

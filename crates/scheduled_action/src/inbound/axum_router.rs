@@ -969,6 +969,7 @@ impl IntoResponse for ScheduledActionApiError {
                 | ActionPolicyError::ConditionsDisabled
                 | ActionPolicyError::InvalidAppearance(_)
                 | ActionPolicyError::GithubNotLinked
+                | ActionPolicyError::UnknownInboxes
                 | ActionPolicyError::DescriptionTooLong
                 | ActionPolicyError::KeyOutsideRun
                 | ActionPolicyError::InvalidKey

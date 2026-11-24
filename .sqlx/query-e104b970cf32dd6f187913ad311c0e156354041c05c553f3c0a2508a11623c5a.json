@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT end_reason FROM computer_screen_drives WHERE computer_id = $1 AND started_at = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "end_reason",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "e104b970cf32dd6f187913ad311c0e156354041c05c553f3c0a2508a11623c5a"
+}

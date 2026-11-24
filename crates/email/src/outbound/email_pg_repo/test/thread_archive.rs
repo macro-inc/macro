@@ -237,7 +237,10 @@ async fn archive_enqueue_failure_restores_only_changed_labels_and_the_original_f
     );
     let labels = service
         .email_repo
-        .labels_by_message_ids(&[first, second])
+        .labels_by_message_ids(
+            &[first, second],
+            Some(&inbox_owner(&service.email_repo.pool).await),
+        )
         .await?;
     for (id, expected) in [(first, true), (second, false)] {
         assert_eq!(
@@ -306,7 +309,9 @@ async fn assert_inbox_state(
         .get_thread_label_messages(thread_id, thread.link_id)
         .await?;
     let ids: Vec<_> = messages.iter().map(|message| message.db_id).collect();
-    let labels = repo.labels_by_message_ids(&ids).await?;
+    let labels = repo
+        .labels_by_message_ids(&ids, Some(&inbox_owner(&repo.pool).await))
+        .await?;
     for id in ids {
         assert_eq!(
             labels
@@ -561,7 +566,9 @@ async fn failed_star_flag_rolls_back_the_label_and_its_marker(
     let messages = repo.get_thread_label_messages(thread, link).await?;
     assert!(messages.iter().all(|message| !message.is_starred));
     let ids: Vec<_> = messages.iter().map(|message| message.db_id).collect();
-    let labels = repo.labels_by_message_ids(&ids).await?;
+    let labels = repo
+        .labels_by_message_ids(&ids, Some(&inbox_owner(&repo.pool).await))
+        .await?;
     assert!(
         !labels
             .values()

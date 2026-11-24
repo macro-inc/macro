@@ -116,6 +116,7 @@
     "@macro-inc/spreadsheet": "workspace:*",
     "@noble/hashes": "^1.8.0",
     "@normy/query-core": "^0.21.0",
+    "@novnc/novnc": "1.7.0",
     "@observablehq/plot": "^0.6.17",
     "@phosphor-icons/core": "^2.1.1",
     "@pierre/diffs": "^1.3.5",

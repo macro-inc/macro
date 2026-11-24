@@ -1047,3 +1047,112 @@ fn a_condition_applies_only_to_the_filter_whose_property_value_matched() {
         ConditionRequirement::AnyOf(_)
     ));
 }
+
+const INBOX: &str = "01900000-0000-7000-8000-000000000005";
+const OTHER_INBOX: &str = "01900000-0000-7000-8000-000000000006";
+
+fn received_in(inbox: &str) -> EventReference {
+    IncomingEvent {
+        event_id: Uuid::parse_str(EVENT_ID).unwrap(),
+        schema_version: 1,
+        routine_id: None,
+        payload: EventPayload::Email(
+            serde_json::from_value(json!({
+                "event_type":"email.message_received", "metadata": {
+                    "link_id": inbox, "owner": HUMAN, "message_id": OTHER_ID,
+                    "provider_message_id": "provider-msg", "thread_id": ENTITY_ID,
+                    "provider_thread_id": "provider-thread", "is_new_thread": false,
+                    "subject": "subject", "from_email": "sender@example.com",
+                    "to_emails": [], "attachment_count": 0, "is_spam_or_trash": false
+                }
+            }))
+            .unwrap(),
+        ),
+    }
+    .normalize()
+    .unwrap()
+}
+
+#[test]
+fn an_inbox_filter_matches_only_mail_into_the_inboxes_it_names() {
+    let event = received_in(INBOX);
+    let activation = event.published_at();
+    let picking = |inboxes: Value| {
+        filters(json!([{"events": ["email.message_received"], "inboxes": inboxes}]))
+    };
+    assert!(filters(json!([{"events": ["email.message_received"]}])).matches(&event, activation));
+    assert!(picking(json!([OTHER_INBOX, INBOX])).matches(&event, activation));
+    assert!(!picking(json!([OTHER_INBOX])).matches(&event, activation));
+    // Intake tells mail only the picked inboxes turned away from other misses.
+    assert!(picking(json!([OTHER_INBOX])).turn_away_only_for_inbox(&event, activation));
+    assert!(!picking(json!([INBOX])).turn_away_only_for_inbox(&event, activation));
+    assert!(
+        !filters(json!([{"events": ["document.created"]}]))
+            .turn_away_only_for_inbox(&event, activation)
+    );
+    let later = activation + chrono::Duration::seconds(1);
+    assert!(!picking(json!([OTHER_INBOX])).turn_away_only_for_inbox(&event, later));
+    // No inboxes is every inbox, as no ids is every thread.
+    for every in [Value::Null, json!([])] {
+        let every = picking(every);
+        assert_eq!(every.as_slice()[0].inboxes(), None);
+        assert!(every.matches(&event, activation));
+    }
+    let deduped = picking(json!([OTHER_INBOX, INBOX, OTHER_INBOX]));
+    assert_eq!(
+        deduped.as_slice()[0].inboxes().unwrap(),
+        [INBOX, OTHER_INBOX].map(|id| Uuid::parse_str(id).unwrap())
+    );
+}
+
+#[test]
+fn an_inbox_filter_is_only_for_received_mail_alone_in_its_filter() {
+    for value in [
+        json!([{"events": ["document.created"], "inboxes": [INBOX]}]),
+        json!([{"events": ["email.message_received", "document.created"], "inboxes": [INBOX]}]),
+        json!([{"events": ["email.message_received"], "inboxes": ["invalid"]}]),
+        json!([{
+            "events": ["email.message_received"],
+            "inboxes": vec![INBOX; MAX_INBOXES_PER_FILTER + 1]
+        }]),
+    ] {
+        assert!(serde_json::from_value::<EventFilters>(value).is_err());
+    }
+    assert!(
+        serde_json::from_value::<EventFilters>(json!([{
+            "events": ["email.message_received"],
+            "inboxes": vec![INBOX; MAX_INBOXES_PER_FILTER]
+        }]))
+        .is_ok()
+    );
+}
+
+#[test]
+fn no_run_keeps_the_inbox_and_a_run_of_a_routine_that_picks_one_still_starts() {
+    let event = received_in(INBOX);
+    let picking = filters(json!([{"events": ["email.message_received"], "inboxes": [INBOX]}]));
+    let every = filters(json!([{"events": ["email.message_received"]}]));
+    for routine in [&picking, &every] {
+        let kept = serde_json::to_value(routine.run_event(&event)).unwrap();
+        // The stored form older replicas read, with no key they'd reject.
+        assert!(kept.get("inbox").is_none(), "{kept}");
+        let stored: EventReference = serde_json::from_value(kept).unwrap();
+        assert_eq!(stored, routine.run_event(&event));
+        // What a run keeps still matches when the run is about to start.
+        assert!(routine.matches(&stored, event.published_at()));
+    }
+    // Admission still turns away mail into an inbox the routine didn't pick.
+    assert!(!picking.matches(&received_in(OTHER_INBOX), event.published_at()));
+
+    let mut mail = serde_json::to_value(&event).unwrap();
+    mail["inbox"] = json!(INBOX);
+    assert!(serde_json::from_value::<EventReference>(mail).is_err());
+    let mut document = serde_json::to_value(
+        incoming("document.created", metadata())
+            .normalize()
+            .unwrap(),
+    )
+    .unwrap();
+    document["inbox"] = json!(INBOX);
+    assert!(serde_json::from_value::<EventReference>(document).is_err());
+}

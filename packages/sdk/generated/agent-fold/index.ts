@@ -1210,7 +1210,9 @@ export type ImportWorkspace =
 /**  Linear projects and issues. */
 "linear" |
 /**  Jira projects, epics and issues. */
-"jira";
+"jira" |
+/**  HubSpot deal pipelines, companies, contacts and deals. */
+"hubspot";
 
 /**  Review item state, shared with notification consumers. */
 export type ItemStatus =

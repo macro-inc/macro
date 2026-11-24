@@ -21,6 +21,7 @@ const MAX_EVENT_BYTES: NonZeroUsize = match NonZeroUsize::new(1024 * 1024) {
 };
 const MESSAGE_START: &str = "message_start";
 const MESSAGE_DELTA: &str = "message_delta";
+const MESSAGE_STOP: &str = "message_stop";
 
 #[derive(Debug, Default, Deserialize)]
 struct WireUsage {
@@ -96,6 +97,10 @@ pub(super) fn from_json_body(body: &[u8]) -> Option<TokenUsage> {
 pub(super) struct SseUsage {
     usage: TokenUsage,
     decoder: SseDecoder,
+    /// Whether the message ended: `message_stop` came. A stream that ends
+    /// without it (an `error` event after the 200, a cut connection) did not
+    /// finish.
+    stopped: bool,
 }
 
 impl Default for SseUsage {
@@ -103,6 +108,7 @@ impl Default for SseUsage {
         Self {
             usage: TokenUsage::default(),
             decoder: SseDecoder::with_limit(MAX_EVENT_BYTES),
+            stopped: false,
         }
     }
 }
@@ -114,6 +120,10 @@ impl SseUsage {
             let Ok(SseEvent::Message(message)) = event else {
                 continue;
             };
+            if message.event == MESSAGE_STOP {
+                self.stopped = true;
+                continue;
+            }
             if message.event != MESSAGE_START && message.event != MESSAGE_DELTA {
                 continue;
             }
@@ -134,5 +144,10 @@ impl SseUsage {
 
     pub(super) fn usage(&self) -> TokenUsage {
         self.usage
+    }
+
+    /// Whether the streamed message finished.
+    pub(super) fn stopped(&self) -> bool {
+        self.stopped
     }
 }

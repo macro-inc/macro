@@ -143,6 +143,20 @@ describe('ImportNamespace', () => {
     ]);
   });
 
+  test('recordImported refuses a HubSpot record, which only the reviewed import writes', async () => {
+    const { client, requests } = importsClient();
+
+    await expect(
+      new ImportNamespace(client).recordImported(
+        { source: 'hubspot', foreignId: '1:company:2', metadata: {} },
+        Task.byId(client, 'task-1'),
+      ),
+    ).rejects.toThrow(
+      'A hubspot import is recorded only by the reviewed HubSpot import',
+    );
+    expect(requests).toEqual([]);
+  });
+
   test('recordImported refuses an item of the wrong kind for its source', async () => {
     const { client, requests } = importsClient();
 
