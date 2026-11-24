@@ -43,6 +43,13 @@ export async function startApp(
   logDir: string
 ): Promise<AppServer> {
   const web = join(worktree, 'apps/web');
+  // A server left on the port (a debug script that died before stopApp)
+  // would answer for this one while it fails to bind: refuse to start.
+  const stale = await fetch(`http://localhost:${port}/`, { signal: AbortSignal.timeout(5_000) }).then(
+    () => true,
+    () => false
+  );
+  if (stale) throw new Error(`port ${port} already serves something: stop it first`);
   mkdirSync(join(web, 'src/__proof__'), { recursive: true });
   copyFileSync(probeSource, join(web, 'src/__proof__/probe.ts'));
   const log = openSync(join(logDir, `vite-${side}.log`), 'a');
