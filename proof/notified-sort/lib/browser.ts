@@ -147,7 +147,7 @@ export async function openLane(
   browser: Browser,
   app: AppServer,
   user: User,
-  options: { touch?: boolean; video?: string; facets?: Record<string, string[]>; path?: string } = {}
+  options: { touch?: boolean; video?: string; facets?: Record<string, string[]>; path?: string; tab?: 'signal' | 'noise' } = {}
 ): Promise<Lane> {
   const touch = options.touch ?? false;
   const context = await browser.newContext({
@@ -170,7 +170,10 @@ export async function openLane(
         else localStorage.removeItem(key);
       } catch {}
     },
-    [storageKey, options.facets ? JSON.stringify({ version: 1, tab: 'signal', facets: options.facets }) : ''] as const
+    [
+      storageKey,
+      options.facets || options.tab ? JSON.stringify({ version: 1, tab: options.tab ?? 'signal', facets: options.facets ?? {} }) : '',
+    ] as const
   );
   const page = await context.newPage();
   const failed: RequestFailure[] = [];
