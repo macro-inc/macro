@@ -4,10 +4,20 @@ const MAX_TRACKED_ERRORS = 100;
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+/** The machine-readable code a cache response rejected with, if any. */
+export const cacheResponseErrorCode = (error: unknown): string | undefined =>
+  error instanceof Error &&
+  'errorCode' in error &&
+  typeof error.errorCode === 'string'
+    ? error.errorCode
+    : undefined;
+
 /**
  * Admits one report per minute for each kind of cache failure. Failures that
- * differ only by a number, such as an owner epoch, count as one kind. The next
- * admitted report carries how many were dropped since the last one.
+ * differ only by a number, such as an owner epoch, count as one kind. Failures
+ * that share a message but not a response code stay separate: one owner loss
+ * rejects plain requests and uncertain admitted enqueues with the same text.
+ * The next admitted report carries how many were dropped since the last one.
  */
 export function createCacheErrorThrottle(now: () => number = Date.now) {
   const seen = new Map<string, { reportedAt: number; suppressed: number }>();
@@ -16,7 +26,7 @@ export function createCacheErrorThrottle(now: () => number = Date.now) {
       error: unknown,
       operationKind?: string
     ): { report: boolean; suppressed: number } {
-      const key = `${operationKind ?? ''}:${errorMessage(error).replace(/\d+/g, '#')}`;
+      const key = `${operationKind ?? ''}:${cacheResponseErrorCode(error) ?? ''}:${errorMessage(error).replace(/\d+/g, '#')}`;
       const entry = seen.get(key);
       const at = now();
       if (entry && at - entry.reportedAt < REPORT_INTERVAL_MS) {

@@ -95,7 +95,10 @@ import { filter, pipe } from 'wonka';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
-import { createCacheErrorThrottle } from './cache-error-throttle';
+import {
+  cacheResponseErrorCode,
+  createCacheErrorThrottle,
+} from './cache-error-throttle';
 import {
   type CacheRecoveryStopReason,
   canRetryCacheFailure,
@@ -916,6 +919,10 @@ export function getGraphqlSoupClient(): Client {
           'error.source': 'graphql-cache',
           'cache.backend': native ? 'native' : 'turso-wasm-opfs',
           'cache.phase': phase,
+          // The response code, when the cache gave one, tells an uncertain
+          // admitted enqueue from a plain rejection with the same message.
+          'cache.error_code':
+            cacheResponseErrorCode(error) ?? classifyCacheError(error),
           ...(operationKind ? { 'cache.operation_kind': operationKind } : {}),
           ...(throttled.suppressed > 0
             ? { 'cache.suppressed_count': throttled.suppressed }

@@ -1682,6 +1682,7 @@ describe('GraphQL Soup browser cache session gate', () => {
         'error.source': 'graphql-cache',
         'cache.backend': 'turso-wasm-opfs',
         'cache.phase': 'operation',
+        'cache.error_code': 'unknown',
         'cache.operation_kind': kind,
       });
     }
@@ -1733,6 +1734,7 @@ describe('GraphQL Soup browser cache session gate', () => {
           'error.source': 'graphql-cache',
           'cache.backend': 'turso-wasm-opfs',
           'cache.phase': 'operation',
+          'cache.error_code': errorCode ?? 'unknown',
           'cache.operation_kind': 'mutation',
         });
       } else {
@@ -1740,6 +1742,41 @@ describe('GraphQL Soup browser cache session gate', () => {
       }
     }
   );
+
+  it('reports an uncertain enqueue after a plain rejection with the same text', async () => {
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+    const report =
+      mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.onCacheError;
+    const operation: Operation = {
+      kind: 'mutation',
+      key: 42,
+      query: parse('mutation PrivateMutation { update }'),
+      variables: {},
+      context: { url: 'http://dss.test', requestPolicy: 'cache-first' },
+    };
+    // One owner loss rejects every in-flight request with one message; only
+    // the admitted enqueue carries the uncertain code.
+    const rejection = (errorCode: string) =>
+      Object.assign(new Error('cache engine owner epoch 7 was lost'), {
+        name: 'CacheResponseError',
+        errorCode,
+      });
+    const lost = rejection('owner-epoch-lost');
+    const uncertain = rejection('admitted-enqueue-uncertain');
+
+    report?.(lost, operation);
+    report?.(uncertain, operation);
+
+    expect(mocks.telemetryError).toHaveBeenCalledTimes(2);
+    expect(mocks.telemetryError).toHaveBeenLastCalledWith(uncertain, {
+      'error.source': 'graphql-cache',
+      'cache.backend': 'turso-wasm-opfs',
+      'cache.phase': 'operation',
+      'cache.error_code': 'admitted-enqueue-uncertain',
+      'cache.operation_kind': 'mutation',
+    });
+  });
 
   it.each([
     { native: false, backend: 'turso-wasm-opfs' },
@@ -1774,6 +1811,7 @@ describe('GraphQL Soup browser cache session gate', () => {
         'error.source': 'graphql-cache',
         'cache.backend': backend,
         'cache.phase': 'initialization',
+        'cache.error_code': 'initialization',
       });
       expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
       expect(soup.getGraphqlCacheHost()).toBeUndefined();
@@ -1916,6 +1954,7 @@ describe('GraphQL Soup browser cache session gate', () => {
       'error.source': 'graphql-cache',
       'cache.backend': 'turso-wasm-opfs',
       'cache.phase': 'initialization',
+      'cache.error_code': 'unknown',
     });
   });
 
@@ -1945,6 +1984,7 @@ describe('GraphQL Soup browser cache session gate', () => {
       'error.source': 'graphql-cache',
       'cache.backend': 'turso-wasm-opfs',
       'cache.phase': 'initialization',
+      'cache.error_code': 'initialization',
     });
     // Late failure notifications from the old host do not emit duplicate logs.
     mocks.failInitialization(error);
@@ -2082,6 +2122,7 @@ describe('GraphQL Soup browser cache session gate', () => {
       'error.source': 'graphql-cache',
       'cache.backend': 'turso-wasm-opfs',
       'cache.phase': 'initialization',
+      'cache.error_code': 'owner-epoch-lost',
     });
     expect(mocks.toastFailure).not.toHaveBeenCalled();
     expect(mocks.host.dispose).toHaveBeenCalledOnce();
