@@ -86,11 +86,16 @@ export class CacheReadAvailability {
     this.unavailable = undefined;
   }
 
-  /** `expiresAfter` bounds a read's wait; a write has none. */
+  /** `expiresAfter` bounds a read's wait; a write has none. An aborted read
+   * leaves nothing behind. */
   async waitUntilReady(
     initialize: () => Promise<void>,
     readOnly: boolean,
-    expiresAfter?: { timeoutMs: number; error: () => Error }
+    expiresAfter?: {
+      timeoutMs: number;
+      error: () => Error;
+      signal?: AbortSignal;
+    }
   ): Promise<void> {
     if (readOnly && this.unavailable) throw this.unavailable;
     let rejectRead: ((error: Error) => void) | undefined;
@@ -98,13 +103,12 @@ export class CacheReadAvailability {
       rejectRead = reject;
       if (readOnly) this.waiting.add(reject);
     });
-    const stopTimeout =
-      readOnly && expiresAfter
-        ? visibleTimeout(
-            () => rejectRead?.(expiresAfter.error()),
-            expiresAfter.timeoutMs
-          )
-        : undefined;
+    const bound = readOnly ? expiresAfter : undefined;
+    const end = () => {
+      if (bound) rejectRead?.(bound.error());
+    };
+    const stopTimeout = bound && visibleTimeout(end, bound.timeoutMs);
+    bound?.signal?.addEventListener('abort', end, { once: true });
     try {
       // Both read and write startup waits take the same microtask path so
       // making reads interruptible cannot reorder admission ahead of writes.
@@ -112,6 +116,7 @@ export class CacheReadAvailability {
       if (readOnly && this.unavailable) throw this.unavailable;
     } finally {
       stopTimeout?.();
+      bound?.signal?.removeEventListener('abort', end);
       if (rejectRead) this.waiting.delete(rejectRead);
     }
   }

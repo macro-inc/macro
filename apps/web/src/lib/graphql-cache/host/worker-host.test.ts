@@ -1029,6 +1029,8 @@ describe('createWorkerCacheHost', () => {
     expect(requireAdapter().requests.map((request) => request.kind)).toEqual([
       'init',
     ]);
+    // Only the startup's own limit is left, not the search's.
+    expect(vi.getTimerCount()).toBe(1);
     host.dispose();
   });
 
