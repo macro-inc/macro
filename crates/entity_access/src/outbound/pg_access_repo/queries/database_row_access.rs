@@ -136,6 +136,72 @@ pub async fn get_database_rows_access(
     Ok(highest)
 }
 
+/// [`get_database_rows_access`] for a caller that names many rows and may
+/// reach many databases (search): every arm starts from the requested rows,
+/// so the work is bounded by `row_ids` whatever the sources reach.
+#[tracing::instrument(err, skip_all, fields(row_count = row_ids.len()))]
+pub async fn get_database_rows_access_by_rows(
+    pool: &PgPool,
+    row_ids: &[Uuid],
+    source_ids: &[String],
+) -> Result<HashMap<Uuid, AccessLevel>, sqlx::Error> {
+    let mut highest: HashMap<Uuid, AccessLevel> = HashMap::new();
+    if row_ids.is_empty() || source_ids.is_empty() {
+        return Ok(highest);
+    }
+    // Materialized so the planner cannot start from the sources' grants,
+    // whose count it underestimates, and walk every row of their databases.
+    let rows = sqlx::query!(
+        r#"
+        WITH picked AS MATERIALIZED (
+            SELECT r.id, t.database_id
+            FROM database_rows r
+            JOIN database_tables t ON t.id = r.table_id
+            JOIN database_entities d ON d.database_id = t.database_id
+            WHERE r.id = ANY($1)
+        )
+        SELECT p.id AS "id!", ea.access_level AS "access_level!: AccessLevel"
+        FROM picked p
+        JOIN entity_access ea
+            ON ea.entity_id = p.database_id
+            AND ea.entity_type = 'database'
+            AND ea.source_id = ANY($2)
+
+        UNION ALL
+
+        SELECT p.id, 'edit'::"AccessLevel"
+        FROM picked p
+        JOIN forms f ON f.database_id = p.database_id
+        JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
+        WHERE f.trashed_at IS NULL
+        AND ea.source_id = ANY($2)
+        AND ea.access_level IN ('edit', 'owner')
+
+        UNION ALL
+
+        SELECT p.id, 'view'::"AccessLevel"
+        FROM picked p
+        JOIN forms f ON f.database_id = p.database_id
+        JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
+        WHERE f.trashed_at IS NULL
+        AND f.responses_visible
+        AND ea.source_id = ANY($2)
+        AND ea.access_level = 'view'
+        "#,
+        row_ids,
+        source_ids,
+    )
+    .fetch_all(pool)
+    .await?;
+    for row in rows {
+        highest
+            .entry(row.id)
+            .and_modify(|level| *level = (*level).max(row.access_level))
+            .or_insert(row.access_level);
+    }
+    Ok(highest)
+}
+
 /// The database a row's table belongs to.
 #[tracing::instrument(err, skip(pool))]
 pub async fn get_database_row_database(

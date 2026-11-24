@@ -5,8 +5,8 @@
 use super::models::EntityType;
 use crate::domain::models::{
     AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
-    ChannelRoleResult, CrmEntityAccess, EntityAccessReceipt, EntityAudience, EntityPermission,
-    RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
+    ChannelRoleResult, CrmEntityAccess, CurrentSources, EntityAccessReceipt, EntityAudience,
+    EntityPermission, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
 };
 #[cfg(feature = "explain_binary")]
 use crate::domain::models::{AccessExplanation, AccessGrant};
@@ -179,19 +179,27 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
 
-    /// [`Self::list_database_access`] through the user's memberships as they
-    /// are now, never the source ids other checks share for a few seconds.
-    fn list_current_database_access(
+    /// The user's sources as their memberships are now, never the source ids
+    /// other checks share for a few seconds.
+    fn current_sources(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<CurrentSources, AccessError>> + Send;
+
+    /// [`Self::list_database_access`] for sources read by
+    /// [`Self::current_sources`].
+    fn list_database_access_from(
+        &self,
+        sources: &CurrentSources,
     ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
 
-    /// [`Self::get_database_rows_access`] through the user's memberships as
-    /// they are now, never the source ids other checks share for a few seconds.
-    fn get_current_database_rows_access(
+    /// [`Self::get_database_rows_access`] for sources read by
+    /// [`Self::current_sources`], bounded by `row_ids` whatever the sources
+    /// reach.
+    fn get_database_rows_access_from(
         &self,
         row_ids: &[Uuid],
-        user_id: &MacroUserId<Lowercase<'_>>,
+        sources: &CurrentSources,
     ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
 
     /// Get the highest access level a user has for a form: their grants, plus
@@ -793,17 +801,24 @@ pub trait AccessibleDatabases: Clone + Send + Sync + 'static {
 /// cache of a few seconds; a caller that shows what a database holds the
 /// moment someone leaves a team or channel, such as search hits, reads this.
 pub trait CurrentDatabaseAccess: Clone + Send + Sync + 'static {
-    /// The databases the user can reach and their highest access on each,
+    /// The user's sources as they are now. Read once and pass to the checks
+    /// that follow, so they see one state of the user's memberships.
+    fn current_sources(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<CurrentSources, AccessError>> + Send;
+
+    /// The databases the sources reach and the highest access on each,
     /// ordered by database id. Trashed databases are still listed.
     fn current_accessible_databases(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        sources: &CurrentSources,
     ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
 
-    /// Those of `row_ids` whose database the user can view.
+    /// Those of `row_ids` whose database the sources can view.
     fn current_viewable_database_rows(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        sources: &CurrentSources,
         row_ids: &[Uuid],
     ) -> impl Future<Output = Result<std::collections::HashSet<Uuid>, AccessError>> + Send;
 }
