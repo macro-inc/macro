@@ -308,7 +308,8 @@ export function EntityPropertyEditor(props: {
   });
   createUnhighlightedArrival(
     waitsForSavedValue,
-    props.searchValue,
+    () => rows().length > 0,
+    () => Boolean(searchQuery()) && rows()[0]?.type === 'entity',
     props.setSelectedIndex
   );
 

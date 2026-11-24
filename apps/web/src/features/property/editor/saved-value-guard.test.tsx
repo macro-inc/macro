@@ -61,16 +61,18 @@ vi.mock('../queries/agent-assignees', () => ({
 }));
 vi.mock('./hooks/useEntitiesForProperty', () => ({
   useEntitiesForProperty: (
-    property: () => { specificEntityType?: string } | undefined
+    property: () => { specificEntityType?: string } | undefined,
+    searchQuery: () => string
   ) => ({
     entities: () =>
-      property()?.specificEntityType === 'USER'
+      (property()?.specificEntityType === 'USER'
         ? [userOption('ada'), userOption('bo'), userOption('cy')]
         : [
             companyOption('acme'),
             companyOption('birch'),
             companyOption('cedar'),
-          ],
+          ]
+      ).filter((entity) => entity.id.includes(searchQuery().trim())),
   }),
 }));
 vi.mock('../hooks/usePropertyEntityDisplay', () => ({
@@ -285,6 +287,31 @@ describe.each([
     fireEvent.click(
       screen.getByRole('option', { name: new RegExp(scenario.added) })
     );
+
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0]![1]).toEqual(scenario.keeps);
+  });
+
+  it('keeps the values when a search typed while loading matches nothing', () => {
+    const { onSave, field, setSavedProperties } = open({
+      targetProperty: scenario.definition,
+    });
+
+    fireEvent.input(field, { target: { value: 'nothing matches this' } });
+    setSavedProperties({ data: [scenario.saved] });
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('adds the match of a search typed while loading on Enter', () => {
+    const { onSave, field, setSavedProperties } = open({
+      targetProperty: scenario.definition,
+    });
+
+    fireEvent.input(field, { target: { value: scenario.added } });
+    setSavedProperties({ data: [scenario.saved] });
+    fireEvent.keyDown(field, { key: 'Enter' });
 
     expect(onSave).toHaveBeenCalledOnce();
     expect(onSave.mock.calls[0]![1]).toEqual(scenario.keeps);

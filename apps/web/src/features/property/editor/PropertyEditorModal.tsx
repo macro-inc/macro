@@ -947,7 +947,8 @@ function TagAssignmentEditor(props: {
   });
   createUnhighlightedArrival(
     waitsForSavedTags,
-    props.searchValue,
+    () => rows().length > 0,
+    () => hasSearch() && rows()[0]?.type === 'tag',
     props.setSelectedIndex
   );
 
@@ -1708,7 +1709,8 @@ function SelectPropertyEditor(props: {
   });
   createUnhighlightedArrival(
     waitsForSavedValue,
-    props.searchValue,
+    () => rows().length > 0,
+    () => Boolean(searchQuery()) && rows()[0]?.type === 'option',
     props.setSelectedIndex
   );
 

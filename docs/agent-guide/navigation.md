@@ -2142,7 +2142,9 @@ open view instead, since their download needs the loaded editor (a PDF's
 includes its markup). Tasks add **Set status**, **Set priority**, and **Set assignee**,
 which open the property editor like their shortcuts. For a property that holds
 several values (assignees, tags), the editor shows "Loading …" and takes no pick
-until that item's own values are read. Agent sessions add
+until that item's own values are read. If the read fails, an assignee list says
+it couldn't be loaded; tags can still be edited, since the server merges tag
+changes. Agent sessions add
 **Archive** / **Unarchive** for their owner. Calls offer **Share**. Pull
 requests offer **Open in new split**, **Copy GitHub Link**, **Open on GitHub**,
 and **Copy Branch Name** when the head branch is stored. Rows inside a Drive

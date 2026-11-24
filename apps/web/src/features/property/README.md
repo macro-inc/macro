@@ -139,9 +139,9 @@ property that holds one value is replaced either way and stays editable.
 this item's …" in place of the rows. Tag assignment waits only while the tags
 load, since unread tags would all look unapplied; a failed read still allows
 tagging, as its saves are additions and removals the server merges. Rows that
-arrive after a wait start with none highlighted (`createUnhighlightedArrival`):
-their first row is **Clear all**, and an Enter pressed meanwhile must not
-reach it. An item's own copy of a custom property carries no options, so the
+arrive after a wait start with none highlighted (`createUnhighlightedArrival`),
+unless a search typed meanwhile found a match: the first row may be **Clear
+all**, and an Enter pressed meanwhile must not reach it. An item's own copy of a custom property carries no options, so the
 editor takes them from the property's definition.
 
 ## Creating a property
