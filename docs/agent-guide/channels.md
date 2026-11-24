@@ -1388,9 +1388,11 @@ There is no separate Browse channels row. Closing search restores the sectioned
 list. Collapsed sections retain unread rows by default; **Display → Unread when
 collapsed** turns those rows off without changing expanded membership. Off-page
 unread rows supplement only collapsed groups with that setting enabled; expanded
-groups keep the source's page order. An unseen invite (being added to a channel)
-makes the channel unread, as it is in Notifications and the Chat badge, until
-Chat opens the channel and marks the invite seen.
+groups keep the source's page order. A collapsed section and **Unread only**
+also keep a channel whose only unread is a mention in a thread: its row shows the
+mention count and no unread dot, and the mention lights the Chat badge. Being
+added to a channel does not make it unread; opening the channel in Chat marks
+its invite seen, which tidies Notifications.
 
 Drag a section heading or its name to reorder sections. There is no drag-handle
 icon. Keyboard focus reveals an icon-free **Reorder** control over the heading
@@ -1727,7 +1729,16 @@ and full notification edge load before the split opens with the same top-level
 read policy. Selecting another channel while that request is pending must cancel
 the pending open; failed lookups must not open a split or mark anything seen.
 
-The app-shell Chat badge uses `ChannelUnreadPresence`: only
+With unified notifications on, the app-shell Chat badge lights for an unseen
+top-level message or a mention, thread mentions included: what can make a channel
+unread in the sidebar or show a mention count on its row. A thread reply, a
+reaction, a ping or an invite leaves it dark (see
+[Notifications](notifications.md)). To check, have another account reply in a
+thread you are part of: the badge stays dark and Notifications lists the reply as
+unread. Then have them mention you in that thread: the badge lights and the
+channel's row shows **1**, under **Unread only** too.
+
+With unified notifications off, the badge uses `ChannelUnreadPresence`: only
 channel IDs and at most one unread top-level message/mention ID/state per channel, with a
 500-channel candidate bound and no history, message previews, or metadata. It
 excludes replies, thread mentions, and reactions, matching the channel-row badges.
