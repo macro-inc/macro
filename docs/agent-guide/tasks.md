@@ -451,6 +451,27 @@ generic property row or details row, and the Add property picker never offers
 it; with the flag off nothing about time shows. Typed entries save at once and wait offline in the durable
 queue; the entry id is the replay key.
 
+### Timer
+
+One timer per person, stored on the server. Start timer is in a desktop task's
+header (beside Dispatch Agent, for people who can edit), the first control of
+the Time popover and sheet, and a row in the phone title menu; while the task
+is timed each of them shows the live count and stops it. The running timer
+shows in the desktop rail (a card with Stop and log, Open task, Discard) and
+above the phone dock (`timer` float region; the name opens the task, the square
+stops it), on every screen, and its count shows beside the task on its row,
+board card and pill. Stopping saves an entry and toasts "Logged 42m on …" with
+Edit; starting on another task stops and saves the first and toasts what it
+saved with Undo (discard the new timer, delete the saved entry, restart the
+first from its original start). A timer past eight hours is refused on stop:
+the dialog sets when you stopped, logs all of it (up to 24 hours) or discards
+it. Timer changes are refused offline. Other sessions of the same person
+re-read on the gateway's `time_tracking_changed`.
+
+To test the over-limit dialog, start a timer through the API with `startedAt`
+nine hours back (the start accepts any time in the last 24 hours), then stop it
+in the app.
+
 Verify on a local stack at desktop 1440 and phone 390 with touch, as an editor
 and a view-only teammate (a task shared with the team at view level, its edit
 link turned off): log each accepted form, a one-tap length and a custom entry

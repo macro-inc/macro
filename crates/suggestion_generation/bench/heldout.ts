@@ -5,7 +5,7 @@
 // next confirmation needs a fresh set: `heldout make <name>`.
 
 import { SQL } from 'bun';
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
@@ -23,6 +23,62 @@ const USES = 2;
 const WRITERS = 3;
 
 const ledgerPath = (set: string) => join(HELDOUT_DIR, set, 'ledger.jsonl');
+
+/**
+ * Hold held-out set `set` to the answer keys its first use scored against:
+ * `keys` (`keyDigests`) are the keys a run, rejudge or rescore of it would
+ * score against now. Each person's keys are written down (`keys.json` in
+ * the set) the first time they are scored, and every later use must score
+ * against the same keys, so no key is changed after a build has run on its
+ * person. Throws, naming no one, when one changed.
+ */
+export function fixKeys(set: string, keys: Record<string, string>, dir = HELDOUT_DIR, waitMs = 10_000) {
+  const path = join(dir, set, 'keys.json');
+  // Bench commands on two instances may fix keys of one set at once: one reads and writes at a time.
+  withLock(`${path}.lock`, waitMs, () => fixKeysHeld(set, keys, path));
+}
+
+/**
+ * Run `then` holding the lock file `lock`, waiting up to `waitMs` for
+ * another holder. A holder removes it when done, a failure too; only a
+ * command killed while holding it leaves it, and taking over a lock that
+ * looks left would race another waiter doing the same, so it is removed by
+ * hand.
+ */
+function withLock(lock: string, waitMs: number, then: () => void) {
+  const until = Date.now() + waitMs;
+  for (;;) {
+    try {
+      closeSync(openSync(lock, 'wx'));
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      if (Date.now() > until) throw new Error(`${lock} is held by another bench command: run this one again when it ends, or remove it if no bench command is running`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+  try {
+    then();
+  } finally {
+    unlinkSync(lock);
+  }
+}
+
+function fixKeysHeld(set: string, keys: Record<string, string>, path: string) {
+  const fixed = existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as { keys: Record<string, string> }).keys : {};
+  const changed = Object.entries(keys).filter(([name, digest]) => Object.hasOwn(fixed, name) && fixed[name] !== digest).length;
+  if (changed) {
+    throw new Error(
+      `${changed} of ${Object.keys(keys).length} people of held-out set ${set} have answer keys other than the ones they were first scored against (${path}): a held-out set's keys are fixed before any build runs on it. Score against those keys, or make a new set`,
+    );
+  }
+  const added = Object.keys(keys).filter((name) => !Object.hasOwn(fixed, name));
+  if (!added.length) return;
+  // Written whole or not at all, so a reader never finds half the keys.
+  const partial = `${path}.${process.pid}.partial`;
+  writeFileSync(partial, `${JSON.stringify({ keys: { ...fixed, ...Object.fromEntries(added.map((name) => [name, keys[name]])) } }, null, 1)}\n`);
+  renameSync(partial, path);
+}
 
 /** Record a run on `set`, and say so loudly once the set is spent. */
 export function spend(set: string, section: string, label: string) {
@@ -245,9 +301,12 @@ export async function makeHeldout(at: Stack, name: string, count: number, month 
     if (people.length < count) throw new Error(`the author sketched ${people.length} of ${count} people; run heldout make again`);
     const unusable = rosterProblems(people);
     if (unusable) throw new Error(`${unusable}; run heldout make again`);
+    // A held-out person is someone no earlier set has, by slug, name or mail domain.
+    const repeated = repeatsEarlier(people, takenIdentities());
+    if (repeated.length) throw new Error(`a sketched person repeats one from an earlier set or this one (by ${repeated.join(', ')}); run heldout make again`);
     const slugs = people.map((person) => person.slug);
     if (slugs.some((slug) => !/^[a-z]+$/.test(slug)) || new Set(slugs).size !== slugs.length) {
-      throw new Error(`the people came back with unusable slugs (${slugs.join(', ')}); run heldout make again`);
+      throw new Error('the people came back with unusable or repeated slugs; run heldout make again');
     }
     mkdirSync(root, { recursive: true });
     // Written whole or not at all, so a rerun never reads half a list.
@@ -266,15 +325,24 @@ export async function makeHeldout(at: Stack, name: string, count: number, month 
         else await writePersona(at, name, root, person as Sketch);
       } catch (error) {
         failed.push(person.slug);
-        console.error(`${person.slug}: ${String(error).slice(0, 300)}`);
+        // A held-out person is never named: their slug, names and domain are cut from the error.
+        console.error(`a person of held-out set ${name} could not be written: ${unnamed(person, String(error)).slice(0, 300)}`);
       }
     }
   };
   await Promise.all(Array.from({ length: WRITERS }, writer));
   // What writing cost is reported when it can be read; the set is ready or not all the same.
   await reportCost(at, started, writing - failed.length).catch((error) => console.error(`the writing cost could not be read: ${String(error).slice(0, 200)}`));
-  if (failed.length) throw new Error(`held-out set ${name}: ${failed.join(', ')} not written; run heldout make ${name} again to finish it`);
+  if (failed.length) throw new Error(`held-out set ${name}: ${failed.length} of ${people.length} people not written; run heldout make ${name} again to finish it`);
   console.log(`held-out set ${name} is ready; run it with --set ${name}. Don't open its files while tuning.`);
+}
+
+/** `text` with `person`'s slug, names and mail domain cut out, so an error can be printed without naming them. */
+export function unnamed(person: Sketch | MonthSketch, text: string): string {
+  const names = [person.slug, person.domain, person.owner_first, person.owner_last, ...person.colleagues.flatMap((colleague) => [colleague.first, colleague.last])]
+    .filter((word) => word && word.length > 1)
+    .sort((a, b) => b.length - a.length);
+  return names.reduce((out, word) => out.replace(new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '…'), text);
 }
 
 /**
@@ -289,14 +357,56 @@ export function rosterProblem(sketch: Pick<Sketch, 'owner_first' | 'colleagues'>
   return undefined;
 }
 
-/** Every sketched person whose workspace can't be written, with why, in one line; undefined when all can. */
-const rosterProblems = (people: (Sketch | MonthSketch)[]) =>
-  people
-    .flatMap((person) => {
-      const problem = rosterProblem(person);
-      return problem ? [`${person.slug}: ${problem}`] : [];
-    })
-    .join('; ') || undefined;
+/** How many sketched people's workspaces can't be written, and why, in one line naming none of them; undefined when all can. */
+export function rosterProblems(people: Pick<Sketch, 'owner_first' | 'colleagues'>[]): string | undefined {
+  const problems = people.flatMap((person) => rosterProblem(person) ?? []);
+  return problems.length ? `${problems.length} of ${people.length} sketched people: ${[...new Set(problems)].join('; ')}` : undefined;
+}
+
+/** Who a person is, as a new one must not repeat: slug, full name and mail domain, lowercased. */
+type Identity = { slug: string; name: string; domain: string };
+
+const identityKeys = (who: Identity) =>
+  [`slug:${who.slug}`, `name:${who.name}`, `domain:${who.domain}`].map((key) => key.trim().toLowerCase()).filter((key) => !key.endsWith(':'));
+
+/** Every person of the tune set and of every held-out set, as identity keys, read without showing anyone. */
+export function takenIdentities(): Set<string> {
+  const sets = existsSync(HELDOUT_DIR) ? readdirSync(HELDOUT_DIR, { withFileTypes: true }).filter((e) => e.isDirectory()) : [];
+  const written = sets.flatMap((set) => {
+    const listed = join(HELDOUT_DIR, set.name, 'people.json');
+    if (!existsSync(listed)) return [];
+    return (JSON.parse(readFileSync(listed, 'utf8')) as Sketch[]).map((s) => ({ slug: s.slug, name: `${s.owner_first} ${s.owner_last}`, domain: s.domain }));
+  });
+  const tune = personas('tune').map((p) => ({ slug: p.name, name: p.inbox.owner.name, domain: p.inbox.owner.email.split('@')[1] ?? '' }));
+  return new Set([...tune, ...written].flatMap(identityKeys));
+}
+
+/**
+ * What a sketched person shares with an earlier one, or with another of the
+ * same set: `slug`, `name` or `domain`, each once; none when nobody repeats.
+ * It says which, never whom, so a held-out set stays unread.
+ */
+export function repeatsEarlier(people: Pick<Sketch, 'slug' | 'owner_first' | 'owner_last' | 'domain'>[], taken: Set<string>): string[] {
+  const seen = new Set(taken);
+  const repeated = new Set<string>();
+  for (const s of people) {
+    const keys = identityKeys({ slug: s.slug, name: `${s.owner_first} ${s.owner_last}`, domain: s.domain });
+    for (const key of keys) if (seen.has(key)) repeated.add(key.slice(0, key.indexOf(':')));
+    for (const key of keys) seen.add(key);
+  }
+  return [...repeated].sort();
+}
+
+/** The slugs, full names and mail domains a new person must not take, for the author's prompt. */
+export function takenWords(): string {
+  const of = (kind: string) =>
+    [...takenIdentities()]
+      .filter((key) => key.startsWith(`${kind}:`))
+      .map((key) => key.slice(kind.length + 1))
+      .sort()
+      .join(', ');
+  return `Use none of these slugs: ${of('slug')}. None of these full names: ${of('name')}. None of these domains: ${of('domain')}.`;
+}
 
 /** What the author spent since `started`, in all and per person written. */
 async function reportCost(at: Stack, started: Date, people: number) {
@@ -331,7 +441,7 @@ async function sketch(at: Stack, count: number): Promise<Sketch[]> {
   const { people } = await write<{ people: Sketch[] }>(
     at,
     `Invent ${count} people who would use a work app with email, tasks, documents, chat channels, calls, a CRM and calendar. Each runs or works in a small organization; make them differ from each other in industry, role, seniority and how they work, and differ from these existing ones: ${tune.join(' | ')}.
-For each: a short slug (lowercase letters), a one-sentence persona, a first and last name, an invented company domain ending in .example, an IANA time zone in the Americas or Europe, the 4 to 6 mail labels they file mail under, 4 colleagues, the recurring streams of mail they get (at least 6, such as weekly reports, invoices, customer requests, tool notifications; say how often each comes), and a situation: what is going on in their work this month.`,
+For each: a short slug (lowercase letters), a one-sentence persona, a first and last name, an invented company domain ending in .example, an IANA time zone in the Americas or Europe, the 4 to 6 mail labels they file mail under, 4 colleagues, the recurring streams of mail they get (at least 6, such as weekly reports, invoices, customer requests, tool notifications; say how often each comes), and a situation: what is going on in their work this month. ${takenWords()}`,
     SKETCH,
   );
   return people;
@@ -475,6 +585,6 @@ ${catalog}
     placed.needs = placed.needs.map((need) => (need.drafted ? need : { ...need, drafted: undefined }));
     writeFileSync(join(dir, 'routines-truth.json'), `${JSON.stringify(placed, null, 1)}\n`);
     renameSync(dir, join(root, sketch.slug));
-    console.log(`wrote held-out persona ${sketch.slug} in ${join(root, sketch.slug)}`);
+    console.log('wrote a held-out persona');
   }
 }

@@ -192,25 +192,26 @@ test('compact record controls keep separate full-height touch targets', async ({
       });
       await expect(restore).toBeVisible();
       const controls = [chip, restore];
+      // The company pill's name opens the company.
       const companyNavigation = page.getByRole('button', {
-        name: 'Go to company',
+        name: `Open ${companyName}`,
         exact: true,
       });
       if (kind === 'contact') controls.push(companyNavigation);
 
       for (const control of controls) {
         const bounds = (await control.boundingBox())!;
-        expect(bounds.height).toBe(24);
         await expect(control).toHaveCSS('font-size', '12px');
-        if (!isMobile) continue;
-        if (control !== companyNavigation)
+        // The company pill is a button group, whose segments take its own
+        // 36px touch height; the other controls keep a 24px face.
+        if (isMobile && control === companyNavigation) {
+          expect(bounds.height).toBeGreaterThanOrEqual(36);
           expect(bounds.width).toBeGreaterThanOrEqual(44);
-        else
-          expect(
-            await control.evaluate(
-              (element) => getComputedStyle(element, '::before').width
-            )
-          ).toBe('44px');
+          continue;
+        }
+        expect(bounds.height).toBe(24);
+        if (!isMobile) continue;
+        expect(bounds.width).toBeGreaterThanOrEqual(44);
         // The visible face is compact; the reserved margin and transparent
         // extension must still deliver taps across a separate 44px target.
         for (const y of [bounds.y - 9.5, bounds.y + bounds.height + 9.5]) {
@@ -267,8 +268,13 @@ test('compact record controls keep separate full-height touch targets', async ({
         ).toBeVisible();
         const company = companyNavigation;
         const bounds = (await company.boundingBox())!;
+        // The company pill's segments take its full 36px touch height, with
+        // no extension beyond it.
         if (isMobile)
-          await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y - 9);
+          await page.touchscreen.tap(
+            bounds.x + bounds.width / 2,
+            bounds.y + bounds.height / 2
+          );
         else await company.click();
         await expect(
           page.getByRole('textbox', { name: 'Company name' })

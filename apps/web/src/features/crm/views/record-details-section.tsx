@@ -38,12 +38,19 @@ export function RecordDetailsSection(props: {
         <Show when={props.contact}>
           {(contact) => (
             <>
-              <SidePanel.Row label={t('crm.email')}>
-                <ContactEmailField contact={contact()} />
-              </SidePanel.Row>
+              {/* Several addresses run over several lines, so the label sits
+                  on the first, as the side panel's multi-line values do,
+                  rather than centred like a SidePanel.Row's. */}
+              <span class="self-start truncate pt-1.5 text-ink-muted touch:pt-3">
+                {t('crm.email')}
+              </span>
+              <div class="min-w-0 self-start py-0.5">
+                <ContactEmailField contact={contact()} surface="details" />
+              </div>
               <SidePanel.Row label={t('crm.company')}>
                 <ContactCompanyField
                   contact={contact()}
+                  surface="details"
                   onOpenCompany={props.onOpenCompany}
                 />
               </SidePanel.Row>

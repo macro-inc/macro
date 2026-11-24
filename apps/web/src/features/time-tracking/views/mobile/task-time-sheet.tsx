@@ -11,11 +11,14 @@ import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { EntryForm } from '../../components/entry-form';
 import { QuickLengths } from '../../components/log-time-input';
 import { TimePill } from '../../components/time-pill';
+import { TimerControl } from '../../components/timer-control';
+import { useTimeTracking } from '../../context/time-tracking-context';
 import { localDay } from '../../core/entry-days';
 import { createTaskTime } from '../../primitives/create-task-time';
 import { EntriesSection } from '../shared/entries-section';
 import { reportWrite } from '../shared/report-write';
 import type { TaskTimeViewProps } from '../shared/task-time-props';
+import { createTimerActions } from '../shared/timer-actions';
 
 type Mode =
   | { kind: 'list' }
@@ -32,6 +35,10 @@ export function TaskTimeSheet(props: TaskTimeViewProps): JSX.Element {
   const [opened, setOpened] = createSignal(false);
   const time = createTaskTime(() => (opened() ? props.taskId : undefined));
   const today = () => localDay(new Date());
+  const capabilities = useTimeTracking();
+  const timer = capabilities.runningTimer;
+  const timerActions = createTimerActions(capabilities);
+  const timingThis = () => timer.timer()?.taskId === props.taskId;
   const own = (id: string) =>
     time.entries().find((entry) => entry.id === id && entry.canEdit);
   const editing = () => {
@@ -102,6 +109,19 @@ export function TaskTimeSheet(props: TaskTimeViewProps): JSX.Element {
                 </Match>
                 <Match when={mode().kind === 'list'}>
                   <Show when={props.canEdit}>
+                    <TimerControl
+                      variant="block"
+                      running={timingThis()}
+                      seconds={timer.seconds()}
+                      disabled={timer.busy() || timer.offline()}
+                      disabledReason={
+                        timer.offline()
+                          ? t('timeTracking.timerOffline')
+                          : undefined
+                      }
+                      onStart={() => timerActions.start(props.taskId)}
+                      onStop={timerActions.stop}
+                    />
                     <QuickLengths
                       chips
                       onLog={(minutes) =>

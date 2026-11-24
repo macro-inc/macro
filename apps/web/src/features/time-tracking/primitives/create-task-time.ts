@@ -2,7 +2,10 @@ import { beginInteraction } from '@app/observability/flow';
 import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { err } from 'neverthrow';
 import { type Accessor, createSignal, mapArray } from 'solid-js';
-import { useTimeTracking } from '../context/time-tracking-context';
+import {
+  type TimeTrackingCapabilities,
+  useTimeTracking,
+} from '../context/time-tracking-context';
 import type { TimeEntryValues } from '../core/entry-values';
 import {
   createTaskTimeEntriesAfterQuery,
@@ -35,11 +38,39 @@ async function traced(
 }
 
 /**
+ * Changes to one's own entries, wherever they show: they show at once and
+ * wait offline in the durable queue.
+ */
+export function createTimeEntryWrites(
+  capabilities: Pick<TimeTrackingCapabilities, 'client' | 'cacheHost'>
+) {
+  const { client, cacheHost } = capabilities;
+  const dependencies = () => ({ client: client(), host: cacheHost() });
+  return {
+    update(
+      entry: TimeEntryFieldsFragment,
+      values: TimeEntryValues
+    ): Promise<TimeWriteResult> {
+      return traced('time.update', entry.taskId, () =>
+        updateTimeEntry({ entry, values }, dependencies())
+      );
+    },
+    remove(entry: TimeEntryFieldsFragment): Promise<TimeWriteResult> {
+      return traced('time.delete', entry.taskId, () =>
+        deleteTimeEntry({ entry }, dependencies())
+      );
+    },
+  };
+}
+
+/**
  * A task's time: its entries, newest day first, and the writes that change
  * them. Writes show at once and wait offline in the durable queue.
  */
 export function createTaskTime(taskId: Accessor<string | undefined>) {
-  const { client, cacheHost, viewerId } = useTimeTracking();
+  const capabilities = useTimeTracking();
+  const { client, cacheHost, viewerId } = capabilities;
+  const writes = createTimeEntryWrites(capabilities);
   const entries = createTaskTimeEntriesQuery(taskId, client);
   // Older pages the person asked for, kept only for the task they were read on.
   const [older, setOlder] = createSignal<{
@@ -88,7 +119,10 @@ export function createTaskTime(taskId: Accessor<string | undefined>) {
     entries: allEntries,
     pending: entries.pending,
     /** More entries exist past the ones shown. */
-    hasOlder: () => nextCursor() !== undefined,
+    // A page still loading may have more after it, and the control that
+    // asked for it stays in place meanwhile.
+    hasOlder: () =>
+      nextCursor() !== undefined || olderPages().some((page) => page.pending()),
     olderPending: () => olderPages().some((page) => page.pending()),
     showOlder() {
       const id = taskId();
@@ -107,19 +141,8 @@ export function createTaskTime(taskId: Accessor<string | undefined>) {
         logTime({ taskId: id, userId, values }, dependencies())
       );
     },
-    update(
-      entry: TimeEntryFieldsFragment,
-      values: TimeEntryValues
-    ): Promise<TimeWriteResult> {
-      return traced('time.update', entry.taskId, () =>
-        updateTimeEntry({ entry, values }, dependencies())
-      );
-    },
-    remove(entry: TimeEntryFieldsFragment): Promise<TimeWriteResult> {
-      return traced('time.delete', entry.taskId, () =>
-        deleteTimeEntry({ entry }, dependencies())
-      );
-    },
+    update: writes.update,
+    remove: writes.remove,
   };
 }
 
