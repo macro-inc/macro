@@ -9,6 +9,10 @@ export type SuggestionTarget = {
 export type SuggestionRun = {
   sessionId: string;
   startedAt: string;
+  /** Asked to stop and not yet stopped: the row says it is stopping. */
+  stopping: boolean;
+  /** The one line the run wrote saying what it did and what it sent; absent until it writes one. */
+  report?: string;
 };
 
 export type SuggestionCategory =
