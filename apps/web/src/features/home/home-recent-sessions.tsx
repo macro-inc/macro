@@ -9,6 +9,7 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ChatProviderIcon } from '@entity/components/ChatProviderIcon';
 import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
 import {
+  QUICK_ACCESS_FEED_OPTIONS,
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
@@ -59,7 +60,10 @@ export const RECENT_CHATS_ARGS: SoupAstItemsQueryArgs = {
 
 /** The user's most recently updated AI chats, newest first. */
 export function useRecentChatSessions(limit = DEFAULT_LIMIT) {
-  const query = useSoupAstItemsQuery(() => RECENT_CHATS_ARGS);
+  const query = useSoupAstItemsQuery(
+    () => RECENT_CHATS_ARGS,
+    () => QUICK_ACCESS_FEED_OPTIONS
+  );
   return () =>
     (query.data?.entities ?? [])
       .filter((entity) => entity.type === 'chat')

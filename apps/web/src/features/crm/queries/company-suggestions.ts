@@ -5,9 +5,10 @@ import {
 } from '@app/features/next-soup/filters/filter-store';
 import { type CrmCompanyEntity, isCrmCompanyEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
-import type {
-  SoupAstItemsQueryArgs,
-  useSoupAstItemsQuery,
+import {
+  QUICK_ACCESS_FEED_OPTIONS,
+  type SoupAstItemsQueryArgs,
+  type useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { type Accessor, createMemo } from 'solid-js';
 
@@ -35,7 +36,7 @@ export function useQuickAccessCrmCompaniesQuery(
 ) {
   const query = useSource(
     () => QUICK_ACCESS_CRM_COMPANIES_ARGS,
-    () => ({ enabled: enabled() })
+    () => ({ ...QUICK_ACCESS_FEED_OPTIONS, enabled: enabled() })
   );
 
   const companies = createMemo<CrmCompanyEntity[]>(() =>

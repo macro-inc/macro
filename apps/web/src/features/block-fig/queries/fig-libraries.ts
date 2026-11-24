@@ -12,6 +12,7 @@ import {
 import { isDocumentEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import {
+  QUICK_ACCESS_FEED_OPTIONS,
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
@@ -33,7 +34,10 @@ export const FIG_LIBRARY_DESIGNS_ARGS: SoupAstItemsQueryArgs = {
 
 /** The designs `documentId`'s file may use as libraries. */
 export function useFigLibrarySource(documentId: string): FigLibrarySource {
-  const query = useSoupAstItemsQuery(() => FIG_LIBRARY_DESIGNS_ARGS);
+  const query = useSoupAstItemsQuery(
+    () => FIG_LIBRARY_DESIGNS_ARGS,
+    () => QUICK_ACCESS_FEED_OPTIONS
+  );
   const documents = createMemo<FigLibraryDocument[] | undefined>(() => {
     if (!queryReadyGate(query)) return undefined;
     return query.data.entities

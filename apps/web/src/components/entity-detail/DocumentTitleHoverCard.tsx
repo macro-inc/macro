@@ -6,7 +6,10 @@ import { queryReadyGate } from '@queries/gate';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { HoverCard } from '@ui';
 import { type ParentProps, Show } from 'solid-js';
-import { documentMetadataArgs } from './document-metadata-query';
+import {
+  documentMetadataArgs,
+  documentMetadataOptions,
+} from './document-metadata-query';
 
 type DocumentTitleProps = {
   documentId: string;
@@ -24,11 +27,7 @@ function DocumentTitleDetails(props: DocumentTitleProps) {
   };
   const metadata = useSoupAstItemsQuery(
     () => documentMetadataArgs(props.documentId),
-    () => ({
-      graphqlCacheFirstEntities: [
-        { entityType: 'DOCUMENT', entityId: props.documentId },
-      ],
-    })
+    () => documentMetadataOptions(props.documentId)
   );
   const resolved = () =>
     queryReadyGate(metadata)

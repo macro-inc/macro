@@ -1,7 +1,10 @@
 import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import { isLocallySortable } from '@queries/soup/graphql/reconciliation';
 import { describe, expect, it } from 'vitest';
-import { documentMetadataArgs } from './document-metadata-query';
+import {
+  documentMetadataArgs,
+  documentMetadataOptions,
+} from './document-metadata-query';
 
 describe('documentMetadataArgs', () => {
   it('asks for a sort the local cache can answer', () => {
@@ -10,5 +13,14 @@ describe('documentMetadataArgs', () => {
     }).initial;
     expect(input?.sortMethod).toBeDefined();
     expect(isLocallySortable(input?.sortMethod)).toBe(true);
+  });
+});
+
+describe('documentMetadataOptions', () => {
+  it('reads the document from the cache first, without notifications', () => {
+    expect(documentMetadataOptions('doc-1')).toEqual({
+      ignoresNotifications: true,
+      graphqlCacheFirstEntities: [{ entityType: 'DOCUMENT', entityId: 'doc-1' }],
+    });
   });
 });
