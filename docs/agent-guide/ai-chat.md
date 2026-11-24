@@ -1248,7 +1248,8 @@ quota, but Macro-funded tools and helpers still check independently.
 Every plan includes a monthly AI allowance per seat, measured at provider cost;
 paid usage beyond it is billed at a markup. All of the numbers come from Doppler
 (`AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`
-for Premium, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`, and
+for Premium, `AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS`,
+`AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`, and
 `AI_USAGE_OVERAGE_MARKUP_PERCENT`), never from code. When a paid allowance is
 used up and no credits or usage billing cover the request, sending a message
 answers HTTP 402 and the app opens the **AI usage limit** dialog (title

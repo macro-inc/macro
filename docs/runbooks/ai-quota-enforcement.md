@@ -82,13 +82,15 @@ independent of `ENABLE_AI_USAGE_ENFORCEMENT` and of the deployment environment:
 there is no longer an `Environment::Develop` safeguard, so a true value settles
 in production.
 
-Pricing is four mandatory Doppler values, loaded once at startup by every host that
+Pricing is five mandatory Doppler values, loaded once at startup by every host that
 composes `ai_billing` (see [`config.rs`](../../crates/ai_billing/src/config.rs) and
 [`pricing.rs`](../../crates/ai_billing/src/domain/pricing.rs)): one allowance per plan,
 measured at provider cost — `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS` (the free plan's
 hard cap, per user per UTC calendar month), `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`
-(Premium, per seat per subscription period), and `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`
-(Max, per seat per subscription period) — and `AI_USAGE_OVERAGE_MARKUP_PERCENT`,
+(Premium, per seat per subscription period), `AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS`
+(Business, per seat per subscription period), and `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`
+(Max, per seat per subscription period; an annual subscription's period is metered
+one month at a time) — and `AI_USAGE_OVERAGE_MARKUP_PERCENT`,
 the whole-percent markup over cost applied to paid usage beyond the allowance before
 credits are consumed. There is no default in code: a missing,
 malformed, or out-of-range value fails startup and the Doppler CI validator. The values live in `shared_ai` (`lcl`,
@@ -412,8 +414,8 @@ procedure. Operators must approve and record each release gate.
    memory/common-tool host. Use the existing Doppler-backed application config,
    not a quoted JSON string, AWS secret indirection, or a second Pulumi flag.
    The pricing values `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS`,
-   `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`,
-   and `AI_USAGE_OVERAGE_MARKUP_PERCENT` are mandatory for these same hosts
+   `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS`,
+   `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`, and `AI_USAGE_OVERAGE_MARKUP_PERCENT` are mandatory for these same hosts
    whatever the flags say; see [Settlement](#settlement-enable_ai_usage_billing).
    Before starting the agent harness, MCP, or scheduled action service,
    register `AUTHENTICATION_SERVICE_SECRET_KEY` (the authentication service's
