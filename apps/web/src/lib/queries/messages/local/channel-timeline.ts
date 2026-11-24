@@ -339,6 +339,8 @@ export function createLocalChannelTimeline(
    */
   const loadWindow = async (around: string | undefined, reloads: number) => {
     const token = ++loadToken;
+    // Taken before any await: the catch-up joins the open's trace.
+    const trace = Telemetry.captureContext();
     abort?.abort();
     abort = new AbortController();
     const signal = abort.signal;
@@ -399,7 +401,10 @@ export function createLocalChannelTimeline(
     held = settled === 'held';
     if (!held) return;
     // Opening asks the server only when the channel is not proven current.
-    fireAndForget(deps.runtime.ensureCurrent(channelId), 'channel-local-sync');
+    fireAndForget(
+      trace.run(() => deps.runtime.ensureCurrent(channelId)),
+      'channel-local-sync'
+    );
   };
 
   const reread = async () => {

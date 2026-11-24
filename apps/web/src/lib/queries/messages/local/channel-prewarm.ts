@@ -167,7 +167,8 @@ const warmChannel = (
         return 'fetched' as const;
       }
       deps.runtime.noteStoredSeq(channelId, seq);
-      await deps.runtime.ensureCurrent(channelId);
+      // After awaits: the catch-up joins the pass's trace again.
+      await parent.run(() => deps.runtime.ensureCurrent(channelId));
       return 'held' as const;
     },
     catch: (error) => error,

@@ -16,10 +16,23 @@ import {
 import { fakeLocks } from './fake-locks';
 import { CHANNEL_ID, devicePage, fakeHost, graphqlMessage } from './fixtures';
 
+const trace = vi.hoisted(() => ({ depth: 0 }));
+
 vi.mock('@macro-inc/observability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@macro-inc/observability')>()),
   Telemetry: {
     error: vi.fn(),
+    // Counts the trace a load captured as entered while its work runs.
+    captureContext: () => ({
+      run: <T>(operation: () => T) => {
+        trace.depth += 1;
+        try {
+          return operation();
+        } finally {
+          trace.depth -= 1;
+        }
+      },
+    }),
     span: async (_name: string, run: (span: unknown) => unknown) =>
       run({ setAttr: () => undefined, run: <T>(op: () => T) => op() }),
   },
@@ -67,6 +80,7 @@ function serverThread(): FetchChannelThreadPage {
 }
 
 function runtime() {
+  const inTrace: boolean[] = [];
   const listeners = new Set<() => void>();
   return {
     open: vi.fn(() => () => undefined),
@@ -76,7 +90,11 @@ function runtime() {
     }),
     noteStoredSeq: vi.fn(),
     noteServerRead: vi.fn(),
-    ensureCurrent: vi.fn(async () => 'current' as const),
+    ensureCurrent: vi.fn(async () => {
+      inTrace.push(trace.depth > 0);
+      return 'current' as const;
+    }),
+    inTrace,
     epoch: () => 0,
     change: () => {
       for (const listener of listeners) listener();
@@ -293,6 +311,8 @@ describe('createLocalChannelThread', () => {
     expect(sync.open).toHaveBeenCalledWith(CHANNEL_ID);
     expect(sync.noteStoredSeq).toHaveBeenCalledWith(CHANNEL_ID, '7');
     expect(sync.ensureCurrent).toHaveBeenCalledWith(CHANNEL_ID);
+    // The catch-up after the device read is part of the open's trace.
+    expect(sync.inTrace).toEqual([true]);
 
     keys = [channelMessageKey(third.id), ...keys];
     sync.change();

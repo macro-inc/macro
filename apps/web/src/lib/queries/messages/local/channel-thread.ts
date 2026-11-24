@@ -410,6 +410,8 @@ export function createLocalChannelThread(
     abort?.abort();
     abort = new AbortController();
     const signal = abort.signal;
+    // Taken before any await: the catch-up joins the open's trace.
+    const trace = Telemetry.captureContext();
     const epoch = deps.runtime.epoch();
     try {
       const loaded = await loadChannelThread(deps.host, channelId, root, {
@@ -426,7 +428,10 @@ export function createLocalChannelThread(
       if (loaded.source === 'device') {
         deps.runtime.noteStoredSeq(channelId, loaded.seq);
         held = true;
-        fireAndForget(deps.runtime.ensureCurrent(channelId), 'channel-thread');
+        fireAndForget(
+          trace.run(() => deps.runtime.ensureCurrent(channelId)),
+          'channel-thread'
+        );
         return;
       }
       if (loaded.sessionChanged || loaded.yielded) {
@@ -446,7 +451,10 @@ export function createLocalChannelThread(
       held = loaded.seq !== null;
       // A device that kept an older sequence than the read catches up.
       if (held)
-        fireAndForget(deps.runtime.ensureCurrent(channelId), 'channel-thread');
+        fireAndForget(
+          trace.run(() => deps.runtime.ensureCurrent(channelId)),
+          'channel-thread'
+        );
     } catch (error) {
       if (current !== token) return;
       setState('error', error);
