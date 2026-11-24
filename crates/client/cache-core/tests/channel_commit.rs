@@ -266,6 +266,46 @@ fn the_first_page_drops_older_previews_it_does_not_list() {
 }
 
 #[test]
+fn the_first_page_drops_an_older_preview_its_response_brings_again() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        write_page(&mut engine, "c1", "11", &[root("m9", "90")], None)
+            .await
+            .unwrap();
+        let query = "query ($page: ChannelTimelineInput!, $thread: ChannelThreadInput!) { user { \
+             __typename id channelTimeline(input: $page) { __typename seq entries { __typename \
+             ... on GraphqlChannelMessage { id channelId sortKey threadId deletedAt content } } } \
+             channelThread(input: $thread) { __typename seq root { __typename id channelId \
+             sortKey threadId deletedAt content } } } }";
+        let variables =
+            json!({"page": {"channelId": "c1"}, "thread": {"channelId": "c1", "rootId": "m9"}});
+        let [mut listed, mut old] = [root("m1", "10"), root("m9", "90")];
+        for entry in [&mut listed, &mut old] {
+            entry.as_object_mut().unwrap().remove("thread");
+        }
+        // The thread was read before m9 was removed, the page after.
+        let data = json!({"user": {"__typename": "GraphqlUser", "id": "u1",
+            "channelTimeline": {"__typename": "GraphqlChannelTimelinePage", "seq": "12", "entries": [listed]},
+            "channelThread": {"__typename": "GraphqlChannelThreadPage", "seq": "11", "root": old},
+        }});
+        let write = NetworkWrite {
+            query,
+            operation_name: None,
+            variables: variables.as_object().unwrap(),
+            data: &data,
+            identity: None,
+            channel: Some(&whole("12")),
+        };
+        engine
+            .write_query_with_registration(None, None, write)
+            .await
+            .unwrap();
+        assert_eq!(roots(&mut engine).await, covered(&["m1"]));
+        assert_eq!(content(&mut engine, "m9").await, None);
+    });
+}
+
+#[test]
 fn a_reset_replaces_everything_held() {
     block_on(async {
         let mut engine = held().await;
@@ -613,6 +653,8 @@ fn an_edit_queued_after_the_removal_of_its_entry_shows_nothing_of_it() {
         let mut engine = held_with_mutations().await;
         let removal = removing(changes("c1", "10", "11"), &["m9"]);
         apply(&mut engine, "11", &[], &removal).await;
+        // Deleting what is held of it forgets no removal.
+        engine.delete_keys(&[key("m9")]).await.unwrap();
         // The device never held it; the edit has all of it.
         queue(&mut engine, &saying(root("m9", "90"), "pending"), false).await;
         assert_eq!(roots(&mut engine).await, covered(&["m2", "m1"]));

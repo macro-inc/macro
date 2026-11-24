@@ -214,8 +214,14 @@ impl<S: Storage> Engine<S> {
             let committed =
                 moved.filter(|(commit, ..)| Some(commit.channel_id.as_str()) == channel_id);
             let reset = committed.is_some_and(|(commit, ..)| commit.reset);
-            // A reset keeps no entry its response does not date.
-            let state = state.filter(|_| !reset || stamp.is_none());
+            let state = state.filter(|state| match committed {
+                _ if stamp.is_none() => true,
+                // A reset keeps no entry its response does not date.
+                Some((commit, ..)) if commit.reset => false,
+                // Nobody followed the changes between a preview and a first page.
+                Some((_, None, Some(after), _)) => state.removed || state.seq >= after,
+                _ => true,
+            });
             let watermark = match committed {
                 Some((_, _, after, _)) => after,
                 None => channel_id.and_then(|channel_id| guard.watermark(channel_id)),
