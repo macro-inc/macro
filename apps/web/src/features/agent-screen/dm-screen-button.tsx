@@ -27,7 +27,7 @@ export function useDmScreenHarnessId(
   // An ordinary DM (a team agent is a user) or a bot DM; other conversations
   // never look their participants up for it.
   const participants = useChannelParticipants(() =>
-    channelType() === ChannelType.direct_message || channel()?.agent_dm
+    channelType() === ChannelType.direct_message || channel()?.agentDm != null
       ? channelId
       : ''
   );

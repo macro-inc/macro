@@ -8,7 +8,9 @@ const DM = {
   id: CHANNEL_ID,
   name: AGENT_NAME,
   channel_type: 'direct_message',
-  agent_dm: false,
+  participants: [],
+  botParticipants: [],
+  agentDm: null,
 } as const;
 
 export function useChannelsContext() {

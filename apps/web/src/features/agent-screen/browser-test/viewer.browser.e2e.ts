@@ -152,17 +152,17 @@ for (const theme of ['light', 'dark'] as const) {
 
       // Narrower: the chip drops to its dot, and the name stays whole (at
       // this width it would truncate beside the labelled chip).
-      await page.goto(`${dmHeader}?width=530&theme=${theme}`, {
+      await page.goto(`${dmHeader}?width=420&theme=${theme}`, {
         waitUntil: 'networkidle',
       });
       await expect(chip).toHaveAttribute('data-compact', '');
       await expect(chip).toHaveAttribute('title', 'Offline');
       await expect.poll(truncated).toBe(false);
-      await shot(page, `dm-header-530-${theme}`);
+      await shot(page, `dm-header-420-${theme}`);
 
       // A narrow split beside the viewer: the actions give up their labels
       // too, and the avatar and the name stay whole.
-      await page.goto(`${dmHeader}?width=440&theme=${theme}`, {
+      await page.goto(`${dmHeader}?width=380&theme=${theme}`, {
         waitUntil: 'networkidle',
       });
       await expect(chip).toHaveAttribute('data-compact', '');
@@ -180,7 +180,7 @@ for (const theme of ['light', 'dark'] as const) {
         return inner.left < outer.left || inner.right > outer.right;
       });
       expect(avatarClipped).toBe(false);
-      await shot(page, `dm-header-440-${theme}`);
+      await shot(page, `dm-header-380-${theme}`);
       expect(errors).toEqual([]);
     });
   });
