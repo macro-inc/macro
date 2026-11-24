@@ -31,10 +31,10 @@ TanStack path in `../` runs untouched.
   the window is neither read from the device nor kept for the next mount; a
   change that came meanwhile, or while the window loaded, is read once it
   holds. A window loaded again forgets the old window's pages, and nothing
-  waits for a replaced window's store. A failed page sets `pageFailed`
-  (`olderFailed`) until a scroll, the connection, or a wait that doubles from
-  `PAGE_RETRY_MS` to `PAGE_RETRY_MAX_MS`, so the call panel, which pages
-  whenever paging is idle, asks at a bounded rate.
+  waits for a replaced window's reads or stores, nor for its pages'. A failed
+  page sets `pageFailed` (`olderFailed`) until a scroll, the connection, or a
+  wait that doubles from `PAGE_RETRY_MS` to `PAGE_RETRY_MAX_MS`, so the call
+  panel, which pages whenever paging is idle, asks at a bounded rate.
   Tabs share the device but hear only their own writes and the server's
   frames, so a write announces its channel to the other tabs once the queue
   stores it and once it settles (`channel-tab-writes.ts`, the

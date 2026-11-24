@@ -488,13 +488,18 @@ export function createLocalChannelTimeline(
     const epoch = deps.runtime.epoch();
     let loaded: LoadedChannelPage | 'unsupported';
     try {
-      loaded = await loadChannelPage(
-        deps,
-        {
-          channelId,
-          limit: CHANNEL_PAGE_LIMIT,
-          ...(around !== undefined && { aroundMessageId: around }),
-        },
+      // A device read may not answer an abort: a load replacing this one
+      // stops waiting for it.
+      loaded = await untilAborted(
+        loadChannelPage(
+          deps,
+          {
+            channelId,
+            limit: CHANNEL_PAGE_LIMIT,
+            ...(around !== undefined && { aroundMessageId: around }),
+          },
+          signal
+        ),
         signal
       );
       watch.stop();
@@ -626,13 +631,18 @@ export function createLocalChannelTimeline(
     merged: () => void
   ) => {
     const epoch = deps.runtime.epoch();
-    const loaded = await loadChannelPage(
-      deps,
-      {
-        channelId,
-        limit: CHANNEL_PAGE_LIMIT,
-        ...(direction === 'older' ? { before: cursor } : { after: cursor }),
-      },
+    // A window loaded since aborts the read too: a device read may not
+    // answer an abort, and the next page waits for this one to end.
+    const loaded = await untilAborted(
+      loadChannelPage(
+        deps,
+        {
+          channelId,
+          limit: CHANNEL_PAGE_LIMIT,
+          ...(direction === 'older' ? { before: cursor } : { after: cursor }),
+        },
+        signal
+      ),
       signal
     );
     if (token !== loadToken) return 'stale';

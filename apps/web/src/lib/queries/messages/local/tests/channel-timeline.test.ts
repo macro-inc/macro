@@ -2179,4 +2179,49 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       vi.useRealTimers();
     }
   });
+
+  it('pages a replacement target while the old scroll still has a pending device read', async () => {
+    const rows = messages(200);
+    const mounted = mount({ rows });
+    const [windowKey, setWindowKey] = createSignal(0);
+    const { paginator, dispose } = createRoot((dispose) => ({
+      paginator: createThreadPaginator(mounted.timeline, windowKey),
+      dispose,
+    }));
+    const oldReadStarted = Promise.withResolvers<void>();
+    const releaseOldRead = Promise.withResolvers<void>();
+    let oldScroll: Promise<void> | undefined;
+    try {
+      await settledOnDevice(mounted.runtime);
+      const readDevice = mounted.host.channelTimeline.bind(mounted.host);
+      vi.spyOn(mounted.host, 'channelTimeline').mockImplementationOnce(
+        async (args) => {
+          oldReadStarted.resolve();
+          await releaseOldRead.promise;
+          return readDevice(args);
+        }
+      );
+      oldScroll = paginator.shiftPaginate();
+      await oldReadStarted.promise;
+
+      const target = rows[99]!;
+      const replacement = settledOnDevice(mounted.runtime);
+      setWindowKey(1);
+      mounted.setAround(target.id);
+      await replacement;
+      expect(ids(mounted.timeline)).toContain(target.id);
+      expect(mounted.timeline.hasOlder()).toBe(true);
+      expect(mounted.timeline.isLoadingOlder()).toBe(false);
+      expect(ids(mounted.timeline)).toHaveLength(50);
+
+      await paginator.shiftPaginate();
+      // The new target and its older page are independently readable.
+      await until(() => ids(mounted.timeline).length === 100);
+    } finally {
+      releaseOldRead.resolve();
+      if (oldScroll) await oldScroll;
+      dispose();
+      mounted.dispose();
+    }
+  });
 });
