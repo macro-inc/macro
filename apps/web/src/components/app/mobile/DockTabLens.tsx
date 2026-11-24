@@ -77,13 +77,18 @@ export function DockTabLens(props: {
     onCleanup(() => changes.disconnect());
 
     let touching = false;
+    // Only a finger on the bar can press a tab: a re-snap after a rotation or
+    // the lens resting on a new view also scrolls.
+    let gesture = false;
     let moved = false;
     let startOffset = 0;
     const settle = () => {
       if (touching) return;
       // A drag whose release was cancelled settles where the snap took it.
       const index = lensIndexAt(centers(), element.scrollLeft);
-      if (moved && index !== props.activeIndex) buttons()[index]?.click();
+      if (gesture && moved && index !== props.activeIndex)
+        buttons()[index]?.click();
+      gesture = false;
       moved = false;
       setLensShown(false);
     };
@@ -94,6 +99,7 @@ export function DockTabLens(props: {
         const touch = event.touches[0];
         if (!touch || event.touches.length > 1) return;
         touching = true;
+        gesture = true;
         moved = false;
         settleSoon.clear();
         // The lens lifts under the finger, then follows it.
@@ -113,7 +119,8 @@ export function DockTabLens(props: {
     element.addEventListener(
       'scroll',
       () => {
-        if (Math.abs(element.scrollLeft - startOffset) > 2) moved = true;
+        if (gesture && Math.abs(element.scrollLeft - startOffset) > 2)
+          moved = true;
         if (!touching) settleSoon();
       },
       { passive: true, signal }
