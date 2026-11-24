@@ -839,7 +839,8 @@ that driver.
 **Reading pane.** On desktop the header's columns button (or `Shift+V`) shows
 threads beside the list instead of in its place; the choice is remembered per
 browser. A pane too narrow for the header's actions hides the columns button
-and the Focus sort before Search would leave the pane; `Shift+V` still works
+and the Focus sort before Search would leave the pane, then shows the inbox
+tabs as icons alone (a third of a small window); `Shift+V` still works
 there. The list keeps its own keys: j/k and arrows move the cursor and the
 pane follows it (replacing history rather than adding entries) while the list
 keeps focus, even if the thread is still loading; Mark done on
