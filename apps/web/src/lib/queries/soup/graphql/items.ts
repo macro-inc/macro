@@ -1,3 +1,5 @@
+import type { DateValue } from '@core/util/date';
+import type { EntityData } from '@entity/types/entity';
 import type { CombinedError } from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
 import { arrayEquals } from '../../../core/util/compareUtils';
@@ -26,6 +28,44 @@ import { createGraphqlSoupDoneProjection } from './done-projection';
 import { usePendingGraphqlSoupDeleteKeys } from './optimistic-deletions';
 import { usePendingGraphqlSoupDone } from './optimistic-done';
 import { soupItemKey } from './reconciliation';
+
+type NotifiedRow = {
+  /** The time the row's notified page listed it at. */
+  pageNotifiedAt?: string;
+  entity?: EntityData;
+};
+
+const notifiedTime = (value: DateValue | null | undefined) =>
+  value ? new Date(value).getTime() : Number.NEGATIVE_INFINITY;
+
+/**
+ * A notified list has no local projection, but a notification delivered over
+ * the websocket raises its entity's notified-at floor, which the row's mapping
+ * reads. A row whose time rose past the one its page listed moves up to where
+ * that time puts it, as the server's next read will list it; the others keep
+ * the server's order.
+ */
+function placeNotifiedRows<T extends NotifiedRow>(rows: T[]): T[] {
+  const risen: { row: T; at: number }[] = [];
+  const rest: T[] = [];
+  for (const row of rows) {
+    const at = notifiedTime(row.entity?.notifiedAt);
+    if (at > notifiedTime(row.pageNotifiedAt)) risen.push({ row, at });
+    else rest.push(row);
+  }
+  if (!risen.length) return rows;
+  risen.sort((first, second) => second.at - first.at);
+  const placed: T[] = [];
+  let next = 0;
+  for (const row of rest) {
+    const at = notifiedTime(row.entity?.notifiedAt);
+    while (next < risen.length && risen[next].at > at)
+      placed.push(risen[next++].row);
+    placed.push(row);
+  }
+  for (; next < risen.length; next++) placed.push(risen[next].row);
+  return placed;
+}
 
 export type GraphqlSoupAstItemsQueryArgs = {
   params: SoupAstParams;
@@ -154,6 +194,7 @@ export function createGraphqlSoupAstItemsQuery(
         fetched === record ? item : fetched ? mapItem(fetched) : undefined;
       return {
         key: soupItemKey(record),
+        pageNotifiedAt: notifiedAt,
         item: () => item,
         entity: item
           ? mapSoupPageToEntityList(
@@ -175,13 +216,14 @@ export function createGraphqlSoupAstItemsQuery(
   const visible = createMemo(
     () => {
       const shown = new Set<string>();
-      return (source.data() ?? []).flatMap((record) => {
+      const rows = (source.data() ?? []).flatMap((record) => {
         const key = soupItemKey(record);
         const item = byKey().get(key);
         if (!item || shown.has(key)) return [];
         shown.add(key);
         return [item];
       });
+      return sortMethod() === 'notified_at' ? placeNotifiedRows(rows) : rows;
     },
     undefined,
     { equals: arrayEquals }
