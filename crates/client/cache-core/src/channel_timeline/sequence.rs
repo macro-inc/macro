@@ -215,11 +215,13 @@ fn proven(
 }
 
 /// The coverage `commit` leaves its lists with, over what the guard read.
-/// `listed` has the sort keys of the entries its response carries.
+/// `listed` has the sort keys of the entries its response carries; a list in
+/// `unproven` gains no stretch.
 pub(crate) fn coverage_writes(
     commit: &ChannelTimelineCommit,
     guard: &ChannelGuard,
     listed: &BTreeMap<TimelineScope, BTreeSet<String>>,
+    unproven: &BTreeSet<TimelineScope>,
 ) -> Vec<ChannelCoverageWrite> {
     let mut scopes = commit
         .dropped_thread_root_ids
@@ -234,6 +236,7 @@ pub(crate) fn coverage_writes(
             .filter(|_| !fresh);
         let spans = spans
             .into_iter()
+            .filter(|_| !unproven.contains(&scope))
             .filter_map(|span| proven(span, listed.get(&scope), held));
         let spans = merge_spans(held.into_iter().flatten().cloned().chain(spans));
         if held.map_or(&[][..], Vec::as_slice) != spans {

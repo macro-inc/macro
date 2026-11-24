@@ -266,42 +266,63 @@ fn the_first_page_drops_older_previews_it_does_not_list() {
 }
 
 #[test]
-fn the_first_page_drops_an_older_preview_its_response_brings_again() {
+fn a_page_beside_an_older_copy_of_an_entry_proves_nothing_of_its_list() {
+    let query = "query ($page: ChannelTimelineInput!, $thread: ChannelThreadInput!) { user { \
+         __typename id channelTimeline(input: $page) { __typename seq entries { __typename \
+         ... on GraphqlChannelMessage { id channelId sortKey threadId deletedAt content } } } \
+         channelThread(input: $thread) { __typename seq root { __typename id channelId \
+         sortKey threadId deletedAt content } } } }";
+    let variables =
+        json!({"page": {"channelId": "c1"}, "thread": {"channelId": "c1", "rootId": "m9"}});
     block_on(async {
-        let mut engine = Engine::new(InMemoryStorage::new());
-        write_page(&mut engine, "c1", "11", &[root("m9", "90")], None)
-            .await
-            .unwrap();
-        let query = "query ($page: ChannelTimelineInput!, $thread: ChannelThreadInput!) { user { \
-             __typename id channelTimeline(input: $page) { __typename seq entries { __typename \
-             ... on GraphqlChannelMessage { id channelId sortKey threadId deletedAt content } } } \
-             channelThread(input: $thread) { __typename seq root { __typename id channelId \
-             sortKey threadId deletedAt content } } } }";
-        let variables =
-            json!({"page": {"channelId": "c1"}, "thread": {"channelId": "c1", "rootId": "m9"}});
-        let [mut listed, mut old] = [root("m1", "10"), root("m9", "90")];
-        for entry in [&mut listed, &mut old] {
-            entry.as_object_mut().unwrap().remove("thread");
+        // Whether the page still has m9, a preview of it is held, and a channel
+        // is followed already.
+        for (listed, preview, followed) in [
+            (false, true, false),
+            (true, true, false),
+            (true, false, false),
+            (true, false, true),
+        ] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            if preview {
+                write_page(&mut engine, "c1", "11", &[root("m9", "90")], None)
+                    .await
+                    .unwrap();
+            }
+            if followed {
+                let nothing = page("c1", "12", vec![]);
+                apply(&mut engine, "12", &[], &nothing).await;
+            }
+            let [m1, m9] = [("m1", "10"), ("m9", "90")].map(|(id, sort_key)| {
+                let mut entry = root(id, sort_key);
+                entry.as_object_mut().unwrap().remove("thread");
+                entry
+            });
+            let mut entries = vec![m1];
+            if listed {
+                entries.push(m9.clone());
+            }
+            // The thread was read before the page.
+            let data = json!({"user": {"__typename": "GraphqlUser", "id": "u1",
+                "channelTimeline": {"__typename": "GraphqlChannelTimelinePage", "seq": "12", "entries": entries},
+                "channelThread": {"__typename": "GraphqlChannelThreadPage", "seq": "11", "root": m9},
+            }});
+            let write = NetworkWrite {
+                query,
+                operation_name: None,
+                variables: variables.as_object().unwrap(),
+                data: &data,
+                identity: None,
+                channel: Some(&whole("12")),
+            };
+            engine
+                .write_query_with_registration(None, None, write)
+                .await
+                .unwrap();
+            assert_eq!(roots(&mut engine).await, None);
+            apply(&mut engine, "12", &[root("m1", "10")], &whole("12")).await;
+            assert_eq!(roots(&mut engine).await, covered(&["m1"]));
         }
-        // The thread was read before m9 was removed, the page after.
-        let data = json!({"user": {"__typename": "GraphqlUser", "id": "u1",
-            "channelTimeline": {"__typename": "GraphqlChannelTimelinePage", "seq": "12", "entries": [listed]},
-            "channelThread": {"__typename": "GraphqlChannelThreadPage", "seq": "11", "root": old},
-        }});
-        let write = NetworkWrite {
-            query,
-            operation_name: None,
-            variables: variables.as_object().unwrap(),
-            data: &data,
-            identity: None,
-            channel: Some(&whole("12")),
-        };
-        engine
-            .write_query_with_registration(None, None, write)
-            .await
-            .unwrap();
-        assert_eq!(roots(&mut engine).await, covered(&["m1"]));
-        assert_eq!(content(&mut engine, "m9").await, None);
     });
 }
 

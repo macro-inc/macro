@@ -43,6 +43,9 @@ pub(super) struct ChannelAdmission {
     pub(super) changes: ChannelChanges,
     /// Sort keys of the entries the response carries, by list.
     listed: BTreeMap<TimelineScope, BTreeSet<String>>,
+    /// Lists that may lack an entry the committed page has: the response also
+    /// carries an older copy, and nothing says which of the two is refused.
+    unproven: BTreeSet<TimelineScope>,
     stamped: HashMap<EntityKey<'static>, Admitted>,
     /// Records written whole: nothing they held before is merged into.
     replaced: BTreeSet<EntityKey<'static>>,
@@ -195,7 +198,8 @@ impl<S: Storage> Engine<S> {
             .map(|commit| {
                 let held = guard.watermark(&commit.channel_id);
                 let (after, status) = commit.parsed_watermark()?.apply(held);
-                Ok::<_, EngineError<S::Error>>((commit, held, after, status))
+                let seq = commit.parsed_seq()?;
+                Ok::<_, EngineError<S::Error>>((commit, seq, held, after, status))
             })
             .transpose()?;
         for key in entries {
@@ -204,9 +208,10 @@ impl<S: Storage> Engine<S> {
             let Some(record) = updates.get_mut(&key) else {
                 continue;
             };
-            if let Some(row) = stamp.and_then(|_| project_channel_timeline(&key, record)) {
-                let listed = admission.listed.entry(row.scope).or_default();
-                listed.insert(row.sort_key);
+            let row = stamp.and_then(|_| project_channel_timeline(&key, record));
+            if let Some(row) = &row {
+                let listed = admission.listed.entry(row.scope.clone()).or_default();
+                listed.insert(row.sort_key.clone());
             }
             let channel_id = entry_channel_id(record)
                 .or(state.map(|state| state.channel_id.as_str()))
@@ -219,11 +224,11 @@ impl<S: Storage> Engine<S> {
                 // A reset keeps no entry its response does not date.
                 Some((commit, ..)) if commit.reset => false,
                 // Nobody followed the changes between a preview and a first page.
-                Some((_, None, Some(after), _)) => state.removed || state.seq >= after,
+                Some((_, _, None, Some(after), _)) => state.removed || state.seq >= after,
                 _ => true,
             });
             let watermark = match committed {
-                Some((_, _, after, _)) => after,
+                Some((_, _, _, after, _)) => after,
                 None => channel_id.and_then(|channel_id| guard.watermark(channel_id)),
             };
             let unheld = stamp.is_some()
@@ -244,6 +249,10 @@ impl<S: Storage> Engine<S> {
                 }
                 continue;
             }
+            let older = committed.is_some_and(|(_, seq, ..)| stamp < seq);
+            if let Some(row) = row.filter(|_| older && state.is_none_or(|state| state.removed)) {
+                admission.unproven.insert(row.scope);
+            }
             match (refused, state) {
                 (Refused::KeepIdentity, Some(state)) => retain_identity(record, state.removed),
                 (Refused::KeepIdentity, None) | (Refused::Drop, _) => {
@@ -251,7 +260,7 @@ impl<S: Storage> Engine<S> {
                 }
             }
         }
-        if let Some((commit, held, after, status)) = moved {
+        if let Some((commit, _, held, after, status)) = moved {
             self.admit_channel_commit(&mut admission, updates, &guard, commit, (held, after))
                 .await?;
             admission.outcome = Some(ChannelCommitOutcome {
@@ -347,7 +356,8 @@ impl<S: Storage> Engine<S> {
         }
         admission.write.deleted = doomed.into_iter().collect();
 
-        admission.write.coverage = coverage_writes(commit, guard, &admission.listed);
+        admission.write.coverage =
+            coverage_writes(commit, guard, &admission.listed, &admission.unproven);
         let stored = guard.sync.get(channel_id);
         let touched = stored.map_or(0, |sync| sync.touched_at_ms);
         let sync = ChannelSync {

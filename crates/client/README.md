@@ -114,7 +114,8 @@ lowers the watermark and a reset sets it, so what is held is never older than it
 says; changes advance it only when they continue it, and the outcome (`applied`,
 `stale`, `gap`, `unheld`) tells the host what to ask next. A bound of a covered
 stretch counts only when the page lists it or the device's coverage already
-reaches it. A response without a `seq` never adds a row. A row has one `seq`
+reaches it, and none counts of a list whose entry the response also carries at an
+older `seq` and the device refuses. A response without a `seq` never adds a row. A row has one `seq`
 for the whole record, so every selection of a message under a `seq` uses the same
 fragment, and one response selects a message under a `seq` or not. The removal of
 an entry a queued write changes is kept until the write settles, and eviction
