@@ -150,14 +150,18 @@ while the contact can take one. The single address in `companyDomainEmails`
 shows no Remove and nothing in its place.
 
 The company is one split pill, like a task's Project: its name opens the
-company (Shift opens a new split, without selecting) and its caret opens the
-picker, with Remove company at its foot. A contact without a company shows the
+company as an entity link does. It goes to the split already showing that
+company, opens a new split with Shift (without selecting), and otherwise opens
+in place, after the contact in the breadcrumb trail. `CrmRoute.open` takes
+`followLink` for this; records opened from lists still open where asked, even
+when another split shows them. The caret opens the picker, with Remove company
+at its foot. A contact without a company shows the
 empty property (Company in the header, No company in Record details), which
 offers Add company. The picker switches only for a personal-provider primary
 with no address on the company's domain, and Remove company shows whenever no
 address is on the company's domain (`companyDomain === false`), behind the
-shared confirmation dialog. A company-domain contact shows no caret, with its
-reason in a tooltip. These fields come only from the REST contact detail; a
+shared confirmation dialog. A company-domain contact shows no caret; the
+name's tooltip gives the company's full name and that reason. These fields come only from the REST contact detail; a
 response without `emails` or `companyDomain` stays read-only, apart from a blank
 contact adding its first address.
 Header faces stay at 24px with 12px type/icons and reserve separate 44px touch

@@ -220,8 +220,11 @@ nothing; the contact's Emails tab and the email attachments in Files then stop
 covering it. Removing the primary promotes the oldest address left. Emails and
 Files cover every address of the contact.
 
-The company is one split pill: its name opens the company (Shift-click opens a
-separate split on desktop), and its caret opens the editor. A contact without a
+The company is one split pill: its name opens the company, or brings forward the
+split that already shows it. Shift-click opens a separate split on desktop, and
+also brings forward a split that already shows the company. Its caret opens the
+editor. Hovering the name shows it in full, with the reason
+when the email domain sets the company. A contact without a
 company shows an empty **Company** pill (**No company** in **Record details**)
 named **Add company**, whatever its address. Contacts whose primary is a known
 personal-provider address, and that hold no address on their company's domain,

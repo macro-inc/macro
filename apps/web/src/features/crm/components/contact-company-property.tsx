@@ -31,7 +31,14 @@ export function ContactCompanyProperty(props: {
   lockedReason: string | undefined;
   /** Null removes the company. */
   save(companyId: string | null): Promise<void>;
-  openCompany(event: MouseEvent): void;
+  /**
+   * Opens the company from its name. The press keeps focus where it is, so
+   * the split showing the company stays active once the router hands it over.
+   */
+  openCompany: {
+    onMouseDown(event: MouseEvent): void;
+    onClick(event: MouseEvent): void;
+  };
   errorMessage(error: unknown): string;
 }) {
   const [open, setOpen] = createSignal(false);
@@ -192,7 +199,7 @@ export function ContactCompanyProperty(props: {
   };
   // A button group clips its segments, so on touch they take the group's own
   // 36px height, as a task's Project pill does, rather than a 24px face with a
-  // larger target. The name's tooltip gives it in full, or, when the company
+  // larger target. The name's tooltip gives it in full and, when the company
   // can't change, the reason why.
   const linkedFace = () => (
     <ButtonGroup
@@ -205,10 +212,20 @@ export function ContactCompanyProperty(props: {
         ref={valueElement}
         class="group/company-link min-w-0 shrink justify-start gap-1 touch:min-w-11 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/20"
         aria-label={t('entityActions.openEntityNamed', { name: name() })}
-        tooltip={
-          !actionable() && props.lockedReason ? props.lockedReason : name()
+        tooltip={{
+          content: (
+            <span class="flex min-w-0 flex-col gap-0.5">
+              <span class="ph-no-capture text-ink">{name()}</span>
+              <Show when={!actionable() && props.lockedReason}>
+                {(reason) => <span>{reason()}</span>}
+              </Show>
+            </span>
+          ),
+        }}
+        onMouseDown={(event: MouseEvent) =>
+          props.openCompany.onMouseDown(event)
         }
-        onClick={(event: MouseEvent) => props.openCompany(event)}
+        onClick={(event: MouseEvent) => props.openCompany.onClick(event)}
       >
         <BuildingsIcon class="size-3 shrink-0 not-touch:group-hover/company-link:hidden not-touch:group-focus-visible/company-link:hidden" />
         <ArrowUpRightIcon class="hidden size-3 shrink-0 not-touch:group-hover/company-link:block not-touch:group-focus-visible/company-link:block" />
