@@ -994,6 +994,13 @@ describe('CoordinatorRouter', () => {
       expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([
         expect.objectContaining({ unavailableReason }),
       ]);
+      // A page retires on the first of the two, and only this one says why.
+      const kinds = tab.messages.map(
+        (message) => (effectPayload(message) as { kind?: unknown }).kind
+      );
+      expect(kinds.indexOf('cache-unavailable')).toBeLessThan(
+        kinds.indexOf('cache-message')
+      );
     }
   };
 

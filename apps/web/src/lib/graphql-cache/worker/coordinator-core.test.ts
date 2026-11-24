@@ -134,14 +134,14 @@ describe('CoordinatorCore', () => {
       errorCode: 'owner-lock-unavailable',
     };
     expect(actions).toEqual([
-      { ...unavailable, tabId: 'tab-a', requestId: 1 },
-      { ...unavailable, tabId: 'tab-b', requestId: 2 },
       { kind: 'close-engine-route', tabId: 'tab-a', ownerEpoch: 1 },
       {
         kind: 'broadcast-cache-unavailable',
         reason: expect.stringContaining('another app version'),
         unavailableReason: 'owner-lock-timeout',
       },
+      { ...unavailable, tabId: 'tab-a', requestId: 1 },
+      { ...unavailable, tabId: 'tab-b', requestId: 2 },
     ]);
     expect(core.state).toEqual({
       kind: 'waiting-for-tab',
@@ -214,13 +214,13 @@ describe('CoordinatorCore', () => {
       errorCode: 'owner-lock-unavailable',
     };
     expect(actions).toEqual([
-      { ...unavailable, tabId: 'tab-b', requestId: 1 },
       { kind: 'close-engine-route', tabId: 'tab-a', ownerEpoch: 1 },
       {
         kind: 'broadcast-cache-unavailable',
         reason: expect.stringContaining('files are still open'),
         unavailableReason: 'files-busy',
       },
+      { ...unavailable, tabId: 'tab-b', requestId: 1 },
     ]);
     // The open changed nothing, so no attempt is scheduled to repair it.
     expect(core.state).toEqual({

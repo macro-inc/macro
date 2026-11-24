@@ -988,7 +988,9 @@ export class CoordinatorCore {
   }
 
   /** Refuses queued work, keeps every registered tab uncached, and waits for
-   * a tab that registers later to try again. */
+   * a tab that registers later to try again. Tabs hear why before their
+   * queued requests are refused: a page retires on whichever comes first, and
+   * a refused request does not say why. */
   private failClosed(
     tabId: string,
     ownerEpoch: OwnerEpoch,
@@ -996,18 +998,18 @@ export class CoordinatorCore {
     reason: string,
     unavailableReason: CacheUnavailableReason
   ): CoordinatorAction[] {
-    const actions: CoordinatorAction[] = this.queuedRequests
-      .splice(0)
-      .map(({ tabId: requester, request }) =>
-        this.rejectUnavailable(requester, request.id, reason)
-      );
+    const actions: CoordinatorAction[] = [
+      { kind: 'close-engine-route', tabId, ownerEpoch },
+      { kind: 'broadcast-cache-unavailable', reason, unavailableReason },
+      ...this.queuedRequests
+        .splice(0)
+        .map(({ tabId: requester, request }) =>
+          this.rejectUnavailable(requester, request.id, reason)
+        ),
+    ];
     for (const registered of this.tabs) {
       this.unavailableTabs.set(registered, reason);
     }
-    actions.push(
-      { kind: 'close-engine-route', tabId, ownerEpoch },
-      { kind: 'broadcast-cache-unavailable', reason, unavailableReason }
-    );
     this.stateValue = { kind: 'waiting-for-tab', nextDatabaseAction };
     this.assertInvariants();
     return actions;
