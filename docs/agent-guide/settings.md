@@ -437,10 +437,10 @@ The compact sidebar uses the shared workspace width.
 
 When a newer version is ready, an **Update available** button (a download icon
 in a subtle accent circle that a glowing comet periodically circles) appears in
-the sidebar rail above the Downloads and settings icons. Its popover (a title,
-a short description, and one action) opens by itself once per update until
-dismissed (click outside or Escape); the button stays until the update is
-applied. Its wording and action depend on the update: **New version available**
+the sidebar rail above the Downloads (in a browser) and settings icons. Its
+popover (a title, a short description, and one action) opens by itself once
+per update until dismissed (click outside or Escape); the button stays until
+the update is applied. Its wording and action depend on the update: **New version available**
 / **Reload** for a newer web build, **Update ready** / **Update** for a
 downloaded bundle in the desktop app, and **Desktop app update ready** /
 **Restart and update** for a native desktop update. When part of the app fails
@@ -500,8 +500,13 @@ requirement under the row. On a computer with no installer (Windows, ChromeOS) b
 under "Available for macOS and Linux." The links are the website's stable
 installer links, `https://macro.com/download/mac` and `/download/linux`
 (the same ones as the marketing `/download` page), which redirect to the
-current release's installers. A click sends the PostHog event `desktop_download_clicked`
-with `platform` (`macos` or `linux`) and `source: 'app_settings'`. Its
+current release's installers. Once the website links to the Intel Mac installer
+(`/download/mac-intel` in `apps/marketing/seo/download-redirects.json`), a Mac
+gets **Download for Apple silicon** and **Download for Intel** side by side: the
+one Chromium's architecture hint names is primary, and otherwise Apple silicon
+is, with "Not sure? Apple menu → About This Mac shows your chip." under the row.
+A click sends the PostHog event `desktop_download_clicked` with `platform`
+(`macos`, `macos-intel` or `linux`) and `source: 'app_settings'`. Its
 **Mobile app** section has an **iPhone** / **Android** switch for the App
 Store or Google Play QR code, with **Copy link** for that store's URL. Inside
 the desktop app the page shows only the Mobile app section. Phones, tablets and
@@ -527,7 +532,8 @@ from `apps/web`.
 
 The sidebar rail's **Downloads** button (a download glyph in the same accent
 circle as the update button, without its comet) opens this page; Shift-click
-opens it in a new split. It shows wherever the page exists.
+opens it in a new split. It shows wherever the page exists, except in the
+desktop app, which is already installed and keeps the page in Settings only.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens

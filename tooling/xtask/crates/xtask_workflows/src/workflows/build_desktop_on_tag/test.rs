@@ -11,6 +11,9 @@ const RELEASE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 struct PublishFixture {
     temp: tempfile::TempDir,
     channel_version: &'static str,
+    /// The `latest.json` this release builds, and the one already promoted,
+    /// when a test needs more than their versions.
+    feeds: Option<(&'static str, &'static str)>,
 }
 
 impl PublishFixture {
@@ -41,7 +44,11 @@ command=$5
 shift 5
 case "$command" in
   manifest)
-    printf '{"version":"%s"}\n' "$STUB_RELEASE_VERSION" > "$1/latest.json"
+    if [[ -n "${STUB_MANIFEST:-}" ]]; then
+      printf '%s\n' "$STUB_MANIFEST" > "$1/latest.json"
+    else
+      printf '{"version":"%s"}\n' "$STUB_RELEASE_VERSION" > "$1/latest.json"
+    fi
     ;;
   newer)
     IFS=. read -r candidate_major candidate_minor candidate_patch <<< "$(jq -r .version "$1")"
@@ -78,7 +85,11 @@ case "$1 $2" in
     [[ "$3" == desktop-stable && -n "$STUB_CHANNEL_VERSION" ]]
     while (( $# > 0 )); do
       if [[ "$1" == --dir ]]; then
-        printf '{"version":"%s"}\n' "$STUB_CHANNEL_VERSION" > "$2/latest.json"
+        if [[ -n "${STUB_CHANNEL_FEED:-}" ]]; then
+          printf '%s\n' "$STUB_CHANNEL_FEED" > "$2/latest.json"
+        else
+          printf '{"version":"%s"}\n' "$STUB_CHANNEL_VERSION" > "$2/latest.json"
+        fi
         exit 0
       fi
       shift
@@ -110,11 +121,18 @@ esac
         Self {
             temp,
             channel_version,
+            feeds: None,
         }
+    }
+
+    fn with_feeds(mut self, candidate: &'static str, current: &'static str) -> Self {
+        self.feeds = Some((candidate, current));
+        self
     }
 
     fn run(&self) -> Output {
         let root = self.temp.path();
+        let (manifest, channel_feed) = self.feeds.unwrap_or(("", ""));
         Command::new("bash")
             .args([
                 "-c",
@@ -132,6 +150,8 @@ esac
             .env("STUB_RELEASE_VERSION", RELEASE_VERSION)
             .env("STUB_RELEASE_SHA", RELEASE_SHA)
             .env("STUB_CHANNEL_VERSION", self.channel_version)
+            .env("STUB_MANIFEST", manifest)
+            .env("STUB_CHANNEL_FEED", channel_feed)
             .env("RELEASE_TAG", RELEASE_TAG)
             .env("RELEASE_REPOSITORY", "macro-inc/macro")
             .output()
@@ -373,8 +393,249 @@ fn failed_release_qa_alerts() {
     );
 }
 
+#[test]
+fn intel_dmg_cross_compiles_beside_apple_silicon_on_its_own_cache() {
+    let yaml = rendered_yaml();
+    let intel = job_yaml(&yaml, "build-dmg-x86_64");
+    assert!(
+        intel.contains("nscloud-macos-sequoia-arm64-12x28-with-cache"),
+        "{intel}"
+    );
+    assert!(
+        intel.contains("nscloud-cache-tag-macro-desktop-macos-x86_64"),
+        "{intel}"
+    );
+    assert!(
+        intel.contains("DESKTOP_DMG_PACKAGE: tauri-desktop-dmg-x86_64"),
+        "{intel}"
+    );
+    assert!(intel.contains("DESKTOP_MACH_O_ARCH: x86_64"), "{intel}");
+    assert!(intel.contains("name: macro-dmg-x86_64-"), "{intel}");
+    assert!(intel.contains("timeout-minutes: 180"), "{intel}");
+    assert!(
+        intel.contains("if: needs.resolve-ref.outputs.intel == 'true'"),
+        "{intel}"
+    );
+
+    let arm = job_yaml(&yaml, "build-dmg");
+    assert!(
+        arm.contains("nscloud-cache-tag-macro-desktop-macos\n"),
+        "{arm}"
+    );
+    assert!(
+        arm.contains("DESKTOP_DMG_PACKAGE: tauri-desktop-dmg\n"),
+        "{arm}"
+    );
+    assert!(arm.contains("DESKTOP_MACH_O_ARCH: arm64"), "{arm}");
+    assert!(!arm.contains("\n    if:"), "{arm}");
+}
+
+#[test]
+fn a_failed_or_skipped_intel_build_still_publishes_the_others() {
+    let yaml = rendered_yaml();
+    let installers = job_yaml(&yaml, "publish-installers");
+    assert!(installers.contains("- build-dmg-x86_64"), "{installers}");
+    let condition = installers
+        .lines()
+        .find(|line| line.trim_start().starts_with("if:"))
+        .unwrap_or_else(|| panic!("publish-installers needs a condition:\n{installers}"));
+    assert!(condition.contains("!cancelled()"), "{condition}");
+    for job in ["resolve-ref", "build-appimage", "build-dmg"] {
+        assert!(
+            condition.contains(&format!("needs.{job}.result == ''success''")),
+            "{condition}"
+        );
+    }
+    assert!(!condition.contains("build-dmg-x86_64"), "{condition}");
+
+    // With no condition of its own, the update feed job would be skipped
+    // whenever the Intel build is, since the default success() reads the chain.
+    let updates = job_yaml(&yaml, "publish-release");
+    assert!(
+        updates.contains("needs.publish-installers.result == ''success''"),
+        "{updates}"
+    );
+    // Its own condition must keep the QA gate the default success() gave it.
+    assert!(
+        updates.contains("needs.qa-macos.result == ''success''"),
+        "{updates}"
+    );
+}
+
+struct IntelDecision {
+    temp: tempfile::TempDir,
+}
+
+impl IntelDecision {
+    /// `manifest` is what `gh api` prints for cef-codecs.json; `None` fails it.
+    fn new(manifest: Option<&str>) -> Self {
+        let temp = tempfile::tempdir().expect("decision fixture directory");
+        let bin = temp.path().join("bin");
+        fs::create_dir(&bin).expect("mock command directory");
+        let gh = match manifest {
+            Some(manifest) => format!(
+                "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"$STUB_GH_LOG\"\ncat <<'JSON'\n{manifest}\nJSON\n"
+            ),
+            None => "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"$STUB_GH_LOG\"\necho 'HTTP 502' >&2\nexit 1\n".to_owned(),
+        };
+        write_command(&bin, "gh", &gh);
+        Self { temp }
+    }
+
+    /// `gh api` that answers nothing until long after the read's deadline.
+    fn stalled() -> Self {
+        let temp = tempfile::tempdir().expect("decision fixture directory");
+        let bin = temp.path().join("bin");
+        fs::create_dir(&bin).expect("mock command directory");
+        write_command(
+            &bin,
+            "gh",
+            "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"$STUB_GH_LOG\"\nexec sleep 60\n",
+        );
+        Self { temp }
+    }
+
+    fn decide(&self, build_ref: &str) -> String {
+        let root = self.temp.path();
+        let output_file = root.join("output");
+        fs::write(&output_file, "").expect("output file");
+        let output = Command::new("bash")
+            .args([
+                "-c",
+                "export PATH=\"$STUB_BIN:$PATH\"\nexec bash \"$STUB_SCRIPT\"",
+            ])
+            .current_dir(root)
+            .env("STUB_BIN", root.join("bin"))
+            .env(
+                "STUB_SCRIPT",
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("src/workflows/scripts/decide_intel_desktop.sh"),
+            )
+            .env("STUB_GH_LOG", root.join("gh.log"))
+            .env("GITHUB_OUTPUT", &output_file)
+            .env("GITHUB_REPOSITORY", "macro-inc/macro")
+            .env("BUILD_REF", build_ref)
+            .env("READ_RETRY_SECONDS", "0")
+            .env("READ_TIMEOUT_SECONDS", "1")
+            .output()
+            .expect("run the Intel decision script");
+        assert_publish_success(&output);
+        fs::read_to_string(output_file).expect("step output")
+    }
+
+    fn gh_calls(&self) -> String {
+        fs::read_to_string(self.temp.path().join("gh.log")).unwrap_or_default()
+    }
+}
+
+const ARM_ONLY_MANIFEST: &str = r#"{"assets":{"aarch64":{"asset":"a.tar.bz2","sha256":"aa"}}}"#;
+const PENDING_INTEL_MANIFEST: &str = r#"{"assets":{"aarch64":{"asset":"a.tar.bz2","sha256":"aa"},"x86_64":{"asset":"x.tar.bz2","sha256":""}}}"#;
+const PINNED_INTEL_MANIFEST: &str = r#"{"assets":{"aarch64":{"asset":"a.tar.bz2","sha256":"aa"},"x86_64":{"asset":"x.tar.bz2","sha256":"bb"}}}"#;
+
+#[test]
+fn release_tags_build_intel_only_once_its_codec_cef_is_pinned() {
+    let tag = "refs/tags/v2026.11.24.0";
+    assert_eq!(
+        IntelDecision::new(Some(ARM_ONLY_MANIFEST)).decide(tag),
+        "intel=false\n"
+    );
+    assert_eq!(
+        IntelDecision::new(Some(PENDING_INTEL_MANIFEST)).decide(tag),
+        "intel=false\n"
+    );
+    let pinned = IntelDecision::new(Some(PINNED_INTEL_MANIFEST));
+    assert_eq!(pinned.decide(tag), "intel=true\n");
+    assert!(
+        pinned.gh_calls().contains(&format!(
+            "repos/macro-inc/macro/contents/apps/web/tauri/desktop-cef/cef-codecs.json?ref={tag}"
+        )),
+        "{}",
+        pinned.gh_calls()
+    );
+}
+
+#[test]
+fn an_unreadable_manifest_skips_intel_instead_of_failing_the_release() {
+    let unreachable = IntelDecision::new(None);
+    assert_eq!(
+        unreachable.decide("refs/tags/v2026.11.24.0"),
+        "intel=false\n"
+    );
+    assert_eq!(
+        unreachable.gh_calls().lines().count(),
+        3,
+        "retries before skipping"
+    );
+    assert_eq!(
+        IntelDecision::new(Some("not json")).decide("refs/tags/v2026.11.24.0"),
+        "intel=false\n"
+    );
+}
+
+#[test]
+fn a_stalled_manifest_read_times_out_and_skips_intel() {
+    let stalled = IntelDecision::stalled();
+    let started = std::time::Instant::now();
+    assert_eq!(stalled.decide("refs/tags/v2026.11.24.0"), "intel=false\n");
+    assert_eq!(
+        stalled.gh_calls().lines().count(),
+        3,
+        "each attempt times out"
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(30),
+        "the reads must not wait for the stalled response"
+    );
+}
+
+#[test]
+fn branch_builds_always_verify_intel_without_reading_the_manifest() {
+    let decision = IntelDecision::new(None);
+    assert_eq!(decision.decide("refs/heads/some-branch"), "intel=true\n");
+    assert_eq!(decision.gh_calls(), "");
+}
+
+const FEED_WITHOUT_INTEL: &str = r#"{"version":"2026.1016.0","notes":"Macro v2026.10.16.0","platforms":{"darwin-aarch64":{"url":"a","signature":"sa"},"linux-x86_64":{"url":"l","signature":"sl"}}}"#;
+const FEED_WITH_INTEL: &str = r#"{"version":"2026.1016.0","notes":"Macro v2026.10.16.0","platforms":{"darwin-aarch64":{"url":"a","signature":"sa"},"darwin-x86_64":{"url":"x","signature":"sx"},"linux-x86_64":{"url":"l","signature":"sl"}}}"#;
+const FEED_WITH_CHANGED_ARM: &str = r#"{"version":"2026.1016.0","notes":"Macro v2026.10.16.0","platforms":{"darwin-aarch64":{"url":"a","signature":"other"},"darwin-x86_64":{"url":"x","signature":"sx"},"linux-x86_64":{"url":"l","signature":"sl"}}}"#;
+
+#[test]
+fn a_rerun_intel_build_joins_the_feed_its_version_already_published() {
+    let fixture =
+        PublishFixture::new(RELEASE_VERSION).with_feeds(FEED_WITH_INTEL, FEED_WITHOUT_INTEL);
+    assert_publish_success(&fixture.run());
+    let calls = fixture.gh_calls();
+    assert!(called(&calls, "release upload desktop-stable "), "{calls}");
+    assert!(
+        called(&calls, &format!("release edit {RELEASE_TAG} ")),
+        "{calls}"
+    );
+}
+
+#[test]
+fn a_same_version_feed_may_only_add_platforms() {
+    for (candidate, current) in [
+        (FEED_WITH_CHANGED_ARM, FEED_WITHOUT_INTEL),
+        (FEED_WITHOUT_INTEL, FEED_WITH_INTEL),
+    ] {
+        let fixture = PublishFixture::new(RELEASE_VERSION).with_feeds(candidate, current);
+        let output = fixture.run();
+        assert!(!output.status.success(), "{output:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("with different content"),
+            "{output:?}"
+        );
+        assert!(
+            !called(&fixture.gh_calls(), "release upload desktop-stable "),
+            "{}",
+            fixture.gh_calls()
+        );
+    }
+}
+
 const MAC_LINK: &str = "Macro-macos-arm64.dmg";
 const LINUX_LINK: &str = "Macro-linux-x86_64.AppImage";
+const INTEL_LINK: &str = "Macro-macos-x86_64.dmg";
 
 /// A release with assets kept as JSON, edited by a stub `gh`, so the link
 /// script runs against the asset operations it would make on GitHub.
@@ -725,5 +986,46 @@ fn windows_release_signs_through_its_environment_identity() {
     assert!(
         frontend.contains("REQUIRE_POSTHOG_API_KEY: 'true'"),
         "{frontend}"
+    );
+}
+
+#[test]
+fn download_links_publish_the_intel_installer_when_the_release_built_it() {
+    let fixture = LinksFixture::new(RELEASE_VERSION);
+    fs::write(
+        fixture.temp.path().join(format!(
+            "release-artifacts/Macro-{RELEASE_VERSION}-x86_64-darwin.dmg"
+        )),
+        "new intel dmg",
+    )
+    .expect("Intel dmg");
+    assert_publish_success(&fixture.run());
+    let assets = fixture.assets();
+    assert_eq!(
+        assets.get(INTEL_LINK),
+        Some(&sha256_hex("new intel dmg")),
+        "{assets:?}"
+    );
+    assert_eq!(
+        assets.get(MAC_LINK),
+        Some(&sha256_hex("new dmg")),
+        "{assets:?}"
+    );
+}
+
+#[test]
+fn download_links_leave_the_previous_intel_installer_without_an_intel_build() {
+    let fixture = LinksFixture::new(RELEASE_VERSION).with_asset(1, INTEL_LINK, "older intel dmg");
+    assert_publish_success(&fixture.run());
+    let assets = fixture.assets();
+    assert_eq!(
+        assets.get(INTEL_LINK),
+        Some(&sha256_hex("older intel dmg")),
+        "{assets:?}"
+    );
+    assert_eq!(
+        assets.get(MAC_LINK),
+        Some(&sha256_hex("new dmg")),
+        "{assets:?}"
     );
 }

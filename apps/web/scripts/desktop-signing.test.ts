@@ -120,5 +120,6 @@ test('publication refuses a Windows installer without its release metadata', asy
     child.on('close', (code) => resolve({ code, stderr }));
   });
   expect(result.code).not.toBe(0);
-  expect(result.stderr).toContain('Expected one updater artifact for each of: darwin-aarch64 linux-x86_64');
+  expect(result.stderr).toContain('Expected one updater artifact for each of release-artifacts/darwin-aarch64.release.json release-artifacts/linux-x86_64.release.json');
+  expect(result.stderr).toContain('-x86_64-windows-setup.exe');
 });
