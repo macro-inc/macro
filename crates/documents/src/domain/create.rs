@@ -715,6 +715,10 @@ where
         };
 
         let task_name = metadata.document_name.clone();
+        let source_edited = match &content {
+            MarkdownContent::Notion(_) => metadata.updated_at,
+            MarkdownContent::Markdown(_) => None,
+        };
         let project_id = metadata.project_id;
         let team_id = if let Some((_, _, _, team_id)) = task.as_ref() {
             *team_id
@@ -771,12 +775,18 @@ where
                 }
             };
 
-            self.document_service
-                .set_document_content(
-                    &document_id,
-                    DocumentContent::ready(DocumentContentLocation::SyncService),
-                )
-                .await?;
+            if let Some(edited_at) = source_edited {
+                self.document_service
+                    .ready_imported_document(&document_id, edited_at)
+                    .await?;
+            } else {
+                self.document_service
+                    .set_document_content(
+                        &document_id,
+                        DocumentContent::ready(DocumentContentLocation::SyncService),
+                    )
+                    .await?;
+            }
 
             // Assignments publish events that can start agents immediately.
             // Make the task body readable before applying its properties.

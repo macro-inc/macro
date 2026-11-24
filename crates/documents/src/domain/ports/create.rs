@@ -68,6 +68,13 @@ pub trait DocumentCreationService: Send + Sync {
         content: DocumentContent,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
+    /// Publish the first imported snapshot with the source's edited time.
+    fn ready_imported_document(
+        &self,
+        document_id: &str,
+        edited_at: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
     /// Clean up a document that failed after its database row was created.
     fn cleanup_created_document(&self, document_id: &str) -> impl Future<Output = ()> + Send;
 }
@@ -114,6 +121,16 @@ where
 
     async fn cleanup_created_document(&self, document_id: &str) {
         (**self).cleanup_created_document(document_id).await
+    }
+
+    async fn ready_imported_document(
+        &self,
+        document_id: &str,
+        edited_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), DocumentError> {
+        (**self)
+            .ready_imported_document(document_id, edited_at)
+            .await
     }
 }
 

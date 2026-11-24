@@ -127,7 +127,9 @@ word docs, Illustrator/Photoshop files).
 - Create a document from a Notion page: `DocumentCreator::create_notion_markdown`
   (`src/domain/create.rs`) with a `NotionMarkdown` (`src/domain/notion_markdown.rs`);
   lexical-service converts it through `MarkdownInitializationPort::initialize_existing_notion`
-  and returns the Macro markdown that mention tracking reads.
+  and returns the Macro markdown that mention tracking reads. If the import
+  supplied a source last-edited time, its one-time ready transition persists
+  that time. Normal edits continue to advance the document timestamp.
 - Set creation-time link access with the canonical
   `models_permissions::share_permission::InitialLinkShare` (re-exported from
   `domain::models`); `NewDocumentMetadata::builder(..).initial_link_share(Off)`
