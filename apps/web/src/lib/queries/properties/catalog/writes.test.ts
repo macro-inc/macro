@@ -26,8 +26,10 @@ const soup = vi.hoisted(() => ({
   reload: undefined as Partial<OperationResult> | undefined,
   /** The client's answer to a cache-only read; nothing when unset. */
   cacheOnly: undefined as Partial<OperationResult> | undefined,
-  /** Tells reactive readers of the login session that it changed. */
+  /** Tells reactive readers that the login session or the cache host changed. */
   loginChanged: () => {},
+  /** Read by reactive readers of the login session and the cache host. */
+  tracked: () => {},
   /** The cache store's answers to reads of the tag sets, in order; then a miss. */
   cachedReads: [] as unknown[],
   session: 1,
@@ -53,7 +55,10 @@ vi.mock('@service-storage/graphql-soup', () => ({
       },
     }),
   }),
-  getGraphqlSoupCacheHost: () => soup.host,
+  getGraphqlSoupCacheHost: () => {
+    soup.tracked();
+    return soup.host;
+  },
 }));
 
 vi.mock('@graphql-cache/index', async (importOriginal) => ({
@@ -76,6 +81,9 @@ vi.mock('../../auth/account-scope', async () => {
   const { createSignal } = await import('solid-js');
   const [changes, setChanges] = createSignal(0);
   soup.loginChanged = () => setChanges((count) => count + 1);
+  soup.tracked = () => {
+    changes();
+  };
   return {
     queryAccountSession: () => {
       changes();
@@ -939,10 +947,11 @@ describe('provisioning while the cache cannot answer', () => {
   });
 });
 
-describe('a queued write when another login takes over', () => {
-  // Logout may retire the cache before it reports the write: the waiter must
-  // not hang, and the old login's write is not the page's to report.
-  it('stops waiting for an add and drops it', async () => {
+describe('a waiting write when the login or the cache goes', () => {
+  // Logout or a failed cache may retire the cache before it reports a queued
+  // write: the waiter must not hang, and the old login's write is not the
+  // page's to report.
+  it('stops waiting for an add and drops it when another login takes over', async () => {
     queueingHost();
     const added = outcomeOf(addPropertyOption('def-1', TAG));
     await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
@@ -951,7 +960,30 @@ describe('a queued write when another login takes over', () => {
     expect(isCatalogErrorCode(await added, 'ACCOUNT_CHANGED')).toBe(true);
   });
 
-  it('reports no late failure for a predicted write', async () => {
+  it('stops waiting for an add when the cache holding it stops', async () => {
+    queueingHost();
+    const added = outcomeOf(addPropertyOption('def-1', TAG));
+    await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
+    soup.host = undefined;
+    soup.loginChanged();
+    expect(isCatalogErrorCode(await added, 'CACHE_STOPPED')).toBe(true);
+  });
+
+  it("takes a failure reported as the login changed as the old login's", async () => {
+    const settle = queueingHost();
+    soup.mutation.mockImplementation(() => ({
+      toPromise: async () => ({ queued: 'tx-1' }),
+    }));
+    const late = vi.fn();
+    await updatePropertyOption('def-1', 'opt-1', { value: 'Renamed' }, late);
+    // The settlement arrives before anything noticed the new login.
+    soup.session = 2;
+    settle({ transactionId: 'tx-1', status: 'permanently-failed', error: 'x' });
+    await settle.drained();
+    expect(late).not.toHaveBeenCalled();
+  });
+
+  it('reports no late failure for a predicted write of the old login', async () => {
     const settle = queueingHost();
     soup.mutation.mockImplementation(() => ({
       toPromise: async () => ({ queued: 'tx-1' }),
@@ -960,8 +992,44 @@ describe('a queued write when another login takes over', () => {
     await updatePropertyOption('def-1', 'opt-1', { value: 'Renamed' }, late);
     soup.session = 2;
     soup.loginChanged();
-    settle({ transactionId: 'tx-1', status: 'permanently-failed', error: 'x' });
     await settle.drained();
+    settle({ transactionId: 'tx-1', status: 'permanently-failed', error: 'x' });
     expect(late).not.toHaveBeenCalled();
+  });
+
+  it('reports a predicted write whose cache stopped as failed, once', async () => {
+    const settle = queueingHost();
+    soup.mutation.mockImplementation(() => ({
+      toPromise: async () => ({ queued: 'tx-1' }),
+    }));
+    const late = vi.fn();
+    await updatePropertyOption('def-1', 'opt-1', { value: 'Renamed' }, late);
+    soup.host = undefined;
+    soup.loginChanged();
+    await settle.drained();
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(isCatalogErrorCode(late.mock.calls[0]?.[0], 'CACHE_STOPPED')).toBe(
+      true
+    );
+  });
+
+  it('stops waiting to go online when another login takes over', async () => {
+    onlineManager.setOnline(false);
+    try {
+      const created = outcomeOf(
+        createPropertyDefinition({
+          display_name: 'Stage',
+          data_type: { type: 'string' },
+          scope: 'user',
+        } as Parameters<typeof createPropertyDefinition>[0])
+      );
+      await Promise.resolve();
+      soup.session = 2;
+      soup.loginChanged();
+      expect(isCatalogErrorCode(await created, 'ACCOUNT_CHANGED')).toBe(true);
+      expect(soup.mutation).not.toHaveBeenCalled();
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 });
