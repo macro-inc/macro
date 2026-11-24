@@ -23,6 +23,7 @@ routes in `crates/time_tracking` instead.
 - `src/lib.rs` `graphql_error`: error codes the web reads (`NOT_FOUND`,
   `FORBIDDEN`, `NOT_AUTHOR`, `BAD_USER_INPUT`, `TIMER_OVER_LIMIT` with the
   timer in the `timer` extension, `CONFLICT`, `UNAVAILABLE`).
+- `src/test.rs`: the isolated time schema and its `TestEdges` adapter; keep every required `SoupEntityEdges` method implemented, with empty facts for unrelated domains.
 
 ## Scope
 

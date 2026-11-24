@@ -248,11 +248,26 @@ impl SoupEntityEdges for TestEdges {
     type Notification = String;
     type NotificationFilter = String;
     type ActivityEvent = String;
+    type TaskDependencyState = String;
     type EmailThreadEdges = TestEdges;
     type CrmRecordEdges = TestEdges;
     type InitiativeEdges = TestEdges;
     type AgentSessionEdges = TestEdges;
     type DocumentEdges = TestEdges;
+
+    async fn resolve_task_dependencies(
+        _: &Context<'_>,
+        _: Uuid,
+    ) -> async_graphql::Result<Option<String>> {
+        Ok(None)
+    }
+
+    async fn resolve_dependent_tasks(
+        _: &Context<'_>,
+        _: Uuid,
+    ) -> async_graphql::Result<Vec<String>> {
+        Ok(Vec::new())
+    }
 
     fn from_entity(_: model_entity::Entity<'static>) -> Self {
         Self { available: true }
