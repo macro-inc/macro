@@ -46,6 +46,10 @@ pub struct ChannelTimelineUpdate {
     pub activities: Vec<TimelineActivity>,
     /// A changed entry that was hard-deleted before it could be read.
     pub removed_ids: Vec<Uuid>,
+    /// The change was too large to carry: the lists are empty, and a subscriber
+    /// reads it from the changes page instead.
+    #[serde(default)]
+    pub truncated: bool,
 }
 
 impl ChannelTimelineUpdate {
@@ -58,6 +62,19 @@ impl ChannelTimelineUpdate {
             messages: Vec::new(),
             activities: vec![activity],
             removed_ids: Vec::new(),
+            truncated: false,
+        }
+    }
+
+    /// This update without what it carries: only that its channel advanced.
+    pub fn hint(&self) -> Self {
+        Self {
+            channel_id: self.channel_id,
+            seq: self.seq,
+            messages: Vec::new(),
+            activities: Vec::new(),
+            removed_ids: Vec::new(),
+            truncated: true,
         }
     }
 }
@@ -94,7 +111,8 @@ pub trait ChannelTimelineUpdatePublisher: Send + Sync + 'static {
     /// Why an update could not be scheduled.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Schedule `update` for delivery; best effort, like `message_update`.
+    /// Schedule `update` for delivery; best effort, like `message_update`. An
+    /// update too large to carry is delivered as its [hint](ChannelTimelineUpdate::hint).
     fn publish(&self, update: &AddressedChannelTimelineUpdate) -> Result<(), Self::Err>;
 }
 
@@ -297,6 +315,7 @@ impl<G: MessageRealtime, L: ChannelMessageChangeLoader, P: ChannelTimelineUpdate
                     messages,
                     activities: Vec::new(),
                     removed_ids,
+                    truncated: false,
                 },
             })
             .map_err(|error| ChannelTimelineError::Publish(report(error)))

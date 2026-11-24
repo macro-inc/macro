@@ -50,7 +50,11 @@ fn subscriptions() -> (
 }
 
 fn update() -> Arc<GraphqlChannelTimelineUpdate> {
-    GraphqlChannelTimelineUpdate::shared(ChannelTimelineUpdate::activity(
+    GraphqlChannelTimelineUpdate::shared(domain_update())
+}
+
+fn domain_update() -> ChannelTimelineUpdate {
+    ChannelTimelineUpdate::activity(
         CHANNEL,
         9_007_199_254_740_993,
         TimelineActivity {
@@ -60,10 +64,10 @@ fn update() -> Arc<GraphqlChannelTimelineUpdate> {
             action: "picture_changed".into(),
             payload: None,
         },
-    ))
+    )
 }
 
-const SUBSCRIPTION: &str = "subscription { channelTimelineUpdates { channelId seq removedIds messages { id } activities { id action } } }";
+const SUBSCRIPTION: &str = "subscription { channelTimelineUpdates { channelId seq truncated removedIds messages { id } activities { id action } } }";
 
 fn schema(
     subscriptions: ChannelTimelineSubscriptions,
@@ -93,12 +97,49 @@ async fn streams_the_viewers_updates_with_the_changes_page_shape() {
         serde_json::json!({
             "channelId": CHANNEL.to_string(),
             "seq": "9007199254740993",
+            "truncated": false,
             "removedIds": [],
             "messages": [],
             "activities": [{ "id": Uuid::from_u128(7).to_string(), "action": "picture_changed" }],
         })
     );
     assert_eq!(*asked.lock().unwrap(), ["macro|viewer@example.com"]);
+}
+
+#[tokio::test]
+async fn a_change_too_large_to_push_arrives_as_a_hint() {
+    let (subscriptions, _, (updates, _exit)) = subscriptions();
+    let schema = schema(subscriptions);
+    let mut responses =
+        schema.execute_stream(async_graphql::Request::new(SUBSCRIPTION).data(viewer()));
+
+    updates
+        .send(GraphqlChannelTimelineUpdate::shared(domain_update().hint()))
+        .await
+        .unwrap();
+    let data = responses.next().await.unwrap().data.into_json().unwrap();
+    assert_eq!(
+        data["channelTimelineUpdates"],
+        serde_json::json!({
+            "channelId": CHANNEL.to_string(),
+            "seq": "9007199254740993",
+            "truncated": true,
+            "removedIds": [],
+            "messages": [],
+            "activities": [],
+        })
+    );
+}
+
+#[tokio::test]
+async fn a_process_that_is_not_receiving_updates_says_so() {
+    let schema = schema(ChannelTimelineSubscriptions::new(|_| None));
+    let mut responses =
+        schema.execute_stream(async_graphql::Request::new(SUBSCRIPTION).data(viewer()));
+    let response = responses.next().await.unwrap();
+    let error = serde_json::to_value(&response.errors[0]).unwrap();
+    assert_eq!(error["extensions"]["code"], "SERVICE_UNAVAILABLE");
+    assert!(responses.next().await.is_none());
 }
 
 #[tokio::test]

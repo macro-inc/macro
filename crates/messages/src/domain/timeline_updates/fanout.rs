@@ -128,6 +128,7 @@ impl<U: ChannelTimelineUpdates, T: Clone + Send + Sync + 'static> ChannelTimelin
         fields(
             channel_id = %addressed.update.channel_id,
             seq = addressed.update.seq,
+            truncated = addressed.update.truncated,
             recipients = addressed.recipients.len(),
             delivered = tracing::field::Empty,
         )

@@ -31,6 +31,9 @@ pub struct GraphqlChannelTimelineUpdate {
     pub activities: Vec<GraphqlChannelTimelineActivity>,
     /// A changed entry that no longer exists.
     pub removed_ids: Vec<ID>,
+    /// The change was too large to push, so the lists are empty: read it with
+    /// `channelChanges` rather than apply this sequence.
+    pub truncated: bool,
 }
 
 impl GraphqlChannelTimelineUpdate {
@@ -55,6 +58,7 @@ impl GraphqlChannelTimelineUpdate {
                 .into_iter()
                 .map(|id| ID(id.to_string()))
                 .collect(),
+            truncated: update.truncated,
         })
     }
 }

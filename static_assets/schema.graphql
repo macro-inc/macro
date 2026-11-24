@@ -4272,6 +4272,11 @@ type GraphqlChannelTimelineUpdate {
 	A changed entry that no longer exists.
 	"""
 	removedIds: [ID!]!
+	"""
+	The change was too large to push, so the lists are empty: read it with
+	`channelChanges` rather than apply this sequence.
+	"""
+	truncated: Boolean!
 }
 
 """

@@ -29,7 +29,10 @@ they need.
   stops the process nor leaves a subscriber waiting in silence.
 - `src/outbound/channel_timeline.rs`: the `macro.channel_timeline` event, keyed
   by channel, its broker publisher, and the ungrouped consumer every serving
-  process reads it with (feature `consumer`).
+  process reads it with (feature `consumer`). The publisher keeps every record
+  under Kafka's size limit: an update too large, or refused by the broker, goes
+  out `truncated`, as a hint to read the changes page, and a large audience is
+  split across records.
 - `src/domain/api.rs`: `MessageServiceApi`, the boundary HTTP/agents/channel
   adapters call through; `thread_page` adds bounded reply windows while
   `get_thread` preserves the complete REST thread read.
