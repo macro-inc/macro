@@ -1,9 +1,13 @@
-import { composerStorageGeneration } from '@core/auth/clear-composer-storage';
+import { composerStorageWritable } from '@core/auth/clear-composer-storage';
 import type { MessageParent } from '@service-storage/messages';
 import { createRoot } from 'solid-js';
 import { createInputAttachmentTracker } from '../Input/attachment-tracker';
 import { holdPersistedDraftText } from '../Input/shared-draft';
-import type { InputPersistenceKey, InputSnapshot } from '../Input/types';
+import type {
+  InputHandle,
+  InputPersistenceKey,
+  InputSnapshot,
+} from '../Input/types';
 import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
@@ -66,7 +70,8 @@ function readReplyDraft(keys: ReplyDraftKeys): InputSnapshot | undefined {
 /**
  * Puts a failed reply back into its thread's draft, unless that draft holds
  * something newer, typed in any view of the thread, or composer storage was
- * cleared (sign-out) since `generation` was read, before the send.
+ * cleared (sign-out) since `generation` was read, before the send, or a
+ * sign-out is clearing it now.
  * Returns whether the draft came back.
  */
 export function restoreFailedReply(
@@ -74,7 +79,7 @@ export function restoreFailedReply(
   snapshot: InputSnapshot,
   generation: number
 ): boolean {
-  if (composerStorageGeneration() !== generation) return false;
+  if (!composerStorageWritable(generation)) return false;
   return withReplyDraft(keys, ({ text, setText, attachments }) => {
     if (text()?.trim() || attachments.attachments().length > 0) return false;
     setText(snapshot.value || undefined);
@@ -97,4 +102,20 @@ export function currentReplyDraft(
   if (!stored) return undefined;
   const mentions = live?.value === stored.value ? live.mentions : [];
   return { ...stored, mentions };
+}
+
+/**
+ * Writes a quote (`value`, built on the draft) into the thread's open reply
+ * input. Only the text changes: the input keeps the attachments it holds
+ * now, which an upload may have changed since the quote read the draft.
+ */
+export function applyQuoteText(
+  handle: InputHandle | undefined,
+  value: string
+): void {
+  if (!handle) return;
+  handle.restoreSnapshot(
+    { ...handle.snapshot(), value },
+    { focus: false, cursor: 'trailing-paragraph' }
+  );
 }

@@ -5,6 +5,7 @@ import { ComposerEditor } from '@core/component/LexicalMarkdown/component/Compos
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
 import {
+  $readItemMentions,
   createDragInsertStore,
   INSERT_DOCUMENT_MENTION_COMMAND,
   TYPE_AT_SYMBOL_COMMAND,
@@ -331,7 +332,9 @@ export function ChannelInput(props: ChannelInputProps) {
     markdownEditor.controls.setMarkdown(snapshot.value);
     pendingCursor = options?.cursor;
     attachmentTracker.setAttachments(snapshot.attachments);
-    mentionsTracker.setMentions(snapshot.mentions);
+    // The mentions are those of the text: a draft read back from storage
+    // carries none, and the editor finds them as it reads the text.
+    mentionsTracker.setMentions(lexicalEditor().read($readItemMentions));
     if (options?.focus !== false) focusEditorNow();
     queueMicrotask(() => {
       acceptTyping = true;

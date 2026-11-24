@@ -194,6 +194,26 @@ function $isMentionNode(
   );
 }
 
+/** The mentions the editor's document holds, in document order. */
+export function $readItemMentions(): ItemMention[] {
+  const mentions: ItemMention[] = [];
+  $traverseNodes($getRoot(), (node) => {
+    if ($isMentionNode(node) && !$isUntrackedPullRequestMention(node)) {
+      mentions.push($mentionItemFromNode(node));
+    } else if (
+      node instanceof DocumentCardNode &&
+      node.getBlockName() === 'database'
+    ) {
+      mentions.push({
+        itemType: 'database',
+        itemId: node.getDocumentId(),
+        documentName: node.getDocumentName(),
+      });
+    }
+  });
+  return mentions;
+}
+
 /** A PR mention authored from a GitHub URL alone has no entity to track. */
 function $isUntrackedPullRequestMention(node: LexicalNode): boolean {
   return $isPullRequestMentionNode(node) && !node.getId();
@@ -434,24 +454,7 @@ function registerMentionsPlugin(
 
   function updateMentionsSignal() {
     if (props.setMentions === undefined) return;
-    const mentions: ItemMention[] = [];
-    editor.read(() => {
-      $traverseNodes($getRoot(), (node) => {
-        if ($isMentionNode(node) && !$isUntrackedPullRequestMention(node)) {
-          mentions.push($mentionItemFromNode(node));
-        } else if (
-          node instanceof DocumentCardNode &&
-          node.getBlockName() === 'database'
-        ) {
-          mentions.push({
-            itemType: 'database',
-            itemId: node.getDocumentId(),
-            documentName: node.getDocumentName(),
-          });
-        }
-      });
-    });
-    props.setMentions(mentions);
+    props.setMentions(editor.read($readItemMentions));
   }
 
   // Expansion/collapse replaces the node but preserves its tracked reference UUID.

@@ -10,7 +10,11 @@ import { createChannelMessageActions } from '../Channel/create-channel-message-a
 import { createDeleteMessageConfirmation } from '../Channel/create-delete-message-confirmation';
 import type { InputHandle, InputSnapshot } from '../Input';
 import { Thread } from '../Thread';
-import { currentReplyDraft, replyDraftKeys } from '../Thread/reply-drafts';
+import {
+  applyQuoteText,
+  currentReplyDraft,
+  replyDraftKeys,
+} from '../Thread/reply-drafts';
 import { buildReplyTargetValue } from '../Thread/utils/message-actions';
 import { channelReplyInputOffsetX } from '../Thread/utils/thread-rail-geometry';
 import { useStandaloneThread } from './context';
@@ -66,10 +70,7 @@ function EditableThreadInner() {
         };
         setReplyInputState(nextSnapshot);
         requestAnimationFrame(() => {
-          replyInputHandle()?.restoreSnapshot(nextSnapshot, {
-            focus: false,
-            cursor: 'trailing-paragraph',
-          });
+          applyQuoteText(replyInputHandle(), nextSnapshot.value);
           ctx.replyInputFocusRequest.request();
         });
       } else {

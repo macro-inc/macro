@@ -120,7 +120,11 @@ import {
 } from '../queries/system-activity';
 import { SystemActivity } from '../SystemActivity';
 import { ChannelThread } from '../Thread';
-import { currentReplyDraft, replyDraftKeys } from '../Thread/reply-drafts';
+import {
+  applyQuoteText,
+  currentReplyDraft,
+  replyDraftKeys,
+} from '../Thread/reply-drafts';
 import { ThreadRow } from '../Thread/ThreadRow';
 import { ThreadTypingIndicator } from '../Thread/ThreadTypingIndicator';
 import { buildReplyTargetValue } from '../Thread/utils/message-actions';
@@ -582,10 +586,7 @@ export function Channel(props: ChannelProps) {
       state.setIsReplying(true);
     }
     requestAnimationFrame(() => {
-      state.replyInputHandle?.()?.restoreSnapshot(nextSnapshot, {
-        focus: false,
-        cursor: 'trailing-paragraph',
-      });
+      applyQuoteText(state.replyInputHandle?.(), nextSnapshot.value);
       state.replyInputFocusRequest.request();
     });
   };
