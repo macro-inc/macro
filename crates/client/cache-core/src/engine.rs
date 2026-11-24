@@ -3094,33 +3094,43 @@ impl<S: Storage> Engine<S> {
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
         let normalized = normalize(&self.schema, op, variables, data);
-        // A response that normalizes is typed by the schema as normalizing
-        // typed it. One that doesn't may come from a server on another
-        // schema, so only the types it states count.
-        let untyped = if normalized.is_ok() {
-            identity::UntypedObject::Normalized
-        } else {
-            identity::UntypedObject::Rejected
-        };
+        // A response that doesn't normalize may come from a server on another
+        // schema, so only an object stating its type identifies anything.
+        let resolve: fn(&[IdentityBinding], &serde_json::Value) -> Result<IdentityMap, String> =
+            if normalized.is_ok() {
+                identity::resolve
+            } else {
+                identity::resolve_stated
+            };
         let mut identity_errors = Vec::new();
-        let identities = match identity::resolve(&self.schema, &bindings, op, data, untyped) {
+        let identities = match resolve(&bindings, data) {
             Ok(identities) => identities,
             Err(_) => {
                 // Salvage valid bindings without guessing targets for failed
-                // ones, resolving those left together so a binding's own
-                // identity still outranks one another's reference field infers.
-                bindings.retain(|binding| {
-                    let binding = std::slice::from_ref(binding);
-                    match identity::resolve(&self.schema, binding, op, data, untyped) {
-                        Ok(_) => true,
+                // ones: each keeps only its own identity, and reference fields
+                // infer from those left, never a key any binding names.
+                let mut identities = IdentityMap::new();
+                bindings.retain(
+                    |binding| match resolve(std::slice::from_ref(binding), data) {
+                        Ok(resolved) => {
+                            identities.extend(
+                                resolved
+                                    .into_iter()
+                                    .filter(|(local, _)| *local == binding.local_key),
+                            );
+                            true
+                        }
                         Err(error) => {
                             identity_errors.push(error);
                             false
                         }
-                    }
-                });
-                identity::resolve(&self.schema, &bindings, op, data, untyped)
-                    .map_err(EngineError::InvalidOptimisticProjection)?
+                    },
+                );
+                identity::expand_reference_identities(
+                    &self.optimistic[index].identity_bindings,
+                    &mut identities,
+                );
+                identities
             }
         };
         // The bindings left are those that resolved, an ID the server kept

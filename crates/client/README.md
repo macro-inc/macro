@@ -165,14 +165,12 @@ dropped a field it selects, settles without that content, as a stale outcome
 does, instead of retrying at the head of the queue forever: the IDs the server
 gave keep their aliases for the writes queued after it, and the result's
 `unwritable_response` says why. The host applies nothing from that response
-and refetches its active queries. Identity resolution types a response object
-that states no `__typename` as normalizing typed it: of the object type its
-field declares, read through the fragments that apply to the objects above
-it, failing one of an abstract type. A response that doesn't normalize may
-come from a server on another schema, so there only an object that states its
-type keeps its ID, and every fragment is read, since the adopted schema can't
-say which apply. A binding's own resolution outranks one inferred from
-another's reference field.
+and refetches its active queries. Such a response may come from a server on
+another schema, so a binding keeps its ID only when its response object states
+its type under a literal `__typename` key; one that states none, or states it
+under an alias, is refused and reported. When the write has bindings and none
+resolves, the attempt is rolled back as before. No identity a reference field
+infers replaces a key a binding names, whether that binding resolved or not.
 Settling a create moves the shadows of the writes queued after it to the key
 the server gave the record while their sources keep the local key, so a tier
 follows the alias settlement stored from one to the other, and keeps the

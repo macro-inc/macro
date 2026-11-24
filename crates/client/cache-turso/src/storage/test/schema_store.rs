@@ -1090,8 +1090,8 @@ fn a_binding_own_identity_outranks_an_inferred_one_when_another_fails() {
             ..create_binding(local, "save")
         };
         // The draft says its message shares its ID, but the message resolves
-        // to its own; a third binding's object is missing, so the bindings
-        // left are resolved again after it is dropped.
+        // to its own; a third binding's object is missing, so settlement
+        // salvages the bindings that resolve.
         let mut draft = at("Draft:local", &["save", "draft"]);
         draft.reference_fields = vec!["Message.id".into()];
         let bindings = [
@@ -1168,15 +1168,60 @@ fn a_binding_own_identity_outranks_an_inferred_one_when_another_fails() {
 }
 
 #[test]
-fn a_response_object_of_another_type_settles_no_identity() {
+fn a_settled_write_infers_no_identity_for_a_binding_that_failed() {
     block_on(async {
-        // The operation selects the type under an alias.
+        // The record says the other shares its ID, but the other's response
+        // object doesn't state its type, so it fails to resolve.
+        let query = "mutation Save { save { __typename id label } other: save { id label } }";
+        let mut saved = create_binding("Saved:local", "save");
+        saved.reference_fields = vec!["Other.id".into()];
+        let (engine, outcome) = confirm_across_a_dropped_field(
+            query,
+            &[saved, create_binding("Other:local", "other")],
+            serde_json::json!({
+                "save": { "__typename": "Saved", "id": "local", "label": "pending" },
+                "other": { "id": "other", "label": "pending" }
+            }),
+            serde_json::json!({
+                "save": { "__typename": "Saved", "id": "9", "label": "accepted" },
+                "other": { "id": "5", "label": "accepted" }
+            }),
+        )
+        .await;
+        let CommitOptimisticWriteResult::Committed(result) = outcome else {
+            panic!("settles: {outcome:?}");
+        };
+        assert_eq!(result.identity_errors.len(), 1, "{result:?}");
+        let records = engine
+            .storage()
+            .get_batch(&[key("Saved:local"), key("Other:local"), key("Other:9")])
+            .await
+            .unwrap();
+        assert_eq!(
+            records[0],
+            Some(cache_core::identity::alias_record(&key("Saved:9")))
+        );
+        assert_eq!(
+            records[1]
+                .as_ref()
+                .and_then(cache_core::identity::alias_target),
+            None
+        );
+        assert_eq!(records[2], None);
+    });
+}
+
+#[test]
+fn a_type_stated_under_an_alias_settles_no_identity() {
+    block_on(async {
+        // The operation selects the type under an alias. A response that
+        // doesn't normalize is read only by its literal keys.
         let query = "mutation Save { save { kind: __typename id label } }";
         let (engine, outcome) = confirm_across_a_dropped_field(
             query,
             &[create_binding("Saved:local", "save")],
             serde_json::json!({ "save": { "kind": "Saved", "id": "local", "label": "pending" } }),
-            serde_json::json!({ "save": { "kind": "Other", "id": "9", "label": "accepted" } }),
+            serde_json::json!({ "save": { "kind": "Saved", "id": "9", "label": "accepted" } }),
         )
         .await;
         // Nothing of the response can be kept, so the attempt fails as it did

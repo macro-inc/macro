@@ -321,7 +321,7 @@ fn merge_into(records: &mut RecordUpdates, key: EntityKey<'static>, record: Reco
 }
 
 /// Flattens fragments applicable to `concrete_type` and visits each field.
-pub(crate) fn collect_fields<'a>(
+fn collect_fields<'a>(
     schema: &crate::meta::Schema,
     selections: &'a [Selection],
     concrete_type: &str,
