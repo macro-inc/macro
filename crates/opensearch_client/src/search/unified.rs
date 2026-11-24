@@ -398,7 +398,8 @@ impl UnifiedSearchIndex {
             OpenSearchEntityType::CallRecords => Self::CallRecord(parse(&entity, source)?),
             OpenSearchEntityType::CalendarEvents => Self::CalendarEvent(parse(&entity, source)?),
             OpenSearchEntityType::Projects => Self::Project(parse(&entity, source)?),
-            // No unified query names the database rows index yet.
+            // Rows are proposed by their own query (`search::database_rows`)
+            // and checked in Postgres; the unified query never names them.
             OpenSearchEntityType::DatabaseRows => {
                 return Err(crate::error::OpensearchClientError::Unknown {
                     details: "database row hits are not part of unified search".to_owned(),

@@ -8,6 +8,7 @@ use crate::domain::search_lanes::{LaneTurn, SearchCaller, SearchLanes};
 
 use crate::api::search::caller::{caller_label, draws_api_key_allowance, search_caller};
 use crate::api::search::crm_company;
+use crate::api::search::database_row::{self, RowHits};
 use crate::api::search::email_operators::{
     EmailQuery, QueryClock, apply_email_operators, reported_filters, time_zone,
 };
@@ -59,6 +60,7 @@ enum SearchSource {
     ChannelName,
     Content,
     CrmCompany,
+    DatabaseRow,
 }
 
 /// Wrapper for SearchHit that tracks its source for cursor regeneration
@@ -433,6 +435,13 @@ fn unified_search_span(
         search.rate_limit = tracing::field::Empty,
         search.rate_limit_remaining = tracing::field::Empty,
         search.rate_limit_wait_ms = tracing::field::Empty,
+        search.database_rows = tracing::field::Empty,
+        search.database_row_rounds = tracing::field::Empty,
+        search.database_row_proposed = tracing::field::Empty,
+        search.database_row_shown = tracing::field::Empty,
+        search.database_row_bound_reached = tracing::field::Empty,
+        search.database_row_databases_capped = tracing::field::Empty,
+        search.database_row_failed = tracing::field::Empty,
     )
 }
 
@@ -464,6 +473,10 @@ pub(in crate::api::search) struct UnifiedSearchPage {
     pub(in crate::api::search) hits: Vec<SearchHit>,
     pub(in crate::api::search) next_cursor: Option<String>,
     pub(in crate::api::search) crm_access: Option<CrmTeamReceipt<MemberTeamRole>>,
+    /// The finished items of the database rows among `hits`, built from what
+    /// Postgres held when the search checked them.
+    pub(in crate::api::search) database_rows:
+        std::collections::HashMap<Uuid, models_search::database_row::DatabaseRowSearchResponseItem>,
     /// The email filters the query's typed operators became, if it typed any.
     pub(in crate::api::search) query_filters: Option<item_filters::EmailFilters>,
 }
@@ -576,6 +589,10 @@ async fn search_unified_sources(
         .lowercase();
 
     let search_on = req.search_on;
+    // Rows carry none of the conditions other filters set (owner, folder,
+    // dates, favorites, properties), so a search that sets one leaves them out.
+    let include_database_rows =
+        req.include_database_rows && !models_search::unified::narrows_items(&req.filters);
     let user_organization_id = user_context.organization_id;
     let collapse = req.collapse.unwrap_or(false);
 
@@ -681,6 +698,22 @@ async fn search_unified_sources(
     // search runs however long the turn took.
     let crm_access = crm_company::resolve_crm_team_receipt(ctx, user_context, include_crm).await?;
     let should_include_crm = crm_access.is_some() && !tags_active;
+
+    // Rows are opt-in, on only while the rollout is on for the caller, and
+    // left out by what they cannot meet: a narrowing filter (above), a tag
+    // filter, an email operator, or regexp and query-string matching. The rollout is read
+    // after the caller's turn like every other read of the search.
+    let row_match_type = database_row::row_match_type(match_type);
+    let should_include_database_rows = match row_match_type {
+        Some(_) if include_database_rows && !tags_active && email_query.is_none() => {
+            match macro_user_id::user_id::MacroUserIdStr::parse_from_str(&user_context.user_id) {
+                Ok(caller) => ctx.database_row_rollout.enabled_for(caller).await,
+                Err(_) => false,
+            }
+        }
+        _ => false,
+    };
+    tracing::Span::current().record("search.database_rows", should_include_database_rows);
     let agent_sessions = ctx
         .agent_session_search()
         .scope(
@@ -876,11 +909,17 @@ async fn search_unified_sources(
         .map(|c| c.channel_name_cursor.clone())
         .unwrap_or_default();
 
+    let database_row_cursor = cursor
+        .as_ref()
+        .map(|c| c.database_row_cursor.clone())
+        .unwrap_or_default();
+
     // Clone cursors for passing to search functions (originals needed for cursor regeneration)
     let chat_cursor_for_search = chat_cursor.clone();
     let content_cursor_for_search = content_cursor.clone();
     let crm_cursor_for_search = crm_cursor.clone();
     let channel_name_cursor_for_search = channel_name_cursor.clone();
+    let database_row_cursor_for_search = database_row_cursor.clone();
 
     let mut unified_search_args = UnifiedSearchArgs {
         agent_session_search_args: AgentSessionSearchArgs {
@@ -995,13 +1034,14 @@ async fn search_unified_sources(
                 ("chats", should_include_chats && searches_names),
                 ("channels", should_include_channels && searches_names),
                 ("crm_companies", should_include_crm && searches_names),
+                ("database_rows", should_include_database_rows),
             ],
         ),
     );
 
     // Call search functions in parallel for included entity types
     // search_names handles Done cursors internally by returning early
-    let (chat_results, channel_results, content_results, crm_results) = tokio::join!(
+    let (chat_results, channel_results, content_results, crm_results, row_results) = tokio::join!(
         async {
             if should_include_chats {
                 match search_on {
@@ -1077,6 +1117,23 @@ async fn search_unified_sources(
                 _ => Ok((vec![], SearchCursorOption::Done)),
             }
         },
+        async {
+            // Rows match their title and their cells under every mode.
+            match row_match_type {
+                Some(row_match_type) if should_include_database_rows => {
+                    database_row::search_database_rows(
+                        ctx,
+                        &user_id,
+                        &search_terms,
+                        row_match_type,
+                        page_size,
+                        database_row_cursor_for_search,
+                    )
+                    .await
+                }
+                _ => Ok(RowHits::done()),
+            }
+        },
     );
 
     // Extract results and next cursors
@@ -1088,6 +1145,11 @@ async fn search_unified_sources(
         email_states_checked,
     } = content_results?;
     let (crm_hits, crm_next_cursor) = crm_results?;
+    let RowHits {
+        hits: row_hits,
+        items: mut database_rows,
+        cursor: row_next_cursor,
+    } = database_row::rows_or_unchanged(row_results, &database_row_cursor);
 
     // Track original counts before combining
     let chat_name_count = chat_hits.len();
@@ -1097,6 +1159,7 @@ async fn search_unified_sources(
     // their hit count already equals their entity count.
     let content_count = distinct_entity_count(&content_hits);
     let crm_count = crm_hits.len();
+    let row_count = row_hits.len();
 
     let final_tagged = {
         // Wrap results with source tags
@@ -1116,6 +1179,10 @@ async fn search_unified_sources(
         combined.extend(crm_hits.into_iter().map(|hit| TaggedSearchHit {
             hit,
             source: SearchSource::CrmCompany,
+        }));
+        combined.extend(row_hits.into_iter().map(|hit| TaggedSearchHit {
+            hit,
+            source: SearchSource::DatabaseRow,
         }));
 
         // Sort: updated_at DESC (None to bottom), entity_id DESC as tiebreaker
@@ -1154,6 +1221,10 @@ async fn search_unified_sources(
             .iter()
             .filter(|h| h.source == SearchSource::CrmCompany)
             .count();
+        let included_rows = final_tagged
+            .iter()
+            .filter(|h| h.source == SearchSource::DatabaseRow)
+            .count();
 
         // Generate new cursors using helper function
         let new_chat_cursor = compute_next_cursor(
@@ -1189,11 +1260,22 @@ async fn search_unified_sources(
             &crm_cursor,
         );
 
+        // A row cut by the merge was shown to no one yet, so the next page
+        // resumes after the last row on this one, or where this page started.
+        let new_row_cursor = compute_next_cursor(
+            &row_next_cursor,
+            included_rows,
+            row_count,
+            find_last_of_source(&final_tagged, SearchSource::DatabaseRow),
+            &database_row_cursor,
+        );
+
         // Build next cursor if any source has more results
         let has_more = new_chat_cursor.has_more()
             || new_channel_cursor.has_more()
             || new_content_cursor.has_more()
-            || new_crm_cursor.has_more();
+            || new_crm_cursor.has_more()
+            || new_row_cursor.has_more();
 
         if has_more {
             let cursor = SearchCursor {
@@ -1204,6 +1286,7 @@ async fn search_unified_sources(
                 project_name_cursor: SearchCursorOption::Done,
                 crm_company_cursor: new_crm_cursor,
                 channel_name_cursor: new_channel_cursor,
+                database_row_cursor: new_row_cursor,
                 document_term_matching: term_matching_for_cursor(
                     requested_term_matching,
                     search_terms.len(),
@@ -1222,11 +1305,19 @@ async fn search_unified_sources(
 
     // Extract final SearchHits from tagged results
     let final_results: Vec<SearchHit> = final_tagged.into_iter().map(|t| t.hit).collect();
+    // Only the rows this page returns keep their items.
+    let shown_rows: HashSet<Uuid> = final_results
+        .iter()
+        .filter(|hit| hit.entity_type == SearchEntityType::DatabaseRows)
+        .map(|hit| hit.entity_id)
+        .collect();
+    database_rows.retain(|row_id, _| shown_rows.contains(row_id));
 
     Ok(UnifiedSearchPage {
         hits: final_results,
         next_cursor,
         crm_access,
+        database_rows,
         query_filters: email_query.as_ref().map(reported_filters),
     })
 }
@@ -1263,7 +1354,12 @@ pub async fn handler(
         "simple_unified_search"
     );
 
-    // CRM opt-in is wired through the unified `/search` endpoint only.
+    // CRM and database rows are wired through the unified `/search` endpoint
+    // only: their hits are finished items this response has no shape for.
+    let req = UnifiedSearchRequest {
+        include_database_rows: false,
+        ..req
+    };
     let results = perform_unified_search(&ctx, user, false, query_params, req).await?;
 
     let results = results.hits.into_iter().map(|a| a.into()).collect();

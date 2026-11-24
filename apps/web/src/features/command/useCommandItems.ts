@@ -1,4 +1,5 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import type { DatabaseRowMatch } from '@app/features/block-database/queries/row-search';
 import { inEnglish } from '@app/lib/i18n';
 import type {
   EntityItem,
@@ -20,6 +21,7 @@ import {
   type CreateProjectCommandItem,
   newProjectCommand,
 } from './project-items';
+import type { DatabaseRowSource } from './queries/database-rows';
 import { useEntitySearch } from './queries/entity-search';
 import { sameRankInput } from './rank-command-search-items';
 import { getCommandLastUsedAt } from './recency';
@@ -64,13 +66,25 @@ type AskAiItem = {
   query: string;
 };
 
+/** A database row the server search found for the typed query. */
+type DatabaseRowItem = {
+  id: string;
+  kind: 'database-row';
+  bucket: 'database-row';
+  searchText: string;
+  sortTimestamp: number;
+  timestamps: TimestampedItem;
+  data: DatabaseRowMatch;
+};
+
 /** Combined item type for command menu (quickAccess items + commands) */
 type CommandMenuItem =
   | QuickAccessItem
   | CommandItem
   | SearchItem
   | AskAiItem
-  | CreateProjectCommandItem;
+  | CreateProjectCommandItem
+  | DatabaseRowItem;
 
 export type PaginationControls = {
   windowKey?: Accessor<string | undefined>;
@@ -106,6 +120,28 @@ function isSearchItem(item: CommandMenuItem): item is SearchItem {
 
 function isAskAiItem(item: CommandMenuItem): item is AskAiItem {
   return item.kind === 'ask-ai';
+}
+
+function isDatabaseRowItem(item: CommandMenuItem): item is DatabaseRowItem {
+  return item.kind === 'database-row';
+}
+
+/** Categories whose typed searches also list matching database rows. */
+const DATABASE_ROW_CATEGORIES: ReadonlySet<CategoryFilter> = new Set([
+  'all',
+  'documents',
+]);
+
+function makeDatabaseRowItem(row: DatabaseRowMatch): DatabaseRowItem {
+  return {
+    id: `database-row:${row.rowId}`,
+    kind: 'database-row',
+    bucket: 'database-row',
+    searchText: row.title,
+    sortTimestamp: 0,
+    timestamps: { viewedAt: undefined, updatedAt: undefined },
+    data: row,
+  };
 }
 
 /** Categories that surface a "Search for [query]" row in the command menu */
@@ -361,6 +397,11 @@ export function useCommandItems(
       search: Accessor<string>,
       active: Accessor<boolean>
     ) => CommandContactSource;
+    /** Finds database rows for typed All and Files queries. */
+    databaseRowDiscovery?: (
+      search: Accessor<string>,
+      active: Accessor<boolean>
+    ) => DatabaseRowSource;
   }
 ) {
   const showSearchRow = options?.showSearchRow ?? true;
@@ -376,6 +417,16 @@ export function useCommandItems(
     excludeEmails: true,
     contactDiscovery: options?.contactDiscovery,
   });
+  const databaseRows = options?.databaseRowDiscovery?.(
+    query,
+    () =>
+      entityEnabled() &&
+      DATABASE_ROW_CATEGORIES.has(categoryFilter()) &&
+      query().trim().length > 0
+  );
+  const rowItems = createMemo(() =>
+    (databaseRows?.rows() ?? []).map(makeDatabaseRowItem)
+  );
   const categoryItems = (): CommandMenuItem[] => {
     if (
       commandScopeCommands().length > 0 ||
@@ -433,6 +484,7 @@ export function useCommandItems(
             : []),
           ...topCommands,
           ...rest,
+          ...rowItems(),
         ];
       }
     }
@@ -440,13 +492,13 @@ export function useCommandItems(
     if (shouldShowSearchRow(q)) {
       // With no direct results the menu would only offer search, so also
       // offer handing the query to AI.
-      if (ranked.length === 0) {
+      if (ranked.length === 0 && rowItems().length === 0) {
         return [makeSearchItem(q, categoryFilter()), makeAskAiItem(q)];
       }
-      return [makeSearchItem(q, categoryFilter()), ...ranked];
+      return [makeSearchItem(q, categoryFilter()), ...ranked, ...rowItems()];
     }
 
-    return ranked;
+    return [...ranked, ...rowItems()];
   });
 
   return {
@@ -454,9 +506,23 @@ export function useCommandItems(
     isLoadingEntities: entities.isLoadingEntities,
     isSearchingEntities: entities.isSearchingEntities,
     isSettling: entities.isSettling,
+    isSearchingDatabaseRows: () => databaseRows?.isLoading() ?? false,
     pagination: entities.pagination,
   };
 }
 
-export type { AskAiItem, CommandMenuItem, SearchItem, UserItem };
-export { isAskAiItem, isCommandItem, isEntityItem, isSearchItem, isUserItem };
+export type {
+  AskAiItem,
+  CommandMenuItem,
+  DatabaseRowItem,
+  SearchItem,
+  UserItem,
+};
+export {
+  isAskAiItem,
+  isCommandItem,
+  isDatabaseRowItem,
+  isEntityItem,
+  isSearchItem,
+  isUserItem,
+};

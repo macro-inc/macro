@@ -77,7 +77,7 @@ pub(in crate::api::search) async fn resolve_crm_team_receipt(
 /// Recheck access on primary; existing search and enrichment reads stay on the replica.
 fn search_service(ctx: &SearchHandlerState) -> CrmSearchServiceImpl<CrmSearchRepositoryImpl> {
     CrmSearchServiceImpl::new(
-        CrmSearchRepositoryImpl::new(ctx.db.0.clone()).with_access_pool(ctx.crm_db.clone()),
+        CrmSearchRepositoryImpl::new(ctx.db.0.clone()).with_access_pool(ctx.primary_db.clone()),
     )
 }
 

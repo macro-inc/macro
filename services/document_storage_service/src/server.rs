@@ -1106,11 +1106,14 @@ async fn run_server() -> anyhow::Result<()> {
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
         call::outbound::channel_threads::MessageChannelThreads::new(call_root_poster.clone()),
     ));
-    let search_term_matching: Arc<dyn search_service::TermMatchingRollout> =
+    let search_rollout = |flag: &'static str| -> Arc<dyn search_service::SearchRollout> {
         match config.environment {
-            Environment::Local => Arc::new(search_service::LocalTermMatching),
-            _ => Arc::new(search_service::FlaggedTermMatching::new(flags.clone())),
-        };
+            Environment::Local => Arc::new(search_service::LocalRollout),
+            _ => Arc::new(search_service::FlaggedRollout::new(flags.clone(), flag)),
+        }
+    };
+    let search_term_matching = search_rollout(search_service::DYNAMIC_TERM_MATCHING_FLAG);
+    let search_database_rows = search_rollout(search_service::DATABASE_ROW_SEARCH_FLAG);
     let call_service_builder = call_service_builder.with_programmatic_call_gate(
         call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags.clone()),
     );
@@ -2722,6 +2725,7 @@ async fn run_server() -> anyhow::Result<()> {
     ));
     let api_context = ApiContext {
         search_term_matching,
+        search_database_rows,
         search_lanes: Arc::new(search_service::SearchLanes::new(
             search_service::LanePolicy::DEFAULT,
         )),

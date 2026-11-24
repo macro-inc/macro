@@ -9,6 +9,7 @@ pub(in crate::api::search) mod caller;
 pub(in crate::api) mod channel;
 pub(in crate::api) mod chat;
 pub(in crate::api) mod crm_company;
+pub(in crate::api::search) mod database_row;
 pub(in crate::api) mod document;
 pub(in crate::api) mod email;
 pub(in crate::api::search) mod email_operators;

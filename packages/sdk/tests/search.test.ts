@@ -4,6 +4,7 @@ import { AgentSession } from '../src/entities/agent-sessions/agent-session';
 import { CalendarEvent } from '../src/entities/calendar/event';
 import { Message } from '../src/entities/channels/message';
 import { Chat } from '../src/entities/chats/chat';
+import { DatabaseRow } from '../src/entities/databases/row';
 import { Document } from '../src/entities/documents/document';
 import { EmailThread } from '../src/entities/email/thread';
 import { Macro } from '../src/macro';
@@ -100,6 +101,7 @@ test('searches every type in one call and returns a typed handle per hit', async
     search_on: 'name_content',
     filters: { agent_session_filters: { include: true } },
     time_zone: runtimeTimeZone,
+    include_database_rows: true,
   });
   expect(results.map((result) => result.type)).toEqual([
     'document',
@@ -230,6 +232,40 @@ test('companies are searched only when asked for', async () => {
   const page = await macro().search.page('acme', { types: ['company'] });
   expect(page.results[0]?.type).toBe('company');
   expect(page.results[0]?.entity.id).toBe('acme');
+});
+
+test('database rows come back as row handles and are left out by other types', async () => {
+  const bodies: unknown[] = [];
+  serve(async (request) => {
+    bodies.push(await request.json());
+    return Response.json({
+      results: [
+        {
+          type: 'databaseRow',
+          database_id: 'db',
+          table_id: 'table',
+          row_id: 'row',
+          database_name: 'Accounts',
+          table_name: 'Customers',
+          title: 'Acme Corp',
+          snippet: 'Renewal with <macro_em>Acme</macro_em>',
+          updated_at: '2026-11-20T10:00:00Z',
+        },
+      ],
+    });
+  });
+  const client = macro();
+  const page = await client.search.page('acme', { types: ['database_row'] });
+  await client.search.page('acme', { types: ['document'] });
+
+  const [row] = page.results;
+  if (row?.type !== 'database_row') throw new Error('expected a row');
+  expect(row.entity).toBeInstanceOf(DatabaseRow);
+  expect(row.entity.toJSON()).toEqual({ id: 'row', tableId: 'table' });
+  expect(row.entity.table.database.id).toBe('db');
+  expect(row.hit.title).toBe('Acme Corp');
+  expect(bodies[0]).toMatchObject({ include_database_rows: true });
+  expect(bodies[1]).not.toHaveProperty('include_database_rows');
 });
 
 test('rejects an empty query, an unknown type and an unknown tag before searching', async () => {

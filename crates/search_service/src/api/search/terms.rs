@@ -13,7 +13,7 @@ use models_search::{MatchType, TermMatching};
 use models_search_cursor::CursorTermMatching;
 use opensearch_client::search::documents::{DocumentTermMatching, MIN_TERMS_FOR_DYNAMIC_MATCHING};
 
-use crate::TermMatchingRollout;
+use crate::SearchRollout;
 use crate::api::search::simple::SearchError;
 
 /// Whether `c` opens or closes a phrase: a straight double quote or a curly
@@ -117,7 +117,7 @@ pub(in crate::api::search) fn record_term_counts(
 /// access check, and a search already under way keeps its mode after the
 /// flag changes.
 pub(in crate::api::search) async fn resolve_document_term_matching(
-    rollout: &dyn TermMatchingRollout,
+    rollout: &dyn SearchRollout,
     caller: &str,
     requested: TermMatching,
     term_count: usize,
@@ -134,7 +134,7 @@ pub(in crate::api::search) async fn resolve_document_term_matching(
     let Ok(caller) = MacroUserIdStr::parse_from_str(caller) else {
         return DocumentTermMatching::All;
     };
-    if rollout.dynamic_enabled_for(caller).await {
+    if rollout.enabled_for(caller).await {
         DocumentTermMatching::Dynamic
     } else {
         DocumentTermMatching::All

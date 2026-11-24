@@ -32,7 +32,8 @@ pub async fn enrich_search_response(
     search_term: Option<&str>,
 ) -> Result<Vec<UnifiedSearchResponseItem>, SearchError> {
     match entity_type {
-        // Database row hits are never exposed until their exposure gate exists.
+        // Row hits arrive as finished items from `database_row`, built when
+        // the search checked them; nothing here may build one.
         SearchEntityType::DatabaseRows => Ok(Vec::new()),
         SearchEntityType::AgentSessions => Ok(super::agent_session::enrich_agent_sessions(
             ctx, user_id, results,

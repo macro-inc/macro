@@ -109,3 +109,75 @@ fn design_files_are_searchable_but_other_vector_files_are_not() {
         .file_types;
     assert_eq!(expanded, ["ai", "fig", "psd", "psb"]);
 }
+
+#[test]
+fn leaving_kinds_out_or_scoping_mail_does_not_narrow_items() {
+    let nil = NIL_UUID.to_string();
+    let rows_only = EntityFilters {
+        agent_session_filters: item_filters::AgentSessionFilters {
+            ids: vec![nil.clone()],
+            ..Default::default()
+        },
+        calendar_event_filters: CalendarEventFilters {
+            calendar_event_ids: vec![nil.clone()],
+            ..Default::default()
+        },
+        call_filters: CallFilters {
+            call_ids: vec![nil.clone()],
+            ..Default::default()
+        },
+        document_filters: DocumentFilters {
+            document_ids: vec![nil.clone()],
+            ..Default::default()
+        },
+        email_filters: EmailFilters {
+            email_thread_ids: vec![nil.clone()],
+            link_ids: vec!["0195f3a0-0000-7000-8000-000000000001".to_string()],
+            importance: Some(true),
+            ..Default::default()
+        },
+        project_filters: ProjectFilters {
+            project_ids: vec![nil],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    assert!(!narrows_items(&EntityFilters::default()));
+    assert!(!narrows_items(&rows_only));
+    assert!(!narrows_items(&entity_filters_from_include(
+        vec![UnifiedSearchIndex::DatabaseRows],
+        EntityFilters::default(),
+    )));
+}
+
+#[test]
+fn owner_folder_favorite_and_tag_conditions_narrow_items() {
+    let in_folder = EntityFilters {
+        project_filters: ProjectFilters {
+            project_ids: vec!["0195f3a0-0000-7000-8000-000000000002".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let by_owner = EntityFilters {
+        document_filters: DocumentFilters {
+            owners: vec!["macro|owner@example.com".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let favorites = EntityFilters {
+        favorites_only: Some(true),
+        ..Default::default()
+    };
+    let tagged = EntityFilters {
+        tag_option_ids: vec!["0195f3a0-0000-7000-8000-000000000003".to_string()],
+        ..Default::default()
+    };
+
+    assert!(narrows_items(&in_folder));
+    assert!(narrows_items(&by_owner));
+    assert!(narrows_items(&favorites));
+    assert!(narrows_items(&tagged));
+}

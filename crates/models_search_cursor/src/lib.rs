@@ -179,6 +179,12 @@ pub struct SearchCursor {
     /// channels were name-searched in Postgres still decode.
     #[serde(default)]
     pub channel_name_cursor: SearchCursorOption,
+    /// The database row cursor: the last row shown, never a row the caller
+    /// was not shown. Absent means done: rows were not searched, so a cursor
+    /// from before rows were searched, or from a search that left them out,
+    /// stays byte for byte what it was and never starts them mid-way.
+    #[serde(default = "done", skip_serializing_if = "SearchCursorOption::is_done")]
+    pub database_row_cursor: SearchCursorOption,
     /// The matching mode the first page ran with, so every later page runs
     /// the same one. Absent on cursors minted before it existed and on
     /// searches dynamic matching could not apply to; the page then decides
@@ -194,6 +200,10 @@ pub struct SearchCursor {
     /// in epoch milliseconds, so every later page bounds the same instants.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub query_time_millis: Option<i64>,
+}
+
+fn done() -> SearchCursorOption {
+    SearchCursorOption::Done
 }
 
 fn known_term_matching<'de, D: serde::Deserializer<'de>>(
@@ -226,6 +236,7 @@ impl SearchCursor {
             && self.project_name_cursor.is_done()
             && self.crm_company_cursor.is_done()
             && self.channel_name_cursor.is_done()
+            && self.database_row_cursor.is_done()
     }
 }
 
@@ -318,6 +329,38 @@ mod test {
         assert_eq!(decoded.query_time_millis, Some(1_763_000_000_000));
     }
 
+    /// A cursor without a row cursor (minted before rows were searched, or by
+    /// a search that left them out) reads rows as done, so a later page never
+    /// starts rows from their first match.
+    #[test]
+    fn missing_database_row_cursor_reads_as_done() {
+        let legacy = r#"{"chat_name_cursor":"Done","content_cursor":{"NotDone":null},"project_name_cursor":"Done","crm_company_cursor":"Done","channel_name_cursor":"Done"}"#;
+
+        let cursor = SearchCursor::decode(&BASE64.encode(legacy)).expect("legacy cursor decodes");
+
+        assert!(cursor.database_row_cursor.is_done());
+    }
+
+    #[test]
+    fn database_row_cursor_round_trips() {
+        let row_id = uuid::Uuid::parse_str("0195f3a0-0000-7000-8000-000000000001").expect("uuid");
+        let updated_at = chrono::DateTime::from_timestamp_millis(1_763_000_000_000).expect("time");
+        let cursor = SearchCursor {
+            database_row_cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+                entity_id: row_id,
+                updated_at,
+            })),
+            ..Default::default()
+        };
+
+        let decoded = SearchCursor::decode(&cursor.encode().expect("encode")).expect("decode");
+
+        let SearchCursorOption::NotDone(Some(position)) = decoded.database_row_cursor else {
+            panic!("row cursor lost");
+        };
+        assert_eq!(position.as_updated_at(), Some((row_id, updated_at)));
+    }
+
     #[test]
     fn crm_cursor_round_trips() {
         let cursor = SearchCursor {
@@ -336,10 +379,18 @@ mod test {
             project_name_cursor: SearchCursorOption::Done,
             crm_company_cursor: SearchCursorOption::Done,
             channel_name_cursor: SearchCursorOption::Done,
+            database_row_cursor: SearchCursorOption::Done,
             document_term_matching: None,
             query_time_millis: None,
         };
         assert!(cursor.is_exhausted());
+
+        cursor.database_row_cursor = SearchCursorOption::NotDone(None);
+        assert!(
+            !cursor.is_exhausted(),
+            "a not-done database row cursor must keep the aggregate cursor alive"
+        );
+        cursor.database_row_cursor = SearchCursorOption::Done;
 
         cursor.crm_company_cursor = SearchCursorOption::NotDone(None);
         assert!(

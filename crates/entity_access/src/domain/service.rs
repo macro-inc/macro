@@ -5,13 +5,13 @@ use std::{collections::HashMap, marker::PhantomData, str::FromStr};
 use crate::domain::{
     models::{
         AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
-        ChannelRoleResult, CrmEntityAccess, Entity, EntityAccessAuth, EntityAccessReceipt,
-        EntityAudience, EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
-        ViewAccessLevel,
+        ChannelRoleResult, CrmEntityAccess, CurrentSources, Entity, EntityAccessAuth,
+        EntityAccessReceipt, EntityAudience, EntityPermission, EntityType, RequiredPermission,
+        TeamRole, UserTeamInfo, ViewAccessLevel,
     },
     ports::{
         AccessRepository, AccessibleDatabases, AccessibleForms, AccessiblePipelines,
-        EntityAccessService, EntityAudienceLookup, ScheduledActionGrants,
+        CurrentDatabaseAccess, EntityAccessService, EntityAudienceLookup, ScheduledActionGrants,
     },
 };
 use futures::{StreamExt, stream};
@@ -321,6 +321,47 @@ where
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
         self.repo.list_database_access(user_id).await
+    }
+}
+
+impl<R> CurrentDatabaseAccess for EntityAccessServiceImpl<R>
+where
+    R: AccessRepository,
+{
+    #[tracing::instrument(err(level = Level::DEBUG), skip_all)]
+    async fn current_sources(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<CurrentSources, AccessError> {
+        self.repo.current_sources(user_id).await
+    }
+
+    #[tracing::instrument(err(level = Level::DEBUG), skip_all)]
+    async fn current_accessible_databases(
+        &self,
+        sources: &CurrentSources,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        self.repo.list_database_access_from(sources).await
+    }
+
+    #[tracing::instrument(err(level = Level::DEBUG), skip_all, fields(row_count = row_ids.len()))]
+    async fn current_viewable_database_rows(
+        &self,
+        sources: &CurrentSources,
+        row_ids: &[Uuid],
+    ) -> Result<std::collections::HashSet<Uuid>, AccessError> {
+        if row_ids.is_empty() {
+            return Ok(std::collections::HashSet::new());
+        }
+        let levels = self
+            .repo
+            .get_database_rows_access_from(row_ids, sources)
+            .await?;
+        Ok(levels
+            .into_iter()
+            .filter(|(_, level)| *level >= AccessLevel::View)
+            .map(|(row_id, _)| row_id)
+            .collect())
     }
 }
 

@@ -1563,6 +1563,57 @@
           "LINK"
         ]
       },
+      "DatabaseRowSearchResponseItem": {
+        "type": "object",
+        "description": "A database row matching a search.",
+        "required": [
+          "database_id",
+          "table_id",
+          "row_id",
+          "database_name",
+          "table_name",
+          "title",
+          "updated_at"
+        ],
+        "properties": {
+          "database_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The database holding the row."
+          },
+          "database_name": {
+            "type": "string",
+            "description": "The database's name."
+          },
+          "row_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The row."
+          },
+          "snippet": {
+            "type": ["string", "null"],
+            "description": "The matching passage of one of the row's cells, matched words wrapped\nin `<macro_em>…</macro_em>`. Absent when only the title matched."
+          },
+          "table_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The table holding the row."
+          },
+          "table_name": {
+            "type": "string",
+            "description": "The table's name."
+          },
+          "title": {
+            "type": "string",
+            "description": "The row's title: its primary column, or its first column when the\ntable has none, as plain text. Empty when that cell is empty."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the row was last written."
+          }
+        }
+      },
       "DateRange": {
         "type": "object",
         "description": "A span of time from `start` to `end`, both included. The end is never\nbefore the start: a range that would end earlier does not deserialize.",
@@ -4739,6 +4790,23 @@
                 }
               }
             ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DatabaseRowSearchResponseItem"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["databaseRow"]
+                  }
+                }
+              }
+            ]
           }
         ]
       },
@@ -4862,6 +4930,23 @@
                 }
               }
             ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DatabaseRowSearchResponseItem"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["databaseRow"]
+                  }
+                }
+              }
+            ]
           }
         ]
       },
@@ -4930,6 +5015,10 @@
           "include_crm": {
             "type": "boolean",
             "description": "Opt in to searching the caller's team CRM companies (name/domain).\nOff by default: CRM results are only included when this is true and\nthe caller has a qualifying team membership. CRM has no content\nindex, so it is searched only under Name / NameContent."
+          },
+          "include_database_rows": {
+            "type": "boolean",
+            "description": "Opt in to searching the rows of the caller's databases: a row's title,\ntext and link cells, and the labels of its select and tag cells.\nSearched only while database row search is on for the caller, under\n`partial` or `exact` matching. Off by default."
           },
           "match_type": {
             "$ref": "#/components/schemas/MatchType",
@@ -5148,6 +5237,23 @@
                   "type": {
                     "type": "string",
                     "enum": ["agentSession"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DatabaseRowSearchResponseItem"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["databaseRow"]
                   }
                 }
               }

@@ -11,6 +11,10 @@ const mocks = vi.hoisted(() => ({
   apply: vi.fn(),
   activate: vi.fn(),
   askAi: vi.fn(),
+  openRow: vi.fn(async () => {}),
+}));
+vi.mock('@app/features/block-database/open-row', () => ({
+  openDatabaseRow: mocks.openRow,
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   openChatWithMessage: mocks.askAi,
@@ -49,6 +53,7 @@ vi.mock('./useCommandItems', () => ({
   isUserItem: (item: { kind: string }) => item.kind === 'user',
   isSearchItem: (item: { kind: string }) => item.kind === 'search',
   isAskAiItem: (item: { kind: string }) => item.kind === 'ask-ai',
+  isDatabaseRowItem: (item: { kind: string }) => item.kind === 'database-row',
 }));
 vi.mock('./category-search-filters', () => ({
   getCategorySearchFilters: () => undefined,
@@ -147,6 +152,40 @@ it('opens the shared AI fallback when no search results match', () => {
       })
     ).toBe(true);
     expect(mocks.askAi).toHaveBeenCalledWith('how blowholes work');
+    expect(mocks.open).not.toHaveBeenCalled();
+    dispose();
+  });
+});
+
+it('opens a database row at its table, in a new split on Shift', () => {
+  createRoot((dispose) => {
+    const open = createCommandResultOpener();
+    const row = {
+      databaseId: 'database',
+      tableId: 'table',
+      rowId: 'row',
+      databaseName: 'Hiring',
+      tableName: 'Candidates',
+      title: 'Ada',
+    };
+    expect(
+      open(
+        {
+          kind: 'database-row',
+          bucket: 'database-row',
+          id: 'database-row:row',
+          searchText: 'Ada',
+          sortTimestamp: 0,
+          timestamps: {},
+          data: row,
+        },
+        true
+      )
+    ).toBe(true);
+    expect(mocks.openRow).toHaveBeenCalledWith(row, {
+      openInNewSplit: true,
+      referredFrom: 'kommand-menu',
+    });
     expect(mocks.open).not.toHaveBeenCalled();
     dispose();
   });

@@ -26,6 +26,11 @@ Off by default: CRM results are only included when this is true and
 the caller has a qualifying team membership. CRM has no content
 index, so it is searched only under Name / NameContent. */
   include_crm?: boolean;
+  /** Opt in to searching the rows of the caller's databases: a row's title,
+text and link cells, and the labels of its select and tag cells.
+Searched only while database row search is on for the caller, under
+`partial` or `exact` matching. Off by default. */
+  include_database_rows?: boolean;
   /** How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field. */
   match_type: MatchType;
   /** The search query string. Must not be empty; one character is enough.

@@ -13,6 +13,7 @@ pub mod calendar_events;
 pub mod call_records;
 pub mod channels;
 pub mod chats;
+pub mod database_rows;
 pub mod documents;
 pub mod emails;
 pub mod model;

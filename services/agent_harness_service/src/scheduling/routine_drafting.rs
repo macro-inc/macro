@@ -141,6 +141,7 @@ impl SearchNames {
                 filters: entity_filters_from_include(indexes.clone(), Default::default()),
                 search_on: SearchOn::Name,
                 include_crm: false,
+                include_database_rows: false,
                 calendar_event_scope: Default::default(),
                 // A name is a strict AND of its words, never a passage match.
                 term_matching: TermMatching::All,

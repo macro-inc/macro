@@ -15,7 +15,7 @@ use crate::domain::telemetry::{record_source_ids, span_count};
 use crate::domain::{
     models::{
         AccessError, AccessLevel, AgentSessionParent, BotId, CallChannelInfo, ChannelRoleResult,
-        CrmEntityAccess, EntityAudience, EntityType, UserTeamInfo,
+        CrmEntityAccess, CurrentSources, EntityAudience, EntityType, UserTeamInfo,
     },
     ports::AccessRepository,
 };
@@ -560,6 +560,45 @@ impl AccessRepository for PgAccessRepository {
                 &self.pool,
                 row_ids,
                 &source_ids,
+            )
+            .await?,
+        )
+    }
+
+    #[tracing::instrument(err, skip_all, fields(source_id_count = tracing::field::Empty))]
+    async fn current_sources(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<CurrentSources, AccessError> {
+        let source_ids = queries::get_current_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        record_source_ids(source_ids.0.len());
+        Ok(CurrentSources {
+            source_ids: source_ids.0,
+        })
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    async fn list_database_access_from(
+        &self,
+        sources: &CurrentSources,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        let source_ids = queries::SourceIds(sources.source_ids.clone());
+        Ok(queries::database_access::list_database_access(&self.pool, &source_ids).await?)
+    }
+
+    #[tracing::instrument(err, skip_all, fields(row_count = span_count(row_ids.len())))]
+    async fn get_database_rows_access_from(
+        &self,
+        row_ids: &[Uuid],
+        sources: &CurrentSources,
+    ) -> Result<std::collections::HashMap<Uuid, AccessLevel>, AccessError> {
+        Ok(
+            queries::database_row_access::get_database_rows_access_by_rows(
+                &self.pool,
+                row_ids,
+                &sources.source_ids,
             )
             .await?,
         )

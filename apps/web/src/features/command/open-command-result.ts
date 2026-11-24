@@ -1,3 +1,4 @@
+import { openDatabaseRow } from '@app/features/block-database/open-row';
 import { openChatWithMessage } from '@app/features/chat/ChatWithAgentButton';
 import { createGlobalSearchOpener } from '@app/features/next-soup/open-search';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
@@ -18,6 +19,7 @@ import { getCategorySearchFilters } from './category-search-filters';
 import {
   type CommandMenuItem,
   isAskAiItem,
+  isDatabaseRowItem,
   isEntityItem,
   isSearchItem,
   isUserItem,
@@ -131,6 +133,14 @@ export function createCommandResultOpener(
 
     if (isAskAiItem(item)) {
       fireAndForget(openChatWithMessage(item.query), 'command-menu');
+      return true;
+    }
+
+    if (isDatabaseRowItem(item)) {
+      fireAndForget(
+        openDatabaseRow(item.data, { openInNewSplit, referredFrom }),
+        'command-menu'
+      );
       return true;
     }
 

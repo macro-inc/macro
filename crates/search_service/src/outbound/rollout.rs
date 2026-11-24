@@ -1,4 +1,4 @@
-//! Feature-flag backed rollout of dynamic multi-term matching.
+//! Feature-flag backed rollouts of search features.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -11,9 +11,14 @@ use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use tokio::time::Instant;
 use tracing::Instrument;
 
-use crate::domain::term_matching::TermMatchingRollout;
+use crate::domain::rollout::SearchRollout;
 
-const ENABLE_DYNAMIC_SEARCH_TERM_MATCHING: &str = "enable-dynamic-search-term-matching";
+/// Dynamic multi-term matching on document content.
+pub const DYNAMIC_TERM_MATCHING_FLAG: &str = "enable-dynamic-search-term-matching";
+
+/// Database rows in unified search. The web app's flag of the same key
+/// shows them in Cmd+K.
+pub const DATABASE_ROW_SEARCH_FLAG: &str = "enable-database-row-search";
 
 /// How long one caller's answer counts as current. After it, the next search
 /// still gets that answer and starts a refresh.
@@ -22,7 +27,7 @@ const DECISION_LIFETIME: Duration = Duration::from_secs(300);
 /// How long a lapsed answer is kept for a caller who has stopped searching.
 const LAPSED_DECISION_RETENTION: Duration = Duration::from_secs(24 * 60 * 60);
 
-/// Answers from the per-user flag without ever making a search wait on the
+/// Answers from one per-user flag without ever making a search wait on the
 /// flag provider, which is a network call.
 ///
 /// A search gets the caller's remembered answer, or "off" when there is none.
@@ -30,12 +35,13 @@ const LAPSED_DECISION_RETENTION: Duration = Duration::from_secs(24 * 60 * 60);
 /// background read per caller replaces it; a failed read is remembered as
 /// "off". So the first search after the flag turns on for a caller, in each
 /// process, still runs strict, and the next one is dynamic.
-pub struct FlaggedTermMatching<F> {
+pub struct FlaggedRollout<F> {
     shared: Arc<Shared<F>>,
 }
 
 struct Shared<F> {
     flags: F,
+    flag: &'static str,
     decisions: Mutex<Decisions>,
 }
 
@@ -54,12 +60,13 @@ struct Decision {
     expires_at: Instant,
 }
 
-impl<F> FlaggedTermMatching<F> {
-    /// Wrap a flag provider; nothing is remembered yet.
-    pub fn new(flags: F) -> Self {
+impl<F> FlaggedRollout<F> {
+    /// Answer `flag` from a flag provider; nothing is remembered yet.
+    pub fn new(flags: F, flag: &'static str) -> Self {
         Self {
             shared: Arc::new(Shared {
                 flags,
+                flag,
                 decisions: Mutex::new(Decisions::default()),
             }),
         }
@@ -110,9 +117,9 @@ impl<F> Shared<F> {
 impl<F: FeatureFlags + 'static> Shared<F> {
     async fn refresh(&self, caller: MacroUserIdStr<'static>) {
         let enabled = match self.flags.load(&caller).await {
-            Ok(flags) => flags.is_enabled(ENABLE_DYNAMIC_SEARCH_TERM_MATCHING),
+            Ok(flags) => flags.is_enabled(self.flag),
             Err(error) => {
-                tracing::warn!(error = ?error, "failed to load dynamic term matching flag");
+                tracing::warn!(error = ?error, flag = self.flag, "failed to load search rollout flag");
                 false
             }
         };
@@ -122,13 +129,14 @@ impl<F: FeatureFlags + 'static> Shared<F> {
 }
 
 #[async_trait::async_trait]
-impl<F: FeatureFlags + 'static> TermMatchingRollout for FlaggedTermMatching<F> {
-    async fn dynamic_enabled_for(&self, caller: MacroUserIdStr<'_>) -> bool {
+impl<F: FeatureFlags + 'static> SearchRollout for FlaggedRollout<F> {
+    async fn enabled_for(&self, caller: MacroUserIdStr<'_>) -> bool {
         let (enabled, starts_refresh) = self.shared.remembered(caller.as_ref());
         if starts_refresh {
             // Parented on the search's span so the read stays in its trace.
             let span = tracing::info_span!(
-                "search.term_matching_refresh",
+                "search.rollout_refresh",
+                flag = self.shared.flag,
                 enabled = tracing::field::Empty
             );
             let shared = self.shared.clone();
@@ -139,12 +147,12 @@ impl<F: FeatureFlags + 'static> TermMatchingRollout for FlaggedTermMatching<F> {
     }
 }
 
-/// Local stacks have no flag provider: dynamic matching is on for everyone.
-pub struct LocalTermMatching;
+/// Local stacks have no flag provider: every search rollout is on for everyone.
+pub struct LocalRollout;
 
 #[async_trait::async_trait]
-impl TermMatchingRollout for LocalTermMatching {
-    async fn dynamic_enabled_for(&self, _caller: MacroUserIdStr<'_>) -> bool {
+impl SearchRollout for LocalRollout {
+    async fn enabled_for(&self, _caller: MacroUserIdStr<'_>) -> bool {
         true
     }
 }

@@ -374,6 +374,14 @@ impl RequiredPermission for OwnerTeamRole {
     }
 }
 
+/// The sources (the user, their teams and their channels) a user held when
+/// read, uncached, so a run of checks sees one current state of their
+/// memberships. Only this crate reads what it holds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CurrentSources {
+    pub(crate) source_ids: Vec<String>,
+}
+
 /// The team a user belongs to and the role they hold in it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UserTeamInfo {

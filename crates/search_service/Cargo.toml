@@ -23,6 +23,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 channels = { path = "../channels", default-features = false, features = ["outbound"] }
 comms_db_client = { path = "../comms_db_client" }
+database_row_search = { path = "../database_row_search" }
 crm = { path = "../crm", default-features = false, features = ["search"] }
 document_sub_type = { path = "../document_sub_type" }
 email_db_client = { path = "../email_db_client" }
@@ -65,5 +66,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 bot_id = { path = "../bot_id" }
+macro_db_migrator = { path = "../macro_db_migrator" }
 macro_auth = { path = "../macro_auth", features = ["testing"] }
 tracing-subscriber = { workspace = true }

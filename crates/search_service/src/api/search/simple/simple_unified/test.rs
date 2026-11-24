@@ -571,6 +571,7 @@ fn channel_name_cursor_round_trips_through_the_unified_cursor() {
             entity_id,
             updated_at: ts(1000),
         })),
+        database_row_cursor: SearchCursorOption::Done,
         document_term_matching: None,
         query_time_millis: None,
     };
@@ -619,6 +620,7 @@ fn the_unified_search_span_carries_the_mode_and_not_the_request() {
         filters: Default::default(),
         search_on: SearchOn::NameContent,
         include_crm: false,
+        include_database_rows: false,
         calendar_event_scope: Default::default(),
         term_matching: Default::default(),
         collapse: None,
@@ -695,6 +697,7 @@ fn the_unified_search_span_defaults_the_page_size() {
         filters: Default::default(),
         search_on: SearchOn::Content,
         include_crm: false,
+        include_database_rows: false,
         calendar_event_scope: Default::default(),
         term_matching: Default::default(),
         collapse: None,
@@ -975,6 +978,7 @@ fn search_request(query: &str) -> UnifiedSearchRequest {
         filters: Default::default(),
         search_on: SearchOn::NameContent,
         include_crm: false,
+        include_database_rows: false,
         calendar_event_scope: Default::default(),
         term_matching: Default::default(),
         collapse: None,
@@ -1053,7 +1057,7 @@ fn unreachable_state(lanes: SearchLanes) -> SearchHandlerState {
         .unwrap();
     SearchHandlerState {
         db: readonly_pool::ReadOnlyPool(pool.clone()),
-        crm_db: pool.clone(),
+        primary_db: pool.clone(),
         opensearch_client: std::sync::Arc::new(
             opensearch_client::OpensearchClient::new(
                 "http://127.0.0.1:1".to_string(),
@@ -1083,7 +1087,8 @@ fn unreachable_state(lanes: SearchLanes) -> SearchHandlerState {
         agent_session_search_metadata: std::sync::Arc::new(NoSessions),
         calendar_search_enabled: false,
         calendar_event_labels: std::sync::Arc::new(NoLabels),
-        term_matching_rollout: std::sync::Arc::new(crate::LocalTermMatching),
+        term_matching_rollout: std::sync::Arc::new(crate::LocalRollout),
+        database_row_rollout: std::sync::Arc::new(crate::LocalRollout),
         search_lanes: std::sync::Arc::new(lanes),
         api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(Some(
             rate_limit::TokenBucketResult::Taken { remaining: 200 },
@@ -1609,4 +1614,63 @@ fn operators_count_toward_the_term_cap() {
         limited_terms(&mut every_kind(), false, terms, MatchType::Partial, clock()),
         Err(SearchError::TooManyTerms)
     ));
+}
+
+/// What a failed row search leaves of the page and of the rows' place in the
+/// next cursor: no rows, the cursor the request sent, and the failure on the
+/// span.
+fn rows_after_failure(input: SearchCursorOption) -> (RowHits, SearchCursorOption, String) {
+    use crate::api::search::span_capture::SpanFields;
+
+    let (fields, _guard) = SpanFields::install();
+    let query_params = SearchPaginationParams {
+        page: None,
+        page_size: Some(10),
+        cursor: None,
+    };
+    let span = unified_search_span(
+        &caller(macro_authorization::CredentialOrigin::Internal),
+        &query_params,
+        &search_request("acme"),
+    );
+    let (rows, next) = span.in_scope(|| {
+        let rows = database_row::rows_or_unchanged(
+            Err(SearchError::InternalError(anyhow::anyhow!(
+                "opensearch failed 1 of 2 shards"
+            ))),
+            &input,
+        );
+        let next = compute_next_cursor(&rows.cursor, 0, rows.hits.len(), None, &input);
+        (rows, next)
+    });
+    let failed = fields.of("perform_unified_search")["search.database_row_failed"].clone();
+    (rows, next, failed)
+}
+
+#[test]
+fn a_failed_first_row_page_keeps_rows_to_try_again() {
+    let (rows, next, failed) = rows_after_failure(SearchCursorOption::NotDone(None));
+
+    assert!(rows.hits.is_empty());
+    assert!(rows.items.is_empty());
+    assert!(matches!(next, SearchCursorOption::NotDone(None)));
+    assert_eq!(failed, "true");
+}
+
+#[test]
+fn a_failed_later_row_page_neither_ends_nor_advances_rows() {
+    let shown = Uuid::now_v7();
+    let input = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: shown,
+        updated_at: ts(1000),
+    }));
+
+    let (rows, next, failed) = rows_after_failure(input);
+
+    assert!(rows.hits.is_empty());
+    let SearchCursorOption::NotDone(Some(position)) = next else {
+        panic!("the rows cursor changed: {next:?}");
+    };
+    assert_eq!(position.as_updated_at(), Some((shown, ts(1000))));
+    assert_eq!(failed, "true");
 }

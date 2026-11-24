@@ -260,6 +260,7 @@ export type SearchEntityType =
   | 'projects'
   | 'call_records'
   | 'calendar_events'
+  | 'database_rows'
   | 'chats';
 /**
  * Which tag set a tag belongs to, relative to the caller.
@@ -310,6 +311,9 @@ export type TaggedSessionAwareSearchResult1 =
     })
   | (AgentSessionSearchResponseItem & {
       type: 'agentSession';
+    })
+  | (DatabaseRowSearchResponseItem & {
+      type: 'databaseRow';
     });
 /**
  * The document sub type enum represents all values of document sub types.
@@ -875,6 +879,9 @@ export type SessionAwareSearchResult =
     })
   | (AgentSessionSearchResponseItem & {
       type: 'agentSession';
+    })
+  | (DatabaseRowSearchResponseItem & {
+      type: 'databaseRow';
     });
 /**
  * Outcome describes actual completion, including uncertain interrupted work.
@@ -6395,7 +6402,7 @@ export interface ConnectMcpServerResponse {
   summary: string;
 }
 /**
- * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; agent session messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For agent sessions, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type, and keep that scope on follow-ups and retries. To find a person's emails, search for their quoted email address, not their name: a name only matches where that display name appears. Resolve the address first (from context, NameSearch or a contact lookup). Results for documents, emails, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
+ * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; agent session messages; call transcripts; database rows (their title and their text, link, select and tag cells). This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For agent sessions, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type, and keep that scope on follow-ups and retries. To find a person's emails, search for their quoted email address, not their name: a name only matches where that display name appears. Resolve the address first (from context, NameSearch or a contact lookup). Results for documents, emails, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
  */
 export interface ContentSearch {
   /**
@@ -6404,7 +6411,7 @@ export interface ContentSearch {
   query: string;
   matchType?: SearchMatchType & string;
   /**
-   * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']. Projects and calendar events carry no indexed content, so they never match here — search those by name with NameSearch instead.
+   * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records'], ['database_rows']. Projects and calendar events carry no indexed content, so they never match here — search those by name with NameSearch instead.
    */
   entityTypes?: SearchEntityType[];
   /**
@@ -7069,6 +7076,45 @@ export interface SearchGotoAgentSession {
    */
   message_turn: number;
   author: AgentSessionAuthor;
+}
+/**
+ * A database row matching a search.
+ */
+export interface DatabaseRowSearchResponseItem {
+  /**
+   * The database holding the row.
+   */
+  database_id: string;
+  /**
+   * The table holding the row.
+   */
+  table_id: string;
+  /**
+   * The row.
+   */
+  row_id: string;
+  /**
+   * The database's name.
+   */
+  database_name: string;
+  /**
+   * The table's name.
+   */
+  table_name: string;
+  /**
+   * The row's title: its primary column, or its first column when the
+   * table has none, as plain text. Empty when that cell is empty.
+   */
+  title: string;
+  /**
+   * The matching passage of one of the row's cells, matched words wrapped
+   * in `<macro_em>…</macro_em>`. Absent when only the title matched.
+   */
+  snippet?: string | null;
+  /**
+   * When the row was last written.
+   */
+  updated_at: string;
 }
 /**
  * Start a new session with a coding or chat agent from ListAgents (or macro.agents.list() in ExecuteCode). Provide the agent botId and a self-contained initial prompt. The new session does not inherit this conversation. Returns its session ID after the first prompt is accepted, not completed work. Use ManageAgentSession to continue an existing session. Create once; do not automatically retry after an uncertain failure.
@@ -13210,7 +13256,7 @@ export interface MuteNotificationsResponse {
   snoozeUntil?: string | null;
 }
 /**
- * Search items by their name or title: document name, email subject, agent session title, channel name, project name, call-record name, or calendar event title. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type, and keep that scope on follow-ups and retries. Results for documents, emails, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist). A calendar event result is one copy of the event on a calendar the user can see, not all of them theirs: calendarName names that calendar, contributesToAvailability says whether it is on the user's schedule, and role says whether they organize it or are a guest. A result without contributesToAvailability carries none of this, as on an event shared with them, so say you cannot tell rather than infer anything from the missing fields. Otherwise only role says the user organizes an event: organizer is whoever the provider names, which on a read-only calendar can be the user's own mailbox, so without a role tell them they do not organize it. Say "your calendar" only when contributesToAvailability is true or there is a role. Any other result is what that calendar shows, not where the user is or what they are doing, even when they ask about "my" event: never call it their appointment, trip or meeting. Say "alex@example.com's calendar has..." when calendarName shows whose it is; if it does not, say you cannot tell rather than guess.
+ * Search items by their name or title: document name, email subject, agent session title, channel name, project name, call-record name, calendar event title, or database row (its title and its text, link, select and tag cells). This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type, and keep that scope on follow-ups and retries. Results for documents, emails, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist). A calendar event result is one copy of the event on a calendar the user can see, not all of them theirs: calendarName names that calendar, contributesToAvailability says whether it is on the user's schedule, and role says whether they organize it or are a guest. A result without contributesToAvailability carries none of this, as on an event shared with them, so say you cannot tell rather than infer anything from the missing fields. Otherwise only role says the user organizes an event: organizer is whoever the provider names, which on a read-only calendar can be the user's own mailbox, so without a role tell them they do not organize it. Say "your calendar" only when contributesToAvailability is true or there is a role. Any other result is what that calendar shows, not where the user is or what they are doing, even when they ask about "my" event: never call it their appointment, trip or meeting. Say "alex@example.com's calendar has..." when calendarName shows whose it is; if it does not, say you cannot tell rather than guess.
  */
 export interface NameSearch {
   /**
@@ -13219,7 +13265,7 @@ export interface NameSearch {
   name: string;
   matchType?: SearchMatchType & string;
   /**
-   * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records'].
+   * Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records'], ['database_rows'].
    */
   entityTypes?: SearchEntityType[];
   /**

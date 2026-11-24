@@ -13,6 +13,9 @@ import { Channel } from '../channels/channel';
 import { Message } from '../channels/message';
 import { Chat } from '../chats/chat';
 import { Company } from '../crm/company';
+import { Database } from '../databases/database';
+import { DatabaseRow } from '../databases/row';
+import { DatabaseTable } from '../databases/table';
 import { Document } from '../documents/document';
 import { EmailThread } from '../email/thread';
 import { Project } from '../projects/project';
@@ -33,14 +36,15 @@ const DEFAULT_PAGE_SIZE = 50;
 
 const searchTypes: readonly SearchType[] = [
   ...(Object.keys(exclusions) as SearchType[]),
+  'database_row',
   'company',
 ];
 
 /**
  * Search the user's Macro content across every kind of item in one call:
  * documents and tasks, email, channels and their messages, projects, call
- * transcripts, calendar events, agent session transcripts, AI chats, and CRM
- * companies when asked for. Results come most relevant first, as typed entity
+ * transcripts, calendar events, agent session transcripts, AI chats, rows of
+ * the user's databases, and CRM companies when asked for. Results come most relevant first, as typed entity
  * handles, with the same filters as the per-type searches and more: exact
  * matching, tags, one inbox and agent session transcripts.
  *
@@ -205,6 +209,10 @@ export class SearchNamespace {
       filters,
       ...(timeZone ? { time_zone: timeZone } : {}),
       ...(types.includes('company') ? { include_crm: true } : {}),
+      // Rows are searched with every kind unless the types leave them out.
+      ...(!types.length || types.includes('database_row')
+        ? { include_database_rows: true }
+        : {}),
       ...(options.calendarScope
         ? { calendar_event_scope: options.calendarScope }
         : {}),
@@ -334,6 +342,18 @@ function searchResult(
     .with({ type: 'company' }, (hit) => ({
       type: 'company',
       entity: Company.byId(client, hit.id),
+      hit,
+      tags,
+    }))
+    .with({ type: 'databaseRow' }, (hit) => ({
+      type: 'database_row',
+      entity: DatabaseRow.byId(
+        DatabaseTable.byId(
+          Database.byId(client, hit.database_id),
+          hit.table_id,
+        ),
+        hit.row_id,
+      ),
       hit,
       tags,
     }))

@@ -41,6 +41,21 @@ async fn insert_row(pool: &PgPool) -> (Uuid, Uuid) {
     (database_id, row_id)
 }
 
+/// [`get_database_rows_access`], checked against the row-bounded form search
+/// uses, which must answer the same for every input.
+async fn rows_access(
+    pool: &PgPool,
+    row_ids: &[Uuid],
+    source_ids: &SourceIds,
+) -> Result<HashMap<Uuid, AccessLevel>, sqlx::Error> {
+    let levels = get_database_rows_access(pool, row_ids, source_ids).await?;
+    assert_eq!(
+        get_database_rows_access_by_rows(pool, row_ids, &source_ids.0).await?,
+        levels
+    );
+    Ok(levels)
+}
+
 async fn source_ids(pool: &PgPool, email: &str) -> SourceIds {
     let user = MacroUserIdStr::try_from_email(email).unwrap();
     get_user_source_ids(pool, Some(&user)).await.unwrap()
@@ -80,7 +95,7 @@ async fn row_access_is_the_highest_grant_on_its_database(pool: PgPool) {
 
     let missing_row_id = Uuid::now_v7();
     assert_eq!(
-        get_database_rows_access(&pool, &[row_id, other_row_id, missing_row_id], &member)
+        rows_access(&pool, &[row_id, other_row_id, missing_row_id], &member)
             .await
             .unwrap(),
         std::collections::HashMap::from([
@@ -88,16 +103,11 @@ async fn row_access_is_the_highest_grant_on_its_database(pool: PgPool) {
             (other_row_id, AccessLevel::Owner)
         ])
     );
-    assert!(
-        get_database_rows_access(&pool, &[], &member)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(rows_access(&pool, &[], &member).await.unwrap().is_empty());
 
     let outsider = source_ids(&pool, "noteam@team.com").await;
     assert!(
-        get_database_rows_access(&pool, &[row_id, other_row_id], &outsider)
+        rows_access(&pool, &[row_id, other_row_id], &outsider)
             .await
             .unwrap()
             .is_empty()
@@ -209,7 +219,7 @@ async fn a_form_editor_edits_the_rows_of_its_database(pool: PgPool) {
         None
     );
     assert_eq!(
-        get_database_rows_access(&pool, &[edited, viewed, trashed], &member)
+        rows_access(&pool, &[edited, viewed, trashed], &member)
             .await
             .unwrap(),
         HashMap::from([(edited, AccessLevel::Edit)])
@@ -243,9 +253,7 @@ async fn a_direct_database_grant_above_edit_wins_over_a_form_on_rows(pool: PgPoo
         Some(AccessLevel::Owner)
     );
     assert_eq!(
-        get_database_rows_access(&pool, &[row_id], &member)
-            .await
-            .unwrap(),
+        rows_access(&pool, &[row_id], &member).await.unwrap(),
         HashMap::from([(row_id, AccessLevel::Owner)])
     );
 }
@@ -286,7 +294,7 @@ async fn viewing_a_form_that_shares_responses_views_the_rows_of_its_database(poo
         None
     );
     assert_eq!(
-        get_database_rows_access(&pool, &[shared, hidden], &member)
+        rows_access(&pool, &[shared, hidden], &member)
             .await
             .unwrap(),
         HashMap::from([(shared, AccessLevel::View)])

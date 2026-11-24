@@ -1,3 +1,7 @@
+import {
+  DatabaseRowIcon,
+  DatabaseRowSearchResult,
+} from '@app/features/block-database/component/DatabaseRowSearchResult';
 import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { hasValidHotkey } from '@core/hotkey/utils';
@@ -17,6 +21,7 @@ import {
   type CommandMenuItem,
   isAskAiItem,
   isCommandItem,
+  isDatabaseRowItem,
   isEntityItem,
   isSearchItem,
   isUserItem,
@@ -272,6 +277,16 @@ export function ItemDisplay(props: { item: CommandMenuItem }) {
       </Match>
       <Match when={isUserItem(props.item) && props.item}>
         {(item) => <UserDisplay item={item()} />}
+      </Match>
+      <Match when={isDatabaseRowItem(props.item) && props.item}>
+        {(item) => (
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <div class="size-5 mobile:scale-150 flex items-center justify-center text-ink-muted shrink-0">
+              <DatabaseRowIcon />
+            </div>
+            <DatabaseRowSearchResult row={item().data} />
+          </div>
+        )}
       </Match>
     </Switch>
   );

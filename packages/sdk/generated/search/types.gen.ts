@@ -906,6 +906,46 @@ export type CrmCompanySearchResponseItem = {
 export type DataType = 'BOOLEAN' | 'DATE' | 'DATE_RANGE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
 
 /**
+ * A database row matching a search.
+ */
+export type DatabaseRowSearchResponseItem = {
+    /**
+     * The database holding the row.
+     */
+    database_id: string;
+    /**
+     * The database's name.
+     */
+    database_name: string;
+    /**
+     * The row.
+     */
+    row_id: string;
+    /**
+     * The matching passage of one of the row's cells, matched words wrapped
+     * in `<macro_em>…</macro_em>`. Absent when only the title matched.
+     */
+    snippet?: string | null;
+    /**
+     * The table holding the row.
+     */
+    table_id: string;
+    /**
+     * The table's name.
+     */
+    table_name: string;
+    /**
+     * The row's title: its primary column, or its first column when the
+     * table has none, as plain text. Empty when that cell is empty.
+     */
+    title: string;
+    /**
+     * When the row was last written.
+     */
+    updated_at: string;
+};
+
+/**
  * A span of time from `start` to `end`, both included. The end is never
  * before the start: a range that would end earlier does not deserialize.
  */
@@ -2568,6 +2608,8 @@ export type SimpleUnifiedSearchResponseBaseItem = (SimpleDocumentSearchResponseB
     type: 'call';
 }) | (SimpleCalendarEventSearchResponseBaseItemHumanReadableTimestamp & {
     type: 'calendarEvent';
+}) | (DatabaseRowSearchResponseItem & {
+    type: 'databaseRow';
 });
 
 export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp = (SimpleDocumentSearchResponseBaseItemHumanReadableTimestamp & {
@@ -2584,6 +2626,8 @@ export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp = (SimpleD
     type: 'call';
 }) | (SimpleCalendarEventSearchResponseBaseItemHumanReadableTimestamp & {
     type: 'calendarEvent';
+}) | (DatabaseRowSearchResponseItem & {
+    type: 'databaseRow';
 });
 
 /**
@@ -2645,6 +2689,13 @@ export type UnifiedSearchRequest = {
      * index, so it is searched only under Name / NameContent.
      */
     include_crm?: boolean;
+    /**
+     * Opt in to searching the rows of the caller's databases: a row's title,
+     * text and link cells, and the labels of its select and tag cells.
+     * Searched only while database row search is on for the caller, under
+     * `partial` or `exact` matching. Off by default.
+     */
+    include_database_rows?: boolean;
     /**
      * How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field.
      */
@@ -2714,6 +2765,8 @@ export type UnifiedSearchResponseItem = (DocumentSearchResponseItemWithMetadata 
     type: 'calendarEvent';
 }) | (AgentSessionSearchResponseItem & {
     type: 'agentSession';
+}) | (DatabaseRowSearchResponseItem & {
+    type: 'databaseRow';
 });
 
 export type UnifiedSearchData = {

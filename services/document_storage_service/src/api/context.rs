@@ -1020,7 +1020,10 @@ pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRo
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
-    pub search_term_matching: Arc<dyn search_service::TermMatchingRollout>,
+    pub search_term_matching: Arc<dyn search_service::SearchRollout>,
+    /// Which callers' unified searches reach database rows.
+    #[from_ref(skip)]
+    pub search_database_rows: Arc<dyn search_service::SearchRollout>,
     /// Each caller's unified search lane, shared by both search mounts.
     pub search_lanes: Arc<search_service::SearchLanes>,
     /// The search allowance each account's user API keys share, in Redis.
@@ -1174,7 +1177,7 @@ impl From<&ApiContext> for SearchHandlerState {
     fn from(ctx: &ApiContext) -> Self {
         SearchHandlerState {
             db: ctx.readonly_db.clone(),
-            crm_db: ctx.db.clone(),
+            primary_db: ctx.db.clone(),
             opensearch_client: ctx.opensearch_client.clone(),
             entity_access_service: ctx.entity_access_service.clone(),
             authorization_state: ctx.authorization_state.clone(),
@@ -1192,6 +1195,7 @@ impl From<&ApiContext> for SearchHandlerState {
                 ctx.readonly_db.0.clone(),
             ))) as Arc<dyn CalendarEventLabelReader>,
             term_matching_rollout: ctx.search_term_matching.clone(),
+            database_row_rollout: ctx.search_database_rows.clone(),
             search_lanes: ctx.search_lanes.clone(),
             api_key_search_buckets: ctx.api_key_search_buckets.clone(),
         }

@@ -11,6 +11,7 @@ import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnes
 import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnethree } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnethree';
 import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezero } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezero';
 import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfSeven } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfSeven';
+import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfTwotwo } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfTwotwo';
 
 export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp =
   | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOf
@@ -19,4 +20,5 @@ export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp =
   | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezero
   | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnethree
   | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnesix
-  | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnenine;
+  | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnenine
+  | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfTwotwo;

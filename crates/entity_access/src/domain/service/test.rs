@@ -8,9 +8,9 @@ mod entity_audiences;
 mod telemetry;
 use crate::domain::models::{
     AdminParticipantRole, AdminTeamRole, AnyEntityPermission, BotAccessScope, BotId,
-    BotReceiptScope, CallChannelInfo, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
-    MemberParticipantRole, MemberTeamRole, OwnerParticipantRole, ParticipantRole, UserTeamInfo,
-    ViewAccessLevel, ViewOnly,
+    BotReceiptScope, CallChannelInfo, CommentAccessLevel, CurrentSources, EditAccessLevel,
+    EntityAccessAuth, MemberParticipantRole, MemberTeamRole, OwnerParticipantRole, ParticipantRole,
+    UserTeamInfo, ViewAccessLevel, ViewOnly,
 };
 use crate::domain::ports::{AccessibleForms, ScheduledActionGrants};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -547,6 +547,34 @@ impl AccessRepository for MockRepo {
         self.database_row_access_calls
             .fetch_add(1, Ordering::SeqCst);
         Ok(*self.database_row_access.lock().await)
+    }
+
+    async fn current_sources(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<CurrentSources, AccessError> {
+        Ok(CurrentSources {
+            source_ids: Vec::new(),
+        })
+    }
+
+    async fn list_database_access_from(
+        &self,
+        _sources: &CurrentSources,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        Ok(self.database_access_list.lock().await.clone())
+    }
+
+    async fn get_database_rows_access_from(
+        &self,
+        row_ids: &[Uuid],
+        _sources: &CurrentSources,
+    ) -> Result<HashMap<Uuid, AccessLevel>, AccessError> {
+        let level = *self.database_row_access.lock().await;
+        Ok(row_ids
+            .iter()
+            .filter_map(|id| level.map(|level| (*id, level)))
+            .collect())
     }
 
     async fn get_database_rows_access(

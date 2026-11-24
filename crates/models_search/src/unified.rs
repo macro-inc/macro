@@ -37,6 +37,11 @@ pub enum UnifiedSearchIndex {
     CallRecords,
     #[serde(rename = "calendar_events")]
     CalendarEvents,
+    /// Rows of the caller's databases. They are searched only when the
+    /// request sets `include_database_rows`; naming them here leaves the
+    /// kinds not named out, as naming any kind does.
+    #[serde(rename = "database_rows")]
+    DatabaseRows,
 }
 
 const NIL_UUID: &str = "00000000-0000-0000-0000-000000000000";
@@ -118,6 +123,13 @@ pub struct UnifiedSearchRequest {
     #[serde(default)]
     pub include_crm: bool,
 
+    /// Opt in to searching the rows of the caller's databases: a row's title,
+    /// text and link cells, and the labels of its select and tag cells.
+    /// Searched only while database row search is on for the caller, under
+    /// `partial` or `exact` matching. Off by default.
+    #[serde(default)]
+    pub include_database_rows: bool,
+
     /// Which calendar events to search. Defaults to `own`: events on the
     /// caller's own and delegated calendars. `shared_with_you` searches only
     /// events shared with a channel the caller belongs to that are on none of
@@ -141,6 +153,30 @@ pub struct UnifiedSearchRequest {
     /// Defaults to UTC.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub time_zone: Option<String>,
+}
+
+/// Whether `filters` narrow the items a search reaches beyond leaving whole
+/// kinds out. Leaving a kind out is a nil id in its primary id list; the email
+/// filters scope mail alone (an inbox, important mail). Database rows carry
+/// none of the other conditions (owner, folder, dates, favorites, properties,
+/// tags), so a search that sets any of them leaves rows out rather than
+/// showing rows those conditions never applied to.
+pub fn narrows_items(filters: &EntityFilters) -> bool {
+    let mut scope = filters.clone();
+    strip_nil_uuids(&mut scope.agent_session_filters.ids);
+    scope.agent_session_filters.include = false;
+    strip_nil_uuids(&mut scope.calendar_event_filters.calendar_event_ids);
+    strip_nil_uuids(&mut scope.project_filters.project_ids);
+    strip_nil_uuids(&mut scope.document_filters.document_ids);
+    strip_nil_uuids(&mut scope.chat_filters.chat_ids);
+    strip_nil_uuids(&mut scope.channel_filters.channel_ids);
+    strip_nil_uuids(&mut scope.channel_thread_filters.thread_ids);
+    strip_nil_uuids(&mut scope.call_filters.call_ids);
+    strip_nil_uuids(&mut scope.call_filters.channel_ids);
+    strip_nil_uuids(&mut scope.crm_company_filters.company_ids);
+    strip_nil_uuids(&mut scope.foreign_entity_filters.ids);
+    scope.email_filters = EmailFilters::default();
+    !non_empty::IsEmpty::is_empty(&scope)
 }
 
 /// Whether a [FileAssociation] is indexed by the search processing service.
@@ -299,6 +335,7 @@ pub enum UnifiedSearchResponseItem {
     Company(crate::crm_company::CrmCompanySearchResponseItem),
     CalendarEvent(crate::calendar_event::CalendarEventSearchResponseItemWithMetadata),
     AgentSession(crate::agent_session::AgentSessionSearchResponseItem),
+    DatabaseRow(crate::database_row::DatabaseRowSearchResponseItem),
 }
 
 impl UnifiedSearchResponseItem {
@@ -314,6 +351,7 @@ impl UnifiedSearchResponseItem {
             Self::Call(item) => item.extra.id,
             Self::Company(item) => item.id,
             Self::CalendarEvent(item) => item.extra.id,
+            Self::DatabaseRow(item) => item.row_id,
         }
     }
     /// Get the updated_at timestamp for each item
@@ -329,6 +367,7 @@ impl UnifiedSearchResponseItem {
             Self::Call(item) => item.metadata.as_ref().map(|m| m.updated_at),
             Self::Company(item) => Some(item.updated_at),
             Self::CalendarEvent(item) => item.metadata.as_ref().map(|m| m.updated_at),
+            Self::DatabaseRow(item) => Some(item.updated_at),
         }
     }
 }
@@ -356,6 +395,7 @@ pub enum SimpleUnifiedSearchResponseBaseItem<T> {
     Project(SimpleProjectSearchResponseBaseItem<T>),
     Call(SimpleCallRecordSearchResponseBaseItem<T>),
     CalendarEvent(crate::calendar_event::SimpleCalendarEventSearchResponseBaseItem<T>),
+    DatabaseRow(crate::database_row::DatabaseRowSearchResponseItem),
 }
 
 pub type SimpleUnifiedSearchResponseItem =

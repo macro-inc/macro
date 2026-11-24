@@ -43,7 +43,7 @@ impl FeatureFlags for SlowFlags {
             return Err(rootcause::report!("flag provider unreachable"));
         }
         Ok(FlagSnapshot::new([(
-            ENABLE_DYNAMIC_SEARCH_TERM_MATCHING.into(),
+            DYNAMIC_TERM_MATCHING_FLAG.into(),
             FlagValue::Boolean(self.enabled.load(Ordering::SeqCst)),
         )]))
     }
@@ -65,17 +65,17 @@ const COLLEAGUE: &str = "macro|colleague@example.com";
 #[tokio::test(start_paused = true)]
 async fn a_search_never_waits_on_a_slow_provider() {
     let flags = SlowFlags::answering(true);
-    let rollout = FlaggedTermMatching::new(flags.clone());
+    let rollout = FlaggedRollout::new(flags.clone(), DYNAMIC_TERM_MATCHING_FLAG);
 
     let started = Instant::now();
-    let first_answer = rollout.dynamic_enabled_for(caller(PERSON)).await;
+    let first_answer = rollout.enabled_for(caller(PERSON)).await;
     assert_eq!(started.elapsed(), Duration::ZERO);
     assert!(!first_answer, "nothing remembered yet reads as off");
 
     refresh_finishes().await;
     tokio::time::advance(DECISION_LIFETIME).await;
     let started = Instant::now();
-    let lapsed_answer = rollout.dynamic_enabled_for(caller(PERSON)).await;
+    let lapsed_answer = rollout.enabled_for(caller(PERSON)).await;
     assert_eq!(started.elapsed(), Duration::ZERO);
     assert!(lapsed_answer, "a lapsed answer is still the answer");
 }
@@ -83,32 +83,32 @@ async fn a_search_never_waits_on_a_slow_provider() {
 #[tokio::test(start_paused = true)]
 async fn the_answer_flips_once_the_refresh_lands() {
     let flags = SlowFlags::answering(true);
-    let rollout = FlaggedTermMatching::new(flags.clone());
+    let rollout = FlaggedRollout::new(flags.clone(), DYNAMIC_TERM_MATCHING_FLAG);
 
-    assert!(!rollout.dynamic_enabled_for(caller(PERSON)).await);
+    assert!(!rollout.enabled_for(caller(PERSON)).await);
     refresh_finishes().await;
-    assert!(rollout.dynamic_enabled_for(caller(PERSON)).await);
+    assert!(rollout.enabled_for(caller(PERSON)).await);
 
     // The flag turns off for the caller: the next search after the lifetime
     // still answers on, and the one after its refresh answers off.
     flags.enabled.store(false, Ordering::SeqCst);
     tokio::time::advance(DECISION_LIFETIME).await;
-    assert!(rollout.dynamic_enabled_for(caller(PERSON)).await);
+    assert!(rollout.enabled_for(caller(PERSON)).await);
     refresh_finishes().await;
-    assert!(!rollout.dynamic_enabled_for(caller(PERSON)).await);
+    assert!(!rollout.enabled_for(caller(PERSON)).await);
 }
 
 #[tokio::test(start_paused = true)]
 async fn searches_during_a_refresh_share_it() {
     let flags = SlowFlags::answering(true);
-    let rollout = FlaggedTermMatching::new(flags.clone());
+    let rollout = FlaggedRollout::new(flags.clone(), DYNAMIC_TERM_MATCHING_FLAG);
 
     for _ in 0..50 {
-        rollout.dynamic_enabled_for(caller(PERSON)).await;
+        rollout.enabled_for(caller(PERSON)).await;
     }
     refresh_finishes().await;
     for _ in 0..50 {
-        assert!(rollout.dynamic_enabled_for(caller(PERSON)).await);
+        assert!(rollout.enabled_for(caller(PERSON)).await);
     }
     refresh_finishes().await;
 
@@ -118,24 +118,24 @@ async fn searches_during_a_refresh_share_it() {
 #[tokio::test(start_paused = true)]
 async fn each_caller_gets_their_own_refresh() {
     let flags = SlowFlags::answering(true);
-    let rollout = FlaggedTermMatching::new(flags.clone());
+    let rollout = FlaggedRollout::new(flags.clone(), DYNAMIC_TERM_MATCHING_FLAG);
 
-    rollout.dynamic_enabled_for(caller(PERSON)).await;
+    rollout.enabled_for(caller(PERSON)).await;
     refresh_finishes().await;
 
-    assert!(!rollout.dynamic_enabled_for(caller(COLLEAGUE)).await);
+    assert!(!rollout.enabled_for(caller(COLLEAGUE)).await);
     refresh_finishes().await;
-    assert!(rollout.dynamic_enabled_for(caller(COLLEAGUE)).await);
+    assert!(rollout.enabled_for(caller(COLLEAGUE)).await);
     assert_eq!(flags.loads(), 2);
 }
 
 #[tokio::test(start_paused = true)]
 async fn an_unreachable_provider_is_remembered_as_off() {
     let flags = SlowFlags::unreachable();
-    let rollout = FlaggedTermMatching::new(flags.clone());
+    let rollout = FlaggedRollout::new(flags.clone(), DYNAMIC_TERM_MATCHING_FLAG);
 
     for _ in 0..10 {
-        assert!(!rollout.dynamic_enabled_for(caller(PERSON)).await);
+        assert!(!rollout.enabled_for(caller(PERSON)).await);
         refresh_finishes().await;
     }
 
@@ -144,12 +144,12 @@ async fn an_unreachable_provider_is_remembered_as_off() {
 
 #[tokio::test(start_paused = true)]
 async fn long_lapsed_answers_are_dropped() {
-    let rollout = FlaggedTermMatching::new(SlowFlags::answering(true));
+    let rollout = FlaggedRollout::new(SlowFlags::answering(true), DYNAMIC_TERM_MATCHING_FLAG);
 
-    rollout.dynamic_enabled_for(caller(PERSON)).await;
+    rollout.enabled_for(caller(PERSON)).await;
     refresh_finishes().await;
     tokio::time::advance(DECISION_LIFETIME + LAPSED_DECISION_RETENTION).await;
-    rollout.dynamic_enabled_for(caller(COLLEAGUE)).await;
+    rollout.enabled_for(caller(COLLEAGUE)).await;
     refresh_finishes().await;
 
     let decisions = rollout.shared.decisions();

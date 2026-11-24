@@ -88,7 +88,9 @@ the entity-access domain service.
 - `get_user_source_ids` is cached for 10 s per process and concurrent misses
   for one user share one query through `single_flight`. A failure then arrives
   as `Arc<sqlx::Error>`; `anyhow_access_error` classifies both forms, so route
-  new callers' errors through it.
+  new callers' errors through it. `CurrentDatabaseAccess` (database row search)
+  reads source ids uncached through `get_current_user_source_ids`, so leaving a
+  team or channel hides a database's rows at once; it is the only such path.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
 
 ## Related
