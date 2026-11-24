@@ -29,6 +29,9 @@ const BASE_NAME = pulumi.getProject();
 /** Must match `ENCRYPTION_PURPOSE` in `mcp_auth_proxy::outbound::postgres`. */
 const MCP_OAUTH_KMS_PURPOSE = 'mcp-oauth-authorization-code';
 const MCP_OAUTH_KMS_ACTIONS = ['kms:Encrypt', 'kms:Decrypt'];
+/** Must match `ENCRYPTION_PURPOSE` in `connectors::outbound::native_api::cipher`. */
+const API_APP_GRANT_KMS_PURPOSE = 'connectors-api-app-grant';
+const API_APP_GRANT_KMS_ACTIONS = ['kms:GenerateDataKey', 'kms:Decrypt'];
 const REPO_ROOT = '../../..';
 
 /** Where the service reads `REPO_STORAGE_ROOT`; set to this path in Doppler. */
@@ -313,6 +316,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     );
 
     const mcpOauthKms = this.createMcpOauthKmsKey(tags);
+    const apiAppGrantKms = this.createApiAppGrantKmsKey(tags);
 
     const image = new EcrImage(
       `${BASE_NAME}-ecr-image-${stack}`,
@@ -601,6 +605,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
           ...repoStorage.mountTargets,
           ...args.configurationSecrets,
           ...mcpOauthKms,
+          ...apiAppGrantKms,
           gatewayTargetGroup.listener_rule,
           ...publicHostRules,
           ...sharedApiRules,
@@ -618,11 +623,54 @@ export class AgentHarnessService extends pulumi.ComponentResource {
    * ECS service must wait for, so no task starts unable to issue a code.
    */
   private createMcpOauthKmsKey(tags: { [key: string]: string }) {
+    return this.createPurposeKmsKey(tags, {
+      slug: 'mcp-oauth',
+      description: `Public MCP OAuth authorization code encryption key for ${stack}`,
+      statementId: 'AllowMcpOauthCodeEncryption',
+      actions: MCP_OAUTH_KMS_ACTIONS,
+      purpose: MCP_OAUTH_KMS_PURPOSE,
+      dopplerName: 'MCP_OAUTH_KMS_KEY_ID',
+    });
+  }
+
+  /**
+   * The key that wraps the grants of REST apps the connectors sign in to
+   * with Macro's own OAuth client (Autodesk), and the Doppler value naming
+   * it. The source stays off until the app's client id and secret are in
+   * Doppler too.
+   */
+  private createApiAppGrantKmsKey(tags: { [key: string]: string }) {
+    return this.createPurposeKmsKey(tags, {
+      slug: 'api-app-grant',
+      description: `Connectors REST app grant envelope key for ${stack}`,
+      statementId: 'AllowApiAppGrantEncryption',
+      actions: API_APP_GRANT_KMS_ACTIONS,
+      purpose: API_APP_GRANT_KMS_PURPOSE,
+      dopplerName: 'API_APP_GRANT_KMS_KEY_ID',
+    });
+  }
+
+  /**
+   * A rotating KMS key the service role may use only under one
+   * `macro:purpose` encryption context, its alias, and the Doppler value
+   * naming the alias.
+   */
+  private createPurposeKmsKey(
+    tags: { [key: string]: string },
+    spec: {
+      slug: string;
+      description: string;
+      statementId: string;
+      actions: string[];
+      purpose: string;
+      dopplerName: string;
+    }
+  ) {
     const accountRootArn = pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentityOutput().accountId}:root`;
     const key = new aws.kms.Key(
-      `${BASE_NAME}-mcp-oauth-key`,
+      `${BASE_NAME}-${spec.slug}-key`,
       {
-        description: `Public MCP OAuth authorization code encryption key for ${stack}`,
+        description: spec.description,
         deletionWindowInDays: 30,
         enableKeyRotation: true,
         policy: aws.iam.getPolicyDocumentOutput({
@@ -650,16 +698,16 @@ export class AgentHarnessService extends pulumi.ComponentResource {
               resources: ['*'],
             },
             {
-              sid: 'AllowMcpOauthCodeEncryption',
+              sid: spec.statementId,
               effect: 'Allow',
               principals: [{ type: 'AWS', identifiers: [this.role.arn] }],
-              actions: MCP_OAUTH_KMS_ACTIONS,
+              actions: spec.actions,
               resources: ['*'],
               conditions: [
                 {
                   test: 'StringEquals',
                   variable: 'kms:EncryptionContext:macro:purpose',
-                  values: [MCP_OAUTH_KMS_PURPOSE],
+                  values: [spec.purpose],
                 },
               ],
             },
@@ -670,24 +718,27 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       { parent: this, protect: stack === 'prod' }
     );
     const alias = new aws.kms.Alias(
-      `${BASE_NAME}-mcp-oauth-key-alias`,
-      { name: `alias/${BASE_NAME}-mcp-oauth-${stack}`, targetKeyId: key.keyId },
+      `${BASE_NAME}-${spec.slug}-key-alias`,
+      {
+        name: `alias/${BASE_NAME}-${spec.slug}-${stack}`,
+        targetKeyId: key.keyId,
+      },
       { parent: this }
     );
     const rolePolicy = new aws.iam.RolePolicy(
-      `${BASE_NAME}-mcp-oauth-kms-policy`,
+      `${BASE_NAME}-${spec.slug}-kms-policy`,
       {
         role: this.role.id,
         policy: {
           Version: '2012-10-17',
           Statement: [
             {
-              Action: MCP_OAUTH_KMS_ACTIONS,
+              Action: spec.actions,
               Resource: key.arn,
               Effect: 'Allow',
               Condition: {
                 StringEquals: {
-                  'kms:EncryptionContext:macro:purpose': MCP_OAUTH_KMS_PURPOSE,
+                  'kms:EncryptionContext:macro:purpose': spec.purpose,
                 },
               },
             },
@@ -699,11 +750,11 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     // MacroConfig reads only Doppler in ECS, so the key reaches the service
     // through it rather than the container environment.
     const dopplerKeyId = new doppler.Secret(
-      `harness-MCP_OAUTH_KMS_KEY_ID-${stack}`,
+      `harness-${spec.dopplerName}-${stack}`,
       {
         project: 'agent-harness-service',
         config: stack === 'prod' ? 'prd' : 'dev',
-        name: 'MCP_OAUTH_KMS_KEY_ID',
+        name: spec.dopplerName,
         value: alias.name,
       },
       { parent: this }
