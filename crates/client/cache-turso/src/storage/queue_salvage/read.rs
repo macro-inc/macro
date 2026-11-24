@@ -2,8 +2,8 @@
 
 use super::{
     Db, IDENTITY_META_KEY, ImportMarker, QueueRead, RecordKey, STORAGE_GENERATION_META_KEY,
-    SalvagedQueue, Shadow, TursoStorage, driver, import_marker, invariant, metadata_record, record,
-    required_i64, required_text, sequence,
+    SalvagedQueue, Shadow, TursoStorage, driver, identity_of, import_marker, invariant,
+    metadata_record, record, required_i64, required_text, sequence,
 };
 use crate::TursoStorageError;
 use crate::storage::{
@@ -140,9 +140,11 @@ struct HeldQueue {
 
 impl HeldQueue {
     /// Whether this database holds, or has already settled, what `pending` does.
+    /// One that never got a generation is told by the writes it still queues.
     fn holds(&self, pending: &SalvagedQueue) -> bool {
         self.imported == Some(pending.id)
             || (pending.source.is_some() && pending.source == self.queue.source)
+            || self.queue.shares_a_write_with(pending)
     }
 }
 
@@ -332,6 +334,18 @@ impl Shadow {
 }
 
 impl SalvagedQueue {
+    /// Whether both hold one write, not merely one ID or UUID.
+    fn shares_a_write_with(&self, other: &Self) -> bool {
+        let theirs = other
+            .rows
+            .iter()
+            .filter_map(|row| identity_of(row).ok())
+            .collect::<HashSet<_>>();
+        self.rows
+            .iter()
+            .any(|row| identity_of(row).is_ok_and(|write| theirs.contains(&write)))
+    }
+
     /// Adds what `older` holds and this does not, or nothing when the two were
     /// queued by different accounts. Returns how many writes were left out.
     fn absorb(&mut self, older: SalvagedQueue) -> Result<u64, TursoStorageError> {

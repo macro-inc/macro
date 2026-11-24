@@ -459,6 +459,31 @@ fn a_database_that_was_never_wiped_keeps_its_own_queue() {
 }
 
 #[test]
+fn a_database_without_a_generation_is_known_by_the_writes_it_queues() {
+    block_on(async {
+        let mut storage = fresh();
+        enqueue(&mut storage, "First").await;
+        enqueue(&mut storage, "Second").await;
+        let queue = carried(&storage);
+        assert_eq!(queue.source, None);
+        // The wipe never came: the next one finds the copy and the original.
+        let again = storage.salvage_queue(SCOPE, Some(queue.clone()), 0);
+        assert!(again.pending_held && again.complete);
+        assert_eq!(again.dropped, 0);
+        let mut next = fresh();
+        let imported = next.import_queue(&again.queue.unwrap(), 0).unwrap();
+        assert_eq!((imported.kept, imported.complete), (2, true));
+        assert_eq!(contents(&next), contents(&storage));
+        // Or an engine opened the original, which settles one of them.
+        let (id, token) = claim(&mut storage, 0).await.unwrap();
+        storage.discard_mutation(id, token).await.unwrap();
+        let held = storage.import_queue(&queue, 0).unwrap();
+        assert_eq!((held.kept, held.dropped, held.complete), (0, 0, true));
+        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 1);
+    });
+}
+
+#[test]
 fn a_queue_that_lost_its_ids_says_so_after_another_wipe() {
     block_on(async {
         let mut storage = fresh();
@@ -563,6 +588,7 @@ fn a_write_the_database_already_queues_is_not_queued_twice() {
         let mut next = fresh();
         next.import_queue(&queue, 0).unwrap();
         execute(&next, "DELETE FROM meta WHERE key = 'salvaged-queue'");
+        execute(&next, "UPDATE mutation_queue SET created_at_ms = 2");
         assert_eq!(
             next.import_queue(&queue, 0).unwrap(),
             QueueImport {

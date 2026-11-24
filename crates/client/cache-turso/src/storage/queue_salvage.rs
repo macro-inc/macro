@@ -36,6 +36,7 @@ const IMPORT_MARKER_KEY: &str = "salvaged-queue";
 const QUEUE_ROW_COLUMNS: usize = 17;
 const LEASE_OWNER_COLUMN: usize = 9;
 const LEASE_EXPIRY_COLUMN: usize = 11;
+const CREATED_AT_COLUMN: usize = 13;
 
 const QUEUE_IMPORT: &str = "INSERT INTO mutation_queue (id, uuid, superseded, query, operation_name, variables_json, identity, attempt_count, next_attempt_at_ms, lease_owner, lease_generation, lease_expires_at_ms, last_error, created_at_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)";
 const SEQUENCE_SELECT: &str = "SELECT seq FROM sqlite_sequence WHERE name = 'mutation_queue'";
@@ -44,6 +45,8 @@ const SEQUENCE_INSERT: &str = "INSERT INTO mutation_queue (id, uuid, superseded,
 const SEQUENCE_REMOVE: &str = "DELETE FROM mutation_queue WHERE id = ?1";
 const CURRENT_UUID_SELECT: &str =
     "SELECT 1 FROM mutation_queue WHERE uuid = ?1 AND superseded = 0 LIMIT 1";
+const QUEUED_AS_SELECT: &str =
+    "SELECT 1 FROM mutation_queue WHERE id = ?1 AND uuid = ?2 AND created_at_ms = ?3 LIMIT 1";
 const SHADOW_KEY_SELECT: &str =
     "SELECT 1 FROM optimistic_index_documents WHERE record_key = ?1 LIMIT 1";
 const SHADOW_FACT_INSERTS: [&str; 4] = [
@@ -176,6 +179,34 @@ fn record(connection: &Db, key: &RecordKey) -> Result<Option<Vec<u8>>, TursoStor
     rows.first().map(|row| required_blob(row, 0)).transpose()
 }
 
+/// Whether this is the database `queue` was read from, which may never have
+/// been given a generation: it still queues one of those very writes.
+fn queues_any_of(connection: &Db, queue: &SalvagedQueue) -> Result<bool, TursoStorageError> {
+    for row in &queue.rows {
+        let (id, uuid, created_at_ms) = identity_of(row)?;
+        let values = vec![
+            Value::from_i64(id),
+            text(&uuid),
+            Value::from_i64(created_at_ms),
+        ];
+        let found = driver::query(connection, QUEUED_AS_SELECT, values)?;
+        if !found.is_empty() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// What no other write has: another database may reuse the ID, and an edit of
+/// the same thing the UUID.
+fn identity_of(row: &[Value]) -> Result<(i64, String, i64), TursoStorageError> {
+    Ok((
+        required_i64(row, 0)?,
+        required_text(row, 1)?,
+        required_i64(row, CREATED_AT_COLUMN)?,
+    ))
+}
+
 #[derive(Clone, Copy)]
 struct ImportMarker {
     id: Uuid,
@@ -231,7 +262,8 @@ fn import(
 ) -> Result<QueueImport, TursoStorageError> {
     let held = import_marker(connection)?.is_some_and(|marker| marker.id == queue.id)
         || (queue.source.is_some()
-            && queue.source == metadata_record(connection, STORAGE_GENERATION_META_KEY)?);
+            && queue.source == metadata_record(connection, STORAGE_GENERATION_META_KEY)?)
+        || queues_any_of(connection, queue)?;
     if held {
         return Ok(QueueImport {
             complete: queue.complete,
