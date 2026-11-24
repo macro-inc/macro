@@ -1,3 +1,4 @@
+import { createComputed, createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearNotifiedFloors,
@@ -60,6 +61,25 @@ describe('notified floors', () => {
     expect(resolveNotifiedAt('e-1', null)).toBe('2026-09-02T17:00:00Z');
     vi.advanceTimersByTime(60 * 1000);
     expect(resolveNotifiedAt('e-1', null)).toBeNull();
+  });
+
+  it("re-runs a computation that read an entity's stamp when its floor rises", () => {
+    const seen: (string | null | undefined)[] = [];
+    const dispose = createRoot((dispose) => {
+      createComputed(() =>
+        seen.push(resolveNotifiedAt('e-1', '2026-09-02T00:00:00Z'))
+      );
+      return dispose;
+    });
+    try {
+      raiseNotifiedFloor('other', '2026-09-02T18:00:00Z');
+      raiseNotifiedFloor('e-1', '2026-09-02T17:00:00Z');
+      // An older delivery leaves the floor, and so the reader, alone.
+      raiseNotifiedFloor('e-1', '2026-09-02T16:00:00Z');
+      expect(seen).toEqual(['2026-09-02T00:00:00Z', '2026-09-02T17:00:00Z']);
+    } finally {
+      dispose();
+    }
   });
 
   it('bounds retained stamps and keeps the most recently advanced entities', () => {

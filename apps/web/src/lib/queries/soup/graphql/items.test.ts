@@ -72,6 +72,11 @@ import {
   disposeChannelNotificationRefresh,
 } from '../../channel/notification-refresh';
 import { registerChannelNotificationRefresh } from '../../channel/register-notification-refresh';
+import {
+  clearNotifiedFloors,
+  raiseNotifiedFloor,
+  resolveNotifiedAt,
+} from '../normalized-cache/notified-floor';
 import { getActiveGraphqlSoupRevalidations } from './active-queries';
 import { createSoupLiveQuery } from './create-soup-live-query';
 import { createGraphqlSoupAstItemsQuery } from './items';
@@ -2974,6 +2979,55 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       expect(notifiedAtOf('notified')).toBe('2026-11-18T11:00:00Z');
     } finally {
       dispose();
+    }
+  });
+
+  it('moves a loaded row to a delivered notification time before any re-read', () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    // The real entity mapper resolves notified_at through the floor.
+    mapSoupPageToEntityListMock.mockImplementation((page) =>
+      page.items.map((item: { id: string; notified_at?: string }) => ({
+        ...item,
+        notified_at: resolveNotifiedAt(item.id, item.notified_at),
+      }))
+    );
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'notified_at' }, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    const notifiedAtOf = (id: string) =>
+      (
+        query.data()?.entities as
+          | { id: string; notified_at?: string }[]
+          | undefined
+      )?.find((entity) => entity.id === id)?.notified_at;
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ id: 'top' }, { id: 'below' }],
+          next_cursor: null,
+          notified_at: [
+            { entityId: 'top', notifiedAt: '2026-11-18T10:00:00Z' },
+            { entityId: 'below', notifiedAt: '2026-11-18T09:00:00Z' },
+          ],
+        })
+      );
+      expect(notifiedAtOf('below')).toBe('2026-11-18T09:00:00Z');
+
+      // A notification over the websocket raises the floor; the list's
+      // network re-read is throttled and may hit a lagging replica.
+      raiseNotifiedFloor('below', '2026-11-18T11:00:00Z');
+      expect(notifiedAtOf('below')).toBe('2026-11-18T11:00:00Z');
+      expect(notifiedAtOf('top')).toBe('2026-11-18T10:00:00Z');
+      expect(fake.executions).toHaveLength(1);
+    } finally {
+      dispose();
+      clearNotifiedFloors();
+      mapSoupPageToEntityListMock.mockImplementation((page) => page.items);
     }
   });
 

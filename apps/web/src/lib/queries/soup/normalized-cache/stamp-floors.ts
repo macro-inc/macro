@@ -1,3 +1,8 @@
+import { ReactiveMap } from '@solid-primitives/map';
+import { batch } from 'solid-js';
+
+type StampFloor = { stamp: string; expiresAt?: number };
+
 /**
  * Optimistic timestamp floors keyed by entity id.
  *
@@ -10,13 +15,21 @@
  * Consumers that also map optimistic snapshots can retain floors briefly:
  * seeing the local stamp is not proof that an older refetch cannot arrive.
  *
- * Import-free on purpose: floors sit below the normalized cache, the entity
- * mappers, and the list-view gates, which would otherwise form an import
- * cycle.
+ * Reactive floors are tracked per entity: a mapper that resolves an entity's
+ * stamp inside a computation runs again when that entity's floor rises, so a
+ * row that is already mapped moves without waiting for a refetch.
+ *
+ * Free of app imports on purpose: floors sit below the normalized cache, the
+ * entity mappers, and the list-view gates, which would otherwise form an
+ * import cycle.
  */
-export function createStampFloors(options: { retainForMs?: number } = {}) {
+export function createStampFloors(
+  options: { retainForMs?: number; reactive?: boolean } = {}
+) {
   const maxRetainedFloors = 200;
-  const floors = new Map<string, { stamp: string; expiresAt?: number }>();
+  const floors: Map<string, StampFloor> = options.reactive
+    ? new ReactiveMap<string, StampFloor>()
+    : new Map<string, StampFloor>();
   const { retainForMs } = options;
 
   function getFloor(entityId: string) {
@@ -36,17 +49,20 @@ export function createStampFloors(options: { retainForMs?: number } = {}) {
         current === undefined ||
         new Date(stamp).getTime() > new Date(current.stamp).getTime()
       ) {
-        floors.delete(entityId);
-        floors.set(entityId, {
-          stamp,
-          expiresAt:
-            retainForMs === undefined ? undefined : Date.now() + retainForMs,
+        // One batch, so a reactive reader never sees the floor missing.
+        batch(() => {
+          floors.delete(entityId);
+          floors.set(entityId, {
+            stamp,
+            expiresAt:
+              retainForMs === undefined ? undefined : Date.now() + retainForMs,
+          });
+          // Retained floors do not clear on reads, so cap their session state.
+          if (retainForMs !== undefined && floors.size > maxRetainedFloors) {
+            const oldest = floors.keys().next().value;
+            if (oldest !== undefined) floors.delete(oldest);
+          }
         });
-        // Retained floors do not clear on reads, so cap their session state.
-        if (retainForMs !== undefined && floors.size > maxRetainedFloors) {
-          const oldest = floors.keys().next().value;
-          if (oldest !== undefined) floors.delete(oldest);
-        }
       }
     },
 
