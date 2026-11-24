@@ -492,6 +492,22 @@ describe('CoordinatorCore', () => {
     });
   });
 
+  it('leaves alone a departure from an epoch that is over', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    ready(core, 'tab-a', 1, 'opened-existing');
+    core.setTabVisibility('tab-a', false);
+    core.engineDrained('tab-a', 1);
+    core.setTabVisibility('tab-a', true);
+    const { state } = core;
+    expect(state).toMatchObject({ kind: 'activating', ownerEpoch: 2 });
+
+    expect(core.beginGracefulDeparture('tab-a', 1)).toEqual([]);
+
+    expect(core.state).toEqual(state);
+    expect(core.snapshot().protocolViolations).toBe(0);
+  });
+
   it.each([
     'opened-existing',
     'opened-new',

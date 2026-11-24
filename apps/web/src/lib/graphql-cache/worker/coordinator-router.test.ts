@@ -2314,6 +2314,83 @@ describe('CoordinatorRouter', () => {
     });
   });
 
+  it('lets a page leave gracefully while its engine is still opening', async () => {
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    expect(messagesOfKind(tabA, 'become-owner')).toHaveLength(1);
+
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'graceful-departure',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+
+    expect(messagesOfKind(tabA, 'terminate-engine')).toEqual([
+      expect.objectContaining({ ownerEpoch: 1 }),
+    ]);
+    expect(tabA.closed).toBe(true);
+    expect(router.snapshot()).toMatchObject({
+      tabIds: ['tab-b'],
+      protocolViolations: 0,
+      state: {
+        kind: 'activating',
+        tabId: 'tab-b',
+        ownerEpoch: 2,
+        databaseAction: 'open-existing',
+      },
+    });
+  });
+
+  it('drops a page that navigates away before it knows its epoch ended', async () => {
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    await register(router, tabA, 'tab-a');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+    const visibility = (visible: boolean) =>
+      router.handleTabMessage(tabA as CoordinatorMessagePort, {
+        ...version,
+        kind: 'tab-visibility',
+        tabId: 'tab-a',
+        visible,
+      });
+    await visibility(false);
+    engine.receive({
+      ...version,
+      kind: 'engine-drained',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    await visibility(true);
+    expect(router.snapshot()?.ownerEpoch).toBe(2);
+
+    await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+      ...version,
+      kind: 'navigation-departure',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'pagehide',
+    });
+
+    expect(router.snapshot()).toMatchObject({
+      tabIds: [],
+      protocolViolations: 0,
+      state: { kind: 'waiting-for-tab', nextDatabaseAction: 'open-existing' },
+    });
+    expect(tabA.closed).toBe(true);
+  });
+
   it('terminates a live owner before dropping a MessagePort on messageerror', async () => {
     const router = new CoordinatorRouter({
       verifyTabLockHeld: async () => true,

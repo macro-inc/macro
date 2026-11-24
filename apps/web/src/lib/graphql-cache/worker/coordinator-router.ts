@@ -420,7 +420,7 @@ export class CoordinatorRouter {
         this.attachEnginePort(tabId, ownerEpoch, enginePort);
       })
       .with({ kind: 'graceful-departure' }, ({ ownerEpoch }) => {
-        this.applyActions(core.beginGracefulDeparture(tabId, ownerEpoch));
+        this.departGracefully(tabId, ownerEpoch);
       })
       .with({ kind: 'navigation-departure' }, ({ ownerEpoch, reason }) => {
         this.departForNavigation(tabId, ownerEpoch, reason);
@@ -1424,6 +1424,24 @@ export class CoordinatorRouter {
     this.applyActions(actions);
   }
 
+  private departGracefully(tabId: string, ownerEpoch: number): void {
+    const core = this.coreValue;
+    if (!core) return;
+    const state = core.state;
+    if (
+      state.kind !== 'activating' ||
+      state.tabId !== tabId ||
+      state.ownerEpoch !== ownerEpoch
+    ) {
+      this.applyActions(core.beginGracefulDeparture(tabId, ownerEpoch));
+      return;
+    }
+    // Its engine is not ready, so there is nothing to drain.
+    const reason = 'page disposed before its engine was ready';
+    this.postTerminateEngine(tabId, ownerEpoch, reason);
+    this.departForNavigation(tabId, ownerEpoch, reason);
+  }
+
   private departForNavigation(
     tabId: string,
     ownerEpoch: number,
@@ -1439,9 +1457,9 @@ export class CoordinatorRouter {
       state.kind !== 'failed' &&
       state.tabId === tabId &&
       state.ownerEpoch === ownerEpoch;
-    const actions = core.departForNavigation(tabId, ownerEpoch, reason);
     if (!isCurrentOwner) {
-      this.applyActions(actions);
+      // That epoch ended before the page knew. The page left all the same.
+      this.loseTab(tabId, reason);
       return;
     }
 
@@ -1449,7 +1467,7 @@ export class CoordinatorRouter {
       outcome: 'graceful',
       ownerEvent: 'navigation-departure',
     });
-    this.applyActions(actions);
+    this.applyActions(core.departForNavigation(tabId, ownerEpoch, reason));
   }
 
   private loseTab(tabId: string, reason: string): void {

@@ -1087,7 +1087,7 @@ describe('CacheCoordinatorPageAdapter', () => {
     }
   );
 
-  it('settles graceful timeout when disconnect reporting throws', async () => {
+  it('settles graceful timeout when reporting the departure throws', async () => {
     vi.useFakeTimers();
     const coordinatorPort = new FakeCoordinatorPort();
     const worker = new FakeWorker();
@@ -1108,7 +1108,7 @@ describe('CacheCoordinatorPageAdapter', () => {
     coordinatorPort.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
     await started;
     coordinatorPort.receive(election(1));
-    coordinatorPort.throwKinds.add('disconnect-tab');
+    coordinatorPort.throwKinds.add('navigation-departure');
 
     const disposed = adapter.dispose({ graceful: true });
     await vi.advanceTimersByTimeAsync(11);
@@ -1116,7 +1116,7 @@ describe('CacheCoordinatorPageAdapter', () => {
 
     expect(worker.terminated).toBe(true);
     expect(coordinatorPort.closed).toBe(true);
-    expect(terminalErrors).toEqual(['disconnect-tab send failed']);
+    expect(terminalErrors).toEqual(['navigation-departure send failed']);
   });
 
   it('rejects startup and queued RPC when disposed during lock acquisition', async () => {
@@ -1267,10 +1267,41 @@ describe('CacheCoordinatorPageAdapter', () => {
     ).toHaveLength(0);
   });
 
-  it('terminal-fails when the owned engine crashes during graceful drain', async () => {
+  it.each([
+    {
+      ends: 'the drain timed out',
+      departure: 'navigation-departure',
+      end: () => vi.advanceTimersByTimeAsync(11),
+    },
+    {
+      ends: 'the engine crashed',
+      departure: 'disconnect-tab',
+      end: (worker: FakeWorker) =>
+        worker.onerror?.call(
+          {} as AbstractWorker,
+          {
+            message: 'engine failed while draining',
+            preventDefault: vi.fn(),
+          } as unknown as ErrorEvent
+        ),
+    },
+    {
+      ends: 'the coordinator ended its epoch first',
+      departure: 'disconnect-tab',
+      end: (_worker: FakeWorker, port: FakeCoordinatorPort) =>
+        port.receive({
+          ...version,
+          kind: 'terminate-engine',
+          tabId: 'tab-a',
+          ownerEpoch: 1,
+          reason: 'visibility handoff drained',
+        }),
+    },
+  ])('leaves without failing when $ends', async ({ departure, end }) => {
+    vi.useFakeTimers();
     const coordinatorPort = new FakeCoordinatorPort();
     const worker = new FakeWorker();
-    const terminalErrors: string[] = [];
+    const onTerminalError = vi.fn();
     const adapter = createCacheCoordinatorPageAdapter({
       scope: 'scope',
       tabId: 'tab-a',
@@ -1279,7 +1310,8 @@ describe('CacheCoordinatorPageAdapter', () => {
         port: coordinatorPort as unknown as MessagePort,
       }),
       createDedicatedWorker: () => worker,
-      onTerminalError: (error) => terminalErrors.push(error.message),
+      gracefulTimeoutMs: 10,
+      onTerminalError,
     });
     const started = adapter.start();
     await vi.waitFor(() => expect(coordinatorPort.messages).toHaveLength(1));
@@ -1288,18 +1320,14 @@ describe('CacheCoordinatorPageAdapter', () => {
     coordinatorPort.receive(election(1));
 
     const disposed = adapter.dispose({ graceful: true });
-    worker.onerror?.call(
-      {} as AbstractWorker,
-      {
-        message: 'engine failed while draining',
-        preventDefault: vi.fn(),
-      } as unknown as ErrorEvent
-    );
+    await end(worker, coordinatorPort);
     await disposed;
 
     expect(worker.terminated).toBe(true);
     expect(coordinatorPort.closed).toBe(true);
-    expect(terminalErrors).toEqual(['engine failed while draining']);
+    expect(coordinatorPort.events).toContain(`post:${departure}`);
+    expect(onTerminalError).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('keeps the worker alive through graceful drain and terminates after retire-complete', async () => {

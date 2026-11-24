@@ -380,19 +380,7 @@ export class CacheCoordinatorPageAdapter {
       }
       this.gracefulTimeout = setTimeout(() => {
         this.gracefulTimeout = undefined;
-        if (this.closed) return;
-        this.terminateEngine(ownerEpoch, 'graceful drain timed out', false);
-        if (this.closed) return;
-        this.postCoordinator(
-          withVersion<TabToCoordinatorEnvelope>({
-            kind: 'disconnect-tab',
-            tabId: this.tabId,
-            reason: 'graceful page disposal timed out',
-          })
-        );
-        if (!this.closed) {
-          this.failTerminal(new Error('graceful engine drain timed out'));
-        }
+        if (!this.closed) this.departForNavigation('graceful drain timed out');
       }, this.gracefulTimeoutMs);
     } else {
       this.disposeMode = 'abrupt';
@@ -687,6 +675,9 @@ export class CacheCoordinatorPageAdapter {
             new Error('coordinator terminated an unknown owner epoch')
           );
         }
+        // The epoch this page was draining is over: nothing is left to drain.
+        if (this.disposeMode === 'graceful' && !this.closed)
+          this.departForNavigation(message.reason);
         break;
       case 'retire-complete':
         if (
@@ -911,20 +902,16 @@ export class CacheCoordinatorPageAdapter {
 
     worker.onerror = (event) => {
       event.preventDefault();
-      const reason = event.message || 'dedicated engine worker error';
-      const failedDuringDrain = this.disposeMode === 'graceful';
-      this.terminateEngine(election.ownerEpoch, reason, !failedDuringDrain);
-      if (failedDuringDrain && !this.closed) {
-        this.failTerminal(new Error(reason));
-      }
+      this.engineFailed(
+        election.ownerEpoch,
+        event.message || 'dedicated engine worker error'
+      );
     };
     worker.onmessageerror = () => {
-      const reason = 'dedicated engine worker messageerror';
-      const failedDuringDrain = this.disposeMode === 'graceful';
-      this.terminateEngine(election.ownerEpoch, reason, !failedDuringDrain);
-      if (failedDuringDrain && !this.closed) {
-        this.failTerminal(new Error(reason));
-      }
+      this.engineFailed(
+        election.ownerEpoch,
+        'dedicated engine worker messageerror'
+      );
     };
 
     const directChannel = new MessageChannel();
@@ -967,6 +954,13 @@ export class CacheCoordinatorPageAdapter {
         error instanceof Error ? error : new Error(String(error))
       );
     }
+  }
+
+  private engineFailed(ownerEpoch: number, reason: string): void {
+    // A page that is leaving takes its engine with it either way.
+    const leaving = this.disposeMode === 'graceful';
+    this.terminateEngine(ownerEpoch, reason, !leaving);
+    if (leaving && !this.closed) this.departForNavigation(reason);
   }
 
   private terminateEngine(

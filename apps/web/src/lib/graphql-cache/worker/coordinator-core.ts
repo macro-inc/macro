@@ -551,6 +551,11 @@ export class CoordinatorCore {
     }));
   }
 
+  /**
+   * Drains the departing page's engine. A page that no longer owns, at that
+   * epoch, an engine to drain is told so by the `terminate-engine` that ended
+   * the epoch, and leaves on that instead.
+   */
   beginGracefulDeparture(
     tabId: string,
     ownerEpoch: OwnerEpoch
@@ -561,9 +566,7 @@ export class CoordinatorCore {
       state.tabId !== tabId ||
       state.ownerEpoch !== ownerEpoch
     ) {
-      return this.recordProtocolViolation(
-        `unexpected graceful departure from ${tabId} at epoch ${ownerEpoch}`
-      );
+      return [];
     }
     this.retiringTabs.add(tabId);
     // An explicit disposal may join an already-running visibility handoff.
