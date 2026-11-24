@@ -199,6 +199,12 @@ if [[ -n $endpoint ]]; then
   if [[ $computer =~ ^[A-Za-z0-9-]{1,64}$ ]]; then
     export OTEL_EXPORTER_OTLP_HEADERS="x-macro-computer-id=$computer"
   fi
+  # The deployment its spans are tagged with (dev, prod, local), as the
+  # services' own spans are.
+  deployment=$(setting "$credentials" OTEL_DEPLOYMENT_ENVIRONMENT)
+  if [[ $deployment =~ ^[a-z]{1,16}$ ]]; then
+    export OTEL_DEPLOYMENT_ENVIRONMENT=$deployment
+  fi
 fi
 # The computer's setup trace, which macrod stages beside agent.env: the
 # runtime's start (agent.start) joins it once. A restart after that (a land,
