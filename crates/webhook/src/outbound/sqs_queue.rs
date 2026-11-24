@@ -217,9 +217,8 @@ impl McpEventEnqueuer for SqsWebhookQueue {
     }
 }
 
-/// One FIFO group per subscription keeps its deliveries in order, as a
-/// webhook's are; the deduplication id makes a re-ingested event one
-/// delivery.
+/// One FIFO group per subscription, as a webhook has one; the
+/// deduplication id makes a re-ingested event one delivery.
 fn prepare_mcp_message(message: &McpEventQueueMessage) -> anyhow::Result<PreparedWebhookMessage> {
     let group_id = format!("mcp:{}", message.mcp_subscription_id);
     let deduplication_id = format!(
