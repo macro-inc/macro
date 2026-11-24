@@ -147,9 +147,10 @@ test('MEM-03 a person removed while the channel is open loses it at once', async
 
   await ada.removeParticipants(channel.id, [people.cy]);
 
-  // Known defect, on some machines in every run and on others in none: when
+  // Known defect, in some runs, and on some machines in every run: when
   // nothing else reaches the removed person around the removal, their page
-  // keeps the channel and its composer until a reload.
+  // keeps the channel, its composer and its row in the list until a reload;
+  // what they send then vanishes unsaid.
   const gone = async () => {
     await expect(cyView.composer).toHaveCount(0);
     await expect(noAccess(cyPage)).toBeVisible();

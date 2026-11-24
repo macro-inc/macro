@@ -1,4 +1,9 @@
-import { clearFavoriteChannels, prepareHistory } from './harness/history';
+import {
+  clearFavoriteChannels,
+  clearNotifications,
+  prepareHistory,
+} from './harness/history';
+import { checkBrowserSeesConnection } from './harness/network';
 import { firstCast, signEveryoneIn } from './harness/people';
 import { workers } from './harness/stack';
 
@@ -7,6 +12,7 @@ export default async function globalSetup(): Promise<void> {
     { length: workers() },
     (_, index) => firstCast() + index
   );
+  await checkBrowserSeesConnection();
   await signEveryoneIn(casts);
   await Promise.all(
     casts.flatMap((ofCast) => [
@@ -14,4 +20,6 @@ export default async function globalSetup(): Promise<void> {
       clearFavoriteChannels(ofCast),
     ])
   );
+  // After the history, whose messages notify too.
+  await Promise.all(casts.map((ofCast) => clearNotifications(ofCast)));
 }

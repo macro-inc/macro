@@ -1,4 +1,4 @@
-test	defect
-NAV-05	Reading forward from an old message jumps over part of the history (from message 150 to about 217 of 230)
-CHN-14	A new channel with no messages shows neither its created line nor an empty state
-UNR-09	The first message in a new channel leaves the other member's row unmarked; the second marks it
+test	builds	defect
+NAV-05	both	Reading forward from an old message jumps over part of the history (from message 150 to about 217 of 230)
+CHN-14	both	A new channel with no messages shows neither its created line nor an empty state
+REC-04	both	A connection lost in the first seconds after the app opened makes it say that a new version is out and offer a reload, which without a connection loses the app: the code it fetches then fails to load (5 of 5 runs on each build)

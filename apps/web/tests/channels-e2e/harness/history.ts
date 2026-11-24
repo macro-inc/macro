@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { GetAllUserNotificationsResponse } from '../../../src/lib/service-clients/service-notification/generated/schemas/getAllUserNotificationsResponse';
 import { Api, type SentMessage } from './api';
-import { apiFor, cast, readPeople } from './people';
+import { apiFor, cast, PERSON_KEYS, readPeople } from './people';
 import { runDirectory, stackUrl } from './stack';
 
 export const HISTORY_LENGTH = 230;
@@ -117,9 +118,8 @@ export function readHistory(ofCast = cast()): History {
 
 /**
  * Takes every channel out of the cast's Favorites. The sidebar draws only the
- * rows near its window, and a deleted channel can stay under Favorites
- * (CHN-08), so on a stack many runs have used the row a test has just made
- * would be past the ones drawn.
+ * rows near its window, so on a stack many runs have used the row a test has
+ * just made would be past the ones drawn.
  */
 export async function clearFavoriteChannels(ofCast: number): Promise<void> {
   const http = await apiFor('ada', ofCast);
@@ -140,4 +140,63 @@ export async function clearFavoriteChannels(ofCast: number): Promise<void> {
   } finally {
     await http.dispose();
   }
+}
+
+/**
+ * Removes every notification the cast's people hold. Each run leaves some
+ * thousands, and a page reads a person's whole notification feed again on
+ * every mark-seen and every notification pushed to it: a cast that had run
+ * for days held 20,000 and its pages were minutes behind on their writes.
+ */
+export async function clearNotifications(ofCast: number): Promise<void> {
+  // Kept to study a stack as its runs have left it.
+  if (process.env.CHANNELS_E2E_KEEP_NOTIFICATIONS) return;
+  await Promise.all(
+    PERSON_KEYS.map(async (key) => {
+      const http = await apiFor(key, ofCast);
+      try {
+        // A pass lists every page, then removes what it listed. A page can
+        // come back short or empty with more behind it, when some of its
+        // rows could not be read, so passes go on until one lists nothing.
+        for (let pass = 0; ; pass += 1) {
+          if (pass === 50) throw new Error('notifications are never all gone');
+          const ids: string[] = [];
+          let cursor: string | null | undefined;
+          do {
+            const listed = await http.get(
+              '/notification/v1/user_notifications',
+              {
+                params: {
+                  states: '',
+                  limit: 500,
+                  ...(cursor ? { cursor } : {}),
+                },
+              }
+            );
+            if (!listed.ok()) {
+              throw new Error(`list notifications failed (${listed.status()})`);
+            }
+            const page =
+              (await listed.json()) as GetAllUserNotificationsResponse;
+            ids.push(...page.items.map((item) => item.id));
+            cursor = page.next_cursor;
+          } while (cursor);
+          if (ids.length === 0) return;
+          for (let start = 0; start < ids.length; start += 500) {
+            const removed = await http.delete(
+              '/notification/v1/user_notifications/bulk',
+              { data: { notificationIds: ids.slice(start, start + 500) } }
+            );
+            if (!removed.ok()) {
+              throw new Error(
+                `remove notifications failed (${removed.status()})`
+              );
+            }
+          }
+        }
+      } finally {
+        await http.dispose();
+      }
+    })
+  );
 }

@@ -18,8 +18,16 @@ export async function chooseChannelAction(
   page: Page,
   name: string
 ): Promise<void> {
-  await page.getByRole('button', { name: 'Channel actions' }).click();
-  await channelAction(page, name).click();
+  // The menu closes by itself when the bar above the channel is drawn again,
+  // as it is just after a favorite or a rename: open it again until the
+  // entry takes the click.
+  const entry = channelAction(page, name);
+  await expect(async () => {
+    if (!(await entry.isVisible())) {
+      await page.getByRole('button', { name: 'Channel actions' }).click();
+    }
+    await entry.click({ timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
 }
 
 /** An entry of the open "Channel actions" menu. */
@@ -193,9 +201,10 @@ export async function inviteByEmail(page: Page, email: string): Promise<void> {
   });
   await box.click();
   await box.fill(email);
-  // The list first offers the typed address ("Invite <address>") and, once
-  // the person is found, their name in its place: either adds them.
-  await page.getByRole('option').filter({ hasText: email }).click();
+  // The one row reads "Invite <address>" until the device's own list of
+  // people answers; if it knows the address, the row becomes that person's,
+  // sometimes as it is being clicked (MEM-01). Either row invites them.
+  await dialog.getByRole('option').filter({ hasText: email }).first().click();
   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(dialog).toBeHidden();
 }
