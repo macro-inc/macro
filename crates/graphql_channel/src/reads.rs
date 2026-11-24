@@ -107,8 +107,8 @@ impl ChannelGraphqlContext {
     /// is answered without it. A root that cannot be read back is answered
     /// `SERVICE_UNAVAILABLE`, since a root without its thread summary would
     /// erase the cached one: the client's queue replays the write under the
-    /// same id, every mutation here answers a replay without another write, and
-    /// the replay reads the root again.
+    /// same id, a replay that finds its write in place makes no other, and the
+    /// replay reads the root again.
     ///
     /// The answer's position is a floor for both records: the root is read
     /// after the write committed, or after the position a replay is given.

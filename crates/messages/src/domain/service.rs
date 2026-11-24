@@ -324,6 +324,12 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
 
     /// The stored message a repeated write answers with. The channel's
     /// position is read first, so the message includes everything up to it.
+    #[tracing::instrument(
+        name = "messages.read_replayed",
+        err,
+        skip_all,
+        fields(message_id = %id, seq = tracing::field::Empty)
+    )]
     async fn stored(
         &self,
         parent: &MessageParent,
@@ -333,6 +339,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             MessageParent::Channel(channel_id) => Some(self.repo.channel_seq(*channel_id).await?),
             _ => None,
         };
+        tracing::Span::current().record("seq", seq);
         let message = self.repo.get(parent, id).await?;
         Ok(message.map(|message| WrittenMessage { message, seq }))
     }

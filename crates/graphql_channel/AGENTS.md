@@ -15,7 +15,8 @@ separately from Soup's thread-root projection.
 - `src/writes.rs`: `sendChannelMessage`, `editChannelMessage`,
   `deleteChannelMessage`, `reactToChannelMessage` for the web client's durable
   mutation queue; each returns a `GraphqlChannelMessageWrite`: the written
-  message, and for a reply its root with the thread summary that counts it.
+  message, for a reply its root with the thread summary that counts it, and the
+  `seq` both include.
 - `src/lib.rs`: channel activity mutation and typed read errors.
 
 ## Boundaries
