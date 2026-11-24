@@ -792,6 +792,19 @@ controls. CI runs it when
 cut `Gantt.BarTitle` (or the label itself overflowing) counts as a cramped bar,
 so wrap a bar's title in it.
 
+The database view toolbars (the real `MobileDatabaseToolbar`, `TablePicker`
+and `DatabaseToolbar` over tables and views kept in memory) have a
+phone/desktop regression in the same suite, `toolbar.browser.e2e.ts`: at 320,
+390 and 430px every control stays on screen at 36px or taller, also with search
+open, the table menu switches tables, the selected view tab shows whole, and
+**View actions** creates, renames and deletes a view; desktop keeps one row
+with **New view**. Both toolbars draw their view tabs from
+`createViewControls`; `block-database/database-page-toolbar.tsx` is the
+one device switch. The database block pads itself by
+`--mobile-content-inset-top` on touch (its toolbar is in flow) and resets that
+inset for its children; phones drop the header's table tabs for the toolbar's
+table menu.
+
 Column renames have a backend-free desktop/phone regression using the real
 schema query and mutation adapter with delayed service responses:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts rename.browser.e2e.ts`.

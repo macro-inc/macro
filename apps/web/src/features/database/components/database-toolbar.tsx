@@ -6,6 +6,7 @@ import TableIcon from '@icon/system/regular/table.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { Key } from '@solid-primitives/keyed';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 import {
   closestCenter,
   createSortable,
@@ -19,7 +20,7 @@ import { Dropdown } from '@ui/components/Dropdown';
 import { Input } from '@ui/components/Input';
 import { Tooltip } from '@ui/components/Tooltip';
 import type { ResultAsync } from 'neverthrow';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { createEffect, createSignal, For, type JSX, on, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   ContextMenuContent,
@@ -43,6 +44,7 @@ import {
 } from '../core/write-failure';
 import { DatabaseEditorToolbar } from './database-editor-toolbar';
 import { createInlineRename } from './inline-rename';
+import { revealInRail } from './reveal-in-rail';
 
 /** A layout a stored view can be switched to from its tab's menu. */
 export type ShownLayout =
@@ -50,7 +52,7 @@ export type ShownLayout =
   | { kind: 'board'; groupBy: BoardGrouping }
   | { kind: 'timeline'; range: TimelineRange };
 
-type DatabaseToolbarProps = {
+export type DatabaseToolbarProps = {
   columns: DatabaseViewColumn[];
   /** The table's stored views, in order. */
   views: DatabaseView[];
@@ -82,13 +84,17 @@ type DatabaseToolbarProps = {
   actions?: JSX.Element;
 };
 
-/** View controls contain no data fetching or mutation implementation. */
-export function DatabaseToolbar(props: DatabaseToolbarProps) {
+/**
+ * The state behind a table's view tabs: which one is being renamed, created
+ * or deleted. A toolbar draws `tabs` in its own arrangement, `feedback` under
+ * it, and the remaining actions where its layout has room.
+ */
+export function createViewControls(props: DatabaseToolbarProps) {
   const [creating, setCreating] = createSignal(false);
   const [deleting, setDeleting] = createSignal<{ view: DatabaseView }>();
   let renameInput: HTMLInputElement | undefined;
   let allRecordsButton: HTMLButtonElement | undefined;
-  let viewRail: HTMLDivElement | undefined;
+  const [viewRail, setViewRail] = createSignal<HTMLDivElement>();
   /** Viewers change only what All records shows them; stored views are everyone's. */
   const canChangeView = () => !props.selectedViewId || props.canEdit;
   const viewRename = createInlineRename({
@@ -100,7 +106,7 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
     input: () => renameInput,
     // The tab is drawn again when the rename input goes, so focus finds it by its view.
     restoreFocus: (view) =>
-      viewRail
+      viewRail()
         ?.querySelector<HTMLElement>(`[data-view-id="${view.id}"]`)
         ?.focus(),
   });
@@ -155,13 +161,192 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
     if (moved.some((view, index) => view !== order[index]))
       props.onReorderViews?.(moved);
   }
+  // A selection made elsewhere (a link, a new view, a rename) can land on a
+  // tab the rail has scrolled away, and a narrower rail can cut it off.
+  const revealSelectedView = () => {
+    const rail = viewRail();
+    const selected =
+      rail?.querySelector<HTMLElement>('input[aria-label="View name"]') ??
+      rail?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (rail && selected) revealInRail(rail, selected);
+  };
+  createResizeObserver(viewRail, revealSelectedView);
+  createEffect(
+    on(
+      [
+        () => props.selectedViewId,
+        // The tabs there are, not each refetch of the same ones.
+        () => props.views.map((view) => view.id).join(),
+        () => viewRename.target()?.id,
+        viewRail,
+      ],
+      () => {
+        // The tabs are drawn again after these change.
+        queueMicrotask(revealSelectedView);
+      }
+    )
+  );
+
+  return {
+    creating,
+    canChangeView,
+    /** The stored view on screen; undefined on All records. */
+    selectedView: () =>
+      props.views.find((view) => view.id === props.selectedViewId),
+    beginRename: (view: DatabaseView) => {
+      if (props.canEdit) viewRename.begin(view);
+    },
+    confirmDelete: (view: DatabaseView) => {
+      setViewError('');
+      setDeleting({ view });
+    },
+    /** All records and every stored view, in a rail that scrolls sideways. */
+    tabs: () => (
+      <div
+        ref={setViewRail}
+        class="-m-1 flex min-w-0 items-center gap-1.5 overflow-x-auto p-1"
+        role="group"
+        aria-label="Views"
+      >
+        <Button
+          ref={allRecordsButton}
+          type="button"
+          variant="secondary"
+          size="md"
+          aria-pressed={!props.selectedViewId}
+          onClick={() => props.onSelectView()}
+          class="max-w-40"
+        >
+          <span class="truncate">All records</span>
+        </Button>
+        <DragDropProvider
+          collisionDetector={closestCenter}
+          onDragEnd={({ draggable, droppable }) => {
+            if (droppable) reorder(String(draggable.id), String(droppable.id));
+          }}
+        >
+          <DragDropSensors />
+          <SortableProvider ids={props.views.map((view) => view.id)}>
+            <Key each={props.views} by="id">
+              {(view) => (
+                <ViewTab
+                  view={view()}
+                  selected={props.selectedViewId === view().id}
+                  canEdit={props.canEdit}
+                  canReorder={props.canEdit && !!props.onReorderViews}
+                  renaming={viewRename.target()?.id === view().id}
+                  renameDraft={viewRename.draft()}
+                  renamePending={viewRename.pending()}
+                  renameInput={(element) => {
+                    renameInput = element;
+                  }}
+                  onRenameInput={viewRename.setDraft}
+                  onRenameSave={(restoreFocus) =>
+                    fireAndForget(viewRename.save(restoreFocus), 'database')
+                  }
+                  onRenameCancel={() => viewRename.cancel(true)}
+                  onSelect={() => props.onSelectView(view().id)}
+                  onRename={() => {
+                    if (props.canEdit) viewRename.begin(view());
+                  }}
+                  onDelete={() => {
+                    setViewError('');
+                    setDeleting({ view: view() });
+                  }}
+                  columns={props.columns}
+                  onShowAs={(shown) => {
+                    setViewError('');
+                    void props
+                      .onShowViewAs(view(), shown)
+                      .mapErr((failure) =>
+                        setViewError(databaseOpMessage(failure, 'this view'))
+                      );
+                  }}
+                />
+              )}
+            </Key>
+          </SortableProvider>
+        </DragDropProvider>
+      </div>
+    ),
+    /** Menu items that create a view in each layout. */
+    newViewItems: () => (
+      <>
+        <Dropdown.Item
+          onSelect={() => fireAndForget(createView('table'), 'database')}
+          disabled={creating()}
+        >
+          <TableIcon class="size-4" />
+          Table
+        </Dropdown.Item>
+        <Dropdown.Item
+          onSelect={() => fireAndForget(createView('board'), 'database')}
+          disabled={creating()}
+        >
+          <KanbanIcon class="size-4" />
+          Board
+        </Dropdown.Item>
+        <Dropdown.Item
+          onSelect={() => fireAndForget(createView('timeline'), 'database')}
+          disabled={creating()}
+        >
+          <TimelineIcon class="size-4" />
+          Timeline
+        </Dropdown.Item>
+      </>
+    ),
+    /** What went wrong with the last view change, and the delete confirmation. */
+    feedback: () => (
+      <>
+        <Show when={viewError()}>
+          <p role="alert" class="px-4 pb-2 text-xs text-failure">
+            {viewError()}
+          </p>
+        </Show>
+        <DeleteDialog
+          open={!!deleting()}
+          onOpenChange={(open) => {
+            if (!open) setDeleting(undefined);
+          }}
+          title="Delete view?"
+          deleteLabel="Delete view"
+          onDelete={() => {
+            const target = deleting();
+            if (!target) return;
+            setDeleting(undefined);
+            void props
+              .onDeleteView(target.view)
+              .mapErr((failure) =>
+                setViewError(databaseOpMessage(failure, 'this view'))
+              );
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            allRecordsButton?.focus();
+          }}
+          body={
+            <p class="break-words">
+              “{deleting()?.view.name}” will be deleted for everyone. The table
+              and its records stay.
+            </p>
+          }
+        />
+      </>
+    ),
+  };
+}
+
+/** View controls contain no data fetching or mutation implementation. */
+export function DatabaseToolbar(props: DatabaseToolbarProps) {
+  const views = createViewControls(props);
+
   return (
     <div class="shrink-0 bg-canvas-base">
       <DatabaseEditorToolbar
         columns={props.columns}
         view={props.view}
         onChangeView={props.onChangeView}
-        canChangeView={canChangeView()}
+        canChangeView={views.canChangeView()}
         search={props.search}
         actions={props.actions}
         // Every layout adds records here: a paged table's blank row only
@@ -171,77 +356,7 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
         creating={props.creating}
         selection={
           <>
-            <div
-              ref={viewRail}
-              class="-m-1 flex min-w-0 items-center gap-1.5 overflow-x-auto p-1"
-              aria-label="Views"
-            >
-              <Button
-                ref={allRecordsButton}
-                type="button"
-                variant="secondary"
-                size="md"
-                aria-pressed={!props.selectedViewId}
-                onClick={() => props.onSelectView()}
-                class="max-w-40"
-              >
-                <span class="truncate">All records</span>
-              </Button>
-              <DragDropProvider
-                collisionDetector={closestCenter}
-                onDragEnd={({ draggable, droppable }) => {
-                  if (droppable)
-                    reorder(String(draggable.id), String(droppable.id));
-                }}
-              >
-                <DragDropSensors />
-                <SortableProvider ids={props.views.map((view) => view.id)}>
-                  <Key each={props.views} by="id">
-                    {(view) => (
-                      <ViewTab
-                        view={view()}
-                        selected={props.selectedViewId === view().id}
-                        canEdit={props.canEdit}
-                        canReorder={props.canEdit && !!props.onReorderViews}
-                        renaming={viewRename.target()?.id === view().id}
-                        renameDraft={viewRename.draft()}
-                        renamePending={viewRename.pending()}
-                        renameInput={(element) => {
-                          renameInput = element;
-                        }}
-                        onRenameInput={viewRename.setDraft}
-                        onRenameSave={(restoreFocus) =>
-                          fireAndForget(
-                            viewRename.save(restoreFocus),
-                            'database'
-                          )
-                        }
-                        onRenameCancel={() => viewRename.cancel(true)}
-                        onSelect={() => props.onSelectView(view().id)}
-                        onRename={() => {
-                          if (props.canEdit) viewRename.begin(view());
-                        }}
-                        onDelete={() => {
-                          setViewError('');
-                          setDeleting({ view: view() });
-                        }}
-                        columns={props.columns}
-                        onShowAs={(shown) => {
-                          setViewError('');
-                          void props
-                            .onShowViewAs(view(), shown)
-                            .mapErr((failure) =>
-                              setViewError(
-                                databaseOpMessage(failure, 'this view')
-                              )
-                            );
-                        }}
-                      />
-                    )}
-                  </Key>
-                </SortableProvider>
-              </DragDropProvider>
-            </div>
+            {views.tabs()}
             <Show when={props.canEdit}>
               <Dropdown placement="bottom-start">
                 <Dropdown.Trigger
@@ -250,77 +365,19 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                   size="icon-md"
                   variant="ghost"
                   class="ml-1.5 shrink-0"
-                  disabled={creating()}
+                  disabled={views.creating()}
                 >
                   <PlusIcon class="size-4 touch:size-3.5" />
                 </Dropdown.Trigger>
                 <Dropdown.Content class="min-w-40">
-                  <Dropdown.Item
-                    onSelect={() =>
-                      fireAndForget(createView('table'), 'database')
-                    }
-                    disabled={creating()}
-                  >
-                    <TableIcon class="size-4" />
-                    Table
-                  </Dropdown.Item>
-                  <Dropdown.Item
-                    onSelect={() =>
-                      fireAndForget(createView('board'), 'database')
-                    }
-                    disabled={creating()}
-                  >
-                    <KanbanIcon class="size-4" />
-                    Board
-                  </Dropdown.Item>
-                  <Dropdown.Item
-                    onSelect={() =>
-                      fireAndForget(createView('timeline'), 'database')
-                    }
-                    disabled={creating()}
-                  >
-                    <TimelineIcon class="size-4" />
-                    Timeline
-                  </Dropdown.Item>
+                  {views.newViewItems()}
                 </Dropdown.Content>
               </Dropdown>
             </Show>
           </>
         }
       />
-      <Show when={viewError()}>
-        <p role="alert" class="px-4 pb-2 text-xs text-failure">
-          {viewError()}
-        </p>
-      </Show>
-      <DeleteDialog
-        open={!!deleting()}
-        onOpenChange={(open) => {
-          if (!open) setDeleting(undefined);
-        }}
-        title="Delete view?"
-        deleteLabel="Delete view"
-        onDelete={() => {
-          const target = deleting();
-          if (!target) return;
-          setDeleting(undefined);
-          void props
-            .onDeleteView(target.view)
-            .mapErr((failure) =>
-              setViewError(databaseOpMessage(failure, 'this view'))
-            );
-        }}
-        onCloseAutoFocus={(event) => {
-          event.preventDefault();
-          allRecordsButton?.focus();
-        }}
-        body={
-          <p class="break-words">
-            “{deleting()?.view.name}” will be deleted for everyone. The table
-            and its records stay.
-          </p>
-        }
-      />
+      {views.feedback()}
     </div>
   );
 }

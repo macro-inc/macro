@@ -31,6 +31,7 @@ ignores:
   - apps/web/src/features/block-canvas/component/Block.tsx
   - apps/web/src/features/block-chat/component/Chat.tsx
   - apps/web/src/features/block-code/component/Block.tsx
+  - apps/web/src/features/block-database/database-page-toolbar.tsx
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
   - apps/web/src/features/block-fig/fig-block.tsx
   - apps/web/src/features/block-form/form-block.tsx

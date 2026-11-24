@@ -21,6 +21,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazy } from '@core/util/lazy';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import {
@@ -41,11 +42,11 @@ import {
   For,
   onCleanup,
   Show,
+  Suspense,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { DatabaseSearch } from '../../database/components/database-search';
 import type { ShownLayout } from '../../database/components/database-toolbar';
-import { DatabaseToolbar } from '../../database/components/database-toolbar';
 import type { DatabaseRelatedDestination } from '../../database/core/database-relations';
 import type { NewView } from '../../database/core/view-creation';
 import type { ViewChange } from '../../database/core/view-state';
@@ -59,6 +60,7 @@ import { createDatabaseSearch } from '../../database/primitives/database-search'
 import { createDatabaseUndo } from '../../database/primitives/undo-controller';
 import { createViewCreation } from '../../database/primitives/view-creation';
 import { databaseChat } from '../core/chat-context';
+import { DatabasePageToolbar } from '../database-page-toolbar';
 import { databaseDetailSearch } from '../database-route';
 import {
   createDatabaseViewSelection,
@@ -80,6 +82,12 @@ import { DatabaseGrid } from './DatabaseGrid';
 import { DatabasePageShell } from './DatabasePageShell';
 import { DatabaseSidePanelSections } from './sidepanel/DatabaseSidePanelSections';
 import { TopBar } from './TopBar';
+
+// Forms load only when the flag is on, and only through this boundary.
+const DatabaseFormsEntry = lazy(async () => ({
+  default: (await import('@app/features/block-form/database-forms-entry'))
+    .DatabaseFormsEntry,
+}));
 
 const Block: Component = () => {
   const databaseId = useBlockId();
@@ -288,6 +296,25 @@ const Block: Component = () => {
       allRecordsView(table.table)
     );
   };
+  /** The active table's forms, in whichever menu switches tables. */
+  const tableMenuItems = () => {
+    if (!activeTable()) return undefined;
+
+    return () => (
+      <Suspense>
+        <DatabaseFormsEntry
+          databaseId={databaseId}
+          tableId={activeTableId()}
+          tableName={activeTable()?.table.name}
+          canCreate={detail()?.grant === 'owner'}
+          enabled
+        />
+      </Suspense>
+    );
+  };
+  function selectTable(tableId: string) {
+    setSelection((current) => ({ ...current, tableId }));
+  }
   function selectView(id?: string) {
     const tableId = activeTableId();
     if (!tableId) return;
@@ -358,9 +385,8 @@ const Block: Component = () => {
           detail={detail()}
           canEdit={canEdit()}
           activeTable={activeTable()}
-          onSelectTable={(tableId) =>
-            setSelection((current) => ({ ...current, tableId }))
-          }
+          tableMenuItems={tableMenuItems()}
+          onSelectTable={selectTable}
           onDelete={() =>
             trashDatabase(getEntityGraphqlClient(), databaseId).map(() =>
               returnSplitToRecentListView(panel.handle)
@@ -370,7 +396,7 @@ const Block: Component = () => {
           onOpenChat={() => fireAndForget(openDatabaseChat(), 'database-view')}
         />
         <div
-          class="@container/database flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-canvas-base text-ink"
+          class="@container/database flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-canvas-base text-ink touch:pt-(--mobile-content-inset-top) touch:[&>*]:[--mobile-content-inset-top:0px]"
           style={{ '--database-title-column-width': '18rem' }}
         >
           <ErrorBoundary
@@ -475,6 +501,7 @@ const Block: Component = () => {
                             schema="opened"
                             databaseId={databaseId}
                             table={table()}
+                            contentClass="mx-4 mb-4 mt-1 rounded-xl border border-edge-muted touch:mb-[calc(var(--mobile-content-inset-bottom,0px)+0.5rem)]"
                             canEdit={canEdit() && !activeCreation()}
                             view={shown().view}
                             stored={!!selectedView() && !activeCreation()}
@@ -497,12 +524,19 @@ const Block: Component = () => {
                               openRequestedRecord();
                             }}
                             renderToolbar={(actions) => (
-                              <DatabaseToolbar
+                              <DatabasePageToolbar
                                 columns={columns()}
                                 views={storedViews()}
                                 view={shown().view}
                                 selectedViewId={selectedView()?.id}
                                 canEdit={canEdit() && !activeCreation()}
+                                tables={tables().map((entry) => ({
+                                  id: entry.table.id,
+                                  name: entry.table.name,
+                                }))}
+                                activeTableId={activeTableId()}
+                                onSelectTable={selectTable}
+                                tableMenuItems={tableMenuItems()}
                                 search={
                                   <DatabaseSearch
                                     term={search.term()}

@@ -21,6 +21,7 @@ import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import { isMobile } from '@core/mobile/isMobile';
 import { useGetPermissions } from '@core/signal/permissions';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazy } from '@core/util/lazy';
@@ -31,7 +32,7 @@ import type { TableDetail } from '@service-storage/generated/schemas/tableDetail
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { ButtonGroup } from '@ui';
 import type { ResultAsync } from 'neverthrow';
-import { createSignal, Show, Suspense } from 'solid-js';
+import { createSignal, type JSX, Show, Suspense } from 'solid-js';
 import { DatabaseTitle } from '../../database/components/database-title';
 import {
   type DatabaseEntityFailure,
@@ -45,10 +46,6 @@ import {
 import { TableTabs } from './TableTabs';
 
 // Forms load only when the flag is on, and only through this boundary.
-const DatabaseFormsEntry = lazy(async () => ({
-  default: (await import('@app/features/block-form/database-forms-entry'))
-    .DatabaseFormsEntry,
-}));
 const DatabaseFormEditors = lazy(async () => ({
   default: (await import('@app/features/block-form/database-forms-entry'))
     .DatabaseFormEditors,
@@ -59,6 +56,8 @@ export function TopBar(props: {
   detail: DatabaseDetail | undefined;
   canEdit: boolean;
   activeTable: TableDetail | undefined;
+  /** Feature-owned items of the tables' add menu, e.g. the table's forms. */
+  tableMenuItems: (() => JSX.Element) | undefined;
   onSelectTable: (tableId: string) => void;
   onDelete: () => ResultAsync<void, DatabaseEntityFailure>;
   openingChat: boolean;
@@ -184,30 +183,19 @@ export function TopBar(props: {
                 onDelete={props.onDelete}
                 onImported={props.onSelectTable}
               />
-              <div class="ml-2 min-w-0 max-w-xl shrink">
-                <TableTabs
-                  databaseId={databaseId}
-                  tables={detail().tables}
-                  activeTableId={props.activeTable?.table.id}
-                  canEdit={props.canEdit}
-                  onSelect={props.onSelectTable}
-                  menuItems={
-                    props.activeTable
-                      ? () => (
-                          <Suspense>
-                            <DatabaseFormsEntry
-                              databaseId={databaseId}
-                              tableId={props.activeTable?.table.id}
-                              tableName={props.activeTable?.table.name}
-                              canCreate={props.detail?.grant === 'owner'}
-                              enabled
-                            />
-                          </Suspense>
-                        )
-                      : undefined
-                  }
-                />
-              </div>
+              {/* A phone's header has no room for them: its toolbar switches tables. */}
+              <Show when={!isMobile()}>
+                <div class="ml-2 min-w-0 max-w-xl shrink">
+                  <TableTabs
+                    databaseId={databaseId}
+                    tables={detail().tables}
+                    activeTableId={props.activeTable?.table.id}
+                    canEdit={props.canEdit}
+                    onSelect={props.onSelectTable}
+                    menuItems={props.tableMenuItems}
+                  />
+                </div>
+              </Show>
             </>
           )}
         </Show>
