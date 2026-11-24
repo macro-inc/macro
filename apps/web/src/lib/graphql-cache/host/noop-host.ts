@@ -110,6 +110,9 @@ export function createNoopCacheHost(): CacheHost {
     onMutationSettled() {
       return () => undefined;
     },
+    onChannelChanged() {
+      return () => undefined;
+    },
     dispose() {},
   };
 }

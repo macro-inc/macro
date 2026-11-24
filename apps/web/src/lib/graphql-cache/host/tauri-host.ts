@@ -31,6 +31,7 @@ import type {
   CalendarCommitCacheResult,
   CalendarRangeCacheArgs,
   CalendarRangeCacheResult,
+  ChannelChange,
   ChannelCommitArgs,
   ChannelCommitOutcome,
   ChannelTimelineCacheArgs,
@@ -88,6 +89,8 @@ const CACHE_CHANGED_EVENT = 'graphql-cache://cache-changed';
 const CACHE_HYDRATED_EVENT = 'graphql-cache://cache-hydrated';
 /** Keep in sync with `MUTATION_SETTLED_EVENT` in graphql_cache_plugin. */
 const MUTATION_SETTLED_EVENT = 'graphql-cache://mutation-settled';
+/** Keep in sync with `CHANNELS_CHANGED_EVENT` in graphql_cache_plugin. */
+const CHANNELS_CHANGED_EVENT = 'graphql-cache://channels-changed';
 const AUTHORITY_CHANGED_EVENT = 'graphql-cache://authority-changed';
 
 /** Payload of the ops-affected event (graphql_cache_plugin `OpsAffectedEvent`). */
@@ -251,6 +254,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const settlementSubscribers = new Set<
     (settlement: MutationSettlement) => void
   >();
+  const channelSubscribers = new Set<(change: ChannelChange) => void>();
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
@@ -477,6 +481,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       console.warn('graphql cache mutation-settled listener failed', error);
       return undefined;
     });
+
+  const unlistenChannels: Promise<UnlistenFn | undefined> = listen<
+    ChannelChange[]
+  >(CHANNELS_CHANGED_EVENT, (event) => {
+    pendingReads.clear();
+    flushAffected();
+    for (const change of event.payload)
+      for (const cb of channelSubscribers) cb(change);
+  }).catch((error) => {
+    console.warn('graphql cache channels-changed listener failed', error);
+    return undefined;
+  });
 
   const unlistenCacheChanges: Promise<UnlistenFn | undefined> =
     listen<CacheChangedPayload>(CACHE_CHANGED_EVENT, (event) => {
@@ -1326,6 +1342,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       return () => settlementSubscribers.delete(cb);
     },
 
+    onChannelChanged(cb: (change: ChannelChange) => void): () => void {
+      channelSubscribers.add(cb);
+      return () => channelSubscribers.delete(cb);
+    },
+
     dispose() {
       clearTimeout(affectedTimer);
       pendingAffected.clear();
@@ -1336,11 +1357,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       hydrationSubscribers.clear();
       generationChangeSubscribers.clear();
       settlementSubscribers.clear();
+      channelSubscribers.clear();
       for (const unlisten of [
         unlistenOps,
         unlistenCacheChanges,
         unlistenHydration,
         unlistenSettlements,
+        unlistenChannels,
         unlistenAuthority,
       ]) {
         // UnlistenFn returns the unlisten IPC promise despite its void type.

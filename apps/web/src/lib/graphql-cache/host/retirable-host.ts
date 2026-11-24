@@ -140,6 +140,10 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
       current.onMutationSettled((...args) => {
         if (current === inner) cb(...args);
       }),
+    onChannelChanged: (cb) =>
+      current.onChannelChanged((...args) => {
+        if (current === inner) cb(...args);
+      }),
     dispose() {
       if (current !== inner) return;
       current = createNoopCacheHost();

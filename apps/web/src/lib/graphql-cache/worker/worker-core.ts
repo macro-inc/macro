@@ -1653,6 +1653,9 @@ export class CacheWorkerCore {
           // A stale artifact opened storage without asking the coordinator.
           throw new Error('cache WASM does not support the owner-lock grant');
         }
+        await this.engine.onChannelsChanged((changes) =>
+          this.push({ kind: 'channels-changed', changes })
+        );
         this.options.onInitializationOutcome?.(openOutcome);
         this.telemetry.record({
           name: 'graphql_cache.schema_init',

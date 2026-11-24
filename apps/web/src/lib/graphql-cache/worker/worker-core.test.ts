@@ -6,6 +6,7 @@ import {
 } from '../authority-fixture';
 import {
   type CacheRequest,
+  type ChannelChange,
   type ChannelCommitArgs,
   INITIAL_CACHE_REVISION,
   parseCacheRevision,
@@ -18,6 +19,7 @@ vi.mock('./wasm-module', () => ({
     const module = await loadCacheWasmMock();
     const wrap = (engine: object) => ({
       currentAuthority: async (identity: string) => testAuthority(identity),
+      onChannelsChanged: async () => undefined,
       ...engine,
     });
     const result = { ...module };
@@ -43,6 +45,31 @@ import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
+  it('pushes the channels a transaction changed to every port', async () => {
+    let report: ((changes: ChannelChange[]) => void) | undefined;
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: async () => ({
+        onChannelsChanged: async (callback: typeof report) => {
+          report = callback;
+        },
+      }),
+    });
+    const ports = [{ postMessage: vi.fn() }, { postMessage: vi.fn() }];
+    const core = new CacheWorkerCore();
+    for (const port of ports) core.addPort(port);
+    await core.handleRequest(ports[0], {
+      id: 1,
+      kind: 'init',
+      scope: 'profile',
+    });
+    const changes: ChannelChange[] = [{ channelId: 'c1', kind: 'changed' }];
+    report?.(changes);
+    for (const port of ports)
+      expect(port.postMessage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ kind: 'channels-changed', changes })
+      );
+  });
+
   it('uses the owner stamp for warm reads and refreshes it after a clear', async () => {
     let generation = TEST_AUTHORITY_GENERATION;
     const currentAuthority = vi.fn(async (identity: string) => ({

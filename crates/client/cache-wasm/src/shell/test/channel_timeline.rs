@@ -1,6 +1,7 @@
 use super::*;
 use cache_core::channel_timeline::{TIMELINE_HEAD, TIMELINE_START};
 use serde_json::{Value, json};
+use wasm_bindgen::JsCast;
 
 const PAGE: &str = "query Page($input: ChannelTimelineInput!) { user { __typename id channelTimeline(input: $input) { __typename seq entries { __typename ... on GraphqlChannelMessage { __typename id channelId sortKey threadId deletedAt content } } } } }";
 
@@ -28,6 +29,18 @@ fn page(seq: &str, ids: &[&str]) -> JsValue {
 
 fn variables() -> JsValue {
     js(json!({"input": {"channelId": "c1"}}))
+}
+
+/// Every report of `engine`, in the order it made them.
+async fn heard(engine: &CacheEngine) -> (js_sys::Array, Closure<dyn Fn(JsValue)>) {
+    let reports = js_sys::Array::new();
+    let received = reports.clone();
+    let listener = Closure::<dyn Fn(JsValue)>::new(move |changes| {
+        received.push(&changes);
+    });
+    let callback = listener.as_ref().unchecked_ref::<js_sys::Function>();
+    resolved(engine.on_channels_changed(callback.clone())).await;
+    (reports, listener)
 }
 
 async fn listed(engine: &CacheEngine) -> Value {
@@ -123,4 +136,32 @@ async fn a_response_and_its_channel_commit_cross_the_js_boundary_together() {
         .await
         .expect_err("a reset needs the sequence it was read at");
     close_and_destroy(&engine, "cache-wasm-channel-commit").await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn changed_channels_are_reported_before_a_call_resolves_and_after_a_reset() {
+    let scope = "cache-wasm-channel-reports";
+    let engine = fresh_engine(scope).await;
+    let (reports, _listener) = heard(&engine).await;
+    let write = |seq: &str, id: &str| {
+        engine.write_query(
+            js(json!({})),
+            PAGE.into(),
+            None,
+            variables(),
+            page(seq, &[id]),
+            None,
+        )
+    };
+    resolved(write("5", "1")).await;
+    resolved(write("5", "1")).await;
+    resolved(engine.physical_reset()).await;
+    resolved(write("6", "1")).await;
+    let changed = json!([{"channelId": "c1", "kind": "changed"}]);
+    assert_eq!(
+        from_js::<Value>(reports.into()),
+        json!([changed, changed]),
+        "the same page again reports nothing, and a reset keeps the listener"
+    );
+    close_and_destroy(&engine, scope).await;
 }

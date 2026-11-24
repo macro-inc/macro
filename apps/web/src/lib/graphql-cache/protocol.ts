@@ -1323,6 +1323,24 @@ export type CacheResponse =
       errorCode?: CacheResponseErrorCode;
     };
 
+/** What one stored transaction did to a channel's timeline: something in it
+ * changed, everything held was replaced, or everything held was dropped. */
+export type ChannelChange = {
+  channelId: string;
+  kind: 'changed' | 'reset' | 'evicted';
+};
+
+function isChannelChange(value: unknown): value is ChannelChange {
+  return (
+    isWireRecord(value) &&
+    hasOnlyWireKeys(value, ['channelId', 'kind']) &&
+    typeof value.channelId === 'string' &&
+    (value.kind === 'changed' ||
+      value.kind === 'reset' ||
+      value.kind === 'evicted')
+  );
+}
+
 /**
  * Pushed (not request/response) messages from worker to its client(s):
  * operations whose underlying records changed. The host filters by its own
@@ -1350,6 +1368,7 @@ export type CachePush = { authorityGeneration?: string } & (
       revision: CacheRevision;
     } & CacheChangeHints)
   | { kind: 'mutation-settled'; settlement: MutationSettlement }
+  | { kind: 'channels-changed'; changes: ChannelChange[] }
 );
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -1529,6 +1548,12 @@ export function isCachePush(value: unknown): value is CachePush {
           isWireStringArray(value.unchangedViews)) &&
         (value.searchChangedBuckets === undefined ||
           isWireStringArray(value.searchChangedBuckets))
+      );
+    case 'channels-changed':
+      return (
+        hasOnlyWireKeys(value, ['kind', 'changes']) &&
+        Array.isArray(value.changes) &&
+        value.changes.every(isChannelChange)
       );
     case 'mutation-settled': {
       const settlement = value.settlement;

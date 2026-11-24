@@ -569,6 +569,8 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
 }
 
 struct CacheState {
+    /// Hears of changed channels from this engine and every reset of it.
+    on_channels_changed: Option<js_sys::Function>,
     selections: RecordSelectionCache,
     engine: Option<BrowserEngine>,
     mail_generation: String,
@@ -1283,6 +1285,7 @@ async fn open_cache_inner(
     Ok((
         CacheEngine {
             state: Rc::new(Mutex::new(CacheState {
+                on_channels_changed: None,
                 selections: RecordSelectionCache::default(),
                 engine: Some(engine),
                 mail_generation: soup_filter_cache_adapter::mail::new_generation(),
@@ -1586,7 +1589,7 @@ pub fn cache_build_info() -> Result<JsValue, JsValue> {
     })
 }
 
-fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
+fn to_js<T: Serialize + ?Sized>(value: &T) -> Result<JsValue, JsValue> {
     value
         .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
         .map_err(|e| JsValue::from_str(&e.to_string()))
@@ -3060,6 +3063,7 @@ impl CacheEngine {
                 }
             };
             state.engine = Some(engine);
+            state.listen_to_channels();
             state.mail_generation = soup_filter_cache_adapter::mail::new_generation();
             state.reset_required = false;
             Ok(JsValue::UNDEFINED)

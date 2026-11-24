@@ -33,6 +33,7 @@ import type {
   CalendarCommitArgs,
   CalendarRangeCacheArgs,
   CalendarRangeCacheResult,
+  ChannelChange,
   ChannelCommitArgs,
   ChannelCommitOutcome,
   ChannelTimelineCacheArgs,
@@ -177,6 +178,9 @@ export interface CacheEngine {
   ): Promise<CalendarRangeCacheResult>;
   /** Resolves like `writeQuery`: deleted records are reported as `changed`. */
   calendarCommit(commit: CalendarCommitArgs): Promise<WriteResult>;
+  onChannelsChanged(
+    callback: (changes: ChannelChange[]) => void
+  ): Promise<void>;
   channelTimeline(
     request: ChannelTimelineCacheArgs
   ): Promise<ChannelTimelineCacheResult>;

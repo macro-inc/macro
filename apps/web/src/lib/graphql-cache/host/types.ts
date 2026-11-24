@@ -21,6 +21,7 @@ import type {
   CalendarCommitCacheResult,
   CalendarRangeCacheArgs,
   CalendarRangeCacheResult,
+  ChannelChange,
   ChannelCommitArgs,
   ChannelTimelineCacheArgs,
   ChannelTimelineCacheResult,
@@ -282,6 +283,12 @@ export interface CacheHost {
   onCacheGenerationChanged(
     cb: (change: CacheGenerationChange) => void
   ): () => void;
+
+  /** Reports, in every tab, each channel whose timeline a stored transaction
+   * changed: a commit, a stamped write, an eviction, a reset, or an optimistic
+   * write queued, settled or rolled back. Clearing the cache is reported by
+   * onCacheGenerationChanged instead. */
+  onChannelChanged(cb: (change: ChannelChange) => void): () => void;
 
   /** Subscribes to final commit, rollback, or supersession events. */
   onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;

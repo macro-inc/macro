@@ -26,6 +26,7 @@ use cache_core::channel_timeline::{
     ChannelCommitOutcome, ChannelEviction, ChannelTimelineCommit, ChannelTimelineRequest,
     ChannelTimelineStats,
 };
+use cache_core::engine::channel_changes::ChannelChange;
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::meta::Schema;
@@ -164,14 +165,22 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
             let (storage, adoption) = open_cache(&dir, &scope, &incoming)?;
             let events = app.clone();
-            let handle = EngineHandle::with_schema(storage, hot_capacity, adoption.schema)
-                .with_authority_listener(scope.clone(), move |authority| {
+            let channel_events = app.clone();
+            let handle = EngineHandle::with_channel_listener(
+                storage,
+                hot_capacity,
+                adoption.schema,
+                move |changes: &[ChannelChange]| {
                     crate::emit_cache_event(
-                        &events,
-                        "graphql-cache://authority-changed",
-                        authority,
+                        &channel_events,
+                        crate::CHANNELS_CHANGED_EVENT,
+                        changes,
                     );
-                });
+                },
+            )
+            .with_authority_listener(scope.clone(), move |authority| {
+                crate::emit_cache_event(&events, "graphql-cache://authority-changed", authority);
+            });
             *guard = Some(InitializedCache {
                 scope,
                 handle: handle.clone(),

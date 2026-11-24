@@ -293,6 +293,7 @@ it('silences retired public subscriptions while retained storage still emits eve
     | Parameters<CacheHost['onCacheGenerationChanged']>[0]
     | undefined;
   let settled: Parameters<CacheHost['onMutationSettled']>[0] | undefined;
+  let channel: Parameters<CacheHost['onChannelChanged']>[0] | undefined;
   const inner = {
     ...createNoopCacheHost(),
     disabled: false,
@@ -315,13 +316,18 @@ it('silences retired public subscriptions while retained storage still emits eve
       settled = cb;
       return () => {};
     },
+    onChannelChanged: (cb: Parameters<CacheHost['onChannelChanged']>[0]) => {
+      channel = cb;
+      return () => {};
+    },
   };
   const host = createRetirableCacheHost(inner);
-  const callbacks = [vi.fn(), vi.fn(), vi.fn(), vi.fn()];
+  const callbacks = [vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn()];
   host.onOpsAffected(callbacks[0]);
   host.onCacheChanged(callbacks[1]);
   host.onCacheGenerationChanged(callbacks[2]);
   host.onMutationSettled(callbacks[3]);
+  host.onChannelChanged(callbacks[4]);
   const retained = retainCacheHost(host);
   affected?.([1]);
   expect(callbacks[0]).toHaveBeenCalledOnce();
@@ -331,6 +337,7 @@ it('silences retired public subscriptions while retained storage still emits eve
   changed?.(INITIAL_CACHE_REVISION);
   generation?.({ storage: 'preserved' });
   settled?.({ transactionId: 'draft', status: 'committed' });
+  channel?.({ channelId: 'c1', kind: 'changed' });
   for (const callback of callbacks) expect(callback).not.toHaveBeenCalled();
   expect(inner.dispose).not.toHaveBeenCalled();
   retained?.release();

@@ -31,6 +31,7 @@ import {
   type CalendarCommitCacheResult,
   type CalendarRangeCacheArgs,
   type CalendarRangeCacheResult,
+  type ChannelChange,
   type ChannelCommitArgs,
   type ChannelTimelineCacheArgs,
   type ChannelTimelineCacheResult,
@@ -250,6 +251,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const settlementSubscribers = new Set<
     (settlement: MutationSettlement) => void
   >();
+  const channelSubscribers = new Set<(change: ChannelChange) => void>();
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   let initializationTimeoutMs =
@@ -356,6 +358,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       }
       if (msg.kind === 'mutation-settled') {
         for (const cb of settlementSubscribers) cb(msg.settlement);
+        return;
+      }
+      if (msg.kind === 'channels-changed') {
+        for (const change of msg.changes)
+          for (const cb of channelSubscribers) cb(change);
         return;
       }
       const prefix = `${clientId}:`;
@@ -810,6 +817,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     hydrationSubscribers.clear();
     generationChangeSubscribers.clear();
     settlementSubscribers.clear();
+    channelSubscribers.clear();
   }
 
   function reportFailure(error: Error): void {
@@ -1919,6 +1927,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     ): () => void {
       settlementSubscribers.add(cb);
       return () => settlementSubscribers.delete(cb);
+    },
+
+    onChannelChanged(cb: (change: ChannelChange) => void): () => void {
+      channelSubscribers.add(cb);
+      return () => channelSubscribers.delete(cb);
     },
 
     dispose() {

@@ -1,9 +1,10 @@
 //! Channel timeline page reads, commits and eviction over the local index.
 
-use super::{CacheEngine, JsWriteResult, err_js, js_write_result, to_js};
+use super::{CacheEngine, CacheState, JsWriteResult, err_js, js_write_result, to_js};
 use cache_core::channel_timeline::{
     ChannelEviction, ChannelTimelineCommit, ChannelTimelineRequest, ChannelTimelineResult,
 };
+use cache_core::engine::channel_changes::ChannelChange;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
@@ -26,8 +27,37 @@ struct JsChannelEvictionResult {
     has_more: bool,
 }
 
+impl CacheState {
+    pub(super) fn listen_to_channels(&mut self) {
+        let (Some(engine), Some(callback)) = (&mut self.engine, &self.on_channels_changed) else {
+            return;
+        };
+        let callback = callback.clone();
+        engine.set_channel_listener(move |changes: &[ChannelChange]| {
+            // The write is stored whatever the listener does with the news.
+            to_js(changes)
+                .and_then(|changes| callback.call1(&JsValue::NULL, &changes))
+                .ok();
+        });
+    }
+}
+
 #[wasm_bindgen]
 impl CacheEngine {
+    /// Calls `callback` with the channels each transaction changed, after it
+    /// committed and before its call resolves.
+    #[wasm_bindgen(js_name = onChannelsChanged)]
+    pub fn on_channels_changed(&self, callback: js_sys::Function) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            state.on_channels_changed = Some(callback);
+            state.listen_to_channels();
+            Ok(JsValue::UNDEFINED)
+        })
+    }
+
     /// Answers one channel or thread page from cached messages, or reports
     /// that the requested window was never fully fetched.
     #[wasm_bindgen(js_name = channelTimeline)]

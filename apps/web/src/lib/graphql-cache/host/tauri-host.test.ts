@@ -33,7 +33,7 @@ import {
   NativeCacheUpgradeRequiredError,
 } from './tauri-host';
 
-type EventCallback = (event: { payload: Record<string, unknown> }) => void;
+type EventCallback = (event: { payload: unknown }) => void;
 
 const filterArgs: EntityFilterCacheArgs = {
   filters: {},
@@ -1270,6 +1270,10 @@ describe('createTauriCacheHost', () => {
       event: 'mutation-settled',
       payload: { transactionId: '1', status: 'committed' },
     },
+    {
+      event: 'channels-changed',
+      payload: [{ channelId: 'c1', kind: 'changed' }],
+    },
   ])(
     'flushes invalidations before $event observers run',
     ({ event, payload }) => {
@@ -1282,6 +1286,7 @@ describe('createTauriCacheHost', () => {
       });
       host.onCacheGenerationChanged(() => seen.push('generation'));
       host.onMutationSettled(() => seen.push('settled'));
+      host.onChannelChanged(() => seen.push('channel'));
       eventCallbacks.get('graphql-cache://ops-affected')!({
         payload: { opIds: [`${host.clientId}:5`] },
       });
@@ -1302,6 +1307,25 @@ describe('createTauriCacheHost', () => {
       payload: { revision: INITIAL_CACHE_REVISION },
     });
     expect(calls).toBe(1);
+  });
+
+  it('delivers each channel a native transaction changed', async () => {
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const seen = vi.fn();
+    host.onChannelChanged(seen);
+    await Promise.resolve();
+
+    const changes = [
+      { channelId: 'c1', kind: 'changed' },
+      { channelId: 'c2', kind: 'reset' },
+    ];
+    const notify = eventCallbacks.get('graphql-cache://channels-changed')!;
+    notify({ payload: changes });
+    expect(seen.mock.calls).toEqual(changes.map((change) => [change]));
+
+    host.dispose();
+    notify({ payload: changes });
+    expect(seen).toHaveBeenCalledTimes(2);
   });
 
   it.each([undefined, 'DRAFT_ALREADY_SENT'])(

@@ -513,6 +513,9 @@ function makeFakeHost(): FakeHost {
     onMutationSettled() {
       return () => undefined;
     },
+    onChannelChanged() {
+      return () => undefined;
+    },
     dispose() {},
   };
   return host;

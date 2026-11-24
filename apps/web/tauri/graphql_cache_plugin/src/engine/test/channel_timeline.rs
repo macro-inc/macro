@@ -2,6 +2,7 @@ use super::*;
 use cache_core::channel_timeline::{
     ChannelEviction, ChannelTimelineCommit, ChannelTimelineRequest,
 };
+use cache_core::engine::channel_changes::ChannelChange;
 
 fn latest() -> ChannelTimelineRequest {
     serde_json::from_value(serde_json::json!({ "channelId": "c1", "limit": 50 })).unwrap()
@@ -166,4 +167,44 @@ fn eviction_is_not_fenced_by_the_generation_it_was_asked_under() {
             .unwrap();
         assert_eq!(evicted.channel_ids, ["c1"]);
     });
+}
+
+#[test]
+fn a_transaction_tells_the_listener_of_its_channels_before_it_answers() {
+    let heard = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let listener = heard.clone();
+    let handle = EngineHandle::with_channel_listener(
+        TursoStorage::open_in_memory("scope-1").unwrap(),
+        None,
+        cache_core::meta::bundled_schema(),
+        move |changes: &[ChannelChange]| {
+            listener
+                .lock()
+                .unwrap()
+                .push(serde_json::to_value(changes).unwrap());
+        },
+    );
+    let commit = |value| serde_json::from_value::<ChannelTimelineCommit>(value).unwrap();
+    for (value, kind) in [
+        (
+            serde_json::json!({ "channelId": "c1", "seq": "3", "watermark": { "kind": "lower" } }),
+            Some("changed"),
+        ),
+        (
+            serde_json::json!({ "channelId": "c1", "touchedAtMs": 10 }),
+            None,
+        ),
+        (
+            serde_json::json!({ "channelId": "c1", "seq": "4", "reset": true }),
+            Some("reset"),
+        ),
+    ] {
+        block_on(handle.channel_timeline_commit(commit(value))).unwrap();
+        let reported: Vec<_> = std::mem::take(&mut *heard.lock().unwrap());
+        let expected: Vec<_> = kind
+            .map(|kind| serde_json::json!([{ "channelId": "c1", "kind": kind }]))
+            .into_iter()
+            .collect();
+        assert_eq!(reported, expected);
+    }
 }

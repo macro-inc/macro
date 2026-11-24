@@ -13,6 +13,7 @@
 
 use cache_core::channel_timeline::{ChannelCommitOutcome, ChannelTimelineCommit};
 use cache_core::deps::OpId;
+use cache_core::engine::channel_changes::ChannelListener;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
     HydrationScope, HydrationWriteResult, InitialClaimOutcome, NetworkWrite, NormalizedResponse,
@@ -505,14 +506,36 @@ impl EngineHandle {
         hot_capacity: Option<u32>,
         schema: Arc<cache_core::meta::Schema>,
     ) -> Self {
-        let engine = Engine::with_schema(
+        Self::over(Self::engine(storage, hot_capacity, schema))
+    }
+
+    /// [`Self::with_schema`], telling `listener` of every channel a
+    /// transaction changes.
+    pub fn with_channel_listener(
+        storage: TursoStorage,
+        hot_capacity: Option<u32>,
+        schema: Arc<cache_core::meta::Schema>,
+        listener: impl ChannelListener + 'static,
+    ) -> Self {
+        Self::over(Self::engine(storage, hot_capacity, schema).with_channel_listener(listener))
+    }
+
+    fn engine(
+        storage: TursoStorage,
+        hot_capacity: Option<u32>,
+        schema: Arc<cache_core::meta::Schema>,
+    ) -> Engine<TursoStorage> {
+        Engine::with_schema(
             storage,
             hot_capacity
                 .filter(|c| *c > 0)
                 .map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
             schema,
         )
-        .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners);
+        .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners)
+    }
+
+    fn over(engine: Engine<TursoStorage>) -> Self {
         let inner = Arc::new(EngineAccess::new(EngineState {
             engine,
             ops: OpInterner::default(),
