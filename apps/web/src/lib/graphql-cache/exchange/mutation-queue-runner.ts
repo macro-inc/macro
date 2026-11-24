@@ -400,6 +400,11 @@ export type MutationQueueRunner = {
   wake: () => void;
   /** Retires every attempt token and returns the head to idle. */
   resetStorage: () => void;
+  /**
+   * Stops sending, and lets the queue's owner go once no request it sent is
+   * unanswered: another page sends what a departed owner had claimed.
+   */
+  dispose: () => void;
 };
 
 export function createMutationQueueRunner(
@@ -411,6 +416,9 @@ export function createMutationQueueRunner(
   const liveQueuedOps = new Map<string, LiveQueuedOperation>();
   let storageGeneration = 0;
   let activeAttempt: AttemptToken | undefined;
+  // Requests on their way. Unlike the active attempt, they survive a reset.
+  const unanswered = new Set<AttemptToken>();
+  let disposed = false;
   // Queue IDs advance in order; retries advance their lease.
   // Keep the watermark after settlement so a late claim cannot revive an old head.
   let latestClaim:
@@ -463,6 +471,14 @@ export function createMutationQueueRunner(
     if (!isCurrent(token)) return false;
     head = typeof next === 'function' ? next(head) : next;
     return true;
+  }
+
+  function letOwnerGo(): void {
+    if (disposed && unanswered.size === 0) owner.dispose();
+  }
+
+  function answered(attempt: AttemptToken): void {
+    if (unanswered.delete(attempt)) letOwnerGo();
   }
 
   function scheduleDrain(delayMs = 0): void {
@@ -592,10 +608,10 @@ export function createMutationQueueRunner(
       return;
     }
     admissionFailures.delete(claimed.transactionId);
-    if (!owner.holds(attempt.leaseOwner)) {
-      // The page was hidden while this head waited for admission and let its
-      // owner go, so another page may have released and sent this claim.
-      // Hand the claim back; the next drain claims it under the page's owner.
+    if (disposed || !owner.holds(attempt.leaseOwner)) {
+      // While this head waited for admission the client ended, or the page
+      // was hidden and let its owner go, so another page may have released
+      // and sent this claim. Hand the claim back; the next drain claims it under the page's owner.
       await deferAdmission(claimed, attempt);
       attemptTelemetry.finish('deferred');
       return;
@@ -631,6 +647,7 @@ export function createMutationQueueRunner(
       scheduleDrain();
       return;
     }
+    unanswered.add(attempt);
     const live = liveQueuedOps.get(claimed.transactionId);
     if (live) {
       liveQueuedOps.delete(claimed.transactionId);
@@ -688,6 +705,8 @@ export function createMutationQueueRunner(
         } finally {
           if (transition(attempt, IDLE)) scheduleDrain();
         }
+      } finally {
+        answered(attempt);
       }
     }
     // Any other live operation is ordered behind the claimed head.
@@ -1071,6 +1090,17 @@ export function createMutationQueueRunner(
     networkResult: OperationResult,
     attempt: QueueAttemptContext
   ): Promise<OperationResult> {
+    try {
+      return await settleAttempt(networkResult, attempt);
+    } finally {
+      answered(attempt);
+    }
+  }
+
+  async function settleAttempt(
+    networkResult: OperationResult,
+    attempt: QueueAttemptContext
+  ): Promise<OperationResult> {
     let result = networkResult;
     const op = result.operation;
     const detachedResult = () =>
@@ -1350,5 +1380,9 @@ export function createMutationQueueRunner(
     },
     wake: wakeDrain,
     resetStorage,
+    dispose: () => {
+      disposed = true;
+      letOwnerGo();
+    },
   };
 }

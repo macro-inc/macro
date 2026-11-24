@@ -737,3 +737,47 @@ it('hands back a claim whose owner the page let go while it waited for admission
     'Admission deferred'
   );
 });
+
+it('keeps its owner while a request it sent is unanswered', async () => {
+  const letGo = vi.fn();
+  const { runner, forwarded } = fixture({}, { ...PLAIN_OWNER, dispose: letGo });
+  const op = operation();
+  const admitted = runner.admit(op, enqueue(op, '1'), runner.epoch());
+  await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+  // Retires the attempt, but not the request already on its way.
+  runner.resetStorage();
+  runner.dispose();
+  await admitted;
+  expect(letGo).not.toHaveBeenCalled();
+
+  const sent = forwarded[0]!;
+  await runner.settle(
+    { operation: sent, data: {}, stale: false, hasNext: false },
+    queueAttemptOf(sent)!
+  );
+  expect(letGo).toHaveBeenCalledOnce();
+});
+
+it('lets its owner go at once, and sends nothing more, with no request unanswered', async () => {
+  const letGo = vi.fn();
+  let admit = (_: true) => {};
+  const { runner, forwarded, host } = fixture(
+    {
+      beforeMutationAttempt: () =>
+        new Promise((resolve) => {
+          admit = resolve;
+        }),
+    },
+    { ...PLAIN_OWNER, dispose: letGo }
+  );
+  const op = operation();
+  const admitted = runner.admit(op, enqueue(op, '1'), runner.epoch());
+  await Promise.resolve();
+  runner.dispose();
+  expect(letGo).toHaveBeenCalledOnce();
+
+  admit(true);
+  await admitted;
+  expect(forwarded).toEqual([]);
+  expect(host.deferOptimisticWrite).toHaveBeenCalledOnce();
+});
