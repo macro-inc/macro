@@ -17,6 +17,8 @@ const soup = vi.hoisted(() => ({
         onCacheGenerationChanged: () => () => void;
         readRecordsByKeys: (args: { keys: string[] }) => Promise<unknown>;
         readQuery: () => Promise<unknown>;
+        /** Paused through an outage: not handed out, but serving again later. */
+        paused?: boolean;
       }
     | undefined,
   /** Whether the cache holds the definition's options on its record. */
@@ -171,6 +173,13 @@ function queueingHost() {
       },
     }
   );
+}
+
+/** An outage pauses the cache: the soup client stops handing the host out. */
+function pause(host: typeof soup.host) {
+  if (host) host.paused = true;
+  soup.host = undefined;
+  soup.loginChanged();
 }
 
 /** The value a write resolves with, or the error it rejects with. */
@@ -1011,6 +1020,50 @@ describe('a waiting write when the login or the cache goes', () => {
     expect(isCatalogErrorCode(late.mock.calls[0]?.[0], 'CACHE_STOPPED')).toBe(
       true
     );
+  });
+
+  it('keeps waiting for an add while the cache holding it pauses', async () => {
+    const settle = queueingHost();
+    const held = soup.host;
+    let ended = false;
+    const added = outcomeOf(addPropertyOption('def-1', TAG)).finally(() => {
+      ended = true;
+    });
+    await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
+    pause(held);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(ended).toBe(false);
+    // The same host serves again and reports the write.
+    if (held) held.paused = false;
+    soup.host = held;
+    soup.loginChanged();
+    settle({ transactionId: 'tx-1', status: 'committed' });
+    expect(await added).toMatchObject({ property_definition_id: 'def-1' });
+  });
+
+  it('stops waiting for an add when a paused cache is then retired', async () => {
+    queueingHost();
+    const held = soup.host;
+    const added = outcomeOf(addPropertyOption('def-1', TAG));
+    await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
+    pause(held);
+    if (held) held.paused = false;
+    soup.loginChanged();
+    expect(isCatalogErrorCode(await added, 'CACHE_STOPPED')).toBe(true);
+  });
+
+  it('reports a predicted write settled while its cache was paused, not a failure', async () => {
+    const settle = queueingHost();
+    const held = soup.host;
+    soup.mutation.mockImplementation(() => ({
+      toPromise: async () => ({ queued: 'tx-1' }),
+    }));
+    const late = vi.fn();
+    await updatePropertyOption('def-1', 'opt-1', { value: 'Renamed' }, late);
+    pause(held);
+    settle({ transactionId: 'tx-1', status: 'committed' });
+    await settle.drained();
+    expect(late).not.toHaveBeenCalled();
   });
 
   it('keeps a commit the cache reported before it stopped', async () => {

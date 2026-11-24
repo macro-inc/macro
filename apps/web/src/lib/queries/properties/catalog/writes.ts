@@ -162,9 +162,18 @@ type WaitScope = {
 };
 
 /**
+ * Whether a host is paused through an outage: it is not handed out, but keeps
+ * its queue and its settlement listeners, and serves again as itself. Hosts
+ * that cannot pause have no `paused`.
+ */
+const isPaused = (host: CacheHost): boolean =>
+  'paused' in host && host.paused === true;
+
+/**
  * Why a write's wait ended before its work did, if it did: another login took
  * over, or the cache holding the write stopped (signed out, retired or
- * replaced), which may never report it.
+ * replaced), which may never report it. A paused cache has not stopped: it
+ * reports the write when it serves again.
  */
 function waitEnded({
   session,
@@ -172,7 +181,7 @@ function waitEnded({
   when,
 }: WaitScope): CatalogMutationError | undefined {
   if (queryAccountSession() !== session) return accountChanged(when);
-  if (host && getGraphqlSoupCacheHost() !== host)
+  if (host && getGraphqlSoupCacheHost() !== host && !isPaused(host))
     return new CatalogMutationError(
       `The cache stopped ${when}`,
       'CACHE_STOPPED'
