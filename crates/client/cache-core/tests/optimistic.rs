@@ -274,11 +274,11 @@ impl Storage for ClaimFailingStorage {
         if self.fail_next_put.swap(false, Ordering::Relaxed) {
             return Err(std::io::Error::other("injected record write failure"));
         }
-        Ok(self
-            .inner
+        self.inner
             .put_channel_records(entries, projections, channel)
             .await
-            .unwrap())
+            .unwrap();
+        Ok(())
     }
 
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
