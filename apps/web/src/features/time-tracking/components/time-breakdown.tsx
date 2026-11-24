@@ -98,63 +98,77 @@ function BreakdownGroup(props: {
   const taskId = () =>
     props.group.key.by === 'TASK' ? props.group.key.taskId : null;
   return (
-    <li>
-      <div class="flex items-center gap-1">
-        <button
-          type="button"
-          aria-expanded={props.open}
-          data-press-surface
-          class="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left text-sm not-touch:hover:bg-hover touch:min-h-[44px]"
-          onClick={() => props.onToggle()}
-        >
-          <CaretRightIcon
-            class={cn(
-              'size-3.5 shrink-0 text-ink-muted transition-transform motion-reduce:transition-none',
-              props.open && 'rotate-90'
-            )}
-          />
+    <Show
+      when={props.group.minutes > 0 || props.group.rows.length > 0}
+      fallback={
+        <li class="flex min-h-10 items-center gap-2 px-2 py-1 text-sm touch:min-h-[44px]">
+          <span class="size-3.5 shrink-0" aria-hidden="true" />
           <span class="flex min-w-0 flex-1 items-center gap-2 font-medium">
             <TimeKeyLabel timeKey={props.group.key} person={props.person} />
           </span>
-          <Show when={props.group.key.by !== 'TASK'}>
-            <span class="shrink-0 text-xs text-ink-muted">
-              {t('timeTracking.taskCount', { count: props.group.taskCount })}
+          <span class="shrink-0 tabular-nums text-ink-extra-muted">–</span>
+        </li>
+      }
+    >
+      <li>
+        <div class="flex items-center gap-1">
+          <button
+            type="button"
+            aria-expanded={props.open}
+            data-press-surface
+            class="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left text-sm not-touch:hover:bg-hover touch:min-h-[44px]"
+            onClick={() => props.onToggle()}
+          >
+            <CaretRightIcon
+              class={cn(
+                'size-3.5 shrink-0 text-ink-muted transition-transform motion-reduce:transition-none',
+                props.open && 'rotate-90'
+              )}
+            />
+            <span class="flex min-w-0 flex-1 items-center gap-2 font-medium">
+              <TimeKeyLabel timeKey={props.group.key} person={props.person} />
             </span>
-          </Show>
-          <Length minutes={props.group.minutes} />
-        </button>
-        <Show when={taskId()}>
-          {(id) => (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={t('timeTracking.openTaskNamed', {
-                task:
-                  props.group.key.task?.name || t('timeTracking.untitledTask'),
-              })}
-              tooltip={t('timeTracking.openTask')}
-              onClick={(event) => props.onOpenTask(id(), { event })}
-            >
-              <ArrowSquareOutIcon class="size-3.5" />
-            </Button>
-          )}
-        </Show>
-      </div>
-      <Show when={props.open}>
-        <ul>
-          <For each={props.group.rows}>
-            {(total) => (
-              <BreakdownRow
-                total={total}
-                person={props.person}
-                onOpenTask={props.onOpenTask}
-                reserveAction={props.group.key.by === 'TASK'}
-              />
+            <Show when={props.group.key.by !== 'TASK'}>
+              <span class="shrink-0 text-xs text-ink-muted">
+                {t('timeTracking.taskCount', { count: props.group.taskCount })}
+              </span>
+            </Show>
+            <Length minutes={props.group.minutes} />
+          </button>
+          <Show when={taskId()}>
+            {(id) => (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t('timeTracking.openTaskNamed', {
+                  task:
+                    props.group.key.task?.name ||
+                    t('timeTracking.untitledTask'),
+                })}
+                tooltip={t('timeTracking.openTask')}
+                onClick={(event) => props.onOpenTask(id(), { event })}
+              >
+                <ArrowSquareOutIcon class="size-3.5" />
+              </Button>
             )}
-          </For>
-        </ul>
-      </Show>
-    </li>
+          </Show>
+        </div>
+        <Show when={props.open}>
+          <ul>
+            <For each={props.group.rows}>
+              {(total) => (
+                <BreakdownRow
+                  total={total}
+                  person={props.person}
+                  onOpenTask={props.onOpenTask}
+                  reserveAction={props.group.key.by === 'TASK'}
+                />
+              )}
+            </For>
+          </ul>
+        </Show>
+      </li>
+    </Show>
   );
 }
 
