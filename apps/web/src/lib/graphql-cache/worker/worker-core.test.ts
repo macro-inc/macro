@@ -2299,7 +2299,6 @@ describe('CacheWorkerCore', () => {
       id: 3,
       ok: false,
       error: 'cache engine is draining',
-      errorCode: 'owner-epoch-lost',
     });
     expect(close).not.toHaveBeenCalled();
 

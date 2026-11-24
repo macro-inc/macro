@@ -30,7 +30,6 @@ import type {
 import {
   isTypedSearch,
   isTypedSearchRowRead,
-  OWNER_EPOCH_LOST_ERROR_CODE,
   parseCacheRevision,
   parseStorageGeneration,
 } from '../protocol';
@@ -336,7 +335,6 @@ export class CacheWorkerCore {
         id: request.id,
         ok: false,
         error: 'cache engine is draining',
-        errorCode: OWNER_EPOCH_LOST_ERROR_CODE,
       });
       return;
     }
