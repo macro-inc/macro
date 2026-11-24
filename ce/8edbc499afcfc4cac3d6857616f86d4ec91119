@@ -1,0 +1,22 @@
+crates/fusion_import/AGENTS.md
+  s_8c8123a52748fa::t_527039ab418e83 18-20
+crates/fusion_import/src/domain/service.rs
+  s_8c8123a52748fa::t_527039ab418e83 5-6
+  s_8c8123a52748fa::t_9358f43529f565 15,50-56,59-83,263,267,338,409,440,469,691,798
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ce8edbc499afcfc4cac3d6857616f86d4ec91119",
+  "prompts": {},
+  "sessions": {
+    "s_8c8123a52748fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e3ebe64b-e3f3-41de-91c9-1dffbc9d884d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
