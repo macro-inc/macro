@@ -500,9 +500,9 @@ async fn refusals_carry_their_rest_status_class() {
 #[tokio::test]
 async fn an_infrastructure_failure_hides_its_cause() {
     let (_, errors) = run(
-        FakeWriter::refusing(PropertiesErr::Repo(anyhow::anyhow!(
-            "connection to 10.0.0.1 refused"
-        ))),
+        FakeWriter::refusing(PropertiesErr::Repo(
+            rootcause::report!("connection to 10.0.0.1 refused").into(),
+        )),
         r#"mutation { ensureTagSet(scope: TEAM) { scope } }"#,
     )
     .await;

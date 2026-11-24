@@ -5,7 +5,6 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-anyhow = { workspace = true }
 futures = { workspace = true }
 async-graphql = { workspace = true, features = ["dataloader"] }
 chrono = { workspace = true }
