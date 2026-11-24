@@ -122,8 +122,10 @@ async fn a_new_import_reads_its_inbox_then_sent_before_folders_listed_ahead_of_t
         &discovery,
         &[
             folder("archive", FolderRole::Archive),
+            folder("conversation history", FolderRole::Other),
             folder("deleted", FolderRole::Trash),
             folder("inbox", FolderRole::Inbox),
+            folder("junk", FolderRole::Junk),
             folder("projects", FolderRole::Other),
             folder("sent", FolderRole::Sent),
         ],
@@ -132,8 +134,21 @@ async fn a_new_import_reads_its_inbox_then_sent_before_folders_listed_ahead_of_t
     .unwrap();
 
     let mut order = Vec::new();
-    for _ in 0..5 {
+    for _ in 0..7 {
         order.push(claim(&repo).await.folder.as_str().to_owned());
     }
-    assert_eq!(order, ["inbox", "sent", "archive", "deleted", "projects"]);
+    assert_eq!(order[..2], ["inbox", "sent"], "{order:?}");
+    // The rest are due together; ids made in the same millisecond order them.
+    let mut rest = order[2..].to_vec();
+    rest.sort();
+    assert_eq!(
+        rest,
+        [
+            "archive",
+            "conversation history",
+            "deleted",
+            "junk",
+            "projects"
+        ]
+    );
 }
