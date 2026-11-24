@@ -115,6 +115,8 @@ import {
 } from './mutation-queue-telemetry';
 import type { QueryRevalidation } from './optimistic';
 import {
+  CachePausedError,
+  holdsWhilePaused,
   normalizedEntityKey,
   notifyOptimisticMutationEnqueued,
   optimisticContextOf,
@@ -448,6 +450,7 @@ function storageChangedDuringEnqueue(cause?: unknown): Error {
   );
 }
 
+/** A mutation's answer when it did not reach the queue, or might not have. */
 function uncertainEnqueueResult(op: Operation, error: Error): OperationResult {
   return {
     operation: op,
@@ -1232,7 +1235,10 @@ export function normalizedCacheExchange(
         op: Operation
       ): Promise<OperationResult | undefined> {
         const epoch = mutationQueue.epoch();
+        // Straight out, a mutation would overtake the ones the queue keeps.
+        const held = () => Boolean(host.paused) && holdsWhilePaused(op);
         if (host.disabled) {
+          if (held()) return uncertainEnqueueResult(op, new CachePausedError());
           notifyOptimisticMutationEnqueued(op);
           enqueueForward(op);
           return undefined;
@@ -1294,6 +1300,11 @@ export function normalizedCacheExchange(
           // an engine. Send it as a disabled cache would.
           if (isOwnerLockUnavailableError(error)) {
             enqueueTelemetry.failed('owner-lock');
+            if (held())
+              return uncertainEnqueueResult(
+                op,
+                new CachePausedError({ cause: error })
+              );
             enqueueForward(op);
             return undefined;
           }
@@ -1303,6 +1314,11 @@ export function normalizedCacheExchange(
           if (args.linkPatches.length === 0) {
             enqueueTelemetry.failed('rejected');
             options.onCacheError?.(error, op);
+            if (held())
+              return uncertainEnqueueResult(
+                op,
+                new CachePausedError({ cause: error })
+              );
             enqueueForward(op);
             return undefined;
           }
@@ -1353,6 +1369,11 @@ export function normalizedCacheExchange(
               return uncertainEnqueueResult(op, fallbackError);
             }
             enqueueTelemetry.failed('rejected');
+            if (held())
+              return uncertainEnqueueResult(
+                op,
+                new CachePausedError({ cause: fallbackError })
+              );
             enqueueForward(op);
             return undefined;
           }

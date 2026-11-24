@@ -1,4 +1,4 @@
-import { thrownResultErrorHasCode } from '@core/util/result';
+import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import { ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE } from '@graphql-cache/protocol';
 import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { CombinedError } from '@urql/core';
@@ -51,6 +51,16 @@ const failure = async (write: Promise<unknown>): Promise<unknown> => {
     return error;
   }
 };
+
+const edited = (id: string) => ({
+  channelId: CHANNEL_ID,
+  id,
+  content: 'edited',
+  mentions: [],
+  removeAttachmentIds: [],
+  addAttachments: [],
+  nonce: 'n',
+});
 
 // A test that times out under fake timers would leave them on for the next.
 afterEach(() => {
@@ -589,18 +599,33 @@ describe('createChannelWrites', () => {
     await expect(sending).resolves.toEqual(mapChannelMessage(stored));
   });
 
-  it('rejects a held write when the device cache is reset and its queue cannot be read', async () => {
+  it('rejects a held edit when the device cache is reset and its queue cannot be read', async () => {
     const { writes, reset, queue, listeners } = setup(() => ({
       disposition: { kind: 'queued', transactionId: '4' },
     }));
-    const sending = writes.send(send(graphqlMessage(7).id));
+    const editing = writes.edit(edited(graphqlMessage(7).id));
     await settleMicrotasks();
     queue.unreadable = true;
     reset();
-    const error = await sending.catch((thrown: unknown) => thrown);
+    const error = await failure(editing);
     expect(thrownResultErrorHasCode(error, 'CACHE_RESET')).toBe(true);
     expect(listeners.size).toBe(0);
     expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
+  });
+
+  it('calls a held send unknown when the device cache is reset and its queue cannot be read', async () => {
+    // The device's copy can be the queue's own optimistic record.
+    const row = graphqlMessage(7);
+    const { writes, reset, queue } = setup(
+      () => ({ disposition: { kind: 'queued', transactionId: '4' } }),
+      [row]
+    );
+    const sending = writes.send(send(row.id));
+    await settleMicrotasks();
+    queue.unreadable = true;
+    reset();
+    const error = await failure(sending);
+    expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
   });
 
   it('calls a send a reset emptied from the queue that the server lacks unknown', async () => {
@@ -1141,17 +1166,29 @@ describe('createChannelWrites', () => {
     expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
   });
 
-  it('rejects a held write when its host retires', async () => {
+  it('rejects a held edit when its host retires', async () => {
     const { writes, listeners } = setup(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    const editing = writes.edit(edited(graphqlMessage(7).id));
+    await settleMicrotasks();
+    writes.retire();
+    const error = await failure(editing);
+    expect(thrownResultErrorHasCode(error, 'CACHE_RETIRED')).toBe(true);
+    expect(listeners.size).toBe(0);
+    expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
+  });
+
+  it('calls a held send unknown when its host retires', async () => {
+    // The queue keeps the send, and can still deliver it.
+    const { writes } = setup(() => ({
       disposition: { kind: 'queued', transactionId: '4' },
     }));
     const sending = writes.send(send(graphqlMessage(7).id));
     await settleMicrotasks();
     writes.retire();
-    const error = await sending.catch((thrown: unknown) => thrown);
-    expect(thrownResultErrorHasCode(error, 'CACHE_RETIRED')).toBe(true);
-    expect(listeners.size).toBe(0);
-    expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
+    const error = await failure(sending);
+    expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
   });
 
   it('rejects a held write the server later refuses, with its code', async () => {
@@ -1232,19 +1269,68 @@ describe('createChannelWrites', () => {
         () => ({ error: uncertain() }),
         [graphqlMessage(7)]
       );
-      const error = await failure(
-        writes.edit({
-          channelId: CHANNEL_ID,
-          id: graphqlMessage(7).id,
-          content: 'edited',
-          mentions: [],
-          removeAttachmentIds: [],
-          addAttachments: [],
-          nonce: 'n',
-        })
-      );
+      const error = await failure(writes.edit(edited(graphqlMessage(7).id)));
       expect(thrownResultErrorHasCode(error, 'NOT_APPLIED')).toBe(true);
     });
+
+    it('calls a send the queue holds unknown once a reset hides the queue', async () => {
+      const row = graphqlMessage(7);
+      const { writes, queued, queue, reset } = setup(() => ({
+        error: uncertain(),
+      }));
+      queued.push({ transactionId: '4', uuid: row.id });
+      const sending = writes.send(send(row.id));
+      await settleMicrotasks();
+      queue.unreadable = true;
+      reset();
+      const error = await failure(sending);
+      expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
+    });
+  });
+
+  it('answers a send the server committed but could not read back from the server', async () => {
+    const row = graphqlMessage(7);
+    const { writes, fetched } = setup(
+      () => ({ error: refused('SERVICE_UNAVAILABLE') }),
+      [],
+      [row]
+    );
+    await expect(writes.send(send(row.id))).resolves.toEqual(
+      mapChannelMessage(row)
+    );
+    expect(fetched).toEqual([row.id]);
+  });
+
+  it('answers a send the device could not store once the server had it from the server', async () => {
+    const row = graphqlMessage(7);
+    const { writes, fetched } = setup(
+      () => ({
+        disposition: { kind: 'permanently-failed', transactionId: '4' },
+        error: new CombinedError({
+          networkError: new Error('local commit failed'),
+        }),
+      }),
+      [],
+      [row]
+    );
+    await expect(writes.send(send(row.id))).resolves.toEqual(
+      mapChannelMessage(row)
+    );
+    expect(fetched).toEqual([row.id]);
+  });
+
+  it('rejects a send the cache dropped before any queue got it', async () => {
+    const { writes, fetched } = setup(() => ({
+      error: new CombinedError({
+        networkError: Object.assign(new Error('no owner took the write'), {
+          errorCode: 'write-not-admitted',
+        }),
+      }),
+    }));
+    const error = await failure(writes.send(send(graphqlMessage(7).id)));
+    expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(false);
+    expect(error).toBeInstanceOf(ThrownResultError);
+    expect(fetched).toEqual([]);
   });
 
   it('calls a send unknown when the server’s direct answer was lost', async () => {

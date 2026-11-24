@@ -1,7 +1,10 @@
 import type { CacheHost } from '@graphql-cache/index';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { ChannelChangesDocument } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  graphqlCacheEnabled,
+} from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import { channelCacheHost } from './channel-flag';
 import { queryChannelNetwork } from './channel-network';
@@ -95,6 +98,7 @@ export function channelWrites(host: CacheHost): ChannelWrites {
     host,
     runtime: channelSyncRuntime(host),
     client: getGraphqlSoupClient,
+    serving: graphqlCacheEnabled,
   });
   writes.set(host, created);
   return created;

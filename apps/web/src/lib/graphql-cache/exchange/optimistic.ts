@@ -39,6 +39,8 @@ import { selectRecords } from './record-selection';
 const OPTIMISTIC_MUTATION_CONTEXT_KEY = 'normalizedCacheOptimistic';
 // Page-local acknowledgement; deliberately excluded from durable queue data.
 const OPTIMISTIC_ENQUEUED_CONTEXT_KEY = 'normalizedCacheOptimisticEnqueued';
+/** Private operation-context field of a mutation that waits out an outage. */
+const HOLD_WHILE_PAUSED_CONTEXT_KEY = 'normalizedCacheHoldWhilePaused';
 /** Private result-extension field carrying the queue disposition. */
 const OPTIMISTIC_MUTATION_DISPOSITION_KEY =
   'normalizedCacheMutationDisposition';
@@ -130,6 +132,12 @@ export type OptimisticMutationOptions = {
   identityBindings?: readonly IdentityBindingWire[];
   /** Runs after durable layer installation, independently of HTTP settlement. */
   onEnqueued?: () => void;
+  /**
+   * While the cache's database is away (`host.paused`), answers with a
+   * `CachePausedError` instead of sending the mutation past its queue: the
+   * caller keeps it and hands it over again.
+   */
+  holdWhilePaused?: boolean;
   updates?: readonly OptimisticUpdate[];
   /** Relevant queries that cannot safely be updated still revalidate on success. */
   revalidations?: readonly QueryRevalidation[];
@@ -590,7 +598,22 @@ export function optimisticMutationContext<TData>(
     ...(options.onEnqueued
       ? { [OPTIMISTIC_ENQUEUED_CONTEXT_KEY]: options.onEnqueued }
       : {}),
+    ...(options.holdWhilePaused
+      ? { [HOLD_WHILE_PAUSED_CONTEXT_KEY]: true }
+      : {}),
   };
+}
+
+/** Whether a mutation's caller keeps it while the cache's database is away. */
+export const holdsWhilePaused = (op: Operation): boolean =>
+  op.context[HOLD_WHILE_PAUSED_CONTEXT_KEY] === true;
+
+/** A held mutation's answer: no queue and no server got it. */
+export class CachePausedError extends Error {
+  constructor(options?: ErrorOptions) {
+    super('the local cache is away for now', options);
+    this.name = 'CachePausedError';
+  }
 }
 
 /** Acknowledge installation without allowing caller code to interrupt queue routing. */

@@ -1,4 +1,5 @@
 import {
+  notifyOptimisticMutationEnqueued,
   type OptimisticMutationContext,
   optimisticContextOf,
   withOptimisticMutationDisposition,
@@ -35,10 +36,11 @@ export type Call = {
 
 /**
  * A client that answers each mutation from `answer`, records the call and
- * acknowledges the queue installing it.
+ * acknowledges the queue installing it, once `installed` settles.
  */
 export function fakeClient(
-  answer: (variables: unknown) => Answer | Promise<Answer>
+  answer: (variables: unknown) => Answer | Promise<Answer>,
+  installed: () => Promise<void> | undefined = () => undefined
 ) {
   const calls: Call[] = [];
   const client = {
@@ -49,6 +51,9 @@ export function fakeClient(
       calls.push({ variables, context: optimistic });
       return {
         toPromise: async () => {
+          const installing = installed();
+          if (installing) await installing;
+          notifyOptimisticMutationEnqueued(operation);
           const { disposition, ...result } = await answer(variables);
           const base = {
             operation,
@@ -75,9 +80,16 @@ export function writeHost(records: ChannelMessageFieldsFragment[] = []) {
   // bare id is the last write handed over, an entry names its own mutation.
   const queued: (string | { transactionId: string; uuid: string })[] = [];
   // Set to make the queue unreadable, as an engine that did not come back;
-  // `failures` fails only that many reads.
-  const queue = { unreadable: false, failures: 0, lastUuid: '' };
-  const availability = { paused: false };
+  // `failures` fails only that many reads. `installing` holds the queue's
+  // acknowledgement of the writes handed over meanwhile.
+  const queue = {
+    unreadable: false,
+    failures: 0,
+    lastUuid: '',
+    installing: undefined as Promise<void> | undefined,
+  };
+  // `serving` is false from an outage until the queue has been read again.
+  const availability = { paused: false, serving: true };
   const host: ChannelWriteHost = {
     get paused() {
       return availability.paused;
@@ -139,10 +151,13 @@ export function setup(
   server: ChannelMessageFieldsFragment[] = []
 ) {
   const device = writeHost(records);
-  const { client, calls } = fakeClient((variables) => {
-    device.queue.lastUuid = calls.at(-1)?.context.uuid ?? '';
-    return answer(variables);
-  });
+  const { client, calls } = fakeClient(
+    (variables) => {
+      device.queue.lastUuid = calls.at(-1)?.context.uuid ?? '';
+      return answer(variables);
+    },
+    () => device.queue.installing
+  );
   const runtime = { notifyChanged: vi.fn() };
   const fetched: string[] = [];
   const writes = createChannelWrites({
@@ -150,6 +165,7 @@ export function setup(
     runtime,
     client: () => client,
     now: () => NOW,
+    serving: () => device.availability.serving,
     async fetchMessage(_channelId, messageId) {
       fetched.push(messageId);
       return server.find((message) => message.id === messageId) ?? null;
@@ -158,9 +174,11 @@ export function setup(
   /** The cache's database is away for now. */
   const startOutage = () => {
     device.availability.paused = true;
+    device.availability.serving = false;
   };
   const endOutage = () => {
     device.availability.paused = false;
+    device.availability.serving = true;
     writes.resumed();
   };
   return { writes, calls, runtime, fetched, startOutage, endOutage, ...device };
