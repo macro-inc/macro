@@ -812,6 +812,13 @@ pub async fn build(
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),
         ),
+        fusion_tool_context: ai_tools::build_fusion_tool_context(
+            db.clone(),
+            Some(composed),
+            &document_tool_context,
+            config.environment,
+            side_effect_clients.feature_flags.clone(),
+        ),
         chat_tool_context,
         channel_tool_context,
         channel_media_upload_tool_context: ai_tools::build_channel_media_upload_tool_context()?,
@@ -991,8 +998,8 @@ pub async fn build(
     })
 }
 
-/// The apps Macro imports from, and what each import reads: Linear, Jira and
-/// Notion through the app's REST API, Slack's channels and the agent-led
+/// The apps Macro imports from, and what each import reads: Linear, Jira,
+/// Notion and Autodesk through the app's REST API, Slack's channels and the agent-led
 /// imports (the web's connector-import catalog) through the app's MCP tools.
 fn importable_apps() -> anyhow::Result<connectors::inbound::dto::Importable> {
     use connectors::ConnectorId;
@@ -1003,6 +1010,7 @@ fn importable_apps() -> anyhow::Result<connectors::inbound::dto::Importable> {
         ("linear", ImportSurface::Api),
         ("jira", ImportSurface::Api),
         ("notion", ImportSurface::Api),
+        ("autodesk", ImportSurface::Api),
         ("slack", ImportSurface::Mcp),
         ("airtable_oauth", ImportSurface::Mcp),
         ("asana", ImportSurface::Mcp),

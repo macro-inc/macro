@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM fusion_item_version\n            WHERE user_id = $1 AND item_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "11934a8b788909e02863e499f49317205203e57bb1b2f7cf9e431b34487eae9e"
+}

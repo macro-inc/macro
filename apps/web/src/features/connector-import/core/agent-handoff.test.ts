@@ -31,7 +31,7 @@ describe('agent import handoff', () => {
     expect(handoff.input).toBe('Import my Fusion designs into Macro.');
     expect(handoff.instructions).toContain('ImportFromFusion');
     expect(handoff.instructions).toContain('browse');
-    expect(handoff.instructions).toContain('sync again while remaining');
+    expect(handoff.instructions).toContain('nextCursor');
     expect(handoff.instructions).toContain('never edit or delete');
     expect(handoff.instructions).not.toContain('CreateDocument');
   });

@@ -109,6 +109,10 @@ pub use tool_context::{
     build_task_properties_adapter, build_team_calendar_tool_context, build_team_repository,
     build_team_tool_context, build_time_tracking_tool_context,
 };
+pub use tool_context::{
+    FusionCadDocuments, FusionDocumentsError, ToolFusionService, ToolFusionToolContext,
+    build_fusion_tool_context,
+};
 pub use tool_context::{ToolConnectorToolContext, build_connector_tool_context};
 #[cfg(any(test, feature = "test-support"))]
 pub use tool_context::{
@@ -302,6 +306,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     };
     let toolset = toolset
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
+        .add_subtoolset::<ToolFusionToolContext>(fusion_import::inbound::toolset::fusion_toolset())
         .add_subtoolset::<ToolCodingAgentToolContext>(coding_agent_toolset());
     // Only Macro's own agents connect servers for the user.
     let toolset = match host {

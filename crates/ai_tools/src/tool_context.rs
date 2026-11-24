@@ -108,6 +108,11 @@ pub use initiatives::{
 
 mod time_entries;
 pub use time_entries::{ToolTimeTrackingToolContext, build_time_tracking_tool_context};
+mod fusion;
+pub use fusion::{
+    FusionCadDocuments, FusionDocumentsError, ToolFusionService, ToolFusionToolContext,
+    build_fusion_tool_context,
+};
 
 use activity_metadata::ToolActivityMetadataResolver;
 pub use ai_toolset::RequestContext;
@@ -2271,6 +2276,8 @@ pub struct ToolServiceContext {
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
     pub import_tool_context: ToolImportToolContext,
+    /// `ImportFromFusion`. `unwired` in hosts without connectors.
+    pub fusion_tool_context: ToolFusionToolContext,
     /// Built per-request via a manual `FromRef` below so it can carry the
     /// running chat's id — the derive's field-clone would freeze it at
     /// startup with no chat id set.

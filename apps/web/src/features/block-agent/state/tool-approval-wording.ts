@@ -87,6 +87,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   GetUserActivity: (whose) => `read activity with ${whose} access`,
   GetThread: (whose) => `read ${whose} email`,
   ImportCompaniesCsv: (whose) => `import companies into ${whose} CRM`,
+  ImportFromFusion: (whose) => `import Fusion designs into ${whose} Drive`,
   ImportFromLinear: (whose) =>
     `import a Linear workspace into ${whose} workspace`,
   ImportFromJira: (whose) => `import a Jira workspace into ${whose} workspace`,

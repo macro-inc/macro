@@ -15,7 +15,7 @@ import {
 /*
  * Renderers for the import-ledger tools the chat agent can call
  * (CreateImportEntity / ImportNotionPage / ImportFromNotion /
- * DeleteImportEntity / ListImportEntities).
+ * ImportFromFusion / DeleteImportEntity / ListImportEntities).
  */
 
 /** Human label for the item a call is about, from its source metadata. */
@@ -172,6 +172,48 @@ export const importFromLinearHandler = createToolRenderer({
 export const importFromJiraHandler = createToolRenderer({
   name: 'ImportFromJira',
   render: (ctx) => <WorkspaceImportTool {...ctx} source="jira" />,
+});
+
+export const importFromFusionHandler = createToolRenderer({
+  name: 'ImportFromFusion',
+  render: (ctx) => {
+    const [isExpanded, setIsExpanded] = createSignal(false);
+    const hasResponse = () => ctx.response !== undefined;
+    const label = () =>
+      match(ctx.tool.data.action)
+        .with('browse', () => 'Browse Autodesk Fusion')
+        .with('import', () => {
+          const count = ctx.tool.data.itemIds?.length ?? 0;
+          return count === 1
+            ? 'Import a Fusion design'
+            : `Import ${count} Fusion designs`;
+        })
+        .with('sync', () => 'Sync Fusion versions')
+        .exhaustive();
+    return (
+      <BaseTool
+        icon={TrayArrowDown}
+        renderContext={ctx.renderContext}
+        type="call"
+        response={
+          hasResponse() && isExpanded() ? (
+            <div class="rounded-md bg-panel px-3 py-2 text-xs text-ink-muted">
+              {ctx.response?.data.message}
+            </div>
+          ) : undefined
+        }
+      >
+        <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
+          <div class="min-w-0 flex-1 truncate">{label()}</div>
+          <Tool.ResultToggle
+            expanded={isExpanded()}
+            onToggle={() => setIsExpanded((expanded) => !expanded)}
+            showToggle={hasResponse()}
+          />
+        </div>
+      </BaseTool>
+    );
+  },
 });
 
 export const deleteImportEntityHandler = createToolRenderer({

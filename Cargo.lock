@@ -1258,6 +1258,7 @@ dependencies = [
  "axum",
  "bot_id",
  "bots",
+ "bytes",
  "calendar_events",
  "calendar_scheduling",
  "call",
@@ -1288,6 +1289,7 @@ dependencies = [
  "foreign_entity",
  "forms",
  "frecency",
+ "fusion_import",
  "github_pull_requests",
  "harnesses",
  "hosted_runtimes",
@@ -1317,6 +1319,7 @@ dependencies = [
  "messages",
  "model",
  "model-entity",
+ "model_file_type",
  "model_owner",
  "model_user",
  "models_databases",
@@ -9069,6 +9072,40 @@ name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
+
+[[package]]
+name = "fusion_import"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "async-trait",
+ "bytes",
+ "chrono",
+ "connectors",
+ "feature_flags",
+ "http 1.4.0",
+ "macro_db_migrator",
+ "macro_env_var",
+ "macro_tower_layers",
+ "macro_user_id",
+ "model_file_type",
+ "nom 8.0.0",
+ "reqwest 0.13.4",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "upstream_error",
+ "url",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+]
 
 [[package]]
 name = "fusionauth"

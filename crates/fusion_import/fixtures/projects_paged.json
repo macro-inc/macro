@@ -1,0 +1,131 @@
+{
+  "jsonapi": {
+    "version": "1.0"
+  },
+  "links": {
+    "self": {
+      "href": "/project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE/projects"
+    },
+    "first": {
+        "href": "project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE/projects?page%5Bnumber%5D=0&page%5Blimit%5D=2"
+    },
+    "prev": {
+        "href": "/project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE/projects?page%5Bnumber%5D=0&page%5Blimit%5D=2"
+    },
+    "next": {
+        "href": "/project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE/projects?page%5Bnumber%5D=2&page%5Blimit%5D=2"
+    }
+  },
+  "data": [
+    {
+      "type": "projects",
+      "id": "a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjEjMjAyMzAzMTcwMDAwMDAx",
+      "attributes": {
+        "name": "my project",
+        "scopes": [
+          "global"
+        ],
+        "extension": {
+          "type": "projects:autodesk.core:Project",
+          "version": "1.0",
+          "schema": {
+            "href": "/schema/v1/versions/projects%3Aautodesk.core%3AProject-1.0"
+          },
+          "data": {
+              "projectType": "ACC"
+          }
+        }
+      },
+      "links": {
+        "self": {
+          "href": "/project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE/projects/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjEjMjAyMzAzMTcwMDAwMDAx"
+        }
+      },
+      "relationships": {
+        "hub": {
+          "data": {
+            "type": "hubs",
+            "id": "a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE"
+          },
+          "links": {
+            "related": {
+              "href": "/project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE"
+            }
+          }
+        },
+        "rootFolder": {
+          "data": {
+            "type": "folders",
+            "id": "urn:adsk.wipprod:dm.folder:hC6k4hndRWaeIVhIjvHu8w"
+          },
+          "meta": {
+            "link": {
+              "href": "/data/v1/projects/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjEjMjAyMzAzMTcwMDAwMDAx/folders/urn%3Aadsk.wipprod%3Adm.folder%3AhC6k4hndRWaeIVhIjvHu8w"
+            }
+          }
+        },
+        "topFolders": {
+          "links": {
+            "related": {
+              "href": "/project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE/projects/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjEjMjAyMzAzMTcwMDAwMDAx/topFolders"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "projects",
+      "id": "a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjEjMjAyMzAzMTcwMDAwMDAx",
+      "attributes": {
+        "name": "my project",
+        "scopes": [
+          "global"
+        ],
+        "extension": {
+          "type": "projects:autodesk.core:Project",
+          "version": "1.0",
+          "schema": {
+            "href": "/schema/v1/versions/projects%3Aautodesk.core%3AProject-1.0"
+          },
+          "data": {}
+        }
+      },
+      "links": {
+        "self": {
+          "href": "/project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE/projects/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjEjMjAyMzAzMTcwMDAwMDAx"
+        }
+      },
+      "relationships": {
+        "hub": {
+          "data": {
+            "type": "hubs",
+            "id": "a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE"
+          },
+          "links": {
+            "related": {
+              "href": "/project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE"
+            }
+          }
+        },
+        "rootFolder": {
+          "data": {
+            "type": "folders",
+            "id": "urn:adsk.wipprod:dm.folder:hC6k4hndRWaeIVhIjvHu8w"
+          },
+          "meta": {
+            "link": {
+              "href": "/data/v1/projects/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjEjMjAyMzAzMTcwMDAwMDAx/folders/urn%3Aadsk.wipprod%3Adm.folder%3AhC6k4hndRWaeIVhIjvHu8w"
+            }
+          }
+        },
+        "topFolders": {
+          "links": {
+            "related": {
+              "href": "/project/v1/hubs/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjE/projects/a.ZXhhbXBsZTp3aXAxZnFhYXV0b2Rlc2sxNjEjMjAyMzAzMTcwMDAwMDAx/topFolders"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

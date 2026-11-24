@@ -66,7 +66,7 @@ const FUSION_HANDOFF: AgentImportHandoff = {
   instructions: [
     "The user started this from Macro's import dialog and has just connected Autodesk.",
     'Use ImportFromFusion: browse to show their hubs, projects and folders, and ask which designs to bring over.',
-    'Import the ones they pick, then call sync again while remaining is above 0.',
+    'Import the ones they pick, then keep calling sync as each report says (with its nextCursor, or the same itemIds while remaining is above 0) until nothing is left.',
     'Never recreate Fusion files with other tools, and never edit or delete anything in Autodesk.',
   ].join(' '),
 };
