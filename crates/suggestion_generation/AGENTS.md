@@ -19,7 +19,18 @@ scheduling runtime.
   routines session for every surface at once (`SessionLayout`: a session that
   sees every surface picks the few routines the mail calls for, where split
   sessions each filled their own), each kind only when its flag is
-  on (`enable-suggestions`, `enable-routine-suggestions`).
+  on (`enable-suggestions`, `enable-routine-suggestions`). An onboarding
+  with `routine-suggestions-find-work` on runs routines sessions for every
+  surface split by part instead: one that picks catalog routines starts at
+  once, while `RoutineSuggestionApi::find_work` reads the person's month of
+  mail (`routine.find_work` span, at most `FIND_WORK_TIMEOUT`). When the
+  work is found, up to `MAX_DRAFT_SESSIONS` draft, each from its share of
+  the first `MAX_DRAFTED_STREAMS` streams (`WorkList::shares`, dealt in
+  turn), the first as the session the finding call's usage was recorded
+  with: one session drafting for every stream outlasted the 240-second
+  limit. When it can't be found, one drafts from the newest mail alone. Each
+  is retried once on its own when it suggested nothing, a drafting one from
+  the same share.
 - Each session is hidden, the person's, non-billable, and may call its kind's
   tools while its `suggestion_generation_session` row is open. Its brief comes
   from the kind's crate (`SuggestionApi::brief`, `RoutineSuggestionApi::brief`),
@@ -67,6 +78,14 @@ scheduling runtime.
   it): every service refuses their requests other than reads, their own tools
   and email drafts, and the native tool gate their non-code tools. A new
   session tool route goes on the scope's list.
+- A routines session whose brief carries the list of work found
+  (`BriefPart::carries_work_list`) is prompted with
+  `PromptRoutineSession::withhold_content`: its turns record no content on
+  traces (the harness's session projector drops to the disabled policy for
+  the connection, and the in-process runtime runs the turn inside
+  `genai_telemetry::withhold_content`, which its internal MCP tools and
+  code-mode runs carry). The list lives only in those sessions, until they
+  are deleted.
 - Traces: an onboarding or manual generation is a child of the request that
   started it; a nightly one is its own root span linked to the tick. Its trace
   id is kept on `suggestion_generation.trace_id` and recorded as
@@ -83,7 +102,8 @@ scheduling runtime.
 
 - Generation (`generation.rs`): `generating` → `ready` (every session
   finished) | `partial` (some finished, or something changed) | `failed`
-  (nothing) | `cancelled` (its process stopped it before any finished) |
+  (nothing) | `cancelled` (its process stopped it before any finished, or,
+  in an onboarding that finds the work, cut a routines session short) |
   `interrupted` (heartbeat lost). All but `generating` are final; `cancelled`
   and `interrupted` are retryable. `admit` decides a start from whether one
   runs and the latest of the same trigger: each trigger has its own window

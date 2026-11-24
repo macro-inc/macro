@@ -95,6 +95,11 @@ pub struct PromptRoutineSession {
     /// What made the routine fire, rendered ahead of the prompt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<trigger_context::TriggerContext>,
+    /// Record none of this prompt's turn on traces (see
+    /// [`agent_runtime_protocol::domain::action::AgentPromptAction::withhold_content`]):
+    /// for a prompt that carries what must not be kept outside the session.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub withhold_content: bool,
 }
 
 /// Prompt admission is not completion.

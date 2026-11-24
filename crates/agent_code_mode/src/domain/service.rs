@@ -531,7 +531,11 @@ impl SessionCodeMode for CodeModeService {
         // Finish the journal even when the MCP request future is dropped. The drop
         // guard cancels the runner; its final cleanup then persists the outcome.
         let session_id = session.id;
-        tokio::spawn(
+        // A turn whose content stays off traces keeps it off in the
+        // execution, which runs on a task of its own.
+        let withheld = genai_telemetry::content_withheld();
+        tokio::spawn(genai_telemetry::withhold_content_if(
+            withheld,
             async move {
                 let _permit = permit;
                 let mut result = service.run(identity, execution, request, cancel).await;
@@ -559,7 +563,7 @@ impl SessionCodeMode for CodeModeService {
                 result
             }
             .instrument(span.or_current()),
-        )
+        ))
         .await
         .map_err(CodeModeError::Task)?
     }

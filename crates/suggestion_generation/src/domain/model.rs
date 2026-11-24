@@ -31,6 +31,15 @@ pub struct SessionLayout {
 /// Most routines sessions one generation runs at once.
 pub const MAX_ROUTINE_SESSIONS: usize = 3;
 
+/// Most sessions that draft from the work found in a person's mail at
+/// onboarding, each from its share of the streams: one session drafting
+/// for every stream outlasts the onboarding timeout.
+pub const MAX_DRAFT_SESSIONS: usize = 3;
+
+/// Most streams of the work found that are drafted for, the first listed
+/// first.
+pub const MAX_DRAFTED_STREAMS: usize = 12;
+
 /// Every surface routine suggestions show on.
 pub const ALL_SURFACES: [Surface; 9] = [
     Surface::Email,
