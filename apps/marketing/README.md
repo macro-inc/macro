@@ -362,7 +362,7 @@ meta-ads repository's tutorial sets, taken at about 1000×600 in dark mode at 2x
 and stored as WebP in `src/features/marketing/assets/screens/`. Register each
 capture in `core/feature-screens.ts` with its alt text and an optional `focus`
 rectangle (capture pixels) that `FeatureScreenshot` outlines in the app accent.
-The screen sits on a flat, borderless stage with a 50% opaque `#101010` background.
+On feature pages with their own hero palette, the screen sits on a toned `TutorialWallpaper` stage (varied per section with a subtle dark atmospheric scrim and grain); pages without a dedicated feature palette keep the flat 50% `#101010` stage.
 On phones the canvas is up to 640px wide, sized so the focus fits, and scrolls sideways starting on it.
 When the focus is too wide for that (about 580 capture pixels or more), add a
 `narrow` frame: the same scene captured at 400×700, where the app uses its narrow

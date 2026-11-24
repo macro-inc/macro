@@ -4,15 +4,32 @@ import type {
   FeatureScreenFrame,
   PhoneScreen,
 } from '../core/feature-screens';
+import type { TutorialVideoId } from '../core/tutorial-videos';
+import { TutorialWallpaper } from './TutorialWallpaper';
 import './feature-screenshot.css';
 
-/** A real Macro app screen on a dark stage, outlined where the section's point is. */
-export function FeatureScreenshot(props: { screen: FeatureScreen }) {
+/** A real Macro app screen on a dark or feature-themed stage, outlined where the section's point is. */
+export function FeatureScreenshot(props: {
+  screen: FeatureScreen;
+  wallpaper?: TutorialVideoId;
+  variant?: number;
+}) {
   return (
     <figure
       class="feature-screenshot"
+      classList={{ 'feature-screenshot--wallpaper': Boolean(props.wallpaper) }}
       data-narrow={props.screen.narrow ? '' : undefined}
+      data-wallpaper-variant={
+        props.wallpaper ? (props.variant ?? 0) % 4 : undefined
+      }
     >
+      <Show when={props.wallpaper}>
+        {(wallpaper) => (
+          <div class="feature-screenshot-backdrop" aria-hidden="true">
+            <TutorialWallpaper tutorial={wallpaper()} />
+          </div>
+        )}
+      </Show>
       <div class="feature-screenshot-frame">
         <ScreenCanvas
           frame={props.screen}
