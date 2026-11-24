@@ -180,7 +180,9 @@ use crate::api::search::terms::{
 /// Per-request cap on whitespace-delimited search terms. Each term expands
 /// into its own `has_child` clause and is embedded in every clause's highlight
 /// query, so query-build cost is quadratic in the term count across the
-/// join-shape indices — an unbounded paste can OOM the service.
+/// join-shape indices — an unbounded paste can OOM the service. It also keeps
+/// an email search under the clauses OpenSearch accepts, so it counts the
+/// email text conditions the request sends with the ones typed.
 const MAX_SEARCH_TERMS: usize = 50;
 
 /// Per-term character cap. Body size also scales with summed term length; real
@@ -214,6 +216,9 @@ fn limited_terms(
     }
     let (terms, mut email_query) =
         apply_email_operators(filters, include_crm, terms, match_type, clock);
+    if terms.len() + filters.email_filters.text_matches.len() > MAX_SEARCH_TERMS {
+        return Err(SearchError::TooManyTerms);
+    }
     let terms = enforce_term_limits(terms)?;
     truncate_text_matches(&mut filters.email_filters);
     if let Some(query) = &mut email_query {

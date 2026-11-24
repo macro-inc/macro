@@ -1578,6 +1578,28 @@ fn a_long_label_name_is_matched_whole_while_words_are_cut() {
 }
 
 #[test]
+fn the_requests_own_text_conditions_count_toward_the_term_cap() {
+    let with_conditions = |count: usize| {
+        let mut filters = every_kind();
+        filters.email_filters.text_matches = (0..count)
+            .map(|i| item_filters::EmailTextMatch {
+                part: item_filters::EmailTextPart::Subject,
+                text: format!("t{i}"),
+                exclude: false,
+            })
+            .collect();
+        let terms = vec!["menu".to_string(), "from:ana".to_string()];
+        limited_terms(&mut filters, false, terms, MatchType::Partial, clock())
+    };
+
+    assert!(with_conditions(MAX_SEARCH_TERMS - 2).is_ok());
+    assert!(matches!(
+        with_conditions(MAX_SEARCH_TERMS - 1),
+        Err(SearchError::TooManyTerms)
+    ));
+}
+
+#[test]
 fn operators_count_toward_the_term_cap() {
     let terms: Vec<String> = (0..=MAX_SEARCH_TERMS)
         .map(|i| format!("subject:t{i}"))
