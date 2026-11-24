@@ -675,7 +675,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
 **Phase 3 — hosts + JS glue** *(done)*
 - ~~`cache-wasm`~~: wasm-bindgen shell (async-mutex engine, string op-id
   interning `"{clientId}:{urqlKey}"`), browser-verified via
-  wasm-bindgen-test. Build: `just build-cache-wasm` →
+  wasm-bindgen-test. Build: `just apps/web/build-wasm cache-wasm` →
   `src/lib/graphql-cache/wasm/` (gitignored), ~460 KiB pre-gzip.
 - ~~JS glue~~ (`apps/web/src/lib/graphql-cache/`, alias `@graphql-cache/*`):
   wire protocol (`protocol.ts`), `CacheWorkerCore` + SharedWorker entry,

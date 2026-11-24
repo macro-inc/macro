@@ -1,0 +1,144 @@
+{
+  "modules": [
+    {
+      "name": "cache-wasm",
+      "package": "cache-wasm",
+      "crateDir": "crates/client/cache-wasm",
+      "outDir": "src/lib/graphql-cache/wasm",
+      "outName": "cache_wasm",
+      "profile": "release",
+      "defaultFeatures": true,
+      "features": [],
+      "rustflags": [],
+      "extraWatch": [],
+      "thread": "worker",
+      "variants": {
+        "browser-test-hooks": {
+          "outDir": "src/lib/graphql-cache/wasm-browser-test",
+          "outName": "cache_wasm_browser_test_hooks",
+          "features": ["browser-test-hooks"]
+        },
+        "profiling": {
+          "profile": "cache-wasm-profiling"
+        }
+      }
+    },
+    {
+      "name": "agent-fold",
+      "package": "agent_fold",
+      "crateDir": "crates/folds/agent_fold",
+      "outDir": "src/lib/core/agent-fold/wasm",
+      "outName": "agent_fold",
+      "profile": "release",
+      "defaultFeatures": false,
+      "features": [],
+      "rustflags": [],
+      "extraWatch": [],
+      "thread": "worker"
+    },
+    {
+      "name": "database-sql",
+      "package": "database_sql",
+      "crateDir": "crates/database_sql",
+      "outDir": "src/lib/core/database-sql/wasm",
+      "outName": "database_sql",
+      "profile": "release",
+      "defaultFeatures": true,
+      "features": [],
+      "rustflags": [],
+      "extraWatch": [],
+      "thread": "main"
+    },
+    {
+      "name": "natural-time",
+      "package": "natural_time",
+      "crateDir": "crates/natural_time",
+      "outDir": "src/lib/core/natural-time/wasm",
+      "outName": "natural_time",
+      "profile": "release",
+      "defaultFeatures": true,
+      "features": [],
+      "rustflags": [],
+      "extraWatch": [],
+      "thread": "main"
+    },
+    {
+      "name": "pptx-engine",
+      "package": "pptx_engine",
+      "crateDir": "crates/pptx_engine",
+      "outDir": "src/lib/core/pptx-engine/wasm",
+      "outName": "pptx_engine",
+      "profile": "release",
+      "defaultFeatures": true,
+      "features": [],
+      "rustflags": ["-C", "target-feature=+simd128"],
+      "extraWatch": ["crates/pptx_engine/fonts", "crates/pptx_engine/assets"],
+      "thread": "worker"
+    },
+    {
+      "name": "docx-engine",
+      "package": "docx_engine",
+      "crateDir": "crates/docx_engine",
+      "outDir": "src/lib/core/docx-engine/wasm",
+      "outName": "docx_engine",
+      "profile": "release",
+      "defaultFeatures": true,
+      "features": [],
+      "rustflags": ["-C", "target-feature=+simd128"],
+      "extraWatch": ["crates/pptx_engine/fonts"],
+      "thread": "worker"
+    },
+    {
+      "name": "fig-engine",
+      "package": "fig_engine",
+      "crateDir": "crates/fig_engine",
+      "outDir": "src/lib/core/fig-engine/wasm",
+      "outName": "fig_engine",
+      "profile": "fig-engine-wasm",
+      "defaultFeatures": true,
+      "features": [],
+      "rustflags": ["-C", "target-feature=+simd128"],
+      "extraWatch": ["crates/fig_engine/fonts"],
+      "thread": "worker"
+    },
+    {
+      "name": "psd-engine",
+      "package": "psd_engine",
+      "crateDir": "crates/psd_engine",
+      "outDir": "src/lib/core/psd-engine/wasm",
+      "outName": "psd_engine",
+      "profile": "psd-engine-wasm",
+      "defaultFeatures": true,
+      "features": [],
+      "rustflags": ["-C", "target-feature=+simd128"],
+      "extraWatch": ["crates/fig_engine/fonts"],
+      "thread": "worker"
+    },
+    {
+      "name": "ai-engine",
+      "package": "ai_engine",
+      "crateDir": "crates/ai_engine",
+      "outDir": "src/lib/core/ai-engine/wasm",
+      "outName": "ai_engine",
+      "profile": "ai-engine-wasm",
+      "defaultFeatures": true,
+      "features": [],
+      "rustflags": ["-C", "target-feature=+simd128"],
+      "extraWatch": ["crates/fig_engine/fonts"],
+      "thread": "worker"
+    },
+    {
+      "name": "password-import",
+      "package": "password_import_wasm",
+      "crateDir": "crates/password_import_wasm",
+      "outDir": "src/lib/core/password-import/wasm",
+      "outName": "password_import_wasm",
+      "profile": "release",
+      "defaultFeatures": true,
+      "features": [],
+      "rustflags": [],
+      "extraWatch": [],
+      "thread": "worker"
+    }
+  ]
+}

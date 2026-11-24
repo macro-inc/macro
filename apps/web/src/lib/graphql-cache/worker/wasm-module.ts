@@ -18,7 +18,7 @@ import type { IdentityBindingWire, MutationInspection } from '../protocol';
  * dynamically so the repo type-checks without the generated artifacts.
  *
  * Build the package with:
- *   just build-cache-wasm
+ *   just build-wasm cache-wasm
  * which runs wasm-pack over crates/client/cache-wasm into
  * src/lib/graphql-cache/wasm/ (gitignored).
  */

@@ -3,7 +3,7 @@
  * dynamically so the repo type-checks without the generated artifacts.
  *
  * Build the package with:
- *   just build-ai-engine-wasm
+ *   just build-wasm ai-engine
  * which runs wasm-pack over crates/ai_engine into
  * src/lib/core/ai-engine/wasm/ (gitignored).
  */

@@ -31,7 +31,7 @@ export default defineConfig({
     headless: true,
   },
   webServer: {
-    command: `just build-cache-wasm && bunx --bun vite --config ${JSON.stringify(`${directory}/vite.config.ts`)}`,
+    command: `just build-wasm cache-wasm && bunx --bun vite --config ${JSON.stringify(`${directory}/vite.config.ts`)}`,
     cwd: webDirectory,
     url: 'http://127.0.0.1:4188',
     reuseExistingServer: false,

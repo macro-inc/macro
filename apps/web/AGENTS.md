@@ -374,7 +374,7 @@ package; its backend-free desktop/phone regression, at a fixed New York clock,
 checks both readings of a guessed hour, saving either, the reasons shown for
 unreadable, passed and daylight-saving-skipped times, and the presets:
 `bunx playwright test --config src/features/reminders/browser-test/playwright.config.ts`.
-Run `just ensure-natural-time-wasm` first.
+Run `just ensure-wasm natural-time` first.
 
 Focus rows have a backend-free browser regression over the real row and mapping
 at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
@@ -753,7 +753,7 @@ nix develop --command just run_local --instance <name>
 - First bring-up is slow (a build of every service plus the agent-harness sandbox image); later runs reuse the caches. It needs no terminal: without one it runs in the background and returns once ready, and survives your shell dying. `just run_local rebuild --instance <name>` rebuilds changed Rust services in place (`r` while attached); add `--services <name>` (comma-separated compose or binary names) to rebuild and restart only that one, then `stale_services` in `status --json` lists the services left on older code until a `rebuild` with no flag catches them all up. `just run_local status --json --instance <name>` reports its state. See [Run without a terminal](../../docs/development/running-locally.md#run-without-a-terminal).
 - No accounts are pre-created: passwordless login registers any email on demand, and the one-time code lands in the instance's Mailpit (endpoint in `just status_local`). `just seed-scenario apply --file seed/scenarios/team-perms.json` seeds multi-user team fixtures with printed login links.
 - Full details, Doppler vs no-Doppler modes, and port-conflict debugging: `docs/development/running-locally.md`.
-- `just run_local` prepares the wasm packages (`bun run dev:prepare`) while the services build, from a machine-wide cache keyed by each package's sources (`~/.cache/macro-local/wasm-pkgs`); only a package no worktree has built yet compiles, which takes a few minutes. A bare `bun run dev` doesn't use that cache.
+- `just run_local` prepares the wasm packages (`bun run dev:prepare`, which `bun run dev` also runs) while the services build, from a machine-wide cache keyed by each package's sources (`~/.cache/macro/wasm-pkgs`); only a package no worktree has built yet compiles, which takes a few minutes.
 - That tab is pointed at **real dev data**. Treat creates, edits, and deletes as real, and discard drafts you open.
 
 ### Instrumenting a flash, blank, or remount
@@ -1733,15 +1733,23 @@ raise `min-native-build.json` to the first build with it, or handle
 `Command … not found` in the caller (see the src-tauri README).
 Keep phone call audio-output commands optional for older native binaries, register their mobile capability, and fence route updates by call ID.
 
-## Desktop release builds: generated WASM
+## Browser wasm modules
 
-Keep `nix/tauri-desktop.nix` in sync with generated WASM dependencies: desktop
-releases run Vite directly and do not call `just build-tauri` or `build-wasm`.
-A new `build-*-wasm` package under `src/lib/core/` gets an entry in
-`coreWasmPackages`, which builds its JavaScript glue and WASM before Vite runs
-and checks that both appear in the output. Without them, Vite leaves the
-loader's relative imports unchanged and Tauri serves HTML for the missing
-module, so that file type fails to open on desktop.
+`wasm-modules.json` lists every first-party wasm-pack module: crate, output
+directory, profile, features, rustflags, embedded assets and thread. It is the
+only list; `scripts/wasm.ts` (`just build-wasm [names]`, `just ensure-wasm
+[names]`), `dev:prepare`, `nix/tauri-desktop.nix`, the `cargo x deps` wasm
+closures and the CI path filters read it. A new module is one entry there plus
+`cargo x deps`. `ensure-wasm` rebuilds a module only when its input key
+(`scripts/wasm-cache-key.ts`) differs from the `.wasm-build-key` its last build
+left in the output directory, and builds restore unchanged packages from
+`WASM_PKG_CACHE_DIR` (`~/.cache/macro/wasm-pkgs` by default).
+
+Desktop releases run Vite directly and do not call `just build-tauri` or
+`build-wasm`; `nix/tauri-desktop.nix` builds each manifest module before Vite
+runs and checks that its glue and binary appear in the output. Without them,
+Vite leaves the loader's relative imports unchanged and Tauri serves HTML for
+the missing module, so that file type fails to open on desktop.
 
 ## Videos stay out of native bundles
 
@@ -2194,7 +2202,7 @@ current vault's own drag. Register its desktop composable split layout
 and wrap every route state in `SplitPanel.Root` / `SplitPanel.Body` so the
 legacy header does not reserve an empty band. The responsive vault fixture is exercised with
 `bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`
-(its import case needs `just ensure-password-import-wasm`). Imports parse in a
+(its import case needs `just ensure-wasm password-import`). Imports parse in a
 per-file worker (`lib/core/password-import`); the parsed export lives only in
 the import primitive's closure while the dialog is open, and sessionStorage
 holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).

@@ -27,7 +27,7 @@ export default defineConfig({
   webServer: {
     cwd: fileURLToPath(new URL('../../', import.meta.url)),
     command:
-      'just ensure-cache-wasm && bunx --bun vite build --config tests/functional/vite.config.ts && bunx --bun vite preview --config tests/functional/vite.config.ts',
+      'just ensure-wasm cache-wasm && bunx --bun vite build --config tests/functional/vite.config.ts && bunx --bun vite preview --config tests/functional/vite.config.ts',
     url: `http://127.0.0.1:${port}/tests/functional/optimistic-mutations/index.html`,
     reuseExistingServer: false,
     timeout: 240_000,

@@ -1758,7 +1758,7 @@ succeeding and with the first failing before the second succeeds.
 
 A self-contained browser regression uses the production list cell, mutation hooks,
 and worker/WASM cache with delayed fixture HTTP (no hosted task edits). From
-`apps/web`, run `just build-cache-wasm`, then
+`apps/web`, run `just build-wasm cache-wasm`, then
 `bunx playwright test -c src/features/tasks-view/browser-test/playwright.config.ts`.
 The harness defaults to port 3004; `TASK_PROPERTY_TEST_PORT` can select a verified
 same-worktree dev server.

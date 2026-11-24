@@ -6,7 +6,7 @@ named by `FIG_CORPUS_DIR`). It loads no authentication, document storage, or
 product routes. It verifies the viewer and engine integration, not storage or
 permissions.
 
-From `apps/web` (build the engine first with `just ensure-fig-engine-wasm`):
+From `apps/web` (build the engine first with `just ensure-wasm fig-engine`):
 
 ```sh
 bunx vite --config src/features/block-fig/browser-test/vite.config.ts
