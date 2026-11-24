@@ -107,9 +107,13 @@ test.describe('desktop popover', () => {
       const startOffset = opened.y - (await box(pending.anchor)).y;
       expect(withRequests).toBeGreaterThan(withoutRequests + 40);
 
-      // Put the event where the popover fits below it until the requests
-      // arrive, with room above for the whole grown popover.
-      const top = Math.round(1000 - 8 - (withRequests + withoutRequests) / 2);
+      // Leave enough room above for the full card at its current natural height.
+      // The initial card fits below the event, but its expanded version does not.
+      const viewportHeight = Math.ceil(withRequests * 2 + 64);
+      await page.setViewportSize({ width: 1280, height: viewportHeight });
+      const top = Math.round(
+        viewportHeight - 8 - (withRequests + withoutRequests) / 2
+      );
       const { anchor, details } = await openDetails(page, `top=${top}`);
       const event = await box(anchor);
       expect(event.bottom).toBeGreaterThan(withRequests + 16);
@@ -129,7 +133,7 @@ test.describe('desktop popover', () => {
         after.height - before.height + 1
       );
       expect(after.bottom).toBeGreaterThan(event.bottom + 1);
-      expect(after.bottom).toBeLessThanOrEqual(1000);
+      expect(after.bottom).toBeLessThanOrEqual(viewportHeight);
       await expect(
         details.getByRole('button', { name: 'Add as guest', exact: true })
       ).toBeInViewport({ ratio: 1 });
