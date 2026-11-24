@@ -16,7 +16,7 @@ the item's lease, lists its versions, and for each unrecorded one: decides an
 outcome, downloads through `signeds3download` + `SignedDownloads`, stores
 through `CadDocuments`, records a `fusion_item_version` row. One call
 downloads at most 10 versions, starts none after 10 minutes (inside the
-15-minute lease), and reports `remaining`; a sync of everything pages 50
+30-minute lease), and reports `remaining`; a sync of everything pages 50
 items by id with `nextCursor`.
 
 ## Start here

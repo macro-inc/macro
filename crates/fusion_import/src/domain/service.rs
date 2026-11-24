@@ -47,14 +47,16 @@ pub const MAX_IMPORT_ITEMS: usize = 20;
 /// How many items one sync covers.
 pub const MAX_SYNC_ITEMS: usize = 50;
 
-/// How long one call starts downloads for. With a download's own timeout
-/// (five minutes) it stays inside [`SYNC_LEASE`], so a lease never lapses
-/// under a sync that is still writing.
+/// How long one call starts new versions for.
 const CALL_WORK_LIMIT: Duration = Duration::from_secs(10 * 60);
 
-/// How long one sync holds an item. A call that is cancelled mid-sync leaves
-/// its item busy until then.
-const SYNC_LEASE: Duration = Duration::from_secs(15 * 60);
+/// How long one sync holds an item. The last version a call starts, just
+/// before [`CALL_WORK_LIMIT`], still signs its download (up to a minute and
+/// a half with one rate-limit wait), downloads it (five minutes at most) and
+/// stores it in Macro; twice that margin keeps the lease from lapsing under
+/// a sync that is still writing, so a second sync can't take the item. A
+/// call cancelled mid-sync leaves its item busy until the lease ends.
+const SYNC_LEASE: Duration = Duration::from_secs(30 * 60);
 
 /// What one call may still spend: downloads, and time to start them in.
 #[derive(Debug)]
