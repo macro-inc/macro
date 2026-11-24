@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { hapticImpact } from './haptics';
@@ -12,7 +13,7 @@ beforeEach(() => vi.clearAllMocks());
 
 it('asks the native haptics plugin for the impact in the iOS and Android apps', () => {
   vi.mocked(isNativeMobilePlatform).mockReturnValue(true);
-  vi.mocked(impactFeedback).mockResolvedValue();
+  vi.mocked(impactFeedback).mockResolvedValue({ status: 'ok', data: null });
   hapticImpact('medium');
   expect(impactFeedback).toHaveBeenCalledExactlyOnceWith('medium');
 });
@@ -23,11 +24,12 @@ it('does nothing in a browser', () => {
   expect(impactFeedback).not.toHaveBeenCalled();
 });
 
-// A rejection that escaped would fail the run as an unhandled rejection.
 it('ignores a device without a vibrator', async () => {
   vi.mocked(isNativeMobilePlatform).mockReturnValue(true);
   vi.mocked(impactFeedback).mockRejectedValue(new Error('unsupported'));
+  const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
   hapticImpact('light');
   expect(impactFeedback).toHaveBeenCalledExactlyOnceWith('light');
   await new Promise((resolve) => setTimeout(resolve));
+  expect(report).not.toHaveBeenCalled();
 });
