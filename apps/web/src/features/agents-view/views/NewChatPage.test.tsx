@@ -1766,9 +1766,13 @@ describe('agent-led new conversation', () => {
     }
   );
 
-  it.each([false, true])(
-    'opens the model menu from the full new-conversation card with the real composer (touch: %s)',
-    async (touch) => {
+  it.each([
+    { touch: false, compact: false },
+    { touch: true, compact: false },
+    { touch: true, compact: true },
+  ])(
+    'opens the model menu with the real composer (touch: $touch, compact: $compact)',
+    async ({ touch, compact }) => {
       const { ChatComposer } = await vi.importActual<
         typeof import('../components/ChatComposer')
       >('../components/ChatComposer');
@@ -1777,6 +1781,7 @@ describe('agent-led new conversation', () => {
       const user = userEvent.setup();
       render(() => (
         <NewChatPage
+          compact={compact}
           mode="chat"
           roster={buildAgentRoster({
             agents: [],
@@ -1808,6 +1813,12 @@ describe('agent-led new conversation', () => {
       await user.type(search, 'Sonnet');
       expect(screen.getByRole('button', { name: 'Sonnet 4' })).toBeTruthy();
       expect(search.isConnected).toBe(true);
+      if (compact)
+        expect(
+          document
+            .querySelector('[data-agent-composer]')
+            ?.hasAttribute('data-composer-expanded')
+        ).toBe(true);
     }
   );
 
@@ -2078,6 +2089,12 @@ describe('agent-led new conversation', () => {
         name: 'Choose an agent or model',
       });
       if (touch) fireEvent.click(trigger);
+      const modelLabel = await screen.findByText('Model');
+      const modelRow = modelLabel.parentElement?.parentElement;
+      expect(modelRow?.classList.contains(touch ? 'pl-2.5' : 'pl-1.5')).toBe(
+        true
+      );
+      expect(modelRow?.className).not.toMatch(/\b(?:px|pr)-/);
       fireEvent.click(
         await screen.findByRole('button', { name: 'Keep GPT-5 for Cursor' })
       );

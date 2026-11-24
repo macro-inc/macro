@@ -4,6 +4,7 @@ import { preloadAgentFold } from '@core/agent-fold/client';
 import type { RestoreFocusDefault } from '@core/component/LexicalMarkdown/plugins/restore-focus';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { setVirtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import {
@@ -1028,8 +1029,82 @@ it.each(['Repository', 'Branch'])(
   }
 );
 
+it.each([false, true])(
+  'keeps portaled controls inside the phone composer interaction until they close (keyboard: %s)',
+  (keyboard) => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    setVirtualKeyboardVisible(keyboard);
+    onTestFinished(() => {
+      setVirtualKeyboardVisible(false);
+    });
+    const [open, setOpen] = createSignal(false);
+    const { container } = render(() => (
+      <>
+        <ChatComposer
+          collapseOnBlur
+          phoneLayout
+          controlsOpen={open()}
+          draft="Unsent"
+          onDraftChange={() => {}}
+          onSend={() => {}}
+          selector={<button>Model</button>}
+        />
+        <Portal>
+          <input aria-label="Portaled control" />
+        </Portal>
+        <button aria-label="Outside composer" />
+      </>
+    ));
+    const input = screen.getByTestId('editor');
+    input.tabIndex = -1;
+    input.focus();
+    const surface = container.querySelector('[data-agent-composer]')!;
+    const blur = vi.spyOn(input, 'blur');
+    const control = screen.getByRole('textbox', { name: 'Portaled control' });
+    setOpen(true);
+    fireEvent.touchStart(control, { touches: [{ clientX: 10, clientY: 10 }] });
+    expect(blur).not.toHaveBeenCalled();
+    control.focus();
+    expect(document.activeElement).toBe(control);
+    expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+    screen.getByRole('button', { name: 'Outside composer' }).focus();
+    expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+    setOpen(false);
+    expect(surface.hasAttribute('data-composer-expanded')).toBe(false);
+    expect(screen.getByTestId('editor')).toBe(input);
+    input.focus();
+    setOpen(true);
+    setOpen(false);
+    expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+  }
+);
+
+it('expands again when an outside pointer left DOM focus in the editor', () => {
+  vi.mocked(isTouchDevice).mockReturnValue(true);
+  const { container } = render(() => (
+    <ChatComposer
+      collapseOnBlur
+      phoneLayout
+      draft="Unsent"
+      onDraftChange={() => {}}
+      onSend={() => {}}
+      selector={<button>Model</button>}
+    />
+  ));
+  const input = screen.getByTestId('editor');
+  input.tabIndex = -1;
+  input.focus();
+  const surface = container.querySelector('[data-agent-composer]')!;
+  fireEvent.pointerDown(document.body);
+  expect(document.activeElement).toBe(input);
+  expect(surface.hasAttribute('data-composer-expanded')).toBe(false);
+  fireEvent.pointerDown(input);
+  expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+});
+
 it('keeps the list composer expanded across model selection and dismisses an orphaned card', async () => {
   vi.mocked(isTouchDevice).mockReturnValue(true);
+  setVirtualKeyboardVisible(true);
   const computedStyle = window.getComputedStyle;
   vi.stubGlobal('getComputedStyle', (element: Element) => {
     const style = computedStyle(element);
@@ -1043,6 +1118,7 @@ it('keeps the list composer expanded across model selection and dismisses an orp
     }
   );
   onTestFinished(() => {
+    setVirtualKeyboardVisible(false);
     vi.unstubAllGlobals();
   });
   const [open, setOpen] = createSignal(false);
@@ -1086,7 +1162,8 @@ it('keeps the list composer expanded across model selection and dismisses an orp
   ));
   const input = screen.getByTestId('editor');
   const surface = container.querySelector('[data-agent-composer]')!;
-  fireEvent.focusIn(input);
+  input.tabIndex = -1;
+  input.focus();
   const trigger = screen.getByRole('button', {
     name: 'Choose an agent or model',
   });
@@ -1098,6 +1175,7 @@ it('keeps the list composer expanded across model selection and dismisses an orp
   fireEvent(window, new Event('resize'));
   expect(document.activeElement).toBe(search);
   expect(open()).toBe(true);
+  expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
   await waitFor(() => expect(sheet.style.transform).toContain('0px'));
   const press = new MouseEvent('pointerdown', {
     bubbles: true,
@@ -1133,14 +1211,16 @@ it('keeps the list composer expanded across model selection and dismisses an orp
   await waitFor(() => expect(open()).toBe(false));
   expect(model()).toBe('anthropic/claude-sonnet-5-5');
   await waitFor(() => expect(screen.queryByRole('textbox')).toBeNull());
-  expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+  expect(surface.hasAttribute('data-composer-expanded')).toBe(false);
   expect(screen.getByTestId('editor')).toBe(input);
 
+  input.focus();
   fireEvent.click(trigger);
   await screen.findByRole('dialog');
   fireEvent.keyDown(document, { key: 'Escape' });
   await waitFor(() => expect(open()).toBe(false));
 
+  input.focus();
   fireEvent.click(trigger);
   await screen.findByRole('dialog');
   setHidden(true);
@@ -1148,6 +1228,7 @@ it('keeps the list composer expanded across model selection and dismisses an orp
   expect(trigger.getAttribute('aria-expanded')).toBe('false');
   setHidden(false);
 
+  input.focus();
   fireEvent.click(trigger);
   await screen.findByRole('dialog');
   fireEvent.click(document.querySelector('[data-model-selector-overlay]')!);

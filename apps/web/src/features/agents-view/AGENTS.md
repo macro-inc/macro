@@ -54,7 +54,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Keep custom-agent model pins browser-local per account and agent; preserve pinned overrides across sends, clear pins on the agent default or confirmed catalog retirement, and never mutate the agent's shared default.
 - Keep Suggested below Recent, using only fixed frontier matches, excluding Auto and Recent, with at most five models and no full-catalog fallback.
 - Use semantic hover, active, selected, overlay and shadow tokens throughout the selector; keep Speed triggers neutral at every tier, retain accelerated glyphs, and retain the shared Slider disabled treatment.
-- Keep logo-to-name spacing at `gap-1` and name-to-Thinking spacing at `gap-2` on both platforms; match name and Thinking value type sizes, inset only Model/Thinking label rows by 6px desktop or 10px phone, and keep the full-width slider surface's thumb-range inset in its own padding with an invisible 44px phone thumb hit area.
+- Keep logo-to-name spacing at `gap-1` and name-to-Thinking spacing at `gap-2` on both platforms; match name and Thinking value type sizes, inset Model rows only on the left by 6px desktop or 10px phone, keep Thinking labels inset on both sides, and keep the full-width slider surface's thumb-range inset in its own padding with an invisible 44px phone thumb hit area.
 - Keep model-selector cards and sheets in the composer's active interaction lifetime; dismiss them when navigation removes or hides their trigger, and unmount the card while a phone sheet owns focus.
 - Scope model discovery by account, preserve kept models while discovery is pending, and retire them only against a successful catalog for that account.
 - Reuse AgentAvatar for selector agent identities at the specified sizes; keep the agents-view circular surface-1 fill and muted glyph rather than the person-avatar treatment.
@@ -74,7 +74,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Follow Root-and-parts composition and the [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
 - An agent picked from the new-conversation composer's @ menu (Agents page, Home and the phone composer, which all mount `NewChatPage`) becomes the selected agent through `rosterAgentForMention` and the picker's own `selectAgent`; never add a second selection path.
 - Keep catalog option identities stable across capability updates; isolate optional speed-marker discovery with Suspense so it cannot detach the editor.
-- Keep phone file inputs and overlay owners mounted on blur; add-menu, model, and repository sheets hold the composer expanded.
+- Keep phone file inputs and overlay owners mounted on blur; let open add-menu, model, and repository controls own keyboard dismissal and count as composer focus, track physical focus separately, and collapse after controls close only when focus remains outside.
 - Keep the phone list composer's unfocused 46px pill vertically centered with no Send control; hide controls without unmounting their file or overlay owners.
 - Keep phone composer layout measurable while collapsed; animate the clipped shape and editor insets together, reveal inert controls during the final part of the 200ms expansion, and disable transitions for reduced motion.
 

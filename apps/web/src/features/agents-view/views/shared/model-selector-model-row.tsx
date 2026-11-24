@@ -29,8 +29,8 @@ export function ModelSelectorModelRow(props: {
   return (
     <div
       class={cn(
-        'flex h-6 items-center justify-between gap-2 px-1.5 text-xs',
-        props.mobile && 'h-8 px-2.5 text-sm leading-5'
+        'flex h-6 items-center justify-between gap-2 pl-1.5 text-xs',
+        props.mobile && 'h-8 pl-2.5 text-sm leading-5'
       )}
     >
       <div class="flex items-center gap-0.5 text-ink-extra-muted">

@@ -1,17 +1,17 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createSignal } from 'solid-js';
 
-/** Shared editor expansion state; sheets retain the expanded island across blur. */
+/** Physical focus and open controls together own the composer's interaction lifetime. */
 export function createComposerExpansion(
   collapseOnBlur: () => boolean | undefined,
   controlsOpen: () => boolean | undefined
 ) {
-  const [focused, setFocused] = createSignal(false);
+  const [focusWithin, setFocusWithin] = createSignal(false);
+  const focused = () => focusWithin() || Boolean(controlsOpen());
   const [hasFocused, setHasFocused] = createSignal(false);
-  const collapsed = () =>
-    isTouchDevice() && collapseOnBlur() && !focused() && !controlsOpen();
+  const collapsed = () => isTouchDevice() && collapseOnBlur() && !focused();
   const focus = () => {
-    setFocused(true);
+    setFocusWithin(true);
     setHasFocused(true);
   };
   return {
@@ -19,10 +19,8 @@ export function createComposerExpansion(
     hasFocused,
     collapsed,
     focus,
-    // Portaled controls are still a composer interaction. Preserve logical
-    // focus until they close, so their final focus handoff cannot hide the anchor.
-    blur: () => {
-      if (!controlsOpen()) setFocused(false);
-    },
+    // Record physical blur even while a portal holds the interaction open.
+    // Releasing that hold then reflects the current focus instead of a stale bit.
+    blur: () => setFocusWithin(false),
   };
 }
