@@ -37,6 +37,20 @@ describe('openMacroLinkInApp', () => {
     });
   });
 
+  it('opens a same-origin import link with its table and view parameters', () => {
+    vi.mocked(isTauri).mockReturnValue(true);
+    expect(
+      openMacroLinkInApp('/app/database/example?tableId=table&viewId=board')
+    ).toBe(true);
+    expect(emit).toHaveBeenCalledWith('navigate', {
+      path: '/database/example',
+      query: 'tableId=table&viewId=board',
+    });
+    expect(openMacroLinkInApp('//example.test/app/database/example')).toBe(
+      false
+    );
+  });
+
   it('keeps the private token of a booking receipt link', () => {
     vi.mocked(isTauri).mockReturnValue(true);
     expect(openMacroLinkInApp('https://macro.com/app/booking/123#token')).toBe(

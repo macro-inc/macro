@@ -1,6 +1,7 @@
 import { parseInternalAppLink } from '@core/util/macroAppUrl';
 import { isTauri } from '@core/util/platform';
 import { registerExternalUrlInterceptor } from '@core/util/url';
+import { getWebOrigin } from '@core/util/webOrigin';
 import { emit } from '@tauri-apps/api/event';
 
 /**
@@ -14,14 +15,19 @@ import { emit } from '@tauri-apps/api/event';
  */
 export function openMacroLinkInApp(url: string): boolean {
   if (!isTauri()) return false;
-  const parsed = parseInternalAppLink(url);
+  // Imported links use an origin-relative href so it also works in previews.
+  // Tauri's asset origin does not serve the web app's /app routes.
+  const target = url.startsWith('/app/')
+    ? new URL(url, getWebOrigin()).toString()
+    : url;
+  const parsed = parseInternalAppLink(target);
   if (!parsed) return false;
   emit('navigate', parsed).catch((e) => {
     console.error('failed to emit navigate event for macro link', e);
     // The navigate event never dispatched, so nothing routed in-app. Fall back
     // to the system browser rather than leaving the link silently unhandled
     // (openExternalUrl has already returned by the time this rejects).
-    window.open(url, '_blank', 'noopener,noreferrer')?.focus();
+    window.open(target, '_blank', 'noopener,noreferrer')?.focus();
   });
   return true;
 }
