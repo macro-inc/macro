@@ -122,7 +122,7 @@ function errorOf(result: OperationResult): CatalogMutationError {
  * Resolves once the app is online (`onlineManager`, the native network path on
  * iOS and Android), as TanStack held a mutation started offline until then.
  */
-export function whenOnline(): Promise<void> {
+export function whenOnline(signal?: AbortSignal): Promise<void> {
   if (onlineManager.isOnline()) return Promise.resolve();
   return new Promise((resolve) => {
     const unsubscribe = onlineManager.subscribe((online) => {
@@ -130,6 +130,8 @@ export function whenOnline(): Promise<void> {
       unsubscribe();
       resolve();
     });
+    // A caller that stopped waiting leaves no listener behind.
+    signal?.addEventListener('abort', unsubscribe, { once: true });
   });
 }
 
@@ -179,15 +181,20 @@ function waitEnded({
 }
 
 /**
- * Waits for `work`, or rejects once the wait ended (`waitEnded`). Work
- * that finished as the wait ended counts as ended too: its outcome belongs to
- * the login or cache that is gone.
+ * Waits for `work`, or rejects once the wait ended (`waitEnded`), aborting
+ * `work`'s signal. An outcome that arrives as the login changes belongs to
+ * the old login; one the cache reported before it stopped still stands.
  */
 async function whileWaitHolds<T>(
   scope: WaitScope,
-  work: () => Promise<T>
+  work: (signal: AbortSignal) => Promise<T>
 ): Promise<T> {
   const ended = () => waitEnded(scope);
+  const loginEnded = () =>
+    queryAccountSession() === scope.session
+      ? undefined
+      : accountChanged(scope.when);
+  const abort = new AbortController();
   let stop = () => {};
   const stopped = new Promise<never>((_, reject) => {
     createRoot((dispose) => {
@@ -199,14 +206,15 @@ async function whileWaitHolds<T>(
     });
   });
   try {
-    const value = await Promise.race([work(), stopped]);
-    const reason = ended();
+    const value = await Promise.race([work(abort.signal), stopped]);
+    const reason = loginEnded();
     if (reason) throw reason;
     return value;
   } catch (error: unknown) {
-    throw ended() ?? error;
+    throw loginEnded() ?? error;
   } finally {
     stop();
+    abort.abort();
   }
 }
 
@@ -217,18 +225,27 @@ async function observeCommit(
   scope: WaitScope,
   options: SettleOptions
 ): Promise<void> {
+  let failure: Error | undefined;
   try {
     await whileWaitHolds(scope, () => settlements.waitForCommit(transactionId));
-    options.onCommit?.();
   } catch (error: unknown) {
-    // The old login's write is not this page's to report.
-    if (isCatalogErrorCode(error, 'ACCOUNT_CHANGED')) return;
-    const failure = error instanceof Error ? error : new Error(String(error));
-    console.error('Queued property catalog write failed', failure);
-    options.onLateFailure?.(failure);
+    failure = error instanceof Error ? error : new Error(String(error));
   } finally {
     settlements.dispose();
   }
+  // The old login's write is not this page's to report. Checked here, right
+  // before the callbacks, since a login can change after the wait ends.
+  if (
+    queryAccountSession() !== scope.session ||
+    isCatalogErrorCode(failure, 'ACCOUNT_CHANGED')
+  )
+    return;
+  if (!failure) {
+    options.onCommit?.();
+    return;
+  }
+  console.error('Queued property catalog write failed', failure);
+  options.onLateFailure?.(failure);
 }
 
 type Settled<TData> =
@@ -284,6 +301,9 @@ async function settle<TData, TVariables extends AnyVariables>(
         await whileWaitHolds(saving, () =>
           settlements.waitForCommit(disposition.transactionId)
         );
+        // A login can change after the wait ends.
+        if (queryAccountSession() !== session)
+          throw accountChanged(saving.when);
         options.onCommit?.();
         return { kind: 'committed', data: undefined, waited: true };
       }

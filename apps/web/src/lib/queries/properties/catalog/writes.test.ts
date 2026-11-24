@@ -1013,7 +1013,33 @@ describe('a waiting write when the login or the cache goes', () => {
     );
   });
 
+  it('keeps a commit the cache reported before it stopped', async () => {
+    const settle = queueingHost();
+    soup.optimistic.mockImplementation(() => ({
+      toPromise: async () => {
+        settle({ transactionId: 'tx-1', status: 'committed' });
+        // The cache is replaced under the same login before the wait begins.
+        soup.host = undefined;
+        soup.loginChanged();
+        return { queued: 'tx-1' };
+      },
+    }));
+    const added = await outcomeOf(addPropertyOption('def-1', TAG));
+    expect(added).toMatchObject({ property_definition_id: 'def-1' });
+  });
+
   it('stops waiting to go online when another login takes over', async () => {
+    const subscribe = onlineManager.subscribe.bind(onlineManager);
+    const unsubscribed = vi.fn();
+    const spy = vi
+      .spyOn(onlineManager, 'subscribe')
+      .mockImplementation((listener) => {
+        const unsubscribe = subscribe(listener);
+        return () => {
+          unsubscribed();
+          unsubscribe();
+        };
+      });
     onlineManager.setOnline(false);
     try {
       const created = outcomeOf(
@@ -1028,7 +1054,10 @@ describe('a waiting write when the login or the cache goes', () => {
       soup.loginChanged();
       expect(isCatalogErrorCode(await created, 'ACCOUNT_CHANGED')).toBe(true);
       expect(soup.mutation).not.toHaveBeenCalled();
+      // It left no listener waiting for the reconnect.
+      expect(unsubscribed).toHaveBeenCalledTimes(1);
     } finally {
+      spy.mockRestore();
       onlineManager.setOnline(true);
     }
   });
