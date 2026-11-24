@@ -6,6 +6,7 @@
 use kafka_util::{KafkaEventProducer, KafkaProducerError};
 use macro_event_topics::Topic;
 use rdkafka::Message;
+use rdkafka::error::{KafkaError, RDKafkaErrorCode};
 
 use crate::MessageParts;
 use crate::domain::models::EventBrokerError;
@@ -36,7 +37,17 @@ impl EventPublisher for KafkaEventPublisher {
         self.producer
             .send(T::TOPIC_STR, key, event_type, payload)
             .await
-            .map_err(|error| EventBrokerError::Publish(error.to_string()))
+            .map_err(publish_error)
+    }
+}
+
+/// Tell a message no retry can deliver from a delivery that failed.
+fn publish_error(error: KafkaError) -> EventBrokerError {
+    match error.rdkafka_error_code() {
+        Some(RDKafkaErrorCode::MessageSizeTooLarge) => {
+            EventBrokerError::TooLarge(error.to_string())
+        }
+        _ => EventBrokerError::Publish(error.to_string()),
     }
 }
 
@@ -53,3 +64,6 @@ impl<T: Message> MessageParts for T {
         Message::topic(self)
     }
 }
+
+#[cfg(test)]
+mod test;

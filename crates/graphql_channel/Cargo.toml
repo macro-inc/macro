@@ -6,9 +6,12 @@ publish = false
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
+async-stream = { workspace = true }
+broadcast = { path = "../broadcast" }
 chrono = { workspace = true }
 messages = { path = "../messages", default-features = false, features = ["ports"] }
 serde_json = { workspace = true }
+tokio-stream = { workspace = true }
 nom = { workspace = true }
 tracing = { workspace = true }
 async-graphql = { workspace = true }
@@ -20,4 +23,5 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }

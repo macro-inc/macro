@@ -152,6 +152,10 @@ pub enum EventBrokerError {
     /// The broker rejected or failed to deliver the message.
     #[error("failed to publish event: {0}")]
     Publish(String),
+    /// The message exceeds the broker's size limit; sending it again cannot
+    /// succeed.
+    #[error("event is too large to publish: {0}")]
+    TooLarge(String),
     /// Publishing did not complete within the configured timeout.
     #[error("event publish timed out after {timeout:?}")]
     PublishTimeout {

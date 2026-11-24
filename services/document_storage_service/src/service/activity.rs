@@ -49,7 +49,7 @@ mod persistence;
 pub(crate) use persistence::PgChannelActivityRepo;
 
 mod timeline;
-pub(crate) use timeline::TimelinePublisher;
+pub(crate) use timeline::{ChannelParticipantAudience, TimelinePublisher};
 
 /// Dispatches each event to its owning domain. Document editing sessions use
 /// the shared inactivity store; all classification and debounce policy stays

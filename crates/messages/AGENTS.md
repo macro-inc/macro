@@ -18,6 +18,21 @@ they need.
 - `crates/channel_change_db_utils`: owns counter/log SQL; message adapters pass
   transaction boundaries and policy limits to it, then map rows to domain types.
   DSS composes atomic activity logging; the call repository appends root changes.
+- `src/domain/timeline_updates.rs`: live channel timeline updates for the
+  `channelTimelineUpdates` subscription. `ChannelTimelineRealtime` wraps channel
+  realtime delivery, hydrates each sequenced change once with
+  `load_message_changes` and publishes it to the participants delivery read;
+  `ChannelActivityUpdates` publishes sequenced activity the same way;
+  `ChannelTimelineFanout` (feature `realtime`) hands each update to the
+  process's subscribers from memory, mapped once and shared. It opens its topic
+  when it runs and refuses subscribers until then, so a missing topic neither
+  stops the process nor leaves a subscriber waiting in silence.
+- `src/outbound/channel_timeline.rs`: the `macro.channel_timeline` event, keyed
+  by channel, its broker publisher, and the ungrouped consumer every serving
+  process reads it with (feature `consumer`). The publisher sizes records
+  for Kafka's default limit: an update too large, or over the broker's own limit,
+  goes out `truncated`, as a hint to read the changes page, and a large audience
+  is split across records. Any other failed publish is lost: clients catch up.
 - `src/domain/api.rs`: `MessageServiceApi`, the boundary HTTP/agents/channel
   adapters call through; `thread_page` adds bounded reply windows while
   `get_thread` preserves the complete REST thread read.
@@ -55,7 +70,8 @@ they need.
 - Depends on (by feature): `entity_access` (ports/inbound), `model` (annotations),
   `properties`/`models_properties`/`model_notifications`/`notification`
   (delivery), `initiative` and `channel_change_db_utils` (outbound), `activity` models,
-  `macro_event_broker`/`macro_event_topics` (broker).
+  `macro_event_broker`/`macro_event_topics` (broker), `broadcast` (realtime),
+  `kafka_util`/`rdkafka` (consumer).
 - Used by: `agent_harness`, `agent_session`, `agent_trigger`, `ai_tools`, `bots`,
   `calendar_service`, `call`, `channel_bots`, `channels`, `coding_agent_worker`,
   `crm`, `documents`,
@@ -122,9 +138,14 @@ channel message tools change a message as their bot only when
 - A call chat's first message is a normal `MessageKind::Message` root; deleting it tombstones only
   that message and keeps the thread and replies available for later posts.
 - Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,
-  `delivery`, `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
-  combination gets a missing-module compile error, not a runtime one — check
+  `consumer`, `delivery`, `inbound`, `outbound`, `ports`, `realtime`, `schema`); a
+  caller enabling the wrong combination gets a missing-module compile error, not a runtime one — check
   `Cargo.toml`'s `[features]` table before adding a dependency edge.
+- Every composition root of `ChannelMessageDelivery` wraps its realtime in
+  `ChannelTimelineRealtime`; a writer that doesn't publishes nothing to
+  `channelTimelineUpdates`. Call end/delete, the call cleanup trigger for a
+  removed user and historical-import resets also advance the sequence with no
+  update. Subscribers catch up at the gap the next update shows, or on reconnect.
 
 - Thread summaries count live replies on each page. With stale statistics after a
   very large import, an ordinary-reply page can also scan that thread's imported

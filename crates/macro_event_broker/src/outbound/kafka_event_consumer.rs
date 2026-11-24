@@ -39,6 +39,22 @@ impl<M: MacroEventCollection> KafkaConsumerAdapter<Ungrouped, M> {
             topics: PhantomData,
         })
     }
+
+    /// Creates an ungrouped adapter that receives every record published to the
+    /// topics in `M` after this returns.
+    ///
+    /// All broker requests must finish within `timeout`; failures are returned
+    /// to the caller.
+    pub fn from_now(
+        consumer: KafkaEventConsumer<Ungrouped>,
+        timeout: Duration,
+    ) -> Result<Self, rootcause::Report> {
+        consumer.assign_topics_from_now(M::topics(), timeout)?;
+        Ok(KafkaConsumerAdapter {
+            inner: consumer,
+            topics: PhantomData,
+        })
+    }
 }
 
 impl<T: GroupName> KafkaConsumerAdapter<T, ()> {
