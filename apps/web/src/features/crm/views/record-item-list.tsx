@@ -35,8 +35,9 @@ import { recordItemMatchesSearch } from '../core/record-search';
 
 /**
  * One of a CRM record's soup lists (emails, files, calls or references):
- * unified-list rows that open in a split, paging in as the end scrolls into
- * view. A failed request shows a retry instead of the empty state.
+ * unified-list rows, or the information panel's compact rows with `panel`,
+ * that open in a split, paging in as the end scrolls into view. A failed
+ * request shows a retry instead of the empty state.
  */
 export function RecordItemList(props: {
   source: ItemListSource;
@@ -114,7 +115,10 @@ export function RecordItemList(props: {
     <div class="flex min-h-0 w-full flex-1 flex-col">
       <Switch>
         <Match when={loading()}>
-          <CrmListSkeleton count={props.panel ? 2 : undefined} />
+          <CrmListSkeleton
+            count={props.panel ? 2 : undefined}
+            panel={props.panel}
+          />
         </Match>
         <Match when={props.source.isError}>
           <Show
@@ -168,12 +172,17 @@ export function RecordItemList(props: {
             <Show
               when={props.source.isFetchNextPageError}
               fallback={
-                <CrmListSkeleton label="Searching more items" count={2} />
+                <CrmListSkeleton
+                  label="Searching more items"
+                  count={2}
+                  panel={props.panel}
+                />
               }
             >
               <CrmListRetry
                 message="Couldn't load more."
                 onRetry={() => props.source.fetchNextPage()}
+                inline={props.panel}
               />
             </Show>
             <Show
@@ -207,7 +216,11 @@ export function RecordItemList(props: {
                     }
                   >
                     <Show when={!props.source.isFetchNextPageError}>
-                      <CrmListSkeleton label="Searching more items" count={2} />
+                      <CrmListSkeleton
+                        label="Searching more items"
+                        count={2}
+                        panel={props.panel}
+                      />
                     </Show>
                   </Show>
                 </Show>
@@ -251,6 +264,7 @@ export function RecordItemList(props: {
               <CrmListRetry
                 message="Couldn't load more."
                 onRetry={() => props.source.fetchNextPage()}
+                inline={props.panel}
               />
             }
           >
@@ -258,7 +272,11 @@ export function RecordItemList(props: {
               <div ref={setSentinelRef} class="h-px" />
             </Show>
             <Show when={props.source.isFetchingNextPage}>
-              <CrmListSkeleton label="Loading more items" count={2} />
+              <CrmListSkeleton
+                label="Loading more items"
+                count={2}
+                panel={props.panel}
+              />
             </Show>
           </Show>
         </Match>
@@ -293,12 +311,13 @@ function PanelItemRow(props: {
         props.onOpen(event);
       }}
     >
-      <EntityRowIcon
-        entity={props.entity}
-        class="size-4 shrink-0"
-        suppressClick
-        showTooltip={false}
-      />
+      <span class="size-4 shrink-0">
+        <EntityRowIcon
+          entity={props.entity}
+          suppressClick
+          showTooltip={false}
+        />
+      </span>
       <span class="ph-no-capture flex min-w-0 truncate">
         <EntityRowTitle entity={props.entity} />
       </span>
