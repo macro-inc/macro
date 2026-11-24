@@ -93,6 +93,15 @@ fn a_new_monthly_max_price_keeps_the_original_for_its_subscribers() {
 }
 
 #[test]
+fn annual_prices_are_configured_together() {
+    let only_max = StripePrices {
+        max_yearly: Some("price_max_year".to_string()),
+        ..prices()
+    };
+    assert!(only_max.seat_prices().is_err());
+}
+
+#[test]
 fn blank_prices_count_as_unset_and_malformed_ones_are_refused() {
     let blank = StripePrices {
         business_monthly: Some("  ".to_string()),

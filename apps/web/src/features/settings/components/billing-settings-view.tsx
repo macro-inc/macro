@@ -1,4 +1,5 @@
 import {
+  isUpgrade,
   type PaidPlanTier,
   PLAN_BY_TIER,
   type PlanTier,
@@ -38,11 +39,15 @@ export function BillingSettingsView(props: {
   // Business and Max are offered annually first; once paid, the
   // subscription's own interval prices every card.
   const [interval, setChosenInterval] = createSignal<BillingInterval>('year');
+  // Until a paid subscription's interval is known, only upgrades show: a
+  // cheaper plan may not be sold at it (Pro on an annual subscription).
   const offeredPlans = () =>
     (['premium', 'business', 'max'] as const).filter((plan) => {
       if (!props.state.hasPaid) return true;
       if (plan === props.state.tier) return false;
-      return soldAt(plan, props.state.interval ?? 'month');
+      const interval = props.state.interval;
+      if (interval === undefined) return isUpgrade(props.state.tier, plan);
+      return soldAt(plan, interval);
     });
   const formatDate = (value: string | undefined) => {
     if (!value) return;

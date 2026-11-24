@@ -217,3 +217,24 @@ fn pending_records_written_before_business_read_as_downgrades_from_max() {
         }
     );
 }
+
+#[test]
+fn downgrades_from_max_are_stored_as_older_binaries_read_them() {
+    let stored = |downgrade| serde_json::to_value(PendingSeat::of(downgrade)).unwrap();
+
+    assert_eq!(stored(MAX_TO_PRO), json!("premium"));
+    assert_eq!(
+        stored(SeatDowngrade {
+            from: SeatPlan::Max,
+            to: SeatPlan::Business,
+        }),
+        json!("business")
+    );
+    assert_eq!(
+        stored(SeatDowngrade {
+            from: SeatPlan::Business,
+            to: SeatPlan::Premium,
+        }),
+        json!({"from": "business", "to": "premium"})
+    );
+}

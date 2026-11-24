@@ -159,7 +159,7 @@ export function TeamMemberMenu(props: TeamMemberMenuProps) {
               </Show>
             }
           >
-            <For each={seatPlanOptions()}>
+            <For each={seatPlanOptions(props.annual)}>
               {(option) => (
                 <Choice
                   label={option.label}

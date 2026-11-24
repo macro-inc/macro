@@ -258,7 +258,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
             Some(downgrade) => {
                 pending
                     .members
-                    .insert(user.to_string(), PendingSeat::Move(downgrade));
+                    .insert(user.to_string(), PendingSeat::of(downgrade));
             }
             None => {
                 pending.members.remove(user.as_ref());
@@ -641,7 +641,9 @@ struct PendingChanges {
 }
 
 /// One member's scheduled downgrade, as stored in
-/// `subscription_plan_schedule.member_plans`.
+/// `subscription_plan_schedule.member_plans`. A downgrade from Max is stored
+/// as its bare target, as binaries built before Business read it; only a
+/// move involving Business needs the source plan written out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 enum PendingSeat {
@@ -653,6 +655,14 @@ enum PendingSeat {
 }
 
 impl PendingSeat {
+    fn of(downgrade: SeatDowngrade) -> Self {
+        if downgrade.from == SeatPlan::Max {
+            PendingSeat::Target(downgrade.to)
+        } else {
+            PendingSeat::Move(downgrade)
+        }
+    }
+
     fn downgrade(self) -> SeatDowngrade {
         match self {
             PendingSeat::Move(downgrade) => downgrade,

@@ -858,11 +858,11 @@ async fn concurrent_instances_preserve_all_scheduled_members_and_seat_additions(
     assert_eq!(pending.members.len(), 2);
     assert_eq!(
         pending.members.get(first.as_ref()),
-        Some(&PendingSeat::Move(MAX_TO_PRO))
+        Some(&PendingSeat::Target(SeatPlan::Premium))
     );
     assert_eq!(
         pending.members.get(second.as_ref()),
-        Some(&PendingSeat::Move(MAX_TO_PRO))
+        Some(&PendingSeat::Target(SeatPlan::Premium))
     );
     assert_eq!(
         phase_quantities(&phase_parameters(&schedule.phases[0]).unwrap()).unwrap(),

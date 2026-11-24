@@ -3027,6 +3027,45 @@ async fn an_annual_subscription_is_metered_and_stored_by_the_month() {
 }
 
 #[tokio::test]
+async fn an_annual_anchor_stored_by_the_webhook_is_metered_by_the_month() {
+    let payer = user("payer@example.com");
+    let repo = FakeRepo::default();
+    let payments = FakePayments::default();
+    let svc = BillingServiceImpl::new(
+        FakeEntitlements::default()
+            .with(Entitlement::personal(payer.clone(), PlanTier::Max))
+            .with_customer(&payer, "cus_123"),
+        FakeUsage {
+            cents: Arc::new(Mutex::new(0)),
+            entries: Default::default(),
+        },
+        repo.clone(),
+        payments.clone(),
+        AiPricing::testing(),
+    )
+    .with_enforcement(AiUsageEnforcement::Enabled)
+    .with_billing(AiUsageBilling::Enabled);
+    // The subscription webhook stores the whole annual period.
+    svc.sync_period(&payer, d(2026, 1, 10), d(2027, 1, 10), None)
+        .await
+        .unwrap();
+
+    let position = svc.position(&payer, apr_18_noon()).await.unwrap();
+
+    assert_eq!(
+        position.period,
+        BillingPeriod {
+            start: d(2026, 4, 10),
+            end: d(2026, 5, 10),
+        }
+    );
+    assert!(
+        payments.period_requests().is_empty(),
+        "the stored annual anchor answers without reading Stripe"
+    );
+}
+
+#[tokio::test]
 async fn ended_anchor_is_refreshed_from_the_subscription_before_rolling_forward() {
     let (svc, repo, payments, _) = premium_service(0);
     let payer = user("payer@x.com");

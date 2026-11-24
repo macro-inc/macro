@@ -77,7 +77,9 @@ function Choice(props: {
 /** A person's seat plan, role, CRM access and Remove, behind their ⋯. */
 export function TeamMemberMenu(props: TeamMemberMenuProps) {
   const choosePlan = (value: string) => {
-    const option = seatPlanOptions().find((plan) => plan.value === value);
+    const option = seatPlanOptions(props.annual).find(
+      (plan) => plan.value === value
+    );
     if (option && option.value !== props.plan) props.onPlanChange(option.value);
   };
   const chooseRole = (value: string) => {
@@ -97,7 +99,7 @@ export function TeamMemberMenu(props: TeamMemberMenuProps) {
                   {t('teamMembers.plan')}
                 </Dropdown.GroupLabel>
                 <Dropdown.RadioGroup value={plan()} onChange={choosePlan}>
-                  <For each={seatPlanOptions()}>
+                  <For each={seatPlanOptions(props.annual)}>
                     {(option) => (
                       <Choice
                         value={option.value}

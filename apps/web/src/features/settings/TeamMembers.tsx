@@ -17,8 +17,12 @@ import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import { useAiBillingSummaryQuery } from '@queries/auth';
+import {
+  useAiBillingSummaryQuery,
+  useSubscriptionStatusQuery,
+} from '@queries/auth';
 import { useComputersQuery } from '@queries/computers/computers';
+import { queryReadyGate } from '@queries/gate';
 import {
   useDeleteTeamInviteMutation,
   useResendTeamInviteMutation,
@@ -281,6 +285,16 @@ export function TeamMembers(props: { team: TeamSummary }) {
       billingSummary.data.seats > 1
     );
   };
+  // An annual team has no Pro seats. Admins read how it bills from the
+  // subscription status; until that answers, every plan is listed and the
+  // server refuses one that isn't sold.
+  const subscriptionStatus = useSubscriptionStatusQuery({
+    enabled: () => showSeatPlans() && isAdminOrOwner(),
+  });
+  const annualTeam = () =>
+    queryReadyGate(subscriptionStatus)
+      ? subscriptionStatus.data.billing?.interval === 'year'
+      : false;
   const setMemberPlanMutation = useSetTeamMemberPlanMutation();
   // Seat moves read and rewrite the subscription's item quantities, so only
   // one may be in flight per team: every plan menu waits while one runs.
@@ -480,6 +494,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
                             plan={
                               showSeatPlans() ? memberPlan(member()) : undefined
                             }
+                            annual={annualTeam()}
                             pendingDowngrade={
                               pendingDowngradeOf(member()) !== undefined
                             }

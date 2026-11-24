@@ -677,6 +677,15 @@ fn a_monthly_period_or_a_time_outside_it_is_metered_as_is() {
         month.month_containing(Utc.with_ymd_and_hms(2026, 2, 10, 0, 0, 0).unwrap()),
         month
     );
+    // A month Stripe stretched by a few days is still one period.
+    let stretched = BillingPeriod {
+        start: Utc.with_ymd_and_hms(2026, 1, 10, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 2, 14, 0, 0, 0).unwrap(),
+    };
+    assert_eq!(
+        stretched.month_containing(Utc.with_ymd_and_hms(2026, 2, 12, 0, 0, 0).unwrap()),
+        stretched
+    );
     assert_eq!(
         year.month_containing(Utc.with_ymd_and_hms(2027, 2, 1, 0, 0, 0).unwrap()),
         year

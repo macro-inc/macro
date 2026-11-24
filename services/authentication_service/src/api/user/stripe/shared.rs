@@ -48,6 +48,14 @@ impl StripePrices {
                 .map(crate::config::configured_price_id)
                 .transpose()
         };
+        let business_yearly = price(&self.business_yearly)?;
+        let max_yearly = price(&self.max_yearly)?;
+        // An annual team has no Pro seats, so its joining members start on
+        // Business: annual Max needs annual Business sold beside it.
+        anyhow::ensure!(
+            business_yearly.is_some() == max_yearly.is_some(),
+            "STRIPE_BUSINESS_YEARLY_PRICE_ID and STRIPE_MAX_YEARLY_PRICE_ID must be set together"
+        );
         let original_max = price(&self.max)?;
         let max_monthly = price(&self.max_monthly)?;
         // A new monthly Max price retires the original one from sale; its
@@ -63,12 +71,12 @@ impl StripePrices {
             },
             business: PlanPrices {
                 monthly: price(&self.business_monthly)?,
-                yearly: price(&self.business_yearly)?,
+                yearly: business_yearly,
                 legacy: Vec::new(),
             },
             max: PlanPrices {
                 monthly: max_monthly,
-                yearly: price(&self.max_yearly)?,
+                yearly: max_yearly,
                 legacy: max_legacy,
             },
         })

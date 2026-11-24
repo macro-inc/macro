@@ -1,4 +1,4 @@
-import { PLANS } from '@app/features/paywall/plans';
+import { PLAN_BY_TIER, PLANS, soldAt } from '@app/features/paywall/plans';
 import { t } from '@app/lib/i18n';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
@@ -20,6 +20,8 @@ export type TeamMemberMenuProps = {
   email?: string;
   /** The seat plan, when the team bills per seat. */
   plan?: PaidPlan;
+  /** The team bills annually, where Pro isn't sold. */
+  annual: boolean;
   /** A seat that moves to a cheaper plan at renewal; Keep cancels that. */
   pendingDowngrade: boolean;
   planPending: boolean;
@@ -52,9 +54,10 @@ type SeatPlanOption = {
 /** Every paid plan a seat can be moved to, cheapest first, described by its
  * AI usage: a seat's price depends on whether the team bills monthly or
  * annually. */
-export function seatPlanOptions(): SeatPlanOption[] {
+export function seatPlanOptions(annual: boolean): SeatPlanOption[] {
   return PLANS.flatMap((plan) => {
     if (plan.tier === 'free') return [];
+    if (!soldAt(plan.tier, annual ? 'year' : 'month')) return [];
     return [
       {
         value: plan.tier,
@@ -70,9 +73,7 @@ export function seatPlanOptions(): SeatPlanOption[] {
 }
 
 export function seatPlanName(plan: PaidPlan): string {
-  return (
-    seatPlanOptions().find((option) => option.value === plan)?.label ?? plan
-  );
+  return PLAN_BY_TIER[plan].name;
 }
 
 /** The roles an owner can give a member or admin. */

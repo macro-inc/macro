@@ -192,12 +192,13 @@ impl BillingPeriod {
     /// `current_period_start/end`) the window is the anchor itself, rolled
     /// forward by its own length in months when the webhook that would have
     /// moved it has not landed yet. Without an anchor, the UTC calendar month.
+    /// An annual anchor is metered by the month (see [`Self::month_containing`]).
     pub fn current(anchor: Option<(DateTime<Utc>, DateTime<Utc>)>, now: DateTime<Utc>) -> Self {
         if let Some((start, end)) = anchor
             && start < end
         {
             if now < end {
-                return Self { start, end };
+                return Self { start, end }.month_containing(now);
             }
             let anchor_days = (end - start).num_days().max(1) as f64;
             let months_per_period = (anchor_days / 30.44).round().max(1.0) as u32;
@@ -209,7 +210,9 @@ impl BillingPeriod {
                     .checked_add_months(Months::new(index * months_per_period))
                     .zip(start.checked_add_months(Months::new((index + 1) * months_per_period)));
                 match candidate {
-                    Some((s, e)) if now < e => return Self { start: s, end: e },
+                    Some((s, e)) if now < e => {
+                        return Self { start: s, end: e }.month_containing(now);
+                    }
                     Some(_) => index += 1,
                     None => break,
                 }
@@ -221,14 +224,15 @@ impl BillingPeriod {
     /// The month of this subscription period that contains `at`. Allowances
     /// reset monthly, so an annual subscription is metered in month-long
     /// windows counted from its period start (the last one ends with the
-    /// period). A period of a month or less, or one not containing `at`, is
-    /// returned as is.
+    /// period). A monthly period is returned as is, including one Stripe
+    /// stretched or shortened by a few days, as is a period not containing
+    /// `at`: only a period over two months long is split.
     pub fn month_containing(self, at: DateTime<Utc>) -> Self {
-        let longer_than_a_month = self
+        let longer_than_two_months = self
             .start
-            .checked_add_months(Months::new(1))
-            .is_some_and(|month_end| month_end < self.end);
-        if !longer_than_a_month || at < self.start || at >= self.end {
+            .checked_add_months(Months::new(2))
+            .is_some_and(|two_months| two_months < self.end);
+        if !longer_than_two_months || at < self.start || at >= self.end {
             return self;
         }
         // Each boundary is counted from the period start, so a start on the
@@ -251,13 +255,15 @@ impl BillingPeriod {
         self
     }
 
-    /// The stored anchor when it contains `now`.
+    /// The stored anchor when it contains `now`; for an annual anchor (the
+    /// webhook stores the subscription's whole period), its month containing
+    /// `now`, since allowances reset monthly.
     pub fn covering(
         anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
         now: DateTime<Utc>,
     ) -> Option<Self> {
         let (start, end) = anchor?;
-        (start <= now && now < end).then_some(Self { start, end })
+        (start <= now && now < end).then(|| Self { start, end }.month_containing(now))
     }
 
     /// The part of this subscription window to store and meter after the
