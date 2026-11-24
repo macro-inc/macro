@@ -398,6 +398,13 @@ impl UnifiedSearchIndex {
             OpenSearchEntityType::CallRecords => Self::CallRecord(parse(&entity, source)?),
             OpenSearchEntityType::CalendarEvents => Self::CalendarEvent(parse(&entity, source)?),
             OpenSearchEntityType::Projects => Self::Project(parse(&entity, source)?),
+            // No unified query names the database rows index yet.
+            OpenSearchEntityType::DatabaseRows => {
+                return Err(crate::error::OpensearchClientError::Unknown {
+                    details: "database row hits are not part of unified search".to_owned(),
+                    operation: OpensearchOperation::SearchUnified,
+                });
+            }
         })
     }
 }
@@ -413,6 +420,7 @@ pub struct SplitUnifiedSearchResponseValues {
     pub call_record: Vec<SearchHit>,
     pub crm_company: Vec<SearchHit>,
     pub calendar_event: Vec<SearchHit>,
+    pub database_row: Vec<SearchHit>,
 }
 
 pub trait SplitUnifiedSearchResponse: Iterator<Item = SearchHit> {
@@ -436,6 +444,7 @@ where
                 SearchEntityType::CallRecords => split.call_record.push(item),
                 SearchEntityType::CrmCompanies => split.crm_company.push(item),
                 SearchEntityType::CalendarEvents => split.calendar_event.push(item),
+                SearchEntityType::DatabaseRows => split.database_row.push(item),
             }
         }
         split
