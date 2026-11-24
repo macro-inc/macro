@@ -182,6 +182,7 @@ fn label(labels: &[&str], tagged: bool, exclude: bool) -> EmailLabelCondition {
 struct Case {
     name: &'static str,
     args: UnifiedEmailSearchArgs,
+    match_type: &'static str,
     expected: &'static [u128],
 }
 
@@ -193,6 +194,7 @@ fn case(name: &'static str, terms: &[&str], expected: &'static [u128]) -> Case {
             user_ids: vec![VIEWER.to_string()],
             ..Default::default()
         },
+        match_type: "partial",
         expected,
     }
 }
@@ -339,6 +341,72 @@ async fn a_hyphenated_word_finds_the_mail_that_holds_it() -> anyhow::Result<()> 
     search_seeded(hyphenated_messages(), hyphenated_cases()).await
 }
 
+/// Mail holding a word in its text, in an address, and nowhere.
+fn punctuated_messages() -> Vec<Message> {
+    let message = |n, subject, content, sender| Message {
+        thread: thread(n),
+        owner: VIEWER,
+        subject,
+        content,
+        sender,
+        recipients: vec![ANA],
+        cc: Vec::new(),
+        bcc: Vec::new(),
+        labels: vec!["INBOX"],
+        sent_at_millis: Some(MARCH_2025),
+        tagged: false,
+    };
+    vec![
+        message(21, "Team lunch", "menu attached", BO),
+        message(22, "Weekly plan", "agenda", LUNCH_DESK),
+        message(23, "Quarterly numbers", "two figures", CY),
+    ]
+}
+
+const LUNCH_DESK: (&str, &str) = ("Canteen", "lunch@probe.example");
+
+/// A term's punctuation is never query syntax: a term matches by its words,
+/// as it matches documents.
+fn punctuated_cases() -> Vec<Case> {
+    let words = || {
+        [
+            case("lunch", &["lunch"], &[21, 22]),
+            case("-lunch", &["-lunch"], &[21, 22]),
+            case("--lunch", &["--lunch"], &[21, 22]),
+            case("-lunch -menu", &["-lunch", "-menu"], &[21]),
+            case("numbers -lunch", &["numbers", "-lunch"], &[]),
+            case("a minus before a word no mail holds", &["-zebra"], &[]),
+            case("a minus before a phrase", &["-team lunch"], &[21]),
+            case("a minus before a hyphenated word", &["-team-lunch"], &[21]),
+            case("(lunch", &["(lunch"], &[21, 22]),
+            case("+lunch)", &["+lunch)"], &[21, 22]),
+            case("lunch~2", &["lunch~2"], &[]),
+            case("lunch|numbers", &["lunch|numbers"], &[]),
+            case("a minus alone", &["-"], &[]),
+        ]
+    };
+    let mut cases = Vec::new();
+    for match_type in ["partial", "exact"] {
+        cases.extend(words().map(|case| Case { match_type, ..case }));
+    }
+    let mut with = |mut case: Case, set: &dyn Fn(&mut UnifiedEmailSearchArgs)| {
+        set(&mut case.args);
+        cases.push(case);
+    };
+    with(case("subject:-lunch", &[], &[21]), &|args| {
+        args.text_conditions = vec![text(EmailTextFields::Subject, "-lunch", false)];
+    });
+    with(case("from:-lunch", &[], &[22]), &|args| {
+        args.text_conditions = vec![text(EmailTextFields::From, "-lunch", false)];
+    });
+    cases
+}
+
+#[tokio::test]
+async fn a_term_matches_by_its_words_whatever_punctuation_it_carries() -> anyhow::Result<()> {
+    search_seeded(punctuated_messages(), punctuated_cases()).await
+}
+
 /// Seeds `messages` into an `emails` index holding nothing else, runs each
 /// case, removes what it seeded, and fails on any case that kept other
 /// messages than it names.
@@ -388,7 +456,7 @@ async fn seed_and_search(
         let args = UnifiedSearchArgs {
             user_id: VIEWER.to_string(),
             page_size: 50,
-            match_type: "partial".to_string(),
+            match_type: case.match_type.to_string(),
             cursor: SearchCursorOption::default(),
             search_indices: [models_opensearch::OpenSearchEntityType::Emails].into(),
             email_search_args: case.args,
@@ -399,8 +467,8 @@ async fn seed_and_search(
         let expected: BTreeSet<Uuid> = case.expected.iter().map(|n| thread(*n)).collect();
         if found != expected {
             failures.push(format!(
-                "{}: expected {expected:?}, found {found:?}",
-                case.name
+                "{} ({}): expected {expected:?}, found {found:?}",
+                case.name, case.match_type
             ));
         }
     }

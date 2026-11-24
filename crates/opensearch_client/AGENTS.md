@@ -171,10 +171,13 @@ projects.
   never holds. A partial term of several UAX #29 words is matched with
   `create_query` instead (`emails::text_terms_query`), so it follows the
   rules above, a Thai run included. A term of one word with punctuation
-  around it (`follow-`, `Re:`) matches by that word alone, as a prefix or,
-  under three characters, as the whole word. A one-word term `single_word`
-  does not count (a Devanagari word with a virama) stays an uncapped
-  `term*`.
+  around it (`follow-`, `Re:`, `-lunch`) matches by that word alone, as a
+  prefix or, under three characters, as the whole word; one `single_word`
+  does not count (a Devanagari word with a virama) is an uncapped `term*`
+  too. Everything else a `simple_query_string` would read as syntax is
+  escaped (`emails::escape_syntax`): unescaped, the address clause of
+  `-lunch` was NOT `lunch` and matched every other message. Only regexp input
+  keeps its punctuation.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:
