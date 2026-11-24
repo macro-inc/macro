@@ -118,6 +118,15 @@ export function ChatComposer(props: {
   const controlsOpen = () => Boolean(props.controlsOpen || addControlsActive());
   const { focused, hasFocused, collapsed, focus, blur } =
     createComposerExpansion(() => props.collapseOnBlur, controlsOpen);
+  createEffect(
+    on(controlsOpen, (active, previous) => {
+      if (active || !previous) return;
+      // A null-target iOS blur can precede the opening click. Reconcile with
+      // the DOM only after every control finishes its final focus restoration.
+      if (container?.contains(document.activeElement)) focus();
+      else blur();
+    })
+  );
   const drawerOpen = () => props.drawerOpen && !collapsed();
   // Portaled controls own their keyboard and outside-dismissal behavior.
   // The composer's DOM-only boundary must not blur their editor on touchstart.

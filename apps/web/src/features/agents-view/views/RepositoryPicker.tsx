@@ -13,6 +13,7 @@ import {
   For,
   type JSX,
   Match,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
@@ -203,6 +204,10 @@ export function RepositoryPicker(props: {
     >
       <RepositoryPickerMenu
         open={repoOpen()}
+        onDispose={() => {
+          setRepoOpen(false);
+          setFocusScope('repository', false);
+        }}
         onCloseFocus={() => {
           if (!repoOpen()) setFocusScope('repository', false);
         }}
@@ -344,6 +349,10 @@ export function RepositoryPicker(props: {
       <Show when={props.repoUrl}>
         <RepositoryPickerMenu
           open={branchOpen()}
+          onDispose={() => {
+            setBranchOpen(false);
+            setFocusScope('branch', false);
+          }}
           onCloseFocus={() => {
             if (!branchOpen()) setFocusScope('branch', false);
           }}
@@ -505,6 +514,7 @@ function RepositoryPickerMenu(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCloseFocus: () => void;
+  onDispose: () => void;
   label: string;
   triggerLabel?: string;
   triggerClass: string;
@@ -514,6 +524,7 @@ function RepositoryPickerMenu(props: {
   children: JSX.Element;
 }) {
   let content: HTMLDivElement | undefined;
+  onCleanup(props.onDispose);
   return (
     <Show
       when={isTouchDevice()}

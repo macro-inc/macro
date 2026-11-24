@@ -988,6 +988,9 @@ it.each(['Repository', 'Branch'])(
       vi.unstubAllGlobals();
     });
     const [controlsOpen, setControlsOpen] = createSignal(false);
+    const [repoUrl, setRepoUrl] = createSignal<string | undefined>(
+      'https://github.com/macro-inc/macro'
+    );
     const { container } = render(() => (
       <ChatComposer
         collapseOnBlur
@@ -1000,7 +1003,7 @@ it.each(['Repository', 'Branch'])(
         drawer={
           <RepositoryPicker
             onFocusScopeChange={setControlsOpen}
-            repoUrl="https://github.com/macro-inc/macro"
+            repoUrl={repoUrl()}
             branch="main"
             repositories={[]}
             repositoriesLoading={false}
@@ -1018,7 +1021,8 @@ it.each(['Repository', 'Branch'])(
       />
     ));
     const input = screen.getByTestId('editor');
-    fireEvent.focusIn(input);
+    input.tabIndex = -1;
+    input.focus();
     fireEvent.click(screen.getByRole('button', { name: control }));
     const search = screen.getByRole('combobox');
     const scrollBody = search.closest<HTMLElement>('[data-drawer-scroll-body]');
@@ -1039,6 +1043,13 @@ it.each(['Repository', 'Branch'])(
     expect(controlsOpen()).toBe(true);
     await waitFor(() => expect(controlsOpen()).toBe(false));
     expect(screen.getByTestId('editor')).toBe(input);
+    if (control === 'Branch') {
+      input.focus();
+      fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+      expect(controlsOpen()).toBe(true);
+      setRepoUrl(undefined);
+      await waitFor(() => expect(controlsOpen()).toBe(false));
+    }
   }
 );
 
@@ -1089,6 +1100,12 @@ it.each([false, true])(
     setOpen(true);
     setOpen(false);
     expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+    // iOS can blur with no next target before the control's click opens it.
+    input.blur();
+    setOpen(true);
+    control.focus();
+    setOpen(false);
+    expect(surface.hasAttribute('data-composer-expanded')).toBe(false);
   }
 );
 
