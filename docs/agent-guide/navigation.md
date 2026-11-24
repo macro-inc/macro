@@ -1302,7 +1302,7 @@ in the iOS app, the Android app, and a mobile browser. Their edge is an even 1px
 hairline with no bevel or highlight, and a press shows the normal tap feedback:
 surfaces do not grow, spotlight, or trigger haptics. In dark mode the dock,
 header islands, pills, and composers sit a step lighter than the page, so they
-read as raised, and are 88% opaque over a backdrop blur, so content scrolling
+read as raised, and are 78% opaque over a backdrop blur, so content scrolling
 beneath them shows through softly; light mode keeps them opaque.
 
 ## Routines

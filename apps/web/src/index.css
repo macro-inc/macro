@@ -764,7 +764,7 @@ body.tauri-ios {
     /* Dark touch chrome sits lighter than the page so it reads as raised,
        and lets the blurred content behind it show through. */
     --raised-glass-lift: 10%;
-    --raised-glass-alpha: 88%;
+    --raised-glass-alpha: 78%;
     --glass-desktop-outline: rgb(0 0 0 / 0.4);
     --glass-desktop-inner-edge: rgb(255 255 255 / 0.08);
     --glass-desktop-top-edge: rgb(255 255 255 / 0.12);
