@@ -1545,12 +1545,18 @@ fn a_long_label_name_is_matched_whole_while_words_are_cut() {
     let name = "n".repeat(MAX_TERM_CHARS + 15);
     let word = "w".repeat(MAX_TERM_CHARS + 15);
     let subject = "s".repeat(MAX_TERM_CHARS + 15);
+    let left_out = "x".repeat(MAX_TERM_CHARS + 15);
     let mut filters = every_kind();
 
-    let (terms, _) = limited_terms(
+    let (terms, email_query) = limited_terms(
         &mut filters,
         false,
-        vec![format!("label:{name}"), word, format!("subject:{subject}")],
+        vec![
+            format!("label:{name}"),
+            word,
+            format!("subject:{subject}"),
+            format!("-{left_out}"),
+        ],
         MatchType::Partial,
         clock(),
     )
@@ -1558,10 +1564,17 @@ fn a_long_label_name_is_matched_whole_while_words_are_cut() {
 
     assert_eq!(filters.email_filters.label_names[0].name, name);
     assert_eq!(terms[0].chars().count(), MAX_TERM_CHARS);
-    assert_eq!(
-        filters.email_filters.text_matches[0].text.chars().count(),
-        MAX_TERM_CHARS
+    assert_eq!(filters.email_filters.text_matches.len(), 2);
+    assert!(
+        filters
+            .email_filters
+            .text_matches
+            .iter()
+            .all(|text_match| text_match.text.chars().count() == MAX_TERM_CHARS)
     );
+    let reported = reported_filters(&email_query.expect("the search typed operators"));
+    assert_eq!(reported.label_names, filters.email_filters.label_names);
+    assert_eq!(reported.text_matches, filters.email_filters.text_matches);
 }
 
 #[test]

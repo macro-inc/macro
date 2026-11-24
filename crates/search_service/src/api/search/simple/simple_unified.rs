@@ -200,7 +200,8 @@ fn enforce_term_limits(terms: Vec<String>) -> Result<Vec<String>, SearchError> {
 /// A search's terms with its email operators read out of them, then held to
 /// [`MAX_SEARCH_TERMS`] and [`MAX_TERM_CHARS`]. Operators are read before
 /// anything is cut to length, so a long label name is matched whole; the
-/// words left and the text the operators match are cut as terms are.
+/// words left and every text condition the search applies are cut as terms
+/// are, and the typed conditions reported back are cut the same way.
 fn limited_terms(
     filters: &mut SearchEntityFilters,
     include_crm: bool,
@@ -211,13 +212,21 @@ fn limited_terms(
     if terms.len() > MAX_SEARCH_TERMS {
         return Err(SearchError::TooManyTerms);
     }
-    let (terms, email_query) =
+    let (terms, mut email_query) =
         apply_email_operators(filters, include_crm, terms, match_type, clock);
     let terms = enforce_term_limits(terms)?;
-    for text_match in &mut filters.email_filters.text_matches {
-        text_match.text = truncate_term(std::mem::take(&mut text_match.text));
+    truncate_text_matches(&mut filters.email_filters);
+    if let Some(query) = &mut email_query {
+        truncate_text_matches(&mut query.filters);
     }
     Ok((terms, email_query))
+}
+
+/// Each text condition in `filters` cut to [`MAX_TERM_CHARS`].
+fn truncate_text_matches(filters: &mut item_filters::EmailFilters) {
+    for text_match in &mut filters.text_matches {
+        text_match.text = truncate_term(std::mem::take(&mut text_match.text));
+    }
 }
 
 /// `term` cut to [`MAX_TERM_CHARS`].
