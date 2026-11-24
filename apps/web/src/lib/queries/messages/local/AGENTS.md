@@ -28,7 +28,9 @@ TanStack path in `../` runs untouched.
   edit, delete or reaction resolves only when the device copy shows it
   (`applied`; another tab may have rolled it back, `NOT_APPLIED`), and a send
   answers from the device copy, else the server copy (`ChannelMessage`), else
-  `NOT_SENT`, or `DELIVERY_UNKNOWN` when the server cannot say. A queue that
+  `NOT_SENT`, or `DELIVERY_UNKNOWN` when the server cannot say; the composers
+  send a restored draft of that message again under the same id
+  (`features/channel/Input/utils/uncertain-sends.ts`). A queue that
   cannot be read is asked again with backoff, except after a reset, which
   fails the write with `CACHE_RESET`. A write is its transaction id and its
   mutation id: transaction ids restart when the queue is rebuilt. The queue

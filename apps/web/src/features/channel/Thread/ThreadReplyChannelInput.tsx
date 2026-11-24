@@ -20,6 +20,7 @@ import {
   makeInputValuePersistenceKey,
 } from '../Input/utils/persistence';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
+import { createUncertainSends } from '../Input/utils/uncertain-sends';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import type { FocusRequest } from './focus-request';
 
@@ -58,6 +59,12 @@ type ThreadReplyChannelInputProps = {
  * a remount restores only snapshots built elsewhere, such as a quote reply.
  */
 const REPORTED_SNAPSHOTS = new WeakSet<InputSnapshot>();
+
+/**
+ * The reply input unmounts as it sends, so the reply whose delivery is
+ * unknown is remembered here, with where it went.
+ */
+const UNCERTAIN_REPLIES = createUncertainSends(() => newMessageId());
 
 export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
   onCleanup(() => {
@@ -164,16 +171,20 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
           snapshot,
           threadId: props.threadId,
         });
+        const uncertainKey = { parent: props.parent, message: payload.message };
+        const optimisticId = UNCERTAIN_REPLIES.idFor(uncertainKey);
 
         sendMessageMutation.mutate(
           {
             parent: props.parent,
             senderId,
-            optimisticId: newMessageId(),
+            optimisticId,
             ...payload,
           },
           {
-            onError: () => {
+            onError: (error) => {
+              // Sent again unchanged, a reply that may have arrived keeps its id.
+              UNCERTAIN_REPLIES.failed(uncertainKey, optimisticId, error);
               // The user may have started a new draft by now; keep it.
               const current = props.replyInputState();
               if (current && hasSendableInputContent(current)) return;

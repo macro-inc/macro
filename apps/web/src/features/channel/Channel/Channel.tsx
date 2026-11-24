@@ -113,6 +113,7 @@ import {
 } from '../Input';
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
+import { createUncertainSends } from '../Input/utils/uncertain-sends';
 import {
   decodeSystemActivityRow,
   mergesSystemActivity,
@@ -788,6 +789,8 @@ export function Channel(props: ChannelProps) {
     sendSurfaceDisposed = true;
   });
 
+  const uncertainSends = createUncertainSends(() => newMessageId());
+
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
     const channelId = props.channelId;
     const senderId = userId();
@@ -796,7 +799,10 @@ export function Channel(props: ChannelProps) {
       snapshot,
     });
 
-    const optimisticId = newMessageId();
+    // Where it goes with what it says: the same text in another channel is
+    // another message.
+    const uncertainKey = { channelId, message: payload.message };
+    const optimisticId = uncertainSends.idFor(uncertainKey);
     // Send to the optimistic message's paint; channel.send follows delivery.
     const sendUi = startUiOperation('message.send', {
       attributes: { 'channel.id': channelId, 'message.id': optimisticId },
@@ -815,9 +821,11 @@ export function Channel(props: ChannelProps) {
             ...payload,
           });
           span.setAttr('composer.outcome', 'succeeded');
-        } catch {
+        } catch (error) {
           sendUi.finish('error');
           span.error('Channel send failed');
+          // Sent again unchanged, a send that may have arrived keeps its id.
+          uncertainSends.failed(uncertainKey, optimisticId, error);
           const handle = channelInputHandle();
           if (
             !handle ||
