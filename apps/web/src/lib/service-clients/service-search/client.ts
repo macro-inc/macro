@@ -1,4 +1,5 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { getDefaultTimezone } from '@core/util/cron';
 import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
@@ -61,12 +62,17 @@ const buildSearchQuery = (params: SearchParams) => {
 };
 
 export const searchClient = {
+  /**
+   * Dates typed into the search (`after:`, `newer_than:`) count days in the
+   * person's time zone unless the request names another.
+   */
   async search(args: SearchArgs, init?: SafeFetchInit) {
     const url = `/search${buildSearchQuery(args.params)}`;
+    const request = { time_zone: getDefaultTimezone(), ...args.request };
     return (
       await searchServiceFetch<UnifiedSearchResponse>(url, {
         method: 'POST',
-        body: JSON.stringify(args.request),
+        body: JSON.stringify(request),
         ...init,
       })
     ).map((result) => result);
