@@ -70,6 +70,10 @@ describe('isUnfinishedEmailSearchOperator', () => {
       'after:2026/01-05',
       '-in:sent',
       '-in:berlin',
+      'after:/',
+      'newer_than:-',
+      'constructor:',
+      '__proto__:x',
       'lunch',
       're:',
     ]) {
@@ -102,7 +106,9 @@ describe('completeEmailSearchOperator', () => {
     expect(texts('subject:')).toEqual([]);
   });
 
-  it('offers nothing inside a quoted phrase', () => {
+  it('offers nothing inside a quoted phrase, or for a name that is not an operator', () => {
     expect(texts('"su')).toEqual([]);
+    expect(texts('constructor:')).toEqual([]);
+    expect(texts('__proto__:')).toEqual([]);
   });
 });

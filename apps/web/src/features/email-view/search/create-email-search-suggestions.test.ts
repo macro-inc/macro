@@ -252,3 +252,31 @@ it('lists the views -in: can leave out, and finishes one with its minus', () => 
     dispose();
   });
 });
+
+it('forgets the active row when an edit brings the same text back', () => {
+  createRoot((dispose) => {
+    const { setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+
+    setSearch('is:');
+    suggestions.setActive(0);
+    expect(suggestions.active()).toBe(0);
+    setSearch('is:u');
+    setSearch('is:');
+    expect(suggestions.active()).toBe(-1);
+    dispose();
+  });
+});
+
+it('lists no views for an in: inside a quoted phrase', () => {
+  createRoot((dispose) => {
+    const { setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+
+    setSearch('subject:"team -in:se');
+    expect(recentListed(suggestions)).toEqual([]);
+    setSearch('subject:"team lunch" -in:se');
+    expect(recentListed(suggestions)).toEqual(['view:-sent']);
+    dispose();
+  });
+});

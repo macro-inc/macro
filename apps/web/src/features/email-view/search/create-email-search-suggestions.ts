@@ -27,10 +27,10 @@ export const searchSuggestionOptionId = (index: number) =>
 const MAX_LISTED = 5;
 
 /**
- * An `in:` being typed at the end of the field, or a `-in:` that leaves a
+ * An `in:` being typed as the field's last token, or a `-in:` that leaves a
  * view out: the view's name so far.
  */
-const TYPED_FILTER = /(?:^|\s)(-?)in:(\S*)$/i;
+const TYPED_FILTER = /^(-?)in:(\S*)$/i;
 
 /** A row under the search field. */
 export type EmailSearchSuggestion =
@@ -79,28 +79,34 @@ export function createEmailSearchSuggestions(options: {
   const recent = createRecentEmailSearches(options.userId);
   const [open, setOpen] = createSignal(false);
   const [focused, setFocusedState] = createSignal(false);
-  // The row picked out by the keyboard, for the text it was picked out in:
-  // typing changes the rows, so it no longer points at that row.
-  const [activeRow, setActiveRow] = createSignal({ index: -1, search: '' });
+  // Each edit of the search is a new object, so a row picked out by the
+  // keyboard before an edit no longer counts, even when the edit brings the
+  // same text back: typing changes the rows under it.
+  const searchEdit = createMemo(() => ({ search: options.search() }));
+  const [activeRow, setActiveRow] = createSignal({
+    index: -1,
+    edit: searchEdit(),
+  });
   const setActive = (index: number) =>
-    setActiveRow({ index, search: options.search() });
+    setActiveRow({ index, edit: searchEdit() });
   const active = () => {
     const row = activeRow();
-    if (row.search !== options.search()) return -1;
+    if (row.edit !== searchEdit()) return -1;
     return Math.min(row.index, listed().length - 1);
   };
   const [awaitsPickedResults, setAwaitsPickedResults] = createSignal(false);
 
-  // The text split at an `in:` being typed at its end.
+  // The text split at an `in:` being typed at its end, outside quotes.
   const typedFilter = () => {
-    const text = options.search();
-    const typed = TYPED_FILTER.exec(text);
-    if (!typed) return undefined;
+    const typed = typedToken(options.search());
+    if (!typed || typed.token.includes('"')) return undefined;
+    const parts = TYPED_FILTER.exec(typed.token);
+    if (!parts) return undefined;
 
     return {
-      before: text.slice(0, typed.index),
-      exclude: typed[1] === '-',
-      prefix: typed[2] ?? '',
+      before: typed.before,
+      exclude: parts[1] === '-',
+      prefix: parts[2] ?? '',
     };
   };
 
@@ -168,9 +174,7 @@ export function createEmailSearchSuggestions(options: {
         .with({ kind: 'view' }, ({ scope, exclude }) => {
           const before = typedFilter()?.before ?? '';
           const minus = exclude ? '-' : '';
-          options.setSearch(
-            `${before}${before ? ' ' : ''}${minus}in:${scope} `
-          );
+          options.setSearch(`${before}${minus}in:${scope} `);
           setActive(-1);
         })
         // An operator replaces the token it finishes.

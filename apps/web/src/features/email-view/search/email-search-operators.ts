@@ -82,7 +82,7 @@ const isKey = (key: string): key is EmailSearchOperatorKey =>
   (EMAIL_SEARCH_OPERATOR_KEYS as readonly string[]).includes(key);
 
 const isValueKey = (key: string): key is EmailSearchValueKey =>
-  key in EMAIL_SEARCH_OPERATOR_VALUES;
+  Object.hasOwn(EMAIL_SEARCH_OPERATOR_VALUES, key);
 
 /**
  * A minus, then `name:value`, read as the service reads a term: quotes are
@@ -193,7 +193,11 @@ export function isUnfinishedEmailSearchOperator(token: string): boolean {
       return true;
   }
   if (readsAsEmailSearchOperator(token)) return false;
-  if (!hasWord(read.value)) return true;
+  if (!hasWord(read.value)) {
+    // A date or a span starts with a digit, so `after:/` can never be one.
+    const dated = ['after', 'before', 'newer_than', 'older_than'];
+    return !dated.includes(read.key) || read.value === '';
+  }
 
   if (isValueKey(read.key)) {
     return EMAIL_SEARCH_OPERATOR_VALUES[read.key].some((full) =>
