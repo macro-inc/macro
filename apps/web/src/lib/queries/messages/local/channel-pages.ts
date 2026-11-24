@@ -129,6 +129,18 @@ export interface ChannelTouches {
 /** How often an opened channel's eviction clock is written to the device. */
 export const CHANNEL_TOUCH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
+type SessionGeneration = typeof cacheSessionGeneration;
+
+/**
+ * Whether the device takes a mark read under `generation`: the current
+ * session, also while its cleanup still runs (the device already writes under
+ * it, and a channel opened then would otherwise keep its old clock).
+ */
+export const touchSessionAccepts =
+  (session: Pick<SessionGeneration, 'capture' | 'isCurrent'>) =>
+  (generation: string) =>
+    generation === session.capture() || session.isCurrent(generation);
+
 /**
  * Remembers in memory when each channel was last marked opened, so ordinary
  * opens write nothing: eviction runs on a 30-day clock, and six hours of
@@ -140,11 +152,14 @@ export const CHANNEL_TOUCH_INTERVAL_MS = 6 * 60 * 60 * 1000;
  * from an earlier session, so a read in a new session marks the channel
  * again, even while the earlier mark is still on its way. A read from a
  * session that is no longer current marks nothing, since the device would
- * refuse it, so it never replaces the current session's mark.
+ * refuse it, so it never replaces the current session's mark; a read in a
+ * session whose cleanup still runs marks.
  */
 export function createChannelTouches(
   intervalMs = CHANNEL_TOUCH_INTERVAL_MS,
-  isCurrent: (generation: string) => boolean = cacheSessionGeneration.isCurrent
+  isCurrent: (generation: string) => boolean = touchSessionAccepts(
+    cacheSessionGeneration
+  )
 ): ChannelTouches {
   const touched = new Map<string, { atMs: number; generation: string }>();
   return {

@@ -94,7 +94,8 @@ TanStack path in `../` runs untouched.
   30-day eviction would take at once. A touch counts only once the device
   stored it (`settled`), and only in the cache session it was sent in: a
   refused one, or one from an earlier session, is sent again with the next
-  read. A read from a session that is no longer current marks nothing.
+  read. A read from a session that is no longer current marks nothing; one
+  in the session whose cleanup still runs marks (`touchSessionAccepts`).
 - `effect` is allowed only in `channel-sync-runtime.ts`, `channel-writes.ts`,
   `channel-prewarm.ts` and the tests that run their effects (FE-46).
 - Channel queries abort through `firstOrAborted`: urql replaces
@@ -109,8 +110,9 @@ TanStack path in `../` runs untouched.
 - A pushed message reaches an open timeline only once the device has reread
   it, and its unread notification often gets there first. Code that fetches
   what the timeline lacks waits for it to settle on the device path, as the
-  unread navigation's parent lookup does (`followsPushes`), or every push
-  fetches its own message again.
+  unread navigation's parent lookup does (`followsPushes`, each parent on
+  its own monotonic clock, `createRipeIds`), or every push fetches its own
+  message again.
 
 ## Related
 

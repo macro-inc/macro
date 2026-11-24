@@ -3,7 +3,10 @@ import {
   CHANNEL_TIMELINE_HEAD,
   CHANNEL_TIMELINE_START,
 } from '@graphql-cache/index';
-import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import {
+  cacheSessionGeneration,
+  createSessionGeneration,
+} from '@graphql-cache/session-generation';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as ChannelNetwork from '../channel-network';
 import {
@@ -13,6 +16,7 @@ import {
   type FetchChannelServerPage,
   loadChannelPage,
   serverPageCoverage,
+  touchSessionAccepts,
 } from '../channel-pages';
 import {
   DELETE_HOLD_LIMIT_MS,
@@ -550,5 +554,22 @@ describe('createChannelTouches', () => {
       if (at !== undefined) touches.settled(CHANNEL_ID, at, earlier, false);
 
     expect(touches.due(CHANNEL_ID, 1_010, 'current')).toBeUndefined();
+  });
+
+  it('marks a channel read while the session it changed to is cleaning up', async () => {
+    const session = createSessionGeneration('first');
+    session.initialize('first');
+    const cleanup = Promise.withResolvers<void>();
+    const changed = session.transition(() => cleanup.promise, 'second');
+    const touches = createChannelTouches(
+      undefined,
+      touchSessionAccepts(session)
+    );
+
+    expect(touches.due(CHANNEL_ID, 1_000, 'first')).toBeUndefined();
+    expect(touches.due(CHANNEL_ID, 1_000, session.capture())).toBe(1_000);
+    cleanup.resolve();
+    await changed;
+    expect(touches.due(CHANNEL_ID, 1_001, 'second')).toBeUndefined();
   });
 });
