@@ -314,8 +314,8 @@ function EmailLayout(props: {
   );
 }
 
-function EmailMobileLayout(props: ParentProps) {
-  const { state, setState } = useEmailView();
+export function EmailMobileLayout(props: ParentProps) {
+  const { state, setState, registerSearchField } = useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
   const suggestions = createEmailSearchSuggestions({
@@ -339,6 +339,7 @@ function EmailMobileLayout(props: ParentProps) {
     triggerFocusInput(() => searchInput);
   };
   const closeSearch = mobileSearch.close;
+  registerSearchField({ open: searching, close: closeSearch });
   useAndroidBackNavigation(() => {
     if (!searching()) return false;
 

@@ -145,7 +145,7 @@ export function EmailList(props: EmailListProps) {
     openThread,
     selectedThread,
     filterByTag,
-    searchOpen,
+    searchHasText,
     parsedSearch,
   } = useEmailView();
   const analytics = useAnalytics();
@@ -608,7 +608,7 @@ export function EmailList(props: EmailListProps) {
 
   const hasEmailRows = () => rows().some((row) => row.kind === 'entity');
   // The tutorial introduces the inbox; search results are not the inbox.
-  const showsTutorial = () => state.tab === 'important' && !searchOpen();
+  const showsTutorial = () => state.tab === 'important' && !searchHasText();
 
   function showsEmptyViewport() {
     return (
