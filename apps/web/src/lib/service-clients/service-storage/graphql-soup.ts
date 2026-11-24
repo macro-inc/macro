@@ -527,6 +527,10 @@ export function subscribeGraphqlSoupReconnected(
   };
 }
 
+function notifyReconnected(): void {
+  for (const listener of reconnectListeners) listener();
+}
+
 function createGraphqlSoupWebSocketClient(
   onConnected: () => void,
   onState: (state: MutationQueueEnvironment['websocket']) => void = () =>
@@ -570,7 +574,7 @@ function createGraphqlSoupWebSocketClient(
         onConnected();
         connections += 1;
         if (connections === 1) return;
-        for (const listener of reconnectListeners) listener();
+        notifyReconnected();
       },
     },
     shouldRetry: shouldRetryGraphqlSoupWebSocket,
@@ -1054,7 +1058,11 @@ export function getGraphqlSoupClient(): Client {
       if (!target || cachedCacheHost !== target) return;
       installCrmCacheHost(target);
       fireAndForget(
-        startSubscriptions(target).then(cacheRecovery.available),
+        startSubscriptions(target).then(() => {
+          // Soup updates were off meanwhile, as while a socket is down.
+          notifyReconnected();
+          return cacheRecovery.available();
+        }),
         'graphql-cache-recovery'
       );
     };

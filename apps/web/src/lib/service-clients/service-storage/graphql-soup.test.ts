@@ -2369,10 +2369,14 @@ describe('GraphQL Soup browser cache session gate', () => {
       expect(visible()).toBeUndefined();
       expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
 
+      const reconnected = vi.fn();
+      soup.subscribeGraphqlSoupReconnected(reconnected);
       pause(false);
       mocks.available();
       await vi.advanceTimersByTimeAsync(0);
 
+      // What arrived meanwhile was missed, as while a socket is down.
+      expect(reconnected).toHaveBeenCalledOnce();
       expect(soup.graphqlCacheRecoveryState()).toBe('ready');
       expect(soup.graphqlCacheEnabled()).toBe(true);
       expect(visible()).toBe(host);
