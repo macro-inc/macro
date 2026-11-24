@@ -259,3 +259,43 @@ fn surface_extractors_reject_document_and_cross_surface_grants() {
         assert_eq!(response.status(), expected, "{uri}");
     }
 }
+
+#[test]
+fn import_links_require_internal_and_exact_owner_credentials() {
+    let mut router = Router::new()
+        .route(
+            "/document/{document_id}/import-links",
+            axum::routing::post(|_: ImportLinkAccess| async {}),
+        )
+        .with_state(Secrets {
+            internal_api_secret: "internal".into(),
+            document_permissions_secret: "secret".into(),
+        });
+
+    let token = |permission| {
+        let token = macro_sync_service_jwt::encode(
+            &serde_json::json!({ "document_id": "a", "access_level": permission, "exp": usize::MAX / 2 }),
+            "secret",
+        ).unwrap();
+        format!("Bearer {token}")
+    };
+
+    for (document, internal, authorization, expected) in [
+        ("a", false, Some(token("owner")), StatusCode::UNAUTHORIZED),
+        ("a", true, None, StatusCode::UNAUTHORIZED),
+        ("a", true, Some(token("edit")), StatusCode::FORBIDDEN),
+        ("b", true, Some(token("owner")), StatusCode::UNAUTHORIZED),
+        ("a", true, Some(token("owner")), StatusCode::OK),
+    ] {
+        let mut request = Request::post(format!("/document/{document}/import-links"));
+        if internal {
+            request = request.header("x-internal-auth-key", "internal");
+        }
+        if let Some(authorization) = authorization {
+            request = request.header("authorization", authorization);
+        }
+        let response =
+            futures::executor::block_on(router.call(request.body(Body::empty()).unwrap())).unwrap();
+        assert_eq!(response.status(), expected);
+    }
+}

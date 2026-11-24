@@ -12,7 +12,7 @@
 //! routes. The token and the payloads are never logged.
 
 use base64::{Engine, engine::general_purpose::STANDARD};
-use macro_sync_service_jwt::DocumentPermissionToken;
+pub use macro_sync_service_jwt::DocumentPermissionToken;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
@@ -223,6 +223,38 @@ impl SyncServiceClient {
         expected_revision: &[u8],
         update: &[u8],
     ) -> Result<DocumentUpdate, DocumentStateError> {
+        self.commit_document_update(document_id, token, expected_revision, update, "update")
+            .await
+    }
+
+    /// Apply an import-produced link delta through the internal CAS endpoint.
+    /// Callers must fence it against the active import's initial body receipt.
+    #[tracing::instrument(skip_all, fields(document_id, update_len = update.len()), err)]
+    pub async fn update_import_links(
+        &self,
+        document_id: &str,
+        token: &DocumentPermissionToken,
+        expected_revision: &[u8],
+        update: &[u8],
+    ) -> Result<DocumentUpdate, DocumentStateError> {
+        self.commit_document_update(
+            document_id,
+            token,
+            expected_revision,
+            update,
+            "import-links",
+        )
+        .await
+    }
+
+    async fn commit_document_update(
+        &self,
+        document_id: &str,
+        token: &DocumentPermissionToken,
+        expected_revision: &[u8],
+        update: &[u8],
+        operation: &'static str,
+    ) -> Result<DocumentUpdate, DocumentStateError> {
         if update.len() > MAX_DOCUMENT_BINARY_BYTES
             || expected_revision.len() > MAX_DOCUMENT_REVISION_BYTES
         {
@@ -230,7 +262,7 @@ impl SyncServiceClient {
         }
         let response = self
             .client
-            .post(format!("{}/document/{document_id}/update", self.url))
+            .post(format!("{}/document/{document_id}/{operation}", self.url))
             .bearer_auth(token.as_str())
             .json(&UpdateRequest {
                 expected_revision: STANDARD.encode(expected_revision),

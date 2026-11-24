@@ -157,6 +157,25 @@ where
     }
 }
 
+/// An internal caller acting under a signed grant from the document owner.
+pub struct ImportLinkAccess(pub SignedDocumentAccess);
+
+impl<S: Send + Sync> FromRequestParts<S> for ImportLinkAccess
+where
+    Secrets: FromRef<S>,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        InternalAccess::from_request_parts(parts, state).await?;
+        let signed = SignedDocumentAccess::from_request_parts(parts, state).await?;
+        if signed.claims.access_level != AccessLevel::Owner {
+            return Err(StatusCode::FORBIDDEN);
+        }
+        Ok(Self(signed))
+    }
+}
+
 /// Destructive service APIs accept only the shared internal credential.
 pub struct InternalAccess;
 
