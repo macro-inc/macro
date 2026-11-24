@@ -139,7 +139,11 @@ vi.mock('../../auth/account-scope', async () => {
   };
 });
 
-import { CatalogMutationError, isCatalogErrorCode } from './errors';
+import {
+  CatalogMutationError,
+  isCatalogConflict,
+  isCatalogErrorCode,
+} from './errors';
 import { registerCatalogReader } from './readers';
 import {
   addPropertyOption,
@@ -1520,6 +1524,30 @@ describe('a write while the cache holds older writes it cannot send', () => {
       'mutation:client',
       'mutation:client',
     ]);
+  });
+});
+
+describe('a refusal', () => {
+  it('keeps what a conflict collided with', async () => {
+    soup.result = {
+      error: new CombinedError({
+        graphQLErrors: [
+          {
+            message: 'A property with that name already exists',
+            extensions: { code: 'CONFLICT', reason: 'NAME_TAKEN' },
+          },
+        ],
+      }),
+    };
+    const created = await outcomeOf(
+      createPropertyDefinition({
+        display_name: 'Phase',
+        data_type: { type: 'boolean' },
+        scope: 'user',
+      })
+    );
+    expect(isCatalogConflict(created, 'NAME_TAKEN')).toBe(true);
+    expect(isCatalogConflict(created, 'RESERVED_NAME')).toBe(false);
   });
 });
 

@@ -121,10 +121,12 @@ function httpStatusCode(status: number | undefined): string | undefined {
 function errorOf(result: OperationResult): CatalogMutationError {
   const [first] = result.error?.graphQLErrors ?? [];
   const code = first?.extensions?.code;
+  const reason = first?.extensions?.reason;
   const response = result.error?.response as Response | undefined;
   return new CatalogMutationError(
     first?.message ?? result.error?.message ?? 'Property catalog write failed',
-    typeof code === 'string' ? code : httpStatusCode(response?.status)
+    typeof code === 'string' ? code : httpStatusCode(response?.status),
+    typeof reason === 'string' ? reason : undefined
   );
 }
 

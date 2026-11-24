@@ -9,6 +9,7 @@ import XIcon from '@icon/system/regular/x.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
 import { queryReadyGate } from '@queries/gate';
+import { isCatalogConflict } from '@queries/properties/catalog/errors';
 import {
   isPropertyNameReserved,
   useCreatePropertyDefinitionMutation,
@@ -269,7 +270,11 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       setError(
         isPropertyNameReserved(error)
           ? builtInNameMessage(variables.body.display_name)
-          : ERROR_MESSAGES.PROPERTY_CREATE
+          : isCatalogConflict(error, 'NAME_TAKEN')
+            ? ERROR_MESSAGES.PROPERTY_NAME_TAKEN
+            : isCatalogConflict(error, 'OPTION_VALUE_TAKEN')
+              ? ERROR_MESSAGES.VALIDATION_DUPLICATE
+              : ERROR_MESSAGES.PROPERTY_CREATE
       );
     },
   });

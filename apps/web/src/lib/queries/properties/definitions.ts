@@ -20,6 +20,7 @@ import {
 } from '@service-storage/graphql-soup';
 import type { AnyVariables, OperationResult } from '@urql/core';
 import { type Accessor, createMemo, untrack } from 'solid-js';
+import { isCatalogConflict } from './catalog/errors';
 import { offlineAsSuccess } from './catalog/list-result';
 import {
   toDefinitionWithOptions,
@@ -228,8 +229,7 @@ export function useDeletePropertyDefinitionMutation(
 
 /** Whether a failed create was the server refusing a built-in property's name. */
 export function isPropertyNameReserved(error: unknown): boolean {
-  // Creating a definition conflicts only on a reserved name.
-  return isCatalogErrorCode(error, 'CONFLICT');
+  return isCatalogConflict(error, 'RESERVED_NAME');
 }
 
 export function useCreatePropertyDefinitionMutation(
@@ -244,8 +244,8 @@ export function useCreatePropertyDefinitionMutation(
     {
       onError(error) {
         console.error('Failed to create property definition', error);
-        // The caller says why a built-in name was refused.
-        if (isPropertyNameReserved(error)) return;
+        // The caller says why a name or an option value was refused.
+        if (isCatalogErrorCode(error, 'CONFLICT')) return;
         toast.failure('Failed to create property');
       },
     },
