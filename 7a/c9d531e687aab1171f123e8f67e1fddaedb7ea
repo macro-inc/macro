@@ -1,0 +1,24 @@
+crates/fusion_import/src/inbound/toolset.rs
+  s_8c8123a52748fa::t_210b0a46cc6436 18,274-276,279-288,290,301-313,316-321,327,329
+  s_8c8123a52748fa::t_714f264bf73855 17
+  s_8c8123a52748fa::t_94e0cb4dd1ab8e 328
+crates/fusion_import/src/inbound/toolset/test.rs
+  s_8c8123a52748fa::t_714f264bf73855 4
+  s_8c8123a52748fa::t_210b0a46cc6436 126-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7ac9d531e687aab1171f123e8f67e1fddaedb7ea",
+  "prompts": {},
+  "sessions": {
+    "s_8c8123a52748fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e3ebe64b-e3f3-41de-91c9-1dffbc9d884d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
