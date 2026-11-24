@@ -1700,3 +1700,98 @@ it('catches up again when a read from before the reconnect lowers the device aft
     test.stop();
   }
 });
+
+async function caughtUpToSix() {
+  const test = setup();
+  test.disconnect();
+  const oldEpoch = test.runtime.epoch();
+  test.runtime.onConnected();
+  await vi.advanceTimersByTimeAsync(600);
+  const latest = graphqlMessage(6, { content: 'edited at 6' });
+  test.requests[0].answer(delta('6', { messages: [latest] }));
+  await vi.advanceTimersByTimeAsync(600);
+  expect(test.seq()).toBe('6');
+  expect(await test.runtime.ensureCurrent(CHANNEL_ID)).toBe('current');
+  return { test, oldEpoch, latest };
+}
+
+it('reads again from the device when a read lowers it below a catch-up page out', async () => {
+  vi.useFakeTimers();
+  const { test, oldEpoch, latest } = await caughtUpToSix();
+  const key = `GraphqlChannelMessage:${latest.id}`;
+  try {
+    test.runtime.onDisconnected();
+    test.runtime.onConnected();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.requests.map(({ after }) => after)).toEqual(['5', '6']);
+
+    test.records.set(key, 'old snapshot at 5');
+    const lowered = await test.host.channelTimelineCommit({
+      channelId: CHANNEL_ID,
+      seq: { kind: 'lower', seq: '5' },
+    });
+    expect(lowered.channelSeq).toBe('5');
+    test.runtime.noteServerRead(CHANNEL_ID, lowered.channelSeq, oldEpoch, '5');
+
+    const next = graphqlMessage(7);
+    test.requests[1].answer(delta('7', { messages: [next] }));
+    await vi.advanceTimersByTimeAsync(600);
+    for (const request of test.requests.slice(2)) {
+      const messages = request.after === '5' ? [latest, next] : [next];
+      request.answer(delta('7', { messages }));
+      await vi.advanceTimersByTimeAsync(600);
+    }
+
+    expect({
+      cursors: test.requests.map(({ after }) => after),
+      seq: test.seq(),
+      content: test.records.get(key),
+    }).toEqual({ cursors: ['5', '6', '5'], seq: '7', content: latest.content });
+  } finally {
+    test.stop();
+  }
+});
+
+it('catches up when a read finds the device below what it read', async () => {
+  vi.useFakeTimers();
+  const { test, latest } = await caughtUpToSix();
+  const key = `GraphqlChannelMessage:${latest.id}`;
+  try {
+    const oldEpoch = test.runtime.epoch();
+    // A page fetched at 7 under this connection is still storing when it drops.
+    test.runtime.onDisconnected();
+    test.runtime.onConnected();
+    await vi.advanceTimersByTimeAsync(600);
+    test.requests[1].answer(delta('8', { messages: [graphqlMessage(8)] }));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.seq()).toBe('8');
+    expect(await test.runtime.ensureCurrent(CHANNEL_ID)).toBe('current');
+
+    // Another tab shares the device, but its earlier page fill does not
+    // notify this runtime of a lower, so this runtime still believes it holds 8.
+    test.records.set(key, 'old snapshot at 5');
+    await test.host.channelTimelineCommit({
+      channelId: CHANNEL_ID,
+      seq: { kind: 'lower', seq: '5' },
+    });
+    const loaded = await test.host.channelTimelineCommit({
+      channelId: CHANNEL_ID,
+      seq: { kind: 'lower', seq: '7' },
+    });
+    expect(loaded.channelSeq).toBe('5');
+    // A pagination fill reports its store without calling ensureCurrent.
+    test.runtime.noteServerRead(CHANNEL_ID, loaded.channelSeq, oldEpoch, '7');
+    await vi.advanceTimersByTimeAsync(600);
+    for (const request of test.requests.slice(2)) {
+      request.answer(delta('8', { messages: [latest, graphqlMessage(8)] }));
+      await vi.advanceTimersByTimeAsync(600);
+    }
+    expect({
+      cursors: test.requests.map(({ after }) => after),
+      seq: test.seq(),
+      content: test.records.get(key),
+    }).toEqual({ cursors: ['5', '6', '5'], seq: '8', content: latest.content });
+  } finally {
+    test.stop();
+  }
+});

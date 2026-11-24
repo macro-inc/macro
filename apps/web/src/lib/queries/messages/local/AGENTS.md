@@ -28,7 +28,9 @@ TanStack path in `../` runs untouched.
   under an earlier connection never marks a channel current (`epoch`, which
   moves on every drop and connect); one that moved the device, storing an
   older snapshot over what a later catch-up applied, makes it not current and
-  catches it up again. Each catch-up commit runs in a
+  catches it up again, as does a read that finds the device below what it
+  read; a page out when a read lowers the device below its cursor is read
+  again from there. Each catch-up commit runs in a
   `channel.catch_up.commit` span. A last page out while a newer frame stored records is
   read again (`MAX_PAGE_REREADS`); the repair is left in place until a reread
   holds (for an earlier page, until a later page reaches the frames that

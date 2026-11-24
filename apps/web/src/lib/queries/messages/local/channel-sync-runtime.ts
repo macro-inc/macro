@@ -595,6 +595,15 @@ export function createChannelSyncRuntime(
         delta.messages.length +
         delta.activities.length +
         delta.removedIds.length;
+      // A read lowered the device below the page's cursor while it was out:
+      // the page lacks the changes in between, so it cannot advance from
+      // there. Read again from where the device is.
+      if (state.seq !== null && state.seq !== undefined && state.seq < asked) {
+        yield* release;
+        state.current = false;
+        after = state.seq;
+        continue;
+      }
       const stored = state.seq ?? from;
       if (to <= stored && delta.removedIds.length === 0) yield* release;
       else {
@@ -989,6 +998,8 @@ export function createChannelSyncRuntime(
         // Nothing stored, or the device kept rows the server has since
         // changed or deleted: only a catch-up replays those.
         state.current = false;
+        if (state.seq !== null && isConnected)
+          scheduleCatchUp(channelId, 'gap');
         return;
       }
       if (!isConnected || epoch !== socketEpoch) {

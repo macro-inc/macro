@@ -152,7 +152,8 @@ const fetchServerMessage: FetchChannelMessage = async (
       }
     )
   );
-  if (inTime === undefined)
+  // Only a copy found: an empty answer stores nothing the views would show.
+  if (inTime === undefined && data.user.channelMessage)
     fireAndForget(whenStoredLate(storing, storedLate), 'channel-writes');
   return data.user.channelMessage;
 };
