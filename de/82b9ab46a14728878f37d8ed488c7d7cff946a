@@ -1,0 +1,38 @@
+crates/fusion_import/src/outbound/aps.rs
+  s_8c8123a52748fa::t_93836fa0e58c8e 43-48,443-452,464-475,535-542
+crates/fusion_import/AGENTS.md
+  s_8c8123a52748fa::t_42db0970e44173 60-62
+crates/fusion_import/src/domain/models.rs
+  s_8c8123a52748fa::t_93836fa0e58c8e 533-535,550
+crates/fusion_import/src/outbound/aps/test.rs
+  s_8c8123a52748fa::t_0a38dfc5ad9f2d 303-304
+  s_8c8123a52748fa::t_13d8f9658a98ae 275-302,305-337
+crates/fusion_import/src/inbound/toolset.rs
+  s_8c8123a52748fa::t_ab38f86a5a27ea 291-296
+crates/fusion_import/src/domain/service.rs
+  s_8c8123a52748fa::t_93836fa0e58c8e 413-419,441-442,448,460-463,465-466,473,476,483,488,497,502,504
+crates/fusion_import/src/domain/service/test.rs
+  s_8c8123a52748fa::t_93836fa0e58c8e 579,1082-1128
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_8c8123a52748fa::t_31d4d82b4051f9 11444
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_8c8123a52748fa::t_dfe6b44b9e45cc 11388-11392
+crates/fusion_import/fixtures/README.md
+  s_8c8123a52748fa::t_27ece134df0102 28-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "de82b9ab46a14728878f37d8ed488c7d7cff946a",
+  "prompts": {},
+  "sessions": {
+    "s_8c8123a52748fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e3ebe64b-e3f3-41de-91c9-1dffbc9d884d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
