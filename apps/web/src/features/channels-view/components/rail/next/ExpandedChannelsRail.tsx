@@ -138,9 +138,10 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           />
         </div>
       </ViewSidebar.Primary>
+      {/* With the aside's gap-3: 1rem under New, 1.5rem above the list. */}
       <SidebarRoutineSuggestions
         surface="chat"
-        class="mx-(--sidebar-gutter) mt-(--sidebar-gutter)"
+        class="px-(--sidebar-gutter) pt-(--sidebar-content-inset) pb-3"
       />
       <Show when={rail.labelsFailed()}>
         <div

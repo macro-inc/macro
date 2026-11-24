@@ -6,7 +6,7 @@ import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
 } from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
-import { ViewShell } from '@app/components/view-shell';
+import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
 import { AccountManagerRequestButton } from '@app/features/account-manager/account-manager-request-button';
 import {
   DmScreenButton,
@@ -39,11 +39,14 @@ import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
+  splitRootScope,
   useSplitDisplayName,
+  useSplitPanel,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
+  channelMemberIds,
   useChannel,
   useChannelCanCall,
   useChannelName,
@@ -174,9 +177,23 @@ export function ChannelDetailTabs(props: {
         priority: 1,
       })
     : () => false;
+  const [tabsElement, setTabsElement] = createSignal<HTMLElement>();
+  const panel = useSplitPanel();
+  if (panel) {
+    useViewTabHotkeys<ChannelTabId>({
+      scopeId: splitRootScope(panel),
+      enabled: panel.isPanelActive,
+      tabs: tabsElement,
+      ids: () => tabs().map((tab) => tab.value),
+      activeId: activeTab,
+      setActiveId: setActiveTab,
+      label: (id) => tabs().find((tab) => tab.value === id)?.label ?? id,
+    });
+  }
 
   return (
     <Tabs
+      ref={setTabsElement}
       aria-label="Channel sections"
       size="sm"
       touch="inset"
@@ -238,7 +255,7 @@ export function ChannelDetailActions(
         </DebugSuspense>
       </Show>
       <Show
-        when={!call.isInThisChannel() && ENABLE_CALLS && !channel()?.agent_dm}
+        when={!call.isInThisChannel() && ENABLE_CALLS && !channel()?.agentDm}
       >
         <DebugSuspense name="ChannelDetail.joinable-call">
           <JoinableCallStatus channelId={props.channelId} />
@@ -277,7 +294,7 @@ export function ChannelDetailActions(
           )}
         </Show>
         <Show
-          when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
+          when={ENABLE_CALLS && !channel()?.agentDm && !call.isInThisChannel()}
         >
           <DebugSuspense name="ChannelDetail.call-button">
             <ChannelCallButton grouped channelId={props.channelId} />
@@ -394,7 +411,7 @@ function TouchChannelDetailTopBar(props: ChannelDetailHeaderProps) {
           </Show>
         </DebugSuspense>
         <Show
-          when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
+          when={ENABLE_CALLS && !channel()?.agentDm && !call.isInThisChannel()}
         >
           <HeaderIsland class="px-1">
             <DebugSuspense name="ChannelDetail.touch-call">
@@ -444,6 +461,10 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const orchestrator = useGlobalBlockOrchestrator();
   const channelId = props.channelId;
   const conversationChannel = useChannel(channelId);
+  const memberIds = () => {
+    const channel = conversationChannel();
+    return channel ? channelMemberIds(channel) : [];
+  };
   const canCall = useChannelCanCall(channelId);
   const conversationType = useChannelType(channelId);
   const channelName = useChannelName(channelId, props.fallbackName);
@@ -498,7 +519,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   );
   const setActiveTab = (tab: ChannelTabId) => {
     setActiveTabInternal(
-      conversationChannel()?.agent_dm &&
+      conversationChannel()?.agentDm &&
         ['call', 'calls', 'participants'].includes(tab)
         ? DEFAULT_CHANNEL_TAB
         : normalizeChannelTab(tab)
@@ -506,7 +527,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   };
   createComputed(() => {
     if (
-      conversationChannel()?.agent_dm &&
+      conversationChannel()?.agentDm &&
       ['call', 'calls', 'participants'].includes(activeTab())
     )
       setActiveTabInternal(DEFAULT_CHANNEL_TAB);
@@ -581,11 +602,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
         </DebugSuspense>
         <DmWorkProvider
           isDirectMessage={conversationType() === 'direct_message'}
-          participantIds={
-            conversationChannel()?.participants.map(
-              (participant) => participant.user_id
-            ) ?? []
-          }
+          participantIds={memberIds()}
         >
           <ChannelDetailLayout
             scrollBehindHeader={activeTab() === 'messages'}

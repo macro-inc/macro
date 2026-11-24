@@ -176,9 +176,9 @@ function NewTop(props: { channelId: string }) {
       id: props.channelId,
       name: ch.name ?? 'New Channel',
       blockName: 'channel',
-      channelType: ch.channel_type,
-      teamId: ch.team_id ?? undefined,
-      ownerId: ch.owner_id,
+      channelType: ch.channelType,
+      teamId: ch.teamId ?? undefined,
+      ownerId: ch.ownerId,
       isParticipant: participantsQuery.isSuccess
         ? (participantsQuery.data ?? []).some(
             (participant) => participant.user_id === userId()
@@ -290,7 +290,7 @@ function NewTop(props: { channelId: string }) {
           ]}
         />
       </SplitTitleFileMenu>
-      <AgentDmRuntimeStatus botId={channel()?.agent_dm?.bot_id} />
+      <AgentDmRuntimeStatus botId={channel()?.agentDm?.botId} />
       <Show when={!isActivePhoneCall()}>
         <SplitHeaderRight>
           {/* Desktop only: phones keep Ask Macro in the title drawer. Shares
@@ -324,7 +324,7 @@ function NewTop(props: { channelId: string }) {
       </Show>
       {/* Hidden once the user has joined — the call surface owns the UI. */}
       <Show
-        when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
+        when={ENABLE_CALLS && !channel()?.agentDm && !call.isInThisChannel()}
       >
         <SplitHeaderRight>
           <HeaderIsland class="px-1">
@@ -415,9 +415,9 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
         id: channelId,
         name: channel.name ?? 'New Channel',
         blockName: 'channel',
-        ownerId: channel.owner_id,
-        channelType: channel.channel_type,
-        teamId: channel.team_id ?? undefined,
+        ownerId: channel.ownerId,
+        channelType: channel.channelType,
+        teamId: channel.teamId ?? undefined,
       });
     },
   });
@@ -503,7 +503,7 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
   );
   createComputed(() => {
     if (
-      conversationChannel()?.agent_dm &&
+      conversationChannel()?.agentDm &&
       ['call', 'calls', 'participants'].includes(activeTab())
     )
       setActiveTabInternal(DEFAULT_CHANNEL_TAB);
@@ -520,7 +520,7 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
 
   const setActiveTab = (tab: ChannelTabId) => {
     setActiveTabInternal(
-      conversationChannel()?.agent_dm &&
+      conversationChannel()?.agentDm &&
         ['call', 'calls', 'participants'].includes(tab)
         ? DEFAULT_CHANNEL_TAB
         : normalizeChannelTab(tab)

@@ -47,6 +47,7 @@ mod code_check_cloud_storage;
 mod code_check_conventions;
 mod code_check_infra;
 pub mod composite;
+mod connectors_e2e;
 mod deploy_ai_editing_worker;
 mod deploy_all_services;
 mod deploy_analytics_proxy_dev;
@@ -61,7 +62,9 @@ mod deploy_service_generic;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
+mod desktop_check;
 mod desktop_qa_macos;
+mod desktop_release_watch;
 mod email_e2e;
 mod email_e2e_alert;
 mod email_e2e_browser;
@@ -167,6 +170,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(build_agent_daemon_on_tag::build_agent_daemon_on_tag)(),
     },
     WorkflowFile {
+        slug: "connectors_e2e",
+        file_name: "connectors_e2e.yml",
+        render_yaml: || render_gh_workflow(connectors_e2e::connectors_e2e)(),
+    },
+    WorkflowFile {
         slug: "channels_e2e",
         file_name: "channels_e2e.yml",
         render_yaml: || render_gh_workflow(channels_e2e::channels_e2e)(),
@@ -190,6 +198,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "desktop_qa_macos",
         file_name: "desktop_qa_macos.yml",
         render_yaml: || render_gh_workflow(desktop_qa_macos::desktop_qa_macos)(),
+    },
+    WorkflowFile {
+        slug: "desktop_release_watch",
+        file_name: "desktop-release-watch.yml",
+        render_yaml: || render_gh_workflow(desktop_release_watch::desktop_release_watch)(),
     },
     WorkflowFile {
         slug: "build_desktop_on_tag",
@@ -466,6 +479,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "check_tauri_lockfiles",
         file_name: "check_tauri_lockfiles.yml",
         render_yaml: || render_gh_workflow(check_tauri_lockfiles::check_tauri_lockfiles)(),
+    },
+    WorkflowFile {
+        slug: "desktop_check",
+        file_name: "desktop_check.yml",
+        render_yaml: || render_gh_workflow(desktop_check::desktop_check)(),
     },
     WorkflowFile {
         slug: "check_generated",

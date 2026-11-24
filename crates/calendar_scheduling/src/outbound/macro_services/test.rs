@@ -379,6 +379,7 @@ async fn busy_with(coworker_counts: bool, listing: OccurrenceListing) -> Vec<Bus
             starts_at() - Duration::hours(1),
             starts_at() + Duration::hours(2),
             None,
+            None,
         )
         .await
         .unwrap()
@@ -525,11 +526,20 @@ fn host(
 async fn busy_for(
     host: &MacroCalendars<FakeOccurrences, FakeMutations>,
 ) -> Result<Vec<BusyRange>, Error> {
+    busy_on(host, None).await
+}
+
+/// Busy time for a link booking on `inbox`, or on the host's primary inbox.
+async fn busy_on(
+    host: &MacroCalendars<FakeOccurrences, FakeMutations>,
+    inbox: Option<Uuid>,
+) -> Result<Vec<BusyRange>, Error> {
     host.busy(
         &[HOST.to_owned()],
         starts_at() - Duration::hours(1),
         starts_at() + Duration::hours(2),
         None,
+        inbox,
     )
     .await
 }
@@ -672,7 +682,7 @@ async fn a_primary_calendar_failing_briefly_still_takes_the_booking() {
         CalendarSyncStatus::Ready,
     );
     assert!(busy_for(&host).await.is_ok());
-    assert_eq!(host.creation_calendar(HOST).await.unwrap(), PRIMARY);
+    assert_eq!(host.creation_calendar(HOST, None).await.unwrap(), PRIMARY);
 }
 
 #[tokio::test]
@@ -699,7 +709,7 @@ async fn a_primary_calendar_that_lost_its_grant_takes_no_booking_even_with_busy_
         Err(Error::CalendarUnavailable)
     ));
     assert!(matches!(
-        host.creation_calendar(HOST).await,
+        host.creation_calendar(HOST, None).await,
         Err(Error::CalendarUnavailable)
     ));
 }
@@ -718,7 +728,7 @@ async fn attaching_a_booking_link_follows_the_availability_rule() {
         },
         CalendarSyncStatus::Ready,
     );
-    assert!(busy_off_failing.ready(HOST).await.is_ok());
+    assert!(busy_off_failing.ready(HOST, None).await.is_ok());
 
     let counting_stale = host(
         vec![primary(), coworker(true, Some(RETRYING))],
@@ -732,7 +742,7 @@ async fn attaching_a_booking_link_follows_the_availability_rule() {
         CalendarSyncStatus::Ready,
     );
     assert!(matches!(
-        counting_stale.ready(HOST).await,
+        counting_stale.ready(HOST, None).await,
         Err(Error::CalendarUnavailable)
     ));
 }
@@ -764,4 +774,113 @@ async fn a_calendar_listed_after_the_calendar_listing_counts_until_it_syncs() {
     .await
     .unwrap();
     assert_eq!(synced_since.len(), 1, "its events still block their time");
+}
+
+const WORK_LINK: Uuid = Uuid::from_u128(0x5);
+const WORK: Uuid = Uuid::from_u128(0x6);
+const WORK_EMAIL: &str = "host@work.example";
+
+/// The primary calendar of the host's second connected inbox, counting
+/// toward availability as `counts`.
+fn work_calendar(counts: bool) -> VisibleCalendar {
+    VisibleCalendar {
+        email_link_id: WORK_LINK,
+        email_address: WORK_EMAIL.to_owned(),
+        ..calendar(WORK, "Work", true, counts)
+    }
+}
+
+#[tokio::test]
+async fn a_link_on_a_second_inbox_books_on_that_inbox_primary_calendar() {
+    let host = host(
+        vec![
+            calendar(PRIMARY, "Host", true, true),
+            coworker(true, None),
+            work_calendar(true),
+        ],
+        CalendarSyncHealth {
+            calendars: vec![
+                synced(PRIMARY, None),
+                synced(COWORKER, None),
+                synced(WORK, None),
+            ],
+            unlisted_inboxes: Vec::new(),
+        },
+        CalendarSyncStatus::Ready,
+    );
+    assert_eq!(
+        host.creation_calendar(HOST, Some(WORK_LINK)).await.unwrap(),
+        WORK
+    );
+    assert_eq!(host.creation_calendar(HOST, None).await.unwrap(), PRIMARY);
+    assert!(busy_on(&host, Some(WORK_LINK)).await.is_ok());
+    assert!(host.ready(HOST, Some(WORK_LINK)).await.is_ok());
+    assert_eq!(
+        host.booking_accounts(HOST).await.unwrap(),
+        vec![
+            BookingAccount {
+                email_link_id: LINK,
+                email_address: HOST_EMAIL.to_owned(),
+                video_meetings: true,
+            },
+            BookingAccount {
+                email_link_id: WORK_LINK,
+                email_address: WORK_EMAIL.to_owned(),
+                video_meetings: true,
+            },
+        ],
+        "one account per inbox with a primary calendar the host can write"
+    );
+}
+
+#[tokio::test]
+async fn a_link_whose_inbox_lost_its_grant_offers_no_time_and_never_falls_back() {
+    // With Busy off on the work calendar, only its booking check can refuse.
+    let host = host(
+        vec![calendar(PRIMARY, "Host", true, true), work_calendar(false)],
+        CalendarSyncHealth {
+            calendars: vec![
+                synced(PRIMARY, None),
+                synced(WORK, Some(CalendarSyncFailure::ReauthRequired)),
+            ],
+            unlisted_inboxes: Vec::new(),
+        },
+        CalendarSyncStatus::Ready,
+    );
+    assert!(matches!(
+        busy_on(&host, Some(WORK_LINK)).await,
+        Err(Error::CalendarUnavailable)
+    ));
+    assert!(matches!(
+        host.creation_calendar(HOST, Some(WORK_LINK)).await,
+        Err(Error::CalendarUnavailable)
+    ));
+    assert!(matches!(
+        host.ready(HOST, Some(WORK_LINK)).await,
+        Err(Error::CalendarUnavailable)
+    ));
+    assert!(
+        busy_on(&host, None).await.is_ok(),
+        "links on the primary inbox still offer time"
+    );
+}
+
+#[tokio::test]
+async fn a_link_whose_inbox_was_removed_offers_no_time() {
+    let host = host(
+        vec![calendar(PRIMARY, "Host", true, true)],
+        CalendarSyncHealth {
+            calendars: vec![synced(PRIMARY, None)],
+            unlisted_inboxes: Vec::new(),
+        },
+        CalendarSyncStatus::Ready,
+    );
+    assert!(matches!(
+        busy_on(&host, Some(WORK_LINK)).await,
+        Err(Error::CalendarUnavailable)
+    ));
+    assert!(matches!(
+        host.creation_calendar(HOST, Some(WORK_LINK)).await,
+        Err(Error::CalendarUnavailable)
+    ));
 }

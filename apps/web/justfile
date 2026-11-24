@@ -361,6 +361,7 @@ test-email-fixtures-browser *ARGS:
     done <<'SUITES'
     src/features/email-compose/browser-test/playwright.config.ts -g alias.does.not.make|already-sent.background.save|sends.its.newest.text.once|sends.the.newest.text.once
     src/features/email-compose/browser-test/playwright.app.config.ts recipient-commit.app
+    src/features/block-email/browser-test/playwright.config.ts
     src/features/calendar/browser-test/playwright.config.ts
     src/features/calendar-view/browser-test/playwright.config.ts
     src/features/settings/browser-test/signatures/playwright.config.ts
@@ -664,19 +665,23 @@ gen-database-sql-types:
     cargo run -p database_sql --features cli --bin database_sql_types
     bunx biome format --write {{justfile_directory()}}/src/lib/core/database-sql/generated/types.ts
 
-# Dev fast path: build the wasm pkg only when missing or its version drifts
+# Dev fast path: build the wasm pkg only when missing, when its version drifts
 # from client/cache-wasm/Cargo.toml (bump that version to push a rebuild to
-# dev machines). CI app builds run `build-cache-wasm`, whose cache keys on the
-# sources, so deploys never depend on that bump. Runs no cargo, so it doesn't wait on a service
-# build holding the workspace target dir.
+# dev machines), or when the GraphQL schema is newer than it: the engine embeds
+# the schema's tables when it is built, so a schema edit needs a new engine.
+# CI app builds run `build-cache-wasm`, whose cache keys on the sources, so
+# deploys never depend on that bump. Runs no cargo, so it doesn't wait on a
+# service build holding the workspace target dir.
 ensure-cache-wasm:
     #!/usr/bin/env bash
     set -euo pipefail
     CRATE="{{justfile_directory()}}/../../crates/client/cache-wasm/Cargo.toml"
     PKG="{{justfile_directory()}}/src/lib/graphql-cache/wasm/package.json"
+    WASM="{{justfile_directory()}}/src/lib/graphql-cache/wasm/cache_wasm_bg.wasm"
+    SDL="{{justfile_directory()}}/../../static_assets/schema.graphql"
     WANT=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$CRATE" | head -1)
     HAVE=$(jq -r '.version // empty' "$PKG" 2>/dev/null || true)
-    if [ "$HAVE" != "$WANT" ]; then
-        echo "cache-wasm: built '${HAVE:-none}', crate $WANT; building"
+    if [ "$HAVE" != "$WANT" ] || [ ! -f "$WASM" ] || [ "$SDL" -nt "$WASM" ]; then
+        echo "cache-wasm: built '${HAVE:-none}', crate $WANT, or the schema changed since; building"
         just --justfile "{{justfile()}}" build-cache-wasm
     fi

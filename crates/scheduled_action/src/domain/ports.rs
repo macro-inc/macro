@@ -391,6 +391,13 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<InProgressExecution>> + Send;
 
+    /// Stop the routine's run in progress, on whichever instance runs it.
+    /// The run ends as stopped soon after; with none running, nothing happens.
+    fn stop_run(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// The routine's finished runs, newest first, each with the routines it
     /// created that still follow it.
     fn get_execution_records(
@@ -1268,6 +1275,8 @@ pub enum RunEnd {
     Failed,
     /// Shutdown or the event worker stopped it.
     Interrupted,
+    /// Its owner stopped it.
+    Stopped,
     /// The owner's AI allowance refused the run before it started.
     AiLimitReached,
 }

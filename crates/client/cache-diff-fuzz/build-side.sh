@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# Builds the fuzzer against one side of a comparison: BASE with BRANCH... merged in.
+#
+#   build-side.sh NAME BASE [BRANCH...]
+#
+# IDLE_CHECKPOINT=1 builds the side with the host's idle point (the side must
+# have TursoStorage::checkpoint_if_due). STAGED_HYDRATE=1 builds it with the hooks that stage
+# hydrates as the browser host does (the side must have Engine::stage_hydrate). MIGRATION_HOOKS=1
+# builds it with cache-turso's migration-test-hooks feature, for --interrupt-migration-after.
+# STORAGE_FAULTS=1 builds it with flags that fail the next record write or read, for --fail-writes
+# and --fail-reads.
+# TARGET=x builds in target-x instead of
+# target-NAME, so sides that differ little share one; builds that share a target
+# take turns. The binary lands in $CACHE_DIFF_FUZZ_HOME/bin/NAME, and
+# $CACHE_DIFF_FUZZ_HOME/bin/NAME.side records the commits it was built from. A
+# failed build leaves neither, and removes its worktree.
+set -euo pipefail
+
+if [ $# -lt 2 ]; then
+  echo "usage: build-side.sh NAME BASE [BRANCH...]" >&2
+  exit 2
+fi
+name=$1
+base=$2
+shift 2
+# Letters, digits, - and _ only: no dot, so no name is another side's .side, .tmp or lock.
+for plain in "$name" "${TARGET:-x}"; do
+  [[ "$plain" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || { echo "NAME and TARGET may hold only letters, digits, - and _" >&2; exit 2; }
+done
+repo=$(git rev-parse --show-toplevel)
+# FUZZER_SRC builds from a snapshot of the fuzzer, so the working copy can change meanwhile.
+crate=${FUZZER_SRC:-$repo/crates/client/cache-diff-fuzz}
+home=${CACHE_DIFF_FUZZ_HOME:-$HOME/.cache/cache-diff-fuzz}
+tree=$home/sides/$name
+target=$home/target-${TARGET:-$name}
+mkdir -p "$home/bin" "$home/sides" "$home/locks"
+# One build per side name at a time, and none while a run copies the side. Cargo gets the
+# descriptor closed, so no long-lived child (an sccache server) keeps the lock. Locks live
+# apart from sides and targets, so no name's lock is another name's file.
+exec 8> "$home/locks/side-$name"
+flock 8
+rm -f "$home/bin/$name" "$home/bin/$name.side"
+
+if [ -d "$tree" ]; then
+  git -C "$repo" worktree remove --force "$tree"
+fi
+built=0
+stamp=$(mktemp)
+# A failed build leaves no binary, stamp or worktree behind.
+trap '[ "$built" = 1 ] || { rm -f "$stamp" "$home/bin/$name.tmp" "$home/bin/$name.side"; git -C "$repo" worktree remove --force "$tree" 2> /dev/null; } || true' EXIT
+# Each ref is resolved once, so the stamp names exactly the commits that were built.
+base_commit=$(git -C "$repo" rev-parse --verify "$base^{commit}")
+fuzzer_commit=$(git -C "$repo" rev-parse HEAD)
+echo "base $base_commit" > "$stamp"
+commits=()
+for branch in "$@"; do
+  commit=$(git -C "$repo" rev-parse --verify "$branch^{commit}")
+  commits+=("$commit")
+  echo "branch $branch $commit" >> "$stamp"
+done
+git -C "$repo" worktree add --quiet --detach "$tree" "$base_commit"
+for commit in "${commits[@]}"; do
+  git -C "$tree" merge --quiet --no-edit "$commit"
+done
+
+# A deliberate regression, to show a comparison catches it: MUTATE_FILE (relative to the
+# repository) gets the perl substitution MUTATE_PERL, which must change it.
+if [ -n "${MUTATE_FILE:-}" ]; then
+  # The file must resolve inside the side's worktree, through any symlink.
+  case "$(realpath -e "$tree/$MUTATE_FILE")" in
+    "$(realpath -e "$tree")"/*) ;;
+    *) echo "MUTATE_FILE must name a file in the repository" >&2; exit 2 ;;
+  esac
+  before=$(sha256sum "$tree/$MUTATE_FILE")
+  perl -0pi -e "$MUTATE_PERL" "$tree/$MUTATE_FILE"
+  if [ "$(sha256sum "$tree/$MUTATE_FILE")" = "$before" ]; then
+    echo "MUTATE_PERL did not change $MUTATE_FILE" >&2
+    exit 1
+  fi
+fi
+
+# STORAGE_FAULTS=1 lets `--fail-writes` and `--fail-reads` fail storage: cache-turso gets two
+# flags, one taken by its test fault point after the first record a write transaction puts
+# (`fault_after`), one by the next `get_batch` of at least one key. Either fails as a database
+# error does, the write rolled back. The same patch on every side.
+if [ "${STORAGE_FAULTS:-0}" = 1 ]; then
+  storage=$tree/crates/client/cache-turso/src/storage.rs
+  for patch in \
+    's/(    fn fault_after\(&self, site: TestFaultSite, index: usize\) -> Result<\(\), TursoStorageError> \{\n)/$1        if matches!(site, TestFaultSite::Put)\n            && crate::FUZZ_FAIL_NEXT_PUT.swap(false, std::sync::atomic::Ordering::SeqCst)\n        {\n            return Err(TursoStorageError::Database);\n        }\n/' \
+    's/(    async fn get_batch\(&self, keys: &\[EntityKey<._>\]\) -> Result<Vec<Option<Record>>, Self::Error> \{\n        self\.require_healthy\(\)\?;\n)/$1        if !keys.is_empty()\n            && crate::FUZZ_FAIL_NEXT_READ.swap(false, std::sync::atomic::Ordering::SeqCst)\n        {\n            return Err(TursoStorageError::Database);\n        }\n/'; do
+    before=$(sha256sum "$storage")
+    perl -0pi -e "$patch" "$storage"
+    if [ "$(sha256sum "$storage")" = "$before" ]; then
+      echo "STORAGE_FAULTS: cache-turso's storage.rs has no fault_after or get_batch to patch" >&2
+      exit 1
+    fi
+  done
+  printf '\n/// Set by the differential fuzzer: the next record write fails.\n#[doc(hidden)]\npub static FUZZ_FAIL_NEXT_PUT: std::sync::atomic::AtomicBool =\n    std::sync::atomic::AtomicBool::new(false);\n/// Set by the differential fuzzer: the next batch of record reads fails.\n#[doc(hidden)]\npub static FUZZ_FAIL_NEXT_READ: std::sync::atomic::AtomicBool =\n    std::sync::atomic::AtomicBool::new(false);\n' >> "$tree/crates/client/cache-turso/src/lib.rs"
+fi
+
+# The fuzzer itself is the same on every side: this checkout's copy, hashed as copied.
+rm -rf "${tree:?}/crates/client/cache-diff-fuzz"
+cp -r "$crate" "$tree/crates/client/cache-diff-fuzz"
+fuzzer_hash=$(cd "$tree/crates/client/cache-diff-fuzz" \
+  && find . -type f -not -path './target/*' | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-16)
+if ! grep -q '"crates/client/cache-diff-fuzz"' "$tree/Cargo.toml"; then
+  sed -i 's|^  "crates/client/cache-core",$|  "crates/client/cache-core",\n  "crates/client/cache-diff-fuzz",|' "$tree/Cargo.toml"
+fi
+
+# Sides that share a target take turns, so one never copies another's binary. `-o` keeps
+# the lock out of long-lived children such as an sccache server.
+(
+  cd "$tree"
+  export CACHE_DIFF_FUZZ_IDLE_CHECKPOINT=${IDLE_CHECKPOINT:-0} CACHE_DIFF_FUZZ_STAGED_HYDRATE=${STAGED_HYDRATE:-0} CACHE_DIFF_FUZZ_MIGRATION_HOOKS=${MIGRATION_HOOKS:-0} CACHE_DIFF_FUZZ_STORAGE_FAULTS=${STORAGE_FAULTS:-0} CARGO_TARGET_DIR=$target out=$home/bin/$name.tmp
+  features=
+  [ "${MIGRATION_HOOKS:-0}" = 1 ] && features=cache-turso/migration-test-hooks
+  export features
+  flock -o "$home/locks/target-${TARGET:-$name}" bash -c 'cargo build --quiet --release -p cache-diff-fuzz ${features:+--features "$features"} && cp "$CARGO_TARGET_DIR/release/cache-diff-fuzz" "$out"' 8>&-
+)
+{
+  cat "$stamp"
+  echo "tree $(git -C "$tree" rev-parse HEAD)"
+  echo "idle-checkpoint ${IDLE_CHECKPOINT:-0}"
+  echo "migration-hooks ${MIGRATION_HOOKS:-0}"
+  echo "staged-hydrate ${STAGED_HYDRATE:-0}"
+  echo "storage-faults ${STORAGE_FAULTS:-0}"
+  if [ -n "${MUTATE_FILE:-}" ]; then echo "mutate $MUTATE_FILE $MUTATE_PERL"; fi
+  echo "fuzzer $fuzzer_commit $fuzzer_hash"
+} > "$home/bin/$name.side"
+rm -f "$stamp"
+mv "$home/bin/$name.tmp" "$home/bin/$name"
+built=1
+cat "$home/bin/$name.side"

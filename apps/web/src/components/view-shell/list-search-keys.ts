@@ -19,6 +19,11 @@ export type ListSearchSuggestions = {
   active: () => number;
   setActive: (index: number) => void;
   pick: (index: number) => void;
+  /**
+   * Whether picking the row edits the query (adds a filter) rather than
+   * running a search, so the keyboard stays in the field to go on typing.
+   */
+  editsQuery?: (index: number) => boolean;
   /** The list's element id and its active row's, announced from the field. */
   listId?: string;
   activeId?: () => string | undefined;
@@ -121,8 +126,9 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
       return true;
     }
     if (event.key === 'Enter' && active >= 0) {
+      const editsQuery = suggestions.editsQuery?.(active) ?? false;
       suggestions.pick(active);
-      leave('first', true);
+      if (!editsQuery) leave('first', true);
       return true;
     }
 

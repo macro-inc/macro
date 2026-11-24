@@ -54,12 +54,15 @@ export type RunOutcome =
   | 'running'
   | 'succeeded'
   | 'failed'
+  | 'stopped'
   | 'skipped'
   | 'nothing';
 
 export function runOutcome(record: HistoryRecord): RunOutcome {
   if (!record.id) return 'running';
   if (record.skipped) return 'skipped';
+  // A stopped run is recorded as unsuccessful, but nothing went wrong.
+  if (record.stopped) return 'stopped';
   if (!record.success) return 'failed';
   // Code acted when one of its writes went through.
   const acted = record.steps?.some(
@@ -92,6 +95,7 @@ export function summarizeRun(
       ? 'Skipped: condition not met'
       : 'Skipped: condition couldn’t be checked';
   }
+  if (record.stopped) return 'Stopped';
   if (record.success === false) {
     const reason = failedStep(record)?.error ?? record.error;
     return reason ? `Failed: ${reason}` : 'Failed';

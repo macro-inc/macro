@@ -111,10 +111,6 @@ export const FoldersRouteView = lazyNamed(
   () => import('@app/features/next-soup/route-views'),
   'FoldersRouteView'
 );
-export const NewHomeRouteView = lazyNamed(
-  () => import('@app/features/new-home/route-views'),
-  'NewHomeRouteView'
-);
 export const RecentRouteView = lazyNamed(
   () => import('@app/features/next-soup/route-views'),
   'RecentRouteView'
@@ -146,6 +142,10 @@ export const ProjectDetailRouteView = lazyNamed(
 export const ProjectTaskRouteView = lazyNamed(
   () => import('@app/features/tasks-view/route-views'),
   'ProjectTaskRouteView'
+);
+export const TasksTimeTaskRouteView = lazyNamed(
+  () => import('@app/features/tasks-view/route-views'),
+  'TasksTimeTaskRouteView'
 );
 export const TasksRouteView = lazyNamed(
   () => import('@app/features/tasks-view/route-views'),
@@ -191,7 +191,6 @@ export const OTHER_APP_VIEWS = [
   SearchRouteView,
   NotificationsRouteView,
   NotificationsCalendarRouteView,
-  NewHomeRouteView,
   RecentRouteView,
   FoldersRouteView,
   CallsRouteView,

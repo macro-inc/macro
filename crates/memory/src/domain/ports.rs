@@ -180,12 +180,19 @@ pub trait MemoryTeams: Send + Sync {
     async fn members(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<(Uuid, Vec<String>)>>;
 }
 
-/// Whether the user did anything on a UTC day that a daily report could
-/// describe; viewing alone does not count. A day without it needs no research.
-/// Object-safe because hosts inject their configured activity store.
+/// What the activity log says about a user. Object-safe because hosts inject
+/// their configured activity store.
 #[async_trait::async_trait]
 pub trait MemoryActivity: Send + Sync {
+    /// Whether anything happened on a UTC day that a daily report could
+    /// describe, the user's own work or work done for them; viewing alone does
+    /// not count. A day without it needs no research.
     async fn acted_on(&self, user: &MacroUserIdStr<'_>, date: NaiveDate) -> Result<bool>;
+
+    /// Whether the user used Macro themselves at or after `since`: a signed-in
+    /// client of theirs was open, or they changed something. Work an agent, a
+    /// bot or a code-mode run did for them does not count.
+    async fn used_since(&self, user: &MacroUserIdStr<'_>, since: DateTime<Utc>) -> Result<bool>;
 }
 
 /// Model calls live in an outbound adapter. Research is limited to read tools.

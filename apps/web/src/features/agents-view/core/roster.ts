@@ -1,3 +1,4 @@
+import { currentModelId } from '@core/component/AI/constant/model';
 import {
   CURSOR_BOT_HANDLE,
   CURSOR_BOT_ID,
@@ -9,7 +10,13 @@ import {
   MACRO_AGENT_NAME,
   MACRO_HARNESS_NAME,
 } from '@core/constant/macroAgent';
-import { type AgentKind, kindForHarness, systemBotKind } from './agent-kind';
+import { isMacroNewId } from '@core/constant/macroNew';
+import {
+  type AgentKind,
+  isMacroHarness,
+  kindForHarness,
+  systemBotKind,
+} from './agent-kind';
 
 /**
  * Macro's own chat agent: the deployment's managed default. Started without a
@@ -206,7 +213,10 @@ function persistedAgent(
     avatarUrl: agent.bot.avatar_url ?? undefined,
     harness: agent.harness,
     harnessId,
-    defaultModel: agent.default_model,
+    // A Macro agent saved on a retired model runs on its replacement.
+    defaultModel: isMacroHarness(agent.harness)
+      ? currentModelId(agent.default_model)
+      : agent.default_model,
     share: agent.bot.owner?.type === 'team' ? 'team' : 'private',
     runtime: {
       label: runtimeLabel(agent.harness, harnessId, input.runtimes),
@@ -292,4 +302,22 @@ export function kindForBot(
     roster.find((agent) => agent.botId === bare)?.kind ??
     'agent'
   );
+}
+
+/**
+ * The roster agent a mention names: mentions carry the `bot|<uuid>` principal,
+ * and Macro's mention stands for the default persona, which has no bot id.
+ */
+export function rosterAgentForMention(
+  roster: readonly RosterAgent[],
+  mentionedId: string
+): RosterAgent | undefined {
+  if (!mentionedId.startsWith('bot|')) return undefined;
+  // The @ menu mentions Macro as the agent-session bot (`macroMentionUser`);
+  // older content uses the classic chat bot. Both are Macro's persona.
+  if (isMacroNewId(mentionedId) || isMacroAgentId(mentionedId)) {
+    return roster.find((agent) => agent.id === MACRO_PERSONA_ID);
+  }
+  const botId = mentionedId.slice('bot|'.length);
+  return roster.find((agent) => agent.botId === botId);
 }

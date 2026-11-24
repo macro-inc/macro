@@ -2109,6 +2109,76 @@ async fn restoring_is_gated_on_the_flag(pool: PgPool) {
     ));
 }
 
+/// The person takes back marking a suggestion done (opening it, or the
+/// composer) within five minutes; a reply their own reply answered stays done.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_person_undoes_a_suggestion_they_just_marked_done(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "suggestions").await;
+    let review = NewSuggestion {
+        action: Some(EntityAction::Review),
+        ..entity_suggestion("venue:review")
+    };
+    let composer = NewSuggestion {
+        run_mode: Some(RunMode::Composer),
+        ..prompt_suggestion("quotes:compare", "Compare the quotes")
+    };
+    for request in [review, composer] {
+        let key = request.dedup_key.clone();
+        let suggestion = h.suggest(session, request).await.suggestion.unwrap();
+        h.service
+            .accept(
+                &user(OWNER),
+                SuggestionCaller::User,
+                suggestion.id,
+                shown(&suggestion),
+            )
+            .await
+            .unwrap();
+        h.service
+            .restore(&user(OWNER), SuggestionCaller::User, suggestion.id)
+            .await
+            .unwrap();
+        let feed = h
+            .service
+            .feed(&user(OWNER), SuggestionCaller::User, None, None)
+            .await
+            .unwrap();
+        let back = feed
+            .suggestions
+            .iter()
+            .find(|open| open.id == suggestion.id)
+            .unwrap_or_else(|| panic!("{key} is open again"));
+        assert_eq!(back.state, SuggestionState::Proposed, "{key}");
+        assert_eq!(back.status, SuggestionStatus::Open, "{key}");
+    }
+
+    let thread = Uuid::now_v7();
+    let reply = h
+        .suggest(session, reply_suggestion("thread:answered", thread))
+        .await
+        .suggestion
+        .unwrap();
+    let repo = PgSuggestionRepo::new(h.pool.clone());
+    assert!(
+        repo.answer(&user(OWNER), reply.id, Utc::now())
+            .await
+            .unwrap()
+    );
+    assert!(matches!(
+        h.service
+            .restore(&user(OWNER), SuggestionCaller::User, reply.id)
+            .await,
+        Err(SuggestionError::NotRestorable)
+    ));
+    let stored = repo
+        .suggestion(&user(OWNER), reply.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.state, SuggestionState::Done);
+}
+
 /// The ids of the feed's suggestions shown as new.
 async fn new_in_feed(h: &Harness) -> HashSet<Uuid> {
     let feed = h

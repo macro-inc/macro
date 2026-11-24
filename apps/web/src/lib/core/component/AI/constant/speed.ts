@@ -21,7 +21,7 @@ export function isModelSpeed(value: unknown): value is ModelSpeed {
  * enabled for the deployment.
  */
 export function speedsForModel(model: string): readonly ModelSpeed[] {
-  if (model === Model.gpt6Astra || model === Model.gpt61Sol)
+  if (model === Model.gpt6Astra || model === Model.gpt62Sol)
     return ['standard', 'priority', 'ultrafast'];
   return ['standard'];
 }

@@ -19,11 +19,12 @@ import computers from './en/computers';
 import create from './en/create';
 import crm from './en/crm';
 import databaseAnswers from './en/database-answers';
+import dictation from './en/dictation';
 import emailThread from './en/email-thread';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import entityIcons from './en/entity-icons';
-import home from './en/home';
+import githubConnect from './en/github-connect';
 import importJobs from './en/import-jobs';
 import localRuntime from './en/local-runtime';
 import markdownEditor from './en/markdown-editor';
@@ -34,11 +35,13 @@ import passwords from './en/passwords';
 import routineDrafts from './en/routine-drafts';
 import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
+import routinesList from './en/routines-list';
 import runtimeSharing from './en/runtime-sharing';
 import settingsBilling from './en/settings-billing';
+import settingsDownloads from './en/settings-downloads';
 import settingsEmail from './en/settings-email';
 import settingsLanguage from './en/settings-language';
-import settingsMobileApp from './en/settings-mobile-app';
+import settingsNativeApp from './en/settings-native-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
 import subRoutines from './en/sub-routines';
@@ -46,6 +49,7 @@ import suggestions from './en/suggestions';
 import tabs from './en/tabs';
 import teamAgents from './en/team-agents';
 import teamMembers from './en/team-members';
+import timeTracking from './en/time-tracking';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
 
@@ -61,6 +65,7 @@ export default {
   agentScreen,
   accountManager,
   agentSetup,
+  githubConnect,
   agentWork,
   calendarPrompt,
   calls,
@@ -75,11 +80,11 @@ export default {
   create,
   crm,
   databaseAnswers,
+  dictation,
   emailThread,
   emailViews,
   entityActions,
   entityIcons,
-  home,
   importJobs,
   suggestions,
   localRuntime,
@@ -91,17 +96,20 @@ export default {
   routineDrafts,
   routineMenu,
   routineSuggestions,
+  routinesList,
   settingsBilling,
   settingsEmail,
   runtimeSharing,
   settingsLanguage,
-  settingsMobileApp,
+  settingsNativeApp,
+  settingsDownloads,
   settingsNav,
   splitMenu,
   subRoutines,
   tabs,
   teamAgents,
   teamMembers,
+  timeTracking,
   tutorials,
   viewMenus,
 };

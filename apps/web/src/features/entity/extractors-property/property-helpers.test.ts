@@ -86,3 +86,42 @@ describe('withTaskProject', () => {
     expect(placeholder).toEqual(buildTaskProjectDefaultProperty());
   });
 });
+
+describe('soupPropertyToProperty dates', () => {
+  const dueSoupProperty = (value: SoupProperty['value']): SoupProperty => ({
+    id: SYSTEM_PROPERTY_IDS.DUE_DATE,
+    definition: {
+      id: SYSTEM_PROPERTY_IDS.DUE_DATE,
+      display_name: 'Due Date',
+      data_type: 'DATE',
+      is_metadata: false,
+      is_multi_select: false,
+      is_system: true,
+      owner: { scope: 'system' },
+      specific_entity_type: null,
+      created_at: EPOCH_ZERO,
+      updated_at: EPOCH_ZERO,
+    },
+    value,
+  });
+
+  it('keeps whether a date has its time of day', () => {
+    expect(
+      soupPropertyToProperty(
+        dueSoupProperty({
+          type: 'Date',
+          value: '2026-11-27T09:00:00Z',
+          has_time: true,
+        })
+      )
+    ).toMatchObject({
+      valueType: 'DATE',
+      value: new Date('2026-11-27T09:00:00Z'),
+      hasTime: true,
+    });
+    const day = soupPropertyToProperty(
+      dueSoupProperty({ type: 'Date', value: '2026-11-27T05:00:00Z' })
+    );
+    expect('hasTime' in day).toBe(false);
+  });
+});

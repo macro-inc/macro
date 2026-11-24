@@ -90,6 +90,13 @@ OpenSearch, and exposes backfill HTTP routes for each.
   formatters drop `<m-paste>` (long pastes; in agent sessions also quoted
   replies) with every tag they do not know, so a new message index writes its
   pastes the same way.
+- A thread reindex deletes, and a message upsert skips, every message its
+  mailbox facts put in Trash or Junk or mark gone at the provider
+  (`ParsedSearchMessage::excluded_from_search`, read from
+  `email_message_mailbox_facts`). Never decide that from labels: Outlook
+  messages have no system labels, so a label check keeps Outlook trash, junk
+  and provider deletes searchable, whether the change came from Macro (an
+  organization command) or from Outlook.
 - Email documents are keyed `{thread_id}:{message_id}`, so a message that
   changes threads gets a new document and keeps the old one. An
   `email.message_sent` from a Macro send (`origin: UserAction`) deletes the

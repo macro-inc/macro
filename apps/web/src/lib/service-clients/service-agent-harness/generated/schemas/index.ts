@@ -187,6 +187,7 @@ export * from './connectedToolResultStructuredContentAnyOf';
 export * from './connectedToolSearch';
 export * from './connectMcpServer';
 export * from './connectMcpServerResponse';
+export * from './connectorStatus';
 export * from './connectorTool';
 export * from './controlRequest';
 export * from './controlRequestAllOf';

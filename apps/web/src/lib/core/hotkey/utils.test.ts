@@ -93,3 +93,18 @@ describe('shift punctuation round trip', () => {
     expect(prettyPrintHotkeyString('shift+3')).toBe('#');
   });
 });
+
+// WebKitGTK (the Linux desktop app) reports Shift+Tab, which X maps to the
+// ISO_Left_Tab keysym, with key 'Unidentified' and code 'Tab'.
+describe('shift+tab on WebKitGTK', () => {
+  test("an 'Unidentified' key with code 'Tab' resolves to 'tab'", () => {
+    const event = new KeyboardEvent('keydown', {
+      key: 'Unidentified',
+      code: 'Tab',
+      shiftKey: true,
+    });
+
+    expect(normalizeEventKeyPress(event)).toBe('tab');
+    expect(getKeyString(new Set(['tab', 'shift']))).toBe('shift+tab');
+  });
+});

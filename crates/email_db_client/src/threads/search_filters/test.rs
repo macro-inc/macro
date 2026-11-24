@@ -377,6 +377,41 @@ async fn attachment_kinds_match_any_attachment_of_any_message(pool: PgPool) -> a
         .await?,
         HashSet::from([t.read, t.done])
     );
+    assert_eq!(
+        matching(&pool, &t, kinds(vec![ThreadAttachmentKind::Any])).await?,
+        HashSet::from([t.unread, t.read, t.done, t.invite])
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn any_attachment_matches_a_kind_no_filter_names(pool: PgPool) -> anyhow::Result<()> {
+    let t = threads(&pool).await;
+    let zipped = insert_message(&pool, t.unread, false, false, None).await;
+    attach(&pool, zipped, "application/zip").await;
+    insert_message(&pool, t.read, false, false, None).await;
+
+    let kinds = |attachment_kinds| ThreadStateFilter {
+        attachment_kinds,
+        ..Default::default()
+    };
+    assert_eq!(
+        matching(&pool, &t, kinds(vec![ThreadAttachmentKind::Any])).await?,
+        HashSet::from([t.unread])
+    );
+    assert_eq!(
+        matching(
+            &pool,
+            &t,
+            kinds(vec![
+                ThreadAttachmentKind::Pdf,
+                ThreadAttachmentKind::Image,
+                ThreadAttachmentKind::Document
+            ])
+        )
+        .await?,
+        HashSet::new()
+    );
     Ok(())
 }
 

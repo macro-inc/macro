@@ -4,11 +4,13 @@
  * a URL's consent, and the refusal of a request this client cannot display.
  *
  * Fields and decisions are separate components over one draft so a surface
- * can place them apart - the chip crops the fields in its area and keeps the
- * decisions on the row beneath - while `LiveQuestionCard` stacks them for
- * the session. A Macro user tool under review opens in the tool's own
- * composer (`UserToolComposer`); a draft the tool's schema rejects falls
- * back to the flat form the agent also sent, through these.
+ * can place them apart: `QuestionCard` puts them in an `ElicitationCard`'s
+ * body and footer for the session and a channel reply's live tail, and
+ * `LiveQuestionCard` stacks them on a plain row (agent updates). A Macro
+ * user tool under review opens in the tool's own composer
+ * (`UserToolComposer`); a draft the tool's schema rejects, or a tool with no
+ * composer here, falls back to the flat form the agent also sent, through
+ * these.
  */
 
 import { CalendarDraftComposer } from '@core/component/AI/component/tool/calendar/DraftComposer';
@@ -24,7 +26,7 @@ import type {
   CreateCalendarEvent,
   SendEmail,
 } from '@service-cognition/generated/tools/types';
-import { Button } from '@ui';
+import { Button, Card } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -40,10 +42,12 @@ import {
   type FieldValue,
   type FormValues,
   initialValues,
+  requiredAnswered,
   toContent,
   validate,
 } from '../state/elicitation-form';
 import { createElicitationReviewSink } from '../state/elicitation-review-sink';
+import { ElicitationCard, type ElicitationSummary } from './ElicitationCard';
 import { ElicitationForm } from './ElicitationForm';
 
 export type RespondToElicitation = (
@@ -63,6 +67,8 @@ export type FormDraft = {
   /** Problems shown to the user - none until the first submit attempt. */
   errors: Accessor<Record<string, string>>;
   setValue: (name: string, value: FieldValue) => void;
+  /** Every required field has an answer, so Submit can be pressed. */
+  answered: Accessor<boolean>;
   /**
    * The content to accept with, or undefined while the draft is not valid -
    * from then on the problems show.
@@ -85,6 +91,7 @@ function createFormDraft(schema: ElicitationSchema): FormDraft {
     values,
     errors: () => (touched() ? problems() : {}),
     setValue: (name, value) => setValues(name, value),
+    answered: () => requiredAnswered(schema, values),
     content: () => {
       setTouched(true);
       return Object.keys(problems()).length > 0
@@ -182,8 +189,14 @@ export function QuestionFields(props: {
 }
 
 /**
- * The decisions, as buttons for the caller's row: the question's own
- * (Submit, Open) then Decline and, unless the row is short of room, Cancel.
+ * The decisions, as buttons: the question's own (Submit, Open) then Skip.
+ * Skip declines, the one refusal whose effect is the same for every agent:
+ * the agent goes on without an answer. Cancel is not offered beside it,
+ * because no agent stops for it (Claude aborts the tool call and goes on,
+ * Codex can't tell it from a decline); stopping the agent is the session's
+ * own Stop. On a card they follow the
+ * session's other cards (`ToolApprovalCard`): the refusals quiet on the left,
+ * the question's own action on the right, and nothing primary.
  *
  * URL mode never opens anything on its own: only after the user presses Open
  * does it send the consent and open a new tab - never an iframe, never a
@@ -194,10 +207,8 @@ export function QuestionActions(props: {
   question: LiveQuestion;
   locked: boolean;
   onRespond: RespondToElicitation;
-  /** Whether Cancel joins Decline; default yes. */
-  cancel?: boolean;
-  /** Decline before the question's own button, as the chip's row reads. */
-  declineFirst?: boolean;
+  /** Lay the buttons out for a card's footer rather than a plain row. */
+  card?: boolean;
 }) {
   const respond = (answer: ElicitationAnswer) => {
     if (props.locked) return;
@@ -213,15 +224,16 @@ export function QuestionActions(props: {
     if (!accepted) return;
     window.open(target, '_blank', 'noopener,noreferrer');
   };
+  const size = () => (props.card ? 'md' : 'xs');
 
   const primary = (
     <Switch>
       <Match when={form(props.question)}>
         {(question) => (
           <Button
-            variant="primary"
-            size="xs"
-            disabled={props.locked}
+            variant={props.card ? 'secondary' : 'primary'}
+            size={size()}
+            disabled={props.locked || !question().draft.answered()}
             onClick={() => submit(question().draft)}
           >
             Submit
@@ -231,8 +243,8 @@ export function QuestionActions(props: {
       <Match when={url(props.question)}>
         {(question) => (
           <Button
-            variant="primary"
-            size="xs"
+            variant={props.card ? 'secondary' : 'primary'}
+            size={size()}
             disabled={props.locked}
             onClick={() =>
               fireAndForget(open(question().url), 'agent-interactions')
@@ -244,36 +256,66 @@ export function QuestionActions(props: {
       </Match>
     </Switch>
   );
-  const decline = (
+  const refusals = (
     <Button
-      variant="secondary"
-      size="xs"
+      variant={props.card ? 'ghost' : 'secondary'}
+      size={size()}
       disabled={props.locked}
       onClick={() => respond({ action: 'decline' })}
     >
-      Decline
+      Skip
     </Button>
   );
 
   return (
-    <>
-      {props.declineFirst ? decline : primary}
-      {props.declineFirst ? primary : decline}
-      <Show when={props.cancel ?? true}>
-        <Button
-          variant="ghost"
-          size="xs"
-          disabled={props.locked}
-          onClick={() => respond({ action: 'cancel' })}
-        >
-          Cancel
-        </Button>
-      </Show>
-    </>
+    <Show
+      when={props.card}
+      fallback={
+        <>
+          {primary}
+          {refusals}
+        </>
+      }
+    >
+      <div class="flex items-center gap-1">{refusals}</div>
+      <Card.Actions>{primary}</Card.Actions>
+    </Show>
   );
 }
 
-/** The fields over the decisions, as the session's card lays them out. */
+/**
+ * A form, URL or unrecognized request on its own card: the fields in the
+ * body, the decisions in the footer.
+ */
+export function QuestionCard(props: {
+  summary: ElicitationSummary;
+  /** Placement on the card root, such as a height cap. */
+  class?: string;
+  request: LiveQuestionRequest;
+  locked: boolean;
+  onRespond: RespondToElicitation;
+}) {
+  // A request never changes for its card, so its state is made once.
+  const question = createLiveQuestion(props.request);
+  return (
+    <ElicitationCard
+      summary={props.summary}
+      class={props.class}
+      actions={
+        <QuestionActions
+          question={question}
+          locked={props.locked}
+          onRespond={props.onRespond}
+          card
+        />
+      }
+    >
+      <QuestionFields question={question} locked={props.locked} />
+    </ElicitationCard>
+  );
+}
+
+/** The fields over the decisions, on a plain row with no card around them. */
 export function LiveQuestionCard(props: {
   request: LiveQuestionRequest;
   locked: boolean;
@@ -346,25 +388,46 @@ export function parseDraftedTool(
   return undefined;
 }
 
+// The tools `UserToolComposer` opens; keep this in step with its `Switch`.
+const composedTools = new Set([
+  'CreateBookingLink',
+  'EditBookingLink',
+  'CreateCalendarEvent',
+  'SendEmail',
+]);
+
+/**
+ * The draft `UserToolComposer` can open, or undefined when the caller should
+ * fall back to the flat form: a draft its schema rejects, or a tool with no
+ * composer here.
+ */
+export function composableDraft(
+  request: UserToolRequest,
+  toolCall: string
+): DraftedTool | undefined {
+  const tool = parseDraftedTool(request, toolCall);
+  return tool && composedTools.has(tool.name) ? tool : undefined;
+}
+
 /**
  * A drafted Macro user tool in the tool's own composer: the calendar event
  * form for `CreateCalendarEvent`, the email compose for `SendEmail`. The
  * composer's Create/Send accepts the review with the whole edited draft; its
  * Cancel, where it has one, declines. The email composer has only Send, so
- * `cancel` adds a Cancel beneath it for a surface with no other refusal.
- * `fallback` renders a tool this client has no composer for.
+ * `cancel` adds a Skip beneath it, which declines like a question's Skip, for
+ * a surface with no other refusal.
+ * Callers pass only a draft from `composableDraft`.
  */
 export function UserToolComposer(props: {
   tool: DraftedTool;
   toolCall: string;
   review: ReviewInputs;
   cancel?: boolean;
-  fallback?: JSX.Element;
 }) {
   const sink = <T,>() => createElicitationReviewSink<T>(props.review);
   const locked = () => !props.review.canAnswer();
   return (
-    <Switch fallback={props.fallback}>
+    <Switch>
       <Match
         when={
           props.tool.name === 'CreateBookingLink' ||
@@ -410,6 +473,7 @@ export function UserToolComposer(props: {
               <Button
                 variant="ghost"
                 size="xs"
+                tooltip="The agent continues without sending it"
                 disabled={locked()}
                 onClick={() =>
                   fireAndForget(
@@ -418,7 +482,7 @@ export function UserToolComposer(props: {
                   )
                 }
               >
-                Cancel
+                Skip
               </Button>
             </div>
           </Show>

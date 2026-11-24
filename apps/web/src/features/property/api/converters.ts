@@ -127,6 +127,9 @@ export function entityPropertyFromApi(
             ...baseProperty,
             valueType: 'DATE',
             value: new Date(dateVal),
+            ...('has_time' in propertyValue && propertyValue.has_time
+              ? { hasTime: true }
+              : {}),
           };
         }
       }
@@ -231,6 +234,7 @@ export function propertyValueToApi(
       return {
         type: 'date',
         value: apiValues.value.toISOString(),
+        ...(apiValues.hasTime ? { has_time: true } : {}),
       };
 
     case 'DATE_RANGE':
