@@ -2,7 +2,7 @@
 
 use super::properties_pg_repo::PropertiesPgRepo;
 use super::property_definition_queries;
-use crate::domain::model::PropertyDefinitionOwner;
+use crate::domain::model::{CreatePropertyDefinitionOutcome, PropertyDefinitionOwner};
 use crate::domain::ports::PropertiesRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -11,7 +11,7 @@ use models_properties::{DataType, EntityType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-fn user_1() -> MacroUserIdStr<'static> {
+pub(super) fn user_1() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap()
 }
 
@@ -223,7 +223,9 @@ async fn listings_order_names_alike(pool: Pool<Postgres>) -> anyhow::Result<()> 
             None,
             Vec::new(),
         )
-        .await?;
+        .await?
+        .into_created()
+        .expect("created");
     }
 
     let plain: Vec<(String, Uuid)> = repo
@@ -350,7 +352,9 @@ async fn create_property_definition_simple(pool: Pool<Postgres>) -> anyhow::Resu
             None,
             Vec::new(),
         )
-        .await?;
+        .await?
+        .into_created()
+        .expect("created");
 
     assert_eq!(property.display_name, "New Test Property");
     assert_eq!(property.data_type, DataType::String);
@@ -376,7 +380,9 @@ async fn create_property_definition_user_owned(pool: Pool<Postgres>) -> anyhow::
             None,
             Vec::new(),
         )
-        .await?;
+        .await?
+        .into_created()
+        .expect("created");
 
     assert_eq!(property.display_name, "My User Property");
     assert_eq!(property.data_type, DataType::Number);
@@ -403,9 +409,12 @@ async fn create_property_definition_duplicate_name_fails(
             None,
             Vec::new(),
         )
-        .await;
+        .await?;
 
-    assert!(result.is_err());
+    assert!(matches!(
+        result,
+        CreatePropertyDefinitionOutcome::DuplicateName
+    ));
 
     Ok(())
 }
@@ -431,7 +440,9 @@ async fn create_property_definition_with_options(pool: Pool<Postgres>) -> anyhow
             None,
             options,
         )
-        .await?;
+        .await?
+        .into_created()
+        .expect("created");
 
     let option_count: i64 = sqlx::query_scalar!(
         r#"SELECT COUNT(*) as "count!" FROM property_options WHERE property_definition_id = $1"#,
@@ -460,7 +471,9 @@ async fn create_property_definition_specific_entity(pool: Pool<Postgres>) -> any
             Some(EntityType::Document),
             Vec::new(),
         )
-        .await?;
+        .await?
+        .into_created()
+        .expect("created");
 
     assert_eq!(property.specific_entity_type, Some(EntityType::Document));
 

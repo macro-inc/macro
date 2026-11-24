@@ -12,8 +12,9 @@ use super::query_error::PropertyQueryError;
 use crate::domain::database_option_writer::ColorChange;
 
 use crate::domain::model::{
-    EntityPropertyMutationSnapshot, GetOrCreatePropertyOptionResult, PropertyOptionReplaceOutcome,
-    PropertyOptionReplacePlan, UpdatePropertyOptionOutcome,
+    CreatePropertyOptionWithIdOutcome, EntityPropertyMutationSnapshot,
+    GetOrCreatePropertyOptionResult, PropertyOptionReplaceOutcome, PropertyOptionReplacePlan,
+    UpdatePropertyOptionOutcome,
 };
 
 /// Keep selected options alive until their assignment commits. Validation
@@ -222,8 +223,9 @@ pub async fn insert_property_option(
 }
 
 /// Inserts a property option under an id the client minted, unless a row
-/// already has that id. Returns `None` without writing when the id is taken,
-/// so a replayed request can be told apart from a new one.
+/// already has that id. Writes nothing when the id is taken, so a replayed
+/// request can be told apart from a new one, or when the definition already
+/// has the value.
 #[tracing::instrument(skip(executor, value, color), err)]
 pub async fn insert_property_option_unless_id_taken(
     executor: impl PgExecutor<'_>,
@@ -232,10 +234,10 @@ pub async fn insert_property_option_unless_id_taken(
     display_order: i32,
     value: PropertyOptionValue,
     color: Option<String>,
-) -> Result<Option<PropertyOption>, PropertyQueryError> {
+) -> Result<CreatePropertyOptionWithIdOutcome, PropertyQueryError> {
     let (number_value, string_value) = value.to_db_values();
 
-    let row = sqlx::query!(
+    let row = match sqlx::query!(
         r#"
         INSERT INTO property_options (
             id,
@@ -257,9 +259,17 @@ pub async fn insert_property_option_unless_id_taken(
         color.clone()
     )
     .fetch_optional(executor)
-    .await?;
+    .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => return Ok(CreatePropertyOptionWithIdOutcome::IdTaken),
+        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+            return Ok(CreatePropertyOptionWithIdOutcome::DuplicateValue);
+        }
+        Err(err) => return Err(err.into()),
+    };
 
-    Ok(row.map(|row| PropertyOption {
+    Ok(CreatePropertyOptionWithIdOutcome::Created(PropertyOption {
         id: row.id,
         property_definition_id,
         display_order,

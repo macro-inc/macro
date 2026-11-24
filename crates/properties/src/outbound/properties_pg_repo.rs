@@ -15,10 +15,10 @@ use super::{
     task_property_queries,
 };
 use crate::domain::model::{
-    EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
-    GetOrCreatePropertyOptionResult, GetOrCreateTagDefinitionResult, PropertyDefinitionOwner,
-    PropertyOptionReplaceOutcome, PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome,
-    UpdatePropertyOptionOutcome,
+    CreatePropertyDefinitionOutcome, CreatePropertyOptionWithIdOutcome, EntityPropertiesKey,
+    EntityPropertyInfo, EntityPropertyMutationSnapshot, GetOrCreatePropertyOptionResult,
+    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, PropertyOptionReplaceOutcome,
+    PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome, UpdatePropertyOptionOutcome,
 };
 use crate::domain::ports::PropertiesRepo;
 use models_properties::DataType;
@@ -132,7 +132,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         is_multi_select: bool,
         specific_entity_type: Option<EntityType>,
         options: Vec<PropertyOption>,
-    ) -> Result<PropertyDefinition, Self::Err> {
+    ) -> Result<CreatePropertyDefinitionOutcome, Self::Err> {
         property_definition_queries::create_property_definition(
             &self.pool,
             owner,
@@ -280,7 +280,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         display_order: i32,
         value: PropertyOptionValue,
         color: Option<String>,
-    ) -> Result<Option<PropertyOption>, Self::Err> {
+    ) -> Result<CreatePropertyOptionWithIdOutcome, Self::Err> {
         property_option_queries::insert_property_option_unless_id_taken(
             &self.pool,
             option_id,

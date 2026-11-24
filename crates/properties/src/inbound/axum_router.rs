@@ -105,6 +105,7 @@ pub fn properties_err_status(e: &PropertiesErr) -> StatusCode {
         | PropertiesErr::OptionNotFound
         | PropertiesErr::EntityPropertyNotFound => StatusCode::NOT_FOUND,
         PropertiesErr::DuplicateOptionValue
+        | PropertiesErr::DuplicateDefinitionName
         | PropertiesErr::ConflictingTeamLabel(_)
         | PropertiesErr::ReservedName(_) => StatusCode::CONFLICT,
         PropertiesErr::PermissionDenied

@@ -10,9 +10,9 @@ mod time_logged;
 use super::service_impl::PropertiesServiceImpl;
 use crate::domain::error::PropertiesErr;
 use crate::domain::model::{
-    EditReceipt, EntityPropertyMutationSnapshot, GetOrCreateTagDefinitionResult,
-    PropertyAccessReceiptExt, TagScope, UpdatePropertyOptionOutcome, ViewReceipt,
-    canonical_entity_type,
+    CreatePropertyDefinitionOutcome, CreatePropertyOptionWithIdOutcome, EditReceipt,
+    EntityPropertyMutationSnapshot, GetOrCreateTagDefinitionResult, PropertyAccessReceiptExt,
+    TagScope, UpdatePropertyOptionOutcome, ViewReceipt, canonical_entity_type,
 };
 use crate::domain::{
     ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo},
@@ -272,7 +272,9 @@ async fn property_definition_event_create_publishes_authoritative_snapshot() {
 
     let mut repo = MockPropertiesRepo::new();
     repo.expect_create_property_definition()
-        .return_once(move |_, _, _, _, _, _| Box::pin(async move { Ok(property) }));
+        .return_once(move |_, _, _, _, _, _| {
+            Box::pin(async move { Ok(CreatePropertyDefinitionOutcome::Created(property)) })
+        });
     let event_broker = RecordingEventBroker::default();
     let service = service_with_event_broker(repo, event_broker.clone());
 
@@ -468,11 +470,13 @@ async fn create_property_definition_allows_a_name_that_only_resembles_a_built_in
         .withf(|_, display_name, _, _, _, _| display_name == "Contact")
         .return_once(|_, _, _, _, _, _| {
             Box::pin(async {
-                Ok(property_definition_for_event(
-                    Uuid::from_u128(0xC1),
-                    "Contact",
-                    DataType::Entity,
-                    true,
+                Ok(CreatePropertyDefinitionOutcome::Created(
+                    property_definition_for_event(
+                        Uuid::from_u128(0xC1),
+                        "Contact",
+                        DataType::Entity,
+                        true,
+                    ),
                 ))
             })
         });
@@ -560,7 +564,9 @@ async fn property_definition_event_broker_scheduling_failure_is_non_fatal() {
 
     let mut repo = MockPropertiesRepo::new();
     repo.expect_create_property_definition()
-        .return_once(move |_, _, _, _, _, _| Box::pin(async move { Ok(property) }));
+        .return_once(move |_, _, _, _, _, _| {
+            Box::pin(async move { Ok(CreatePropertyDefinitionOutcome::Created(property)) })
+        });
     let service = service_with_event_broker(repo, RecordingEventBroker::failing());
 
     let result = service
@@ -4836,7 +4842,9 @@ async fn add_option_with_id_creates_under_the_client_id() {
         .withf(move |id, definition, _, _, _| {
             *id == option_id && *definition == property_definition_id
         })
-        .return_once(move |_, _, _, _, _| Box::pin(async move { Ok(Some(option)) }));
+        .return_once(move |_, _, _, _, _| {
+            Box::pin(async move { Ok(CreatePropertyOptionWithIdOutcome::Created(option)) })
+        });
     let event_broker = RecordingEventBroker::default();
     let service = service_with_event_broker(repo, event_broker.clone());
 
@@ -4875,7 +4883,9 @@ async fn a_replayed_add_answers_with_its_option_and_publishes_nothing() {
     let mut repo = MockPropertiesRepo::new();
     expect_owned_modifiable_definition(&mut repo, definition);
     repo.expect_create_property_option_with_id()
-        .return_once(|_, _, _, _, _| Box::pin(async { Ok(None) }));
+        .return_once(|_, _, _, _, _| {
+            Box::pin(async { Ok(CreatePropertyOptionWithIdOutcome::IdTaken) })
+        });
     repo.expect_get_property_option()
         .return_once(move |_| Box::pin(async move { Ok(Some(existing)) }));
     let event_broker = RecordingEventBroker::default();
@@ -4914,7 +4924,9 @@ async fn an_option_id_held_by_another_option_is_refused() {
     let mut repo = MockPropertiesRepo::new();
     expect_owned_modifiable_definition(&mut repo, definition);
     repo.expect_create_property_option_with_id()
-        .return_once(|_, _, _, _, _| Box::pin(async { Ok(None) }));
+        .return_once(|_, _, _, _, _| {
+            Box::pin(async { Ok(CreatePropertyOptionWithIdOutcome::IdTaken) })
+        });
     repo.expect_get_property_option()
         .return_once(move |_| Box::pin(async move { Ok(Some(other)) }));
     let service = service_with_event_broker(repo, RecordingEventBroker::default());

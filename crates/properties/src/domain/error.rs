@@ -35,6 +35,10 @@ pub enum PropertiesErr {
     #[error("This property is required and cannot be removed from this entity")]
     RequiredProperty,
 
+    /// The owner already has a property with the requested name - maps to 409
+    #[error("A property with that name already exists")]
+    DuplicateDefinitionName,
+
     /// An option with the requested value already exists - maps to 409
     #[error("An option with that value already exists")]
     DuplicateOptionValue,

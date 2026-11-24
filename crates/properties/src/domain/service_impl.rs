@@ -44,7 +44,8 @@ use super::events::{
 };
 use super::metadata;
 use super::model::{
-    EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyMutationSnapshot,
+    CreatePropertyDefinitionOutcome, CreatePropertyOptionWithIdOutcome, EditReceipt,
+    EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyMutationSnapshot,
     EntityPropertyOptionSelection, EntityPropertyOptionUpdate, PropertyAccessReceiptExt,
     PropertyDefinitionOwner, PropertyOptionReplaceOutcome, PropertyOptionReplacePlan,
     PropertyTargetKey, ResolvedPropertySubject, TagPromotionOutcome, TagScope, TagSet,
@@ -1328,7 +1329,7 @@ where
             _ => Vec::new(),
         };
 
-        let property = self
+        let property = match self
             .repository
             .create_property_definition(
                 owner,
@@ -1339,7 +1340,16 @@ where
                 property_options,
             )
             .await
-            .map_err(anyhow::Error::from)?;
+            .map_err(anyhow::Error::from)?
+        {
+            CreatePropertyDefinitionOutcome::Created(property) => property,
+            CreatePropertyDefinitionOutcome::DuplicateName => {
+                return Err(PropertiesErr::DuplicateDefinitionName);
+            }
+            CreatePropertyDefinitionOutcome::DuplicateOptionValue => {
+                return Err(PropertiesErr::DuplicateOptionValue);
+            }
+        };
 
         tracing::info!(
             property_id = %property.id,
@@ -1502,39 +1512,44 @@ where
             .prepare_property_option(user_id, team, property_definition_id, request)
             .await?;
 
-        let inserted = self
+        match self
             .repository
             .create_property_option_with_id(
                 option_id,
                 property_definition_id,
                 display_order,
-                option_value.clone(),
+                option_value,
                 color,
             )
             .await
-            .map_err(anyhow::Error::from)?;
-        if let Some(option) = inserted {
-            tracing::info!(
-                option_id = %option.id,
-                display_order = option.display_order,
-                "successfully added property option"
-            );
-            self.publish_property_event(Self::property_option_created_event(&option, user_id));
-            return Ok(option);
+            .map_err(anyhow::Error::from)?
+        {
+            CreatePropertyOptionWithIdOutcome::Created(option) => {
+                tracing::info!(
+                    option_id = %option.id,
+                    display_order = option.display_order,
+                    "successfully added property option"
+                );
+                self.publish_property_event(Self::property_option_created_event(&option, user_id));
+                return Ok(option);
+            }
+            CreatePropertyOptionWithIdOutcome::DuplicateValue => {
+                return Err(PropertiesErr::DuplicateOptionValue);
+            }
+            CreatePropertyOptionWithIdOutcome::IdTaken => {}
         }
 
-        // The id is taken. A retry of this same add finds its own option and
-        // answers with it; any other row keeps the id and the request fails.
+        // The id is taken. The client minted it for this add, so an option of
+        // this definition under it is this add's own, made by an earlier try:
+        // answer with it as it stands now, renamed or recolored since or not.
+        // An id on another definition's option is refused.
         let existing = self
             .repository
             .get_property_option(option_id)
             .await
             .map_err(anyhow::Error::from)?;
         match existing {
-            Some(option)
-                if option.property_definition_id == property_definition_id
-                    && option.value == option_value =>
-            {
+            Some(option) if option.property_definition_id == property_definition_id => {
                 tracing::info!(option_id = %option.id, "property option add replayed");
                 Ok(option)
             }

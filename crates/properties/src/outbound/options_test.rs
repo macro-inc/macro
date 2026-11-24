@@ -2,8 +2,9 @@
 
 use super::properties_pg_repo::PropertiesPgRepo;
 use crate::domain::model::{
-    PropertyDefinitionOwner, PropertyOptionInsert, PropertyOptionReplaceOutcome,
-    PropertyOptionReplacePlan, PropertyOptionRewrite, UpdatePropertyOptionOutcome,
+    CreatePropertyOptionWithIdOutcome, PropertyDefinitionOwner, PropertyOptionInsert,
+    PropertyOptionReplaceOutcome, PropertyOptionReplacePlan, PropertyOptionRewrite,
+    UpdatePropertyOptionOutcome,
 };
 use crate::domain::ports::PropertiesRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -453,7 +454,9 @@ async fn get_or_create_tag_definition_coexists_with_same_named_property(
 
     // Owner already has a non-tag property literally named "Tags".
     repo.create_property_definition(owner, "Tags", DataType::String, false, None, Vec::new())
-        .await?;
+        .await?
+        .into_created()
+        .expect("created");
 
     // Provisioning the tag set still succeeds: tag definitions are exempt from the
     // display-name uniqueness that applies to user-created properties.
@@ -806,8 +809,10 @@ async fn create_property_option_with_id_writes_once(pool: Pool<Postgres>) -> any
             PropertyOptionValue::String("Someday".to_string()),
             Some("#00FF00".to_string()),
         )
-        .await?
-        .expect("first insert writes");
+        .await?;
+    let CreatePropertyOptionWithIdOutcome::Created(created) = created else {
+        panic!("first insert writes: {created:?}");
+    };
     assert_eq!(created.id, id);
 
     // A second insert under the same id writes nothing, even with new values.
@@ -820,7 +825,7 @@ async fn create_property_option_with_id_writes_once(pool: Pool<Postgres>) -> any
             None,
         )
         .await?;
-    assert!(replay.is_none());
+    assert!(matches!(replay, CreatePropertyOptionWithIdOutcome::IdTaken));
     let stored = repo.get_property_option(id).await?.expect("stored");
     assert_eq!(
         stored.value,
@@ -841,7 +846,10 @@ async fn create_property_option_with_id_writes_once(pool: Pool<Postgres>) -> any
             PropertyOptionValue::String("Low".to_string()),
             None,
         )
-        .await;
-    assert!(duplicate.is_err());
+        .await?;
+    assert!(matches!(
+        duplicate,
+        CreatePropertyOptionWithIdOutcome::DuplicateValue
+    ));
     Ok(())
 }

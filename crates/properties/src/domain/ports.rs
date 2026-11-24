@@ -22,7 +22,8 @@ use models_properties::{DataType, EntityPropertyReference, EntityReference, Enti
 use uuid::Uuid;
 
 use super::model::{
-    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
+    CreatePropertyDefinitionOutcome, CreatePropertyOptionWithIdOutcome, EditReceipt,
+    EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
     EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreatePropertyOptionResult,
     GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, PropertyOptionReplaceOutcome,
     PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification,
@@ -91,7 +92,7 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         is_multi_select: bool,
         specific_entity_type: Option<EntityType>,
         options: Vec<PropertyOption>,
-    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<CreatePropertyDefinitionOutcome, Self::Err>> + Send;
 
     /// Create a definition owned by a database, outside the shared user/team namespace.
     /// The calling database domain service owns authorization and column-type policy.
@@ -168,8 +169,8 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         color: Option<String>,
     ) -> impl Future<Output = Result<PropertyOption, Self::Err>> + Send;
 
-    /// Create a property option under an id the caller minted. Returns `None`
-    /// without writing when a row already has that id.
+    /// Create a property option under an id the caller minted. Writes nothing
+    /// when a row already has that id or the definition already has the value.
     fn create_property_option_with_id(
         &self,
         option_id: Uuid,
@@ -177,7 +178,7 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         display_order: i32,
         value: PropertyOptionValue,
         color: Option<String>,
-    ) -> impl Future<Output = Result<Option<PropertyOption>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<CreatePropertyOptionWithIdOutcome, Self::Err>> + Send;
 
     /// Resolve by exact value, inserting if absent. Concurrent calls return the
     /// same option; an existing option's color and display order are preserved.

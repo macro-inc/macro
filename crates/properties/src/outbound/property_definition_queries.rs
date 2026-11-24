@@ -10,7 +10,9 @@ use models_properties::{DataType, EntityType, db};
 use sqlx::{PgExecutor, Pool, Postgres};
 use uuid::Uuid;
 
-use crate::domain::model::{GetOrCreateTagDefinitionResult, PropertyDefinitionOwner};
+use crate::domain::model::{
+    CreatePropertyDefinitionOutcome, GetOrCreateTagDefinitionResult, PropertyDefinitionOwner,
+};
 
 /// Gets a single property definition by ID (includes system properties).
 pub async fn get_property_definition(
@@ -439,7 +441,7 @@ pub async fn create_property_definition(
     is_multi_select: bool,
     specific_entity_type: Option<EntityType>,
     options: Vec<PropertyOption>,
-) -> anyhow::Result<PropertyDefinition> {
+) -> anyhow::Result<CreatePropertyDefinitionOutcome> {
     let (team_id, user_id) = owner.into_ids();
     let user_id: Option<&str> = user_id.map(|u| u.as_ref());
 
@@ -447,7 +449,8 @@ pub async fn create_property_definition(
 
     let mut tx = pool.begin().await?;
 
-    let row = sqlx::query!(
+    // A unique violation aborts the transaction; dropping it rolls back.
+    let row = match sqlx::query!(
         r#"
         INSERT INTO property_definitions (
             id,
@@ -480,7 +483,14 @@ pub async fn create_property_definition(
         specific_entity_type as Option<EntityType>
     )
     .fetch_one(&mut *tx)
-    .await?;
+    .await
+    {
+        Ok(row) => row,
+        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+            return Ok(CreatePropertyDefinitionOutcome::DuplicateName);
+        }
+        Err(err) => return Err(err.into()),
+    };
 
     let db_property_def = db::PropertyDefinition {
         id: row.id,
@@ -497,19 +507,28 @@ pub async fn create_property_definition(
     };
 
     for option in options {
-        create_property_option_tx(
+        match create_property_option_tx(
             &mut tx,
             db_property_def.id,
             option.display_order,
             option.value,
             option.color,
         )
-        .await?;
+        .await
+        {
+            Ok(()) => {}
+            Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+                return Ok(CreatePropertyDefinitionOutcome::DuplicateOptionValue);
+            }
+            Err(err) => return Err(err.into()),
+        }
     }
 
     tx.commit().await?;
 
-    Ok(db_property_def.into())
+    Ok(CreatePropertyDefinitionOutcome::Created(
+        db_property_def.into(),
+    ))
 }
 
 /// Creates a database-owned definition without adding it to shared property lists.
@@ -660,7 +679,7 @@ pub(super) async fn create_property_option_tx(
     display_order: i32,
     value: PropertyOptionValue,
     color: Option<String>,
-) -> anyhow::Result<()> {
+) -> Result<(), sqlx::Error> {
     let id = macro_uuid::generate_uuid_v7();
     let (number_value, string_value) = value.to_db_values();
 
@@ -774,16 +793,24 @@ pub async fn get_or_create_tag_definition(
     )
     .await
     {
-        Ok(definition) => Ok(GetOrCreateTagDefinitionResult {
-            definition,
-            created: true,
-        }),
-        Err(create_error) => match get_tag_definition(pool, owner).await? {
+        Ok(CreatePropertyDefinitionOutcome::Created(definition)) => {
+            Ok(GetOrCreateTagDefinitionResult {
+                definition,
+                created: true,
+            })
+        }
+        // A lost race leaves the winner's definition to read back.
+        outcome => match get_tag_definition(pool, owner).await? {
             Some(definition) => Ok(GetOrCreateTagDefinitionResult {
                 definition,
                 created: false,
             }),
-            None => Err(create_error),
+            None => match outcome {
+                Err(create_error) => Err(create_error),
+                Ok(_) => Err(anyhow::anyhow!(
+                    "tag definition create conflicted but none exists"
+                )),
+            },
         },
     }
 }

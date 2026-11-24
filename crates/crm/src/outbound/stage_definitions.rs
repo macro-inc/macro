@@ -104,6 +104,9 @@ fn stage_store_error(err: PropertiesErr) -> CrmError {
         PropertiesErr::DuplicateOptionValue => {
             CrmError::InvalidRequest("a stage with that label already exists".into())
         }
+        PropertiesErr::DuplicateDefinitionName => {
+            CrmError::InvalidRequest("the team's stages were created meanwhile".into())
+        }
         PropertiesErr::Repo(err) if is_unique_violation(&err) => {
             CrmError::InvalidRequest("a stage with that label already exists".into())
         }
