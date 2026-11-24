@@ -52,6 +52,16 @@ function serverPage(
   };
 }
 
+/** A commit the device refuses once, as after a session change, then stores. */
+function refuseFirstCommit() {
+  let refused = false;
+  return () => {
+    if (refused) return undefined;
+    refused = true;
+    throw new StaleCacheAuthorityError();
+  };
+}
+
 /** Counts every host request, the IPCs a native page would make. */
 function countingHost(...args: Parameters<typeof fakeHost>) {
   const host = fakeHost(...args);
@@ -72,7 +82,7 @@ describe('loadChannelPage', () => {
     );
     const fetchPage = vi.fn<FetchChannelServerPage>();
     // Marked recently: an ordinary open writes nothing.
-    const touches = { due: () => undefined };
+    const touches = { due: () => undefined, settled: () => {} };
 
     const loaded = await loadChannelPage(
       { host, touches, fetchPage },
@@ -111,6 +121,64 @@ describe('loadChannelPage', () => {
     ]);
   });
 
+  it('marks a channel opened again when the device did not store the last mark', async () => {
+    const { host } = countingHost(() => devicePage([keyOf(newer)]), {
+      records: [newer],
+      commit: refuseFirstCommit(),
+    });
+    let now = 1_000;
+    const deps = { host, touches: createChannelTouches(), now: () => now };
+    const open = () =>
+      loadChannelPage(deps, { channelId: CHANNEL_ID, limit: 50 });
+
+    await open();
+    await vi.waitFor(() => expect(host.commits).toHaveLength(1));
+    now += 1;
+    await open();
+
+    await vi.waitFor(() => expect(host.commits).toHaveLength(2));
+    expect(host.commits.map((commit) => commit.touchedAtMs)).toEqual([
+      1_000, 1_001,
+    ]);
+  });
+
+  it('marks a channel again after a fill whose commit the device refused', async () => {
+    const { host } = countingHost(
+      [
+        devicePage([], { covered: false, seq: null }),
+        devicePage([], { covered: false, seq: null }),
+      ],
+      { commit: refuseFirstCommit() }
+    );
+    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
+      page: serverPage(),
+      cached: Promise.resolve(),
+    }));
+    let now = 1_000;
+    const deps = {
+      host,
+      touches: createChannelTouches(),
+      fetchPage,
+      now: () => now,
+    };
+    const fill = async () => {
+      const loaded = await loadChannelPage(deps, {
+        channelId: CHANNEL_ID,
+        limit: 50,
+      });
+      if (loaded === 'unsupported') throw new Error('unexpected');
+      return loaded.stored;
+    };
+
+    await fill();
+    now += 1;
+    await fill();
+
+    expect(host.commits.map((commit) => commit.touchedAtMs)).toEqual([
+      1_000, 1_001,
+    ]);
+  });
+
   it('fetches a page the device lacks and commits it once the cache stores it', async () => {
     const { host } = countingHost([
       devicePage([], { covered: false, seq: null }),
@@ -125,7 +193,7 @@ describe('loadChannelPage', () => {
     }));
 
     const loaded = await loadChannelPage(
-      { host, touches: { due: () => 5 }, fetchPage },
+      { host, touches: { due: () => 5, settled: () => {} }, fetchPage },
       { channelId: CHANNEL_ID, limit: 50 }
     );
 
@@ -167,7 +235,7 @@ describe('loadChannelPage', () => {
       }));
 
       const loaded = await loadChannelPage(
-        { host, touches: { due: () => 5 }, fetchPage },
+        { host, touches: { due: () => 5, settled: () => {} }, fetchPage },
         { channelId: CHANNEL_ID, limit: 50 }
       );
       if (loaded === 'unsupported') throw new Error('unexpected');
@@ -192,7 +260,7 @@ describe('loadChannelPage', () => {
     }));
 
     const loaded = await loadChannelPage(
-      { host, touches: { due: () => undefined }, fetchPage },
+      { host, touches: { due: () => undefined, settled: () => {} }, fetchPage },
       { channelId: CHANNEL_ID, limit: 50 }
     );
 
@@ -221,7 +289,11 @@ describe('loadChannelPage', () => {
       }));
 
       const loaded = await loadChannelPage(
-        { host, touches: { due: () => undefined }, fetchPage },
+        {
+          host,
+          touches: { due: () => undefined, settled: () => {} },
+          fetchPage,
+        },
         { channelId: CHANNEL_ID, limit: 50 }
       );
       if (loaded === 'unsupported') throw new Error('unexpected');
@@ -239,7 +311,11 @@ describe('loadChannelPage', () => {
 
     expect(
       await loadChannelPage(
-        { host, touches: { due: () => undefined }, fetchPage },
+        {
+          host,
+          touches: { due: () => undefined, settled: () => {} },
+          fetchPage,
+        },
         { channelId: CHANNEL_ID, limit: 50 }
       )
     ).toBe('unsupported');
@@ -271,7 +347,7 @@ describe('loadChannelPage across tabs', () => {
     vi.stubGlobal('navigator', { locks: fakeLocks() });
     const { host, fetchPage, storeRecords } = fill();
     const loaded = await loadChannelPage(
-      { host, touches: { due: () => undefined }, fetchPage },
+      { host, touches: { due: () => undefined, settled: () => {} }, fetchPage },
       { channelId: CHANNEL_ID, limit: 50 }
     );
     if (loaded === 'unsupported') throw new Error('unexpected');
@@ -302,7 +378,7 @@ describe('loadChannelPage across tabs', () => {
     const { host, fetchPage, storeRecords } = fill();
 
     const loaded = await loadChannelPage(
-      { host, touches: { due: () => undefined }, fetchPage },
+      { host, touches: { due: () => undefined, settled: () => {} }, fetchPage },
       { channelId: CHANNEL_ID, limit: 50 }
     );
     if (loaded === 'unsupported') throw new Error('unexpected');
@@ -321,7 +397,11 @@ describe('loadChannelPage across tabs', () => {
       vi.stubGlobal('navigator', { locks: fakeLocks() });
       const { host, fetchPage, storeRecords } = fill();
       const loaded = await loadChannelPage(
-        { host, touches: { due: () => undefined }, fetchPage },
+        {
+          host,
+          touches: { due: () => undefined, settled: () => {} },
+          fetchPage,
+        },
         { channelId: CHANNEL_ID, limit: 50 }
       );
       if (loaded === 'unsupported') throw new Error('unexpected');

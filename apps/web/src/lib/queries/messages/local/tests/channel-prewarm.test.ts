@@ -76,7 +76,7 @@ function deps(
   const value: ChannelPrewarmDeps = {
     host: { channelTimelineEvict: evict } as never,
     runtime,
-    touches: { due: () => undefined },
+    touches: { due: () => undefined, settled: () => {} },
     listChannels: async () => channelIds,
     idle: Effect.void,
     online: () => true,

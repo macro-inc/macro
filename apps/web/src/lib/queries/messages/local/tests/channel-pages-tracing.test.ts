@@ -51,7 +51,7 @@ it('keeps a cold page, its request and its store in one trace', async () => {
   });
 
   const loaded = await loadChannelPage(
-    { host, touches: { due: () => undefined }, fetchPage },
+    { host, touches: { due: () => undefined, settled: () => {} }, fetchPage },
     { channelId: CHANNEL_ID, limit: 50 }
   );
   if (loaded === 'unsupported') throw new Error('unexpected');

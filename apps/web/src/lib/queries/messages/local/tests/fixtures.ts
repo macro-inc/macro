@@ -112,9 +112,10 @@ export function fakeHost(
     records?: Array<
       ChannelMessageFieldsFragment | ChannelTimelineActivityFieldsFragment
     >;
+    /** A commit's answer; undefined answers as committed. */
     commit?: (
       args: ChannelTimelineCommitArgs
-    ) => ChannelTimelineCommitCacheResult;
+    ) => ChannelTimelineCommitCacheResult | undefined;
   } = {}
 ): FakeHost {
   const script = Array.isArray(timeline) ? [...timeline] : undefined;

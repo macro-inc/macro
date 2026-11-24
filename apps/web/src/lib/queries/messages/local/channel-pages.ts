@@ -5,6 +5,7 @@ import {
   CHANNEL_TIMELINE_START,
   type ChannelCoverageWire,
   type ChannelTimelineCacheArgs,
+  type ChannelTimelineCommitCacheResult,
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/index';
@@ -107,8 +108,16 @@ export type FetchChannelServerPage = (
 
 /** A store of when each channel was last marked opened. */
 export interface ChannelTouches {
-  /** The time to record, or undefined when the channel was marked recently. */
+  /**
+   * The time to record, or undefined when the channel was marked recently or
+   * a mark is on its way to the device.
+   */
   due(channelId: string, nowMs: number): number | undefined;
+  /**
+   * Tells how the commit carrying a mark from `due` ended: one the device did
+   * not store is due again at the next read.
+   */
+  settled(channelId: string, touchedAtMs: number, stored: boolean): void;
 }
 
 /** How often an opened channel's eviction clock is written to the device. */
@@ -117,7 +126,10 @@ export const CHANNEL_TOUCH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 /**
  * Remembers in memory when each channel was last marked opened, so ordinary
  * opens write nothing: eviction runs on a 30-day clock, and six hours of
- * slack on it never evicts a channel in use.
+ * slack on it never evicts a channel in use. A mark counts once the device
+ * stored it: a channel whose mark was refused (the session changed while it
+ * was sent) keeps the device's old clock, which a frame's empty row leaves
+ * at 0, and the next eviction would take it while it is on screen.
  */
 export function createChannelTouches(
   intervalMs = CHANNEL_TOUCH_INTERVAL_MS
@@ -130,7 +142,29 @@ export function createChannelTouches(
       touched.set(channelId, nowMs);
       return nowMs;
     },
+    settled(channelId, touchedAtMs, stored) {
+      if (stored || touched.get(channelId) !== touchedAtMs) return;
+      touched.delete(channelId);
+    },
   };
+}
+
+/** Commits a page or a mark, and settles the mark it carries. */
+async function commitTouch(
+  touches: ChannelTouches,
+  channelId: string,
+  touchedAtMs: number | undefined,
+  commit: () => Promise<ChannelTimelineCommitCacheResult>
+): Promise<ChannelTimelineCommitCacheResult> {
+  let stored = false;
+  try {
+    const committed = await commit();
+    stored = committed.kind === 'committed';
+    return committed;
+  } finally {
+    if (touchedAtMs !== undefined)
+      touches.settled(channelId, touchedAtMs, stored);
+  }
 }
 
 // Compiled on first read: the app shell imports this module before the cache.
@@ -334,7 +368,9 @@ export function touchChannel(
   const touchedAtMs = deps.touches.due(channelId, (deps.now ?? Date.now)());
   if (touchedAtMs === undefined) return;
   fireAndForget(
-    deps.host.channelTimelineCommit({ channelId, touchedAtMs }, generation),
+    commitTouch(deps.touches, channelId, touchedAtMs, () =>
+      deps.host.channelTimelineCommit({ channelId, touchedAtMs }, generation)
+    ),
     'channel-local-sync'
   );
 }
@@ -464,14 +500,20 @@ async function loadPage(
       request.channelId,
       (deps.now ?? Date.now)()
     );
-    const committed = await host.channelTimelineCommit(
-      {
-        channelId: request.channelId,
-        ...(coverage && { coverage: [coverage] }),
-        seq: { kind: 'lower', seq: page.seq },
-        ...(touchedAtMs !== undefined && { touchedAtMs }),
-      },
-      generation
+    const committed = await commitTouch(
+      deps.touches,
+      request.channelId,
+      touchedAtMs,
+      () =>
+        host.channelTimelineCommit(
+          {
+            channelId: request.channelId,
+            ...(coverage && { coverage: [coverage] }),
+            seq: { kind: 'lower', seq: page.seq },
+            ...(touchedAtMs !== undefined && { touchedAtMs }),
+          },
+          generation
+        )
     );
     return committed.kind === 'committed' ? committed.channelSeq : held.seq;
   };

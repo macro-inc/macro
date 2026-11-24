@@ -91,7 +91,8 @@ TanStack path in `../` runs untouched.
   later session must not store what an earlier one read.
 - A read touches a channel at most every 6 hours (`CHANNEL_TOUCH_INTERVAL_MS`),
   and a prewarm counts as a touch: `touched_at_ms` defaults to 0, which the
-  30-day eviction would take at once.
+  30-day eviction would take at once. A touch counts only once the device
+  stored it (`settled`); a refused one is sent again with the next read.
 - `effect` is allowed only in `channel-sync-runtime.ts`, `channel-writes.ts`,
   `channel-prewarm.ts` and the tests that run their effects (FE-46).
 - Channel queries abort through `firstOrAborted`: urql replaces
