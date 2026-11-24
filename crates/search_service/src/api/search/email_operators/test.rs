@@ -623,9 +623,8 @@ fn mail_search_draws_exactly_the_operators_the_service_reads() {
         .iter()
         .filter(|case| {
             let query = read(&case.typed);
-            let read_as_operator = query.operators == 1
-                && query.terms.is_empty()
-                && query.excluded_words.is_empty();
+            let read_as_operator =
+                query.operators == 1 && query.terms.is_empty() && query.excluded_words.is_empty();
             read_as_operator != case.operator
         })
         .map(|case| case.typed.as_str())
