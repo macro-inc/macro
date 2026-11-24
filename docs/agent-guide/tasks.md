@@ -13,7 +13,7 @@ The single-row desktop header contains the title, `Filter`, a separate
 `Sort`, `Group`, `New`, and an expandable Search icon
 (`Ctrl+F` opens it). A pane too narrow for those actions hides the layout
 group, then Sort and Group, before New or Search would leave the pane; each
-comes back once there is room, and `s` still sorts. The active-filter count sits beside the filter icon inside
+comes back once there is room (`s` sorts only while Sort shows). The active-filter count sits beside the filter icon inside
 its button, without overlapping the icon or the group border;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 Project, and Tags submenus. They use the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):

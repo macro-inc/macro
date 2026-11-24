@@ -293,11 +293,19 @@ try {
       `narrow-tasks-header-${width}`,
       `${width}px`
     );
+    // A control that renders nothing has no box to be cut off; New and
+    // Search must be there.
+    for (const kept of ['^="New task"', '="Search tasks"'])
+      assert(
+        await browser.$(`button[aria-label${kept}]`).isDisplayed(),
+        `Tasks header at ${width}px shows no button[aria-label${kept}]`
+      );
   }
   await browser.setWindowSize(windowSize.width, windowSize.height);
-  await browser.$('button[aria-label="Group by"]').waitForDisplayed({
-    timeout: 5000,
-  });
+  for (const restored of ['Board', 'Group by'])
+    await browser
+      .$(`button[aria-label="${restored}"]`)
+      .waitForDisplayed({ timeout: 5000 });
   await expectHeaderFits(
     browser,
     'Search tasks',

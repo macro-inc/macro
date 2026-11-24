@@ -79,7 +79,8 @@ function DesktopTasksControls(
     },
     sort: {
       description: 'Sort tasks',
-      condition: () => !isSearching(),
+      // A sort menu hidden with the header's view options has no trigger to open beside.
+      condition: () => !isSearching() && !props.hideViewOptions,
       run: () => {
         if (!sortTrigger) return false;
 

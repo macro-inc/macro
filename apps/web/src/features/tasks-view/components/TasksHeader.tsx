@@ -113,7 +113,7 @@ export function TasksHeader(props: TasksHeaderProps) {
   let focusSearch: (() => void) | undefined;
   // A narrow pane (the desktop window has no minimum width) hides the layout
   // switch, then sort and group, rather than push New and Search past the
-  // header's edge. Each comes back once there is room; `s` still sorts.
+  // header's edge. Each comes back once there is room.
   const [actions, setActions] = createSignal<HTMLDivElement>();
   const collapsed = createLabelCollapse(actions, () => HEADER_COLLAPSE_ORDER, {
     watchContent: true,

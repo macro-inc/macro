@@ -38,7 +38,7 @@ expect every Email list header control, Search included, inside the header,
 then restore the size and expect the view options (the reading pane toggle) back.
 They then open Tasks, narrow the window from 520px to 400px and expect every
 Tasks list header control, New and Search included, inside the header, then
-restore the size and expect Group by back.
+restore the size and expect the layout switch and Group by back.
 The full suite checks native Soup predicate evaluation via
 `graphql_cache_entity_filter`, including filter combinations never fetched online,
 then reloads the webview with the API still down and expects All mail to render
