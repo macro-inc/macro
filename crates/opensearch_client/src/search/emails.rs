@@ -280,15 +280,23 @@ fn build_keyword_query_string(terms: &[String], match_type: &str) -> String {
         .join(" + ")
 }
 
-/// The word of a term that holds a single Unicode (UAX #29) word, without the
-/// characters around it (`-lunch`, `(lunch`, `Re:`), or the whole term. A
-/// prefix is not analyzed, so with them it would look for a token the index
-/// never holds. Regexp input stays whole.
+/// The word of a term that is one Unicode (UAX #29) word with nothing but
+/// ASCII punctuation around it (`-lunch`, `(lunch`, `Re:`), or the whole term.
+/// A prefix is not analyzed, so with the punctuation it would look for a token
+/// the index never holds. The index does hold a symbol as a token, so a term
+/// with one (`C♯`) stays whole, as regexp input does.
 fn one_word<'a>(term: &'a str, match_type: &str) -> &'a str {
-    let mut words = term.unicode_words();
-    match (words.next(), words.next()) {
-        (Some(word), None) if match_type != "regexp" => word,
-        _ => term,
+    let mut words = term.unicode_word_indices();
+    let (Some((start, word)), None) = (words.next(), words.next()) else {
+        return term;
+    };
+    let mut around = term[..start]
+        .chars()
+        .chain(term[start + word.len()..].chars());
+    if match_type != "regexp" && around.all(|c| c.is_ascii_punctuation()) {
+        word
+    } else {
+        term
     }
 }
 

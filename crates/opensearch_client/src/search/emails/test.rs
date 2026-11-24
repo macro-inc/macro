@@ -952,6 +952,10 @@ fn a_terms_punctuation_is_never_read_as_query_syntax() {
         ("-नमस्ते", "(नमस्ते | नमस्ते@*)", "नमस्ते*"),
         ("-", r"(\- | \-@*)", r"(\-)"),
         ("a+", "(a | a@*)", "(a)"),
+        ("lunch*", "(lunch | lunch@*)", "lunch*"),
+        ("C♯", "(C♯ | c♯@*)", "(C♯)"),
+        ("-lunch🎉", r"(\-lunch🎉 | \-lunch🎉@*)", r"\-lunch🎉*"),
+        (r"team lunch\", r#""team lunch\\""#, r#""team lunch\\""#),
         (
             r#"-team "lunch"#,
             r#""\-team \"lunch""#,
@@ -968,15 +972,24 @@ fn a_terms_punctuation_is_never_read_as_query_syntax() {
         assert_eq!(build_keyword_query_string(&terms, "partial"), addresses);
         assert_eq!(build_text_query_string(&terms, "partial"), text);
     }
-    let words = ["lunch~2".to_string(), "lunch|menu".to_string()];
-    assert_eq!(
-        build_keyword_query_string(&words, "partial"),
-        r"(lunch\~2 | lunch\~2@*) + (lunch\|menu | lunch\|menu@*)"
-    );
-    assert_eq!(
-        build_text_query_string(&words, "exact"),
-        r"(lunch\~2) + (lunch\|menu)"
-    );
+    for (term, literal) in [
+        ("lunch~2", r"lunch\~2"),
+        ("lunch|menu", r"lunch\|menu"),
+        (r"lunch\|menu", r"lunch\\\|menu"),
+        ("lunch(menu)", r"lunch\(menu\)"),
+        ("lunch*menu", r"lunch\*menu"),
+    ] {
+        let terms = [term.to_string()];
+
+        assert_eq!(
+            build_keyword_query_string(&terms, "partial"),
+            format!("({literal} | {literal}@*)")
+        );
+        assert_eq!(
+            build_text_query_string(&terms, "exact"),
+            format!("({literal})")
+        );
+    }
 }
 
 #[test]

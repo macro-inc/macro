@@ -174,7 +174,8 @@ projects.
   around it (`follow-`, `Re:`, `-lunch`) matches by that word alone, as a
   prefix or, under three characters, as the whole word; one `single_word`
   does not count (a Devanagari word with a virama) is an uncapped `term*`
-  too. Everything else a `simple_query_string` would read as syntax is
+  too. A term with a symbol in it (`C♯`) stays whole, since the tokenizer
+  keeps symbols. Everything a `simple_query_string` would read as syntax is
   escaped (`emails::escape_syntax`): unescaped, the address clause of
   `-lunch` was NOT `lunch` and matched every other message. Only regexp input
   keeps its punctuation.

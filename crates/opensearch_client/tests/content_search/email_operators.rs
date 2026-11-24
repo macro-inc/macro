@@ -360,6 +360,8 @@ fn punctuated_messages() -> Vec<Message> {
         message(21, "Team lunch", "menu attached", BO),
         message(22, "Weekly plan", "agenda", LUNCH_DESK),
         message(23, "Quarterly numbers", "two figures", CY),
+        message(24, "Sonata in C♯", "for piano", DI),
+        message(25, "Grade C", "for effort", DI),
     ]
 }
 
@@ -382,6 +384,9 @@ fn punctuated_cases() -> Vec<Case> {
             case("+lunch)", &["+lunch)"], &[21, 22]),
             case("lunch~2", &["lunch~2"], &[]),
             case("lunch|numbers", &["lunch|numbers"], &[]),
+            case("a symbol the index keeps", &["C♯"], &[24]),
+            case("a phrase ending in a backslash", &["team lunch\\"], &[21]),
+            case("words a backslash joins", &["lunch\\|numbers"], &[]),
             case("a minus alone", &["-"], &[]),
         ]
     };
