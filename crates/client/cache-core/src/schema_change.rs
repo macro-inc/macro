@@ -309,7 +309,9 @@ fn close_over_holders(stored: &Schema, incoming: &Schema, changed: &mut BTreeSet
 
 /// The incoming artifact plus the stored definitions it removed from types
 /// that keep their records, and the types whose removed definitions cannot
-/// be kept because a type they name is gone.
+/// be kept: one names a type that is gone, or a name an incoming field reads
+/// as an enum or scalar is a removed type's, or a removed field reads as a
+/// leaf a name that is now a type.
 fn keep_removed(
     stored: &Schema,
     incoming: &Schema,
@@ -344,12 +346,23 @@ fn keep_removed(
             kept.insert(old.name.clone(), removed);
         }
     }
+    // A field names a type exactly when it is composite; anything kept that
+    // breaks that would not validate beside the incoming definitions.
+    let leaves = incoming
+        .artifact()
+        .types
+        .iter()
+        .flat_map(|ty| &ty.fields)
+        .filter(|field| field.ty.kind != FieldKind::Composite)
+        .map(|field| field.ty.name.as_str())
+        .collect::<BTreeSet<_>>();
     let unkeepable = kept
         .into_iter()
-        .filter(|(_, fields)| {
-            fields.iter().any(|field| {
-                field.ty.kind == FieldKind::Composite && !types.contains_key(&field.ty.name)
-            })
+        .filter(|(owner, fields)| {
+            leaves.contains(owner.as_str())
+                || fields.iter().any(|field| {
+                    (field.ty.kind == FieldKind::Composite) != types.contains_key(&field.ty.name)
+                })
         })
         .map(|(owner, _)| owner)
         .collect();

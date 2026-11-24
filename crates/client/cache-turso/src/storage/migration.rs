@@ -374,6 +374,22 @@ pub mod test_hooks {
     }
 
     thread_local! {
+        static CORRUPT_ADOPTION: Cell<bool> = const { Cell::new(false) };
+    }
+
+    /// Makes the next schema adoption on this thread fail as one in a
+    /// corrupt file does, so the caller must replace the file. Only other
+    /// crates' tests use it.
+    #[cfg(feature = "migration-test-hooks")]
+    pub fn corrupt_next_adoption() {
+        CORRUPT_ADOPTION.with(|corrupt| corrupt.set(true));
+    }
+
+    pub(crate) fn take_corrupt_adoption() -> bool {
+        CORRUPT_ADOPTION.with(|corrupt| corrupt.replace(false))
+    }
+
+    thread_local! {
         static STOP_AFTER: Cell<Option<u32>> = const { Cell::new(None) };
         static STOPPED: Cell<bool> = const { Cell::new(false) };
     }
