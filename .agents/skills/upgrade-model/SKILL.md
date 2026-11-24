@@ -42,19 +42,18 @@ a new provider ID needs the corresponding pricing configuration.
 
 When retiring a model, map it to its replacement in `RETIRED_MODELS`
 (`model_access.rs`) and in the web's `RETIRED_MODELS` (`model.ts`). The backend
-upgrades retired ids when a session opens or resumes and when a chat message
-arrives; the web upgrades saved chats, drafts and the remembered agent model,
-and shows a Macro agent or routine saved on a retired id as its replacement
+upgrades retired ids when a session opens, resumes or changes model, and when a
+chat message, structured completion or database question arrives; the web
+upgrades saved chats, drafts and the remembered agent model, and shows a Macro
+agent, session or routine saved on a retired id as its replacement
 (`currentModelId`).
-Migrate saved selections as well, in a later pull request that merges once the
-code that knows the replacement has deployed: migrations run before services
-deploy, and the running code may not know the new id. Routines
-(`scheduled_action.task`, both a legacy task's `model` and each agent step's
-`model` under `steps`) and in-memory agents (`agent_configs.default_model`)
-persist their model. Follow
-`crates/macro_db_client/migrations/20261019221542_upgrade_retired_claude_models.sql`,
-keep the Macro-runtime scope, and bump the routine's `configuration_revision`.
-Create migrations through the `sqlx-migration` skill.
+Saved selections keep the retired id: routines (`scheduled_action.task`, both a
+legacy task's `model` and each agent step's `model` under `steps`) and in-memory
+agents (`agent_configs.default_model`) are read through the mapping, so keep a
+mapping row for as long as saved rows can name its id. Don't rewrite them in a
+migration: the tables grow with use, migrations run before code that knows the
+new id deploys, and raising a routine's `configuration_revision` supersedes its
+queued event runs. A rewrite is a batched job that leaves the revision alone.
 
 ## Validation
 
