@@ -140,6 +140,24 @@ export function PlanStep(props: {
       </Show>
       <Show
         when={
+          props.checkoutReturn?.t === 'cancelled' &&
+          plan.state().t === 'offer' &&
+          !trial.existingSubscription()
+        }
+      >
+        <div class="mt-4 text-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={props.finishing}
+            onClick={props.onContinueFree}
+          >
+            Continue free instead
+          </Button>
+        </div>
+      </Show>
+      <Show
+        when={
           plan.state().t === 'offer' &&
           !trial.existingSubscription() &&
           trial.eligibility().t === 'error'
