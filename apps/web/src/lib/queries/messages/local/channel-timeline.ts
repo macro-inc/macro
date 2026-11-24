@@ -349,6 +349,8 @@ export function createLocalChannelTimeline(
   let givenUp = 0;
   // A change came while the window could not be read again.
   let missedReread = false;
+  // An outage ended while a page was storing, which it may keep from storing.
+  let missedResume = false;
   // The device holds every page shown, so the window can be read again.
   const holds = () =>
     held &&
@@ -455,6 +457,7 @@ export function createLocalChannelTimeline(
     const signal = abort.signal;
     held = false;
     missedReread = false;
+    missedResume = false;
     // Pages still storing belong to the window this load replaces.
     storing = 0;
     anchorId = around;
@@ -622,7 +625,10 @@ export function createLocalChannelTimeline(
   };
   /** A window the device could not store or read during an outage is read again. */
   const resume = () => {
-    if (held) return scheduleReread();
+    if (held) {
+      if (!holds()) missedResume = true;
+      return scheduleReread();
+    }
     if (state.phase !== 'ready')
       return fireAndForget(load(anchorId), 'channel-local-sync');
     currentLoad = loadWindow(
@@ -716,10 +722,14 @@ export function createLocalChannelTimeline(
     return 'unstored';
   };
 
-  /** The window stops following the device until it is loaded again. */
+  /**
+   * The window stops following the device until it is loaded again, which an
+   * outage that ended meanwhile does at once.
+   */
   const letGo = () => {
     held = false;
     givenUp += 1;
+    if (missedResume) return resume();
     // A failed read again of a page given up is not read on reconnect.
     for (const direction of ['older', 'newer'] as const)
       if (state.unstored[direction] !== null) pageReconnects[direction]?.stop();
@@ -843,8 +853,11 @@ export function createLocalChannelTimeline(
     // A later window load counted its own pages from zero.
     if (pending && token === loadToken) {
       storing -= 1;
-      // A change skipped while it stored is read once every page is held.
-      if (missedReread && holds()) scheduleReread();
+      if (holds()) {
+        missedResume = false;
+        // A change skipped while it stored is read once every page is held.
+        if (missedReread) scheduleReread();
+      }
     }
     if (outcome === 'stale' || token !== loadToken) {
       watch.stop();

@@ -498,7 +498,14 @@ export function createLocalChannelThread(
       do {
         rereadAgain = false;
         const current = token;
-        const device = await readDeviceThread(deps.host, channelId, root);
+        let device: Awaited<ReturnType<typeof readDeviceThread>>;
+        try {
+          device = await readDeviceThread(deps.host, channelId, root);
+        } catch (error) {
+          // Asked for again meanwhile, it may answer now.
+          if (current === token && rereadAgain) continue;
+          throw error;
+        }
         if (current !== token) return;
         if (device.kind === 'unsupported') {
           onUnsupported();

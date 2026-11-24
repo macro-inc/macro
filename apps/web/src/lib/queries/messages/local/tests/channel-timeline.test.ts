@@ -36,6 +36,7 @@ import {
 import { fakeLocks } from './fake-locks';
 import {
   CHANNEL_ID,
+  devicePage,
   fakeHost,
   graphqlMessage as fixtureMessage,
   keyOf,
@@ -707,6 +708,55 @@ describe('createLocalChannelTimeline', () => {
     runtime.changed();
     await waitFor(() => timeline.entries().length === 3);
     mounted.dispose();
+  });
+
+  it('holds its window again when a page an outage lost fails to store after it', async () => {
+    const [first, latest, added] = messages(3) as [Row, Row, Row];
+    let keys = [keyOf(latest)];
+    let away = false;
+    const host = fakeHost(
+      (args) => {
+        if (away) throw new Error('cache is away');
+        if (args.before !== undefined) return devicePage([keyOf(first)]);
+        return devicePage(keys, { olderCursor: latest.sortKey });
+      },
+      { records: [first, latest, added] }
+    );
+    const stored = Promise.withResolvers<void>();
+    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
+      page: {
+        __typename: 'GraphqlChannelTimelinePage',
+        entries: [first],
+        olderCursor: null,
+        newerCursor: first.sortKey,
+        seq: '7',
+      } as never,
+      cached: stored.promise,
+    }));
+    const runtime = fakeRuntime();
+    const { timeline, dispose } = createRoot((dispose) => ({
+      dispose,
+      timeline: createLocalChannelTimeline(
+        { host, runtime, touches: createChannelTouches(), fetchPage },
+        CHANNEL_ID,
+        () => undefined,
+        vi.fn()
+      ),
+    }));
+    await waitFor(() => vi.mocked(runtime.noteStoredSeq).mock.calls.length > 0);
+    away = true;
+    const page = timeline.loadOlder();
+    await waitFor(() => timeline.entries().length === 2);
+
+    // The outage ends while the page is storing, and the store is lost to it.
+    away = false;
+    runtime.resumed();
+    stored.reject(new Error('cache was away'));
+    await page;
+    keys = [keyOf(added), keyOf(latest)];
+    runtime.changed();
+    await waitFor(() => ids(timeline)[0] === added.id);
+    dispose();
   });
 
   it('reads a held window again once the cache serves again', async () => {

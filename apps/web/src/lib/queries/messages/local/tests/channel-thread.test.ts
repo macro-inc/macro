@@ -334,6 +334,33 @@ describe('createLocalChannelThread', () => {
     );
   });
 
+  it('reads a held thread again when the read an outage ended in fails', async () => {
+    let keys = [channelMessageKey(first.id)];
+    const host = fakeHost(() => devicePage(keys), {
+      records: [root, first, second],
+    });
+    const sync = runtime();
+    const { thread, dispose } = createRoot((dispose) => ({
+      dispose,
+      thread: createLocalChannelThread(
+        { host, runtime: sync, fetchPage: serverThread() },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      ),
+    }));
+    await vi.waitFor(() => expect(sync.noteStoredSeq).toHaveBeenCalled());
+    const lost = Promise.withResolvers<never>();
+    vi.spyOn(host, 'channelTimeline').mockReturnValueOnce(lost.promise);
+    sync.change();
+    keys = [channelMessageKey(second.id), ...keys];
+    sync.resume();
+    lost.reject(new Error('cache was away'));
+    await vi.waitFor(() => expect(thread.replies()).toHaveLength(2));
+    dispose();
+  });
+
   it('loads a thread again from the server when the device lost it', async () => {
     let covered = true;
     const host = fakeHost(
