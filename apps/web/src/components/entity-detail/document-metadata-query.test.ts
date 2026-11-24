@@ -21,7 +21,9 @@ describe('documentMetadataOptions', () => {
     expect(documentMetadataOptions('doc-1')).toEqual({
       ignoresNotifications: true,
       staleTime: 60_000,
-      graphqlCacheFirstEntities: [{ entityType: 'DOCUMENT', entityId: 'doc-1' }],
+      graphqlCacheFirstEntities: [
+        { entityType: 'DOCUMENT', entityId: 'doc-1' },
+      ],
     });
   });
 });

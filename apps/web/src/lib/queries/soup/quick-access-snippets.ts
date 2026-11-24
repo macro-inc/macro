@@ -10,9 +10,9 @@ import {
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
+import { createMemo } from 'solid-js';
 
 const STALE_TIME = 5 * 60 * 1000;
-import { createMemo } from 'solid-js';
 
 /** Snippet documents only, recently opened first. */
 export const QUICK_ACCESS_SNIPPETS_ARGS: SoupAstItemsQueryArgs = {

@@ -66,17 +66,17 @@ import {
 import { crmExternalWriteTypes } from './external-write-scope';
 import { isCachedMailView } from './mail-view';
 import {
-  usePendingGraphqlSoupDeleteKeys,
-  withoutPendingSoupEntities,
-} from './optimistic-deletions';
-import {
   recordSoupNetworkAnswer,
   soupNetworkAnswerFresh,
 } from './network-freshness';
+import {
+  usePendingGraphqlSoupDeleteKeys,
+  withoutPendingSoupEntities,
+} from './optimistic-deletions';
 import { readSoupPage } from './read-soup-page';
 import {
-  materializeReconciledSoup,
   isLocallySortable,
+  materializeReconciledSoup,
   soupItemKey,
   soupReconciliationBaseline,
   unreconciledServerRecords,
@@ -199,8 +199,7 @@ export function createSoupLiveQuery(
     const client = getGraphqlSoupClient();
     return untrack(
       () =>
-        freshFor !== undefined &&
-        soupNetworkAnswerFresh(client, key, freshFor)
+        freshFor !== undefined && soupNetworkAnswerFresh(client, key, freshFor)
     );
   });
   type ServerProjection = {

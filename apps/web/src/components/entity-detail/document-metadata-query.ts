@@ -32,6 +32,8 @@ export function documentMetadataOptions(
   return {
     ignoresNotifications: true,
     staleTime: 60_000,
-    graphqlCacheFirstEntities: [{ entityType: 'DOCUMENT', entityId: documentId }],
+    graphqlCacheFirstEntities: [
+      { entityType: 'DOCUMENT', entityId: documentId },
+    ],
   };
 }

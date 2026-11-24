@@ -1,7 +1,9 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  handler: undefined as ((message: { type: string; data: string }) => void) | undefined,
+  handler: undefined as
+    | ((message: { type: string; data: string }) => void)
+    | undefined,
   refresh: vi.fn(async () => undefined),
 }));
 vi.mock('@service-connection/websocket', () => ({

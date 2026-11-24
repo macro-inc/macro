@@ -31,23 +31,23 @@ vi.mock('@queries/soup/items', () => ({
   useSoupAstItemsQuery: (_args: unknown, options?: () => unknown) => {
     soup.options.push(options?.());
     return {
-    data: {
-      entities: [
-        {
-          type: 'chat',
-          id: 'gpt-chat',
-          name: 'GPT conversation',
-          model: 'openai/gpt-5.5',
-        },
-        {
-          type: 'chat',
-          id: 'claude-chat',
-          name: 'Claude conversation',
-          model: 'anthropic/claude-sonnet-5',
-        },
-        { type: 'chat', id: 'unknown-chat', name: 'Unknown conversation' },
-      ],
-    },
+      data: {
+        entities: [
+          {
+            type: 'chat',
+            id: 'gpt-chat',
+            name: 'GPT conversation',
+            model: 'openai/gpt-5.5',
+          },
+          {
+            type: 'chat',
+            id: 'claude-chat',
+            name: 'Claude conversation',
+            model: 'anthropic/claude-sonnet-5',
+          },
+          { type: 'chat', id: 'unknown-chat', name: 'Unknown conversation' },
+        ],
+      },
     };
   },
 }));

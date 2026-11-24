@@ -16,8 +16,6 @@ import {
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
-
-const STALE_TIME = 60 * 1000;
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createMemo } from 'solid-js';
@@ -25,6 +23,8 @@ import type {
   FigLibraryDocument,
   FigLibrarySource,
 } from '../context/fig-libraries';
+
+const STALE_TIME = 60 * 1000;
 
 /** Fig designs only, recently opened first. */
 export const FIG_LIBRARY_DESIGNS_ARGS: SoupAstItemsQueryArgs = {
