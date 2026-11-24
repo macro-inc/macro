@@ -3,6 +3,7 @@
 //! between pages (tokio's mutex is fair) instead of waiting for the stream.
 
 use super::access::EngineAccess;
+use super::authority::AuthorityListener;
 use super::{AffectedOperationsResultWire, EngineState, WriteResultWire, wire_write_result};
 use cache_core::engine::Engine;
 use cache_core::predicate::ProjectionMutation;
@@ -16,7 +17,7 @@ use soup_filter_cache_adapter::host_projections::{
     ProjectionFailure, deletion_projections, reuses_stored_identity, write_projections,
 };
 use std::collections::BTreeSet;
-use std::sync::Weak;
+use std::sync::{Arc, Weak};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// Why a run did not complete (`SyncFailure` in `sync-protocol.ts`). Here,
@@ -140,7 +141,12 @@ pub(crate) enum SyncPublication {
 /// the foreground turn (`lock`): they keep FIFO order with commands and do
 /// not supersede in-flight cache warming.
 #[derive(Clone)]
-pub(crate) struct WeakEngineHandle(pub(super) Weak<EngineAccess<EngineState>>);
+pub(crate) struct WeakEngineHandle {
+    inner: Weak<EngineAccess<EngineState>>,
+    /// The handle's authority listener, told when a page starts a new
+    /// authority generation.
+    authority_listener: Option<Arc<AuthorityListener>>,
+}
 
 impl WeakEngineHandle {
     /// Starts a run at `started_at_ms`: its request carries every lane's saved
@@ -150,7 +156,7 @@ impl WeakEngineHandle {
         args: &SyncStartArgs,
         started_at_ms: f64,
     ) -> Result<SyncRun, SyncFailure> {
-        let inner = self.0.upgrade().ok_or(SyncFailure::Aborted)?;
+        let inner = self.inner.upgrade().ok_or(SyncFailure::Aborted)?;
         let state = inner.lock().await;
         state
             .engine
@@ -175,13 +181,24 @@ impl WeakEngineHandle {
         hooks: &NativeSyncHooks,
     ) -> Result<Option<SyncPublication>, SyncFailure> {
         // The cache was shut down or replaced: the run stops with it.
-        let inner = self.0.upgrade().ok_or(SyncFailure::Aborted)?;
+        let inner = self.inner.upgrade().ok_or(SyncFailure::Aborted)?;
         let mut state = inner.lock().await;
         let EngineState { engine, ops, .. } = &mut *state;
-        let applied = engine
-            .sync_apply_next(run, hooks)
-            .await
-            .map_err(|error| match error {
+        let generation = engine
+            .authority_snapshot()
+            .map(|authority| authority.generation);
+        let applied = engine.sync_apply_next(run, hooks).await;
+        // A page for another account resets the cache under a new authority
+        // generation. Publish it before giving the engine back, as hydration
+        // does, so no later notification goes out ahead of it. The run
+        // carries no generation of its own, so only a change is published.
+        if let Some(listener) = &self.authority_listener
+            && let Some(current) = engine.authority_snapshot()
+            && generation != Some(current.generation)
+        {
+            listener(current);
+        }
+        let applied = applied.map_err(|error| match error {
                 SyncWriteError::Stream(error) => SyncFailure::Stream {
                     message: error.to_string(),
                 },
@@ -215,7 +232,13 @@ impl WeakEngineHandle {
 impl super::EngineHandle {
     /// A handle that does not keep the engine alive.
     pub(crate) fn downgrade(&self) -> WeakEngineHandle {
-        WeakEngineHandle(std::sync::Arc::downgrade(&self.inner))
+        WeakEngineHandle {
+            inner: Arc::downgrade(&self.inner),
+            authority_listener: self
+                .authority_listener
+                .as_ref()
+                .map(|(_, listener)| Arc::clone(listener)),
+        }
     }
 
     /// Saved state of every lane that has run against this database.

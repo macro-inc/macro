@@ -393,6 +393,52 @@ fn a_membership_lane_deletes_members_the_server_no_longer_lists() {
 }
 
 #[test]
+fn a_page_for_another_account_publishes_its_new_authority_generation() {
+    let handle = engine();
+    block_on(handle.write(crate::engine::WriteRequest {
+        origin_op_id: None,
+        registration: None,
+        query: "{ user { id } }".to_owned(),
+        operation_name: None,
+        variables: serde_json::Map::new(),
+        data: json!({"user": {"id": "viewer"}}),
+        identity: Some("viewer".to_owned()),
+    }))
+    .unwrap();
+    let before = block_on(handle.current_authority("profile")).unwrap();
+    let (events, received) = std::sync::mpsc::channel();
+    let handle = handle.with_authority_listener("profile".to_owned(), move |authority| {
+        events.send(authority.clone()).unwrap();
+    });
+    let mut page = soup_page("tasks", 0, &[1], None);
+    page["response"]["data"]["user"]["id"] = json!("replacement");
+    let opener = Arc::new(FakeOpener::default());
+    opener.responses.lock().unwrap().push_back((
+        200,
+        vec![Chunk::Bytes(ndjson(&[page, lane_done("tasks", 1, 1), end()]))],
+    ));
+    let runs = runs_with(&opener);
+    let (published, publish) = recorder();
+
+    let outcome = block_on(runs.start(handle.downgrade(), args(), publish));
+
+    assert!(
+        matches!(outcome, SyncRunOutcome::Completed(_)),
+        "{outcome:?}"
+    );
+    let event = received.try_recv().unwrap();
+    assert_ne!(event.generation, before.generation);
+    assert_eq!(event.account.as_deref(), Some("replacement"));
+    // Pages for the same account start no generation.
+    assert!(received.try_recv().is_err());
+    // Open views still hear about the reset.
+    assert_eq!(
+        published.lock().unwrap()[1],
+        "hydrated advanced=true reset=true"
+    );
+}
+
+#[test]
 fn failures_keep_written_pages_and_report_progress() {
     let handle = engine();
     let opener = Arc::new(FakeOpener::default());
