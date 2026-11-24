@@ -1,0 +1,21 @@
+apps/web/src/features/settings/connections/import-action.test.tsx
+  s_87f3afa86ac8c1::t_8f71203cf8bb55 2-3,76-86
+apps/web/src/features/settings/connections/import-action.tsx
+  s_87f3afa86ac8c1::t_8f71203cf8bb55 88-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e03dc3c43510aaaf720887f0fc363268a21e6f43",
+  "prompts": {},
+  "sessions": {
+    "s_87f3afa86ac8c1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80304950-74c2-466b-aa73-c3085432a4c6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
