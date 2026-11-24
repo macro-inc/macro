@@ -15,6 +15,7 @@ import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { TimeTrackingContextProvider } from '../context/time-tracking-context';
 import type { RunningTimerState } from '../primitives/running-timer';
+import { reportTask, TEST_TASK_PARTS } from '../tests/report-task';
 import { ProjectTimeDesktop } from './project-time';
 
 const inputs = vi.hoisted(() => [] as TimeSummaryInput[]);
@@ -45,7 +46,7 @@ const task = (taskId: string, name: string): Key => ({
   userId: null,
   taskId,
   date: null,
-  task: { __typename: 'GraphqlSoupDocument', id: taskId, name },
+  task: reportTask(taskId, name),
 });
 
 function summaryFor(input: TimeSummaryInput): TimeSummaryFieldsFragment {
@@ -151,6 +152,7 @@ function renderTime(projectId: () => string = () => 'project-1') {
         project={{ id: projectId(), name: 'Launch plans' }}
         clock={{ today: () => '2026-11-24', weekStartsOn: () => 1 }}
         person={(userId) => <span>{userId}</span>}
+        task={TEST_TASK_PARTS}
         onOpenTask={onOpenTask}
         save={save}
       />
@@ -196,13 +198,34 @@ it('shows the three figures and opens a person to their tasks', () => {
   });
 });
 
+it('shows a person’s tasks as task rows whose status and priority never open the task', () => {
+  const { onOpenTask } = renderTime();
+
+  fireEvent.click(screen.getByRole('button', { name: /alice/ }));
+
+  const status = screen.getByRole('button', { name: 'Status of task-b' });
+  expect(screen.getByText('Timer on task-b')).toBeTruthy();
+  fireEvent.click(status);
+  expect(onOpenTask).not.toHaveBeenCalled();
+
+  const row = status.parentElement as HTMLElement;
+  fireEvent.click(row);
+  expect(onOpenTask).toHaveBeenCalledWith('task-b', {
+    event: expect.any(MouseEvent),
+  });
+});
+
 it('reads the breakdown again by task, with the people under each task', () => {
   const { onOpenTask } = renderTime();
 
   fireEvent.click(screen.getByRole('radio', { name: 'Task' }));
 
   expect(inputs.at(-1)).toMatchObject({ groupBy: 'TASK', thenBy: 'PERSON' });
-  fireEvent.click(screen.getByRole('button', { name: /^Draft the plan/ }));
+  const group = screen.getByRole('button', { name: /^Draft the plan/ });
+  fireEvent.click(screen.getByRole('button', { name: 'Status of task-a' }));
+  expect(group.getAttribute('aria-expanded')).toBe('false');
+  expect(onOpenTask).not.toHaveBeenCalled();
+  fireEvent.click(group);
   expect(screen.getByText('bob')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Open Draft the plan' }));
   expect(onOpenTask).toHaveBeenCalledWith('task-a', {

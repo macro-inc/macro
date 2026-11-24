@@ -17,6 +17,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TimeTrackingContextProvider } from '../context/time-tracking-context';
 import type { RunningTimerState } from '../primitives/running-timer';
 import * as summaryModule from '../queries/time-summary';
+import { reportTask, TEST_TASK_PARTS } from '../tests/report-task';
 import { TasksTimeDesktop } from './tasks-time';
 
 const taskTime = vi.hoisted(() => ({
@@ -137,11 +138,7 @@ function summaryFor(input: TimeSummaryInput): TimeSummaryFieldsFragment {
               userId: null,
               taskId: 'task-a',
               date: null,
-              task: {
-                __typename: 'GraphqlSoupDocument' as const,
-                id: 'task-a',
-                name: 'Draft the plan',
-              },
+              task: reportTask('task-a', 'Draft the plan'),
             },
             minutes: 105,
             taskCount: 1,
@@ -228,6 +225,7 @@ function renderWeek(
         clock={{ today: () => '2026-11-24', weekStartsOn: () => 1 }}
         showWeekends={() => options.showWeekends ?? false}
         person={(userId) => <span>{userId}</span>}
+        task={TEST_TASK_PARTS}
         onOpenTask={onOpenTask}
         editAccess={(_taskId, render) =>
           render(() => ('canEdit' in options ? options.canEdit : true))
@@ -378,9 +376,12 @@ it('steps a week at a time and comes back to this week', () => {
   expect(screen.queryByRole('button', { name: 'This week' })).toBeNull();
 });
 
-it('opens a task from its name', () => {
+it('opens a task from its name, beside its status and priority', () => {
   const { onOpenTask } = renderWeek('week');
 
+  fireEvent.click(screen.getByRole('button', { name: 'Status of task-a' }));
+  expect(onOpenTask).not.toHaveBeenCalled();
+  expect(screen.getByText('Timer on task-a')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Draft the plan' }));
 
   expect(onOpenTask).toHaveBeenCalledWith('task-a', {
@@ -400,6 +401,7 @@ it('puts a picked task on the sheet and starts a timer on a picked task', async 
       name: /Review the plan/,
     })
   ).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Status of task-b' })).toBeNull();
 
   fireEvent.click(screen.getByRole('button', { name: 'Start timer' }));
   fireEvent.click(

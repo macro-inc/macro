@@ -25,14 +25,9 @@ import { WeekCell } from './week-cell';
 
 const NO_EXTRA_ROWS: readonly TimeSummaryKey[] = [];
 
+/** A picked task has no summary of its own yet; its row shows the picked name. */
 function taskKey(task: PickedTask): TimeSummaryKey {
-  return {
-    by: 'TASK',
-    userId: null,
-    taskId: task.id,
-    date: null,
-    task: { __typename: 'GraphqlSoupDocument', id: task.id, name: task.name },
-  };
+  return { by: 'TASK', userId: null, taskId: task.id, date: null, task: null };
 }
 
 /** A button that opens the host's task search beside it. */
@@ -143,9 +138,11 @@ function MyWeekDesktop(props: TasksTimeViewProps): JSX.Element {
     ).flatMap((row) =>
       row.key.taskId ? [{ id: row.key.taskId, byDay: row.byDay }] : []
     );
-  const nameOf = (taskId: string) =>
+  const taskOf = (taskId: string) =>
     week.summary()?.groups.find((group) => group.key.taskId === taskId)?.key
-      .task?.name ||
+      .task ?? undefined;
+  const nameOf = (taskId: string) =>
+    taskOf(taskId)?.name ||
     added().find((task) => task.id === taskId)?.name ||
     t('timeTracking.untitledTask');
   return (
@@ -177,13 +174,21 @@ function MyWeekDesktop(props: TasksTimeViewProps): JSX.Element {
           today={props.clock.today()}
           rows={rows()}
           rowLabel={(taskId) => (
-            <button
-              type="button"
-              class="block max-w-full truncate rounded-sm text-left not-touch:hover:underline"
-              onClick={(event) => props.onOpenTask(taskId, { event })}
-            >
-              {nameOf(taskId)}
-            </button>
+            <span class="flex min-w-0 items-center gap-2">
+              <Show when={taskOf(taskId)}>
+                {(task) => <props.task.Lead task={task()} />}
+              </Show>
+              <span class="flex min-w-0 items-center gap-1">
+                <button
+                  type="button"
+                  class="block min-w-0 truncate rounded-sm text-left not-touch:hover:underline"
+                  onClick={(event) => props.onOpenTask(taskId, { event })}
+                >
+                  {nameOf(taskId)}
+                </button>
+                <props.task.Timer taskId={taskId} />
+              </span>
+            </span>
           )}
           cell={(taskId, day, minutes) => (
             <WeekCell

@@ -1,14 +1,23 @@
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
+import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName } from '@core/user/displayName';
 import { tryMacroId } from '@core/user/macroId';
+import { TaskPropertyControl } from '@entity/extractors-property/task-property-control';
 import { downloadFile } from '@filesystem/download';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { queryReadyGate } from '@queries/gate';
 import { useDocumentAccessLevelQuery } from '@queries/storage/document-metadata';
-import { type Accessor, type JSX, Suspense } from 'solid-js';
+import { mapGraphqlProperties } from '@service-storage/graphql-soup';
+import { cn } from '@ui/utils/classname';
+import { type Accessor, createMemo, type JSX, Suspense } from 'solid-js';
+import type {
+  ReportTask,
+  TaskLabelParts,
+} from './components/time-key-label';
 import { createLocalToday } from './primitives/create-local-today';
+import { TaskTimerCount } from './task-timer-count';
 import type { ProjectTimeClock } from './primitives/create-project-time';
 import type { PickedTask } from './views/shared/tasks-time-props';
 
@@ -28,6 +37,67 @@ export function ReportPerson(props: { userId: string }): JSX.Element {
     </span>
   );
 }
+
+function canEditTask(task: ReportTask): boolean {
+  const permission = task.viewerPermission;
+  return (
+    permission?.__typename === 'GraphqlAccessLevelPermission' &&
+    (permission.accessLevel === 'EDIT' || permission.accessLevel === 'OWNER')
+  );
+}
+
+/**
+ * A task's priority then status, by the Tasks list row's own controls and
+ * spacing: a phone's narrow row on phones, the list row elsewhere. A viewer
+ * who can only view the task sees them without being offered a change.
+ */
+function ReportTaskLead(props: { task: ReportTask }): JSX.Element {
+  const entity = createMemo(() => ({
+    id: props.task.id,
+    properties: mapGraphqlProperties(props.task.properties),
+    subType: {
+      type: 'task' as const,
+      is_completed:
+        props.task.subType?.__typename === 'GraphqlTaskSubType'
+          ? props.task.subType.isCompleted
+          : undefined,
+    },
+  }));
+  const canEdit = () => canEditTask(props.task);
+  return (
+    <span
+      class={cn('flex shrink-0 items-center', isMobile() ? 'gap-1' : 'gap-2')}
+    >
+      <TaskPropertyControl
+        entity={entity()}
+        property="priority"
+        canEdit={canEdit()}
+      />
+      <span
+        class={cn(
+          'flex shrink-0 items-center',
+          isMobile() ? '-ml-1 -mr-2' : '-mr-1 touch:-mr-2'
+        )}
+      >
+        <TaskPropertyControl
+          entity={entity()}
+          property="status"
+          canEdit={canEdit()}
+        />
+      </span>
+    </span>
+  );
+}
+
+function ReportTaskTimer(props: { taskId: string }): JSX.Element {
+  return <TaskTimerCount taskId={props.taskId} compact={isMobile()} />;
+}
+
+/** A task in a report reads as its row in the Tasks list. */
+export const REPORT_TASK_PARTS: TaskLabelParts = {
+  Lead: ReportTaskLead,
+  Timer: ReportTaskTimer,
+};
 
 /** Days are this device's; weeks start as the calendar's preference says. */
 export function useReportClock(): ProjectTimeClock {

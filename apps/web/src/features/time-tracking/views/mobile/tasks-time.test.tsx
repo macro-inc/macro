@@ -8,6 +8,7 @@ import { type JSX, type ParentProps, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TimeTrackingContextProvider } from '../../context/time-tracking-context';
 import type { RunningTimerState } from '../../primitives/running-timer';
+import { reportTask, TEST_TASK_PARTS } from '../../tests/report-task';
 import { TasksTimeMobile } from './tasks-time';
 
 vi.mock('../../queries/time-tracking-changes', () => ({
@@ -123,11 +124,7 @@ vi.mock('../../queries/time-summary', () => ({
                   userId: null,
                   taskId: 'task-a',
                   date: null,
-                  task: {
-                    __typename: 'GraphqlSoupDocument',
-                    id: 'task-a',
-                    name: 'Draft the plan',
-                  },
+                  task: reportTask('task-a', 'Draft the plan'),
                 },
                 minutes: 90,
               },
@@ -175,6 +172,7 @@ it('lists the week by day and logs time on a picked task through its sheet', asy
         clock={{ today: () => '2026-11-24', weekStartsOn: () => 0 }}
         showWeekends={() => true}
         person={(userId) => <span>{userId}</span>}
+        task={TEST_TASK_PARTS}
         onOpenTask={onOpenTask}
         editAccess={(_taskId, render) => render(() => true)}
         pickTask={(picker) => (
@@ -197,6 +195,8 @@ it('lists the week by day and logs time on a picked task through its sheet', asy
     thenBy: 'TASK',
   });
   expect(screen.getByRole('region', { name: 'Mon, Nov 23' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Status of task-a' }));
+  expect(onOpenTask).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: /Draft the plan/ }));
   expect(onOpenTask).toHaveBeenCalledWith('task-a', {
     event: expect.any(MouseEvent),
@@ -224,6 +224,7 @@ it('shows a teammate with no time as a plain row with a dash, not one that opens
         clock={{ today: () => '2026-11-24', weekStartsOn: () => 0 }}
         showWeekends={() => true}
         person={(userId) => <span>{userId}</span>}
+        task={TEST_TASK_PARTS}
         onOpenTask={vi.fn()}
         editAccess={(_taskId, render) => render(() => true)}
         pickTask={() => null}

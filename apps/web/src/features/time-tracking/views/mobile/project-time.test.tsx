@@ -7,6 +7,7 @@ import type { Client } from '@urql/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TimeTrackingContextProvider } from '../../context/time-tracking-context';
 import type { RunningTimerState } from '../../primitives/running-timer';
+import { reportTask, TEST_TASK_PARTS } from '../../tests/report-task';
 import { MobileProjectTime } from './project-time';
 
 vi.mock('../../queries/time-tracking-changes', () => ({
@@ -20,7 +21,7 @@ const task = (taskId: string, name: string): Key => ({
   userId: null,
   taskId,
   date: null,
-  task: { __typename: 'GraphqlSoupDocument', id: taskId, name },
+  task: reportTask(taskId, name),
 });
 
 const summary = (input: TimeSummaryInput): TimeSummaryFieldsFragment => ({
@@ -95,6 +96,7 @@ it('opens the stacked summary and a person to their tasks, and opens a task from
         project={{ id: 'project-1', name: 'Launch plans' }}
         clock={{ today: () => '2026-11-24', weekStartsOn: () => 0 }}
         person={(userId) => <span>{userId}</span>}
+        task={TEST_TASK_PARTS}
         onOpenTask={onOpenTask}
       />
     </TimeTrackingContextProvider>
@@ -112,6 +114,14 @@ it('opens the stacked summary and a person to their tasks, and opens a task from
   const alice = screen.getByRole('button', { name: /alice/ });
   fireEvent.click(alice);
   expect(alice.getAttribute('aria-expanded')).toBe('true');
+  expect(
+    screen.getAllByRole('button', { name: 'Status of task-b' })
+  ).toHaveLength(2);
+  for (const status of screen.getAllByRole('button', {
+    name: 'Status of task-b',
+  }))
+    fireEvent.click(status);
+  expect(onOpenTask).not.toHaveBeenCalled();
   const reviews = screen.getAllByRole('button', { name: /Review the plan/ });
   fireEvent.click(reviews[0] as HTMLElement);
   expect(onOpenTask).toHaveBeenCalledWith('task-b', {
