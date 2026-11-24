@@ -193,9 +193,18 @@ const bumpSummary = () =>
 
 beforeEach(() => {
   log.mockResolvedValue(ok({ kind: 'committed', data: undefined }));
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
 });
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   log.mockReset();
   update.mockReset();
   refetch.mockClear();
