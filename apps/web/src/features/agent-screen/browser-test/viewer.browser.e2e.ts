@@ -131,6 +131,8 @@ for (const theme of ['light', 'dark'] as const) {
     test('the real DM top bar: the Offline chip, then the action labels, yield before the agent avatar and name', async ({
       page,
     }) => {
+      // It loads the header at up to 16 widths.
+      test.setTimeout(240_000);
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
       // The stubs answer the header's own data; nothing reaches a backend.
@@ -150,37 +152,58 @@ for (const theme of ['light', 'dark'] as const) {
       expect(await truncated()).toBe(false);
       await shot(page, `dm-header-600-${theme}`);
 
-      // Narrower: the chip drops to its dot, and the name stays whole (at
-      // this width it would truncate beside the labelled chip).
-      await page.goto(`${dmHeader}?width=420&theme=${theme}`, {
-        waitUntil: 'networkidle',
-      });
-      await expect(chip).toHaveAttribute('data-compact', '');
+      // Narrowing the pane: the chip drops to its dot first, then the
+      // actions lose their labels, and the agent's avatar and name stay
+      // whole throughout. The widths where each step happens depend on the
+      // header's other contents and the font, so scan for them.
+      type Step = {
+        width: number;
+        compact: boolean;
+        labelsHidden: boolean;
+        nameCut: boolean;
+      };
+      const steps: Step[] = [];
+      for (let width = 600; width >= 300; width -= 20) {
+        await page.goto(`${dmHeader}?width=${width}&theme=${theme}`, {
+          waitUntil: 'networkidle',
+        });
+        await expect(chip).toBeVisible();
+        await page.evaluate(() => document.fonts.ready);
+        const nameCut = await title.evaluate((span) => {
+          if (span.scrollWidth > span.clientWidth) return true;
+          const avatar = span.previousElementSibling;
+          const sensor = span.closest('.overflow-hidden');
+          if (!avatar || !sensor) return true;
+          const inner = avatar.getBoundingClientRect();
+          const outer = sensor.getBoundingClientRect();
+          return inner.left < outer.left || inner.right > outer.right;
+        });
+        steps.push({
+          width,
+          compact: (await chip.getAttribute('data-compact')) !== null,
+          labelsHidden: await page
+            .locator('[data-header-action-label]')
+            .first()
+            .isHidden(),
+          nameCut,
+        });
+        if (steps.at(-1)?.labelsHidden) break;
+      }
+      const compactAt = steps.find((step) => step.compact);
+      const labelsHiddenAt = steps.find((step) => step.labelsHidden);
+      expect(compactAt, JSON.stringify(steps)).toBeDefined();
+      expect(labelsHiddenAt, JSON.stringify(steps)).toBeDefined();
+      // The chip yields first (at a wider pane), then the labels.
+      expect(compactAt?.width).toBeGreaterThan(labelsHiddenAt?.width ?? 0);
+      for (const step of steps) {
+        if (step.width < (compactAt?.width ?? 0)) {
+          expect(step.compact, JSON.stringify(step)).toBe(true);
+        }
+        expect(step.nameCut, JSON.stringify(step)).toBe(false);
+      }
       await expect(chip).toHaveAttribute('title', 'Offline');
-      await expect.poll(truncated).toBe(false);
-      await shot(page, `dm-header-420-${theme}`);
-
-      // A narrow split beside the viewer: the actions give up their labels
-      // too, and the avatar and the name stay whole.
-      await page.goto(`${dmHeader}?width=380&theme=${theme}`, {
-        waitUntil: 'networkidle',
-      });
-      await expect(chip).toHaveAttribute('data-compact', '');
       await expect(page.getByRole('button', { name: 'Screen' })).toBeVisible();
-      await expect(
-        page.locator('[data-header-action-label]').first()
-      ).toBeHidden();
-      await expect.poll(truncated).toBe(false);
-      const avatarClipped = await title.evaluate((span) => {
-        const avatar = span.previousElementSibling;
-        const sensor = span.closest('.overflow-hidden');
-        if (!avatar || !sensor) return true;
-        const inner = avatar.getBoundingClientRect();
-        const outer = sensor.getBoundingClientRect();
-        return inner.left < outer.left || inner.right > outer.right;
-      });
-      expect(avatarClipped).toBe(false);
-      await shot(page, `dm-header-380-${theme}`);
+      await shot(page, `dm-header-${labelsHiddenAt?.width}-${theme}`);
       expect(errors).toEqual([]);
     });
   });
