@@ -10,6 +10,7 @@ import {
   disposeChannelNotificationRefresh,
 } from '../../queries/channel/notification-refresh';
 import { revalidateCallListsForSoupUpdates } from '../../queries/soup/graphql/call-list-revalidation';
+import { revalidateMailAttachmentListsForSoupUpdates } from '../../queries/soup/graphql/mail-list-revalidation';
 import {
   ActivityUpdatesDocument,
   type ActivityUpdatesSubscription,
@@ -385,6 +386,10 @@ export function createGraphqlSoupSubscriptionsLifecycle(
                 .soupUpdates;
               fireAndForget(
                 revalidateCallListsForSoupUpdates(patches),
+                'graphql-soup-subscriptions'
+              );
+              fireAndForget(
+                revalidateMailAttachmentListsForSoupUpdates(patches),
                 'graphql-soup-subscriptions'
               );
               channelHandler.onSoupUpdates(patches);
