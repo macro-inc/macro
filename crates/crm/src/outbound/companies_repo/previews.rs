@@ -39,17 +39,25 @@ impl CompaniesRepositoryImpl {
             r#"
             SELECT
                 requested.id AS "id!",
-                a.company_id AS "merged_into?",
+                requested.merged_into AS "merged_into?",
                 COALESCE(c.custom_name, dd.name) AS "name?",
                 primary_domain.domain AS "primary_domain?",
                 c.last_interaction AS "updated_at!"
-            FROM (SELECT DISTINCT id FROM unnest($2::uuid[]) AS ids (id)) requested
-            LEFT JOIN crm_company_aliases a
-                ON a.retired_id = requested.id
+            FROM (
+                SELECT
+                    ids.id,
+                    (
+                        SELECT a.company_id
+                        FROM crm_company_aliases a
+                        WHERE a.retired_id = ids.id
+                    ) AS merged_into
+                FROM (SELECT DISTINCT id FROM unnest($2::uuid[]) AS ids (id)) ids
+                OFFSET 0
+            ) requested
             CROSS JOIN LATERAL (
                 SELECT id, team_id, custom_name, hidden, last_interaction
                 FROM crm_companies
-                WHERE id = COALESCE(a.company_id, requested.id)
+                WHERE id = COALESCE(requested.merged_into, requested.id)
                 OFFSET 0
             ) c
             JOIN team_user tu
