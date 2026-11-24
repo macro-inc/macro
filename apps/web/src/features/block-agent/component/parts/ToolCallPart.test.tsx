@@ -244,7 +244,7 @@ describe('ToolCallPart routing', () => {
     expect(rendered.queryByTestId('tool-card')).toBeNull();
   });
 
-  it('shows a failed MCP call as a summary without a disclosure', () => {
+  it('shows a failed MCP call as a plain row without a disclosure', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={{
@@ -264,9 +264,10 @@ describe('ToolCallPart routing', () => {
         context={context(false)}
       />
     ));
-    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+    expect(rendered.getByTestId('tool-card').dataset.status).toBe('failed');
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('false');
     expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe('');
-    expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
+    expect(rendered.getByTestId('trailing').textContent).toBe('');
     expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
     expect(rendered.getByTestId('body').textContent).toBe('');
   });
@@ -609,8 +610,9 @@ describe('ToolCallPart Macro tools', () => {
       />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
-    expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
+    expect(rendered.getByTestId('tool-card').dataset.status).toBe('failed');
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('false');
+    expect(rendered.getByTestId('trailing').textContent).toBe('');
   });
 });
 
@@ -1034,7 +1036,7 @@ describe('ToolCallPart subagents', () => {
     expect(rows.map((el) => el.dataset.active)).toEqual(['false', 'true']);
   });
 
-  it('shows a failed subagent faded with its error', () => {
+  it('shows a failed subagent as a plain row, its error behind the disclosure', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={subagent({
@@ -1053,8 +1055,8 @@ describe('ToolCallPart subagents', () => {
         context={context(false)}
       />
     ));
-    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
-    expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('false');
+    expect(rendered.getByTestId('trailing').textContent).toBe('');
     expect(rendered.getByTestId('output').textContent).toBe(
       'Subagent failed: boom'
     );
@@ -1122,7 +1124,7 @@ describe('ToolCallPart settling', () => {
 });
 
 describe('ToolCallPart failed treatment', () => {
-  it('fades the row and shows a quiet Failed trailing label', () => {
+  it('keeps the failure in the status but shows the row like any other', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={toolUse(
@@ -1132,11 +1134,12 @@ describe('ToolCallPart failed treatment', () => {
         context={context(false)}
       />
     ));
-    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
-    expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
+    expect(rendered.getByTestId('tool-card').dataset.status).toBe('failed');
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('false');
+    expect(rendered.getByTestId('trailing').textContent).toBe('');
   });
 
-  it('a failed edit shows Failed instead of the +/− badge', () => {
+  it('a failed edit shows neither Failed nor the +/− badge', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={toolUse(
@@ -1149,7 +1152,7 @@ describe('ToolCallPart failed treatment', () => {
         context={context(false)}
       />
     ));
-    expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
+    expect(rendered.getByTestId('trailing').textContent).toBe('');
     expect(rendered.queryByTestId('diff-changes')).toBeNull();
   });
 });
@@ -1213,7 +1216,7 @@ describe('ToolCallPart result summaries', () => {
     expect(rendered.getByTestId('tool-card').dataset.status).toBe('completed');
   });
 
-  it('shows a reported terminal exit failure even if the harness completed the call', () => {
+  it('keeps a reported terminal exit failure in the output, not on the row', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={toolUse({
@@ -1225,10 +1228,8 @@ describe('ToolCallPart result summaries', () => {
         context={context(false)}
       />
     ));
-    expect(rendered.getByTestId('trailing').textContent).toBe(
-      'Failed · exit 1'
-    );
-    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+    expect(rendered.getByTestId('trailing').textContent).toBe('');
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('false');
     expect(rendered.getByTestId('terminal')).toBeTruthy();
   });
 

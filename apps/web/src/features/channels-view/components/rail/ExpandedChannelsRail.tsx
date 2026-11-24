@@ -1,9 +1,14 @@
-import { SearchBar, ViewSidebar } from '@app/components/view-shell';
+import {
+  SearchBar,
+  useViewTabHotkeys,
+  ViewSidebar,
+} from '@app/components/view-shell';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
@@ -124,9 +129,24 @@ const GROUPS: GroupConfig[] = [
 
 function ExpandedHeader(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
+  const panel = useSplitPanelOrThrow();
   const selectTab = (value: ChannelsTab) => {
     if (value !== 'threads' || rail.threadsEnabled()) rail.selectTab(value);
   };
+  const tabOptions = () =>
+    rail.threadsEnabled() ? CHANNEL_TABS_WITH_THREADS : CHANNEL_TABS;
+  const [tabs, setTabs] = createSignal<HTMLElement>();
+
+  useViewTabHotkeys<ChannelsTab>({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    tabs,
+    ids: () => tabOptions().map((option) => option.value),
+    activeId: rail.tab,
+    setActiveId: selectTab,
+    label: (id) =>
+      tabOptions().find((option) => option.value === id)?.label ?? id,
+  });
 
   return (
     <div class="flex shrink-0 flex-col">
@@ -158,14 +178,14 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
         <Show when={!isTouchDevice()}>
           <ConversationsCreateMenu presentation="sidebar" />
         </Show>
-        <SidebarRoutineSuggestions surface="chat" />
+        {/* With this column's gap-3: 1rem under New, 1.5rem above the tabs. */}
+        <SidebarRoutineSuggestions surface="chat" class="pt-1 pb-3" />
         <ViewSidebar.Toolbar class={!isTouchDevice() ? 'px-0' : undefined}>
           <Tabs
+            ref={setTabs}
             aria-label="Chat sidebar views"
             fullWidth={!isTouchDevice()}
-            options={
-              rail.threadsEnabled() ? CHANNEL_TABS_WITH_THREADS : CHANNEL_TABS
-            }
+            options={tabOptions()}
             value={rail.tab()}
             onChange={selectTab}
           />

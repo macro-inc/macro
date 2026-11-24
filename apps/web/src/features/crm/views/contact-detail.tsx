@@ -1,3 +1,4 @@
+import { EntityPropertiesSection } from '@app/features/property/side-panel/properties/EntityPropertiesSection';
 import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
 import { createOpenTracker } from '@core/internal/open-tracker';
@@ -10,6 +11,7 @@ import { contactEmails } from '../core/contact';
 import {
   type ContactSection,
   type CrmRecordScope,
+  RECORD_PANEL_ORDER,
   sameRecordScope,
 } from '../core/record';
 import { ContactDiscussionSection } from './contact-discussion-section';
@@ -21,13 +23,13 @@ import {
   RecordReferencesSection,
 } from './record-associations';
 import { RecordDetailsSection } from './record-details-section';
-import { useContactQuery } from './use-crm';
+import { useContactQuery, useCrmPermissions } from './use-crm';
 
 /**
  * Root of the contact detail view, laid out like a project: the host's top
  * bar picks the section, Overview shows the contact and its discussion, and
- * the other sections list its emails, files, tasks and calls. References
- * stay in the floating information panel.
+ * the other sections list its emails, files, tasks and calls. Properties and
+ * references stay in the floating information panel.
  */
 type ContactProps = {
   contactId: string;
@@ -65,6 +67,7 @@ export function Contact(props: ContactProps) {
 
 function ContactContent(props: ContactProps) {
   const context = useCrmContext();
+  const { canEditCrm } = useCrmPermissions();
   const contactQuery = useContactQuery(() => props.contactId);
   usePending('crm.record', () => contactQuery.isLoading);
   const contact = () => contactQuery.data;
@@ -141,7 +144,25 @@ function ContactContent(props: ContactProps) {
         contact={contact()}
         onOpenCompany={props.onOpenCompany}
       />
-      <SidePanel.Section id="contact-references" title="References" order={20}>
+      <SidePanel.Section
+        id="contact-properties"
+        title="Properties"
+        order={RECORD_PANEL_ORDER.properties}
+        defaultOpen
+        render={(renderSection) => (
+          <EntityPropertiesSection
+            entityId={props.contactId}
+            entityType="CONTACT"
+            canEdit={canEditCrm()}
+            renderSection={renderSection}
+          />
+        )}
+      />
+      <SidePanel.Section
+        id="contact-references"
+        title="References"
+        order={RECORD_PANEL_ORDER.references}
+      >
         <RecordReferencesSection scope={scope()} />
       </SidePanel.Section>
     </SidePanel.Layout>

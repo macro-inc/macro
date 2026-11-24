@@ -50,7 +50,7 @@ export function DesktopModelSelector() {
   const showOptions = () => !query().trim() && hasSelectorOptions(options());
   return (
     <Dropdown open={open()} onOpenChange={changeOpen} placement="top-end">
-      <UnifiedModelTrigger>
+      <UnifiedModelTrigger menuOpen={open()}>
         <Dropdown.Trigger
           variant="ghost"
           disabled={state.disabled}

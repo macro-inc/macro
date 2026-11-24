@@ -243,13 +243,28 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         }
     }
 
-    /// Builds a content bool query
-    pub fn build_content_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+    /// Builds the filters every query of this index carries, the items the
+    /// user can reach and the index itself, with no term clause.
+    pub fn build_access_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         if self.ids_only && self.ids.is_empty() {
             return Err(OpensearchClientError::EmptyIdsWithIdsOnly(T::ENTITY_INDEX));
         }
 
         let mut access_bool_query = BoolQueryBuilder::new();
+
+        // Filter over only items you have access to
+        let filter_bool_query = self.build_filter_query(T::USER_ID_KEY)?;
+        access_bool_query.filter(filter_bool_query);
+
+        // Only search on the provided index
+        access_bool_query.filter(QueryType::term("_index", T::ENTITY_INDEX.index_name()));
+
+        Ok(access_bool_query)
+    }
+
+    /// Builds a content bool query
+    pub fn build_content_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+        let mut access_bool_query = self.build_access_bool_query()?;
 
         let term_must_array: Vec<QueryType<'a>> = self.build_must_term_query()?;
 
@@ -263,13 +278,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
         // Add in the inner bool query on content + owner to must of access bool query
         access_bool_query.must(inner_bool_query.build().into());
-
-        // Filter over only items you have access to
-        let filter_bool_query = self.build_filter_query(T::USER_ID_KEY)?;
-        access_bool_query.filter(filter_bool_query);
-
-        // Only search on the provided index
-        access_bool_query.filter(QueryType::term("_index", T::ENTITY_INDEX.index_name()));
 
         Ok(access_bool_query)
     }

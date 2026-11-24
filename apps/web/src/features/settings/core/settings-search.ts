@@ -354,14 +354,28 @@ const SETTINGS: Setting[] = [
     keywords: 'agent manager token access revoke',
   },
   {
-    tab: 'Desktop App',
-    title: 'Desktop app version and download',
-    keywords: 'download mac macos linux version latest release updated',
+    tab: 'Downloads',
+    title: 'Download the desktop app',
+    target: 'Desktop app',
+    keywords: 'download install mac macos linux computer latest release',
   },
   {
-    tab: 'Mobile App',
-    title: 'Mobile app version and download',
-    keywords: 'download phone ios android qr code version build bundle',
+    tab: 'Downloads',
+    title: 'Get the mobile app',
+    target: 'Mobile app',
+    keywords: 'download phone ios android iphone qr code app store play',
+  },
+  {
+    tab: 'Native App',
+    title: 'Version and build',
+    target: 'About',
+    keywords: 'installed version build date bundle about',
+  },
+  {
+    tab: 'Native App',
+    title: 'App updates',
+    target: 'Updates',
+    keywords: 'update upgrade check download install restart',
   },
 ];
 
@@ -417,6 +431,8 @@ export function searchSettings(
     emailRowStyle?: boolean;
     outlook?: boolean;
     macroComputers?: boolean;
+    /** The desktop app's Downloads page has no installers to find. */
+    desktopDownload?: boolean;
     /** Whether search lists the Agent pings notification setting. */
     agentNotifications?: boolean;
   } = {}
@@ -442,6 +458,8 @@ export function searchSettings(
           setting.title !== 'Email row style') &&
         (options.outlook !== false || setting.title !== 'Outlook') &&
         (options.macroComputers !== false || !setting.macroComputers) &&
+        (options.desktopDownload !== false ||
+          setting.title !== 'Download the desktop app') &&
         (options.agentNotifications !== false ||
           setting.eventType !== AGENT_PINGS_EVENT_TYPE)
     ).map((setting) => ({

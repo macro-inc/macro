@@ -344,3 +344,69 @@ async fn get_raw_message_maps_not_found_to_none() {
 
     assert!(raw.is_none());
 }
+
+#[tokio::test]
+async fn list_messages_since_asks_for_one_dated_page() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages"))
+        .and(query_param("q", "after:1699999999"))
+        .and(query_param("labelIds", "INBOX"))
+        .and(query_param("maxResults", "3"))
+        .and(query_param("pageToken", "page-2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "messages": [{ "id": "message-2" }, { "id": "message-3" }],
+            "nextPageToken": "page-3"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let page = list_messages_since(
+        &client(&server),
+        "token",
+        3,
+        &["INBOX"],
+        1_700_000_000,
+        Some("page-2"),
+    )
+    .await
+    .unwrap();
+
+    let ids: Vec<String> = page
+        .messages
+        .unwrap_or_default()
+        .into_iter()
+        .map(|message| message.id)
+        .collect();
+    assert_eq!(ids, vec!["message-2", "message-3"]);
+    assert_eq!(page.next_page_token.as_deref(), Some("page-3"));
+}
+
+#[tokio::test]
+async fn list_messages_since_reads_an_empty_last_page() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages"))
+        .and(query_param("maxResults", "500"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "resultSizeEstimate": 0
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let page = list_messages_since(
+        &client(&server),
+        "token",
+        900,
+        &["INBOX"],
+        1_700_000_000,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert!(page.messages.is_none());
+    assert!(page.next_page_token.is_none());
+}

@@ -1,8 +1,13 @@
 import { t } from '@app/lib/i18n';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { ContactCompanyProperty } from '../components/contact-company-property';
-import { ContactEmailProperty } from '../components/contact-email-property';
+import {
+  ContactEmailList,
+  ContactEmailPill,
+} from '../components/contact-email-property';
 import { useCrmContext } from '../context/crm-context';
 import {
   type CrmContact,
@@ -26,8 +31,14 @@ function editError(error: unknown): string {
   return t('crm.contactEditFailed');
 }
 
+/** Where a contact's properties are drawn: the record header or Record details. */
+type ContactPropertySurface = 'header' | 'details';
+
 /** Key editor state by record identity so navigation cannot reuse an old draft. */
-export function ContactEmailField(props: { contact: CrmContact }) {
+export function ContactEmailField(props: {
+  contact: CrmContact;
+  surface: ContactPropertySurface;
+}) {
   const mutation = useCrmContext().editContactEmail();
   // The one address on the company's domain is what links the contact to it.
   const companyEmail = () => {
@@ -37,7 +48,10 @@ export function ContactEmailField(props: { contact: CrmContact }) {
   return (
     <Show when={props.contact.id} keyed>
       {(_id) => (
-        <ContactEmailProperty
+        <Dynamic
+          component={
+            props.surface === 'header' ? ContactEmailPill : ContactEmailList
+          }
           emails={contactEmails(props.contact)}
           primary={props.contact.email}
           manageable={props.contact.emails !== undefined}
@@ -65,6 +79,7 @@ export function ContactEmailField(props: { contact: CrmContact }) {
 
 export function ContactCompanyField(props: {
   contact: CrmContact;
+  surface: ContactPropertySurface;
   onOpenCompany?: (id: string) => boolean;
 }) {
   const context = useCrmContext();
@@ -79,12 +94,22 @@ export function ContactCompanyField(props: {
     return known ? contactCompanyName(known) : company()?.name;
   };
   const navigation = context.createNavigation();
+  const openCompany = useSplitNavigationHandler<HTMLButtonElement>((event) => {
+    const id = props.contact.companyId;
+    if (!id) return;
+    if (!event.shiftKey && props.onOpenCompany?.(id)) return;
+    navigation.openWithSplit(
+      { type: 'company', id },
+      { activate: true, preferNewSplit: event.shiftKey }
+    );
+  });
   // Older servers omit the classification; the relation then stays read-only.
   const independent = () => props.contact.companyDomain === false;
   return (
     <Show when={props.contact.id} keyed>
       {(_id) => (
         <ContactCompanyProperty
+          surface={props.surface}
           editable={
             independent() &&
             (props.contact.personalEmail === true || !props.contact.companyId)
@@ -101,15 +126,7 @@ export function ContactCompanyField(props: {
           save={async (companyId) => {
             await mutation.mutateAsync({ contact: props.contact, companyId });
           }}
-          openCompany={(event) => {
-            const id = props.contact.companyId;
-            if (!id) return;
-            if (!event.shiftKey && props.onOpenCompany?.(id)) return;
-            navigation.openWithSplit(
-              { type: 'company', id },
-              { activate: true, preferNewSplit: event.shiftKey }
-            );
-          }}
+          openCompany={openCompany}
         />
       )}
     </Show>

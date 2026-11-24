@@ -12,11 +12,21 @@ import XIcon from '@icon/system/regular/x.svg';
 import { Property } from '@property';
 import { Modals } from '@property/component/modal';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
+import {
+  StartDueEditor,
+  type StartDueEditorProps,
+} from '@property/editors/popover/StartDueEditor';
+import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { InlineTagsPill } from '@property/tags';
+import type { Property as PropertyType } from '@property/types';
+import { isDateProperty } from '@property/utils';
+import { formatStartDue, startDueOf } from '@property/utils/start-due';
+import { Key } from '@solid-primitives/keyed';
 import { Button, EntityComposer, Scroll, ToggleSwitch, Tooltip } from '@ui';
 import {
+  type Component,
   createContext,
-  For,
   type JSX,
   Show,
   Suspense,
@@ -46,11 +56,13 @@ function useTaskComposer() {
 type TaskComposerPickers = {
   tagsPill: typeof InlineTagsPill;
   propertyEditor: typeof Property.PopoverEditor;
+  datesEditor: Component<StartDueEditorProps>;
 };
 
 const TaskComposerPickersContext = createContext<TaskComposerPickers>({
   tagsPill: InlineTagsPill,
   propertyEditor: Property.PopoverEditor,
+  datesEditor: StartDueEditor,
 });
 
 function Root(props: {
@@ -59,6 +71,8 @@ function Root(props: {
   tagsPill?: typeof InlineTagsPill;
   /** The editor property pills open; `Property.SheetEditor` inside a touch sheet. */
   propertyEditor?: typeof Property.PopoverEditor;
+  /** The start and due dates picker; `StartDueSheetEditor` inside a touch sheet. */
+  datesEditor?: Component<StartDueEditorProps>;
   children: JSX.Element;
 }) {
   const pickers: TaskComposerPickers = {
@@ -67,6 +81,9 @@ function Root(props: {
     },
     get propertyEditor() {
       return props.propertyEditor ?? Property.PopoverEditor;
+    },
+    get datesEditor() {
+      return props.datesEditor ?? StartDueEditor;
     },
   };
   return (
@@ -287,6 +304,36 @@ function Attach() {
 function Properties(props: { class?: string }) {
   const composer = useTaskComposer();
   const pickers = useContext(TaskComposerPickersContext);
+  // The due date pill reads as the range and sets the start too.
+  const startDateEnabled = composer.startDatesEnabled;
+  const draftDate = (definitionId: string) => {
+    const property = composer.draftProperty(definitionId);
+    return property && isDateProperty(property) ? property : undefined;
+  };
+  const dueDatesText = (property: PropertyType) => {
+    if (
+      !startDateEnabled() ||
+      property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.DUE_DATE
+    ) {
+      return undefined;
+    }
+    return formatStartDue(
+      startDueOf(draftDate(SYSTEM_PROPERTY_IDS.START_DATE), property)
+    );
+  };
+  const dueDatesEditor = startDueEditorFor({
+    field: 'due',
+    enabled: startDateEnabled,
+    other: () => draftDate(SYSTEM_PROPERTY_IDS.START_DATE),
+    saveOther: (property, value) =>
+      composer.saveHandler.saveProperty(property, value),
+    get editor() {
+      return pickers.datesEditor;
+    },
+    get fallback() {
+      return pickers.propertyEditor;
+    },
+  });
   return (
     <Suspense fallback={<div class="h-7" />}>
       <PropertiesProvider
@@ -314,15 +361,22 @@ function Properties(props: { class?: string }) {
             editor.focus(undefined, { defaultSelection: 'rootEnd' });
           }}
         >
-          <For each={composer.properties()}>
+          {/* Keyed by definition: a pill whose value changes keeps its open editor. */}
+          <Key each={composer.properties()} by="propertyDefinitionId">
             {(property) => (
               <InlinePropertyValue
-                property={property}
-                emptyLabel={property.displayName}
-                editor={pickers.propertyEditor}
+                property={property()}
+                emptyLabel={property().displayName}
+                editor={
+                  property().propertyDefinitionId ===
+                  SYSTEM_PROPERTY_IDS.DUE_DATE
+                    ? dueDatesEditor
+                    : pickers.propertyEditor
+                }
+                valueText={dueDatesText(property())}
               />
             )}
-          </For>
+          </Key>
           <CustomerContactPill
             values={composer.propertyValues}
             onChange={composer.setPropertyValues}
@@ -341,7 +395,7 @@ function Properties(props: { class?: string }) {
             definitions={composer.availableProperties()}
             properties={composer.draftProperties()}
             onAdd={composer.addProperty}
-            onSave={(id, value) => composer.setPropertyValues(id, value)}
+            onSave={composer.setPropertyValue}
           />
         </EntityComposer.Properties>
         <Modals />

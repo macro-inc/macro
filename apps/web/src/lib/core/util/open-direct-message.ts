@@ -6,7 +6,10 @@ import type {
 } from '@components/app/split-layout/layoutManager';
 import { useUserId } from '@core/context/user';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
+import { QueryAccountChangedError } from '@queries/auth/account-scope';
 import { existingDirectMessage } from '@queries/channel/get-or-create-dm';
+
+const SIGN_IN_CHANGED = Symbol('sign-in changed');
 
 type OpenDirectMessageOptions = Pick<
   OpenWithSplitOptions,
@@ -49,6 +52,15 @@ export function openDirectMessage(
       'channels.find_direct_message',
       async (lookup) => {
         const existing = await existingDirectMessage(viewerId, recipientId);
+        // A sign-in that changed under the lookup opens nothing: the DM
+        // would open for someone else.
+        if (
+          existing.isErr() &&
+          existing.error instanceof QueryAccountChangedError
+        ) {
+          lookup.setAttr('channels.find_direct_message.scope', 'other_viewer');
+          return SIGN_IN_CHANGED;
+        }
         // A channel list that fails to load only costs the history view:
         // the first message still reaches an existing DM.
         if (existing.isErr()) {
@@ -62,6 +74,11 @@ export function openDirectMessage(
         return existing.value;
       }
     );
+
+    if (channelId === SIGN_IN_CHANGED) {
+      span.setAttr('channels.open_direct_message.outcome', 'other_viewer');
+      return;
+    }
 
     if (channelId) {
       span.setAttr('channel.id', channelId);

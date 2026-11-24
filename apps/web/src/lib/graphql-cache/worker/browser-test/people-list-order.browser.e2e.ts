@@ -24,17 +24,20 @@ test('orders a mention window by contact list through the real host and engine',
     'Sam 903',
     'Sam 900',
   ]);
-  // A whole-name match in no list still leads every word-start match.
-  expect(typed.slice(0, 6)).toEqual([
-    'Sam 90',
+  // Among names that start with the query the group decides first: a
+  // whole-name match in no list follows every listed word-start match, and
+  // leads the word-start matches in none.
+  expect(typed.slice(0, 7)).toEqual([
     'Sam 902',
     'Sam 904',
     'Sam 901',
     'Sam 903',
     'Sam 900',
+    'Sam 90',
+    'Sam 905',
   ]);
   expect(unordered.slice(0, 5)).not.toEqual(browse.slice(0, 5));
-  // The engine reads policy 7. Its first search went without the order and
+  // The engine reads policy 8. Its first search went without the order and
   // was sent again with it; later ones carry it, and a window without an
   // order sends none.
   expect(sent).toEqual([null, ORDER, ORDER, null]);

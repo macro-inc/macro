@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { evictOldest } from '@core/util/evictOldest';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { usePlatformNotificationState } from '@notifications';
@@ -14,6 +15,7 @@ import { invalidateMessageTimeline } from '@queries/messages/timeline';
 import { useCallContext } from './CallContext';
 import { createCallEventsEffect } from './call-events';
 import {
+  type CallResolution,
   createCallResolutionsEffect,
   publishCallResolution,
   resolvesRingFor,
@@ -43,6 +45,7 @@ const RING_INTERVAL_MS = 4_000;
  * call store so its auto-dismiss stays in lockstep with the ringer.
  */
 export const MAX_RING_DURATION_MS = 30_000;
+const MAX_REMEMBERED_RESOLUTIONS = 100;
 
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
 type RingSound = { durationMs: number; stop: () => void };
@@ -83,7 +86,9 @@ export function startCallRinger(
   shouldStop: () => boolean,
   maxDurationMs = MAX_RING_DURATION_MS
 ): Ringer {
-  stopCallRinger(callId);
+  // A repeated start must not replay the phrase or renew its ring window.
+  const existing = activeCallRingers.get(callId);
+  if (existing) return existing;
 
   let participation: RingParticipation | undefined;
   const ringer: Ringer = { stop: () => participation?.stop() };
@@ -93,7 +98,7 @@ export function startCallRinger(
     callId,
     shouldStop,
     maxDurationMs,
-    ring: (end) => startRingingLoop(shouldStop, playRingSound(), end).stop,
+    ring: () => startRingingLoop(callId, playRingSound(callId)).stop,
     onEnd: () => {
       if (activeCallRingers.get(callId) === ringer) {
         activeCallRingers.delete(callId);
@@ -104,7 +109,7 @@ export function startCallRinger(
   return ringer;
 }
 
-function playRingSound(): RingSound | undefined {
+function playRingSound(callId: string): RingSound | undefined {
   const Ctx =
     window.AudioContext ?? (window as WebkitWindow).webkitAudioContext;
   if (!Ctx) return undefined;
@@ -149,6 +154,15 @@ function playRingSound(): RingSound | undefined {
   playPhrase(t0, RING_VOLUME);
   playPhrase(t0 + phraseDuration + RING_PHRASE_GAP_S, RING_VOLUME * 0.75);
 
+  // Scheduling is not proof of audible playback, especially under autoplay.
+  const span = Telemetry.span('call.sound.play');
+  span.setAttr('call.id', callId);
+  span.setAttr('call.sound.kind', 'ring');
+  span.setAttr('call.sound.count', 1);
+  span.setAttr('call.sound.outcome', 'scheduled');
+  span.setAttr('call.sound.context_state', ctx.state);
+  span.end();
+
   const totalMs =
     (phraseDuration * 2 + RING_PHRASE_GAP_S + RING_FADE_S) * 1000 + 200;
 
@@ -169,11 +183,7 @@ function playRingSound(): RingSound | undefined {
   };
 }
 
-function startRingingLoop(
-  shouldStop: () => boolean,
-  initialSound?: RingSound,
-  onStop?: () => void
-): Ringer {
+function startRingingLoop(callId: string, initialSound?: RingSound): Ringer {
   let stopped = false;
   const activeSounds = new Set<RingSound>();
 
@@ -191,23 +201,15 @@ function startRingingLoop(
     if (stopped) return;
     stopped = true;
     window.clearInterval(intervalId);
-    window.clearTimeout(timeoutId);
     for (const sound of activeSounds) {
       sound.stop();
     }
     activeSounds.clear();
-    onStop?.();
   };
 
   const intervalId = window.setInterval(() => {
-    if (shouldStop()) {
-      stop();
-      return;
-    }
-    trackSound(playRingSound());
+    trackSound(playRingSound(callId));
   }, RING_INTERVAL_MS);
-
-  const timeoutId = window.setTimeout(stop, MAX_RING_DURATION_MS);
 
   return { stop };
 }
@@ -233,16 +235,17 @@ function startRingingLoop(
  * election.
  *
  * Mount once near the app root, inside `<CallProvider>` and
- * `<ChannelsContextProvider>`. The backend already excludes the caller from
+ * `<ChannelDirectoryProvider>`. The backend already excludes the caller from
  * the broadcast (`call_service::send_call_event` filters on
  * `triggered_by_user_id`), but we additionally skip when the user is already
  * in the call as a defensive guard against same-user multi-device delivery.
  */
 export function CallStartedNotifier() {
   const callCtx = useCallContext();
-  const channelsCtx = useChannelsContext();
+  const directory = useChannelDirectory();
   const notif = usePlatformNotificationState();
   const userId = useUserId();
+  const resolvedCalls = new Map<string, CallResolution>();
 
   // Attach up front so sibling tabs' ring claims are already recorded when
   // this tab's own `call_started` event arrives (event delivery across tabs
@@ -252,8 +255,18 @@ export function CallStartedNotifier() {
   createCallResolutionsEffect((resolution) => {
     if (!resolvesRingFor(resolution, userId())) return;
 
+    // Keep terminal state for late starts, not only for audio already playing.
+    // An out-of-order answer must never downgrade an ended call.
+    if (resolvedCalls.get(resolution.callId)?.type !== 'ended') {
+      resolvedCalls.set(resolution.callId, resolution);
+      evictOldest(resolvedCalls, MAX_REMEMBERED_RESOLUTIONS);
+    }
+
+    // A delayed start can arrive after an answer on another device. Remember
+    // resolution in the existing cross-tab silence state, even without a ringer.
+    silenceIncomingCallRing(resolution.callId);
+
     if (resolution.type === 'answered') {
-      stopCallRinger(resolution.callId);
       closeCallNotification(resolution.callId);
       // The creator's other devices never receive call_started; a refetch
       // picks the now-answered call up for their active-call badges.
@@ -264,12 +277,10 @@ export function CallStartedNotifier() {
     if (resolution.type === 'declined') {
       // The call is still live for other members, so only this user's ring
       // and toast go away; the active-call caches stay untouched.
-      stopCallRinger(resolution.callId);
       closeCallNotification(resolution.callId);
       return;
     }
 
-    stopCallRinger(resolution.callId);
     // Close the toast too, not just the ring. It is `requireInteraction`, so
     // an ended call's notification otherwise sits on screen until clicked —
     // and clicking it deep-links into a join, which for a call that is over
@@ -313,6 +324,9 @@ export function CallStartedNotifier() {
     },
 
     onCallStarted: ({ channelId, callId, createdBy, isFromSelf }) => {
+      const resolution = resolvedCalls.get(callId);
+      if (resolution?.type === 'ended') return;
+
       const createdAt = new Date().toISOString();
       setActiveCallStartedCache({
         channelId,
@@ -326,13 +340,15 @@ export function CallStartedNotifier() {
       // ring and the toast are skipped when we're already in it or started it.
       if (callCtx.activeCallId() === callId) return;
       if (isFromSelf) return;
+      if (resolution && resolvesRingFor(resolution, userId())) return;
 
       fireAndForget(
         emitCallStartedNotification({
           channelId,
           callId,
           createdBy,
-          channelName: channelsCtx.channelsById()[channelId]?.name ?? undefined,
+          channelName:
+            loadedChannel(directory.lookup(channelId))?.name ?? undefined,
           notif,
           isJoined: () => callCtx.activeCallId() === callId,
         }),
@@ -386,6 +402,11 @@ async function emitCallStartedNotification(args: {
     const callerName =
       (createdBy ? await DefaultUserNameResolver(createdBy) : undefined) ??
       'Someone';
+
+    // Name lookup can outlive an answer. Do not emit even a short-lived OS
+    // alert after resolution, since creating the alert can itself make sound.
+    if (pending.cancelled || isJoined()) return;
+
     const target = channelName ? ` in ${channelName}` : '';
 
     const handle = await notif.showNotification({

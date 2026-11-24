@@ -29,6 +29,13 @@ describe('settings navigation', () => {
     expect(settingsSlugToTab('connections')).toBe('Connected');
   });
 
+  it('lands old Mobile App and Desktop App links on Downloads in a browser', () => {
+    expect(settingsSlugToTab('mobile-app')).toBe('Downloads');
+    expect(settingsSlugToTab('desktop-app')).toBe('Downloads');
+    expect(settingsTabToSlug('Downloads')).toBe('downloads');
+    expect(settingsSlugToTab('downloads')).toBe('Downloads');
+  });
+
   it('puts team settings first, with members on their own page', () => {
     expect(SETTINGS_TAB_GROUPS[0].label).toBe('Team');
     expect(SETTINGS_TAB_GROUPS[0].items.map((item) => item.tab)).toEqual([

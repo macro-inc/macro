@@ -7,7 +7,7 @@
   "maxSqlInputBytes": 262144,
   "maxSqlRows": 500,
   "minPolicyVersion": 5,
-  "policyVersion": 7,
+  "policyVersion": 8,
   "referencePolicyVersion": 4,
   "schemas": {
     "ContactReconcile": {
@@ -758,7 +758,7 @@
           "type": "integer"
         },
         "listPriority": {
-          "description": "Ordered groups of opaque contact list keys. Within a name stage, a\nperson ranks by the first group holding any of their lists, then by\nrecency; people in no group come last. A nonempty order supersedes the\npolicy 6 messaged split; empty keeps the policy 6 order.\nOmitted when empty, which policy 5 and 6 hosts require.",
+          "description": "Ordered groups of opaque contact list keys. A person ranks by the first\ngroup holding any of their lists; people in no group come last. Among\nexact-name and word-prefix matches the group decides before exact over\nword-prefix, then recency; contains-only, then address matches follow,\neach by group, then recency. Policy 7 hosts rank by name stage before\ngroup. A nonempty order supersedes the policy 6 messaged split; empty\nkeeps the policy 6 order. Omitted when empty, which policy 5 and 6 hosts\nrequire.",
           "items": {
             "items": {
               "type": "string"

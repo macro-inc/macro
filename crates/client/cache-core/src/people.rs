@@ -19,7 +19,10 @@ pub const MAX_PEOPLE_BATCH: usize = 500;
 /// renumbers `match_rank` (email prefix 6, identity 7, property self pin 8).
 /// Version 7 accepts `listPriority` and `onlyListed`. A list order replaces
 /// the messaged split: name stage, then list group, then recency.
-pub const PEOPLE_POLICY_VERSION: u32 = 7;
+/// Version 8 lets the list group decide before exact over word-prefix: among
+/// names starting with the query, the group, then exact before word-prefix,
+/// then recency. Without a list order it ranks as version 7 does.
+pub const PEOPLE_POLICY_VERSION: u32 = 8;
 /// Oldest suggestion policy a frontend still accepts. Native hosts (desktop,
 /// iOS, Android) compile this crate and update only with an app release, while
 /// the frontend ships over the air; their policy-5 windows differ only in order.
@@ -151,11 +154,14 @@ pub struct PeopleSearch {
     pub now_ms: i64,
     /// Opaque continuation from this same account, generation and search policy.
     pub cursor: Option<String>,
-    /// Ordered groups of opaque contact list keys. Within a name stage, a
-    /// person ranks by the first group holding any of their lists, then by
-    /// recency; people in no group come last. A nonempty order supersedes the
-    /// policy 6 messaged split; empty keeps the policy 6 order.
-    /// Omitted when empty, which policy 5 and 6 hosts require.
+    /// Ordered groups of opaque contact list keys. A person ranks by the first
+    /// group holding any of their lists; people in no group come last. Among
+    /// exact-name and word-prefix matches the group decides before exact over
+    /// word-prefix, then recency; contains-only, then address matches follow,
+    /// each by group, then recency. Policy 7 hosts rank by name stage before
+    /// group. A nonempty order supersedes the policy 6 messaged split; empty
+    /// keeps the policy 6 order. Omitted when empty, which policy 5 and 6 hosts
+    /// require.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[cfg_attr(any(test, feature = "schema"), schemars(length(max = MAX_LIST_GROUPS)))]
     pub list_priority: Vec<Vec<String>>,

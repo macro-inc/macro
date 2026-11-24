@@ -9,9 +9,8 @@ first. The flag is on in dev and comes from PostHog elsewhere;
 dev default, so a local stack shows the view only with
 `VITE_ENABLE_GRAPHQL_SOUP=true` (or the flag from PostHog). With the flag off the
 route redirects to Home once flags load, and `g i` stays on Home; with it on,
-Home keeps `g h`. With `enable-new-home` on (desktop), this route is New Home's
-Notifications tab instead and the rail's bell gives way to New Home; see
-[New Home](home.md#new-home).
+Home keeps `g h`. The retired New Home view's `/app/new-home` and its saved
+`new-home` splits open this view.
 
 With unified notifications on, the outer rail and mobile dock show unread dots
 from the inbox's `notificationInboxUnreadUpdates` subscription. The updates
@@ -152,8 +151,17 @@ Clearing either kind takes such a row whole. The trigger counts selected kinds;
 changing All or Unread. Choices persist per user across reloads. Old saved hidden
 kinds convert to the kinds that remained visible; an old empty hidden list becomes
 no selection. Selections without matching rows show **No notifications match
-these filters**. The gear beside the filter opens **Settings → Notifications**,
-which decides what is delivered at all (including push and email).
+these filters**.
+
+**Display options** (sliders, beside the filter and Clear, desktop only) offers
+**Condensed** and **Notification settings…**. Condensed (kept per user) shows
+each row as Home's row for the same entity: icon and name; the reply icon and
+"who in #channel" for any row about a thread (replies, mentions, reactions);
+"who commented on" for a comment. On hover the time shows and Mark done takes
+the unread dot's place. Condensed rows sit under Home's date dividers, and a
+condensed stack stays one row. **Notification settings…** opens **Settings →
+Notifications**, which decides what is delivered at all (including push and
+email). Touch has no Display options and always shows full rows.
 
 On touch devices the dock's bell (**Notifications**) opens this view with the
 flag on, as the list alone under the floating controls Home, Email, Tasks and Drive

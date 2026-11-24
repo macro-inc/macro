@@ -1,17 +1,71 @@
+import type { GanttTimedEnd } from '@app/components/gantt/gantt-time';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
-import type { Property } from '@property/types';
+import type { DateProperty, Property } from '@property/types';
+import type { DateField } from '@property/utils/start-due';
 import type { Project } from '../core/project';
 
-export function projectTimelineDates(row: {
+type ProjectTimelineRow = {
   project: Project;
   properties: readonly Property[];
-}) {
-  const due = row.properties.find(
-    (property) => property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.DUE_DATE
-  );
+};
 
+function dateProperty(
+  row: ProjectTimelineRow,
+  definitionId: string
+): DateProperty | undefined {
+  const property = row.properties.find(
+    (property) => property.propertyDefinitionId === definitionId
+  );
+  return property?.valueType === 'DATE' ? property : undefined;
+}
+
+/**
+ * With start dates on, a bar starts at the Start Date, or at the created date
+ * for a project without one.
+ */
+export function projectTimelineDates(
+  row: ProjectTimelineRow,
+  startDates = false
+) {
+  const start = startDates
+    ? dateProperty(row, SYSTEM_PROPERTY_IDS.START_DATE)?.value
+    : undefined;
   return {
-    start: row.project.createdAt,
-    end: due?.valueType === 'DATE' ? due.value : undefined,
+    start: start ?? row.project.createdAt,
+    end: dateProperty(row, SYSTEM_PROPERTY_IDS.DUE_DATE)?.value,
   };
+}
+
+function hasTime(row: ProjectTimelineRow, definitionId: string) {
+  return dateProperty(row, definitionId)?.hasTime === true;
+}
+
+/** Whether the project's Start Date or Due Date has its time of day set. */
+export function projectTimelineTimed(row: ProjectTimelineRow): boolean {
+  return (
+    hasTime(row, SYSTEM_PROPERTY_IDS.START_DATE) ||
+    hasTime(row, SYSTEM_PROPERTY_IDS.DUE_DATE)
+  );
+}
+
+/** With both ends set and only one of them timed, the end saved as a day. */
+export function projectTimelineWholeDay(
+  row: ProjectTimelineRow
+): DateField | undefined {
+  if (
+    dateProperty(row, SYSTEM_PROPERTY_IDS.START_DATE)?.value == null ||
+    dateProperty(row, SYSTEM_PROPERTY_IDS.DUE_DATE)?.value == null
+  )
+    return undefined;
+  const start = hasTime(row, SYSTEM_PROPERTY_IDS.START_DATE);
+  if (start === hasTime(row, SYSTEM_PROPERTY_IDS.DUE_DATE)) return undefined;
+  return start ? 'due' : 'start';
+}
+
+/** `projectTimelineWholeDay` as a timeline bar names its ends. */
+export function projectTimelineWholeDayEnd(
+  row: ProjectTimelineRow
+): GanttTimedEnd | undefined {
+  const end = projectTimelineWholeDay(row);
+  return end === 'due' ? 'end' : end;
 }
