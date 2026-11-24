@@ -4,7 +4,7 @@ import type { SerializedEditorState } from 'lexical';
 import { MARKDOWN_GOLDEN } from './markdown-golden.1';
 import { serializedEditorStateToLoroSnapshot } from './markdown-loro-snapshot';
 import { NodeReplacements, SupportedNodeTypes } from './node-list';
-import type { NotionLinks } from './notion/links';
+import { type NotionLinks, visitNotionLinks } from './notion/links';
 import { notionLines, notionTransformers } from './notion/transformers';
 import { $updateAllNodeIds } from './plugins/nodeIdPlugin';
 import { serializedEditorStateToMarkdown } from './utils/markdown-state';
@@ -51,7 +51,15 @@ export function notionMarkdownToSerializedEditorState(
     },
     { discrete: true }
   );
-  return editor.getEditorState().toJSON();
+  const state = editor.getEditorState().toJSON();
+  const databaseIds = new Set(links.databases?.map((item) => item.containerId));
+  visitNotionLinks(state.root, (link, target) => {
+    const page = links.pages[target.id];
+    if (page && !target.viewId && !databaseIds.has(target.id)) {
+      link.url = `/app/md/${page.documentId}`;
+    }
+  });
+  return state;
 }
 
 /** A new document's snapshot, and the same content as Macro markdown. */

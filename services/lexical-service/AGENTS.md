@@ -69,3 +69,8 @@ comment/markdown rendering. Production runs on ECS behind the gateway at
 URL path; ordinals count that container's placements in page-body order.
 Resolved placements produce database cards; failed placements retain named
 Notion links. Old callers may omit the array.
+
+`POST /snapshot/notion-links` is an internal snapshot operation. It inventories
+exact Notion references in link and autolink nodes and can prepare an href-only
+Loro update for the destinations the importer has verified. Keep code, block
+anchors without mappings, and unresolved references out of the update.

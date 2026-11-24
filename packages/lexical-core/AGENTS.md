@@ -79,3 +79,7 @@ split mid-line database tags into blocks, accept self-closing tags and either
 quote form, and exclude comments, code and escaped tags from the counter.
 
 Creation-time markdown snapshots write explicit root pins as `pending:<definitionId>`; omit initial pins to preserve the blank golden snapshot and implicit defaults.
+
+The Notion importer parses exact page and view references in `notion/links.ts`.
+Keep malformed and external URLs, code, and unmapped block anchors intact.
+Database cards remain a separate occurrence-based conversion.
