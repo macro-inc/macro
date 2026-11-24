@@ -51,8 +51,9 @@ pub struct ChannelGraphqlContext {
 
 /// A root read back after a write.
 enum ReadBack {
-    /// The root as the reads return it.
-    Root(crate::GraphqlChannelMessage),
+    /// The root as the reads return it, boxed: a message is hundreds of bytes
+    /// and the other variants carry none.
+    Root(Box<crate::GraphqlChannelMessage>),
     /// No longer readable as a message root (deleted thread, activity).
     NotRoot,
     /// The read failed; already logged.
@@ -109,14 +110,14 @@ impl ChannelGraphqlContext {
         Ok(match message.thread_id {
             Some(root_id) => crate::GraphqlChannelMessageWrite {
                 root: match self.read_back_root(access, root_id, channel_id).await {
-                    ReadBack::Root(root) => Some(root),
+                    ReadBack::Root(root) => Some(*root),
                     ReadBack::NotRoot | ReadBack::Failed => None,
                 },
                 message: crate::GraphqlChannelMessage::from_message(message, channel_id),
             },
             None => crate::GraphqlChannelMessageWrite {
                 message: match self.read_back_root(access, message.id, channel_id).await {
-                    ReadBack::Root(root) => root,
+                    ReadBack::Root(root) => *root,
                     ReadBack::NotRoot => {
                         crate::GraphqlChannelMessage::from_message(message, channel_id)
                     }
@@ -144,12 +145,12 @@ impl ChannelGraphqlContext {
     ) -> ReadBack {
         use messages::domain::ports::{MessageError, MessageTimelineEntry};
         match self.messages.get_root(access, root_id).await {
-            Ok(MessageTimelineEntry::Message { message }) => ReadBack::Root(
+            Ok(MessageTimelineEntry::Message { message }) => ReadBack::Root(Box::new(
                 crate::GraphqlChannelMessage::from_item(*message, channel_id, None),
-            ),
-            Ok(MessageTimelineEntry::Call { message, status }) => ReadBack::Root(
+            )),
+            Ok(MessageTimelineEntry::Call { message, status }) => ReadBack::Root(Box::new(
                 crate::GraphqlChannelMessage::from_item(*message, channel_id, Some(status)),
-            ),
+            )),
             Ok(MessageTimelineEntry::Activity { .. }) | Err(MessageError::NotFound) => {
                 ReadBack::NotRoot
             }
