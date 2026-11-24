@@ -683,6 +683,13 @@ tools — hexagonal, heavily feature-gated.
   slots, which waits the 10 s pace too. `enumerate_once` then goes on to the
   next due stream (up to `PACED_CLAIMS_PER_TURN`); otherwise a large import's
   waiting rounds, due again within seconds, would take the polls' turns.
+  The discovery that creates a folder's stream makes its first round due a
+  little early by role (`import_round_lead_seconds`: Inbox, then Sent, then
+  the rest): the rounds that read an import's first pages stay ahead of those
+  paced behind them, so without it Graph's alphabetical order would import
+  Archive and Deleted Items before the Inbox. The health snapshot's
+  `import_round_wait_seconds` is how long the mailbox's longest-due round has
+  waited for a claim.
   A message released after a failed read is due at once when a newer
   revision arrived during the lease.
 - A folder's import round is a delta snapshot, so mail that arrives during it
