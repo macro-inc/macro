@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useMessageUnsent } from '@queries/messages/unsent';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
@@ -21,7 +22,7 @@ export function UnsentIndicator(props: UnsentIndicatorProps) {
         class={cn('text-xs text-ink-extra-muted', props.class)}
         data-message-unsent
       >
-        Not sent yet
+        {t('channelComposer.notSentYet')}
       </span>
     </Show>
   );
