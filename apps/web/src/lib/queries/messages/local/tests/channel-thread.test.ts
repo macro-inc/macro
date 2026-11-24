@@ -4,8 +4,9 @@ import {
   CHANNEL_TIMELINE_START,
 } from '@graphql-cache/index';
 import type { Message } from '@service-storage/messages';
+import { until } from '@solid-primitives/promise';
 import { onlineManager } from '@tanstack/solid-query';
-import { createRoot, createSignal } from 'solid-js';
+import { createEffect, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { channelMessageKey, mapChannelMessage } from '../channel-map';
 import { noteChannelReset, whileNoFills } from '../channel-resets';
@@ -514,13 +515,16 @@ describe('createLocalChannelThread', () => {
 
   it('loads a thread again when the connection came back before its request failed', async () => {
     const host = fakeHost(() => devicePage([], { covered: false }));
-    const server = serverThread();
+    const asked = Promise.withResolvers<void>();
     const pending =
       Promise.withResolvers<Awaited<ReturnType<FetchChannelThreadPage>>>();
     const fetchPage = vi
       .fn<FetchChannelThreadPage>()
-      .mockImplementationOnce(() => pending.promise)
-      .mockImplementation(server);
+      .mockImplementationOnce(() => {
+        asked.resolve();
+        return pending.promise;
+      })
+      .mockImplementation(serverThread());
     onlineManager.setOnline(false);
     const { thread, dispose } = createRoot((dispose) => ({
       dispose,
@@ -533,13 +537,59 @@ describe('createLocalChannelThread', () => {
       ),
     }));
     try {
-      await vi.waitFor(() => expect(fetchPage).toHaveBeenCalledTimes(1));
+      await asked.promise;
       // Back while the request sent with no connection is still out.
       onlineManager.setOnline(true);
       pending.reject(new TypeError('Failed to fetch'));
 
-      await vi.waitFor(() => expect(thread.replies()).toHaveLength(2));
+      await until(() => thread.replies()?.length === 2);
       expect(fetchPage).toHaveBeenCalledTimes(2);
+    } finally {
+      dispose();
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('loads nothing more once a thread closed over its failure', async () => {
+    const host = fakeHost(() => devicePage([], { covered: false }));
+    const asked = Promise.withResolvers<void>();
+    const closed = Promise.withResolvers<void>();
+    const pending =
+      Promise.withResolvers<Awaited<ReturnType<FetchChannelThreadPage>>>();
+    const fetchPage = vi
+      .fn<FetchChannelThreadPage>()
+      .mockImplementationOnce(() => {
+        asked.resolve();
+        return pending.promise;
+      })
+      .mockImplementation(serverThread());
+    onlineManager.setOnline(false);
+    // A view that closes the thread as its failure shows.
+    const dispose = createRoot((dispose) => {
+      const thread = createLocalChannelThread(
+        { host, runtime: runtime(), fetchPage },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      );
+      createEffect(() => {
+        if (thread.error() === undefined) return;
+        dispose();
+        closed.resolve();
+      });
+      return dispose;
+    });
+    try {
+      await asked.promise;
+      // The connection is back before the request fails.
+      onlineManager.setOnline(true);
+      pending.reject(new TypeError('Failed to fetch'));
+      await closed.promise;
+
+      // A retry reads the device before it asks the server.
+      expect(host.reads).toHaveLength(1);
+      expect(fetchPage).toHaveBeenCalledTimes(1);
     } finally {
       dispose();
       onlineManager.setOnline(true);

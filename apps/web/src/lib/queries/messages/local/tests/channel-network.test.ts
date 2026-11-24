@@ -131,4 +131,16 @@ describe('watchReconnect', () => {
       onlineManager.setOnline(true);
       expect(reload).not.toHaveBeenCalled();
     }));
+
+  it('loads nothing when a load stopped before it reports a failure the connection came back from', () =>
+    offline(() => {
+      const reload = vi.fn();
+      const watch = watchReconnect();
+      onlineManager.setOnline(true);
+      // A view that closed as the failure showed.
+      watch.stop();
+
+      watch.failed(reload);
+      expect(reload).not.toHaveBeenCalled();
+    }));
 });

@@ -5,6 +5,7 @@ import type {
   ChannelTimelineCacheResult,
 } from '@graphql-cache/index';
 import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/generated/graphql';
+import { until } from '@solid-primitives/promise';
 import { onlineManager } from '@tanstack/solid-query';
 import { CombinedError } from '@urql/core';
 import { createEffect, createRoot, createSignal } from 'solid-js';
@@ -891,33 +892,88 @@ describe('createLocalChannelTimeline', () => {
 });
 
 describe('createLocalChannelTimeline when the connection comes back', () => {
+  type ServerPage = Awaited<ReturnType<FetchChannelServerPage>>;
+  /** The server's page of `rows` from `from` to before `to`, oldest last. */
+  const serverPage = (
+    rows: Row[],
+    from: number,
+    to: number,
+    cached: Promise<void> = Promise.resolve()
+  ): ServerPage => ({
+    page: {
+      __typename: 'GraphqlChannelTimelinePage',
+      entries: rows.slice(from, to).reverse(),
+      olderCursor: from > 0 ? rows[from]!.sortKey : null,
+      newerCursor: null,
+      seq: '9',
+    } as never,
+    cached,
+  });
+  /** A mounted timeline's first window, read and settled on the device. */
+  const settledOnDevice = (runtime: ChannelTimelineRuntime) => {
+    const current = Promise.withResolvers<void>();
+    vi.mocked(runtime.ensureCurrent).mockImplementationOnce(async () => {
+      current.resolve();
+      return 'current';
+    });
+    return current.promise;
+  };
+
   it('loads a window again when the connection came back before its request failed', async () => {
     const rows = messages(2);
-    const pending =
-      Promise.withResolvers<Awaited<ReturnType<FetchChannelServerPage>>>();
+    const asked = Promise.withResolvers<void>();
+    const pending = Promise.withResolvers<ServerPage>();
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
-      .mockImplementationOnce(() => pending.promise)
-      .mockImplementationOnce(async () => ({
-        page: {
-          __typename: 'GraphqlChannelTimelinePage',
-          entries: [...rows].reverse(),
-          olderCursor: null,
-          newerCursor: null,
-          seq: '9',
-        } as never,
-        cached: Promise.resolve(),
-      }));
+      .mockImplementationOnce(() => {
+        asked.resolve();
+        return pending.promise;
+      })
+      .mockResolvedValueOnce(serverPage(rows, 0, 2));
     onlineManager.setOnline(false);
     const mounted = mount({ rows, held: false, fetchPage });
     try {
-      await waitFor(() => fetchPage.mock.calls.length === 1);
+      await asked.promise;
       // Back while the request sent with no connection is still out.
       onlineManager.setOnline(true);
       pending.reject(new TypeError('Failed to fetch'));
 
-      await waitFor(() => mounted.timeline.entries().length === 2);
+      await until(() => mounted.timeline.entries().length === 2);
       expect(fetchPage).toHaveBeenCalledTimes(2);
+    } finally {
+      mounted.dispose();
+      onlineManager.setOnline(true);
+    }
+  });
+
+  it('shows a window loading while the load after its failure is out', async () => {
+    const rows = messages(2);
+    const asked = Promise.withResolvers<void>();
+    const askedAgain = Promise.withResolvers<void>();
+    const pending = Promise.withResolvers<ServerPage>();
+    const again = Promise.withResolvers<ServerPage>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockImplementationOnce(() => {
+        asked.resolve();
+        return pending.promise;
+      })
+      .mockImplementationOnce(() => {
+        askedAgain.resolve();
+        return again.promise;
+      });
+    onlineManager.setOnline(false);
+    const mounted = mount({ rows, held: false, fetchPage });
+    try {
+      await asked.promise;
+      onlineManager.setOnline(true);
+      pending.reject(new TypeError('Failed to fetch'));
+      await askedAgain.promise;
+
+      expect(mounted.timeline.isLoading()).toBe(true);
+      expect(mounted.timeline.loadError()).toBeUndefined();
+      again.resolve(serverPage(rows, 0, 2));
+      await until(() => mounted.timeline.entries().length === 2);
     } finally {
       mounted.dispose();
       onlineManager.setOnline(true);
@@ -941,13 +997,13 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       return dispose;
     });
     try {
-      await waitFor(() => mounted.timeline.entries().length === 2);
+      await until(() => mounted.timeline.entries().length === 2);
       expect(fetchPage).toHaveBeenCalledTimes(1);
 
+      // A load starts in the same turn as the connection comes back.
       onlineManager.setOnline(true);
       expect(mounted.timeline.isLoading()).toBe(false);
-      await settle();
-      expect(fetchPage).toHaveBeenCalledTimes(1);
+      expect(mounted.timeline.entries()).toHaveLength(2);
     } finally {
       disposeView();
       mounted.dispose();
@@ -957,21 +1013,13 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
 
   it('pages no further when the connection comes back after a retried page loaded', async () => {
     const rows = messages(120);
-    const fetchPage = vi.fn<FetchChannelServerPage>();
-    fetchPage.mockRejectedValueOnce(new TypeError('Failed to fetch'));
-    fetchPage.mockResolvedValue({
-      page: {
-        __typename: 'GraphqlChannelTimelinePage',
-        entries: rows.slice(20, 70).reverse(),
-        olderCursor: rows[20]!.sortKey,
-        newerCursor: null,
-        seq: '9',
-      } as never,
-      cached: Promise.resolve(),
-    });
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue(serverPage(rows, 20, 70));
     const mounted = mount({ rows, fetchPage });
     try {
-      await waitFor(() => !mounted.timeline.isLoading());
+      await settledOnDevice(mounted.runtime);
       mounted.setHeld(false);
       onlineManager.setOnline(false);
       await mounted.timeline.loadOlder();
@@ -979,9 +1027,9 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
       await mounted.timeline.loadOlder();
       expect(mounted.timeline.entries()).toHaveLength(100);
 
+      // A page load starts in the same turn as the connection comes back.
       onlineManager.setOnline(true);
       expect(mounted.timeline.isLoadingOlder()).toBe(false);
-      await settle();
       expect(fetchPage).toHaveBeenCalledTimes(2);
     } finally {
       mounted.dispose();
@@ -989,45 +1037,68 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
     }
   });
 
+  it('stops watching the connection once a page loads', async () => {
+    const rows = messages(70);
+    const subscribe = onlineManager.subscribe.bind(onlineManager);
+    const unsubscribed: ReturnType<typeof vi.fn>[] = [];
+    const subscriptions = vi
+      .spyOn(onlineManager, 'subscribe')
+      .mockImplementation((listener) => {
+        const unsubscribe = vi.fn(subscribe(listener));
+        unsubscribed.push(unsubscribe);
+        return unsubscribe;
+      });
+    const mounted = mount({ rows });
+    try {
+      await settledOnDevice(mounted.runtime);
+      await mounted.timeline.loadOlder();
+      expect(mounted.timeline.entries()).toHaveLength(70);
+
+      // One watch for the window and one for the page, both ended.
+      expect(unsubscribed).toHaveLength(2);
+      expect(unsubscribed[0]).toHaveBeenCalled();
+      expect(unsubscribed[1]).toHaveBeenCalled();
+    } finally {
+      mounted.dispose();
+      subscriptions.mockRestore();
+    }
+  });
+
   it('reads a page the device did not take again from its own cursor when the connection comes back', async () => {
     const rows = messages(120);
-    const page = (cached: Promise<void>) => ({
-      page: {
-        __typename: 'GraphqlChannelTimelinePage',
-        entries: rows.slice(20, 70).reverse(),
-        olderCursor: rows[20]!.sortKey,
-        newerCursor: null,
-        seq: '9',
-      } as never,
-      cached,
-    });
+    const stored = Promise.withResolvers<void>();
+    let mounted: ReturnType<typeof mount> | undefined;
     const fetchPage = vi
       .fn<FetchChannelServerPage>()
       // Shown, but the cache session changed before it was stored.
-      .mockImplementationOnce(async () =>
-        page(Promise.reject(new StaleCacheAuthorityError()))
+      .mockResolvedValueOnce(
+        serverPage(rows, 20, 70, Promise.reject(new StaleCacheAuthorityError()))
       )
       // Read again with no connection.
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
-      .mockImplementationOnce(async () => page(Promise.resolve()));
-    const mounted = mount({ rows, fetchPage });
+      // Read again once it is back, and stored: the device holds it now.
+      .mockImplementationOnce(async () => {
+        mounted?.setHeld(true);
+        stored.resolve();
+        return serverPage(rows, 20, 70);
+      });
+    mounted = mount({ rows, fetchPage });
     vi.stubGlobal('navigator', { locks: fakeLocks() });
     try {
-      await waitFor(
-        () => vi.mocked(mounted.runtime.ensureCurrent).mock.calls.length > 0
-      );
+      await settledOnDevice(mounted.runtime);
       mounted.setHeld(false);
       onlineManager.setOnline(false);
       await mounted.timeline.loadOlder();
       expect(mounted.timeline.entries()).toHaveLength(100);
 
       onlineManager.setOnline(true);
-      await vi.waitFor(() =>
-        expect(fetchPage.mock.calls.length).toBeGreaterThanOrEqual(3)
-      );
-      expect(
-        fetchPage.mock.calls.slice(0, 3).map(([input]) => input.before)
-      ).toEqual([rows[70]!.sortKey, rows[70]!.sortKey, rows[70]!.sortKey]);
+      await stored.promise;
+      await until(() => !mounted.timeline.isLoadingOlder());
+      expect(fetchPage.mock.calls.map(([input]) => input.before)).toEqual([
+        rows[70]!.sortKey,
+        rows[70]!.sortKey,
+        rows[70]!.sortKey,
+      ]);
     } finally {
       mounted.dispose();
       vi.unstubAllGlobals();

@@ -395,14 +395,15 @@ export function createLocalChannelTimeline(
       if (token !== loadToken) return;
       // A reload keeps the window it already shows, and pages from it again.
       if (reloads > 0) {
+        watch.stop();
         setState({ loadingOlder: false, loadingNewer: false });
         return;
       }
-      // With no connection nothing on screen retries it: its return does.
-      // Armed before the failure shows: a view that answers the failure by
-      // loading another window stops this retry as that load starts.
-      watch.failed(() => fireAndForget(load(around), 'channel-local-sync'));
       setState({ phase: 'failed', error });
+      // With no connection nothing on screen retries it: its return does. A
+      // view that answered the failure by loading another window (a missing
+      // target shows the live end) stopped this watch as that load started.
+      watch.failed(() => fireAndForget(load(around), 'channel-local-sync'));
       return;
     }
     if (token !== loadToken) return;
@@ -574,6 +575,7 @@ export function createLocalChannelTimeline(
     pageReconnects[direction] = watch;
     // The page past `cursor` is in the window, but not yet on the device.
     let merged = again !== undefined;
+    let failed = false;
     setState(flag, true);
     try {
       if (again) {
@@ -596,22 +598,24 @@ export function createLocalChannelTimeline(
           await fetchMoreAgain(direction, cursor, token, signal, settled);
         }
       }
-      watch.stop();
     } catch (error) {
       // Aborted by a switch or unmount: nothing failed.
       if (token !== loadToken) return;
-      // The window keeps what it shows. The next scroll asks again, and so
-      // does the connection coming back: scrolled to the end there is no
-      // next scroll. A page shown but not stored is read again from its own
-      // cursor, not from the one it moved the window's end to.
       Telemetry.error(error, { surface: 'channel-local-sync' });
-      const retry = merged ? { cursor } : undefined;
-      watch.failed(() =>
-        fireAndForget(loadMore(direction, retry), 'channel-local-sync')
-      );
+      failed = true;
     } finally {
       if (token === loadToken) setState(flag, false);
+      if (!failed) watch.stop();
     }
+    if (!failed) return;
+    // The window keeps what it shows. The next scroll asks again, and so does
+    // the connection coming back: scrolled to the end there is no next
+    // scroll. A page shown but not stored is read again from its own cursor,
+    // not from the one it moved the window's end to.
+    const retry = merged ? { cursor } : undefined;
+    watch.failed(() =>
+      fireAndForget(loadMore(direction, retry), 'channel-local-sync')
+    );
   };
 
   // The target is set again as the view mounts (undefined, then null): only
