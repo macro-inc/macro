@@ -111,6 +111,25 @@ export function createChannelWindows(limit = KEPT_WINDOWS): ChannelWindows {
   };
 }
 
+/** Pages past those it showed that a window read again may still reach over. */
+const RELOAD_EXTRA_PAGES = 4;
+
+/** How far a window reached, for the read again that keeps its place. */
+type WindowReach = {
+  oldest?: string;
+  newest?: string;
+  middleId?: string;
+  /** The most pages to read. */
+  pages: number;
+};
+
+type ReadReach = {
+  /** Newest first. */
+  pages: LoadedChannelPage[];
+  /** The pages end before the oldest entry the window reached. */
+  short: boolean;
+};
+
 type TimelineState = {
   phase: 'loading' | 'ready' | 'failed';
   error: unknown;
@@ -447,13 +466,59 @@ export function createLocalChannelTimeline(
   /**
    * The page a window loads, and, when it is loaded again, the pages beside
    * it as far as the window reached, so a reader who paged away keeps their
-   * place. Newest first.
+   * place. Newest first. At the live end more may have arrived than is worth
+   * reading to get back to that place: then the pages around it.
    */
   const readWindowPages = async (
     around: string | undefined,
-    reach: { oldest: string | undefined; newest: string | undefined },
+    reach: WindowReach,
     signal: AbortSignal
   ): Promise<LoadedChannelPage[] | 'unsupported'> => {
+    if (reach.oldest === undefined) {
+      const read = await readReach(around, reach, signal);
+      return read === 'unsupported' ? read : read.pages;
+    }
+    // One span, so every page of a window read again shares a trace.
+    return await Telemetry.span('channel.reload_window', async (span) => {
+      const trace = Telemetry.captureContext();
+      span.setAttr('channel.id', channelId);
+      const read = await readReach(around, reach, signal);
+      if (read === 'unsupported') return read;
+      const { middleId } = reach;
+      let kept = read;
+      if (read.short && around === undefined && middleId !== undefined) {
+        const near = await trace.run(() =>
+          readNear(middleId, reach, signal, read)
+        );
+        if (near === 'unsupported') return near;
+        kept = near;
+      }
+      span.setAttr('window.reanchored', kept !== read);
+      span.setAttr('window.pages', kept.pages.length);
+      return kept.pages;
+    });
+  };
+
+  /** The pages around a message, or `latest` when it was deleted meanwhile. */
+  const readNear = async (
+    messageId: string,
+    reach: WindowReach,
+    signal: AbortSignal,
+    latest: ReadReach
+  ): Promise<ReadReach | 'unsupported'> => {
+    try {
+      return await readReach(messageId, reach, signal);
+    } catch {
+      signal.throwIfAborted();
+      return latest;
+    }
+  };
+
+  const readReach = async (
+    around: string | undefined,
+    reach: WindowReach,
+    signal: AbortSignal
+  ): Promise<ReadReach | 'unsupported'> => {
     const trace = Telemetry.captureContext();
     // A device read may not answer an abort: a load replacing this one stops
     // waiting for it.
@@ -479,25 +544,32 @@ export function createLocalChannelTimeline(
     while (
       newer !== null &&
       reach.newest !== undefined &&
-      newer < reach.newest
+      newer < reach.newest &&
+      pages.length < reach.pages
     ) {
       const next = await read({ after: newer });
       if (next === 'unsupported') return next;
       pages.unshift(next);
-      newer = next.page.newerCursor;
+      // A cursor that does not move would be read forever.
+      const cursor: string | null = next.page.newerCursor;
+      newer = cursor !== null && cursor > newer ? cursor : null;
     }
     let older = first.page.olderCursor;
     while (
       older !== null &&
       reach.oldest !== undefined &&
-      older > reach.oldest
+      older > reach.oldest &&
+      pages.length < reach.pages
     ) {
       const next = await read({ before: older });
       if (next === 'unsupported') return next;
       pages.push(next);
-      older = next.page.olderCursor;
+      const cursor: string | null = next.page.olderCursor;
+      older = cursor !== null && cursor < older ? cursor : null;
     }
-    return pages;
+    const short =
+      older !== null && reach.oldest !== undefined && older > reach.oldest;
+    return { pages, short };
   };
 
   /** Settles every page a window loaded: held when the device holds each. */
@@ -523,12 +595,16 @@ export function createLocalChannelTimeline(
    */
   const loadWindow = async (around: string | undefined, reloads: number) => {
     const token = ++loadToken;
-    const reach =
+    const reach: WindowReach =
       reloads === 0
-        ? { oldest: undefined, newest: undefined }
+        ? { pages: 1 }
         : {
             oldest: state.entries.at(-1)?.sortKey,
             newest: state.entries[0]?.sortKey,
+            middleId: middleMessageId(state.entries),
+            pages:
+              Math.ceil(state.entries.length / CHANNEL_PAGE_LIMIT) +
+              RELOAD_EXTRA_PAGES,
           };
     // Taken before any await: the catch-up joins the open's trace.
     const trace = Telemetry.captureContext();
@@ -666,9 +742,11 @@ export function createLocalChannelTimeline(
     }
     if (result.kind === 'lost') {
       // Reset or evicted meanwhile: load the window again, from the server.
-      await load(
-        live ? undefined : (anchorId ?? middleMessageId(state.entries))
+      currentLoad = loadWindow(
+        live ? undefined : (anchorId ?? middleMessageId(state.entries)),
+        1
       );
+      await currentLoad;
       return;
     }
     setState('olderCursor', result.olderCursor);
@@ -942,9 +1020,14 @@ export function createLocalChannelTimeline(
     // A view answering that update may have closed this window or loaded
     // another, which stopped this call's watches.
     if (token !== loadToken) return;
-    if (holds() && !state.loadingOlder && !state.loadingNewer)
-      missedResume = false;
     followOutcome(direction, outcome, watch);
+    if (!missedResume || !holds() || state.loadingOlder || state.loadingNewer)
+      return;
+    missedResume = false;
+    // The outage ended while a page was read that it failed.
+    for (const failed of ['older', 'newer'] as const)
+      if (state.pageFailed[failed])
+        fireAndForget(loadMore(failed), 'channel-local-sync');
   };
 
   /** What a page that ended in the current window leaves to follow. */

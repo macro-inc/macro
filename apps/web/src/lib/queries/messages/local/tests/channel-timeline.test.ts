@@ -6,6 +6,7 @@ import type {
   ChannelTimelineCacheArgs,
   ChannelTimelineCacheResult,
 } from '@graphql-cache/index';
+import { Telemetry } from '@macro-inc/observability';
 import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { until } from '@solid-primitives/promise';
 import { onlineManager } from '@tanstack/solid-query';
@@ -227,6 +228,65 @@ function mount(options: {
     setAround,
     addRow,
     dispose,
+  };
+}
+
+/**
+ * A server paging `rows` (oldest first) without the device storing any. Once
+ * `stall` is called, a page past a cursor answers that same cursor.
+ */
+function serverOver(rows: () => Row[]) {
+  const requests: Parameters<FetchChannelServerPage>[0][] = [];
+  let stalled = false;
+  const fetchPage = vi.fn<FetchChannelServerPage>(async (input) => {
+    requests.push(input);
+    // Fails, rather than hangs, what asks for one cursor forever.
+    if (stalled && requests.length > 20) throw new Error('asked forever');
+    const all = rows();
+    const { before, after, around } = input;
+    const limit = input.limit ?? 50;
+    let start = Math.max(0, all.length - limit);
+    let end = all.length;
+    if (around != null) {
+      const at = all.findIndex((row) => row.id === around);
+      if (at < 0) throw new Error('no such message');
+      start = Math.max(0, at - Math.floor(limit / 2));
+      end = Math.min(all.length, start + limit);
+    } else if (before != null) {
+      end = all.filter((row) => row.sortKey < before).length;
+      start = Math.max(0, end - limit);
+    } else if (after != null) {
+      start = all.filter((row) => row.sortKey <= after).length;
+      end = Math.min(all.length, start + limit);
+    }
+    const page = all.slice(start, end).reverse();
+    return {
+      page: {
+        __typename: 'GraphqlChannelTimelinePage',
+        entries: page,
+        olderCursor:
+          stalled && before != null
+            ? before
+            : start === 0
+              ? null
+              : (page.at(-1)?.sortKey ?? null),
+        newerCursor:
+          stalled && after != null
+            ? after
+            : end === all.length
+              ? null
+              : (page[0]?.sortKey ?? null),
+        seq: '9',
+      } as never,
+      cached: Promise.reject(new Error('cache is away')),
+    };
+  });
+  return {
+    fetchPage,
+    requests,
+    stall: () => {
+      stalled = true;
+    },
   };
 }
 
@@ -859,6 +919,155 @@ describe('createLocalChannelTimeline', () => {
     mounted.addRow(graphqlMessage(121));
     runtime.changed();
     await waitFor(() => timeline.entries().length === 101);
+    mounted.dispose();
+  });
+
+  it('keeps every page shown when the device no longer holds a held window', async () => {
+    const rows = messages(120);
+    const { fetchPage, requests } = serverOver(() => rows);
+    const mounted = mount({ rows, fetchPage });
+    const { timeline, runtime, host } = mounted;
+    await waitFor(() => !timeline.isLoading());
+    await settle();
+    await timeline.loadOlder();
+    expect(timeline.entries()).toHaveLength(100);
+    const reads = host.reads.length;
+
+    mounted.setHeld(false);
+    const shown: number[] = [];
+    runtime.resumed();
+    await waitFor(() => {
+      shown.push(timeline.entries().length);
+      return requests.length > 1 && !timeline.isLoadingOlder();
+    });
+    expect(host.reads.length).toBeGreaterThan(reads);
+    expect(Math.min(...shown)).toBe(100);
+    mounted.dispose();
+  });
+
+  it('reads the pages around its place when far more arrived than it showed', async () => {
+    const rows = messages(50);
+    const { fetchPage, requests } = serverOver(() => rows);
+    const mounted = mount({ rows, held: false, fetchPage });
+    const { timeline, runtime } = mounted;
+    await waitFor(() => timeline.entries().length === 50);
+    await settle();
+    const place = ids(timeline)[25] as string;
+    for (let n = 51; n <= 3050; n += 1) rows.push(graphqlMessage(n));
+    requests.length = 0;
+
+    runtime.resumed();
+    await waitFor(() => requests.length > 0 && !timeline.isLoadingOlder());
+    expect(ids(timeline)).toContain(place);
+    expect(requests.length).toBeLessThanOrEqual(10);
+    // The rest is paged in as the reader scrolls to it.
+    const before = timeline.entries().length;
+    await timeline.loadNewer();
+    expect(timeline.entries().length).toBeGreaterThan(before);
+    mounted.dispose();
+  });
+
+  it('reads the latest pages when the message at its place was deleted meanwhile', async () => {
+    const rows = messages(50);
+    const { fetchPage } = serverOver(() => rows);
+    const mounted = mount({ rows, held: false, fetchPage });
+    const { timeline, runtime } = mounted;
+    await waitFor(() => timeline.entries().length === 50);
+    await settle();
+    rows.length = 0;
+    for (let n = 51; n <= 550; n += 1) rows.push(graphqlMessage(n));
+
+    runtime.resumed();
+    await waitFor(() => ids(timeline)[0] === graphqlMessage(550).id);
+    expect(timeline.isLoadingOlder()).toBe(false);
+    mounted.dispose();
+  });
+
+  it.each(['older', 'newer'] as const)(
+    'stops reading a window again at an %s cursor that does not move',
+    async (direction) => {
+      const rows = messages(120);
+      const around = direction === 'newer' ? rows[60] : undefined;
+      const { fetchPage, requests, stall } = serverOver(() => rows);
+      const mounted = mount({
+        rows,
+        held: false,
+        fetchPage,
+        around: around?.id,
+      });
+      const { timeline, runtime } = mounted;
+      await waitFor(() => timeline.entries().length === 50);
+      await settle();
+      await (direction === 'older'
+        ? timeline.loadOlder()
+        : timeline.loadNewer());
+      stall();
+      requests.length = 0;
+
+      runtime.resumed();
+      await waitFor(() => requests.length > 1 && !timeline.isLoadingOlder());
+      expect(requests.length).toBeLessThanOrEqual(3);
+      mounted.dispose();
+    }
+  );
+
+  it('loads a page again whose read failed after an outage it was asked in', async () => {
+    const [older, latest] = messages(2) as [Row, Row];
+    let away = false;
+    const host = fakeHost(
+      (args) => {
+        if (away) throw new Error('cache is away');
+        if (args.before !== undefined) return devicePage([keyOf(older)]);
+        return devicePage([keyOf(latest)], { olderCursor: latest.sortKey });
+      },
+      { records: [older, latest] }
+    );
+    const asked = Promise.withResolvers<void>();
+    const answer = Promise.withResolvers<never>();
+    const fetchPage = vi.fn<FetchChannelServerPage>(() => {
+      asked.resolve();
+      return answer.promise;
+    });
+    const runtime = fakeRuntime();
+    const { timeline, dispose } = createRoot((dispose) => ({
+      dispose,
+      timeline: createLocalChannelTimeline(
+        { host, runtime, touches: createChannelTouches(), fetchPage },
+        CHANNEL_ID,
+        () => undefined,
+        vi.fn()
+      ),
+    }));
+    await waitFor(() => vi.mocked(runtime.noteStoredSeq).mock.calls.length > 0);
+    away = true;
+    const page = timeline.loadOlder();
+    await asked.promise;
+    away = false;
+    runtime.resumed();
+    answer.reject(new Error('no answer'));
+    await page;
+    await waitFor(() => timeline.entries().length === 2);
+    dispose();
+  });
+
+  it('reads every page of a window again in one span', async () => {
+    const rows = messages(120);
+    const span = vi.spyOn(Telemetry, 'span');
+    const { fetchPage, requests } = serverOver(() => rows);
+    const mounted = mount({ rows, held: false, fetchPage });
+    const { timeline, runtime } = mounted;
+    await waitFor(() => timeline.entries().length === 50);
+    await settle();
+    await timeline.loadOlder();
+    span.mockClear();
+    requests.length = 0;
+    runtime.resumed();
+    await waitFor(() => requests.length > 1 && !timeline.isLoadingOlder());
+    const spans = span.mock.calls.map(([name]) => name);
+    expect(spans[0]).toBe('channel.reload_window');
+    expect(spans.slice(1)).not.toContain('channel.reload_window');
+    expect(spans).toHaveLength(1 + requests.length);
+    span.mockRestore();
     mounted.dispose();
   });
 
