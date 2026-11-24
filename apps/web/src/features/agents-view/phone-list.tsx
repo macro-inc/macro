@@ -180,7 +180,7 @@ export function PhoneAgentsList(props: {
         }
       >
         <MaybeSoupEntityActionDrawerManager>
-          {/* Only the scrollport reserves the islands; each section bounds its own sticky heading. */}
+          {/* Reserve the floating islands once; section headings scroll with their rows. */}
           <div
             data-agents-list-scroll
             class="min-h-0 flex-1 overflow-y-auto pt-(--mobile-content-inset-top)"

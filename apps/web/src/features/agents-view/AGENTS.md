@@ -9,7 +9,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 ## Start here
 
 - `views/AgentsView.tsx`: production query, selection, draft, and navigation ownership.
-- `phone-list.tsx` and `components/phone-list-section.tsx`: phone list, section-scoped sticky headings, archive, favorites, bubbles, and existing entity actions.
+- `phone-list.tsx` and `components/phone-list-section.tsx`: phone list, in-flow section headings, archive, favorites, bubbles, and existing entity actions.
 - `phone-sidebar.tsx` and `views/mobile/agents-navigation.tsx`: shell-owned phone drawer and shared routine list data.
 - `core/phone-list.ts`: waiting/favorite partition and startable agent selection.
 - `primitives/mobile-agent-request.ts`: selection handoff to the mounted accessory composer.
@@ -54,7 +54,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Suppress the mobile navigation dock only in active session hosts with an empty `FloatRegion` contribution; retain header/gesture Back and the shared accessory host's safe-area padding, and restore navigation on list and management pages.
 - Use Email's collection-layout NavigationSheet and ViewSidebar sections for phone destinations; Conversations and Archived keep the hamburger, never a title-menu sheet or Archived Back button.
 - Mark drawer destinations with the existing `referredFrom: 'agents'` origin and read current router-entry metadata for management-page navigation; drawer entries show the hamburger, external entries and details keep Back.
-- Keep each phone list heading inside its own section with its rows, after the preceding section's content; use one vertical scroller, apply MobileListLayout's measured island inset once as its top padding and as each heading's sticky top, and use parent gaps/padding instead of child layout margins.
+- Keep phone list headings in normal flow inside their row sections, with no sticky positioning or per-heading offsets; use one vertical scroller, apply MobileListLayout's measured island inset once as its top padding, and use parent gaps/padding instead of child layout margins.
 - Reuse EmptyStatePanel for exhausted empty phone lists with embedded scrolling disabled; omit search/filter actions and focus the existing accessory composer from Start a conversation.
 - Follow Root-and-parts composition and the [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
 - An agent picked from the new-conversation composer's @ menu (Agents page, Home and the phone composer, which all mount `NewChatPage`) becomes the selected agent through `rosterAgentForMention` and the picker's own `selectAgent`; never add a second selection path.

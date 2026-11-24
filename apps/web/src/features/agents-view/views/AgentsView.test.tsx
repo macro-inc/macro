@@ -551,7 +551,10 @@ it('renders the phone archive heading in its collection without a hidden compose
   expect(screen.queryByRole('textbox', { name: 'Message' })).toBeNull();
   const section = heading.closest('section')!;
   const scroller = section.closest('[data-agents-list-scroll]')!;
-  expect(section.firstElementChild).toBe(heading.closest('header'));
+  const header = heading.closest('header')!;
+  expect(section.firstElementChild).toBe(header);
+  expect(header.classList.contains('sticky')).toBe(false);
+  expect(header.className).not.toContain('--mobile-content-inset-top');
   expect(scroller.classList.contains('pt-(--mobile-content-inset-top)')).toBe(
     true
   );

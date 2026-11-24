@@ -175,7 +175,8 @@ describe('phone Agents list', () => {
         scroller.querySelector('.h-\\(--mobile-content-inset-top\\)')
       ).toBeNull();
       expect(heading.parentElement?.tagName).toBe('SECTION');
-      expect(heading.className).toContain('top-(--mobile-content-inset-top)');
+      expect(heading.className).not.toContain('--mobile-content-inset-top');
+      expect(heading.classList.contains('sticky')).toBe(false);
       const verticalScrollers = Array.from(
         container.querySelectorAll('[class]')
       ).filter((element) => element.classList.contains('overflow-y-auto'));
@@ -188,13 +189,11 @@ describe('phone Agents list', () => {
       );
     }
   );
-  it('shows the conversation empty panel after the bubbles and sticky heading, and focuses the existing composer', () => {
+  it('shows the conversation empty panel after the bubbles and in-flow heading, and focuses the existing composer', () => {
     const focus = vi.fn();
     render(() => <Harness focus={focus} />);
     const heading = screen.getByRole('heading', { name: 'Conversations' });
-    expect(heading.closest('header')?.className).toContain(
-      'sticky top-(--mobile-content-inset-top)'
-    );
+    expect(heading.closest('header')?.classList.contains('sticky')).toBe(false);
     expect(
       screen
         .getByRole('button', { name: 'New agent' })
@@ -214,7 +213,7 @@ describe('phone Agents list', () => {
     expect(focus).toHaveBeenCalledOnce();
   });
 
-  it('bounds sticky headings by their own rows instead of neighboring cards', () => {
+  it('keeps headings in normal flow with their own rows instead of overlapping neighboring cards', () => {
     favoriteRows.items = [
       { entityType: 'agent_session', entityId: 'favorite' },
     ];
@@ -269,19 +268,20 @@ describe('phone Agents list', () => {
     expect(
       screen.getAllByRole('heading', { name: 'Conversations' })
     ).toHaveLength(1);
-    const sticky = heading.closest('header');
-    expect(sticky?.className).toContain(
-      'sticky top-(--mobile-content-inset-top)'
-    );
-    expect(sticky?.className).toContain('bg-panel');
+    const header = heading.closest('header');
     expect(heading.className).toContain('text-[20px]/[26px]');
     const conversations = screen.getByRole('region', { name: 'Conversations' });
-    expect(sticky?.parentElement).toBe(conversations);
+    expect(header?.parentElement).toBe(conversations);
     expect(row.closest('section')).toBe(conversations);
     for (const section of [waiting, favorites, conversations]) {
       const header = section.querySelector('header')!;
       expect(header.parentElement).toBe(section);
-      expect(header.classList.contains('sticky')).toBe(true);
+      expect(
+        [...header.classList].filter((name) =>
+          /^(sticky|fixed|absolute|relative|top-|inset-|z-|bg-)/.test(name)
+        )
+      ).toEqual([]);
+      expect(section.classList.contains('relative')).toBe(false);
       expect(section.className).not.toContain('overflow');
     }
     const list = container.querySelector('[data-agents-list-scroll]')!;

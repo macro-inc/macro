@@ -8,7 +8,7 @@ function Root(props: { title: string; card?: boolean; children: JSX.Element }) {
     <section
       aria-label={props.title}
       class={cn(
-        'relative flex min-w-0 flex-col',
+        'flex min-w-0 flex-col',
         props.card
           ? 'shrink-0 rounded-[20px] bg-surface-3 py-1'
           : 'min-h-0 flex-1'
@@ -28,10 +28,10 @@ function Heading(props: {
   return (
     <header
       class={cn(
-        'sticky top-(--mobile-content-inset-top) z-10 flex shrink-0 gap-2 px-3',
+        'flex shrink-0 gap-2 px-3',
         props.card
-          ? 'h-9 items-center gap-1.5 rounded-t-[20px] bg-surface-3 text-sm text-ink-muted'
-          : 'items-baseline bg-panel py-3'
+          ? 'h-9 items-center gap-1.5 text-sm text-ink-muted'
+          : 'items-baseline py-3'
       )}
     >
       <Show when={props.icon}>
@@ -64,5 +64,5 @@ function Body(props: { children: JSX.Element }) {
   return <div class="flex min-w-0 flex-1 flex-col">{props.children}</div>;
 }
 
-/** Keep sticky headings bounded by the section whose rows they describe. */
+/** Keep each in-flow heading with the rows in its section. */
 export const PhoneListSection = { Root, Heading, Body };
