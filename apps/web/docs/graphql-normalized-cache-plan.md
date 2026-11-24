@@ -503,7 +503,8 @@ separate from a repeated-ready restart.
 Retries are bounded in rate, never in number. The coordinator opens the database
 again after every failed attempt: at once after the first loss, then after
 100 ms, doubling to thirty seconds, each time with the open or wipe the last
-attempt still owed. Five failed attempts in a row, a busy owner lock, or busy
+attempt still owed. An attempt counts as failed until its engine answers a
+heartbeat. Five failed attempts in a row, a busy owner lock, or busy
 files start an **outage**: the coordinator tells every page `cache-unavailable`
 with a reason, refuses queued reads and writes with `owner-lock-unavailable`, and
 goes on. A page that is shown, or registers visible, starts the next attempt at
@@ -514,7 +515,8 @@ A page's host is **paused** through an outage: `disabled` and `paused` are both
 true, `getGraphqlSoupCacheHost()` returns nothing (reactively), and reads and
 writes fail at once so callers use the network. The client, its socket, its queue
 and its subscribers stay. A handshake with a later engine ends it: the host
-serves again, subscriptions start over, and recovery proves the queue readable
+serves again, subscriptions start over and their listeners refetch as after a
+socket reconnect, and recovery proves the queue readable
 at once, also while the page is offline or hidden. A pause loses a live query's
 registration like an owner change does, and keeps the CRM authority's
 generation.
