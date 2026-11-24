@@ -437,7 +437,7 @@ The compact sidebar uses the shared workspace width.
 
 When a newer version is ready, an **Update available** button (a download icon
 in a subtle accent circle that a glowing comet periodically circles) appears in
-the sidebar rail above the Downloads and settings icons. Its popover (a title,
+the sidebar rail above the Downloads (in a browser) and settings icons. Its popover (a title,
 a short description, and one action) opens by itself once per update until
 dismissed (click outside or Escape); the button stays until the update is
 applied. Its wording and action depend on the update: **New version available**
@@ -519,7 +519,8 @@ from `apps/web`.
 
 The sidebar rail's **Downloads** button (a download glyph in the same accent
 circle as the update button, without its comet) opens this page; Shift-click
-opens it in a new split. It shows wherever the page exists.
+opens it in a new split. It shows wherever the page exists, except in the
+desktop app, which is already installed and keeps the page in Settings only.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens
