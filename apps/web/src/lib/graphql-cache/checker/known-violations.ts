@@ -83,6 +83,7 @@ const OWNER_LOST: InjectedFault[] = [
   'kill owner',
   'bfcache owner',
   'crash-engine owner',
+  'require-reset owner',
 ];
 
 /** Faults that make a tab ask for the database a tab of another build has. */
@@ -94,11 +95,15 @@ const CONTENDING: InjectedFault[] = [
   'crash-engine owner',
   'restart-coordinator',
   'hold-files',
+  'fail-assets',
+  'stall-assets',
 ];
 
 export const KNOWN_VIOLATIONS: KnownViolation[] = [
   ...known(WIPE, ['crash-engine owner'], [WIPED]),
   ...known(WIPE, ['kill owner'], [WIPED]),
+  ...known(WIPE, ['require-reset owner'], [WIPED]),
+  ...known(DISPOSE_QUARANTINE, ['require-reset owner'], [ABANDONED_OPEN]),
   ...known(DEPARTURE_RACE, ['close owner'], [WIPED], { reordered: true }),
   ...OWNER_LOST.flatMap((fault) => [
     ...known(STARTUP_LOSS, [fault], [EPOCH_LOST, STOPPED, UNSERVED]),

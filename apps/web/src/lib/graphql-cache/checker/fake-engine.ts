@@ -1,11 +1,13 @@
 /**
  * Stands in for the WASM engine (`CacheWorkerCore` over turso-opfs) inside the
  * real engine runtime. It keeps the parts of the engine the handover depends
- * on, and nothing else: it takes the database owner lock without queueing,
- * reports a busy lock, waits for the coordinator's storage grant and then for
- * database files another context still has open, wipes the database on a
- * recovery open (as `recovery_wipe` does, mutation queue included), refuses requests once draining with the same untyped message,
- * and waits for an in-flight open before a drain closes storage.
+ * on, and nothing else: it loads its assets in a task of their own, takes the
+ * database owner lock without queueing, reports a busy lock, waits for the
+ * coordinator's storage grant and then for database files another context still
+ * has open, wipes the database on a recovery open (as `recovery_wipe` does,
+ * mutation queue included), asks for a reset when its storage breaks, refuses
+ * requests once draining with the same untyped message, and waits for an
+ * in-flight open before a drain closes storage.
  *
  * `DurableStorage` is the origin's OPFS: one database per scope that outlives
  * every page and worker.
@@ -45,6 +47,8 @@ export class DurableStorage {
   readonly filesFreed = new Map<string, Promise<void>>();
   /** How many of the next opens fail with a storage error. */
   failNextOpens = 0;
+  /** What becomes of the next load of an engine's assets. */
+  nextAssets: 'load' | 'fail' | 'stall' = 'load';
   /** Each open, in order: which build opened which database. */
   readonly opens: { engine: string; buildTime: number; scope: string }[] = [];
 
@@ -99,6 +103,22 @@ export class FakeEngineCore {
     private readonly options: CacheWorkerCoreOptions
   ) {}
 
+  /** Loads the WASM and its glue, which takes a task of its own. */
+  async prepare(): Promise<void> {
+    const outcome = this.storage.nextAssets;
+    this.storage.nextAssets = 'load';
+    await this.laterTask('engine-assets');
+    if (outcome === 'fail') throw new Error('failed to fetch the cache WASM');
+    if (outcome === 'stall') await new Promise<void>(() => {});
+  }
+
+  /** Storage failed mid-run in a way only a physical reset repairs. */
+  requireReset(): void {
+    this.options.onStorageResetRequired?.(
+      new Error('cache storage reset required')
+    );
+  }
+
   addPort(): void {}
 
   async handleRequest(port: Port, request: CacheRequest): Promise<void> {
@@ -109,7 +129,7 @@ export class FakeEngineCore {
     }
     this.active += 1;
     try {
-      if (request.kind !== 'init') await this.laterTask();
+      if (request.kind !== 'init') await this.laterTask('engine-task');
       const result = await this.answer(request);
       respond({
         id: request.id,
@@ -133,12 +153,12 @@ export class FakeEngineCore {
   }
 
   /** The core queues a request and starts it in a later task. */
-  private async laterTask(): Promise<void> {
+  private async laterTask(kind: string): Promise<void> {
     await new Promise<void>((resolve) => {
       this.sim.queueTask(
         this.context,
         `engine:${this.context.id}`,
-        'engine-task',
+        kind,
         resolve
       );
     });
