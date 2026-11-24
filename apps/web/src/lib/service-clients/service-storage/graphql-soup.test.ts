@@ -1919,6 +1919,35 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(soup.getGraphqlSoupCacheHost()).toBe(host);
   });
 
+  it('lets go of what channels kept once a running host cannot be proven readable', async () => {
+    const soup = await import('./graphql-soup');
+    const { channelWrites } = await import(
+      '@queries/messages/local/channel-sync'
+    );
+    const { CacheBootstrapExhaustedError } = await import(
+      '@graphql-cache/worker/startup'
+    );
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const refused = new CacheBootstrapExhaustedError('Failed to fetch');
+    soup.getGraphqlSoupClient();
+    mocks.failInitialization(refused);
+    mocks.host.inspectMutations.mockRejectedValueOnce(refused);
+    await expect(soup.retryGraphqlCacheInitialization()).rejects.toBe(refused);
+    const host = soup.getKeptGraphqlCacheHost();
+    if (!host) throw new Error('no host');
+    const retire = vi.spyOn(channelWrites(host), 'retire');
+
+    // Nothing proves the queue readable again before a reload.
+    const unreadable = new Error('the queue is unreadable');
+    mocks.host.inspectMutations.mockRejectedValueOnce(unreadable);
+    await expect(soup.retryGraphqlCacheInitialization()).rejects.toBe(
+      unreadable
+    );
+    expect(soup.graphqlCacheRecoveryState()).toBe('recovery-required');
+    expect(retire).toHaveBeenCalledOnce();
+    expect(soup.getKeptGraphqlCacheHost()).toBeUndefined();
+  });
+
   it('retires a failed host so the replaced client degrades instead of rejecting', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const soup = await import('./graphql-soup');

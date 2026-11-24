@@ -209,6 +209,15 @@ describe('a host whose database is away', () => {
     expect(channelCacheHost()).toBe(host);
   });
 
+  it('stays with a host whose database was away while the session proves it again', () => {
+    const host = { ...outage };
+    soup.__setKept(host);
+    expect(channelCacheHost()).toBe(host);
+    // It took writes while it was away, though it has answered nothing yet.
+    Object.assign(host, { paused: false, disabled: false });
+    expect(channelCacheHost()).toBe(host);
+  });
+
   it('moves an open channel to REST once the host is gone', () => {
     posthog.__setFlag({ enabled: true, loading: false });
     const host = { ...outage };

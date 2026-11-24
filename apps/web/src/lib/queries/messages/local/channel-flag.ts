@@ -15,6 +15,9 @@ const unsupportedHosts = new WeakSet<CacheHost>();
 // A host answers nothing until its engine has started, and a failing start can
 // take minutes to give up, so only a host that has answered gets waited on.
 const answeredHosts = new WeakSet<CacheHost>();
+// Hosts whose database was away while they were the channels' host: they stay
+// it until the session has proven them readable again.
+const pausedHosts = new WeakSet<CacheHost>();
 
 /**
  * How long a host that has not answered a channel read yet gets before the
@@ -41,17 +44,18 @@ function channelCacheSupported(host: CacheHost): boolean {
 
 /**
  * The session's host for channels, whether or not its flag is on. A host whose
- * database is away stays it, as does one that served and is being proven
- * readable again: its queue keeps the writes, which must not go around it, and
- * the server fills what it cannot read. One that never answered is not waited
- * on while the session restarts it.
+ * database is away stays it, as does one that served, or was away, and is
+ * being proven readable again: its queue keeps the writes, which must not go
+ * around it, and the server fills what it cannot read. One that did neither is
+ * not waited on while the session restarts it.
  */
 export function sessionChannelHost(): CacheHost | undefined {
   const serving = graphqlCacheEnabled() ? getGraphqlSoupCacheHost() : undefined;
   const host = serving ?? getKeptGraphqlCacheHost();
   if (!host || !channelCacheSupported(host)) return undefined;
-  if (!serving && !host.paused && !answeredHosts.has(host)) return undefined;
-  return host;
+  if (host.paused) pausedHosts.add(host);
+  const kept = answeredHosts.has(host) || pausedHosts.has(host);
+  return serving || kept ? host : undefined;
 }
 
 export function channelCacheAnswered(host: CacheHost): boolean {

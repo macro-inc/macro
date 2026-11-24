@@ -640,7 +640,12 @@ const cacheRecovery = createCacheRecovery(
     }),
   {
     onRelapse: recordCacheRecoveryRelapse,
-    onStopped: recordCacheRecoveryStopped,
+    onStopped: (reason, relapses, error) => {
+      recordCacheRecoveryStopped(reason, relapses, error);
+      // A host kept through an outage has no restart left that would hand its
+      // channel writes to the queue.
+      if (cachedCacheHost) existingChannelWrites(cachedCacheHost)?.retire();
+    },
   }
 );
 
@@ -843,13 +848,15 @@ export function getGraphqlCacheHost(): CacheHost | undefined {
 
 /**
  * The session's cache host, also while its database is away (`paused`) or is
- * being proven readable again; undefined once the host is gone.
+ * being proven readable again; undefined once the host is gone or the page
+ * stopped trying to prove it.
  */
 export function getKeptGraphqlCacheHost(): CacheHost | undefined {
   cacheAvailability();
   if (!sessionActive()) return undefined;
   if (!cachedCacheHost) return undefined;
   if (cachedCacheHost.disabled && !cachedCacheHost.paused) return undefined;
+  if (cacheRecovery.state() === 'recovery-required') return undefined;
   return cachedCacheHost;
 }
 
