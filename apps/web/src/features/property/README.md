@@ -138,11 +138,17 @@ property that holds one value is replaced either way and stays editable.
 `SavedValueStatus` shows "Loading …" or, when the read fails, "Couldn't load
 this item's …" in place of the rows. Tag assignment waits only while the tags
 load, since unread tags would all look unapplied; a failed read still allows
-tagging, as its saves are additions and removals the server merges. Rows that
-arrive after a wait start with none highlighted (`createUnhighlightedArrival`),
-unless a search typed meanwhile found a match: the first row may be **Clear
-all**, and an Enter pressed meanwhile must not reach it. An item's own copy of a custom property carries no options, so the
-editor takes them from the property's definition.
+tagging, as its saves are additions and removals the server merges. An
+item's own copy of a custom property carries no options, so the editor takes
+them from the property's definition.
+
+The select, entity and tag editors list **Clear all** first when nothing is
+typed and the items hold values (last, once something is typed). While that is
+the first row, no row is highlighted until the arrow keys or the pointer pick
+one, so an Enter pressed as the editor opens, or as its rows arrive, removes
+nothing; ArrowDown then reaches Clear all, and typing highlights the first
+match. The Link editor holds its highlight the same way whenever nothing is
+typed. All four use `editor/guarded-highlight.ts`.
 
 ## Adding a property
 
