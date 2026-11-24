@@ -210,6 +210,7 @@ function Fixture() {
     contactInitials: (name) => (name ?? 'IO').slice(0, 2).toUpperCase(),
     createNavigation: () => ({
       splitId: undefined,
+      showsElsewhere: () => false,
       openWithSplit: () => {},
       showCompanies: () => {},
       openEntity: () => {},

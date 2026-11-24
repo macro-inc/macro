@@ -151,10 +151,12 @@ shows no Remove and nothing in its place.
 
 The company is one split pill, like a task's Project: its name opens the
 company as an entity link does. It goes to the split already showing that
-company, opens a new split with Shift (without selecting), and otherwise opens
-in place, after the contact in the breadcrumb trail. `CrmRoute.open` takes
-`followLink` for this; records opened from lists still open where asked, even
-when another split shows them. The caret opens the picker, with Remove company
+company, with or without Shift; otherwise Shift opens a new split (without
+selecting) and a plain click opens it in place, after the contact in the
+breadcrumb trail. `CrmRoute.open` takes `followLink` for this, and the CRM
+navigation's `showsElsewhere` asks the split router whether another pane holds
+the company's claim, so Shift takes the same path when one does. Records opened
+from lists still open where asked, even when another split shows them. The caret opens the picker, with Remove company
 at its foot. A contact without a company shows the
 empty property (Company in the header, No company in Record details), which
 offers Add company. The picker switches only for a personal-provider primary

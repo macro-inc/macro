@@ -1,4 +1,6 @@
+import { useOptionalSplitRouter } from '@app/lib/split-router';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { paneOf } from '@components/app/split-layout/layoutManager';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -7,6 +9,7 @@ import { getWebOrigin } from '@core/util/webOrigin';
 import { openEntityInSplitFromUnifiedList } from '../next-soup/utils';
 import type { CrmContext } from './context/crm-context';
 import type { CrmViewConfig } from './core/saved-view';
+import { crmRecordClaim } from './crm-route';
 import {
   CRM_VIEW_URL_PARAM,
   encodeCrmViewParam,
@@ -61,8 +64,22 @@ export function createAppCrmNavigation(): ReturnType<
 > {
   const layout = useSplitLayout();
   const panel = useSplitPanel();
+  const router = useOptionalSplitRouter();
   return {
     splitId: panel?.handle.id,
+    showsElsewhere: (target) => {
+      const claim = crmRecordClaim({
+        recordType: target.type,
+        recordId: target.id,
+      });
+      const split = panel?.handle.id;
+      return (
+        router?.claims.holderOf(
+          `${claim.namespace}:${claim.id}`,
+          split ? paneOf(split) : undefined
+        ) !== undefined
+      );
+    },
     openWithSplit: (target, options) => {
       layout.openWithSplit(target, options);
     },

@@ -402,6 +402,8 @@ export const useCrmContext = () => ({
     refetch: async () => undefined,
   }),
   createNavigation: () => ({
+    // The fixture has a single pane.
+    showsElsewhere: () => false,
     openWithSplit(target: { id: string }) {
       location.search = `?kind=company&companyArchived&opened=${target.id}`;
     },

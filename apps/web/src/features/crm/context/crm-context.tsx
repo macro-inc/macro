@@ -113,6 +113,11 @@ export type CrmContext = {
   }): Promise<boolean>;
   createNavigation(): {
     splitId: string | undefined;
+    /** Whether a split other than this one already shows the record. */
+    showsElsewhere(target: {
+      type: 'company' | 'contact';
+      id: string;
+    }): boolean;
     openWithSplit(
       target: { type: 'company' | 'contact' | 'email'; id: string },
       options?: { activate?: boolean; preferNewSplit?: boolean }

@@ -97,7 +97,11 @@ export function ContactCompanyField(props: {
   const openCompany = useSplitNavigationHandler<HTMLButtonElement>((event) => {
     const id = props.contact.companyId;
     if (!id) return;
-    if (!event.shiftKey && props.onOpenCompany?.(id)) return;
+    // A split already showing the company comes forward, Shift or not; Shift
+    // otherwise asks for a new split.
+    const followsLink =
+      !event.shiftKey || navigation.showsElsewhere({ type: 'company', id });
+    if (followsLink && props.onOpenCompany?.(id)) return;
     navigation.openWithSplit(
       { type: 'company', id },
       { activate: true, preferNewSplit: event.shiftKey }
