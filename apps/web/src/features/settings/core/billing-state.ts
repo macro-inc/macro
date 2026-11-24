@@ -71,14 +71,15 @@ export function getFreePlanCheckoutRequest(
   };
 }
 
-/** The interval a plan card prices at: the subscription's once paid, else
- * the one chosen, where the plan is sold at it. */
+/** The interval a plan card prices at: the subscription's once paid (the
+ * caller shows no paid card while that is unknown), else the one chosen,
+ * where the plan is sold at it. */
 export function cardInterval(
   plan: PaidPlanTier,
   state: Pick<BillingState, 'hasPaid' | 'interval'>,
   chosen: BillingInterval
 ): BillingInterval {
-  const interval = state.hasPaid ? (state.interval ?? 'month') : chosen;
+  const interval = state.hasPaid ? (state.interval ?? chosen) : chosen;
   return soldAt(plan, interval) ? interval : 'month';
 }
 

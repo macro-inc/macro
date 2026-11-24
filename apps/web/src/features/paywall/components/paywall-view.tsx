@@ -85,7 +85,11 @@ export function PaywallView(props: {
                 {(plan) => (
                   <BillingPlanCard
                     plan={plan}
-                    interval={cardInterval(plan, props.state, 'year')}
+                    interval={cardInterval(
+                      plan,
+                      props.state,
+                      props.state.hasPaid ? 'month' : 'year'
+                    )}
                     state={props.state}
                   />
                 )}

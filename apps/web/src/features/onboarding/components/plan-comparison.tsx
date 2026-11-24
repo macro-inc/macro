@@ -106,7 +106,7 @@ export function PlanComparison(props: {
                             {formatPlanPrice(price(entry())) ?? '—'}
                             <span title="per user per month">/usr/mo</span>
                           </span>
-                          <Show when={annual(entry()) !== undefined}>
+                          <Show when={typeof annual(entry()) === 'number'}>
                             <span class="block">billed annually</span>
                           </Show>
                         </>

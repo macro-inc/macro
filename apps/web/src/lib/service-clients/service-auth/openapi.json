@@ -10730,6 +10730,17 @@
               }
             ]
           },
+          "interval": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BillingInterval",
+                "description": "How often the subscription bills. Plan changes keep it, so clients\nprice plan options at it; Pro is not sold annually."
+              }
+            ]
+          },
           "renewalDate": {
             "type": ["string", "null"],
             "format": "date-time",

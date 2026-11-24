@@ -123,6 +123,24 @@ it('buys Business monthly once Billed monthly is chosen', () => {
   });
 });
 
+it('offers no paid plan change until the subscription interval is known', () => {
+  render(() => (
+    <BillingSettingsView
+      state={getBillingState({
+        hasPaid: true,
+        canManageSubscription: true,
+        aiUsageEnabled: true,
+        pending: false,
+        summary: { tier: 'premium', canManageBilling: true },
+      })}
+      onManage={() => {}}
+      onSelectPlan={() => {}}
+    />
+  ));
+  expect(screen.queryByRole('button', { name: /^Upgrade to/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Switch to/ })).toBeNull();
+});
+
 it('offers no Pro card to an annual subscription', () => {
   render(() => (
     <BillingSettingsView
@@ -163,6 +181,7 @@ it('keeps Max upgrades available after paid access recovers while eligibility da
         pending: false,
         existingSubscription: true,
         summary: { tier: 'premium', canManageBilling: true },
+        interval: 'month',
       })}
       onManage={() => {}}
       onSelectPlan={select}

@@ -2374,6 +2374,7 @@ export type SubscriptionSeatTotal = {
  */
 export type SubscriptionStatus = {
     billing?: null | SubscriptionBilling;
+    interval?: null | BillingInterval;
     /**
      * Provider-confirmed subscription renewal date.
      */

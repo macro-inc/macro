@@ -289,6 +289,7 @@ export * from './subscriptionNextInvoiceDate';
 export * from './subscriptionSeatTotal';
 export * from './subscriptionStatus';
 export * from './subscriptionStatusBilling';
+export * from './subscriptionStatusInterval';
 export * from './subscriptionStatusRenewalDate';
 export * from './subscriptionStatusScheduledChange';
 export * from './systemStatus';

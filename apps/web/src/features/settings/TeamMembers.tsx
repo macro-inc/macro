@@ -293,7 +293,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
   });
   const annualTeam = () =>
     queryReadyGate(subscriptionStatus)
-      ? subscriptionStatus.data.billing?.interval === 'year'
+      ? subscriptionStatus.data.interval === 'year'
       : false;
   const setMemberPlanMutation = useSetTeamMemberPlanMutation();
   // Seat moves read and rewrite the subscription's item quantities, so only

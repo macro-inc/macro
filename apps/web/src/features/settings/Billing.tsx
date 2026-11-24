@@ -134,7 +134,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
           : undefined,
       trialing: licenseStatus() === 'trialing',
       interval: queryReadyGate(subscriptionStatus)
-        ? subscriptionStatus.data.billing?.interval
+        ? (subscriptionStatus.data.interval ?? undefined)
         : undefined,
     });
 
