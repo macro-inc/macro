@@ -66,6 +66,8 @@ export function BillingPreview(props: {
   const [paywallOpen, setPaywallOpen] = createSignal(false);
   const [account, setAccount] = createSignal<Account>('solo');
   const [plan, setPlan] = createSignal<PlanTier>('free');
+  const [billingInterval, setBillingInterval] =
+    createSignal<BillingInterval>('month');
   const [summaryStatus, setSummaryStatus] =
     createSignal<SummaryStatus>('loaded');
   const [hasPaid, setHasPaid] = createSignal(false);
@@ -74,6 +76,11 @@ export function BillingPreview(props: {
   const [aiUsage, setAiUsage] = createSignal(false);
   const [pending, setPending] = createSignal(false);
   const [action, setAction] = createSignal('');
+  const effectiveInterval = (): BillingInterval | undefined => {
+    if (plan() === 'free') return undefined;
+    if (plan() === 'premium') return 'month';
+    return billingInterval();
+  };
   const state = () =>
     getBillingState({
       hasPaid: hasPaid() || (summaryStatus() === 'loaded' && plan() !== 'free'),
@@ -92,10 +99,12 @@ export function BillingPreview(props: {
       aiUsageEnabled: aiUsage(),
       pending: pending(),
       trialEligible: trialEligible(),
+      interval: effectiveInterval(),
     });
   const reset = () => {
     setAccount('solo');
     setPlan('free');
+    setBillingInterval('month');
     setSummaryStatus('loaded');
     setHasPaid(false);
     setTrialEligible(true);
@@ -165,9 +174,24 @@ export function BillingPreview(props: {
           onChange={(value) => {
             setPlan(value);
             setHasPaid(value !== 'free');
+            if (value === 'premium') setBillingInterval('month');
             setAction('');
           }}
         />
+        <Show when={plan() === 'business' || plan() === 'max'}>
+          <PreviewSelect
+            label="Subscription interval"
+            value={billingInterval()}
+            options={[
+              { value: 'year', label: 'Annual' },
+              { value: 'month', label: 'Monthly' },
+            ]}
+            onChange={(value) => {
+              setBillingInterval(value);
+              setAction('');
+            }}
+          />
+        </Show>
       </div>
       <details>
         <summary class="text-sm text-ink-muted">

@@ -50,7 +50,8 @@ function PaymentSummary(props: { payment: LabPayment }) {
         )
         .with(
           { kind: 'subscription' },
-          (payment) => `Start a ${PLAN_BY_TIER[payment.tier].name} subscription`
+          (payment) =>
+            `Start a ${PLAN_BY_TIER[payment.tier].name} subscription (${payment.interval === 'year' ? 'billed annually' : 'billed monthly'})`
         )
         .with(
           { kind: 'methods' },

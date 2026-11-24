@@ -1,3 +1,4 @@
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import { match } from 'ts-pattern';
 import { isUpgrade, type PlanTier } from '../../paywall/plans';
 import type { AutoReloadSettings } from '../../usage/core/usage';
@@ -154,6 +155,7 @@ export type LimitReason =
 export type BillingSimulation = {
   scenario: ScenarioId;
   tier: PlanTier;
+  interval?: BillingInterval;
   scheduledPlan?: PlanTier;
   now: string;
   periodStart: string;
@@ -188,6 +190,7 @@ export function createScenario(scenario: ScenarioId): BillingSimulation {
   const state: BillingSimulation = {
     scenario,
     tier: 'premium',
+    interval: 'month',
     now: '2026-10-15T12:00:00.000Z',
     periodStart: '2026-10-01T12:00:00.000Z',
     periodEnd: '2026-11-01T12:00:00.000Z',
@@ -227,10 +230,16 @@ export function createScenario(scenario: ScenarioId): BillingSimulation {
     }))
     .with('max', () => ({ ...state, tier: 'max', usedCents: 12_000 }))
     .with('canceling', () => ({ ...state, scheduledPlan: 'free' }))
-    .with('free', () => ({ ...state, tier: 'free', usedCents: 45 }))
+    .with('free', () => ({
+      ...state,
+      tier: 'free',
+      interval: undefined,
+      usedCents: 45,
+    }))
     .with('free-exhausted', () => ({
       ...state,
       tier: 'free',
+      interval: undefined,
       usedCents: 100,
       blockedReason: 'free_allowance_exhausted',
     }))
@@ -311,7 +320,8 @@ export function createScenario(scenario: ScenarioId): BillingSimulation {
 /** UI fixture transitions only; the backend remains the billing-policy authority. */
 export function changePlan(
   state: BillingSimulation,
-  tier: PlanTier
+  tier: PlanTier,
+  interval?: BillingInterval
 ): BillingSimulation {
   if (state.role === 'member') return state;
   if (tier === state.tier) return { ...state, scheduledPlan: undefined };
@@ -319,6 +329,12 @@ export function changePlan(
   return {
     ...state,
     tier,
+    interval:
+      tier === 'free'
+        ? undefined
+        : state.tier === 'free'
+          ? (interval ?? 'month')
+          : (state.interval ?? 'month'),
     scheduledPlan: undefined,
     usedCents: 0,
     blockedReason: undefined,
@@ -328,9 +344,11 @@ export function changePlan(
 export function renew(state: BillingSimulation): BillingSimulation {
   const nextEnd = new Date(state.periodEnd);
   nextEnd.setUTCMonth(nextEnd.getUTCMonth() + 1);
+  const nextTier = state.scheduledPlan ?? state.tier;
   return {
     ...state,
-    tier: state.scheduledPlan ?? state.tier,
+    tier: nextTier,
+    interval: nextTier === 'free' ? undefined : state.interval,
     scheduledPlan: undefined,
     now: state.periodEnd,
     reloadSpentCents:

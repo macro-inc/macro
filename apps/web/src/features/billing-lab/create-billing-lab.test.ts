@@ -129,9 +129,30 @@ describe('billing lab actions', () => {
     expect(lab.pending()).toBe(false);
   });
 
+  it('exposes the subscription interval on paid scenarios and keeps it on free checkout', async () => {
+    const pro = createBillingLab('pro');
+    expect(pro.billing.interval?.()).toBe('month');
+
+    const free = createBillingLab('free');
+    expect(free.billing.interval?.()).toBeUndefined();
+    const checkout = free.billing.checkout('business', 'year');
+    await vi.runAllTimersAsync();
+    await checkout;
+    expect(free.payment()).toEqual({
+      kind: 'subscription',
+      tier: 'business',
+      interval: 'year',
+    });
+    const complete = free.completePayment();
+    await vi.runAllTimersAsync();
+    await complete;
+    expect(free.state().tier).toBe('business');
+    expect(free.billing.interval?.()).toBe('year');
+  });
+
   it('retains a failed payment for retry without activating the subscription', async () => {
     const lab = createBillingLab('free');
-    const checkout = lab.billing.checkout('max');
+    const checkout = lab.billing.checkout('max', 'year');
     await vi.runAllTimersAsync();
     await checkout;
     lab.setFailNext(true);
@@ -144,6 +165,7 @@ describe('billing lab actions', () => {
     await vi.runAllTimersAsync();
     await retry;
     expect(lab.state().tier).toBe('max');
+    expect(lab.state().interval).toBe('year');
     expect(lab.state().usedCents).toBe(0);
     expect(lab.payment()).toBeUndefined();
   });
