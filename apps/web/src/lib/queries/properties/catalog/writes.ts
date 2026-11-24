@@ -657,14 +657,19 @@ export async function ensureTagSet(
           (candidate) => candidate.definition?.id === definitionId
         );
       };
-      const read = await ResultAsync.fromPromise(
-        listed(),
-        (error: unknown) => error
-      );
-      if (read.isErr()) {
-        console.error('Reading the cached tag sets failed', read.error);
-      }
-      const wasListed = read.isOk() && read.value;
+      // The cache may not answer at all (a read waiting on another tab's
+      // engine ends unanswered); a failed read is not a negative one.
+      const readListed = async () => {
+        const read = await ResultAsync.fromPromise(
+          listed(),
+          (error: unknown) => error
+        );
+        if (read.isErr())
+          console.error('Reading the cached tag sets failed', read.error);
+        return read;
+      };
+      const before = await readListed();
+      const wasListed = before.isOk() && before.value;
       span.setAttr('property.reloaded', !wasListed);
       if (!wasListed) {
         const reloaded = await client
@@ -678,10 +683,19 @@ export async function ensureTagSet(
         // Provisioning is idempotent, so the caller can simply try again.
         if (reloaded.error) throw errorOf(reloaded);
         // The caller's next add reads the list from the cache, so the set
-        // counts as ready once the cache holds it.
+        // counts as ready once the cache holds it. A cache that cannot answer
+        // is not the cache refusing the set: the readers on screen shared the
+        // reload, so its own answer decides then.
         const metadata = normalizedCacheResultMetadata(reloaded);
         if (metadata?.source === 'live-network') await metadata.persistence;
-        if (!(await listed())) noData('ensureTagSet reload');
+        const after = await readListed();
+        const ready = after.isOk()
+          ? after.value
+          : (reloaded.data?.user.tagSets.some(
+              (candidate) => candidate.definition?.id === definitionId
+            ) ?? false);
+        span.setAttr('property.cache_answered', after.isOk());
+        if (!ready) noData('ensureTagSet reload');
       }
     }
     return mapped;

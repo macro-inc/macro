@@ -4,7 +4,7 @@ import { onlineManager } from '@tanstack/solid-query';
 import { CombinedError, type OperationResult } from '@urql/core';
 import { createRoot } from 'solid-js';
 import { version as uuidVersion, validate as validateUuid } from 'uuid';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const soup = vi.hoisted(() => ({
   result: undefined as Partial<OperationResult> | undefined,
@@ -70,11 +70,12 @@ vi.mock('../../auth/account-scope', () => ({
   queryAccountSession: () => soup.session,
 }));
 
-import { isCatalogErrorCode } from './errors';
+import { CatalogMutationError, isCatalogErrorCode } from './errors';
 import { registerCatalogReader } from './readers';
 import {
   addPropertyOption,
   createPropertyDefinition,
+  deletePropertyDefinition,
   deletePropertyOption,
   ensureTagSet,
   updatePropertyOption,
@@ -453,6 +454,45 @@ describe('provisioning a tag set', () => {
     }
   });
 
+  it('takes the reload as its answer when the cache cannot answer', async () => {
+    const provisioned = {
+      scope: 'TEAM',
+      definition: {
+        __typename: 'GraphqlPropertyDefinition',
+        id: 'def-team',
+        owner: { scope: 'TEAM', principalId: 'team-1' },
+        displayName: 'Tags',
+        dataType: 'SELECT_STRING',
+        isMultiSelect: true,
+        specificEntityType: null,
+        isSystem: false,
+        isMetadata: false,
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+      },
+      options: [],
+    };
+    for (const [reloadLists, ready] of [
+      [[provisioned], true],
+      [[], false],
+    ] as const) {
+      queueingHost();
+      const host = soup.host;
+      if (!host) throw new Error('no host');
+      // Every read of the store ends unanswered, as one waiting on another
+      // tab's engine does once its bound runs out.
+      host.readQuery = async () => {
+        throw new Error('cache read ended unanswered');
+      };
+      soup.result = { data: { ensureTagSet: provisioned } };
+      soup.reload = { data: { user: { tagSets: reloadLists } } };
+      const ensured = await ensureTagSet('team').catch(
+        (error: unknown) => error
+      );
+      expect(ensured instanceof Error).toBe(!ready);
+    }
+  });
+
   it('checks the cache only once the reload is written', async () => {
     const provisioned = {
       scope: 'USER',
@@ -688,6 +728,116 @@ describe('option order', () => {
       expect(reloads).toEqual(['def-1', 'def-2']);
     } finally {
       dispose();
+    }
+  });
+});
+
+describe('a write the cache never hands to an engine', () => {
+  // The cache refuses such a write after 30 s as not admitted: an error with
+  // no queue disposition. No engine applied its optimistic layer, so the
+  // cache has nothing to roll back; the write must fail, once, and nothing
+  // may treat it as committed.
+  const NOT_ADMITTED_MS = 30_000;
+  const notAdmitted = () =>
+    new Promise<Partial<OperationResult>>((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            error: new CombinedError({
+              networkError: new Error('mutation not admitted'),
+            }),
+          }),
+        NOT_ADMITTED_MS
+      )
+    );
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Runs a write to its refusal; whether it settled early, and how. */
+  async function refused(write: () => Promise<unknown>) {
+    let settledEarly = false;
+    const outcome = (async () => {
+      const value = await outcomeOf(write());
+      settledEarly = true;
+      return value;
+    })();
+    await vi.advanceTimersByTimeAsync(NOT_ADMITTED_MS - 1);
+    const early = settledEarly;
+    await vi.advanceTimersByTimeAsync(1);
+    return { early, outcome: await outcome };
+  }
+
+  it('fails an add, with no reload and no second send', async () => {
+    const refreshed = vi.fn(async () => {});
+    const dispose = createRoot((dispose) => {
+      registerCatalogReader({
+        kind: 'options',
+        key: () => 1,
+        propertyDefinitionId: () => 'def-1',
+        refresh: refreshed,
+      });
+      return dispose;
+    });
+    try {
+      queueingHost();
+      soup.optimistic.mockImplementation(() => ({ toPromise: notAdmitted }));
+      const { early, outcome } = await refused(() =>
+        addPropertyOption('def-1', TAG)
+      );
+      expect(early).toBe(false);
+      expect(outcome).toBeInstanceOf(CatalogMutationError);
+      expect(soup.optimistic).toHaveBeenCalledTimes(1);
+      expect(soup.mutation).not.toHaveBeenCalled();
+      expect(refreshed).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('fails a write the cache predicts, reporting it once', async () => {
+    for (const write of [
+      (late: (error: Error) => void) =>
+        updatePropertyOption('def-1', 'opt-1', { value: 'Renamed' }, late),
+      (late: (error: Error) => void) =>
+        deletePropertyOption('def-1', 'opt-1', late),
+      (late: (error: Error) => void) => deletePropertyDefinition('def-1', late),
+    ]) {
+      queueingHost();
+      soup.mutation.mockReset();
+      soup.mutation.mockImplementation(() => ({ toPromise: notAdmitted }));
+      const late = vi.fn();
+      const { early, outcome } = await refused(() => write(late));
+      expect(early).toBe(false);
+      expect(outcome).toBeInstanceOf(CatalogMutationError);
+      // The caller's failure handler hears the rejection; the late-failure
+      // path would report it a second time.
+      expect(late).not.toHaveBeenCalled();
+      expect(soup.mutation).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('fails a write the server answers', async () => {
+    for (const write of [
+      () =>
+        createPropertyDefinition({
+          display_name: 'Stage',
+          data_type: { type: 'string' },
+          scope: 'user',
+        } as Parameters<typeof createPropertyDefinition>[0]),
+      () => ensureTagSet('user'),
+    ]) {
+      queueingHost();
+      soup.mutation.mockReset();
+      soup.mutation.mockImplementation(() => ({ toPromise: notAdmitted }));
+      const { early, outcome } = await refused(write);
+      expect(early).toBe(false);
+      expect(outcome).toBeInstanceOf(CatalogMutationError);
+      expect(soup.mutation).toHaveBeenCalledTimes(1);
     }
   });
 });
