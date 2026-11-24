@@ -780,6 +780,7 @@ body.tauri-ios {
 [data-theme-light='true'] {
   /* Light previews inside a dark touch app stay opaque, like light mode. */
   --raised-glass-alpha: 100%;
+  --color-chrome-glass: color-mix(in oklch, var(--color-chrome) var(--raised-glass-alpha), transparent);
   --color-task-status-in-progress: color-mix(in srgb, var(--color-amber) 85%, var(--color-content-0));
   /* Neutral borders. */
   --border-primary: oklch(0 0 0 / 16%);
