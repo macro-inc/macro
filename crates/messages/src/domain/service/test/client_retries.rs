@@ -47,7 +47,8 @@ async fn a_repeated_post_returns_the_stored_message_without_writing_or_publishin
             input,
         )
         .await
-        .unwrap();
+        .unwrap()
+        .message;
     assert_eq!(message.content, "Stored");
     assert!(repo.creates.lock().unwrap().is_empty());
     assert!(events.0.lock().unwrap().is_empty());
@@ -124,7 +125,8 @@ async fn a_post_that_loses_the_race_recovers_the_committed_message() {
             input,
         )
         .await
-        .unwrap();
+        .unwrap()
+        .message;
     assert_eq!(message.id, id);
     assert!(events.0.lock().unwrap().is_empty());
 }
@@ -143,7 +145,8 @@ async fn a_repeated_delete_returns_the_tombstone_without_publishing() {
             None,
         )
         .await
-        .unwrap();
+        .unwrap()
+        .message;
     assert!(message.deleted_at.is_some());
     assert!(events.0.lock().unwrap().is_empty());
 }
@@ -318,7 +321,8 @@ async fn a_repeated_edit_the_message_already_shows_writes_and_publishes_nothing(
             edit(),
         )
         .await
-        .unwrap();
+        .unwrap()
+        .message;
     assert_eq!(message.content, "Edited");
     assert!(repo.edits.lock().unwrap().is_empty());
     assert!(events.0.lock().unwrap().is_empty());
@@ -353,4 +357,105 @@ async fn a_replayed_edit_that_changes_something_is_written() {
         .unwrap();
     assert_eq!(repo.edits.lock().unwrap().len(), 1);
     assert_eq!(events.0.lock().unwrap().len(), 1);
+}
+
+const CHANNEL: MessageParent = MessageParent::Channel(Uuid::from_u128(20));
+
+/// A channel whose counter stands at 41 and whose next write commits 42.
+fn in_channel(repo: Repo) -> Repo {
+    let mut repo = repo;
+    repo.message.parent = CHANNEL;
+    repo.mutation_seq = Some(42);
+    repo.change_log.seq = 41;
+    repo
+}
+
+#[tokio::test]
+async fn a_write_answers_with_the_position_it_committed() {
+    let repo = in_channel(fixture());
+    let service = MessageService::new(repo.clone(), Events::default());
+    let id = repo.message.id;
+    let mut input = post_input();
+    input.id = Some(Uuid::now_v7());
+    let patch = MessagePatch {
+        content: Some("Changed".into()),
+        ..Default::default()
+    };
+    let written = [
+        service.post_once(channel_access(), input).await,
+        service.patch_once(channel_access(), id, patch).await,
+        service
+            .react_once(channel_access(), id, "👍".into(), true, None)
+            .await,
+        service.delete_once(channel_access(), id, None).await,
+    ];
+    assert_eq!(written.map(|written| written.unwrap().seq), [Some(42); 4]);
+    // A first write never reads the counter: by then it may be past the write.
+    assert!(!repo.reads.lock().unwrap().contains(&"seq"));
+}
+
+#[tokio::test]
+async fn a_replay_answers_with_the_channels_position_read_before_its_message() {
+    let id = Uuid::now_v7();
+    let mut repo = in_channel(persisted(id));
+    repo.reaction_changed = false;
+    repo.message.content = "Shown".into();
+
+    let service = MessageService::new(repo.clone(), Events::default());
+    let mut input = post_input();
+    input.id = Some(id);
+    let patch = MessagePatch {
+        content: Some("Shown".into()),
+        ..Default::default()
+    };
+    let last_reads = || {
+        let reads = std::mem::take(&mut *repo.reads.lock().unwrap());
+        reads[reads.len() - 2..].to_vec()
+    };
+
+    let posted = service.post_once(channel_access(), input.clone()).await;
+    assert_eq!(posted.unwrap().seq, Some(41));
+    assert_eq!(last_reads(), ["seq", "message"]);
+
+    let edited = service.patch_once(channel_access(), id, patch).await;
+    assert_eq!(edited.unwrap().seq, Some(41));
+    assert_eq!(last_reads(), ["seq", "message"]);
+
+    let reacted = service.react_once(channel_access(), id, "👍".into(), true, None);
+    assert_eq!(reacted.await.unwrap().seq, Some(41));
+    assert_eq!(last_reads(), ["seq", "message"]);
+
+    // A post that loses the race to its own replay.
+    let mut raced = repo.clone();
+    raced.concurrent_create = true;
+    let service = MessageService::new(raced, Events::default());
+    let recovered = service.post_once(channel_access(), input).await.unwrap();
+    assert_eq!((recovered.message.id, recovered.seq), (id, Some(41)));
+    assert_eq!(last_reads(), ["seq", "message"]);
+
+    // A delete of a message already gone.
+    let mut gone = repo.clone();
+    gone.message.deleted_at = Some(Utc::now());
+    let service = MessageService::new(gone, Events::default());
+    let deleted = service.delete_once(channel_access(), id, None).await;
+    assert_eq!(deleted.unwrap().seq, Some(41));
+    assert_eq!(last_reads(), ["seq", "message"]);
+}
+
+#[tokio::test]
+async fn a_write_outside_a_channel_has_no_position() {
+    let id = Uuid::now_v7();
+    let repo = persisted(id);
+    let service = MessageService::new(repo.clone(), Events::default());
+    let mut input = post_input();
+    input.id = Some(id);
+    let replayed = service
+        .post_once(
+            access("macro|author@example.com", "doc", AccessLevel::Comment),
+            input,
+        )
+        .await
+        .unwrap();
+    assert_eq!(replayed.seq, None);
+    assert!(!repo.reads.lock().unwrap().contains(&"seq"));
 }

@@ -15,7 +15,8 @@ separately from Soup's thread-root projection.
 - `src/writes.rs`: `sendChannelMessage`, `editChannelMessage`,
   `deleteChannelMessage`, `reactToChannelMessage` for the web client's durable
   mutation queue; each returns a `GraphqlChannelMessageWrite`: the written
-  message, and for a reply its root with the thread summary that counts it.
+  message, for a reply its root with the thread summary that counts it, and the
+  `seq` both include.
 - `src/subscription.rs`: `channelTimelineUpdates`, the viewer's live channel
   changes in the `channelChanges` shape, streamed from request data.
 - `src/lib.rs`: channel activity mutation and typed read errors.
@@ -51,12 +52,9 @@ separately from Soup's thread-root projection.
 - Message mutations are replayed by the client's queue: send goes through
   `post_once` (the client id returns the stored message), edit through
   `patch_once` (an edit the message already shows writes nothing) and delete
-  through `delete_once` (the tombstone); react is already repeatable. Send and
-  delete are safe to replay at any time. An edit or reaction replayed after a
-  lost response is safe only if the message did not change in between: one
-  that lands after a newer edit or reaction from the same person's other
-  device undoes it, and the input carries nothing the server could refuse it
-  by. The client replays them only after a transport failure. A root
+  through `delete_once` (the tombstone), react through `react_once`. `seq` is a
+  position both answered records include every change up to: the write's own,
+  or for a replay the channel's, read before the message. A root
   is returned with its thread summary so the cached row stays complete, and a
   reply (sent, replayed or deleted) with its root, read back on primary after
   the commit. A reply's root that cannot be read back is left out; a written

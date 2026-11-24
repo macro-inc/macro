@@ -1,4 +1,4 @@
-use crate::domain::{mentions::MessageReferenceKind, models::*, ports::*};
+use crate::domain::{mentions::stored_attachment_type, models::*, ports::*};
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -67,14 +67,6 @@ fn database_error(error: sqlx::Error) -> MessageError {
         }
     }
     MessageError::Repository(rootcause::Report::new(error).into())
-}
-
-/// Email references arrive under several editor aliases; store the canonical one.
-fn stored_attachment_type(entity_type: &str) -> &str {
-    match MessageReferenceKind::parse(entity_type) {
-        Some(MessageReferenceKind::EmailThread) => "email_thread",
-        _ => entity_type,
-    }
 }
 
 impl PgMessageRepository {

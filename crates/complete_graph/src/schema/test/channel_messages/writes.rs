@@ -93,12 +93,12 @@ async fn a_send_repeated_by_the_queue_stores_one_message_and_returns_it_again(po
         &harness,
         &context,
         &format!(
-            "channelMessage(channelId: \"{CHANNEL_ID}\", messageId: \"{id}\") {{ {} }}",
+            "channelMessage(channelId: \"{CHANNEL_ID}\", messageId: \"{id}\") {{ message {{ {} }} }}",
             message_selection()
         ),
     )
     .await;
-    assert_eq!(read["channelMessage"], first);
+    assert_eq!(read["channelMessage"]["message"], first);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -266,4 +266,238 @@ async fn writes_need_a_personal_session_write_access_and_a_valid_change(pool: Pg
         ),
         "NOT_FOUND"
     );
+}
+
+/// Every reference is viewable.
+struct AllReferences;
+impl messages::domain::ports::MessageReferenceAccess for AllReferences {
+    fn can_view<'a>(
+        &'a self,
+        _: &'a entity_access::domain::models::EntityAccessAuth,
+        _: EntityType,
+        _: &'a str,
+    ) -> std::pin::Pin<
+        Box<dyn Future<Output = Result<bool, messages::domain::ports::MessageError>> + Send + 'a>,
+    > {
+        Box::pin(async { Ok(true) })
+    }
+}
+
+/// `@here` reaches two people, one of whom is also mentioned by name.
+struct Members;
+impl messages::domain::ports::MessageGroupRecipients for Members {
+    fn channel_members<'s, 'f>(&'s self, _: Uuid) -> MembersFuture<'f>
+    where
+        's: 'f,
+        Self: 'f,
+    {
+        Box::pin(async {
+            Ok(["macro|a@example.com", "macro|b@example.com"]
+                .map(|id| MacroUserIdStr::parse_from_str(id).expect("valid member id"))
+                .to_vec())
+        })
+    }
+}
+/// What `MessageGroupRecipients` returns.
+type MembersFuture<'f> = std::pin::Pin<
+    Box<
+        dyn Future<
+                Output = Result<
+                    Vec<MacroUserIdStr<'static>>,
+                    messages::domain::ports::MessageError,
+                >,
+            > + Send
+            + 'f,
+    >,
+>;
+
+/// The channel's committed position.
+async fn channel_seq(pool: &PgPool) -> i64 {
+    sqlx::query_scalar!(
+        "SELECT seq FROM channel_change_counters WHERE channel_id = $1",
+        CHANNEL_ID,
+    )
+    .fetch_one(pool)
+    .await
+    .expect("channel counter")
+}
+
+/// Sends a message, then applies `edit` twice and returns both answers with
+/// the channel position after each.
+async fn edit_twice(pool: PgPool, edit: &str) -> [(Value, i64); 2] {
+    fixture(pool.clone()).await;
+    let reads = Arc::new(
+        MessageService::new(
+            PgMessageRepository::new(pool.clone()),
+            NoMessageEventPublisher,
+        )
+        .with_references(AllReferences)
+        .with_group_recipients(Members),
+    );
+    let harness = harness();
+    let context = writable(&harness, &reads);
+    let id = Uuid::now_v7();
+    let send = format!(
+        "sendChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{id}\", content: \"Sent\" }}) {{ message {{ id }} }}"
+    );
+    data(
+        mutate(&harness, &context, Some(PERSON), &send).await,
+        "sendChannelMessage",
+    );
+    let edit = format!(
+        "editChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{id}\", {edit} }}) {{ message {{ {} }} }}",
+        message_selection()
+    );
+    let mut answers = Vec::new();
+    for _ in 0..2 {
+        let answer = data(
+            mutate(&harness, &context, Some(PERSON), &edit).await,
+            "editChannelMessage",
+        );
+        answers.push((answer, channel_seq(&pool).await));
+    }
+    answers.try_into().expect("two answers")
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_replayed_edit_does_not_attach_an_email_thread_again_under_its_editor_alias(
+    pool: PgPool,
+) {
+    let [first, replay] = edit_twice(
+        pool,
+        r#"addAttachments: [
+            { entityType: "thread", entityId: "01900000-0000-7000-8000-0000000000aa" },
+            { entityType: "document", entityId: "01900000-0000-7000-8000-0000000000bb" }
+        ]"#,
+    )
+    .await;
+    assert_eq!(
+        first.0["attachments"][0]["entityType"],
+        json!("email_thread")
+    );
+    assert_eq!(first.0["attachments"].as_array().map(Vec::len), Some(2));
+    assert_eq!(
+        replay, first,
+        "the replay changed the message or the channel"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_replayed_edit_with_group_repeated_and_unsorted_mentions_writes_nothing(pool: PgPool) {
+    let [first, replay] = edit_twice(
+        pool,
+        r#"content: "@here and others", mentions: [
+            { entityType: "user", entityId: "macro|b@example.com" },
+            { entityType: "group", entityId: "here" },
+            { entityType: "user", entityId: "macro|a@example.com" },
+            { entityType: "user", entityId: "macro|b@example.com" }
+        ]"#,
+    )
+    .await;
+    assert_eq!(
+        replay, first,
+        "the replay changed the message or the channel"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_replayed_edit_that_only_mentions_here_writes_nothing(pool: PgPool) {
+    let [first, replay] = edit_twice(
+        pool,
+        r#"content: "@here", mentions: [{ entityType: "group", entityId: "here" }]"#,
+    )
+    .await;
+    assert_eq!(
+        first.0["mentions"],
+        json!([{ "entityType": "group", "entityId": "here" }])
+    );
+    assert_eq!(
+        replay, first,
+        "the replay changed the message or the channel"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_replayed_edit_with_a_repeated_mention_writes_nothing(pool: PgPool) {
+    let [first, replay] = edit_twice(
+        pool,
+        r#"content: "twice", mentions: [
+            { entityType: "user", entityId: "macro|a@example.com" },
+            { entityType: "user", entityId: "macro|a@example.com" }
+        ]"#,
+    )
+    .await;
+    assert_eq!(
+        replay, first,
+        "the replay changed the message or the channel"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn each_write_answers_with_the_position_it_committed_and_a_replay_with_the_channels(
+    pool: PgPool,
+) {
+    let reads = fixture(pool.clone()).await;
+    let harness = harness();
+    let context = writable(&harness, &reads);
+    let [root, reply, other] = [(); 3].map(|()| Uuid::now_v7());
+    let send = |id: Uuid, thread: &str| {
+        format!(
+            "sendChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{id}\", content: \"Hi\"{thread} }}) {{ seq }}"
+        )
+    };
+    let in_thread = format!(", threadId: \"{root}\"");
+    let writes = [
+        ("sendChannelMessage", send(root, "")),
+        ("sendChannelMessage", send(reply, &in_thread)),
+        (
+            "editChannelMessage",
+            format!(
+                "editChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{reply}\", content: \"Edited\" }}) {{ seq }}"
+            ),
+        ),
+        (
+            "reactToChannelMessage",
+            format!(
+                "reactToChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{reply}\", emoji: \"👍\", add: true }}) {{ seq }}"
+            ),
+        ),
+        (
+            "deleteChannelMessage",
+            format!(
+                "deleteChannelMessage(input: {{ channelId: \"{CHANNEL_ID}\", id: \"{reply}\" }}) {{ seq }}"
+            ),
+        ),
+    ];
+    let answer = async |(name, field): &(&'static str, String)| {
+        let response = mutate(&harness, &context, Some(PERSON), field).await;
+        payload(response, name)["seq"]
+            .as_str()
+            .expect("a decimal sequence")
+            .parse::<i64>()
+            .expect("a decimal sequence")
+    };
+
+    let mut previous = None;
+    for write in &writes {
+        let written = answer(write).await;
+        assert_eq!(written, channel_seq(&pool).await, "{}", write.0);
+        assert!(previous < Some(written), "{}", write.0);
+        // Its replay writes nothing and answers with where the channel is.
+        assert_eq!(answer(write).await, written, "{} replayed", write.0);
+        assert_eq!(channel_seq(&pool).await, written);
+        previous = Some(written);
+    }
+
+    // Another message moves the channel on; a late replay follows it.
+    let moved = answer(&("sendChannelMessage", send(other, ""))).await;
+    assert!(previous < Some(moved));
+    for (index, write) in writes.iter().enumerate() {
+        // The reply is deleted by now, so its edit and reaction are refused.
+        if matches!(index, 2 | 3) {
+            continue;
+        }
+        assert_eq!(answer(write).await, moved, "{} replayed late", write.0);
+    }
+    assert_eq!(channel_seq(&pool).await, moved);
 }

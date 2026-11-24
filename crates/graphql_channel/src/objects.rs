@@ -111,6 +111,10 @@ pub struct GraphqlChannelMessageWrite {
     /// The reply's root; absent for a root, and when the root could not be
     /// read back after the write committed.
     pub root: Option<GraphqlChannelMessage>,
+    /// Channel position both include every change up to, encoded as in
+    /// `channelChanges`: the one this write committed, or, when there was
+    /// nothing left to write, the channel's position before the read.
+    pub seq: String,
 }
 
 /// Canonical channel message, shared by pages, item reads, and change replay.

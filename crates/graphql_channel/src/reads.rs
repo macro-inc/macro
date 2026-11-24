@@ -48,6 +48,14 @@ pub struct ChannelGraphqlContext {
     writes: Option<ChannelWrites>,
 }
 
+/// A write committed but its answer is incomplete; a replay answers in full.
+fn unanswerable() -> async_graphql::Error {
+    crate::coded_error(
+        "the written message could not be read back; retry the request",
+        crate::code::SERVICE_UNAVAILABLE,
+    )
+}
+
 /// A root read back after a write.
 enum ReadBack {
     /// The root as the reads return it, boxed: a message is hundreds of bytes
@@ -98,16 +106,24 @@ impl ChannelGraphqlContext {
     /// is answered without it. A root that cannot be read back is answered
     /// `SERVICE_UNAVAILABLE`, since a root without its thread summary would
     /// erase the cached one: the client's queue replays the write under the
-    /// same id, every mutation here answers a replay without another write, and
-    /// the replay reads the root again.
+    /// same id, a replay that finds its write in place makes no other, and the
+    /// replay reads the root again.
+    ///
+    /// The answer's position is a floor for both records: the root is read
+    /// after the write committed, or after the position a replay is given.
     pub(crate) async fn written(
         &self,
         access: EntityAccessReceipt<MessageView>,
-        message: messages::domain::models::Message,
+        written: messages::domain::ports::WrittenMessage,
         channel_id: Uuid,
     ) -> async_graphql::Result<crate::GraphqlChannelMessageWrite> {
+        let messages::domain::ports::WrittenMessage { message, seq } = written;
+        // Every channel write has a position; one without is as unanswerable
+        // as a root that cannot be read back.
+        let seq = seq.ok_or_else(unanswerable)?.to_string();
         Ok(match message.thread_id {
             Some(root_id) => crate::GraphqlChannelMessageWrite {
+                seq,
                 root: match self.read_back_root(access, root_id, channel_id).await {
                     ReadBack::Root(root) => Some(*root),
                     ReadBack::NotRoot | ReadBack::Failed => None,
@@ -115,17 +131,13 @@ impl ChannelGraphqlContext {
                 message: crate::GraphqlChannelMessage::from_message(message, channel_id),
             },
             None => crate::GraphqlChannelMessageWrite {
+                seq,
                 message: match self.read_back_root(access, message.id, channel_id).await {
                     ReadBack::Root(root) => *root,
                     ReadBack::NotRoot => {
                         crate::GraphqlChannelMessage::from_message(message, channel_id)
                     }
-                    ReadBack::Failed => {
-                        return Err(crate::coded_error(
-                            "the written message could not be read back; retry the request",
-                            crate::code::SERVICE_UNAVAILABLE,
-                        ));
-                    }
+                    ReadBack::Failed => return Err(unanswerable()),
                 },
                 root: None,
             },

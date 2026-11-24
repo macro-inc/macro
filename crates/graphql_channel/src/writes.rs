@@ -9,8 +9,8 @@ use graphql_common::require_authenticated_user;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     api::MessageCommands,
-    models::{Message, NewAttachment, PostMessage, SimpleMention},
-    ports::{AttachmentChange, MessagePatch},
+    models::{NewAttachment, PostMessage, SimpleMention},
+    ports::{AttachmentChange, MessagePatch, WrittenMessage},
     service::{MessageView, MessageWrite},
 };
 use std::{future::Future, pin::Pin};
@@ -202,9 +202,9 @@ impl AuthorizedWrite<'_> {
         context: &ChannelGraphqlContext,
         view: EntityAccessReceipt<MessageView>,
         channel_id: Uuid,
-        message: Message,
+        written: WrittenMessage,
     ) -> async_graphql::Result<GraphqlChannelMessageWrite> {
-        context.written(view, message, channel_id).await
+        context.written(view, written, channel_id).await
     }
 }
 
@@ -264,7 +264,7 @@ impl ChannelMessageMutationRoot {
             .thread_id
             .map(|id| parse_read_id(id, "threadId"))
             .transpose()?;
-        let message = write
+        let written = write
             .commands
             .post_once(
                 write.access,
@@ -282,7 +282,7 @@ impl ChannelMessageMutationRoot {
             )
             .await
             .map_err(message_error)?;
-        AuthorizedWrite::written(write.context, write.view, write.channel_id, message).await
+        AuthorizedWrite::written(write.context, write.view, write.channel_id, written).await
     }
 
     /// Edit a message the caller wrote or may moderate.
@@ -320,7 +320,7 @@ impl ChannelMessageMutationRoot {
         {
             return Err(bad_input("an edit needs a change"));
         }
-        let message = write
+        let written = write
             .commands
             .patch_once(
                 write.access,
@@ -337,7 +337,7 @@ impl ChannelMessageMutationRoot {
             )
             .await
             .map_err(message_error)?;
-        AuthorizedWrite::written(write.context, write.view, write.channel_id, message).await
+        AuthorizedWrite::written(write.context, write.view, write.channel_id, written).await
     }
 
     /// Delete a message, leaving the tombstone the timeline renders.
@@ -355,12 +355,12 @@ impl ChannelMessageMutationRoot {
         let write = authorize(ctx, input.channel_id).await?;
         let id = parse_read_id(input.id, "id")?;
         tracing::Span::current().record("message_id", tracing::field::display(id));
-        let message = write
+        let written = write
             .commands
             .delete_once(write.access, id, input.nonce)
             .await
             .map_err(message_error)?;
-        AuthorizedWrite::written(write.context, write.view, write.channel_id, message).await
+        AuthorizedWrite::written(write.context, write.view, write.channel_id, written).await
     }
 
     /// Set or clear the caller's reaction.
@@ -378,11 +378,11 @@ impl ChannelMessageMutationRoot {
         let write = authorize(ctx, input.channel_id).await?;
         let id = parse_read_id(input.id, "id")?;
         tracing::Span::current().record("message_id", tracing::field::display(id));
-        let message = write
+        let written = write
             .commands
-            .react(write.access, id, input.emoji, input.add, input.nonce)
+            .react_once(write.access, id, input.emoji, input.add, input.nonce)
             .await
             .map_err(message_error)?;
-        AuthorizedWrite::written(write.context, write.view, write.channel_id, message).await
+        AuthorizedWrite::written(write.context, write.view, write.channel_id, written).await
     }
 }
