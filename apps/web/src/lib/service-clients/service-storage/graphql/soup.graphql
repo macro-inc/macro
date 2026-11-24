@@ -322,6 +322,11 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		}
 	}
 	...GraphqlCrmContactFields
+	... on GraphqlSoupCrmContact {
+		properties {
+			...SoupPropertyFields
+		}
+	}
 	... on GraphqlSoupCrmCompany {
 		crmTeamId: teamId
 		crmCompanyName: name

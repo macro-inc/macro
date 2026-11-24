@@ -96,8 +96,9 @@ domain operation doesn't exist, add it to the domain crate first.
   (`crates/graphql_soup/src/objects/crm_contact.rs`), and implement it in
   `crates/complete_graph/src/edges.rs`. Every test implementation of
   `SoupEntityEdges` also needs the new type: `crates/graphql_initiative/src/test.rs`,
-  `crates/graphql_favorite/src/mutations/test.rs`, and
-  `crates/graphql_entity_mutation/src/mutations/test.rs`.
+  `crates/graphql_favorite/src/mutations/test.rs`,
+  `crates/graphql_entity_mutation/src/mutations/test.rs`, and
+  `crates/graphql_time_tracking/src/test.rs`.
 - **New crate?** Add it to `members` in the root `Cargo.toml` and as a dependency
   of `complete_graph` and `document_storage_service`. Then run `cargo x deps` and
   commit `crates/workspace-hack` and `.github/workspace-dep-closures.json`. Add an

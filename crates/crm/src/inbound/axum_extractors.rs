@@ -8,7 +8,7 @@
 //! receipts they produce are the trusted seam that lives here.
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 use std::collections::HashMap;
 use std::marker::PhantomData;

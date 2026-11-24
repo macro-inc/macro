@@ -1,6 +1,8 @@
 import { ConfirmDialog, Dialog } from '@ui';
 import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import { EventEditor as EventEditorForm } from '../components/event-editor';
+import { useScheduling } from '../context/scheduling-context';
+import { bookingAccountIssue } from '../core/booking-account';
 import type {
   AvailabilitySchedule,
   EventType,
@@ -28,6 +30,7 @@ type EventEditorViewProps = {
 };
 
 export function EventEditor(props: EventEditorViewProps) {
+  const accounts = useScheduling().bookingAccounts;
   const editor = createEventEditor({
     event: props.event,
     events: () => props.events,
@@ -41,6 +44,8 @@ export function EventEditor(props: EventEditorViewProps) {
             (id) => !props.members.some((member) => member.id === id)
           )
         : [],
+    accountIssue: (event) =>
+      props.team ? undefined : bookingAccountIssue(event, accounts()),
     onChange: props.onChange,
     onSave: props.onSave,
   });
@@ -83,6 +88,7 @@ export function EventEditor(props: EventEditorViewProps) {
       draft={editor.draft()}
       schedules={props.schedules}
       members={props.members}
+      accounts={props.team ? [] : accounts()}
       team={props.team}
       saving={props.saving}
       isNew={editor.isNew()}

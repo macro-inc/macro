@@ -366,6 +366,15 @@ pub struct GraphqlChannelTimelinePage {
     pub seq: String,
 }
 
+/// One message read with the channel sequence it is at least as new as.
+#[derive(SimpleObject)]
+pub struct GraphqlChannelMessageRead {
+    /// Channel change sequence read before the message.
+    pub seq: String,
+    /// The message; absent when it does not exist or cannot be shown.
+    pub message: Option<GraphqlChannelMessage>,
+}
+
 /// A bounded, oldest-first page of live thread replies.
 #[derive(SimpleObject)]
 pub struct GraphqlChannelThreadPage {

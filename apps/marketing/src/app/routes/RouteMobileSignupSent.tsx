@@ -13,6 +13,18 @@ import {
 import { setPageSeo } from '../utils/utilSeo';
 import './RouteMobileSignup.css';
 
+/**
+ * Ad conversions for a mobile visitor who asked for a desktop signup link.
+ * Lead, not CompleteRegistration: no account exists yet.
+ */
+export const reportMobileSignupLead = (): void => {
+  analytics.trackMeta('Lead', {
+    content_name: 'mobile_web_signup',
+    value: MOBILE_WEB_SIGNUP_LEAD_VALUE,
+    currency: 'USD',
+  });
+};
+
 const STORES: Record<MobileStorePlatform, { url: string; buttonName: string }> =
   {
     ios: {
@@ -31,9 +43,9 @@ const STORES: Record<MobileStorePlatform, { url: string; buttonName: string }> =
  * are also offered the app from their store.
  *
  * This page also owns the ad-platform conversions for the captured lead (Meta
- * Lead + CompleteRegistration, Google Ads `mobile_web_lead`) — they used to
- * fire from the equivalent screen in the app, and the campaigns that optimize
- * against them are unchanged, so the payloads here match what the app sent.
+ * Lead, Google Ads `mobile_web_lead`). The visitor has not created an account,
+ * so this is not Meta CompleteRegistration — that fires once, server-side,
+ * when an account is actually created.
  */
 export const RouteMobileSignupSent: Component = () => {
   setPageSeo({
@@ -68,16 +80,7 @@ export const RouteMobileSignupSent: Component = () => {
     markConversionFired(captured);
 
     analytics.track('mobile_web_signup_sent_viewed');
-    // Fired as both Lead and CompleteRegistration: Meta's Maximize Value
-    // campaigns don't support Lead, and an existing custom conversion in a live
-    // ad campaign is built on Lead — so both have to keep coming.
-    const leadPayload = {
-      content_name: 'mobile_web_signup',
-      value: MOBILE_WEB_SIGNUP_LEAD_VALUE,
-      currency: 'USD',
-    };
-    analytics.trackMeta('Lead', leadPayload);
-    analytics.trackMeta('CompleteRegistration', leadPayload);
+    reportMobileSignupLead();
     analytics.trackGoogleConversion('mobile_web_lead', {
       value: MOBILE_WEB_SIGNUP_LEAD_VALUE,
       currency: 'USD',

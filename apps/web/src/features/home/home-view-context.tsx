@@ -61,8 +61,6 @@ import type {
 
 type HomeViewProviderProps = ContextProviderProps & {
   initialState?: HomeViewStateOptions;
-  /** The one tab this Home lists, whatever its URL says: New Home's Recent. */
-  tab?: HomeTab;
 };
 
 export type HomeComposerFocusRequest = { channelId: string; id: number };
@@ -137,16 +135,10 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   );
 
   const state = persistedState;
-  // Before the list mounts, so it never starts on a tab it doesn't show.
-  if (props.tab) setState('tab', props.tab);
-
-  // Recent is New Home's alone; old Home reads a Recent link as Signal.
-  const urlTab = (): HomeTab =>
-    tabSearch.tab === 'recent' ? 'signal' : tabSearch.tab;
 
   createEffect(
     on(
-      () => props.tab ?? urlTab(),
+      () => tabSearch.tab,
       (tab) => {
         if (state.tab === tab) return;
         setState(

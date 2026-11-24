@@ -67,6 +67,8 @@ import {
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
 import type { CompanyContactsPageResponse } from './generated/schemas/companyContactsPageResponse';
+import type { CompanyDomainRequest } from './generated/schemas/companyDomainRequest';
+import type { CompanyDomainTakenResponse } from './generated/schemas/companyDomainTakenResponse';
 import type { ContactEmailRequest } from './generated/schemas/contactEmailRequest';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
@@ -273,6 +275,24 @@ async function calendarJoinRequestErrorHandler(response: Response) {
     code: 'HTTP_ERROR' as const,
     message: `HTTP error! status: ${response.status}`,
   };
+}
+
+/**
+ * A refused company domain edit. A 409 carries, as its message, the name of
+ * the company that already has the domain, empty when the caller cannot see
+ * it (an archived company, for a member).
+ */
+async function companyDomainErrorHandler(response: Response) {
+  if (response.status === 400) {
+    return { code: 'BAD_REQUEST' as const, message: 'Domain change refused' };
+  }
+  if (response.status === 409) {
+    const body = (await response
+      .json()
+      .catch(() => null)) as CompanyDomainTakenResponse | null;
+    return { code: 'CONFLICT' as const, message: body?.companyName ?? '' };
+  }
+  return statusError(response.status);
 }
 
 async function contactEditErrorHandler(response: Response) {
@@ -2944,6 +2964,32 @@ export const storageServiceClient = {
       method: 'PUT',
       body: JSON.stringify(body),
     });
+  },
+  async addCompanyDomain({
+    companyId,
+    ...body
+  }: { companyId: string } & CompanyDomainRequest) {
+    return await fetchWithToken<CrmCompanyResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/companies/${companyId}/domains`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: companyDomainErrorHandler,
+      }
+    );
+  },
+  async removeCompanyDomain({
+    companyId,
+    ...body
+  }: { companyId: string } & CompanyDomainRequest) {
+    return await fetchWithToken<CrmCompanyResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/companies/${companyId}/domains`,
+      {
+        method: 'DELETE',
+        body: JSON.stringify(body),
+        errorResponseHandler: companyDomainErrorHandler,
+      }
+    );
   },
   async setCompanyHidden({
     companyId,

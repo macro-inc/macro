@@ -53,7 +53,7 @@ export function homeBaseBlockType(
 export const homeProjectSearch = {
   namespace: 'project',
   schema: z.object({
-    section: z.enum(['overview', 'tasks']).default('overview'),
+    section: z.enum(['overview', 'tasks', 'time']).default('overview'),
     discussionId: z.string().optional(),
   }),
   defaults: {

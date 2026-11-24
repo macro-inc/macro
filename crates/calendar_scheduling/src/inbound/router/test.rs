@@ -62,7 +62,7 @@ impl Directory for People {
 }
 struct Calendar(AtomicBool);
 impl Calendars for Calendar {
-    async fn creation_calendar(&self, _: &str) -> Result<Uuid, Error> {
+    async fn creation_calendar(&self, _: &str, _: Option<Uuid>) -> Result<Uuid, Error> {
         Ok(Uuid::nil())
     }
     async fn busy(
@@ -70,6 +70,7 @@ impl Calendars for Calendar {
         _: &[String],
         _: DateTime<Utc>,
         _: DateTime<Utc>,
+        _: Option<Uuid>,
         _: Option<Uuid>,
     ) -> Result<Vec<BusyRange>, Error> {
         Ok(vec![])
@@ -85,6 +86,14 @@ impl Calendars for Calendar {
     }
     async fn reschedule(&self, _: &BookingRecord) -> Result<(), Error> {
         Ok(())
+    }
+}
+impl BookingAccounts for Calendar {
+    async fn booking_accounts(
+        &self,
+        _: &str,
+    ) -> Result<Vec<crate::domain::booking_link_models::BookingAccount>, Error> {
+        Ok(vec![])
     }
 }
 
@@ -194,6 +203,8 @@ async fn http_booking_receipt_recovery_reschedule_cancel_and_team_auth(pool: sql
     assert_eq!(booked.headers()["cache-control"], "private, no-store");
     let receipt: serde_json::Value = booked.json().await.unwrap();
     assert_eq!(receipt["booking"]["status"], "failed");
+    // A host identity carries their sign-in address, which the booker never sees.
+    assert_eq!(receipt["booking"]["hosts"], serde_json::json!([]));
     let booking = Uuid::parse_str(receipt["booking"]["id"].as_str().unwrap()).unwrap();
     let token = receipt["token"].as_str().unwrap();
     assert_eq!(
@@ -234,6 +245,21 @@ async fn http_booking_receipt_recovery_reschedule_cancel_and_team_auth(pool: sql
         .await
         .unwrap();
     assert_eq!(confirmed["booking"]["status"], "confirmed");
+    assert_eq!(confirmed["booking"]["hosts"], serde_json::json!([]));
+    let listed: serde_json::Value = client
+        .get(format!("{base}/bookings"))
+        .bearer_auth("host")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        listed["bookings"][0]["hosts"],
+        serde_json::json!(["macro|host@example.test"]),
+        "the host's own views keep the hosts"
+    );
     let next = slots["slots"][2]["startsAt"].as_str().unwrap();
     let moved: serde_json::Value = client
         .post(format!("{base}/public/bookings/{booking}/reschedule"))
@@ -245,6 +271,7 @@ async fn http_booking_receipt_recovery_reschedule_cancel_and_team_auth(pool: sql
         .await
         .unwrap();
     assert_eq!(moved["booking"]["rescheduleCount"], 1);
+    assert_eq!(moved["booking"]["hosts"], serde_json::json!([]));
     let cancelled: serde_json::Value = client
         .post(format!("{base}/public/bookings/{booking}/cancel"))
         .json(&serde_json::json!({"token":token}))
@@ -255,6 +282,7 @@ async fn http_booking_receipt_recovery_reschedule_cancel_and_team_auth(pool: sql
         .await
         .unwrap();
     assert_eq!(cancelled["booking"]["status"], "cancelled");
+    assert_eq!(cancelled["booking"]["hosts"], serde_json::json!([]));
     let team = Uuid::now_v7();
     assert_eq!(
         client

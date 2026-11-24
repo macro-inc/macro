@@ -72,6 +72,7 @@ pub enum ToolPropertyTargetEntityType {
     Call,
     User,
     Company,
+    Contact,
 }
 
 impl From<ToolPropertyTargetEntityType> for model_entity::EntityType {
@@ -85,6 +86,7 @@ impl From<ToolPropertyTargetEntityType> for model_entity::EntityType {
             ToolPropertyTargetEntityType::Call => Self::Call,
             ToolPropertyTargetEntityType::User => Self::User,
             ToolPropertyTargetEntityType::Company => Self::CrmCompany,
+            ToolPropertyTargetEntityType::Contact => Self::CrmContact,
         }
     }
 }
@@ -92,7 +94,7 @@ impl From<ToolPropertyTargetEntityType> for model_entity::EntityType {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "GetEntityProperties",
-    description = "Get all properties attached to an entity (document, project, CRM company, etc.). Tasks are targeted as entity_type=document. Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType \"tag\"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For task documents, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. Start Date and Project appear only once set. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties."
+    description = "Get all properties attached to an entity (document, project, CRM company, etc.). Tasks are targeted as entity_type=document. Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType \"tag\"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For task documents, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. Start Date and Project appear only once set. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties. For CRM contacts (entity_type=contact, entity_id=the contact UUID), this returns the contact's custom properties."
 )]
 pub struct GetEntityProperties {
     #[schemars(description = "The ID of the entity to get properties for.")]

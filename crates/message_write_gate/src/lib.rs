@@ -8,7 +8,6 @@
 
 use std::collections::HashMap;
 use std::fmt;
-use std::future::Future;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -72,7 +71,7 @@ impl Registry {
             .expect("write admission semaphores are never closed");
         Ok(WritePermit {
             _permit: permit,
-            _lease: PermitLease::Parent(lease),
+            _lease: lease,
         })
     }
 }
@@ -111,62 +110,7 @@ pub struct WritePermit {
     // Rust drops fields in declaration order. Return the semaphore slot before
     // the final lease can remove this parent's entry from the registry.
     _permit: OwnedSemaphorePermit,
-    _lease: PermitLease,
-}
-
-#[derive(Debug)]
-enum PermitLease {
-    Parent(Lease),
-    Scoped(Arc<AdmissionScope>),
-}
-
-#[derive(Debug)]
-struct AdmissionScope {
-    parent: Parent,
-    serial: Arc<Semaphore>,
-    _outer: WritePermit,
-}
-
-tokio::task_local! {
-    static ADMISSION: Arc<AdmissionScope>;
-}
-
-impl WritePermit {
-    fn parent(&self) -> &Parent {
-        match &self._lease {
-            PermitLease::Parent(lease) => &lease.parent,
-            PermitLease::Scoped(scope) => &scope.parent,
-        }
-    }
-
-    /// Run an operation under admission acquired before a caller-owned lease.
-    ///
-    /// Nested acquisitions for the same parent reuse this admission, with one
-    /// nested writer at a time. Different parents still acquire independently.
-    /// The scope belongs to this future, so spawned tasks acquire independently;
-    /// do not spawn and await same-parent writes while retaining all four slots.
-    /// Cancellation releases admission after all nested permits have dropped.
-    pub async fn scope<F: Future>(self, operation: F) -> F::Output {
-        let scope = Arc::new(AdmissionScope {
-            parent: self.parent().clone(),
-            serial: Arc::new(Semaphore::new(1)),
-            _outer: self,
-        });
-        ADMISSION.scope(scope, operation).await
-    }
-}
-
-impl AdmissionScope {
-    async fn acquire(self: Arc<Self>) -> Result<WritePermit, AdmissionTimeout> {
-        let permit = tokio::time::timeout(MAX_WAIT, self.serial.clone().acquire_owned())
-            .await
-            .map_err(|_| AdmissionTimeout)?
-            .expect("scoped admission semaphores are never closed");
-        Ok(WritePermit {
-            _permit: permit,
-            _lease: PermitLease::Scoped(self),
-        })
-    }
+    _lease: Lease,
 }
 
 /// No write slot became available within two seconds.
@@ -205,17 +149,7 @@ fn registry() -> &'static Arc<Registry> {
     err
 )]
 pub async fn acquire(parent_type: &str, parent_id: &str) -> Result<WritePermit, AdmissionTimeout> {
-    let scope = ADMISSION
-        .try_with(|scope| {
-            (scope.parent.kind.as_ref() == parent_type && scope.parent.id.as_ref() == parent_id)
-                .then(|| scope.clone())
-        })
-        .ok()
-        .flatten();
-    let result = match scope {
-        Some(scope) => scope.acquire().await,
-        None => registry().acquire(parent_type, parent_id).await,
-    };
+    let result = registry().acquire(parent_type, parent_id).await;
     tracing::Span::current().record(
         "outcome",
         if result.is_ok() {

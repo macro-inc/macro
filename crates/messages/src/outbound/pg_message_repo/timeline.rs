@@ -64,10 +64,30 @@ impl PgMessageRepository {
             };
             let more = rows.len() > limit;
             rows.truncate(limit);
-            let has_cursor = query.cursor.is_some();
+            // A cursor can outlive its message. Probe the other side of the
+            // selected window so a stale cursor does not advertise a
+            // continuation with nothing in it.
+            let opposite = match (query.cursor.is_some(), rows.first()) {
+                (true, Some(boundary)) => {
+                    let cursor = MessageCursor {
+                        created_at: boundary.created_at,
+                        id: boundary.id,
+                    };
+                    let probe = match query.direction {
+                        MessageDirection::Older => {
+                            self.newer(parent, &query, Some(&cursor), 1).await?
+                        }
+                        MessageDirection::Newer => {
+                            self.older(parent, &query, Some(&cursor), 1).await?
+                        }
+                    };
+                    !probe.is_empty()
+                }
+                _ => false,
+            };
             let (older, newer) = match query.direction {
-                MessageDirection::Older => (more, has_cursor),
-                MessageDirection::Newer => (has_cursor, more),
+                MessageDirection::Older => (more, opposite),
+                MessageDirection::Newer => (opposite, more),
             };
             (rows, older, newer)
         };

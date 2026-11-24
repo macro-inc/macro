@@ -76,6 +76,26 @@ const readDirectory: typeof readContactDirectory = async (
       nextCursor: null,
     };
   }
+  // A contact that loads only after a reply's list has opened on its
+  // thread sender, already in To.
+  if (request.query.startsWith('thread')) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    setDirectoryRows(1);
+    return {
+      source: 'cache',
+      sync: 'partial',
+      offline: false,
+      query: request.query,
+      users: [
+        {
+          id: 'macro|thread.keeper@example.com',
+          email: 'thread.keeper@example.com',
+          name: 'Thread Keeper',
+        },
+      ],
+      nextCursor: null,
+    };
+  }
   const offset =
     request.cursor?.source === 'people' ? Number(request.cursor.after) : 0;
   const ids =

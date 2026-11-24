@@ -75,7 +75,7 @@ async fn asks_through_the_port_and_returns_the_answer() {
 #[tokio::test]
 async fn preserves_decline_and_cancel_as_successful_tool_results() {
     for (outcome, expected) in [
-        (UserInputOutcome::Declined, AskUserResponse::Declined),
+        (UserInputOutcome::Declined, AskUserResponse::Skipped),
         (UserInputOutcome::Cancelled, AskUserResponse::Cancelled),
     ] {
         let response = AskUser {
@@ -174,5 +174,13 @@ async fn a_cancelled_turn_does_not_start_a_question() {
             .lock()
             .expect("request lock should not be poisoned")
             .is_empty()
+    );
+}
+
+#[test]
+fn a_skip_reads_as_skipped_to_the_model() {
+    assert_eq!(
+        serde_json::to_value(AskUserResponse::Skipped).expect("serializes"),
+        serde_json::json!({ "action": "skipped" })
     );
 }

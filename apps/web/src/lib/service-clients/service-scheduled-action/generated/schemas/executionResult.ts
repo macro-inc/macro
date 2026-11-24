@@ -26,6 +26,9 @@ steps in that configuration; a later edit can put another step there. */
   run?: ExecutionResultRun;
   /** What each step that ran did, in order: decisions, tool calls, the agent. */
   steps?: ExecutionResultStepsItem[];
+  /** The owner stopped the run before it finished. Older records, and
+replicas built before it, leave it out. */
+  stopped?: boolean;
   /** @minimum 0 */
   version: number;
 }

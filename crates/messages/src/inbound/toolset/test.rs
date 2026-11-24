@@ -230,7 +230,11 @@ impl MessageReader for FakeMessages {
     ) -> Result<crate::domain::changes::ChannelChanges, crate::domain::ports::MessageError> {
         unimplemented!()
     }
-    async fn channel_seq(&self, _: uuid::Uuid) -> Result<i64, crate::domain::ports::MessageError> {
+    async fn channel_seq(
+        &self,
+        _: EntityAccessReceipt<crate::domain::service::MessageView>,
+        _: uuid::Uuid,
+    ) -> Result<i64, crate::domain::ports::MessageError> {
         unimplemented!()
     }
 
@@ -251,6 +255,13 @@ impl MessageReader for FakeMessages {
             .find(|thread| thread.root.id == root)
             .cloned()
             .ok_or(MessageError::NotFound)
+    }
+    async fn get_entry(
+        &self,
+        _: EntityAccessReceipt<crate::domain::service::MessageView>,
+        _: Uuid,
+    ) -> Result<crate::domain::ports::MessageRead, crate::domain::ports::MessageError> {
+        unimplemented!("read path unused by these tools")
     }
     async fn get_root(
         &self,

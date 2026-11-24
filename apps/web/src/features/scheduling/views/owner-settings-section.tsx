@@ -10,10 +10,12 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { useCalendarPreferences } from '../../calendar/utils/preferences';
 import { AvailabilityPanel } from '../components/availability-panel';
 import { BookingPageEditor } from '../components/booking-page-editor';
 import { EventTypesPanel } from '../components/event-types-panel';
 import { useScheduling } from '../context/scheduling-context';
+import { availabilityTimeFormat } from '../core/availability-month';
 import type { SchedulingOwner } from '../primitives/create-scheduling-owner';
 import { BookingsView } from './bookings-view';
 import { EventDetailsDialog } from './event-details-view';
@@ -34,6 +36,7 @@ export function OwnerSettingsSection(props: {
   registerSearchFocus?: (focus: () => void) => void;
 }) {
   const capabilities = useScheduling();
+  const [preferences] = useCalendarPreferences();
   const owner = props.owner;
   const {
     scope,
@@ -259,6 +262,7 @@ export function OwnerSettingsSection(props: {
               <div hidden={!!schedule()}>
                 <AvailabilityPanel
                   profile={p()}
+                  timeFormat={availabilityTimeFormat(preferences.timeFormat)}
                   search={props.search}
                   canEdit={scope().canEdit}
                   saving={source.saving()}

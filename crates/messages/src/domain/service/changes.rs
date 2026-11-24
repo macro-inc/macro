@@ -13,7 +13,14 @@ use crate::domain::changes::{
 impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     /// Read the current channel counter before a timeline or thread snapshot.
     #[tracing::instrument(name = "messages.channel_seq", skip_all, fields(%channel_id), err)]
-    pub async fn channel_seq(&self, channel_id: Uuid) -> Result<i64, MessageError> {
+    pub async fn channel_seq(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        channel_id: Uuid,
+    ) -> Result<i64, MessageError> {
+        if parent_from_receipt(&access)? != MessageParent::Channel(channel_id) {
+            return Err(MessageError::Forbidden);
+        }
         self.repo.channel_seq(channel_id).await
     }
 

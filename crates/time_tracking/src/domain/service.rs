@@ -25,14 +25,14 @@ use crate::domain::{
     models::{
         DEFAULT_PAGE_LIMIT, EntrySpan, EntryValues, LoggedTime, MAX_PAGE_LIMIT, NewEntryRow,
         NewTimeEntry, RunningTimer, StartTimer, StartedTimer, StopTimer, StoppedTimer,
-        TaskTimeTotal, TimeEntry, TimeEntryChanges, TimeEntryCursor, TimeEntryPage,
-        TimeEntryPageRequest, TimeEntrySource, TimeTrackingError, TimerEnding, TimerState,
-        finish_timer, may_change_entry, timer_start,
+        TIME_TRACKING_OFF, TaskTimeTotal, TimeEntry, TimeEntryChanges, TimeEntryCursor,
+        TimeEntryPage, TimeEntryPageRequest, TimeEntrySource, TimeTrackingError, TimerEnding,
+        TimerState, finish_timer, may_change_entry, timer_start,
     },
     ports::{
         Clock, DeleteEntryOutcome, InsertEntryOutcome, RepositoryError, StartTimerOutcome,
-        StopTimerOutcome, SystemClock, TimeTrackingRepository, TimeTrackingRollout,
-        UpdateEntryOutcome,
+        StopTimerOutcome, SystemClock, TimeTrackingChange, TimeTrackingRepository,
+        TimeTrackingRollout, TimeTrackingUpdates, UpdateEntryOutcome,
     },
 };
 
@@ -108,36 +108,45 @@ pub trait TimeTrackingService: Send + Sync + 'static {
 }
 
 /// The time tracking service over a repository, the entity access service, a
-/// rollout gate, an event publisher and a clock.
-pub struct TimeTrackingServiceImpl<R, A, P, C = SystemClock> {
+/// rollout gate, an event publisher, the person's open sessions and a clock.
+pub struct TimeTrackingServiceImpl<R, A, P, U, C = SystemClock> {
     repo: R,
     access: Arc<A>,
     rollout: Arc<dyn TimeTrackingRollout>,
     events: P,
+    updates: U,
     clock: C,
 }
 
-impl<R, A, P> TimeTrackingServiceImpl<R, A, P> {
+impl<R, A, P, U> TimeTrackingServiceImpl<R, A, P, U> {
     /// Compose the service with the system clock.
-    pub fn new(repo: R, access: Arc<A>, rollout: Arc<dyn TimeTrackingRollout>, events: P) -> Self {
+    pub fn new(
+        repo: R,
+        access: Arc<A>,
+        rollout: Arc<dyn TimeTrackingRollout>,
+        events: P,
+        updates: U,
+    ) -> Self {
         Self {
             repo,
             access,
             rollout,
             events,
+            updates,
             clock: SystemClock,
         }
     }
 }
 
-impl<R, A, P, C> TimeTrackingServiceImpl<R, A, P, C> {
+impl<R, A, P, U, C> TimeTrackingServiceImpl<R, A, P, U, C> {
     /// Replace the clock, for tests of timer limits.
-    pub fn with_clock<C2: Clock>(self, clock: C2) -> TimeTrackingServiceImpl<R, A, P, C2> {
+    pub fn with_clock<C2: Clock>(self, clock: C2) -> TimeTrackingServiceImpl<R, A, P, U, C2> {
         TimeTrackingServiceImpl {
             repo: self.repo,
             access: self.access,
             rollout: self.rollout,
             events: self.events,
+            updates: self.updates,
             clock,
         }
     }
@@ -162,18 +171,19 @@ fn authenticated<T: entity_access::domain::models::RequiredPermission>(
         .map_err(|_| TimeTrackingError::NotFound("task"))
 }
 
-impl<R, A, P, C> TimeTrackingServiceImpl<R, A, P, C>
+impl<R, A, P, U, C> TimeTrackingServiceImpl<R, A, P, U, C>
 where
     R: TimeTrackingRepository,
     A: EntityAccessService,
     P: TimeEntryEventPublisher,
+    U: TimeTrackingUpdates,
     C: Clock,
 {
     async fn require_enabled(&self, user_id: &MacroUserIdStr<'_>) -> Result<(), TimeTrackingError> {
         if self.rollout.enabled_for(user_id).await {
             return Ok(());
         }
-        Err(TimeTrackingError::NotFound("time tracking"))
+        Err(TimeTrackingError::NotFound(TIME_TRACKING_OFF))
     }
 
     /// The entry, when the caller can see its task and logged it.
@@ -236,13 +246,34 @@ where
                 logged.total_minutes,
             )));
     }
+
+    fn entries_changed(&self, user_id: &MacroUserIdStr<'static>, task_id: &str) {
+        self.updates.changed(
+            user_id,
+            TimeTrackingChange {
+                timer: false,
+                task_id: Some(task_id.to_owned()),
+            },
+        );
+    }
+
+    fn timer_changed(&self, user_id: &MacroUserIdStr<'static>, saved: Option<&LoggedTime>) {
+        self.updates.changed(
+            user_id,
+            TimeTrackingChange {
+                timer: true,
+                task_id: saved.map(|logged| logged.entry.task_id.clone()),
+            },
+        );
+    }
 }
 
-impl<R, A, P, C> TimeTrackingService for TimeTrackingServiceImpl<R, A, P, C>
+impl<R, A, P, U, C> TimeTrackingService for TimeTrackingServiceImpl<R, A, P, U, C>
 where
     R: TimeTrackingRepository,
     A: EntityAccessService,
     P: TimeEntryEventPublisher,
+    U: TimeTrackingUpdates,
     C: Clock,
 {
     #[tracing::instrument(
@@ -327,6 +358,7 @@ where
             InsertEntryOutcome::Inserted(logged) => {
                 tracing::Span::current().record("outcome", "created");
                 self.publish_logged(&logged);
+                self.entries_changed(user_id, &logged.entry.task_id);
                 Ok(logged)
             }
             InsertEntryOutcome::Existing(stored)
@@ -391,6 +423,7 @@ where
                             &logged.entry,
                             logged.total_minutes,
                         )));
+                    self.entries_changed(user_id, &logged.entry.task_id);
                     return Ok(logged);
                 }
                 UpdateEntryOutcome::Changed => {
@@ -446,6 +479,7 @@ where
                         &entry,
                         total_minutes,
                     )));
+                self.entries_changed(user_id, &entry.task_id);
                 Ok(TaskTimeTotal { total_minutes })
             }
             DeleteEntryOutcome::EntryMissing => Err(TimeTrackingError::NotFound("time entry")),
@@ -541,6 +575,7 @@ where
                     if let Some(logged) = &stopped {
                         self.publish_logged(logged);
                     }
+                    self.timer_changed(user_id, stopped.as_ref());
                     return Ok(StartedTimer { timer, stopped });
                 }
                 StartTimerOutcome::TimerChanged => continue,
@@ -606,6 +641,7 @@ where
                 StopTimerOutcome::Stopped(logged) => {
                     span.record("outcome", "stopped");
                     self.publish_logged(&logged);
+                    self.timer_changed(user_id, Some(&logged));
                     return Ok(StoppedTimer {
                         logged: Some(logged),
                     });
@@ -656,6 +692,8 @@ where
         self.repo
             .discard_timer(user_id, timer_id)
             .await
-            .map_err(repository)
+            .map_err(repository)?;
+        self.timer_changed(user_id, None);
+        Ok(())
     }
 }

@@ -24,8 +24,8 @@ for file in release-artifacts/*; do
   fi
 done
 
-# A dedicated prerelease hosts only the mutable pointer. It never becomes the
-# public download page's latest release, nor follows SDK/daemon release tags.
+# A dedicated prerelease hosts the mutable pointers: the update feed and, from the next step,
+# the fixed-name installers. It never becomes the latest release, nor follows SDK/daemon tags.
 if gh release view desktop-stable --repo "$RELEASE_REPOSITORY" --json assets > "$work_dir/channel.json"; then
   if jq -e '.assets | any(.name == "latest.json")' "$work_dir/channel.json" >/dev/null; then
     gh release download desktop-stable --repo "$RELEASE_REPOSITORY" --pattern latest.json --dir "$work_dir"
@@ -62,7 +62,7 @@ else
   release_commit=$(git rev-parse --verify 'HEAD^{commit}')
   gh release create desktop-stable --repo "$RELEASE_REPOSITORY" --target "$release_commit" \
     --prerelease --latest=false --title "Desktop stable update feed" \
-    --notes "Update metadata only. Download installers from a versioned desktop release."
+    --notes "Update feed and the current desktop installers. Download Macro at https://macro.com/download."
 fi
 gh release upload desktop-stable release-artifacts/latest.json --repo "$RELEASE_REPOSITORY" --clobber
 gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --latest

@@ -48,7 +48,7 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_fold::domain::harness::{ToolFrame, tool_name};
 use agent_fold::domain::model::{Harness, ToolName, ToolStatus};
-use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
+use agent_runtime_protocol::domain::action::{MODEL_CONFIG_ID, withholds_content};
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage, ToServerMessage};
 use genai_telemetry::messages::{self, MediaSource};
 use genai_telemetry::{
@@ -252,6 +252,14 @@ impl GenAiProjector {
             self.config_requests.insert(request.id.clone());
         } else if PromptRequest::matches_method(method) {
             let prompt: Option<PromptRequest> = deserialize_params(request.params.as_ref());
+            // A prompt that withholds its content does so for the rest of
+            // this connection: the agent's later output may repeat it.
+            if prompt
+                .as_ref()
+                .is_some_and(|prompt| withholds_content(prompt.meta.as_ref()))
+            {
+                self.policy = ContentPolicy::disabled();
+            }
             self.begin_turn(request.id.clone(), prompt, parent);
             if let Some(turn) = &self.turn
                 && let Some(RawJsonRpcParams::Object(params)) = &mut request.params

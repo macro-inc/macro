@@ -1534,6 +1534,9 @@
         tauri-desktop-cef-app = tauriDesktopCefApp;
         tauri-desktop-dmg = tauriDesktopDmg;
         tauri-desktop-apple-linker-smoke = tauriDesktopDmgAppleLinkerSmoke;
+        # The linker the DMG build links with, for Cargo runs outside Nix builds
+        # (Desktop QA macOS's cargo test) where Nix's cctools ld crashes too.
+        tauri-desktop-apple-linker = tauriDesktopDmgAppleLinker;
       };
     };
 }

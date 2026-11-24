@@ -5,9 +5,13 @@ import {
   countDirectoryDifferences,
   inDirectoryOrder,
   instantMicros,
+  isMessageDestinationChannel,
   toDirectoryChannel,
 } from './directory-core';
-import { directoryChannel } from './tests/directory-channel';
+import {
+  directoryChannel,
+  directoryParticipant,
+} from './tests/directory-channel';
 import { channelRecord, restChannel } from './tests/directory-fixtures';
 
 const message = {
@@ -251,5 +255,34 @@ describe('inDirectoryOrder', () => {
     expect(instantMicros('2026-11-20T06:33:17Z')).toBe(
       Date.parse('2026-11-20T06:33:17Z') * 1000
     );
+  });
+});
+
+describe('message destination channels', () => {
+  it('offers every channel and group chat whatever its size, but no DM', () => {
+    const solo = directoryChannel('solo', {
+      participants: [directoryParticipant('macro|owner@example.com')],
+    });
+    const pair = directoryChannel('pair', {
+      channelType: 'private',
+      participants: [
+        directoryParticipant('macro|owner@example.com'),
+        directoryParticipant('macro|other@example.com'),
+      ],
+    });
+    const team = directoryChannel('team', { channelType: 'team' });
+    const dm = directoryChannel('dm', {
+      channelType: 'direct_message',
+      participants: [
+        directoryParticipant('macro|owner@example.com'),
+        directoryParticipant('macro|other@example.com'),
+      ],
+    });
+
+    expect(
+      [solo, pair, team, dm]
+        .filter(isMessageDestinationChannel)
+        .map((c) => c.id)
+    ).toEqual(['solo', 'pair', 'team']);
   });
 });

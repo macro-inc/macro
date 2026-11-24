@@ -1,5 +1,6 @@
 use crate::domain::{
     bundle_routes::{BundleRoutes, BundleSource, BundleSourceKind},
+    completion::CompletionRecord,
     models::{
         AppInfo, BundleAction, BundleManifest, BundleRoot, ClearRequiredStatus, CompletedStatus,
         NativeUpdateRequiredStatus, ProgressPercentage, Target, UnzipRequest, UnzipStatus,
@@ -317,6 +318,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
                     .await
                     .context(UpdateError::Unzip)?;
                 let update_dir = archive_target.parent().map(Path::to_path_buf);
+                let archive = unzip_status.zip_filename.clone();
                 let (req, rx) = UnzipRequest::new(unzip_status.zip_filename, archive_target);
 
                 let status_tx = self.status_tx.clone();
@@ -342,10 +344,24 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
                 )
                 .await
                 .context(UpdateError::Unzip)?;
+
+                // List what the extraction produced, so startup can later tell
+                // whether any of it has gone missing. The archive itself stays
+                // in the directory but is never served, so it is left out.
+                let mut files = self
+                    .fs_repo
+                    .list_files(&bundle_dir)
+                    .await
+                    .context(UpdateError::Unzip)?;
+                if let Ok(archive) = archive.strip_prefix(&bundle_dir) {
+                    files.retain(|file| file.path != archive);
+                }
+                let record = CompletionRecord::new(unzip_status.expected_bundle_build, files)
+                    .context(UpdateError::Unzip)?;
                 self.fs_repo
                     .write(
                         &bundle_dir.with_extension("complete"),
-                        unzip_status.expected_bundle_build.to_string().as_bytes(),
+                        record.render().as_bytes(),
                     )
                     .await
                     .context(UpdateError::Unzip)?;
@@ -430,9 +446,51 @@ pub(crate) fn next_bundle_index(names: &[String]) -> u64 {
 }
 
 async fn extraction_is_complete(fs: &impl FsRepo, bundle_dir: &Path, build: u64) -> bool {
-    fs.read_to_string(&bundle_dir.with_extension("complete"))
+    check_extraction(fs, bundle_dir, build).await.is_ok()
+}
+
+/// Check that `bundle_dir` was fully extracted for `build` and still holds
+/// every file its completion record lists, at the size it was extracted with.
+///
+/// Records written before file lists existed only mark the extraction as
+/// complete; there is nothing to check their files against.
+async fn check_extraction(
+    fs: &impl FsRepo,
+    bundle_dir: &Path,
+    build: u64,
+) -> Result<(), (BundleRejection, Option<std::io::ErrorKind>)> {
+    let record = fs
+        .read_to_string(&bundle_dir.with_extension("complete"))
         .await
-        .is_ok_and(|value| value == build.to_string())
+        .ok()
+        .and_then(|contents| CompletionRecord::parse(&contents))
+        .filter(|record| record.bundle_build == build)
+        .ok_or((BundleRejection::ExtractionIncomplete, None))?;
+    let Some(files) = record.files else {
+        return Ok(());
+    };
+
+    let paths = files.iter().map(|file| file.path.clone()).collect();
+    let sizes = fs.file_sizes(bundle_dir, paths).await;
+    for (file, size) in files.iter().zip(sizes) {
+        match size {
+            Ok(size) if size == file.size => {}
+            Ok(size) => {
+                tracing::warn!(
+                    path = ?file.path,
+                    expected = file.size,
+                    actual = size,
+                    "Bundle file changed size since extraction"
+                );
+                return Err((BundleRejection::FilesMissing, None));
+            }
+            Err(kind) => {
+                tracing::warn!(path = ?file.path, error_kind = ?kind, "Bundle file is missing");
+                return Err((BundleRejection::FilesMissing, Some(kind)));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Search existing numeric bundle directories for one whose manifest matches
@@ -596,8 +654,13 @@ impl<Fs: FsRepo> Service<Fs> {
         let mut read_error = saved.read_error;
         let mut bundle_dirs_removed = 0;
 
-        if let Err((unusable, unusable_read_error)) = self.check_current_bundle(native_build).await
-        {
+        let check_started = Instant::now();
+        let check = self.check_current_bundle(native_build).await;
+        let saved_bundle_check_ms = self
+            .bundle_root
+            .path()
+            .map(|_| u64::try_from(check_started.elapsed().as_millis()).unwrap_or(u64::MAX));
+        if let Err((unusable, unusable_read_error)) = check {
             tracing::warn!(
                 rejection = ?unusable,
                 error_kind = ?unusable_read_error,
@@ -637,6 +700,7 @@ impl<Fs: FsRepo> Service<Fs> {
             read_error: read_error.map(|kind| format!("{kind:?}")),
             bundle_dirs_found,
             bundle_dirs_removed,
+            saved_bundle_check_ms,
         };
         tracing::info!(?startup, "Selected startup bundle");
         startup
@@ -1002,16 +1066,14 @@ impl<Fs: FsRepo> Service<Fs> {
             return Err((BundleRejection::ManifestInvalid, None));
         };
 
-        if !extraction_is_complete(&self.fs_repo, path, manifest.bundle_build).await {
-            return Err((BundleRejection::ExtractionIncomplete, None));
-        }
         if manifest.bundle_build < self.embedded_bundle_build {
             return Err((BundleRejection::OlderThanEmbedded, None));
         }
         if manifest.min_native_build > native_build {
             return Err((BundleRejection::RequiresNewerNative, None));
         }
-        Ok(())
+        // Checked last: it reads the metadata of every file in the bundle.
+        check_extraction(&self.fs_repo, path, manifest.bundle_build).await
     }
 }
 
@@ -1093,6 +1155,8 @@ impl<Fs: FsRepo> Service<Fs> {
 }
 
 #[cfg(test)]
+mod files_test;
+#[cfg(test)]
 mod interruption_test;
 #[cfg(test)]
 mod network_test;
@@ -1106,6 +1170,7 @@ mod rollback_test;
 mod tests {
     use super::*;
     use crate::domain::{
+        completion::BundleFile,
         models::{
             AppInfo, Arch, BundleAction, BundleClear, BundleNativeUpdateRequired, BundleUpdate,
             DownloadBundleError, DownloadBundleRequest, NativeAppInfo, Target, UnzipError,
@@ -1124,7 +1189,7 @@ mod tests {
     };
 
     #[derive(Clone)]
-    struct FakeUpdateRepo {
+    pub(super) struct FakeUpdateRepo {
         update: Option<BundleAction>,
         block_download: bool,
         download_count: Arc<AtomicUsize>,
@@ -1188,7 +1253,7 @@ mod tests {
             self.state.lock().unwrap().write_failure = Some(path.into());
         }
 
-        fn fail_read(&self, path: impl Into<PathBuf>, kind: ErrorKind) {
+        pub(super) fn fail_read(&self, path: impl Into<PathBuf>, kind: ErrorKind) {
             self.state
                 .lock()
                 .unwrap()
@@ -1321,10 +1386,48 @@ mod tests {
             state.files.remove(path);
             Ok(())
         }
+
+        async fn list_files(&self, dir: &Path) -> Result<Vec<BundleFile>, std::io::Error> {
+            let state = self.state.lock().unwrap();
+            let mut files = state
+                .files
+                .iter()
+                .filter_map(|(path, contents)| {
+                    Some(BundleFile {
+                        path: path.strip_prefix(dir).ok()?.to_path_buf(),
+                        size: contents.len() as u64,
+                    })
+                })
+                .collect::<Vec<_>>();
+            files.sort_by(|a, b| a.path.cmp(&b.path));
+            Ok(files)
+        }
+
+        async fn file_sizes(
+            &self,
+            root: &Path,
+            paths: Vec<PathBuf>,
+        ) -> Vec<Result<u64, ErrorKind>> {
+            let state = self.state.lock().unwrap();
+            paths
+                .iter()
+                .map(|path| {
+                    let path = root.join(path);
+                    if let Some(kind) = state.read_failures.get(&path) {
+                        return Err(*kind);
+                    }
+                    state
+                        .files
+                        .get(&path)
+                        .map(|contents| contents.len() as u64)
+                        .ok_or(ErrorKind::NotFound)
+                })
+                .collect()
+        }
     }
 
     #[derive(Clone, Copy)]
-    struct TestTaskSpawner;
+    pub(super) struct TestTaskSpawner;
 
     impl TaskSpawner for TestTaskSpawner {
         fn spawn(task: impl Future<Output = ()> + Send + 'static) {
@@ -1494,7 +1597,7 @@ mod tests {
         service_with_status_fs_and_embedded_build(status, fs_repo, 0)
     }
 
-    fn service_with_status_fs_and_embedded_build(
+    pub(super) fn service_with_status_fs_and_embedded_build(
         status: UpdateStatus,
         fs_repo: FakeFs,
         embedded_bundle_build: u64,
@@ -1521,7 +1624,7 @@ mod tests {
         )
     }
 
-    fn worker_with_fs_and_native_build(
+    pub(super) fn worker_with_fs_and_native_build(
         fs_repo: FakeFs,
         update: Option<BundleAction>,
         update_dir: PathBuf,
@@ -1555,7 +1658,7 @@ mod tests {
         }
     }
 
-    fn unzip_status(
+    pub(super) fn unzip_status(
         cache_dir: &Path,
         expected_bundle_build: u64,
         expected_min_native_build: u64,
@@ -1622,6 +1725,7 @@ mod tests {
                 read_error: None,
                 bundle_dirs_found: 0,
                 bundle_dirs_removed: 0,
+                saved_bundle_check_ms: None,
             }
         );
     }

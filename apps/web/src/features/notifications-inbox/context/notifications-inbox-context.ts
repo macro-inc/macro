@@ -139,6 +139,11 @@ export type NotificationsInboxContext = {
     read: () => string | null;
     write: (value: string) => void;
   };
+  /** Where the reader's display options (Condensed) are kept between visits. */
+  displayStorage: {
+    read: () => string | null;
+    write: (value: string) => void;
+  };
 };
 
 const Context = createContext<NotificationsInboxContext>();

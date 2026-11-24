@@ -44,6 +44,7 @@ graphql_properties = { path = "../graphql_properties" }
 graphql_registered_work = { path = "../graphql_registered_work" }
 graphql_scheduled_action = { path = "../graphql_scheduled_action" }
 graphql_soup = { path = "../graphql_soup" }
+graphql_time_tracking = { path = "../graphql_time_tracking" }
 graphql_work_feed = { path = "../graphql_work_feed" }
 macro_authorization = { path = "../macro_authorization", features = [
   "axum",
@@ -73,6 +74,7 @@ tracing-subscriber = { workspace = true }
 messages = { path = "../messages", default-features = false, features = ["outbound", "test-utils"] }
 mockall = { workspace = true }
 activity = { path = "../activity", default-features = false, features = ["outbound"] }
+time_tracking = { path = "../time_tracking", default-features = false }
 contacts = { path = "../contacts", default-features = false, features = ["ports"] }
 bot_id = { path = "../bot_id" }
 crm = { path = "../crm", default-features = false, features = ["ports"] }

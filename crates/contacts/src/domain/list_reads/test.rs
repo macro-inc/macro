@@ -272,6 +272,16 @@ impl ContactListReader for Lists {
     ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
         Ok(vec![user("listed-inbox@example.com")])
     }
+
+    async fn list_members(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        _list: ContactList,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> Result<ContactIdPage, Report> {
+        self.list_directory_page(viewer, after, limit).await
+    }
 }
 
 type Router = FlaggedContactReads<Legacy, Lists, &'static Flags>;
@@ -321,6 +331,31 @@ async fn each_read_follows_the_viewers_flag_and_reads_legacy_when_it_cannot_tell
             .await
             .unwrap();
         assert_eq!(lookup[0].email_str(), expected, "{answer:?}");
+    }
+}
+
+#[tokio::test]
+async fn list_members_read_the_lists_whatever_the_flag_says_without_loading_it() {
+    for answer in [Ok(Some(true)), Ok(Some(false)), Ok(None), Err(())] {
+        let (reads, flags) = router(
+            Flags::new(answer),
+            vec![page(&["macro|listed@example.com"], None)],
+        );
+        let members = reads
+            .list_members(
+                user("viewer@example.com"),
+                ContactList::Teammates,
+                None,
+                ContactPageSize::DEFAULT,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            members.contacts[0].user_id.email_str(),
+            "listed@example.com",
+            "{answer:?}"
+        );
+        assert_eq!(flags.loads.load(Ordering::SeqCst), 0, "{answer:?}");
     }
 }
 
