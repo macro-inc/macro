@@ -601,14 +601,14 @@ describe('Enter right after opening a picker', () => {
   it.each([
     {
       name: 'another property',
-      retarget: (state: PropertyEditorState) => ({
+      retarget: (state: PropertyEditorState): PropertyEditorState => ({
         ...state,
         targetProperty: PHASES_ON_TASK,
       }),
     },
     {
       name: 'other items',
-      retarget: (state: PropertyEditorState) => ({
+      retarget: (state: PropertyEditorState): PropertyEditorState => ({
         ...state,
         selectedEntities: [{ ...TASK, id: 'other-task' }],
       }),
