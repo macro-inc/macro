@@ -181,11 +181,17 @@ email-attachment participant leaf per address; the server rejects the whole
 Emails request when an address is no longer the contact's, so both read the
 committed list.
 
-A company's header and Record details list its domains with
-`CompanyDomainField`, on the email field's editor shell (`ValueEditor` in
-`contact-email-property.tsx`) and pending-change helper (`value-change.ts`):
-one pill per domain, primary first, each opening Remove, and a trailing Add
-domain control.
+A company's domains are drawn like a contact's addresses, by the same
+CRM-internal value components: `RecordValuePill` and `RecordValueList` (beside
+`ValueEditor` in `contact-email-property.tsx`), `RecordValueEditor` and
+`RecordValueRow`, with `createValueChange` (`value-change.ts`) for the pending
+change. `CompanyDomainField` takes a `surface`: the header shows one pill (the
+first domain, which is the primary, `+N` and a caret, every domain on hover),
+and Record details' Website lists one line per domain with Remove, then Add
+domain, its label on the first line. Every domain offers Remove; the server
+refuses the one the company is named after, and the refusal shows beside the
+rows. The editor adds above the same rows and stays open for the next domain;
+the add help sits under its field and the remove help is Remove's tooltip.
 Only the committed response updates the cached company's domain list; the
 company's contact details and Team list refresh with it, since which contacts
 sit on the company's domains changes, and so does Soup. A refused add keeps its
