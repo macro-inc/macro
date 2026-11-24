@@ -127,7 +127,7 @@ pub(crate) enum SyncPublication {
     Deleted {
         /// Deleted record keys. Webview events no longer carry keys; tests
         /// read them.
-        #[cfg_attr(not(test), allow(dead_code))]
+        #[cfg(test)]
         keys: Vec<String>,
         /// Revision and the operations that read the keys.
         affected: AffectedOperationsResultWire,
@@ -249,7 +249,13 @@ impl WeakEngineHandle {
                 write: wire_write_result(ops, result.write_result),
                 search_changed_buckets: result.search_changed_buckets,
             },
-            SyncApplied::Deleted { keys, affected, .. } => SyncPublication::Deleted {
+            SyncApplied::Deleted {
+                #[cfg(test)]
+                keys,
+                affected,
+                ..
+            } => SyncPublication::Deleted {
+                #[cfg(test)]
                 keys: keys.into_iter().map(|key| key.0.into_owned()).collect(),
                 affected: AffectedOperationsResultWire {
                     revision: affected.revision.to_string(),
