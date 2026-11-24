@@ -10,11 +10,11 @@ use email_api_client::domain::models::{
     CalendarPart, ChangeBatch, EmailApiError, InboxChanges, MessageWithCalendarParts, SyncCursor,
 };
 use futures::future::BoxFuture;
-use models_email::service;
 use models_email::service::{
     attachment::{Attachment, AttachmentUploadArgs, AttachmentUploadMetadata},
     backfill::{BackfillJob, BackfillJobStatus},
 };
+use models_email::{db, service};
 use std::collections::{HashMap, VecDeque};
 
 pub(super) struct ImportState {
@@ -35,6 +35,10 @@ pub(super) struct ImportState {
     pub primaries: Vec<String>,
     pub previews: VecDeque<bool>,
     pub labels_during_fetch: Option<Vec<String>>,
+    /// The stored labels once the message is inserted.
+    pub labels_after_insert: Option<Vec<db::label::Label>>,
+    /// Every message carrying the label, in message order.
+    pub labelled_messages: Vec<LabelledMessage>,
 }
 impl Default for ImportState {
     fn default() -> Self {
@@ -59,6 +63,8 @@ impl Default for ImportState {
             primaries: vec![],
             previews: VecDeque::new(),
             labels_during_fetch: None,
+            labels_after_insert: None,
+            labelled_messages: vec![],
         }
     }
 }
@@ -104,6 +110,26 @@ impl InboxSyncCatalog for Fake {
     async fn upsert_catalog(&self, labels: Vec<service::label::Label>) -> Result<(), Failure> {
         self.io("upsert_catalog", labels)
     }
+    async fn labelled_messages(
+        &self,
+        _: Uuid,
+        label: &str,
+        after: Uuid,
+        limit: u16,
+    ) -> Result<Vec<LabelledMessage>, Failure> {
+        self.io("labelled_messages", (label, after, limit))?;
+        Ok(self
+            .0
+            .lock()
+            .unwrap()
+            .import
+            .labelled_messages
+            .iter()
+            .filter(|message| message.message_id > after)
+            .take(usize::from(limit))
+            .copied()
+            .collect())
+    }
 }
 impl InboxSyncMessageStore for Fake {
     async fn thread_ids(&self, _: Uuid, provider: &str) -> Result<HashMap<String, Uuid>, Failure> {
@@ -127,7 +153,12 @@ impl InboxSyncMessageStore for Fake {
                 &message.provider_id,
                 resync.map(|r| (&r.stored_labels, &r.pending_labels)),
             ),
-        )
+        )?;
+        let mut state = self.0.lock().unwrap();
+        if let Some(labels) = state.import.labels_after_insert.take() {
+            state.labels = labels;
+        }
+        Ok(())
     }
     async fn insert_thread(&self, _: Uuid, thread: service::thread::Thread) -> Result<(), Failure> {
         self.io("insert_thread", thread)
@@ -368,7 +399,7 @@ impl InboxSyncUploads for Fake {
 impl InboxSyncContacts for Fake {
     fn connect<'a>(
         &'a self,
-        _: &'a MacroUserIdStr<'static>,
+        _: &'a service::link::Link,
         contacts: Vec<MacroUserIdStr<'static>>,
     ) -> BoxFuture<'a, anyhow::Result<()>> {
         Box::pin(async move {

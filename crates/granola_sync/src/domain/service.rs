@@ -21,33 +21,26 @@ pub(crate) struct Plan {
     pub start: Vec<MacroUserIdStr<'static>>,
 }
 
-/// Every enabled Granola account should have one active webhook at the widest
-/// scope; syncs whose account went away are stopped.
+/// Every user whose Granola connection gives API access (`holders`) should
+/// have one active webhook at the widest scope; syncs whose connection went
+/// away are stopped.
 pub(crate) fn plan(
-    accounts: &[(MacroUserIdStr<'static>, String)],
+    holders: &[MacroUserIdStr<'static>],
     states: &[SyncState],
     now: chrono::DateTime<chrono::Utc>,
 ) -> Plan {
-    let account = |user: &MacroUserIdStr<'static>| {
-        accounts
-            .iter()
-            .find(|(u, _)| u == user)
-            .map(|(_, a)| a.as_str())
-    };
     let mut plan = Plan::default();
     for state in states {
-        if state.enabled && account(&state.user_id) != Some(state.account_id.as_str()) {
+        if state.enabled && !holders.contains(&state.user_id) {
             plan.stop.push(state.id);
         }
     }
-    for (user, account_id) in accounts {
+    for user in holders {
         let Some(state) = states.iter().find(|s| &s.user_id == user) else {
             plan.start.push(user.clone());
             continue;
         };
-        let due = if state.account_id != *account_id {
-            true
-        } else if state.enabled {
+        let due = if state.enabled {
             !SCOPE_PREFERENCE.contains(&state.scope)
         } else {
             match state.last_error {
@@ -74,6 +67,11 @@ pub trait SyncService: Send + Sync {
     async fn tick(&self) -> Result<bool>;
     /// Start sync for newly connected accounts and stop it for removed ones.
     async fn reconcile(&self) -> Result<()>;
+    /// The user just connected Granola: start their sync over on that
+    /// connection. Reconcile cannot tell one Granola account from another,
+    /// so without this a reconnect to a different account would keep the
+    /// old account's webhook.
+    async fn connected(&self, user: MacroUserIdStr<'static>) -> Result<()>;
 }
 
 pub struct Service<R, G, A, V> {
@@ -88,21 +86,18 @@ pub struct Service<R, G, A, V> {
 
 impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> Service<R, G, A, V> {
     async fn is_current(&self, connection: &Connection) -> Result<bool> {
-        Ok(connection.enabled
-            && self.accounts.account(&connection.user_id).await?.as_deref()
-                == Some(connection.account_id.as_str()))
+        Ok(connection.enabled && self.accounts.connected(&connection.user_id).await?)
     }
 
     #[tracing::instrument(name = "granola.start_sync", skip_all, fields(scope), err(Display))]
     async fn start(&self, user: MacroUserIdStr<'static>) -> std::result::Result<(), SyncError> {
-        let Some(account) = self.accounts.account(&user).await? else {
+        if !self.accounts.connected(&user).await? {
             return Ok(());
-        };
+        }
         let old = self.repo.by_user(&user).await?;
         let connection = Connection {
             id: macro_uuid::generate_uuid_v7(),
             user_id: user,
-            account_id: account,
             namespace: old
                 .as_ref()
                 .map(|c| c.namespace)
@@ -168,7 +163,7 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> Service<R,
             return Ok(());
         };
         self.repo.stop(connection.id).await?;
-        // A removed Pipedream account can no longer authenticate this call; the
+        // A removed connection can no longer authenticate this call; the
         // endpoint then fails deliveries until Granola disables it.
         if let Err(error) = self.granola.unregister(&connection).await {
             tracing::warn!(error = ?error, "could not remove disabled Granola endpoint");
@@ -265,9 +260,9 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> SyncServic
         if !self.public_url.starts_with("https://") {
             return Ok(());
         }
-        let accounts = self.accounts.connected().await?;
+        let holders = self.accounts.holders().await?;
         let states = self.repo.states().await?;
-        let plan = plan(&accounts, &states, chrono::Utc::now());
+        let plan = plan(&holders, &states, chrono::Utc::now());
         let span = tracing::Span::current();
         span.record("stopped", plan.stop.len().min(RECONCILE_BATCH));
         span.record("started", plan.start.len().min(RECONCILE_BATCH));
@@ -284,6 +279,20 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> SyncServic
             }
         }
         Ok(())
+    }
+
+    #[tracing::instrument(name = "granola.restart_sync", skip_all, err(Debug))]
+    async fn connected(&self, user: MacroUserIdStr<'static>) -> Result<()> {
+        // Granola only delivers to public HTTPS endpoints.
+        if !self.public_url.starts_with("https://") {
+            return Ok(());
+        }
+        match self.start(user).await {
+            // Another instance is setting this user up on the same
+            // connection.
+            Ok(()) | Err(SyncError::Conflict) => Ok(()),
+            Err(error) => Err(rootcause::report!("{error}")),
+        }
     }
 }
 

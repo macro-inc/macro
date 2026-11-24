@@ -18,7 +18,7 @@ vi.mock('@queries/soup/search', () => ({
     text.replaceAll('"', '').trim().length > 0,
 }));
 
-import { createSearchState } from './create-search-state';
+import { createSearchState, soupSearchMatchType } from './create-search-state';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -124,4 +124,13 @@ it('counts the same query again after the box is cleared', () => {
   dispose();
 
   expect(track).toHaveBeenCalledTimes(2);
+});
+
+it('searches for one quoted phrase exactly, in straight or curly quotes', () => {
+  for (const query of ['"team lunch"', '“team lunch”', '„team lunch“']) {
+    expect(soupSearchMatchType(query)).toBe('exact');
+  }
+  for (const query of ['team lunch', '“team lunch” menu', '“team” “lunch”']) {
+    expect(soupSearchMatchType(query)).toBe('partial');
+  }
 });

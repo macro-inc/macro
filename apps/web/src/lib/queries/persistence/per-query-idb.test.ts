@@ -209,3 +209,32 @@ describe('clearable query persistence', () => {
     expect(await db.get('old')).toBeUndefined();
   });
 });
+
+describe('removing query key prefixes', () => {
+  it('deletes a prefix and the keys that extend it, and nothing that only shares its text', async () => {
+    const db = store();
+    const removed = ['["a","b"]', '["a","b","user-1"]', '["a","b",{"x":1}]'];
+    const kept = ['["a","bc"]', '["a","b-"]', '["a"]', '["a","c","user-1"]'];
+    for (const hash of [...removed, ...kept]) db.set(entry(hash));
+    await db.flush();
+
+    await db.removeKeyPrefixes([['a', 'b']]);
+
+    for (const hash of removed) expect(await db.get(hash)).toBeUndefined();
+    for (const hash of kept) expect(await db.get(hash)).toEqual(entry(hash));
+  });
+
+  it('reads no stored entry', async () => {
+    const db = store();
+    db.set(entry('["a","b"]'));
+    await db.flush();
+    const openCursor = vi.spyOn(IDBObjectStore.prototype, 'openCursor');
+    const get = vi.spyOn(IDBObjectStore.prototype, 'get');
+
+    await db.removeKeyPrefixes([['a', 'b']]);
+
+    expect(openCursor).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+    expect(await db.get('["a","b"]')).toBeUndefined();
+  });
+});

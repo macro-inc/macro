@@ -56,6 +56,15 @@ pub trait InboxSyncHistoryFacts: InboxSyncRepository {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
+/// A message carrying a label, and its thread.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LabelledMessage {
+    /// Message row id.
+    pub message_id: Uuid,
+    /// Thread row id.
+    pub thread_id: Uuid,
+}
+
 /// Existing Catalog capabilities for inbox imports.
 pub trait InboxSyncCatalog: InboxSyncRepository {
     /// Read the complete stored label catalog.
@@ -74,6 +83,15 @@ pub trait InboxSyncCatalog: InboxSyncRepository {
         &self,
         labels: Vec<service::label::Label>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Up to `limit` messages carrying this provider label, in message order
+    /// after `after` (the nil id for the first page).
+    fn labelled_messages(
+        &self,
+        link: Uuid,
+        label: &str,
+        after: Uuid,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<LabelledMessage>, Self::Err>> + Send;
 }
 
 /// Existing MessageStore capabilities for inbox imports.
@@ -262,12 +280,13 @@ pub trait InboxSyncUploads: Send + Sync + 'static {
     ) -> BoxFuture<'a, Result<String, InboxSyncUploadError>>;
 }
 
-/// Contact connection publication without exposing transport request types.
+/// Contact publication without exposing transport request types.
 pub trait InboxSyncContacts: Send + Sync + 'static {
-    /// Publish the already selected valid contacts for this owner.
+    /// Record the already selected valid contacts as known to the owner
+    /// through this inbox.
     fn connect<'a>(
         &'a self,
-        owner: &'a MacroUserIdStr<'static>,
+        link: &'a service::link::Link,
         contacts: Vec<MacroUserIdStr<'static>>,
     ) -> BoxFuture<'a, anyhow::Result<()>>;
 }

@@ -387,18 +387,25 @@ pub struct GraphqlNotificationInboxUnreadCount {
     /// Its unread rows across the whole inbox. Counting stops soon after
     /// 100, so present a total of 100 or more as "99+".
     count: i32,
+    /// How many of `count` Chat shows as unread: channel rows holding an
+    /// unseen top-level message or a mention. Replies, reactions and pings
+    /// are unread in the inbox alone. Counting stops as `count`'s does.
+    chat_count: i32,
 }
 
 impl GraphqlNotificationInboxUnreadCount {
     /// The counts of every kind with an unread row, in the kinds' declared
     /// order.
     pub fn list(unread: &UnreadRows) -> Vec<Self> {
+        let chat_counts = unread.chat_counts();
+        let to_i32 = |count: u32| i32::try_from(count).unwrap_or(i32::MAX);
         let mut counts: Vec<Self> = unread
             .counts()
             .into_iter()
             .map(|(row_type, count)| Self {
                 row_type: row_type.into(),
-                count: i32::try_from(count).unwrap_or(i32::MAX),
+                count: to_i32(count),
+                chat_count: to_i32(chat_counts.get(&row_type).copied().unwrap_or(0)),
             })
             .collect();
         counts.sort_by_key(|count| count.row_type as usize);

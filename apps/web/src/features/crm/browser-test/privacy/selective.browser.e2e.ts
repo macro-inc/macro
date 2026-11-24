@@ -271,6 +271,26 @@ test('gate off retains selected rules, history and single-action withdrawal', as
   );
 });
 
+test('a disconnected mailbox connects without enabling selected sharing', async ({
+  page,
+}) => {
+  await openSettings(page, '/?selective-settings&disconnected');
+  await expect(page.getByText('No email connected')).toBeVisible();
+  const connect = page.getByRole('button', {
+    name: 'Connect email',
+    exact: true,
+  });
+  await connect.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('member@example.com')).toBeVisible();
+  await expect(connect).toHaveCount(0);
+  await expect(
+    page.getByText('Your emails are not contributing to CRM.')
+  ).toBeVisible();
+  await expect(page.getByTestId('policy-calls')).not.toContainText('replace');
+  await expect(page.getByTestId('last-change')).toHaveText('');
+});
+
 test('gate off preserves the legacy all-mail settings', async ({ page }) => {
   await openSettings(
     page,

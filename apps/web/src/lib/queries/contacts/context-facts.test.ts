@@ -1,131 +1,134 @@
-import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { expect, it } from 'vitest';
-import { buildContactContextFacts } from './context-facts';
+import { buildContactContextFacts, type ContextChannel } from './context-facts';
 
-it('uses source-order interaction but viewed-first one-to-one command activity, never a group target', () => {
+const SELF = 'macro|self@example.com';
+const PEER = 'macro|peer@example.com';
+
+function dm(
+  id: string,
+  userIds: string[],
+  fields: Partial<ContextChannel> = {}
+): ContextChannel {
+  return {
+    id,
+    name: 'Peer',
+    channelType: 'direct_message',
+    updatedAt: '2026-01-02T00:00:00Z',
+    viewedAt: null,
+    participants: userIds.map((userId) => ({ userId })),
+    botParticipants: [],
+    ...fields,
+  };
+}
+
+it('uses first-other interaction but viewed-first one-to-one command activity, never a group target', () => {
   const result = buildContactContextFacts({
-    viewer: 'macro|self@example.com',
+    viewer: SELF,
     channels: [
-      {
-        id: '00000000-0000-4000-8000-000000000001',
-        channel_type: ChannelType.direct_message,
-        name: 'Peer',
-        updated_at: '2026-01-02T00:00:00Z',
-        viewed_at: '2026-01-03T00:00:00Z',
-        participants: [
-          { user_id: 'macro|self@example.com' },
-          { user_id: 'macro|peer@example.com' },
-        ],
-      },
-      {
-        id: '00000000-0000-4000-8000-000000000002',
-        channel_type: ChannelType.direct_message,
-        name: 'Group',
-        updated_at: '2026-01-04T00:00:00Z',
-        participants: [
-          { user_id: 'macro|self@example.com' },
-          { user_id: 'macro|peer@example.com' },
-          { user_id: 'macro|other@example.com' },
-        ],
-      },
-    ],
-    activity: [
-      {
-        channel_id: '00000000-0000-4000-8000-000000000001',
-        viewed_at: '2026-01-05T00:00:00Z',
-      },
+      dm('00000000-0000-4000-8000-000000000001', [SELF, PEER], {
+        name: 'Peer label',
+        viewedAt: '2026-01-05T00:00:00Z',
+      }),
+      dm(
+        '00000000-0000-4000-8000-000000000002',
+        [SELF, PEER, 'macro|other@example.com'],
+        { name: 'Group', updatedAt: '2026-01-04T00:00:00Z' }
+      ),
     ],
     links: [
       { email_address: 'PEER@example.com', is_primary: false },
       { email_address: 'self@example.com', is_primary: true },
     ],
-    cachedChannels: [
-      {
-        id: '00000000-0000-4000-8000-000000000001',
-        name: 'Cached peer label',
-        channelType: 'direct_message',
-        participantIds: ['macro|self@example.com', 'macro|peer@example.com'],
-        ownerId: 'macro|self@example.com',
-        createdAt: '2026-01-01T00:00:00Z',
-        updatedAt: '2026-01-06T00:00:00Z',
-      },
-    ],
   });
   expect(result.size).toBe(1);
-  expect(result.get('macro|peer@example.com')).toEqual({
+  expect(result.get(PEER)).toEqual({
     lastInteractionMs: Date.parse('2026-01-04T00:00:00Z'),
     secondaryInbox: true,
     directMessage: {
       id: '00000000-0000-4000-8000-000000000001',
-      name: 'Cached peer label',
+      name: 'Peer label',
       timestampMs: Date.parse('2026-01-05T00:00:00Z'),
     },
+  });
+});
+
+it('falls back to the update time for a DM never viewed', () => {
+  const result = buildContactContextFacts({
+    viewer: SELF,
+    channels: [dm('00000000-0000-4000-8000-000000000001', [SELF, PEER])],
+    links: [],
+  });
+  expect(result.get(PEER)?.directMessage?.timestampMs).toBe(
+    Date.parse('2026-01-02T00:00:00Z')
+  );
+});
+
+it('never targets a DM a bot is also in', () => {
+  const result = buildContactContextFacts({
+    viewer: SELF,
+    channels: [
+      dm('00000000-0000-4000-8000-000000000001', [SELF, PEER], {
+        botParticipants: [{ botId: 'bot-1' }],
+      }),
+    ],
+    links: [],
+  });
+  expect(result.get(PEER)).toEqual({
+    lastInteractionMs: Date.parse('2026-01-02T00:00:00Z'),
+    directMessage: null,
+    secondaryInbox: false,
   });
 });
 
 it('excludes the viewer case-insensitively from peers and command targets', () => {
   const result = buildContactContextFacts({
     viewer: 'MACRO|SELF@example.com',
-    activity: [],
     links: [],
     channels: [
-      {
-        id: '00000000-0000-4000-8000-000000000001',
-        channel_type: ChannelType.direct_message,
-        name: 'Peer',
-        updated_at: '2026-01-02T00:00:00Z',
-        viewed_at: '2026-01-03T00:00:00Z',
-        participants: [
-          { user_id: 'macro|SELF@example.com' },
-          { user_id: 'MACRO|PEER@example.com' },
-        ],
-      },
-    ],
-    cachedChannels: [
-      {
-        id: '00000000-0000-4000-8000-000000000001',
-        name: 'Peer',
-        channelType: 'direct_message',
-        participantIds: ['MACRO|SELF@example.com', 'MACRO|PEER@example.com'],
-        ownerId: 'macro|self@example.com',
-        createdAt: '2026-01-01T00:00:00Z',
-        updatedAt: '2026-01-04T00:00:00Z',
-      },
+      dm('00000000-0000-4000-8000-000000000001', [
+        'macro|SELF@example.com',
+        'MACRO|PEER@example.com',
+      ]),
     ],
   });
-  expect([...result.keys()]).toEqual(['macro|peer@example.com']);
-  expect(result.get('macro|peer@example.com')?.directMessage?.id).toBe(
+  expect([...result.keys()]).toEqual([PEER]);
+  expect(result.get(PEER)?.directMessage?.id).toBe(
     '00000000-0000-4000-8000-000000000001'
   );
 });
 
 it('ignores malformed peers and oversized labels without losing valid activity or other rows', () => {
   const result = buildContactContextFacts({
-    viewer: 'macro|self@example.com',
-    activity: [],
+    viewer: SELF,
     links: [],
-    cachedChannels: [],
     channels: [
-      {
-        id: '00000000-0000-4000-8000-000000000001',
-        channel_type: ChannelType.direct_message,
+      dm('00000000-0000-4000-8000-000000000001', [PEER], {
         name: 'é'.repeat(2049),
-        updated_at: '1970-01-01T00:00:00Z',
-        participants: [{ user_id: 'macro|peer@example.com' }],
-      },
-      {
-        id: '00000000-0000-4000-8000-000000000002',
-        channel_type: ChannelType.direct_message,
+        updatedAt: '1970-01-01T00:00:00Z',
+      }),
+      dm('00000000-0000-4000-8000-000000000002', ['not-a-user'], {
         name: 'Bad',
-        updated_at: 'not-a-date',
-        participants: [{ user_id: 'not-a-user' }],
-      },
+        updatedAt: 'not-a-date',
+      }),
     ],
   });
   expect(result.size).toBe(1);
-  expect(result.get('macro|peer@example.com')).toEqual({
+  expect(result.get(PEER)).toEqual({
     lastInteractionMs: 0,
     directMessage: null,
     secondaryInbox: false,
   });
+});
+
+it('skips channels other than DMs', () => {
+  const result = buildContactContextFacts({
+    viewer: SELF,
+    links: [],
+    channels: [
+      dm('00000000-0000-4000-8000-000000000001', [SELF, PEER], {
+        channelType: 'private',
+      }),
+    ],
+  });
+  expect(result.size).toBe(0);
 });

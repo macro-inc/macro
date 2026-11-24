@@ -81,13 +81,13 @@ vi.mock('@queries/slash-menu-mcps', () => ({
     loading: () => false,
     error: () => false,
     mcps: () => [
-      { id: 'pipedream:linear', name: 'Linear', appSlug: 'linear' },
-      { id: 'mcp:https://x.dev/mcp', name: 'Sentry MCP', appSlug: null },
+      { id: 'app/linear', name: 'Linear', appSlug: 'linear' },
+      { id: 'server/eC5kZXY', name: 'Sentry MCP', appSlug: null },
     ],
   }),
 }));
-vi.mock('@core/pipedream/ConnectorIcon', () => ({
-  PipedreamConnectorIcon: () => null,
+vi.mock('@core/connectors/ConnectorIcon', () => ({
+  ConnectorIcon: () => null,
 }));
 vi.mock('../MentionsMenu/hooks/useEntityMention', () => ({
   useEntityMention: (options: { searchTerm: () => string }) => ({

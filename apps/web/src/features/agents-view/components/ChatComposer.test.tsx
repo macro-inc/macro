@@ -60,6 +60,10 @@ const editor = vi.hoisted(() => ({
   connect: undefined as ((markdown: string) => void) | undefined,
   /** The fallback the composer configures with withRestoreFocus. */
   restoreFocus: undefined as RestoreFocusDefault | undefined,
+  /** What the composer does when a mention picks people or agents. */
+  onUserMention: undefined as
+    | ((mention: { mentions: string[] }) => void)
+    | undefined,
 }));
 
 vi.mock(
@@ -71,7 +75,12 @@ vi.mock(
         buildHandle: () => ({ lexical: editor.lexical }),
         namespace: () => builder,
         withAppLinkResolver: () => builder,
-        withMentions: () => builder,
+        withMentions: (options: {
+          onUserMention?: (mention: { mentions: string[] }) => void;
+        }) => {
+          editor.onUserMention = options.onUserMention;
+          return builder;
+        },
         withEmojis: () => builder,
         withLinks: () => builder,
         withHistory: () => builder,
@@ -273,6 +282,21 @@ describe('Chat session input', () => {
       }
     }
   );
+
+  it('reports each person or agent a mention picks', () => {
+    const mentioned = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft=""
+        onDraftChange={vi.fn()}
+        onSend={vi.fn()}
+        onMentionUser={mentioned}
+        selector={null}
+      />
+    ));
+    editor.onUserMention?.({ mentions: ['bot|cursor', 'macro|ada'] });
+    expect(mentioned.mock.calls).toEqual([['bot|cursor'], ['macro|ada']]);
+  });
 
   it('does not write a sent prompt back into the editor', () => {
     const [draft, setDraft] = createSignal('');
@@ -573,6 +597,38 @@ describe('Chat session input', () => {
     expect(screen.getByRole('button', { name: 'Agent' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Model' })).toBeNull();
   });
+  it.each([false, true])(
+    'places new-session modes outside and below the composer, like Home (touch: %s)',
+    (touch) => {
+      vi.mocked(isTouchDevice).mockReturnValue(touch);
+      const { container } = render(() => (
+        <ChatComposer
+          draft=""
+          onDraftChange={vi.fn()}
+          onSend={vi.fn()}
+          selector={<button>Model</button>}
+          settingsPlacement="below"
+          drawerOpen
+          drawer={<button>Auto / Chat / Code</button>}
+        />
+      ));
+      const surface = container.querySelector('[data-agent-composer]');
+      const modes = screen.getByRole('button', { name: 'Auto / Chat / Code' });
+      expect(surface?.contains(modes)).toBe(false);
+      expect(
+        (surface?.compareDocumentPosition(modes) ?? 0) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(
+        modes.closest('.composer-drawer')?.getAttribute('data-placement')
+      ).toBe('bottom');
+      expect(
+        screen
+          .getByRole('button', { name: 'Model' })
+          .closest('[data-agent-composer]')
+      ).toBe(surface);
+    }
+  );
   it.each([false, true])(
     'keeps settings and editor mounted in desktop controls or the touch drawer (touch: %s)',
     (touch) => {

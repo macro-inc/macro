@@ -61,6 +61,7 @@ async fn run_server() -> anyhow::Result<()> {
     let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
     let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
     let link_manager_queue = macro_queues::LinkManagerQueue::new();
+    let link_maintenance_queue = macro_queues::LinkMaintenanceQueue::new();
     let sqs_client = sqs_client::SQS::new(macro_aws_config::sqs_client().await)
         .gmail_inbox_sync_queue(&gmail_inbox_sync_queue)
         .gmail_inbox_sync_retry_queue(&gmail_inbox_sync_retry_queue)
@@ -69,7 +70,8 @@ async fn run_server() -> anyhow::Result<()> {
         .email_backfill_queue(&backfill_queue)
         .email_scheduled_queue(&email_scheduled_queue)
         .sfs_uploader_queue(&sfs_uploader_queue)
-        .email_link_manager_queue(&link_manager_queue);
+        .email_link_manager_queue(&link_manager_queue)
+        .email_link_maintenance_queue(&link_maintenance_queue);
 
     let auth_service_client = authentication_service_client::AuthServiceClient::new(
         config
@@ -120,12 +122,12 @@ async fn run_server() -> anyhow::Result<()> {
         config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     );
-    let contacts_ingress = std::sync::Arc::new(contacts::domain::service::SqsContactsIngress {
-        queue: contacts::outbound::ingress::SqsContactsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::ContactsQueue::new().to_string(),
-        ),
-    });
+    let contacts_ingress = std::sync::Arc::new(crate::composition::contacts_producer(
+        aws_sdk_sqs::Client::new(&aws_config),
+        macro_queues::ContactsQueue::new().to_string(),
+        config.environment,
+        crate::outlook_flags::posthog(&config)?,
+    ));
     let read_receipts = crate::composition::read_receipts(db.clone(), env)?;
     // The webhook reads the message a notification names once
     // `enable-outlook-notified-message-reads` is on; without a PostHog key

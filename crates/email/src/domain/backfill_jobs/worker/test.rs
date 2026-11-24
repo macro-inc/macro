@@ -282,11 +282,24 @@ async fn refused_and_failed_crm_admission_never_populate() {
         } else {
             f.0.lock().unwrap().slot = false
         };
-        let BackfillDisposition::Defer { error, .. } = svc.process(&crm_population()).await else {
+        let BackfillDisposition::Defer { error, retry_after } =
+            svc.process(&crm_population()).await
+        else {
             panic!("deferred")
         };
         assert_eq!(error.reason, FailureReason::BackfillWritesBusy);
         assert_eq!(f.calls(), ["link", "team", "acquire"]);
+        if fail {
+            // Slots that can't be read back off like a busy backfill write.
+            assert_eq!(retry_after, None);
+        } else {
+            // The team is paused or busy: try again in minutes, not seconds.
+            let retry_after = retry_after.expect("a refused team defers for its own delay");
+            assert!(
+                (Duration::from_secs(600)..=Duration::from_secs(900)).contains(&retry_after),
+                "{retry_after:?}"
+            );
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-import { ChannelType } from '@service-storage/generated/schemas/channelType';
+import type { DirectoryChannelType } from '@queries/channel/directory-core';
 import { describe, expect, it } from 'vitest';
 import {
   botAssignableChannelOptions,
@@ -9,18 +9,18 @@ import {
 const channel = (
   id: string,
   name: string | null,
-  channelType: ChannelType
-) => ({ id, name, channel_type: channelType });
+  channelType: DirectoryChannelType
+) => ({ id, name, channelType });
 
 describe('bot channel options', () => {
   it('offers private and team channels only, sorted by name', () => {
     expect(
       botAssignableChannelOptions([
-        channel('c-public', 'Announcements', ChannelType.public),
-        channel('c-dm', 'Direct message', ChannelType.direct_message),
-        channel('c-team', '  Team ops  ', ChannelType.team),
-        channel('c-private', 'Alpha', ChannelType.private),
-        channel('c-unnamed', '  ', ChannelType.private),
+        channel('c-public', 'Announcements', 'public'),
+        channel('c-dm', 'Direct message', 'direct_message'),
+        channel('c-team', '  Team ops  ', 'team'),
+        channel('c-private', 'Alpha', 'private'),
+        channel('c-unnamed', '  ', 'private'),
       ])
     ).toEqual([
       { id: 'c-private', name: 'Alpha' },

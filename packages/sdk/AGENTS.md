@@ -88,11 +88,31 @@ enforced by the ordinary backend APIs.
   creation keys, optional default task titles and task-sharing defaults, selected
   fields with optional defaults, and revision-guarded writes. Team membership and
   creator/admin management stay server-authorized.
+- `src/entities/time/`: `task.logTime`, `timeEntries`, `timeLogged` and
+  `startTimer` (on `Task`), `TimeEntry` (`edit`, `remove`) and `Timer`
+  (`macro.time.timer()`, `stop`, `discard`) over DSS `/time`. There is no
+  single-entry read: entry fields come from the listing or write that
+  returned them, and `TimeEntry.byId` only edits or removes. A 403
+  `not_author` is `NotTimeEntryAuthorError`, not `MacroForbiddenError`, since
+  no access request lets someone change another person's entry; a 409
+  `timer_over_limit` is `TimerOverLimitError` carrying the timer to resolve
+  when the refusal names one; check `timer` before using it.
+  Reports are `macro.time.summary` / `exportCsv` (`scope: 'mine' | 'team'`)
+  and `initiative.timeSummary` / `exportTimeCsv` for a project, over DSS
+  `/time/summary` and `/time/export` (`entities/time/report.ts`); totals come
+  back keyed by `User` and `Task` handles, never ids.
 - `users.search(nameOrEmail)` is one `GET /contacts/search`: the server
-  ranks the caller's contacts and current team (teammates first, at most 20)
+  ranks the caller's contacts and current team (teammates first, then, for a
+  caller on the list-aware directory, `interacted`/`invited` and then email
+  contacts; at most 20; each person carries `lists`)
   and the SDK seeds User handles with each name and agent flag, keeping that
   order. It is not a global directory, and the full `GET /contacts` list stays
-  out of the SDK.
+  out of the SDK. `users.inList(list, { maxItems, pageSize })` pages one
+  contacts list (`ContactListKey`) over `GET /contacts/lists/{list}/members`,
+  naming each page with one auth `getUserNamesWithEmail` batch
+  (`User.named`); `users.teammates()` collects the `teammates` list. The route
+  reads the list tables for every caller, whatever their `contacts-list-reads`
+  flag, so stored lists can be incomplete until the list backfill has run.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
 - `Contact.addEmail` / `removeEmail` / `setEmail` (choose the primary) edit a
@@ -248,9 +268,9 @@ the existing gateway prefixes.
   signature or hint tag updates that package's tool snapshots (`bunx vitest
   run -u` there); doc text alone does not.
 - Give each code-mode documentation topic exactly one `@routing` sentence
-  ("Use when …; not …") on a participating namespace class; tasks and task
-  templates share that sentence. An `@agent` block describes the area for agents
-  only. Both tags are stripped from the public reference, and code-mode
+  ("Use when …; not …") on a participating namespace class; tasks, task
+  templates and time tracking share that sentence. An `@agent` block
+  describes the area for agents only. Both tags are stripped from the public reference, and code-mode
   generation fails without the routing sentence. Put area rules there, never
   in `crates/prompt`; cross-namespace search guidance lives on
   `SearchNamespace` in `search/namespace.ts`.

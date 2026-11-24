@@ -11,6 +11,9 @@ fn parsed() -> Parsed {
     .unwrap()
 }
 
+/// When the test message was received, in Unix milliseconds.
+const RECEIVED_MS: i64 = 1_700_000_000_000;
+
 fn matches(query: &str, held: &[&str]) -> bool {
     let held: BTreeSet<String> = held.iter().map(|label| label.to_string()).collect();
     let labels = [Label {
@@ -18,7 +21,7 @@ fn matches(query: &str, held: &[&str]) -> bool {
         name: "Money Stuff".to_string(),
         system: false,
     }];
-    Query::parse(query).matches_parsed(&parsed(), &held, &labels)
+    Query::parse(query).matches_parsed(&parsed(), &held, &labels, RECEIVED_MS)
 }
 
 #[test]
@@ -34,6 +37,20 @@ fn operators_words_phrases_and_negation_must_all_match() {
     ));
     assert!(!matches("is:read", &["UNREAD"]));
     assert!(!matches("has:attachment", &[]));
+}
+
+#[test]
+fn after_compares_when_the_message_was_received() {
+    assert!(matches("after:1699999940", &[]));
+    assert!(!matches("after:1700000000", &[]));
+    assert!(!matches("after:1700003600", &[]));
+}
+
+#[test]
+fn a_filter_reads_after_against_the_time_mail_arrives() {
+    let criteria = serde_json::json!({ "query": "after:1700000000" });
+    assert!(filter_matches(&criteria, &parsed(), RECEIVED_MS + 1_000));
+    assert!(!filter_matches(&criteria, &parsed(), RECEIVED_MS));
 }
 
 #[test]

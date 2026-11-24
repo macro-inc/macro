@@ -24,6 +24,7 @@ import {
   CALENDAR_CACHE_READ_DEADLINE_MS,
   withinDeadline,
 } from './readiness';
+import type { CalendarSyncController } from './sync-controller';
 
 /** Why a viewport the cache should serve was read from REST instead. */
 export type CalendarCacheFallback =
@@ -38,7 +39,13 @@ export type CalendarCacheFallback =
   /** A cache request failed: refused during an owner handoff, timed out. */
   | 'cache-error'
   /** The cache path's GraphQL fetch of an uncovered span failed. */
-  | 'fetch-error';
+  | 'fetch-error'
+  /**
+   * The cache could not apply the changes since a REST answer already on
+   * screen or a change it was told of, so its week may be older; it answers
+   * only if REST fails too.
+   */
+  | 'behind';
 
 export type CalendarViewportRead =
   | { source: 'cache'; data: CalendarOccurrencesData }
@@ -57,13 +64,21 @@ type CacheOutcome = Result<CalendarRangeRead, unknown>;
 
 type CacheAnswer =
   | { answered: true; data: CalendarOccurrencesData }
-  | { answered: false; fallback: CalendarCacheFallback; error?: unknown };
+  | {
+      answered: false;
+      fallback: CalendarCacheFallback;
+      error?: unknown;
+      /** What an older cache holds, for when REST cannot answer either. */
+      older?: CalendarOccurrencesData;
+    };
 
 type Contender =
   | { from: 'cache'; outcome: CacheOutcome }
   | { from: 'rest'; result: Result<CalendarOccurrencesData, unknown> };
 
 type TraceSpan = Pick<Span, 'setAttr'>;
+
+type CatchUpSource = Pick<CalendarSyncController, 'caughtUp' | 'catchUp'>;
 
 // Cache reads of each host still running past their deadline. While one is,
 // later viewports give the cache only the startup head start before REST
@@ -118,6 +133,14 @@ function cacheAnswer(outcome: CacheOutcome): CacheAnswer {
       })
     )
     .with(
+      { kind: 'behind' },
+      ({ older }): CacheAnswer => ({
+        answered: false,
+        fallback: 'behind',
+        ...(older ? { older } : {}),
+      })
+    )
+    .with(
       { kind: 'unsupported' },
       (): CacheAnswer => ({ answered: false, fallback: 'unsupported' })
     )
@@ -134,6 +157,16 @@ function recordCacheAnswer(span: TraceSpan): void {
   span.setAttr('calendar.read.source', 'cache');
 }
 
+/** Offline, an older cache still beats no week at all. */
+function olderCache(
+  span: TraceSpan,
+  data: CalendarOccurrencesData
+): CalendarViewportRead {
+  recordCacheAnswer(span);
+  span.setAttr('calendar.read.older_cache', true);
+  return { source: 'cache', data };
+}
+
 function recordFallback(
   span: TraceSpan,
   fallback: CalendarCacheFallback,
@@ -141,7 +174,12 @@ function recordFallback(
 ): void {
   span.setAttr('calendar.read.source', 'rest');
   span.setAttr('calendar.read.fallback_reason', fallback);
-  if (fallback !== 'cache-error' && fallback !== 'deadline') return;
+  if (
+    fallback !== 'cache-error' &&
+    fallback !== 'deadline' &&
+    fallback !== 'behind'
+  )
+    return;
   const cacheError =
     fallback === 'cache-error' ? cacheFailureKind(error) : undefined;
   if (cacheError) span.setAttr('calendar.read.cache_error', cacheError);
@@ -195,8 +233,16 @@ async function raceCacheWithRest(
       // The cache gave up after all: its own reason explains the REST read.
       recordFallback(span, answer.fallback, answer.error);
       const result = await rest;
-      if (result.isErr()) throw result.error;
-      return { source: 'rest', data: result.value, fallback: answer.fallback };
+      if (result.isOk()) {
+        return {
+          source: 'rest',
+          data: result.value,
+          fallback: answer.fallback,
+        };
+      }
+      if (answer.older && !signal?.aborted)
+        return olderCache(span, answer.older);
+      throw result.error;
     }
     if (first.result.isOk()) {
       recordFallback(span, deadlineFallback);
@@ -216,6 +262,7 @@ async function raceCacheWithRest(
         recordCacheAnswer(span);
         return { source: 'cache', data: answer.data };
       }
+      if (answer.older) return olderCache(span, answer.older);
     }
     recordFallback(span, deadlineFallback);
     throw first.result.error;
@@ -243,6 +290,8 @@ export async function readCalendarViewport(
     span: TraceSpan;
     signal?: AbortSignal;
     fetchPage?: FetchCalendarOccurrencePage;
+    /** Brings the cache forward after a REST answer or a change notice. */
+    sync?: CatchUpSource;
   }
 ): Promise<CalendarViewportRead> {
   const { fetchRest, span, signal } = options;
@@ -255,7 +304,9 @@ export async function readCalendarViewport(
   const cache = ResultAsync.fromPromise(
     readCalendarRange(host, range, {
       signal,
+      span,
       ...(options.fetchPage ? { fetchPage: options.fetchPage } : {}),
+      ...(options.sync ? { sync: options.sync } : {}),
     }),
     (error) => error
   );
@@ -279,9 +330,13 @@ export async function readCalendarViewport(
   }
   if (signal?.aborted) throw answer.error ?? signal.reason;
   recordFallback(span, answer.fallback, answer.error);
-  return {
-    source: 'rest',
-    data: await fetchRest(range, signal),
-    fallback: answer.fallback,
-  };
+  const rest = await ResultAsync.fromPromise(
+    fetchRest(range, signal),
+    (error) => error
+  );
+  if (rest.isOk()) {
+    return { source: 'rest', data: rest.value, fallback: answer.fallback };
+  }
+  if (answer.older && !signal?.aborted) return olderCache(span, answer.older);
+  throw rest.error;
 }

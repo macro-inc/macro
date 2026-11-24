@@ -16,8 +16,6 @@
 .feature-page-hero-actions .feature-page-cta { margin-top: 0; }
 .feature-page-hero > small { display: block; margin-top: 18px; color: var(--color-ink-subtle); font-size: 11px; }
 .feature-page-section { padding: 86px 0 56px; scroll-margin-top: 105px; }
-.feature-page-section .homepage-feature-heading { margin-bottom: 48px; }
-.feature-page-section .homepage-feature-heading h2 { font-size: clamp(28px, 3.2vw, 40px); }
 .feature-page-visual { width: min(920px, 100%); margin-inline: auto; }
 .feature-page-caption { max-width: 440px; margin: 24px auto 0 !important; color: var(--color-ink-subtle); text-align: center; font-size: 12px; line-height: 1.8; text-wrap: balance; }
 .feature-page-reading { width: min(608px, 100%); margin: 68px auto 0; padding: 64px 24px 72px; color: var(--color-ink-muted); font: 370 15px/28px 'Inter Variable', Inter, sans-serif; }
@@ -47,7 +45,6 @@
   .feature-page-hero h1 { font-size: clamp(38px, 11vw, 46px); line-height: 1.18; }
   .feature-page-hero > p:not(.feature-page-eyebrow) { font-size: 14px; max-width: 100%; text-wrap: pretty; }
   .feature-page-section { padding: 56px 0 24px; }
-  .feature-page-section .homepage-feature-heading { margin-bottom: 32px; }
   .feature-page-reading { padding: 48px 0; margin-top: 40px; font-size: 14px; }
   .feature-page-reading > h2 { font-size: 23px; }
   .feature-page-comparison { margin-bottom: 48px; }
@@ -63,9 +60,6 @@
 .feature-page[data-product-spacing=true] .feature-page-section {
   margin-block: var(--feature-section-space) 0;
   padding-block: 0;
-}
-.feature-page[data-product-spacing=true] .feature-page-section .homepage-feature-heading {
-  margin-bottom: var(--feature-demo-space);
 }
 .feature-page[data-product-spacing=true] .feature-page-visual .product-demo-stage {
   padding-top: 0;

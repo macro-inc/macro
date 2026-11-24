@@ -1,26 +1,21 @@
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
-import { ChannelType } from '@service-storage/generated/schemas/channelType';
+import type { DirectoryChannel } from '@queries/channel/directory-core';
 
 /** A channel a bot can belong to, as shown in bot settings pickers. */
 export type BotChannelOption = { id: string; name: string };
 
-type AssignableChannel = Pick<
-  ApiChannelWithLatest,
-  'id' | 'name' | 'channel_type'
->;
+type AssignableChannel = Pick<DirectoryChannel, 'id' | 'name' | 'channelType'>;
 
 /**
  * Channels offered when assigning a bot — private and team channels, the same
  * types whose participants panel allows managing bots.
  */
 export function botAssignableChannelOptions(
-  channels: AssignableChannel[]
+  channels: readonly AssignableChannel[]
 ): BotChannelOption[] {
   return channels
     .filter(
       (channel) =>
-        channel.channel_type === ChannelType.private ||
-        channel.channel_type === ChannelType.team
+        channel.channelType === 'private' || channel.channelType === 'team'
     )
     .map((channel) => ({
       id: channel.id,

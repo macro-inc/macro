@@ -6,11 +6,14 @@
 //! The worker's consumer group is one for every scenario, so these run one
 //! at a time.
 
-use email_e2e::chrono::NaiveDate;
+use email_e2e::chrono::{DateTime, Days, NaiveDate, SubsecRound as _, TimeDelta, Utc};
 use email_e2e::{
-    DEFAULT_TIMEOUT, Inbox, Mail, Provider, Report, Stack, StackOptions, User, eventually,
+    DEFAULT_TIMEOUT, Inbox, Mail, ModelRequest, Provider, Report, Stack, StackOptions, User,
+    eventually,
 };
 use serde_json::{Value, json};
+use std::time::Duration;
+use tokio::time::Instant;
 
 const GRACE: &str = "Grace <grace@example.net>";
 const GRACE_ADDRESS: &str = "grace@example.net";
@@ -20,6 +23,18 @@ const FOCUS: &str = "query { user { id emailFocus { id name \
      focus { isFocus category needsReply dueOn } } } }";
 const THREAD_FOCUS: &str = "query($input: EmailThreadInput!) { \
      user { id emailThread(input: $input) { id focus { isFocus category } } } }";
+const THREAD_LABELS: &str = "query($input: EmailThreadInput!) { \
+     user { id emailThread(input: $input) { id focus { isFocus needsReply needsFollowUp } } } }";
+const THREAD_CLASSIFIED_AT: &str = "query($input: EmailThreadInput!) { \
+     user { id emailThread(input: $input) { id focus { classifiedAt } } } }";
+
+/// How long before the scenario's meeting ends, or its wait for an answer
+/// does, from when it starts: long enough for the worker to classify the
+/// mail first, short enough to wait for.
+const ENDS_IN: TimeDelta = TimeDelta::seconds(90);
+/// Days the owner waits on an answer before a thread they wrote last on comes
+/// back to Focus (`FOLLOW_UP_AFTER_DAYS` in `crates/email`'s Focus service).
+const FOLLOW_UP_AFTER: TimeDelta = TimeDelta::days(3);
 
 async fn focus_stack() -> Result<Stack, Report> {
     Stack::start_with(StackOptions {
@@ -77,7 +92,14 @@ async fn wait_until_classified(user: &User, thread_id: &str) -> Result<Value, Re
 
 /// Delivers mail and waits for it in the inbox; answers its thread's id.
 async fn arrives(inbox: &Inbox, from: &str, subject: &str) -> Result<String, Report> {
-    inbox.deliver(&Mail::new(from, subject, "Hello."))?;
+    delivered(inbox, &Mail::new(from, subject, "Hello.")).await
+}
+
+/// Delivers this mail and waits for its thread in the inbox; answers the
+/// thread's id.
+async fn delivered(inbox: &Inbox, mail: &Mail) -> Result<String, Report> {
+    let subject = mail.subject.as_str();
+    inbox.deliver(mail)?;
     let preview = inbox.wait_for_preview("inbox", subject).await?;
     let id = preview["id"]
         .as_str()
@@ -371,6 +393,598 @@ async fn gmail_a_linked_inbox_follows_the_flag_of_the_user_who_linked_it() -> Re
     assert_eq!(classifier.times_asked_about("for Dan"), 0);
     assert_eq!(thread_focus(&carol, &left_out).await?, Value::Null);
     assert_eq!(on_home(&carol).await?, Vec::<Value>::new());
+
+    stack.finish().await
+}
+
+/// What the worker logs when a sweep is done, whatever it found.
+const SWEEP_FINISHED: &str = "focus sweep finished";
+/// What the worker logs when a backfill pass over an inbox is done.
+const BACKFILL_PASS_FINISHED: &str = "focus backfill pass finished";
+
+/// How many lines the worker has logged so far: a mark to count from.
+fn log_mark(stack: &Stack) -> usize {
+    stack.focus_worker_log().lines().count()
+}
+
+/// How many lines after `mark` say `message`, and name `id` when given.
+fn logged_since(stack: &Stack, mark: usize, message: &str, id: Option<&str>) -> usize {
+    stack
+        .focus_worker_log()
+        .lines()
+        .skip(mark)
+        .filter(|line| line.contains(message) && id.is_none_or(|id| line.contains(id)))
+        .count()
+}
+
+/// Waits until `count` lines after `mark` say `message`, naming `id` when
+/// given. A minute apart at most, so this waits for up to two of them and
+/// what they took.
+async fn wait_for_logged(
+    stack: &Stack,
+    mark: usize,
+    message: &str,
+    id: Option<&str>,
+    count: usize,
+) -> Result<(), Report> {
+    eventually(
+        &format!("the worker to log {message:?} {count} times"),
+        DEFAULT_TIMEOUT * 2,
+        async || Ok((logged_since(stack, mark, message, id) >= count).then_some(())),
+    )
+    .await
+}
+
+/// Focus works an inbox only while someone whose tab shows it uses Macro.
+/// Bob had Macro open a week and a day ago and not since: mail arriving in
+/// Bob's inbox is not shown to the model, the sweeps leave the inbox though
+/// it holds Focus, and the minute's look no longer counts it in the
+/// rollout, so it forgets the inbox. Once Bob opens Macro again the next
+/// sweep classifies the mail that came in the meantime, and the next look
+/// finds the inbox joining and backfills it, whichever runs first.
+///
+/// When it fails: the worker spends the model on the mail of people who
+/// stopped using Macro, or someone who comes back never has the mail of
+/// their time away classified.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_an_owner_away_from_macro_gets_no_focus_until_they_come_back() -> Result<(), Report> {
+    let stack = Stack::start_with(StackOptions {
+        document_storage: true,
+        focus: true,
+        env: vec![
+            // Sweeps a minute apart, so the scenario sees them.
+            ("FOCUS_SWEEP_INTERVAL_SECS".to_owned(), "60".to_owned()),
+            // Whether someone is active is read on every check, so leaving
+            // and coming back show at once.
+            ("FOCUS_ACTIVITY_CACHE_SECS".to_owned(), "0".to_owned()),
+        ],
+        ..StackOptions::default()
+    })
+    .await?;
+    let classifier = stack.focus_classifier()?;
+    classifier.put_in_focus_when_mail_contains("Contract renewal");
+    let bob = stack.user("bob").await?;
+    let inbox = bob.link(Provider::Gmail, bob.email()).await?;
+    let link_id = inbox.link_id().to_string();
+
+    // While Bob uses Macro the mail is classified, and the look finds the
+    // inbox and fills it in its two passes.
+    let march = arrives(&inbox, MALLORY, "Contract renewal in March").await?;
+    wait_until_classified(&bob, &march).await?;
+    wait_for_logged(&stack, 0, BACKFILL_PASS_FINISHED, Some(&link_id), 2).await?;
+
+    bob.away_for(TimeDelta::days(8)).await?;
+    let away = log_mark(&stack);
+    let april = arrives(&inbox, MALLORY, "Contract renewal in April").await?;
+    eventually(
+        "the worker to leave the mail that came while Bob was away",
+        DEFAULT_TIMEOUT,
+        async || Ok(stack.focus_skipped_without_flag(&april).then_some(())),
+    )
+    .await?;
+    // The second sweep since Bob left started after the first ended.
+    wait_for_logged(&stack, away, SWEEP_FINISHED, None, 2).await?;
+    assert_eq!(thread_focus(&bob, &april).await?, Value::Null);
+    assert_eq!(classifier.times_asked_about("April"), 0);
+
+    // No pass over the inbox while Bob was away: the look left it out.
+    assert_eq!(
+        logged_since(&stack, away, BACKFILL_PASS_FINISHED, Some(&link_id)),
+        0
+    );
+
+    // Counted from before Bob is back: the look may find the inbox and finish
+    // a pass over it before `opens_macro` returns. While Bob was away no pass
+    // covered it, so every pass counted from here came after his return.
+    let back = log_mark(&stack);
+    bob.opens_macro().await?;
+    let verdict = wait_until_classified(&bob, &april).await?;
+    assert_eq!(verdict, json!({ "isFocus": true, "category": "OTHER" }));
+    wait_for_logged(&stack, back, BACKFILL_PASS_FINISHED, Some(&link_id), 1).await?;
+    wait_for_home(
+        &bob,
+        &["Contract renewal in April", "Contract renewal in March"],
+    )
+    .await?;
+
+    stack.finish().await
+}
+
+/// What a thread says of its labels in Focus.
+async fn thread_labels(user: &User, thread_id: &str) -> Result<Value, Report> {
+    let read = user
+        .graphql(
+            THREAD_LABELS,
+            &json!({ "input": { "threadId": thread_id } }),
+        )
+        .await?;
+    Ok(read["user"]["emailThread"]["focus"].clone())
+}
+
+/// Waits until the thread's Focus labels are `labels`.
+async fn wait_for_labels(user: &User, thread_id: &str, labels: &Value) -> Result<(), Report> {
+    let mut seen = Value::Null;
+    let waited = eventually(
+        &format!("the thread's Focus labels to be {labels}"),
+        DEFAULT_TIMEOUT,
+        async || {
+            seen = thread_labels(user, thread_id).await?;
+            Ok((&seen == labels).then_some(()))
+        },
+    )
+    .await;
+    waited.map_err(|error| rootcause::report!("{error}; the thread read {seen}"))
+}
+
+/// A calendar file for an update to a single meeting that ends at `ends`.
+fn meeting_update(uid: &str, ends: DateTime<Utc>) -> String {
+    let stamp = |at: DateTime<Utc>| at.format("%Y%m%dT%H%M%SZ").to_string();
+    let starts = ends - TimeDelta::minutes(30);
+    format!(
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Example//EN\r\nMETHOD:REQUEST\r\n\
+         BEGIN:VEVENT\r\nUID:{uid}\r\nSEQUENCE:1\r\nDTSTAMP:{now}\r\n\
+         DTSTART:{start}\r\nDTEND:{end}\r\nSUMMARY:Design review\r\n\
+         ORGANIZER:mailto:{GRACE_ADDRESS}\r\n\
+         ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:ada@example.com\r\n\
+         END:VEVENT\r\nEND:VCALENDAR\r\n",
+        now = stamp(Utc::now()),
+        start = stamp(starts),
+        end = stamp(ends),
+    )
+}
+
+/// A meeting update is in Focus while its meeting is ahead and leaves once
+/// the meeting is over, though the model wants the thread there for its own
+/// sake too.
+///
+/// When it fails: mail about a meeting that is over stays on Home because it
+/// also reads as worth Focus, or the update never shows as Calendar.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_meeting_update_leaves_focus_once_the_meeting_is_over() -> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    classifier.put_in_focus_when_mail_contains("Design review");
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(Provider::Gmail, ada.email()).await?;
+
+    // In whole seconds, as the invite carries it.
+    let ends = (Utc::now() + ENDS_IN).trunc_subsecs(0);
+    let update = Mail::new(
+        GRACE,
+        "Updated invitation: Design review",
+        "Moved to this afternoon.",
+    )
+    .with_attachment(
+        "invite.ics",
+        "text/calendar; method=REQUEST",
+        meeting_update("design-review-1@example.net", ends).as_bytes(),
+    );
+    let thread = delivered(&inbox, &update).await?;
+
+    let listed = wait_for_home(&ada, &["Updated invitation: Design review"]).await?;
+    assert!(
+        Utc::now() < ends,
+        "the update was classified after its meeting"
+    );
+    assert_eq!(listed[0]["focus"]["category"], "CALENDAR", "{listed:?}");
+    wait_for_home(&ada, &[]).await?;
+    assert!(
+        Utc::now() >= ends,
+        "the update left Focus before its meeting ended"
+    );
+    assert_eq!(thread_focus(&ada, &thread).await?["isFocus"], false);
+
+    stack.finish().await
+}
+
+/// When the thread's Focus classification was made: `null` until it is
+/// classified.
+async fn classified_at(user: &User, thread_id: &str) -> Result<Value, Report> {
+    let read = user
+        .graphql(
+            THREAD_CLASSIFIED_AT,
+            &json!({ "input": { "threadId": thread_id } }),
+        )
+        .await?;
+    Ok(read["user"]["emailThread"]["focus"]["classifiedAt"].clone())
+}
+
+/// Waits until the thread is classified again, after the classification made
+/// at `before`. The worker classifies a thread again only for a newer message.
+async fn wait_until_classified_again(
+    user: &User,
+    thread_id: &str,
+    before: &Value,
+) -> Result<(), Report> {
+    eventually(
+        "the thread to be classified again",
+        DEFAULT_TIMEOUT,
+        async || Ok((classified_at(user, thread_id).await? != *before).then_some(())),
+    )
+    .await
+}
+
+/// Mail about a meeting whose day is over is out of Focus, though the model
+/// wants it, while mail about a meeting still ahead is in. Notes written once
+/// the meeting is over keep the thread out; a question to the owner after it
+/// is judged on its own and brings the thread back.
+///
+/// When it fails: Home keeps mail about meetings that are over or their
+/// notes, or a thread stays out though it now asks the owner something,
+/// because of the meeting its old mail named.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_mail_about_a_meeting_that_is_over_is_out_of_focus() -> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    let today = Utc::now().date_naive();
+    classifier.put_in_focus_when_mail_contains("Quarterly planning");
+    classifier.put_in_focus_when_mail_contains("Board prep");
+    classifier.event_on_when_mail_contains("Quarterly planning", today - Days::new(2));
+    classifier.event_on_when_mail_contains("Board prep", today + Days::new(2));
+    classifier.ask_the_owner_when_mail_contains("send me the slides");
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(Provider::Gmail, ada.email()).await?;
+
+    // Written three days ago, about the meeting the day after.
+    let agenda = Mail {
+        message_id: Some("planning-1@example.net".to_owned()),
+        ..Mail::new(GRACE, "Quarterly planning", "The agenda for our meeting.")
+    }
+    .dated(Utc::now() - TimeDelta::days(3));
+    let planning = delivered(&inbox, &agenda).await?;
+    let verdict = wait_until_classified(&ada, &planning).await?;
+    assert_eq!(verdict["isFocus"], false, "{verdict}");
+    arrives(&inbox, MALLORY, "Board prep").await?;
+    wait_for_home(&ada, &["Board prep"]).await?;
+
+    let agenda_classified_at = classified_at(&ada, &planning).await?;
+    let notes = Mail {
+        message_id: Some("planning-2@example.net".to_owned()),
+        ..Mail::new(GRACE, "Re: Quarterly planning", "Notes from the meeting.")
+    }
+    .in_reply_to("planning-1@example.net");
+    inbox.deliver(&notes)?;
+    wait_until_classified_again(&ada, &planning, &agenda_classified_at).await?;
+    assert_eq!(thread_focus(&ada, &planning).await?["isFocus"], false);
+    let listed = on_home(&ada).await?;
+    assert_eq!(
+        listed
+            .iter()
+            .map(|thread| &thread["name"])
+            .collect::<Vec<_>>(),
+        ["Board prep"],
+        "{listed:?}"
+    );
+
+    let question = Mail::new(
+        GRACE,
+        "Re: Quarterly planning",
+        "Could you send me the slides you showed?",
+    )
+    .in_reply_to("planning-2@example.net");
+    inbox.deliver(&question)?;
+    let listed = wait_for_home(&ada, &["Board prep", "Re: Quarterly planning"]).await?;
+    assert_eq!(listed[1]["id"], planning.as_str());
+    wait_for_labels(
+        &ada,
+        &planning,
+        &json!({ "isFocus": true, "needsReply": true, "needsFollowUp": false }),
+    )
+    .await?;
+
+    stack.finish().await
+}
+
+/// The owner's answer, sent from another mail client, takes a thread out of
+/// Focus, and the thread comes back to follow up once it has waited three days
+/// for an answer. Here the answer was sent just under three days ago, so the
+/// wait ends while the scenario looks.
+///
+/// When it fails: a thread the owner already answered stays on Home, or one
+/// that still needs following up never comes back.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_an_answered_thread_leaves_focus_until_it_needs_following_up() -> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    classifier.put_in_focus_when_mail_contains("Vendor contract");
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(Provider::Gmail, ada.email()).await?;
+
+    let asked = Mail {
+        message_id: Some("vendor-1@example.net".to_owned()),
+        ..Mail::new(GRACE, "Vendor contract", "Can you review the draft?")
+    }
+    .dated(Utc::now() - TimeDelta::days(4));
+    let thread = delivered(&inbox, &asked).await?;
+    wait_for_home(&ada, &["Vendor contract"]).await?;
+    wait_for_labels(
+        &ada,
+        &thread,
+        &json!({ "isFocus": true, "needsReply": false, "needsFollowUp": false }),
+    )
+    .await?;
+
+    // In whole seconds, as the Date header carries it.
+    let waited_at = (Utc::now() + ENDS_IN).trunc_subsecs(0);
+    let answer = Mail {
+        to: Some(GRACE.to_owned()),
+        ..Mail::new(
+            ada.email(),
+            "Re: Vendor contract",
+            "Here are my comments. Can you confirm the dates?",
+        )
+    }
+    .in_reply_to("vendor-1@example.net")
+    .dated(waited_at - FOLLOW_UP_AFTER)
+    .sent_from_mailbox();
+    inbox.deliver(&answer)?;
+    wait_for_home(&ada, &[]).await?;
+    assert!(
+        Utc::now() < waited_at,
+        "the answer was classified after the wait"
+    );
+    assert_eq!(thread_focus(&ada, &thread).await?["isFocus"], false);
+
+    wait_for_home(&ada, &["Re: Vendor contract"]).await?;
+    assert!(
+        Utc::now() >= waited_at,
+        "the thread came back before the wait ended"
+    );
+    wait_for_labels(
+        &ada,
+        &thread,
+        &json!({ "isFocus": true, "needsReply": false, "needsFollowUp": true }),
+    )
+    .await?;
+
+    stack.finish().await
+}
+
+/// A thread the owner answered comes back to follow up as soon as its due day
+/// has come, without the three days' wait; one whose due day is ahead stays
+/// out; and one the owner closed with thanks stays out though its day has come.
+///
+/// When it fails: a thread past its due day waits out the full wait for an
+/// answer, one due later comes back at once, or a closed thread comes back.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_an_answered_thread_comes_back_on_its_due_day_unless_the_answer_closed_it()
+-> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    let today = Utc::now().date_naive();
+    for (subject, due) in [
+        ("Budget sign-off", today - Days::new(1)),
+        ("Offsite venue", today + Days::new(3)),
+        ("Logo files", today - Days::new(1)),
+    ] {
+        classifier.put_in_focus_when_mail_contains(subject);
+        classifier.due_on_when_mail_contains(subject, due);
+    }
+    let ada = stack.user("ada").await?;
+    let inbox = ada.link(Provider::Gmail, ada.email()).await?;
+
+    let mut threads = Vec::new();
+    for (subject, id) in [
+        ("Budget sign-off", "budget-1@example.net"),
+        ("Offsite venue", "offsite-1@example.net"),
+        ("Logo files", "logo-1@example.net"),
+    ] {
+        let asked = Mail {
+            message_id: Some(id.to_owned()),
+            ..Mail::new(GRACE, subject, "Could you send this over?")
+        }
+        .dated(Utc::now() - TimeDelta::days(2));
+        threads.push(delivered(&inbox, &asked).await?);
+    }
+    wait_for_home(&ada, &["Budget sign-off", "Logo files", "Offsite venue"]).await?;
+
+    for (subject, id, text) in [
+        (
+            "Budget sign-off",
+            "budget-1@example.net",
+            "Nearly done. Can I send it Monday?",
+        ),
+        (
+            "Offsite venue",
+            "offsite-1@example.net",
+            "Checking with the team. Is Thursday fine?",
+        ),
+        ("Logo files", "logo-1@example.net", "Thanks!"),
+    ] {
+        let answer = Mail {
+            to: Some(GRACE.to_owned()),
+            ..Mail::new(ada.email(), &format!("Re: {subject}"), text)
+        }
+        .in_reply_to(id)
+        .sent_from_mailbox();
+        inbox.deliver(&answer)?;
+    }
+    wait_for_labels(
+        &ada,
+        &threads[0],
+        &json!({ "isFocus": true, "needsReply": false, "needsFollowUp": true }),
+    )
+    .await?;
+    wait_for_home(&ada, &["Re: Budget sign-off"]).await?;
+    for left in &threads[1..] {
+        wait_for_labels(
+            &ada,
+            left,
+            &json!({ "isFocus": false, "needsReply": false, "needsFollowUp": false }),
+        )
+        .await?;
+    }
+
+    stack.finish().await
+}
+
+/// Tokens a second the worker's backfills and sweeps keep to
+/// (`TOKENS_PER_SECOND` in `email_focus_worker`), half a second of which
+/// they may spend at once.
+const BUDGET: u64 = 60_000;
+/// What the model bills each question in the budget scenario, as for a long
+/// thread: two a second fit the budget.
+const BILLED: u64 = 30_000;
+/// Threads in the mailbox before it is linked: a backfill of a minute at the
+/// budget.
+const BACKLOG: usize = 80;
+/// What the worker logs when TypeSafe pushes back.
+const PUSHED_BACK: &str = "TypeSafe pushed back";
+
+/// The tokens of the requests answered between the `first` and `last`
+/// (inclusive) of `requests`.
+fn billed_between(requests: &[&ModelRequest], first: usize, last: usize) -> u64 {
+    requests[first..=last]
+        .iter()
+        .map(|request| request.tokens)
+        .sum()
+}
+
+/// No stretch of `requests` bills more than `rate` tokens a second over its
+/// length, plus half a second's worth spent at once and one call more.
+fn assert_within(requests: &[&ModelRequest], rate: u64, what: &str) {
+    for first in 0..requests.len() {
+        for last in first..requests.len() {
+            let seconds = (requests[last].at - requests[first].at).as_secs_f64();
+            let billed = billed_between(requests, first, last);
+            #[expect(clippy::cast_precision_loss, reason = "token counts are small")]
+            let allowed = rate as f64 * (seconds + 0.5) + (BILLED + 1) as f64;
+            #[expect(clippy::cast_precision_loss, reason = "token counts are small")]
+            let billed_f = billed as f64;
+            assert!(
+                billed_f <= allowed,
+                "{what}: requests {first}..={last} billed {billed} tokens in {seconds:.2} s, \
+                 more than {allowed}"
+            );
+        }
+    }
+}
+
+/// A backfill spends no more than its token budget, waits when TypeSafe
+/// says to slow down and comes back at half the rate, and never holds up
+/// new mail: Ada links a mailbox of 80 threads whose questions bill 30,000
+/// tokens each, two a second at the budget. Mail arriving in the middle is
+/// classified within seconds while the backfill still has threads to go.
+///
+/// When it fails: a rollout step's backfills take the whole TypeSafe rate
+/// limit from the agent features, keep at it while TypeSafe turns them away,
+/// or new mail waits behind a mailbox's backlog.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_backfill_keeps_to_its_token_budget_and_never_holds_up_new_mail()
+-> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    classifier.put_in_focus_when_mail_contains("Quarterly figures");
+    classifier.put_in_focus_when_mail_contains("Board meeting moved");
+    classifier.bill_tokens_per_call(BILLED);
+    let ada = stack.user("ada").await?;
+    let backlog: Vec<Mail> = (1..=BACKLOG)
+        .map(|n| Mail::new(MALLORY, &format!("Quarterly figures {n}"), "Attached."))
+        .collect();
+    stack.seed_mailbox(Provider::Gmail, ada.email(), &backlog)?;
+    let inbox = ada.link(Provider::Gmail, ada.email()).await?;
+    let answered = |text: &str| {
+        classifier
+            .requests_about(text)
+            .into_iter()
+            .filter(|request| request.about && !request.rate_limited)
+            .count()
+    };
+
+    // New mail in the middle of the backfill goes straight to the model.
+    eventually(
+        "the backfill to be under way",
+        DEFAULT_TIMEOUT,
+        async || Ok((answered("Quarterly figures") >= 10).then_some(())),
+    )
+    .await?;
+    let arrived = Instant::now();
+    let live = arrives(&inbox, MALLORY, "Board meeting moved").await?;
+    wait_until_classified(&ada, &live).await?;
+    let requests = classifier.requests_about("Board meeting moved");
+    let asked = requests
+        .iter()
+        .find(|request| request.about)
+        .map(|request| request.at)
+        .ok_or_else(|| rootcause::report!("the new mail never reached the model"))?;
+    let backlog_done_then = requests
+        .iter()
+        .filter(|request| request.at <= asked && !request.about && !request.rate_limited)
+        .count();
+    assert!(
+        asked.saturating_duration_since(arrived) < Duration::from_secs(10),
+        "the new mail reached the model {:?} after it arrived",
+        asked.saturating_duration_since(arrived)
+    );
+    assert!(
+        backlog_done_then + 20 <= BACKLOG,
+        "the new mail waited until {backlog_done_then} of {BACKLOG} backlog threads were done"
+    );
+
+    // TypeSafe turns everything away for five seconds: Jev's retries of the
+    // questions out then are refused too, and the worker slows down.
+    let mark = log_mark(&stack);
+    classifier.rate_limit_for(Duration::from_secs(5));
+    wait_for_logged(&stack, mark, PUSHED_BACK, None, 1).await?;
+    eventually("the backfill to finish", DEFAULT_TIMEOUT * 2, async || {
+        Ok((answered("Quarterly figures") >= BACKLOG).then_some(()))
+    })
+    .await?;
+
+    let requests = classifier.requests_about("Quarterly figures");
+    let backfill: Vec<&ModelRequest> = requests.iter().filter(|request| request.about).collect();
+    let refused_at = backfill
+        .iter()
+        .filter(|request| request.rate_limited)
+        .map(|request| request.at)
+        .max()
+        .ok_or_else(|| rootcause::report!("no question was turned away"))?;
+    let (before, after): (Vec<&ModelRequest>, Vec<&ModelRequest>) = backfill
+        .iter()
+        .filter(|request| !request.rate_limited)
+        .partition(|request| request.at < refused_at);
+    // Never more than the budget, before TypeSafe pushed back or after.
+    assert_within(&before, BUDGET, "before the push back");
+    // After it: half the rate, climbing a tenth of the full rate each 30 s,
+    // so below 48,000 a second for the first 90 s.
+    let first_90s: Vec<&ModelRequest> = after
+        .iter()
+        .copied()
+        .filter(|request| request.at - refused_at < Duration::from_secs(90))
+        .collect();
+    assert!(
+        first_90s.len() >= 10,
+        "only {} backlog threads were asked about in the 90 s after the push back",
+        first_90s.len()
+    );
+    assert_within(&first_90s, BUDGET * 8 / 10, "after the push back");
+    let resumed = after.first().map(|request| request.at - refused_at);
+    tracing::info!(
+        ?resumed,
+        before = before.len(),
+        after = after.len(),
+        "backfill paced"
+    );
 
     stack.finish().await
 }

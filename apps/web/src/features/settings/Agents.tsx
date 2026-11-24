@@ -2,13 +2,18 @@ import { useOpenAgentDm } from '@app/features/agent-dms/open-agent-dm';
 import {
   type AgentKind,
   isCoderHarness,
+  isMacroHarness,
 } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import { t } from '@app/lib/i18n';
 import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
-import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
+import {
+  currentModelId,
+  MODEL_PRETTYNAME,
+  Model,
+} from '@core/component/AI/constant/model';
 import {
   catalogModelLabel,
   modelLabel,
@@ -20,7 +25,7 @@ import {
   MACRO_HARNESS_NAME,
 } from '@core/constant/macroAgent';
 import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -54,8 +59,8 @@ import {
   useAgentModelsQueries,
 } from '@queries/agents/models';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
+import { useConnectors } from '@queries/connectors';
 import { useRunnableHarnessesQuery } from '@queries/harnesses/harnesses';
-import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import {
   useCurrentTeamQuery,
   useIsTeamAdmin,
@@ -85,6 +90,7 @@ import {
   agentSettingsRequest,
   consumeAgentSettingsRequest,
 } from './agentSettingsState';
+import { ConnectorAppPicker } from './ConnectorAppPicker';
 import { CursorConnectPage } from './CursorConnectPage';
 import { AgentSetupStrips } from './components/agent-setup-strips';
 import { AutoArchiveSetting } from './components/auto-archive-setting';
@@ -101,7 +107,6 @@ import {
   apiKeyProviderName,
   apiKeyProviderOf,
 } from './core/agent-api-key';
-import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
   ChoiceRow,
   SettingsCard,
@@ -190,7 +195,7 @@ export function Agents(props: {
   };
   const [editingAgent, setEditingAgent] = createSignal<AgentWithHarnessId>();
   const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
-  const channelsContext = useChannelsContext();
+  const channelDirectory = useChannelDirectory();
   const currentUserId = useUserId();
   const agentsQuery = useAgentsQuery();
   const createAgentMutation = useCreateAgentMutation();
@@ -258,7 +263,7 @@ export function Agents(props: {
     );
   };
   const channelOptions = createMemo(() =>
-    botAssignableChannelOptions(channelsContext.channels())
+    botAssignableChannelOptions(channelDirectory.channels())
   );
   const currentTeamId = () =>
     currentTeamQuery.isSuccess ? currentTeamQuery.data?.team.id : undefined;
@@ -536,13 +541,22 @@ function summarizeAgent(
     defaultModel:
       agent.default_model === DEFAULT_HARNESS_MODEL
         ? catalogModelLabel(agent.default_model, catalogFor(harnessKey))
-        : (MODEL_PRETTYNAME[agent.default_model as Model] ??
-          agent.default_model),
+        : (MODEL_PRETTYNAME[savedModelId(agent) as Model] ??
+          savedModelId(agent)),
     channelSummary,
     share: agent.bot.owner?.type === 'team' ? 'Team' : 'Private',
     persistedAgent: agent,
     editable: true,
   };
+}
+
+/** An agent's saved model. A Macro agent saved on a retired model runs on its
+ * replacement, so it is shown and edited as that replacement. */
+function savedModelId(agent: AgentWithHarnessId): string {
+  const harness = agent.harness_id ?? agent.harness;
+  return isMacroHarness(harness)
+    ? currentModelId(agent.default_model)
+    : agent.default_model;
 }
 
 function whereItRunsLabel(id: string, harness?: ConnectedHarness): string {
@@ -772,7 +786,7 @@ function AgentEditorPage(props: {
     return data.models[0]?.id ?? '';
   };
   const [defaultModelId, setDefaultModelId] = createSignal(
-    props.agent?.default_model ?? ''
+    props.agent ? savedModelId(props.agent) : ''
   );
   const selectedDefaultModelId = () =>
     defaultModelId() || preferredModelId(harnessId());
@@ -783,9 +797,11 @@ function AgentEditorPage(props: {
     if (data?.status !== 'available') return [];
 
     const selected = selectedDefaultModelId();
+    const saved = props.agent;
     const savedModel =
-      props.agent?.default_model === selected &&
-      (props.agent.harness_id ?? props.agent.harness) === harnessId();
+      saved !== undefined &&
+      savedModelId(saved) === selected &&
+      (saved.harness_id ?? saved.harness) === harnessId();
     if (
       selected.length === 0 ||
       data.models.some((model) => model.id === selected)
@@ -824,7 +840,7 @@ function AgentEditorPage(props: {
   const [share, setShare] = createSignal<AgentShare>(
     props.agent?.bot.owner?.type === 'team' ? 'Team' : 'Private'
   );
-  const connections = usePipedreamConnectedSlugs();
+  const connections = useConnectors();
   const [mcp, setMcp] = createSignal<AgentMcpServers>(
     props.agent?.mcp ?? { scope: 'owner_connections' }
   );
@@ -1635,10 +1651,10 @@ function AgentEditorPage(props: {
 
                       <Show when={mcp().scope === 'selected'}>
                         <div class="mt-3 border-t border-edge-muted pt-3">
-                          <PipedreamAppPicker
+                          <ConnectorAppPicker
                             selected={selectedMcpServers()}
                             onChange={setSelectedMcpServers}
-                            connectedSlugs={connections.slugs}
+                            connectedSlugs={connections.connectedApps}
                             connectionsReady={connections.ready}
                             connectContainer={() => pageContentRef}
                           />

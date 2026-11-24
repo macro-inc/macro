@@ -70,6 +70,8 @@ export type HistoryRecord = {
    */
   revision?: number;
   error?: string;
+  /** Its owner stopped it before it finished. */
+  stopped?: boolean;
   /** The sub-routines the run created that still follow the routine. */
   created?: CreatedRoutine[];
 };

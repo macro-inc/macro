@@ -1,4 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import settingsNavMessages from '@app/lib/i18n/locales/en/settings-nav';
 import BellIcon from '@icon/system/regular/bell-simple.svg';
@@ -9,7 +8,8 @@ import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
 import CpuIcon from '@icon/system/regular/cpu.svg';
 import CreditCardIcon from '@icon/system/regular/credit-card.svg';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
-import DeviceMobileIcon from '@icon/system/regular/device-mobile-speaker.svg';
+import MobileIcon from '@icon/system/regular/device-mobile-speaker.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import EmailIcon from '@icon/system/regular/envelope-simple.svg';
 import GaugeIcon from '@icon/system/regular/gauge.svg';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
@@ -25,17 +25,13 @@ import UserGearIcon from '@icon/system/regular/user-gear.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { type Component, createMemo } from 'solid-js';
+import { match } from 'ts-pattern';
 import { useHasPermission } from '../context/user';
 import { isMobile } from '../mobile/isMobile';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
-import { isPlatform } from '../util/platform';
-import {
-  DEV_MODE_ENV,
-  desktopApp,
-  ENABLE_APP_STORE_QR_CODE,
-  ENABLE_EMAIL,
-} from './featureFlags';
+import { getPlatform, isPlatform } from '../util/platform';
+import { DEV_MODE_ENV, ENABLE_EMAIL } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
 
@@ -96,6 +92,43 @@ function tabItem(
     },
   };
 }
+
+/** The native app page is named for the app it describes. */
+function nativeAppLabelKey(): SettingsNavMessage {
+  return match(getPlatform())
+    .with('ios', () => 'tabIosApp' as const)
+    .with('android', () => 'tabAndroidApp' as const)
+    .with('desktop', 'web', () => 'tabDesktopApp' as const)
+    .exhaustive();
+}
+
+/**
+ * The installed app's version, build dates and updates. Its label and icon
+ * follow the platform, so they are getters like `tabItem`'s label.
+ */
+export const NATIVE_APP_TAB_ITEM: SettingsTabItem = {
+  tab: 'Native App',
+  keywords: [
+    'about',
+    'version',
+    'build',
+    'bundle',
+    'update',
+    'upgrade',
+    'ota',
+    'release',
+    'restart',
+  ],
+  get icon() {
+    return isPlatform('desktop') ? DesktopIcon : MobileIcon;
+  },
+  get label() {
+    return t(`settingsNav.${nativeAppLabelKey()}`);
+  },
+  get englishLabel() {
+    return settingsNavMessages[nativeAppLabelKey()];
+  },
+};
 
 /**
  * Single source of truth for the settings categories: ordering, labels, icons
@@ -203,16 +236,24 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         icon: CreditCardIcon,
         keywords: ['payment', 'subscription', 'invoice', 'plan'],
       }),
-      tabItem('tabDesktopApp', {
-        tab: 'Desktop App',
-        icon: DesktopIcon,
-        keywords: ['download', 'mac', 'macos', 'linux', 'version', 'update'],
+      tabItem('tabDownloads', {
+        tab: 'Downloads',
+        icon: DownloadIcon,
+        keywords: [
+          'download',
+          'install',
+          'desktop',
+          'mac',
+          'macos',
+          'linux',
+          'mobile',
+          'phone',
+          'ios',
+          'android',
+          'app',
+        ],
       }),
-      tabItem('tabMobileApp', {
-        tab: 'Mobile App',
-        icon: DeviceMobileIcon,
-        keywords: ['phone', 'ios', 'android'],
-      }),
+      NATIVE_APP_TAB_ITEM,
     ],
   },
   {
@@ -313,8 +354,8 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   'AI Memory': 'ai-memory',
   Inbox: 'inbox',
   Shortcuts: 'shortcuts',
-  'Mobile App': 'mobile-app',
-  'Desktop App': 'desktop-app',
+  Downloads: 'downloads',
+  'Native App': 'app',
   Agent: 'mcp-server',
   Agents: 'agents',
   Routines: 'routines',
@@ -344,6 +385,12 @@ SETTINGS_SLUG_TO_TAB.set('agent-connections', 'Connected');
 // Team connections (Slack export, GitHub App) moved into Integrations.
 SETTINGS_SLUG_TO_TAB.set('team-connections', 'Connected');
 
+/**
+ * The old Mobile App and Desktop App pages: their installed-version details
+ * live on the native app page, and their downloads on Downloads.
+ */
+const LEGACY_APP_SLUGS = new Set(['mobile-app', 'desktop-app']);
+
 /** The URL slug for a settings tab (e.g. `Connected` → `connections`). */
 export const settingsTabToSlug = (tab: SettingsTab): string =>
   SETTINGS_TAB_SLUGS[tab];
@@ -351,8 +398,13 @@ export const settingsTabToSlug = (tab: SettingsTab): string =>
 /** Resolve a URL slug back to its settings tab, or `undefined` if unknown. */
 export const settingsSlugToTab = (
   slug: string | null | undefined
-): SettingsTab | undefined =>
-  slug ? SETTINGS_SLUG_TO_TAB.get(slug) : undefined;
+): SettingsTab | undefined => {
+  if (!slug) return undefined;
+  if (LEGACY_APP_SLUGS.has(slug)) {
+    return isPlatform('web') ? 'Downloads' : 'Native App';
+  }
+  return SETTINGS_SLUG_TO_TAB.get(slug);
+};
 
 /**
  * Returns a predicate gating which settings tabs are available given feature
@@ -361,7 +413,6 @@ export const settingsSlugToTab = (
  * surface a tab the panel won't render.
  */
 export const useSettingsTabAvailable = () => {
-  const desktopAppFlag = useFeatureFlag(desktopApp);
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
   return (tab: SettingsTab): boolean => {
@@ -392,13 +443,14 @@ export const useSettingsTabAvailable = () => {
         return true;
       case 'Shortcuts':
         return !isTouchDevice();
-      case 'Mobile App':
-        return isNativeMobilePlatform() || ENABLE_APP_STORE_QR_CODE;
-      case 'Desktop App':
-        return (
-          isPlatform('desktop') ||
-          (isPlatform('web') && desktopAppFlag().enabled)
-        );
+      // Phones, tablets and the mobile apps have no Downloads page: the
+      // desktop installers don't run there, and a phone can't scan its own
+      // screen.
+      case 'Downloads':
+        return !isNativeMobilePlatform() && !isTouchDevice();
+      // Only an installed app has a version, build and updates of its own.
+      case 'Native App':
+        return !isPlatform('web');
       case 'Agent':
         return !isNativeMobilePlatform();
       case 'Harness':

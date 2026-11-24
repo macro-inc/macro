@@ -10,7 +10,10 @@ use crate::domain::events::*;
 use crate::domain::models::calendar_invitation::CalendarInvitation;
 use email_api_client::domain::models::{CalendarPart, EmailApiError};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::{link::Link, message::Message};
+use models_email::service::{
+    link::{Link, UserProvider},
+    message::Message,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, future::Future, time::Instant};
 use tracing::{Instrument, Span};
@@ -137,6 +140,8 @@ pub struct CorrespondenceContact {
 pub struct CorrespondenceProjection {
     pub link_id: Uuid,
     pub owner: MacroUserIdStr<'static>,
+    /// The inbox's provider, which names the contacts list its people join.
+    pub provider: UserProvider,
     pub is_sent: bool,
     pub contacts: Vec<CorrespondenceContact>,
     pub connections: Vec<MacroUserIdStr<'static>>,
@@ -553,13 +558,10 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
         effects: &mut EffectCounts,
     ) -> Result<(), MailboxError> {
         self.effects
-            .publish(EmailMacroEvent::threads_reindex_requested(
-                ThreadsReindexRequestedMetadata {
-                    link_id: link.id,
-                    owner: link.macro_id.clone(),
-                    thread_ids: vec![thread],
-                    reason: ThreadsReindexReason::ProviderChanged,
-                },
+            .publish(EmailMacroEvent::thread_reindex_requested(
+                link.id,
+                link.macro_id.clone(),
+                thread,
             ))
             .await?;
         effects.reindex_events += 1;
@@ -700,6 +702,7 @@ fn correspondence(context: &ProjectionContext) -> CorrespondenceProjection {
     let mut result = CorrespondenceProjection {
         link_id: context.link.id,
         owner: context.link.macro_id.clone(),
+        provider: context.link.provider,
         is_sent: false,
         contacts: Vec::new(),
         connections: Vec::new(),

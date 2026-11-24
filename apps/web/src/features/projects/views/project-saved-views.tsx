@@ -199,7 +199,10 @@ function createProjectViewDialogs(views: ProjectViews, owner = getOwner()) {
   return { create, edit, remove };
 }
 
-export function ProjectSavedViewsList() {
+export function ProjectSavedViewsList(props: {
+  /** False while another view (Time) shows, so no saved view reads as open. */
+  showSelection?: boolean;
+}) {
   const views = useProjectSavedViews();
   if (!views) return null;
   const dialogs = createProjectViewDialogs(views);
@@ -216,7 +219,11 @@ export function ProjectSavedViewsList() {
             <SavedViewListRow
               view={record()}
               touchActions={isTouchDevice()}
-              selected={views.active() && views.selectedId() === record().id}
+              selected={
+                props.showSelection !== false &&
+                views.active() &&
+                views.selectedId() === record().id
+              }
               scopeKey={views.viewerId()}
               onSelect={() => views.select(record().id)}
               menu={(defer) => (

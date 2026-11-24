@@ -718,6 +718,20 @@ fn anthropic_optional_count(value: &Value, key: &str) -> Option<u64> {
     optional_count(value, key)
 }
 
+// GPT-6 models split `cache_write_tokens` by cache lifetime. The cache write
+// price is the default 30-minute lifetime's; a 12-hour write has no price here.
+// The breakdown must sum to the total, or neither count can be trusted.
+fn default_retention_writes(details: &Value, cache_written: u64) -> bool {
+    let Some(object) = details.as_object() else {
+        return false;
+    };
+    let default = object.get("ttl_30m_tokens").map_or(Some(0), Value::as_u64);
+    let others_empty = object
+        .iter()
+        .all(|(key, value)| key == "ttl_30m_tokens" || value.as_u64() == Some(0));
+    others_empty && default == Some(cache_written)
+}
+
 fn normalize(protocol: WireProtocol, usage: &Value) -> Option<TrustedTokenUsage> {
     let tokens = match protocol {
         WireProtocol::Anthropic => {
@@ -765,11 +779,12 @@ fn normalize(protocol: WireProtocol, usage: &Value) -> Option<TrustedTokenUsage>
             // Audio and prediction tokens need different rate provenance.
             for details in [input_details, output_details] {
                 if let Some(object) = usage.get(details).and_then(Value::as_object)
-                    && object.iter().any(|(key, value)| {
-                        !matches!(
-                            key.as_str(),
-                            "cached_tokens" | "cache_write_tokens" | "reasoning_tokens"
-                        ) && value.as_u64() != Some(0)
+                    && object.iter().any(|(key, value)| match key.as_str() {
+                        "cached_tokens" | "cache_write_tokens" | "reasoning_tokens" => false,
+                        "cache_write_tokens_details" => {
+                            !default_retention_writes(value, cache_written)
+                        }
+                        _ => value.as_u64() != Some(0),
                     })
                 {
                     return None;

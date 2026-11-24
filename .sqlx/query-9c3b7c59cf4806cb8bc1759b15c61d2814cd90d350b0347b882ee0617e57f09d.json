@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_run SET report = $3\n               WHERE session_id = $1 AND user_id = $2 AND settled_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9c3b7c59cf4806cb8bc1759b15c61d2814cd90d350b0347b882ee0617e57f09d"
+}

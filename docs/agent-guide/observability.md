@@ -217,6 +217,23 @@ line "focus usage this minute" carries that minute's tokens and dollars. The
 **Email Focus rollout** Grafana dashboard draws them; see
 [the runbook](../runbooks/email-focus.md).
 
+## Email thread opens
+
+An open thread, from Mail, a reference in a message or a link, is the routed
+view's flow (`view.mail-thread` in Mail). Its `email.thread` phase lasts until
+the first page of messages loads. Inside it, `email.thread.identity` is the wait
+for the local cache to say whether the route is an unsynced local draft; the
+thread request starts only after that answer. Both carry `email.thread_id`.
+
+When the cache has not answered within a second, or the lookup fails, the
+thread is read from the server without storing the answer, and an
+always-exported `email.thread.identity_fallback` span records
+`email.thread_id`, `email.thread.identity_fallback_reason` (`timeout` or
+`error`) and `email.thread.identity_wait_ms`. Search Tempo for
+`{ name="email.thread.identity_fallback" }` to find opens a slow or stalled
+cache held up. The span joins the view's trace when that trace is sampled, and
+starts its own otherwise.
+
 ## Contact searches
 
 Contact pickers read directory pages as they scroll, and read on by themselves
@@ -237,6 +254,21 @@ longest run of them), `contacts.listed`, `contacts.elapsed_ms`,
 time a picker stays open afterwards is not counted. Reading the same input again
 after a search ended, as a reopened picker or a re-read after a contact change
 does, starts a new span with `contacts.repeat` true. Never add the query text.
+
+A `contacts.read_window` answered by the server (`contacts.source` `server`,
+a tab without a usable local cache) has a `contacts.read_server_window` child.
+On the first page of a typed search it has up to two more, read in parallel:
+`contacts.read_server_exact`, the server's exact-name search (never for text
+that holds an `@`), and `contacts.read_server_named`, the lookup by ID of the
+viewer's teammates or of the one person a whole typed address identifies. Each
+has its own `graphql.transport` request, with one exception: a teammate lookup
+equal to one still in flight, as the previous keystroke's is, shares that
+request, so its span has none under it and the request sits in the trace of the
+search that started it. The window records `contacts.named_exact_count` and
+`contacts.named_word_start_count`, how many of the listed people the text
+names, `contacts.named_failed` when one of the extra reads failed, and
+`contacts.named_late` when one had not answered within its budget; either way
+the page was listed without the people that read would have added.
 
 ## Agent sessions
 
@@ -487,7 +519,8 @@ Phases you will see:
   `agent.session.load.projection_ms` with its message count; do not add the two.
   A slow fold with a similarly slow projection is main-thread store work, not
   WASM.
-- Lists and details: `channel.messages`, `channel.detail`, `email.thread`,
+- Lists and details: `channel.messages`, `channel.detail`, `email.thread`
+  (with `email.thread.identity` inside it; see [Email thread opens](#email-thread-opens)),
   `database.detail`, `database.rows`, `calendar.target`, `calendar.occurrences`
   (per mounted page), `activity.feed`, `activity.overview`, `home.items`,
   `home.list`, `drive.items`, `reviews.items`, `settings.plan`, shared Soup

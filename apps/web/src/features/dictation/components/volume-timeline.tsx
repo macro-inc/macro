@@ -48,12 +48,13 @@ export function VolumeTimeline(props: { levels: readonly number[] }) {
         <Index each={visibleLevels()}>
           {(level) => (
             <span
-              class="w-[3px] shrink-0 rounded-full bg-current"
-              // Heights are relative so the strip scales with the container.
-              style={{
-                height: `${(3 + level() * 29) / 0.32}%`,
-                opacity: level() > 0 ? '0.65' : '0.3',
+              class="w-[3px] shrink-0 rounded-full"
+              classList={{
+                'bg-ink-muted': level() > 0,
+                'bg-ink-placeholder': level() <= 0,
               }}
+              // Heights are relative so the strip scales with the container.
+              style={{ height: `${(3 + level() * 29) / 0.32}%` }}
             />
           )}
         </Index>

@@ -7,6 +7,10 @@ export default {
   previousTab: 'Previous Tab',
   goToTab: 'Go to Tab {{number}}',
   goToLastTab: 'Go to Last Tab',
+  // The tabs at the top of a view's pane (Tab, Shift+Tab and 1–9).
+  viewTabNext: 'Next tab',
+  viewTabPrevious: 'Previous tab',
+  viewTabGoTo: 'Go to {{label}}',
   splitCount: {
     one: '{{count}} split',
     other: '{{count}} splits',
@@ -26,6 +30,7 @@ export default {
   projectSections: 'Project sections',
   'project-overview': 'Overview',
   'project-tasks': 'Tasks',
+  'project-time': 'Time',
   // A project's name in its breadcrumb and split title before it loads.
   projectFallbackName: 'Project',
 };
