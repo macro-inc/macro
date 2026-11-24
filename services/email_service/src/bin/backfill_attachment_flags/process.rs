@@ -1,7 +1,7 @@
 use crate::config::Config;
 use anyhow::Context;
 use email_db_client::threads::update::{
-    AttachmentFlagBatch, backfill_attachment_kind_flags_in_blocks,
+    AttachmentFlagBatch, LinkFlagBackfill, backfill_attachment_kind_flags_in_blocks,
     backfill_link_attachment_kind_flags, email_attachments_block_count,
 };
 use sqlx::types::Uuid;
@@ -11,12 +11,15 @@ use std::time::Duration;
 const BATCH_TRIES: u32 = 5;
 /// Batches between progress lines.
 const PROGRESS_EVERY: u64 = 20;
+/// Largest mailbox `MACRO_IDS` flags in one statement; the block pass covers
+/// larger ones without holding their threads' locks for long.
+const MAILBOX_MAX_THREADS: i64 = 20_000;
 /// SQLSTATE of a statement that ran past `statement_timeout`.
 const STATEMENT_TIMEOUT: &str = "57014";
 
 /// Flags every thread on one of the user's links that has a PDF, image or
-/// document attachment, one statement per link. Returns the number of threads
-/// updated.
+/// document attachment, one statement per link, and stops at a link of more
+/// than `MAILBOX_MAX_THREADS` threads. Returns the number of threads updated.
 pub async fn process_macro_id(pool: &sqlx::PgPool, macro_id: &str) -> anyhow::Result<u64> {
     let link_ids: Vec<Uuid> =
         sqlx::query_scalar!("SELECT id FROM email_links WHERE macro_id = $1", macro_id)
@@ -30,7 +33,14 @@ pub async fn process_macro_id(pool: &sqlx::PgPool, macro_id: &str) -> anyhow::Re
 
     let mut total_flagged = 0u64;
     for link_id in link_ids {
-        let flagged = backfill_link_attachment_kind_flags(pool, link_id).await?;
+        let flagged =
+            match backfill_link_attachment_kind_flags(pool, link_id, MAILBOX_MAX_THREADS).await? {
+                LinkFlagBackfill::Flagged(flagged) => flagged,
+                LinkFlagBackfill::TooManyThreads => anyhow::bail!(
+                    "link {link_id} has more than {MAILBOX_MAX_THREADS} threads; \
+                     flag it with the block pass (MACRO_IDS unset)"
+                ),
+            };
 
         // Prefix with the user so interleaved concurrent output stays readable.
         println!("[{macro_id}] link {link_id}: flagged {flagged} threads");
@@ -64,7 +74,7 @@ pub async fn run_pass(pool: &sqlx::PgPool, config: &Config) -> anyhow::Result<()
         first = next;
         batches += 1;
 
-        if batches % PROGRESS_EVERY == 0 || first >= end {
+        if batches.is_multiple_of(PROGRESS_EVERY) || first >= end {
             println!(
                 "block {first} of {end}: flagged {flagged} threads so far, \
                  {} left for a rerun; resume with START_BLOCK={first}",

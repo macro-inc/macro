@@ -13,7 +13,8 @@
 //! resume at; a thread another transaction holds is skipped and counted, so a
 //! second run picks it up. With `MACRO_IDS` it flags the named users'
 //! mailboxes one statement each, to check a run on a small mailbox first; it
-//! is cancelled after five minutes and is not for a large one.
+//! refuses a mailbox of more than 20,000 threads and is cancelled after five
+//! minutes.
 //!
 //! ## Required Environment Variables:
 //! - `DATABASE_URL`: The connection string for the PostgreSQL database.

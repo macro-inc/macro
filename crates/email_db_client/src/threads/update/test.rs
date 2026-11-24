@@ -144,8 +144,8 @@ async fn backfill_only_sets_missing_kind_flags(pool: Pool<Postgres>) -> anyhow::
     let link_id = Uuid::parse_str(KIND_LINK)?;
 
     assert_eq!(
-        backfill_link_attachment_kind_flags(&pool, link_id).await?,
-        1
+        backfill_link_attachment_kind_flags(&pool, link_id, 10).await?,
+        LinkFlagBackfill::Flagged(1)
     );
     assert_eq!(
         fetch_kind_flags(&pool, KIND_THREAD_ALL_KINDS).await?,
@@ -159,8 +159,31 @@ async fn backfill_only_sets_missing_kind_flags(pool: Pool<Postgres>) -> anyhow::
 
     // A rerun has nothing left to set.
     assert_eq!(
-        backfill_link_attachment_kind_flags(&pool, link_id).await?,
-        0
+        backfill_link_attachment_kind_flags(&pool, link_id, 10).await?,
+        LinkFlagBackfill::Flagged(0)
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("sync_thread_attachment_kind_flags")
+    )
+)]
+async fn backfill_refuses_a_mailbox_over_the_thread_cap(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str(KIND_LINK)?;
+
+    assert_eq!(
+        backfill_link_attachment_kind_flags(&pool, link_id, 1).await?,
+        LinkFlagBackfill::TooManyThreads
+    );
+    assert_eq!(
+        fetch_kind_flags(&pool, KIND_THREAD_ALL_KINDS).await?,
+        (false, false, false)
     );
     Ok(())
 }

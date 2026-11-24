@@ -188,6 +188,15 @@ pub struct AttachmentFlagBatch {
     pub flagged: i64,
 }
 
+/// What the per-mailbox attachment flag backfill did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkFlagBackfill {
+    /// The mailbox was flagged; this many threads were updated.
+    Flagged(u64),
+    /// The mailbox has more threads than the caller allows one statement.
+    TooManyThreads,
+}
+
 /// Heap blocks of `email_attachments`, the positions a pass over it walks.
 #[tracing::instrument(skip(pool), err)]
 pub async fn email_attachments_block_count(pool: &sqlx::PgPool) -> anyhow::Result<i64> {
@@ -292,14 +301,16 @@ pub async fn backfill_attachment_kind_flags_in_blocks(
 /// Sets the PDF, image and document attachment flags on every thread of one
 /// link that has a matching attachment, for threads ingested before the
 /// flags existed. Only ever sets flags; ingest and delete maintain them after.
-/// One statement reads the whole mailbox, so it is for a mailbox small enough
-/// to check a run on; [`backfill_attachment_kind_flags_in_blocks`] covers the
-/// rest. Returns the number of threads updated.
+/// One statement reads the whole mailbox and holds the row locks of every
+/// thread it flags until it commits, so it refuses a mailbox of more than
+/// `max_threads` threads; [`backfill_attachment_kind_flags_in_blocks`] covers
+/// those.
 #[tracing::instrument(skip(pool), err)]
 pub async fn backfill_link_attachment_kind_flags(
     pool: &sqlx::PgPool,
     link_id: Uuid,
-) -> anyhow::Result<u64> {
+    max_threads: i64,
+) -> anyhow::Result<LinkFlagBackfill> {
     let mut tx = pool.begin().await?;
     sqlx::query!("SET LOCAL statement_timeout = '5min'")
         .execute(&mut *tx)
@@ -307,6 +318,21 @@ pub async fn backfill_link_attachment_kind_flags(
     sqlx::query!("SET LOCAL lock_timeout = '2s'")
         .execute(&mut *tx)
         .await?;
+
+    let threads = sqlx::query_scalar!(
+        r#"
+        SELECT count(*) AS "threads!"
+        FROM (SELECT 1 FROM email_threads WHERE link_id = $1 LIMIT $2) capped
+        "#,
+        link_id,
+        max_threads + 1,
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    if threads > max_threads {
+        return Ok(LinkFlagBackfill::TooManyThreads);
+    }
+
     let flagged = sqlx::query!(
         r#"
         UPDATE email_threads t
@@ -338,7 +364,7 @@ pub async fn backfill_link_attachment_kind_flags(
     .await?
     .rows_affected();
     tx.commit().await?;
-    Ok(flagged)
+    Ok(LinkFlagBackfill::Flagged(flagged))
 }
 
 /// Recomputes the denormalized `email_threads.is_signal` flag: true iff the
