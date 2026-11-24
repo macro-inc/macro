@@ -90,6 +90,23 @@ describe('createChannelWrites', () => {
     });
   });
 
+  it('tells the other tabs once a write changed the device', async () => {
+    const stored = graphqlMessage(7);
+    const { writes } = setup(() => ({
+      data: written('sendChannelMessage', stored),
+      disposition: { kind: 'committed' },
+    }));
+    const heard: unknown[] = [];
+    const other = new BroadcastChannel('macro.channel-timeline.writes');
+    other.onmessage = (event) => heard.push(event.data);
+
+    await writes.send(send(stored.id));
+    await vi.waitFor(() =>
+      expect(heard).toContainEqual({ channelIds: [CHANNEL_ID] })
+    );
+    other.close();
+  });
+
   it('predicts a reply after its thread and counts it on the root the device holds', async () => {
     const root = graphqlMessage(1, {
       thread: { ...graphqlMessage(1).thread!, replyCount: 2 },

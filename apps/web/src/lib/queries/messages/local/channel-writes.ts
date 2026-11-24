@@ -40,6 +40,7 @@ import {
   mapChannelTimelineEntry,
   unplacedSortKey,
 } from './channel-map';
+import { announceWritten } from './channel-tab-writes';
 import { queryChannelNetwork } from './channel-network';
 import type { ChannelPageEntry } from './channel-pages';
 import { readTimelineRecords } from './channel-pages';
@@ -652,8 +653,12 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       deletes: write.deletes,
     });
     deps.runtime.notifyChanged(write.channelId);
-    // The optimistic record is on the device: windows read it from here.
-    const onEnqueued = () => deps.runtime.notifyChanged(write.channelId);
+    // The optimistic record is on the device: windows read it from here, in
+    // every tab.
+    const onEnqueued = () => {
+      deps.runtime.notifyChanged(write.channelId);
+      announceWritten(write.channelId);
+    };
     try {
       // The span covers the hand-off and a direct answer; a queued write can
       // wait for hours, which is not this operation's duration.
@@ -701,6 +706,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       removePending(write.channelId, write.uuid);
       // Committed or rolled back, the device's copy changed.
       deps.runtime.notifyChanged(write.channelId);
+      announceWritten(write.channelId);
     }
   }
 

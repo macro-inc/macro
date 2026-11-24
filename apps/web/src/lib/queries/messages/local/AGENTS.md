@@ -19,7 +19,11 @@ TanStack path in `../` runs untouched.
 - Follow: one runtime per host (`channel-sync-runtime.ts`) tracks the sequence
   the device holds per channel, applies subscription frames
   (`channel-stream.ts`), catches up open channels on reconnect, and tells open
-  timelines and threads to reread (`onChanged`).
+  timelines and threads to reread (`onChanged`). Tabs share the device but hear
+  only their own writes and the server's frames, so a write announces its
+  channel to the other tabs once the queue stores it and once it settles
+  (`channel-tab-writes.ts`, the `macro.channel-timeline.writes`
+  BroadcastChannel), and their runtimes tell the channel's views to reread.
 - Write: `channel-writes.ts` enqueues the `*ChannelMessage` mutations on the
   durable cache mutation queue and waits for their settlement; a retired host
   (`graphql-soup.ts` cleanup) fails the writes still waiting. When the cache

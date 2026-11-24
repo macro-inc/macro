@@ -425,6 +425,16 @@ describe('createChannelSyncRuntime', () => {
     ]);
   });
 
+  it("rereads a channel another tab's write changed", async () => {
+    const { changed } = setup(5n);
+
+    // With no connection no frame tells this tab: the other tab says so.
+    const other = new BroadcastChannel('macro.channel-timeline.writes');
+    other.postMessage({ channelIds: [CHANNEL_ID] });
+    other.close();
+    await waitFor(() => changed.mock.calls.length === 1);
+  });
+
   it('gives a channel evicted in another tab a sync row again', async () => {
     const { host, runtime } = setup(null);
     runtime.onFrame(frame(6), true);

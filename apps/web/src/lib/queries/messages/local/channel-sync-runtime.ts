@@ -18,6 +18,7 @@ import {
   RESET_FENCE_WAIT_MS,
   whileNoFills,
 } from './channel-resets';
+import { onWrittenElsewhere } from './channel-tab-writes';
 
 export type ChannelChangesPage = ChannelChangesQuery['user']['channelChanges'];
 
@@ -219,6 +220,10 @@ export function createChannelSyncRuntime(
   };
   // Another tab's eviction removed these channels' sync rows too.
   const stopEvictions = onEvictedElsewhere(forget);
+  // Another tab's write is on the device too: its views read it again.
+  const stopWrites = onWrittenElsewhere((channelIds) => {
+    for (const channelId of channelIds) notifyChanged(channelId);
+  });
 
   const run = <A>(effect: Effect.Effect<A, unknown>): Promise<A> =>
     Effect.runPromise(effect);
@@ -665,6 +670,7 @@ export function createChannelSyncRuntime(
     dispose() {
       disposed = true;
       stopEvictions();
+      stopWrites();
       Effect.runFork(Scope.close(scope, Exit.void));
       channels.clear();
       listeners.clear();
