@@ -4355,5 +4355,36 @@ describe('CacheWorkerCore', () => {
       );
       expect(engine.syncAbort).toHaveBeenCalledOnce();
     });
+
+    it('refreshes every view when a sync write fails in the engine', async () => {
+      const engine = {
+        ...idleSyncEngine(),
+        syncFeed: vi.fn().mockResolvedValue(1),
+        // The page was written; saving its lane state failed.
+        syncApplyNext: vi.fn().mockRejectedValue(new Error('disk full')),
+        currentRevision: vi.fn().mockResolvedValue('7'),
+      };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response('{}\n'))
+      );
+      const { core, port, messages } = await startedCore(engine);
+
+      await core.handleRequest(port, { id: 2, kind: 'sync-start', args });
+
+      expect(messages).toContainEqual({
+        authorityGeneration: TEST_AUTHORITY_GENERATION,
+        kind: 'cache-changed',
+        revision: '7',
+      });
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          id: 2,
+          result: expect.objectContaining({
+            failure: { kind: 'write', message: 'disk full' },
+          }),
+        })
+      );
+    });
   });
 });

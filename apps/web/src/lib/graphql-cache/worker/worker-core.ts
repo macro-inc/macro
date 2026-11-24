@@ -17,6 +17,7 @@ import type {
   CachePush,
   CacheRequest,
   CacheResponse,
+  CacheRevision,
   CacheRevisionResult,
   CalendarCommitCacheResult,
   CalendarRangeCacheResult,
@@ -1035,6 +1036,7 @@ export class CacheWorkerCore {
       result = await task.run(engine);
       after = await engine.currentAuthority(this.scope!);
     } catch (error) {
+      await this.publishFailedSyncWrite(engine, error);
       this.executingAuthority = undefined;
       throw error;
     }
@@ -1043,6 +1045,35 @@ export class CacheWorkerCore {
     this.executingAuthority = after.generation;
     this.syncAuthority = after.generation;
     return result;
+  }
+
+  /**
+   * A sync write that fails in the engine may have committed part of its
+   * work first (a page written before its lane state, the first chunks of a
+   * membership deletion, a whole page whose authority could not be read
+   * after), which its frame's publication never announces.
+   * Every open view refreshes from the engine's revision instead. Failures
+   * the engine marks (stream, aborted) wrote nothing.
+   */
+  private async publishFailedSyncWrite(
+    engine: CacheEngine,
+    error: unknown
+  ): Promise<void> {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'cacheSyncFailure' in error
+    )
+      return;
+    let revision: CacheRevision;
+    try {
+      revision = parseCacheRevision(await engine.currentRevision());
+    } catch {
+      // An engine that cannot answer is latched for replacement, which
+      // refreshes every view anyway.
+      return;
+    }
+    this.push({ kind: 'cache-changed', revision });
   }
 
   private async dispatch(request: CacheRequest): Promise<unknown> {
