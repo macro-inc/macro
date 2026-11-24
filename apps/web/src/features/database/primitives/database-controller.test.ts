@@ -214,6 +214,108 @@ describe('shared database controller', () => {
       baseVersions: { table: 8 },
     });
   });
+  it('waits for a column added while a reorder waits, and orders it too', async () => {
+    const { controller, applyOps, setColumns, setVersion } = fixture();
+    setColumns([
+      {
+        id: 'name',
+        name: 'Name',
+        dataType: 'STRING',
+        writable: true,
+        isMultiSelect: false,
+        options: [],
+      },
+    ]);
+    let finishFirst!: (
+      result: Awaited<ReturnType<DatabaseApi['applyOps']>>
+    ) => void;
+    let finishSecond!: (
+      result: Awaited<ReturnType<DatabaseApi['applyOps']>>
+    ) => void;
+    applyOps
+      .mockReturnValueOnce(
+        new ResultAsync(
+          new Promise((resolve) => {
+            finishFirst = resolve;
+          })
+        )
+      )
+      .mockReturnValueOnce(
+        new ResultAsync(
+          new Promise((resolve) => {
+            finishSecond = resolve;
+          })
+        )
+      );
+    const first = controller.schemaEditing()!.createDefaultColumn();
+    const firstId = controller.data.rows.columns()[1].id;
+    const reordered = controller.schemaEditing()!.reorder([firstId, 'name']);
+    const second = controller.schemaEditing()!.createDefaultColumn();
+    const secondId = controller.data.rows.columns()[2].id;
+    await vi.waitFor(() => expect(applyOps).toHaveBeenCalledTimes(1));
+    setVersion(8);
+    finishFirst(ok({ results: [] }));
+    expect((await first).isOk()).toBe(true);
+    await vi.waitFor(() => expect(applyOps).toHaveBeenCalledTimes(2));
+    expect(applyOps.mock.calls[1][0].ops[0]).toMatchObject({
+      column: secondId,
+      change: { kind: 'create' },
+    });
+    setVersion(9);
+    finishSecond(ok({ results: [] }));
+    expect((await second).isOk()).toBe(true);
+    expect((await reordered).isOk()).toBe(true);
+    expect(applyOps).toHaveBeenLastCalledWith({
+      ops: [
+        {
+          kind: 'table',
+          table: 'table',
+          change: {
+            kind: 'reorder_columns',
+            order: [firstId, 'name', secondId],
+          },
+        },
+      ],
+      baseVersions: { table: 9 },
+    });
+  });
+  it('deletes a column at the version a pending column creation leaves', async () => {
+    const { controller, applyOps, setVersion } = fixture();
+    let finish!: (result: Awaited<ReturnType<DatabaseApi['applyOps']>>) => void;
+    applyOps.mockReturnValueOnce(
+      new ResultAsync(
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+      )
+    );
+    const created = controller.schemaEditing()!.createDefaultColumn();
+    const removed = controller.schemaEditing()!.remove('notes');
+    await vi.waitFor(() => expect(applyOps).toHaveBeenCalledTimes(1));
+    setVersion(8);
+    finish(ok({ results: [] }));
+    expect((await created).isOk()).toBe(true);
+    expect((await removed).isOk()).toBe(true);
+    expect(applyOps).toHaveBeenLastCalledWith({
+      ops: [
+        {
+          kind: 'column',
+          table: 'table',
+          column: 'notes',
+          change: { kind: 'delete' },
+        },
+      ],
+      baseVersions: { table: 8 },
+    });
+  });
+  it('forgets a deleted column the schema never showed', async () => {
+    const { controller } = fixture();
+    const created = await controller.schemaEditing()!.createDefaultColumn();
+    expect(
+      (await controller.schemaEditing()!.remove(created._unsafeUnwrap())).isOk()
+    ).toBe(true);
+    expect(controller.data.rows.columns()).toEqual([]);
+  });
   it('puts a replacing formula column in place of every column, including one still being created', async () => {
     const { controller, applyOps, setColumns, setVersion } = fixture();
     setColumns([
