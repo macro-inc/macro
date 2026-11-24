@@ -1126,3 +1126,32 @@ async fn a_version_of_unknown_type_is_not_recorded_and_is_tried_again() {
     assert_eq!(again.items[0].unidentified, vec![3]);
     assert_eq!(world.fetched(), 2);
 }
+
+#[tokio::test]
+async fn a_document_trashed_before_its_creation_was_recorded_is_replaced_by_import() {
+    let world = World::with_items(&[("bracket", 1)]);
+    world.documents.0.lock().unwrap().crash_after_create = true;
+    import(&world, &["bracket"]).await;
+    let orphan = world.repo.row(&item_id("bracket")).item.document_id;
+    world
+        .documents
+        .0
+        .lock()
+        .unwrap()
+        .documents
+        .get_mut(&orphan)
+        .unwrap()
+        .live = false;
+
+    let synced = world
+        .service()
+        .sync(&user(), SyncScope::All { from: None })
+        .await
+        .unwrap();
+    let reimported = import(&world, &["bracket"]).await;
+
+    assert_eq!(synced.items[0].status, ItemStatus::DocumentGone);
+    assert_eq!(reimported.items[0].status, ItemStatus::Synced);
+    assert_ne!(reimported.items[0].document_id, Some(orphan));
+    assert_eq!(reimported.items[0].imported_now, 1);
+}

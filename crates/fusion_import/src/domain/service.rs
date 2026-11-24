@@ -165,6 +165,8 @@ enum ItemFailure {
     Ledger(rootcause::Report),
     #[error("documents failed: {0:?}")]
     Documents(rootcause::Report),
+    #[error("the item's document was trashed")]
+    DocumentGone,
 }
 
 fn ledger(error: impl std::error::Error + Send + Sync + 'static) -> ItemFailure {
@@ -313,6 +315,7 @@ where
                 }
                 ItemFailure::Aps(ApsError::NotFound | ApsError::Forbidden) => ItemStatus::NotFound,
                 ItemFailure::Aps(ApsError::RateLimited { .. }) => ItemStatus::RateLimited,
+                ItemFailure::DocumentGone => ItemStatus::DocumentGone,
                 other => {
                     tracing::warn!(error = ?other, "a Fusion item failed to sync");
                     ItemStatus::Failed
@@ -535,30 +538,42 @@ where
             }
         };
 
-        // A document with the chosen id that exists already was made by an
-        // attempt that stopped before recording it. Adding the same bytes
-        // answers the version that attempt stored, without adding one.
-        let created = self
+        // A live document under the chosen id was made by an attempt that
+        // stopped before recording it: adding the same bytes answers the
+        // version that attempt stored, without adding one. Asking first
+        // means the bytes go to exactly one call, so they are never copied.
+        let live = self
             .documents
-            .create(
-                user,
-                item.document_id,
-                &document_name,
-                file_type,
-                bytes.clone(),
-            )
+            .is_live(item.document_id)
             .await
             .map_err(documents)?;
-        let document_version_id = match created {
-            CreatedCad::Created {
-                document_version_id,
-            } => document_version_id,
-            CreatedCad::AlreadyExists => {
-                self.documents
-                    .add_version(user, item.document_id, bytes)
-                    .await
-                    .map_err(documents)?
-                    .document_version_id
+        let document_version_id = if live {
+            self.documents
+                .add_version(user, item.document_id, bytes)
+                .await
+                .map_err(documents)?
+                .document_version_id
+        } else {
+            let created = self
+                .documents
+                .create(user, item.document_id, &document_name, file_type, bytes)
+                .await
+                .map_err(documents)?;
+            match created {
+                CreatedCad::Created {
+                    document_version_id,
+                } => document_version_id,
+                // It exists but is not live: that attempt's document was
+                // trashed. Linking it lets `import` replace it and `sync`
+                // report it gone, as for any trashed document.
+                CreatedCad::AlreadyExists => {
+                    self.repo
+                        .mark_linked(user, &item.item_id)
+                        .await
+                        .map_err(ledger)?;
+                    item.state = LinkState::Linked;
+                    return Err(ItemFailure::DocumentGone);
+                }
             }
         };
 

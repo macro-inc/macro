@@ -78,8 +78,9 @@ impl CadDocuments for FusionCadDocuments {
             Ok(created) => Ok(CreatedCad::Created {
                 document_version_id: created.document_version_id(),
             }),
-            // An earlier attempt made the document under this id before it
-            // could record it; the import adds the same bytes to answer it.
+            // A document already holds this id: the import checks liveness
+            // first, so it is one an earlier attempt made and the user
+            // trashed. The import reports it gone.
             Err(DocumentError::Conflict(_)) => Ok(CreatedCad::AlreadyExists),
             Err(error) => Err(error.into()),
         }
