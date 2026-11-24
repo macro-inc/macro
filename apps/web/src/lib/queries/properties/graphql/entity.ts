@@ -1,6 +1,7 @@
 import { createUrqlMutation } from '@app/lib/urql-solid/create-urql-mutation';
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
 import type { UrqlMutationExecutor } from '@app/lib/urql-solid/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import {
   executeOptimisticMutation,
@@ -381,7 +382,10 @@ export function entityPropertyOptimisticMutationUuid(args: {
 }
 
 /** Adds whose request is still in flight, by the property slot they fill. */
-const pendingAdds = new Map<string, Promise<void>>();
+const pendingAdds = new Map<string, Promise<unknown>>();
+
+/** A save goes out after this even if an add of its property is unanswered. */
+const ADD_HOLD_LIMIT_MS = 30_000;
 
 function entityPropertySlot(input: GraphqlEntityPropertyMutationInput): string {
   return entityPropertyOptimisticMutationUuid({
@@ -404,13 +408,34 @@ async function sendAdd<T>(slot: string, send: () => Promise<T>): Promise<T> {
   const answered = new Promise<void>((resolve) => {
     release = resolve;
   });
-  pendingAdds.set(slot, answered);
+  // A property can be added again while an earlier add is unanswered, so a
+  // save waits for all of them.
+  const unanswered = Promise.all([pendingAdds.get(slot), answered]);
+  pendingAdds.set(slot, unanswered);
+
+  const forget = async () => {
+    await unanswered;
+    if (pendingAdds.get(slot) === unanswered) pendingAdds.delete(slot);
+  };
+  fireAndForget(forget(), 'entity-properties');
 
   try {
     return await send();
   } finally {
-    if (pendingAdds.get(slot) === answered) pendingAdds.delete(slot);
     release();
+  }
+}
+
+async function holdForAdds(slot: string): Promise<void> {
+  const deadline = Date.now() + ADD_HOLD_LIMIT_MS;
+
+  while (pendingAdds.has(slot)) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return;
+    await Promise.race([
+      pendingAdds.get(slot),
+      new Promise((resolve) => setTimeout(resolve, remaining)),
+    ]);
   }
 }
 
@@ -438,8 +463,8 @@ async function executeGraphqlEntityPropertyMutation(
     );
   if (input.kind === 'add') return sendAdd(entityPropertySlot(input), send);
 
-  const adding = pendingAdds.get(entityPropertySlot(input));
-  if (adding) await adding;
+  const slot = entityPropertySlot(input);
+  if (pendingAdds.has(slot)) await holdForAdds(slot);
   return send();
 }
 

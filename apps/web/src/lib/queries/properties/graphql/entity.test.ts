@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { cacheSessionExchange } from '@graphql-cache/exchange/session-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { MutationSettlement } from '@graphql-cache/protocol';
@@ -396,6 +397,143 @@ describe('GraphQL entity property mutations', () => {
       'definition-2:{"string":"other"}',
       'definition-1:{"string":"hello"}',
     ]);
+  });
+
+  it('holds a save for every unanswered add of its property', async () => {
+    const answers: Array<() => void> = [];
+    const sent: unknown[] = [];
+    const mutation = vi.fn(
+      (
+        _document: unknown,
+        variables: { input: { value: unknown } },
+        context: Record<string, unknown>
+      ) => ({
+        toPromise: () => {
+          const { value } = variables.input;
+          sent.push(value);
+          const result = {
+            operation: { kind: 'mutation', context } as Operation,
+            data: { setEntityProperty: { id: 'assignment-1' } },
+            stale: false,
+            hasNext: false,
+          };
+          if (value !== null) return Promise.resolve(result);
+          return new Promise((resolve) => {
+            answers.push(() => resolve(result));
+          });
+        },
+      })
+    );
+    graphqlClientState.current = { mutation } as unknown as Client;
+    let add!: ReturnType<typeof createGraphqlAddEntityPropertyMutation>;
+    let save!: ReturnType<typeof createGraphqlBulkSaveEntityPropertiesMutation>;
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      add = createGraphqlAddEntityPropertyMutation();
+      save = createGraphqlBulkSaveEntityPropertiesMutation();
+    });
+    const input = {
+      entityType: 'TASK' as const,
+      entityId: 'task-1',
+      propertyDefinitionId: 'definition-1',
+    };
+    const adding = [add.mutateAsync(input), add.mutateAsync(input)];
+    const saving = save.mutateAsync({
+      properties: [
+        {
+          entityType: 'DOCUMENT',
+          entityId: 'task-1',
+          property: {
+            id: 'definition-1',
+            displayName: 'Fruit',
+            valueType: 'STRING',
+            isMultiSelect: false,
+            isMetadata: false,
+            isSystem: false,
+            owner: { scope: 'user', user_id: 'macro|viewer@example.com' },
+            createdAt: new Date(0),
+            updatedAt: new Date(0),
+          },
+          apiValues: { valueType: 'STRING', value: 'hello' },
+        },
+      ],
+    });
+    await vi.waitFor(() => expect(answers).toHaveLength(2));
+
+    answers[1]!();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sent).toEqual([null, null]);
+
+    answers[0]!();
+    await Promise.all([...adding, saving]);
+    expect(sent).toEqual([null, null, { string: 'hello' }]);
+  });
+
+  it('sends a save when its add stays unanswered for too long', async () => {
+    vi.useFakeTimers();
+    const sent: unknown[] = [];
+    const mutation = vi.fn(
+      (
+        _document: unknown,
+        variables: { input: { value: unknown } },
+        context: Record<string, unknown>
+      ) => ({
+        toPromise: () => {
+          const { value } = variables.input;
+          sent.push(value);
+          if (value === null) return new Promise(() => {});
+          return Promise.resolve({
+            operation: { kind: 'mutation', context } as Operation,
+            data: { setEntityProperty: { id: 'assignment-1' } },
+            stale: false,
+            hasNext: false,
+          });
+        },
+      })
+    );
+    graphqlClientState.current = { mutation } as unknown as Client;
+    let add!: ReturnType<typeof createGraphqlAddEntityPropertyMutation>;
+    let save!: ReturnType<typeof createGraphqlBulkSaveEntityPropertiesMutation>;
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      add = createGraphqlAddEntityPropertyMutation();
+      save = createGraphqlBulkSaveEntityPropertiesMutation();
+    });
+    fireAndForget(
+      add.mutateAsync({
+        entityType: 'TASK',
+        entityId: 'task-2',
+        propertyDefinitionId: 'definition-1',
+      }),
+      'entity-properties'
+    );
+    const saving = save.mutateAsync({
+      properties: [
+        {
+          entityType: 'DOCUMENT',
+          entityId: 'task-2',
+          property: {
+            id: 'definition-1',
+            displayName: 'Fruit',
+            valueType: 'STRING',
+            isMultiSelect: false,
+            isMetadata: false,
+            isSystem: false,
+            owner: { scope: 'user', user_id: 'macro|viewer@example.com' },
+            createdAt: new Date(0),
+            updatedAt: new Date(0),
+          },
+          apiValues: { valueType: 'STRING', value: 'hello' },
+        },
+      ],
+    });
+
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(sent).toEqual([null]);
+    await vi.advanceTimersByTimeAsync(2_000);
+    await saving;
+    expect(sent).toEqual([null, { string: 'hello' }]);
+    vi.useRealTimers();
   });
 
   it('sends a save after an add of its property has failed', async () => {
