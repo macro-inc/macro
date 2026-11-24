@@ -35,18 +35,10 @@ export function ReportPerson(props: { userId: string }): JSX.Element {
   );
 }
 
-function canEditTask(task: ReportTask): boolean {
-  const permission = task.viewerPermission;
-  return (
-    permission?.__typename === 'GraphqlAccessLevelPermission' &&
-    (permission.accessLevel === 'EDIT' || permission.accessLevel === 'OWNER')
-  );
-}
-
 /**
  * A task's priority then status, by the Tasks list row's own controls and
- * spacing: a phone's narrow row on phones, the list row elsewhere. A viewer
- * who can only view the task sees them without being offered a change.
+ * spacing: a phone's narrow row on phones, the list row elsewhere. They only
+ * show here, as a task's status does on the timeline: a press opens the row.
  */
 function ReportTaskLead(props: { task: ReportTask }): JSX.Element {
   const entity = createMemo(() => ({
@@ -60,7 +52,6 @@ function ReportTaskLead(props: { task: ReportTask }): JSX.Element {
           : undefined,
     },
   }));
-  const canEdit = () => canEditTask(props.task);
   return (
     <span
       class={cn('flex shrink-0 items-center', isMobile() ? 'gap-1' : 'gap-2')}
@@ -68,7 +59,7 @@ function ReportTaskLead(props: { task: ReportTask }): JSX.Element {
       <TaskPropertyControl
         entity={entity()}
         property="priority"
-        canEdit={canEdit()}
+        canEdit={false}
       />
       <span
         class={cn(
@@ -79,7 +70,7 @@ function ReportTaskLead(props: { task: ReportTask }): JSX.Element {
         <TaskPropertyControl
           entity={entity()}
           property="status"
-          canEdit={canEdit()}
+          canEdit={false}
         />
       </span>
     </span>

@@ -31,10 +31,7 @@ function selectProperty(
   };
 }
 
-/**
- * A task as the summary reads it. By default the viewer can edit it and it
- * has neither status nor priority set.
- */
+/** A task as the summary reads it; by default neither status nor priority is set. */
 export function reportTask(
   id: string,
   name: string,
@@ -42,7 +39,6 @@ export function reportTask(
     status?: StatusId;
     priority?: PriorityId;
     completed?: boolean;
-    access?: 'VIEW' | 'COMMENT' | 'EDIT' | 'OWNER';
   } = {}
 ): ReportTask {
   return {
@@ -67,19 +63,11 @@ export function reportTask(
           ]
         : []),
     ],
-    viewerPermission: {
-      __typename: 'GraphqlAccessLevelPermission',
-      accessLevel: options.access ?? 'EDIT',
-    },
   };
 }
 
-/** Stand-ins for the host's priority, status and timer, naming their task. */
+/** Stand-ins for the host's read-only priority, status and timer, naming their task. */
 export const TEST_TASK_PARTS: TaskLabelParts = {
-  Lead: (props) => (
-    <button type="button" onClick={(event) => event.stopPropagation()}>
-      Status of {props.task.id}
-    </button>
-  ),
+  Lead: (props) => <button type="button">Status of {props.task.id}</button>,
   Timer: (props) => <span>Timer on {props.taskId}</span>,
 };

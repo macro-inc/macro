@@ -117,11 +117,6 @@ it('opens the stacked summary and a person to their tasks, and opens a task from
   expect(
     screen.getAllByRole('button', { name: 'Status of task-b' })
   ).toHaveLength(2);
-  for (const status of screen.getAllByRole('button', {
-    name: 'Status of task-b',
-  }))
-    fireEvent.click(status);
-  expect(onOpenTask).not.toHaveBeenCalled();
   const reviews = screen.getAllByRole('button', { name: /Review the plan/ });
   fireEvent.click(reviews[0] as HTMLElement);
   expect(onOpenTask).toHaveBeenCalledWith('task-b', {

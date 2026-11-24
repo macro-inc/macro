@@ -174,7 +174,10 @@ function MyWeekDesktop(props: TasksTimeViewProps): JSX.Element {
           today={props.clock.today()}
           rows={rows()}
           rowLabel={(taskId) => (
-            <span class="flex min-w-0 items-center gap-2">
+            <div
+              class="flex min-w-0 items-center gap-2"
+              onClick={(event) => props.onOpenTask(taskId, { event })}
+            >
               <Show when={taskOf(taskId)}>
                 {(task) => <props.task.Lead task={task()} />}
               </Show>
@@ -182,13 +185,12 @@ function MyWeekDesktop(props: TasksTimeViewProps): JSX.Element {
                 <button
                   type="button"
                   class="block min-w-0 truncate rounded-sm text-left not-touch:hover:underline"
-                  onClick={(event) => props.onOpenTask(taskId, { event })}
                 >
                   {nameOf(taskId)}
                 </button>
                 <props.task.Timer taskId={taskId} />
               </span>
-            </span>
+            </div>
           )}
           cell={(taskId, day, minutes) => (
             <WeekCell

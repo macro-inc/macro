@@ -198,18 +198,13 @@ it('shows the three figures and opens a person to their tasks', () => {
   });
 });
 
-it('shows a person’s tasks as task rows whose status and priority never open the task', () => {
+it('shows a person’s tasks as task rows that open from anywhere, their status too', () => {
   const { onOpenTask } = renderTime();
 
   fireEvent.click(screen.getByRole('button', { name: /alice/ }));
 
-  const status = screen.getByRole('button', { name: 'Status of task-b' });
   expect(screen.getByText('Timer on task-b')).toBeTruthy();
-  fireEvent.click(status);
-  expect(onOpenTask).not.toHaveBeenCalled();
-
-  const row = status.parentElement as HTMLElement;
-  fireEvent.click(row);
+  fireEvent.click(screen.getByRole('button', { name: 'Status of task-b' }));
   expect(onOpenTask).toHaveBeenCalledWith('task-b', {
     event: expect.any(MouseEvent),
   });
@@ -223,8 +218,9 @@ it('reads the breakdown again by task, with the people under each task', () => {
   expect(inputs.at(-1)).toMatchObject({ groupBy: 'TASK', thenBy: 'PERSON' });
   const group = screen.getByRole('button', { name: /^Draft the plan/ });
   fireEvent.click(screen.getByRole('button', { name: 'Status of task-a' }));
-  expect(group.getAttribute('aria-expanded')).toBe('false');
+  expect(group.getAttribute('aria-expanded')).toBe('true');
   expect(onOpenTask).not.toHaveBeenCalled();
+  fireEvent.click(group);
   fireEvent.click(group);
   expect(screen.getByText('bob')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Open Draft the plan' }));

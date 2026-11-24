@@ -376,12 +376,12 @@ it('steps a week at a time and comes back to this week', () => {
   expect(screen.queryByRole('button', { name: 'This week' })).toBeNull();
 });
 
-it('opens a task from its name, beside its status and priority', () => {
+it('opens a task from its name, and from its status and priority', () => {
   const { onOpenTask } = renderWeek('week');
 
-  fireEvent.click(screen.getByRole('button', { name: 'Status of task-a' }));
-  expect(onOpenTask).not.toHaveBeenCalled();
   expect(screen.getByText('Timer on task-a')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Status of task-a' }));
+  expect(onOpenTask).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole('button', { name: 'Draft the plan' }));
 
   expect(onOpenTask).toHaveBeenCalledWith('task-a', {

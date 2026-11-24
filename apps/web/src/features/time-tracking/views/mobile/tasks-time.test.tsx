@@ -196,7 +196,8 @@ it('lists the week by day and logs time on a picked task through its sheet', asy
   });
   expect(screen.getByRole('region', { name: 'Mon, Nov 23' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Status of task-a' }));
-  expect(onOpenTask).not.toHaveBeenCalled();
+  expect(onOpenTask).toHaveBeenCalledOnce();
+  onOpenTask.mockClear();
   fireEvent.click(screen.getByRole('button', { name: /Draft the plan/ }));
   expect(onOpenTask).toHaveBeenCalledWith('task-a', {
     event: expect.any(MouseEvent),

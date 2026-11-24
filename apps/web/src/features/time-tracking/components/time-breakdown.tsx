@@ -57,8 +57,8 @@ function Length(props: { minutes: number }): JSX.Element {
 
 /**
  * A row that opens its task: the task's priority and status, then a button
- * holding the rest. A press anywhere on the row opens the task; the status
- * and priority controls keep their own presses.
+ * holding the rest. They sit beside the button because they are buttons
+ * themselves; a press anywhere on the row, on them too, opens the task.
  */
 export function OpenTaskRow(props: {
   timeKey: TimeSummaryKey;

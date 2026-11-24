@@ -2,7 +2,8 @@
 # orders the groups and leaves out tasks the viewer cannot see.
 
 # A task as its row in the Tasks list shows it: status and priority are
-# properties, and the viewer's permission says whether they can change them.
+# properties. No viewerPermission: the server checks it one task at a time,
+# and a report can hold thousands, so time views show them read-only.
 fragment TimeSummaryTaskFields on GraphqlSoupDocument {
   __typename
   id
@@ -15,12 +16,6 @@ fragment TimeSummaryTaskFields on GraphqlSoupDocument {
   }
   properties {
     ...SoupPropertyFields
-  }
-  viewerPermission {
-    __typename
-    ... on GraphqlAccessLevelPermission {
-      accessLevel
-    }
   }
 }
 

@@ -7,14 +7,19 @@ import type { TimeSummaryKey } from './components/time-summary-types';
 import { REPORT_TASK_PARTS } from './report-host';
 import { reportTask } from './tests/report-task';
 
+const save = vi.hoisted(() => vi.fn());
+
 vi.mock('@queries/properties/entity', () => ({
-  useBulkSaveEntityPropertiesMutation: () => ({ mutateAsync: vi.fn() }),
+  useBulkSaveEntityPropertiesMutation: () => ({ mutateAsync: save }),
 }));
 vi.mock('./task-timer-count', () => ({
   TaskTimerCount: () => null,
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  save.mockReset();
+});
 
 /** The status the row shows, as its glyph names it for the status button. */
 function shownStatus(): string | null | undefined {
@@ -48,7 +53,7 @@ function renderRow(task: TimeSummaryKey['task']) {
   return { onOpen };
 }
 
-it('draws a task row with its priority then its status, which change without opening the task', () => {
+it('leads a task row with its priority then its status, which show without offering a change', () => {
   const { onOpen } = renderRow(
     reportTask('task-a', 'Draft the plan', {
       status: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
@@ -61,15 +66,18 @@ it('draws a task row with its priority then its status, which change without ope
   expect(
     priority.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING
   ).toBeTruthy();
-  expect(status.getAttribute('aria-disabled')).toBe('false');
   expect(shownStatus()).toBe('Task: In progress');
+  expect(status.getAttribute('aria-disabled')).toBe('true');
+  expect(priority.getAttribute('aria-disabled')).toBe('true');
 
   fireEvent.click(status);
-  fireEvent.click(priority);
-  expect(onOpen).not.toHaveBeenCalled();
-
-  fireEvent.click(screen.getByText('Draft the plan'));
+  expect(screen.queryByRole('menu')).toBeNull();
+  expect(save).not.toHaveBeenCalled();
   expect(onOpen).toHaveBeenCalledOnce();
+
+  fireEvent.click(priority);
+  fireEvent.click(screen.getByText('Draft the plan'));
+  expect(onOpen).toHaveBeenCalledTimes(3);
 });
 
 it('shows a completed task as completed', () => {
@@ -81,27 +89,6 @@ it('shows a completed task as completed', () => {
   );
 
   expect(shownStatus()).toBe('Task: Completed');
-});
-
-it('offers a viewer who can only view the task no change, and opens it instead', () => {
-  const { onOpen } = renderRow(
-    reportTask('task-a', 'Draft the plan', {
-      status: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
-      access: 'VIEW',
-    })
-  );
-
-  const status = screen.getByRole('button', { name: 'Change status' });
-  expect(status.getAttribute('aria-disabled')).toBe('true');
-  expect(
-    screen
-      .getByRole('button', { name: 'Change priority' })
-      .getAttribute('aria-disabled')
-  ).toBe('true');
-
-  fireEvent.click(status);
-  expect(screen.queryByRole('menu')).toBeNull();
-  expect(onOpen).toHaveBeenCalledOnce();
 });
 
 it('follows a status changed on the task elsewhere', () => {
