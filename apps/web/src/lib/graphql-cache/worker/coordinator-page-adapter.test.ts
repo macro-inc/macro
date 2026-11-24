@@ -1325,9 +1325,11 @@ describe('CacheCoordinatorPageAdapter', () => {
 
     expect(worker.terminated).toBe(true);
     expect(coordinatorPort.closed).toBe(true);
-    expect(coordinatorPort.events).toEqual(
-      expect.arrayContaining(departure.map((kind) => `post:${kind}`))
-    );
+    expect(
+      coordinatorPort.events.filter((event) =>
+        departure.some((kind) => event === `post:${kind}`)
+      )
+    ).toEqual(departure.map((kind) => `post:${kind}`));
     expect(onTerminalError).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });

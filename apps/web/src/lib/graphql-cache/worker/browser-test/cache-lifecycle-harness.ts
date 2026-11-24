@@ -285,14 +285,11 @@ const api = {
   acceptedWriteCount(): number {
     return acceptedWrites.length;
   },
-  async keptWrites(): Promise<{ accepted: number; lost: string[] }> {
-    const queued = new Set(
-      (await requireOwner().inspectMutations!()).map(({ uuid }) => uuid)
-    );
-    return {
-      accepted: acceptedWrites.length,
-      lost: acceptedWrites.filter((uuid) => !queued.has(uuid)),
-    };
+  acceptedWrites(): string[] {
+    return acceptedWrites;
+  },
+  async queuedWrites(): Promise<string[]> {
+    return (await requireOwner().inspectMutations!()).map(({ uuid }) => uuid);
   },
   async storageGeneration(): Promise<string> {
     return await requireOwner().currentStorageGeneration();

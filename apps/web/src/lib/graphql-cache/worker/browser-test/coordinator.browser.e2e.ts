@@ -276,7 +276,9 @@ test('an owner page that dies mid-write leaves every accepted write queued', asy
     devtools.send('Page.crash').catch(() => undefined);
     await crashed;
   };
+  const runsEngine = (target: typeof page) => target.workers().length > 0;
   let owner = await open(page);
+  const everAccepted: string[] = [];
   for (const [round, killAfterMs] of [0, 0, 20, 60, 150].entries()) {
     const writer = await open(await context.newPage());
     const generation = await writer.evaluate(() =>
@@ -289,8 +291,9 @@ test('an owner page that dies mid-write leaves every accepted write queued', asy
       writer.evaluate(() => window.cacheLifecycleHarness.acceptedWriteCount());
     await expect.poll(accepted).toBeGreaterThan(3);
     await writer.waitForTimeout(killAfterMs);
-    // The first page's process also runs the coordinator, which outlives it
-    // only when it closes. Playwright crashes pages in Chromium alone.
+    expect([runsEngine(owner), runsEngine(writer)]).toEqual([true, false]);
+    // The first page's process also runs the coordinator, which a crash ends;
+    // other pages don't recover from that yet. Playwright crashes Chromium only.
     if (round === 0 || testInfo.project.name.includes('firefox'))
       await owner.close();
     else await crash(owner);
@@ -302,10 +305,15 @@ test('an owner page that dies mid-write leaves every accepted write queued', asy
 
     // At most the one in flight, whose outcome only the dead engine knew.
     expect([[], ['admitted-enqueue-uncertain']]).toContainEqual(await refusals);
-    const kept = await writer.evaluate(() =>
-      window.cacheLifecycleHarness.keptWrites()
+    everAccepted.push(
+      ...(await writer.evaluate(() =>
+        window.cacheLifecycleHarness.acceptedWrites()
+      ))
     );
-    expect(kept.lost).toEqual([]);
+    const queued = new Set(
+      await writer.evaluate(() => window.cacheLifecycleHarness.queuedWrites())
+    );
+    expect(everAccepted.filter((uuid) => !queued.has(uuid))).toEqual([]);
     expect(
       await writer.evaluate(() =>
         window.cacheLifecycleHarness.storageGeneration()
