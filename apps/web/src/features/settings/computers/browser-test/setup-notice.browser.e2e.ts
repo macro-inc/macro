@@ -210,12 +210,17 @@ test('closes during setup, is told the computer is ready, and finishes from the 
   await expect(
     dialog(page).getByRole('heading', { name: "Maya's Agent is ready" })
   ).toBeVisible({ timeout: 10_000 });
+  await dialog(page).getByRole('button', { name: 'Add another agent' }).click();
+  const form = page.getByRole('region', { name: 'New agent' });
+  await expect(form).toBeVisible({ timeout: 60_000 });
   await expect(
-    dialog(page).getByRole('button', { name: 'Add another agent' })
-  ).toHaveCount(0);
-  await expect(
-    dialog(page).getByRole('button', { name: 'Done' })
-  ).toBeVisible();
+    form
+      .getByRole('group', { name: 'Where it runs' })
+      .getByRole('radio', { name: /On a Macro computer/ })
+  ).toBeChecked();
+  await form
+    .getByText('On a Macro computer')
+    .evaluate((label) => label.scrollIntoView({ block: 'center' }));
   // Hold on the result so the recording ends on it.
   await page.waitForTimeout(1_500);
 });

@@ -1,7 +1,9 @@
 import { useOpenAgentDm } from '@app/features/agent-dms/open-agent-dm';
+import { requestCreateAgent } from '@app/features/settings/agentSettingsState';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
@@ -249,6 +251,7 @@ export function ComputerSetupSteps(props: {
   const signOut = useClaudeSignOutMutation();
   const completeSetup = useCompleteComputerSetupMutation();
   const retry = useRetryComputerMutation();
+  const settings = useSettingsState();
 
   const up = () => computerConnected(props.computer, props.connected);
   const harnessId = () => props.computer.harnessId ?? undefined;
@@ -389,6 +392,16 @@ export function ComputerSetupSteps(props: {
   // Ready with nothing to open: Done is the one action.
   const endsOnDone = () =>
     done() && !agentDm && !props.selectsForAgent && !props.teamAgentComputer;
+
+  // The create form, with this computer chosen under Where it runs. The tab
+  // switches first, so the Agents page there takes the request.
+  const createAgentHere = () => {
+    const id = harnessId();
+    props.onClose();
+    if (props.selectsForAgent || !id) return;
+    settings.openSettings('Agents');
+    requestCreateAgent(id);
+  };
 
   const retrySetup = async () => {
     try {
@@ -620,6 +633,21 @@ export function ComputerSetupSteps(props: {
                 .exhaustive()}
             </ActionDialogShell.Description>
           </ActionDialogShell.Header>
+          <Show
+            when={done() && !props.teamAgentComputer && !props.selectsForAgent}
+          >
+            <div>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                class="px-0"
+                onClick={createAgentHere}
+              >
+                {t('computers.addAnotherAgent')}
+              </Button>
+            </div>
+          </Show>
         </ActionDialogShell.Body>
         {/* One action: the agent's chat once it is ready, Try again when a
             finishing step failed, and the wait on the button until then. */}
@@ -655,7 +683,7 @@ export function ComputerSetupSteps(props: {
               </Button>
             </Match>
             <Match when={props.selectsForAgent}>
-              <Button type="button" variant="primary" onClick={props.onClose}>
+              <Button type="button" variant="primary" onClick={createAgentHere}>
                 {t('computers.useForThisAgent')}
               </Button>
             </Match>

@@ -1,21 +1,27 @@
 // The channel input's modules import each other; evaluating `Input` before
-// anything else is the order the app's entry gives them.
+// either lazy screen below is the order the app's entry gives them.
 import '@channel/Input/Input';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { render } from 'solid-js/web';
 import '@fontsource-variable/inter';
 import '../../../../index.css';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
+import { lazy } from '@core/util/lazy';
 import { Route, Router } from '@solidjs/router';
 import { Layer } from '@ui/components/Layer';
-import { createSignal, Match, Switch } from 'solid-js';
+import { createSignal, ErrorBoundary, Match, Switch } from 'solid-js';
 import { SettingsPage } from '../../primitives';
 import { GetComputerEntry } from '../views/get-computer-entry';
 import { MacroComputers } from '../views/MacroComputers';
-import { agentDmOpened, harnesses } from './stubs/fixture-state';
+import {
+  agentDmOpened,
+  harnesses,
+  settingsOpened,
+} from './stubs/fixture-state';
 
 // `?theme=dark|light` for screenshots; unset keeps the fixture's default.
 const theme = new URLSearchParams(location.search).get('theme');
@@ -23,6 +29,11 @@ if (theme) applyTheme(theme === 'dark' ? 'Macro Dark' : 'Macro Light');
 
 // The fixture uses the same touch variant switch as the app entry point.
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
+
+// Loaded once Add another agent leaves the dialog, as the app does.
+const AgentSettings = lazy(() => import('./agent-settings'));
+// A large module graph; start loading it while the flow runs.
+fireAndForget(AgentSettings.preload(), 'computers-fixture');
 
 // A computer setup notification arriving, as the realtime feed delivers it.
 // It goes through the app's own handler: the computers list refreshes and
@@ -75,6 +86,13 @@ function Fixture() {
             {(botId) => (
               <section aria-label="Direct message">DM with {botId()}</section>
             )}
+          </Match>
+          <Match when={settingsOpened() === 'Agents'}>
+            {/* A failure shows its message, so a test reports it. No Suspense:
+                the screens show as soon as they load. */}
+            <ErrorBoundary fallback={(error) => <pre>{String(error)}</pre>}>
+              <AgentSettings />
+            </ErrorBoundary>
           </Match>
         </Switch>
         <ToastRegion />

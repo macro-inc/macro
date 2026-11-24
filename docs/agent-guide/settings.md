@@ -360,7 +360,7 @@ An agent teammate is reached only by DM or in channels, like any member: its
 computer's runtime (`team_agent_user_id` on `/harnesses`) never appears in
 **Where it runs**, the Agents page or composer roster, the machine strips,
 Settings → Runtimes, or teammates' machines; its computer setup offers no
-**Chat with <agent>**; and the API refuses saving an agent or
+**Chat with <agent>** or **Add another agent**; and the API refuses saving an agent or
 opening a session on it (409). Connect Claude plan and the DM banner still read it
 from the full `/harnesses` list. On phones the dialog and
 confirmation are sheets and rows stay touch rows. Backend-free check (invite,
@@ -1205,10 +1205,11 @@ change this computer. Ask a team owner or admin." with no **Retry**, only
   `ENABLE_AGENT_DMS` off it is not offered, and **Done** is the action. The
   agent is created server-side when the computer first comes up, so the setup
   steps refetch a cached agents list that lacks it.
-- The ready step offers only **Done** and **Chat with <agent>**; there is no
-  way on from it to add another agent. Bought from an agent's **Where it
-  runs**, the action is **Use for this agent** instead, and only closes: the
-  editor selects the new computer when the modal closes.
+- **Add another agent**, a quiet link in the body, opens **Settings → Agents**
+  on the **New agent** form with this computer chosen under **Where it runs**
+  (`requestCreateAgent(harnessId)` in `agentSettingsState.ts`). Bought from an
+  agent's **Where it runs**, the action is **Use for this agent** instead, and
+  only closes: the editor selects the new computer when the modal closes.
 
 Closing at any step keeps its place; the row's **Finish setup** reopens it.
 

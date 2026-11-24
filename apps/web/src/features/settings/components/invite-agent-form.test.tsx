@@ -53,6 +53,15 @@ it('shows the first letter of the name as the picture, and adds the agent with t
   const picture = () =>
     view.container.querySelector('[data-slot="avatar"]')?.textContent;
   expect(picture()).toBe('?');
+  // What Add charges for is said before anything is bought.
+  expect(
+    screen.getByText('Its own computer, always on. Its seat is included.')
+  ).toBeTruthy();
+  expect(
+    screen.getByText(
+      'Added to your team subscription, prorated for the rest of this billing period.'
+    )
+  ).toBeTruthy();
 
   fireEvent.input(name, { target: { value: 'ada' } });
   expect(picture()).toBe('A');

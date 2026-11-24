@@ -82,6 +82,7 @@ import {
   on,
   Show,
   Switch,
+  untrack,
 } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
@@ -181,11 +182,21 @@ export function Agents(props: {
   const messageAgent = (id: string) =>
     agentDm?.open(id === MACRO_AGENT_BOT_ID ? MACRO_NEW_BOT_ID : id);
   const agentList = tourTarget(AGENTS_TOUR.agentList);
-  const [creating, setCreating] = createSignal(false);
+  // A create request already waiting opens the form on first render, so the
+  // list never flashes before it.
+  const pendingCreate = untrack(agentSettingsRequest);
+  const [creating, setCreating] = createSignal(
+    pendingCreate?.type === 'create'
+  );
+  // A machine chosen elsewhere, such as a Macro computer just set up.
+  const [createHarnessId, setCreateHarnessId] = createSignal(
+    pendingCreate?.type === 'create' ? pendingCreate.harnessId : undefined
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const creatingFromLink = () => searchParams.createAgent === 'true';
   const closeCreateAgent = () => {
     setCreating(false);
+    setCreateHarnessId(undefined);
     setEditingAgent(undefined);
     setDeletingAgent(undefined);
     props.onCloseCreate?.();
@@ -318,6 +329,16 @@ export function Agents(props: {
   ]);
   const privateAgents = createMemo(() =>
     agents().filter((agent) => agent.share === 'Private')
+  );
+
+  createEffect(
+    on(agentSettingsRequest, (request) => {
+      if (request?.type !== 'create') return;
+      setEditingAgent(undefined);
+      setCreateHarnessId(request.harnessId);
+      setCreating(true);
+      consumeAgentSettingsRequest(request.id);
+    })
   );
 
   // Opened from an agent's user card: wait for the list, then show that
@@ -473,6 +494,7 @@ export function Agents(props: {
       <Show keyed when={props.createKind ?? (creating() || creatingFromLink())}>
         <AgentEditorPage
           initialKind={props.createKind}
+          initialHarnessId={createHarnessId()}
           connectedHarnesses={connectedHarnesses()}
           currentTeamId={currentTeamId()}
           canShareWithTeam={canShareWithTeam()}
@@ -722,6 +744,8 @@ function AgentDeleteDialog(props: {
 
 function AgentEditorPage(props: {
   initialKind?: AgentKind;
+  /** The machine a new agent starts on under Where it runs. */
+  initialHarnessId?: string;
   agent?: AgentWithHarnessId;
   connectedHarnesses: readonly ConnectedHarness[];
   currentTeamId?: string;
@@ -748,6 +772,7 @@ function AgentEditorPage(props: {
   const [harnessId, setHarnessId] = createSignal(
     props.agent?.harness_id ??
       props.agent?.harness ??
+      props.initialHarnessId ??
       (props.initialKind === 'coder'
         ? props.connectedHarnesses.find((harness) =>
             isCoderHarness(harness.kind === 'macrod' ? 'macrod' : harness.id)

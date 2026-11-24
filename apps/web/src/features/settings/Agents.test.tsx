@@ -24,7 +24,11 @@ import { Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
-import { agentSettingsRequest, requestAgentDetail } from './agentSettingsState';
+import {
+  agentSettingsRequest,
+  requestAgentDetail,
+  requestCreateAgent,
+} from './agentSettingsState';
 import {
   chooseModelOption,
   chooseSelectOption,
@@ -1541,6 +1545,28 @@ describe('Agents', () => {
         })
       )
     );
+  });
+
+  it('opens the create form on a requested Macro computer', () => {
+    const computer = {
+      ...MACROD_HARNESS,
+      id: 'computer-harness',
+      name: 'Agent Box',
+      computer_id: 'computer-1',
+    };
+    harnessMocks.query.data = [MACROD_HARNESS, computer];
+    requestCreateAgent('computer-harness');
+
+    render(() => <Agents {...agentsPageProps} />);
+
+    const dialog = screen.getByRole('region', { name: 'New agent' });
+    const where = within(dialog).getByTestId('computer-where-it-runs');
+    expect(where.dataset.harnessId).toBe('computer-harness');
+    expect(where.dataset.checked).toBe('true');
+    expect(
+      within(dialog).getByRole('radio', { name: 'In Macro' })
+    ).toHaveProperty('checked', false);
+    expect(agentSettingsRequest()).toBeUndefined();
   });
 
   it('offers registered macrod harnesses in the harness picker', () => {

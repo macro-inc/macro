@@ -328,8 +328,7 @@ export function ChoiceRow(props: {
 }) {
   return (
     <label
-      // edge-muted vanishes on a dark dialog, so dark mode takes the full edge.
-      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted dark-mode:border-edge has-checked:border-accent has-checked:bg-accent-bg"
+      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted has-checked:border-accent has-checked:bg-accent-bg"
       classList={{
         'cursor-not-allowed': props.disabled,
         'p-4': props.suggested,

@@ -58,28 +58,22 @@ export function ComputerSizePicker(props: {
 /** The three sizes on sale, as shimmering cards while the real ones load. */
 export function ComputerSizeSkeleton() {
   return (
-    <ListSkeleton.Root label={t('computers.loadingSizes')} class="min-w-0">
-      {/* Root draws its children inside its own wrapper, so the gap goes here. */}
-      <div class="flex flex-col gap-2">
-        <For each={[0, 1, 2]}>
-          {() => (
-            <div class="flex items-start gap-3 rounded-lg border border-edge-muted p-3 dark-mode:border-edge">
-              <ListSkeleton.Bar class="mt-0.5 size-4 shrink-0" />
-              {/* Two text lines as tall as ChoiceRow's, so the dialog keeps
-                  its height when the sizes arrive. */}
-              <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-                <div class="flex h-5 items-center">
-                  <ListSkeleton.Bar class="h-3 w-20" />
-                </div>
-                <div class="flex h-5 items-center">
-                  <ListSkeleton.Bar class="h-2.5 w-40 max-w-full" />
-                </div>
-              </div>
-              <ListSkeleton.Bar class="h-3 w-16 self-center" />
+    <ListSkeleton.Root
+      label={t('computers.loadingSizes')}
+      class="flex min-w-0 flex-col gap-2"
+    >
+      <For each={[0, 1, 2]}>
+        {() => (
+          <div class="flex items-start gap-3 rounded-lg border border-edge-muted p-3">
+            <ListSkeleton.Bar class="mt-0.5 size-4 shrink-0" />
+            <div class="flex min-w-0 flex-1 flex-col gap-2 py-0.5">
+              <ListSkeleton.Bar class="h-3 w-20" />
+              <ListSkeleton.Bar class="h-2.5 w-40 max-w-full" />
             </div>
-          )}
-        </For>
-      </div>
+            <ListSkeleton.Bar class="h-3 w-16 self-center" />
+          </div>
+        )}
+      </For>
     </ListSkeleton.Root>
   );
 }

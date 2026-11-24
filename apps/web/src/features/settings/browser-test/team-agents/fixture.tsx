@@ -126,20 +126,13 @@ window.teamAgentsFixture = {
   openDm: setDmWith,
   showPage: setShownPage,
 };
-// Only what the dialogs and toasts here ask of a split manager.
-const splits: Pick<
-  SplitManager,
-  'activeSplitId' | 'splitState' | 'openWithSplit'
-> = {
-  // No panes: the sheets that close on navigation see no page.
+setGlobalSplitManager({
   activeSplitId: () => undefined,
-  splitState: () => undefined,
   openWithSplit(content: SplitContent) {
     window.teamAgentsFixture.opened.push(content);
     return { status: 'unavailable' };
   },
-};
-setGlobalSplitManager(splits as SplitManager);
+} as SplitManager);
 
 /** The parts of a DM that say whether its agent teammate is running. */
 function DirectMessage(props: { userId: string }) {

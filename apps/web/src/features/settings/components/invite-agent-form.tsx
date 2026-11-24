@@ -229,6 +229,9 @@ export function InviteAgentForm(props: {
           />
         )}
       </Show>
+      {/* What Add charges for, before anything is bought. */}
+      <p class="text-xs text-ink-muted">{t('teamAgents.computerHint')}</p>
+      <p class="text-xs text-ink-muted">{t('settingsBilling.proration')}</p>
     </div>
   );
 
