@@ -1954,8 +1954,10 @@ describe('agent-led new conversation', () => {
         for (const slider of screen.getAllByRole('slider')) {
           const surface = slider.closest('[style*="padding-inline"]')!;
           expect(surface).not.toBeNull();
-          expect(surface.querySelector('.bg-ink-muted')).not.toBeNull();
-          expect(surface.querySelector('.bg-accent')).toBeNull();
+          expect(surface.classList.contains('bg-active')).toBe(true);
+          expect(surface.classList.contains('bg-selected')).toBe(false);
+          expect(surface.querySelector('.bg-accent')).not.toBeNull();
+          expect(surface.querySelector('.bg-ink-muted')).toBeNull();
         }
       }
       fireEvent.click(await screen.findByRole('button', { name: 'GPT-5.6' }));

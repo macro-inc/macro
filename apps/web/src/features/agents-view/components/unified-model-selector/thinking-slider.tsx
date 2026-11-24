@@ -103,7 +103,7 @@ export function ThinkingSlider(props: {
           class="gap-0"
         >
           <div
-            class={cn('h-6 rounded-full bg-selected', props.mobile && 'h-10')}
+            class={cn('h-6 rounded-full bg-active', props.mobile && 'h-10')}
             style={{ 'padding-inline': `${inset()}px` }}
           >
             <Slider.Track class="m-0 h-full rounded-none bg-transparent before:inset-0">
@@ -113,7 +113,7 @@ export function ThinkingSlider(props: {
                   right: 'auto',
                   width: `calc(${ratio() * 100}% + ${inset() * 2}px)`,
                 }}
-                class="rounded-full bg-ink-muted"
+                class="rounded-full bg-accent"
               />
               <For each={props.effort?.options}>
                 {(_, index) => (

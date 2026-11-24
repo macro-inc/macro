@@ -763,7 +763,7 @@ the shimmer.
   new-chat preferences do not overwrite existing session configuration.
   Universal-input AI drafts and routine agent/model targets use the same selector,
   but have no editable Thinking or Speed because those hosts store only a target.
-- **Thinking** keeps its custom slider in the card with a neutral fill. Pointer choices commit on release;
+- **Thinking** keeps its custom slider in the card with an accent fill and a neutral unfilled track. Pointer choices commit on release;
   arrow keys, Home, and End commit immediately. Models with at most one effort
   option retain a disabled-looking slot labeled **Not available for this model**.
   Agent cards show Thinking and Speed only when the runtime advertises them;
