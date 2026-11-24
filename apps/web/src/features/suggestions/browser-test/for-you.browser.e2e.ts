@@ -97,6 +97,109 @@ test('the sidebar lists Today, To do, Suggestions and Done with their counts, an
   await expect(requests(page)).toContainText('open');
 });
 
+for (const theme of ['dark', 'light']) {
+  test(`Today groups rows by topic, with the rest last, in ${theme}`, async ({
+    page,
+  }, testInfo) => {
+    await page.goto(`/?scenario=topics&theme=${theme}`);
+
+    const groups = page.locator('[data-suggestion-group]');
+    // In the order of their first rows; a topic with a single row has no group.
+    await expect(groups.locator('h2')).toHaveText([
+      'Acme renewal',
+      'Spring offsite',
+      'Everything else',
+    ]);
+    await expect(
+      page
+        .getByRole('group', { name: 'Acme renewal' })
+        .locator('[data-suggestion]')
+    ).toHaveCount(3);
+    await expect(
+      page
+        .getByRole('group', { name: 'Spring offsite' })
+        .locator('[data-suggestion]')
+    ).toHaveCount(2);
+    const rest = page.getByRole('group', { name: 'Everything else' });
+    await expect(rest.locator('[data-suggestion]')).toHaveCount(4);
+    await expect(
+      rest.locator('[data-suggestion="suggestion-review"]')
+    ).toBeVisible();
+    // Only a topic that has a reason says one.
+    await expect(page.locator('[data-topic-reason]')).toHaveText([
+      'Renews December 1',
+    ]);
+    await expectEqualHeights(page);
+    await page.screenshot({
+      path: testInfo.outputPath(`for-you-topics-${theme}.png`),
+    });
+  });
+}
+
+test('the sidebar lists topics with their counts, and choosing one shows its rows alone', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=topics');
+  const topics = page.locator('[data-for-you-topic]');
+  await expect(topics).toHaveText(['Acme renewal3', 'Spring offsite2']);
+
+  await topics.first().click();
+  await expect(title(page)).toHaveText('Acme renewal');
+  await expect(page.locator('[data-suggestions-date]')).toHaveText(
+    'Renews December 1'
+  );
+  await expect(rows(page)).toHaveCount(3);
+  await expect(page.locator('[data-suggestion-group] h2')).toHaveCount(0);
+  await expect(topics.first()).toHaveAttribute('aria-current', 'page');
+  await expect(sidebarList(page, 'today')).not.toHaveAttribute(
+    'aria-current',
+    'page'
+  );
+
+  // A topic without a reason says nothing under its name.
+  await topics.last().click();
+  await expect(title(page)).toHaveText('Spring offsite');
+  await expect(page.locator('[data-suggestions-date]')).toHaveCount(0);
+
+  await page.goBack();
+  await expect(title(page)).toHaveText('Acme renewal');
+  await page.reload();
+  await expect(title(page)).toHaveText('Acme renewal');
+  await expect(rows(page)).toHaveCount(3);
+
+  await sidebarList(page, 'toDo').click();
+  await expect(title(page)).toHaveText('To do');
+  await expect(page.locator('[data-suggestion-group] h2')).toHaveCount(0);
+});
+
+test('a topic stays together while its rows settle, and its count follows', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=topics&topic=event:offsite');
+  await expect(rows(page)).toHaveCount(2);
+  const composer = row(page, 'suggestion-composer');
+  await composer.hover();
+  await button(composer, 'Dismiss “Prepare the budget review”').click();
+  await expect(composer).toHaveAttribute('data-suggestion-state', 'dismissed');
+  await expect(page.locator('[data-for-you-topic="event:offsite"]')).toHaveText(
+    'Spring offsite1'
+  );
+  await expect(rows(page)).toHaveCount(2);
+
+  await sidebarList(page, 'today').click();
+  await expect(
+    page
+      .getByRole('group', { name: 'Spring offsite' })
+      .locator('[data-suggestion]')
+  ).toHaveCount(2);
+});
+
+test('a link to a topic that groups nothing shows Today', async ({ page }) => {
+  await page.goto('/?scenario=topics&topic=project:launch');
+  await expect(title(page)).toHaveText('Today');
+  await expect(rows(page)).toHaveCount(9);
+});
+
 test('the Routines section links to ideas and saved routines', async ({
   page,
 }) => {

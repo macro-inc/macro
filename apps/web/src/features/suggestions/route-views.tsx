@@ -38,7 +38,18 @@ function ForYouPage() {
       list={search.view ?? 'today'}
       onSelectList={(list) =>
         setSearch(
-          { view: list === 'today' ? undefined : list, suggestion: undefined },
+          {
+            view: list === 'today' ? undefined : list,
+            topic: undefined,
+            suggestion: undefined,
+          },
+          { history: 'replace' }
+        )
+      }
+      topicKey={search.topic}
+      onSelectTopic={(topic) =>
+        setSearch(
+          { view: undefined, topic, suggestion: undefined },
           { history: 'replace' }
         )
       }

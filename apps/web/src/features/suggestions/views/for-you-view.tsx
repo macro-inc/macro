@@ -11,6 +11,7 @@ import { Button, cn } from '@ui';
 import {
   type Accessor,
   createEffect,
+  createUniqueId,
   For,
   Match,
   on,
@@ -22,12 +23,14 @@ import { match } from 'ts-pattern';
 import { ForYouSidebar, listName } from '../components/for-you-sidebar';
 import { RefreshSuggestions } from '../components/refresh-suggestions';
 import { SuggestionRow } from '../components/suggestion-row';
+import { TopicHeading } from '../components/topic-heading';
 import type {
   RoutinesSource,
   SuggestionItemParts,
 } from '../context/suggestions-source';
 import { type FeedEntry, type ForYouList, savedRoutineId } from '../core/lists';
 import type { Suggestion } from '../core/suggestion';
+import type { TopicGroup } from '../core/topics';
 import type { SuggestionsFeed } from '../primitives/feed';
 import type { Refresh } from '../primitives/refresh';
 
@@ -115,13 +118,18 @@ function emptyText(list: ForYouList): string {
 
 /**
  * The For you page: a sidebar of lists (Today, To do, Suggestions, Done)
- * with their counts and links to the person's routines, and the chosen
- * list's rows under its name and the date.
+ * with their counts, links to the person's routines and the topics of
+ * Today's rows, and the chosen list's rows under its name and the date.
+ * Today's are grouped by topic; a chosen topic's rows are shown alone, under
+ * its name and why it matters now.
  */
 export function ForYouView(props: {
   feed: SuggestionsFeed;
   list: ForYouList;
   onSelectList(list: ForYouList): void;
+  /** The key of the topic asked for, shown alone in place of the list. */
+  topicKey?: string;
+  onSelectTopic(key: string): void;
   routines: RoutinesSource;
   parts: SuggestionItemParts;
   refresh: Refresh;
@@ -129,13 +137,30 @@ export function ForYouView(props: {
   onRetry(): void;
 }) {
   const view = () => props.feed.view(props.list);
-  const entries = () => {
-    const current = view();
-    return current.kind === 'rows' ? current.entries : [];
+  // One that groups nothing (any more) leaves the list shown.
+  const topic = () =>
+    props.feed.topics().find((other) => other.key === props.topicKey);
+  const groups = () => props.feed.groups(props.list, topic());
+  const name = () => {
+    const shown = topic();
+    if (shown) return shown.name;
+
+    // Which topic was asked for isn't known until the feed is.
+    return props.topicKey && view().kind === 'loading'
+      ? ''
+      : listName(props.list);
+  };
+  const hueOf = (entry: FeedEntry) => {
+    const topics = props.feed.topics();
+    if (topics.length === 0) return undefined;
+
+    const key = entry.suggestion.topic?.key;
+    return topics.find((other) => other.key === key)?.hue ?? 'none';
   };
   // Nothing in Today waits or runs; what settled here may still be held.
   const caughtUp = () =>
     props.list === 'today' &&
+    !topic() &&
     (view().kind === 'empty' || props.feed.counts()?.today === 0);
   // A routine Macro proposed since the last visit waits in Suggestions.
   const newIdea = () => {
@@ -157,6 +182,16 @@ export function ForYouView(props: {
       month: 'long',
       day: 'numeric',
     }).format(new Date());
+
+  /** The line under the page's name. */
+  const underName = () => {
+    const shown = topic();
+    if (shown) return shown.reason;
+
+    return caughtUp()
+      ? t('suggestions.dateNothingNeeded', { date: today() })
+      : today();
+  };
 
   const openRoutines = () => props.routines.openRoutines();
 
@@ -229,6 +264,7 @@ export function ForYouView(props: {
       <SuggestionRow
         entry={entry()}
         parts={props.parts}
+        hue={hueOf(entry())}
         routineEnabled={(() => {
           const routineId = savedRoutineId(entry().suggestion);
           return routineId ? props.routines.enabled(routineId) : undefined;
@@ -263,13 +299,48 @@ export function ForYouView(props: {
     </li>
   );
 
+  // Rows with no topic have a heading only where others have one. A topic
+  // shown alone is named by the page.
+  const heading = (group: TopicGroup) => {
+    if (topic()) return undefined;
+    if (group.topic) return group.topic.name;
+
+    return groups().length > 1 ? t('suggestions.everythingElse') : undefined;
+  };
+  const rowsOf = (group: Accessor<TopicGroup>) => {
+    const headingId = createUniqueId();
+    return (
+      <div
+        class={cn(heading(group()) && 'pt-4')}
+        role={heading(group()) ? 'group' : undefined}
+        aria-labelledby={heading(group()) ? headingId : undefined}
+        data-suggestion-group={group().topic?.key ?? ''}
+      >
+        <Show when={heading(group())}>
+          {(name) => (
+            <TopicHeading
+              id={headingId}
+              name={name()}
+              reason={group().topic?.reason}
+            />
+          )}
+        </Show>
+        <ul class="m-0 flex list-none flex-col p-0">
+          <Key each={group().entries} by={(entry) => entry.suggestion.id}>
+            {row}
+          </Key>
+        </ul>
+      </div>
+    );
+  };
+
   let scroller: HTMLElement | undefined;
-  // Each list starts at its top: the lists share one scroller, and a list
-  // can change from the sidebar or from history (Back). A link to one
+  // Each list and topic starts at its top: they share one scroller, and what
+  // is shown can change from the sidebar or from history (Back). A link to one
   // suggestion scrolls to it instead.
   createEffect(
     on(
-      () => props.list,
+      [() => props.list, () => props.topicKey],
       () => {
         if (!props.focusedId) scroller?.scrollTo({ top: 0 });
       },
@@ -282,6 +353,10 @@ export function ForYouView(props: {
     if (list === props.list) scroller?.scrollTo({ top: 0 });
     props.onSelectList(list);
   };
+  const selectTopic = (key: string) => {
+    if (key === props.topicKey) scroller?.scrollTo({ top: 0 });
+    props.onSelectTopic(key);
+  };
 
   return (
     <ViewShell.Root
@@ -292,20 +367,21 @@ export function ForYouView(props: {
     >
       <ViewShell.Aside>
         <ForYouSidebar
-          list={props.list}
+          list={topic() ? undefined : props.list}
           counts={props.feed.counts()}
           onSelect={selectList}
           ideas={props.routines.ideas()}
           newIdea={newIdea()}
           routines={props.routines.routines()}
           onOpenRoutines={openRoutines}
+          topics={props.feed.topics()}
+          topic={topic()?.key}
+          onSelectTopic={selectTopic}
         />
       </ViewShell.Aside>
       <ViewShell.Main>
         <ViewShell.TopBar>
-          <ViewSidebar.Title caret={false}>
-            {listName(props.list)}
-          </ViewSidebar.Title>
+          <ViewSidebar.Title caret={false}>{name()}</ViewSidebar.Title>
           <div class="ml-auto">
             <ForYouRefresh refresh={props.refresh} />
           </div>
@@ -313,18 +389,20 @@ export function ForYouView(props: {
         <section
           ref={scroller}
           class="min-h-0 flex-1 overflow-y-auto px-8"
-          aria-label={listName(props.list)}
+          aria-label={name()}
         >
           <div class="mx-auto flex min-h-full w-full max-w-180 flex-col gap-6 pt-9 pb-16">
             <header class="flex flex-col gap-0.5 px-4">
-              <h1 class="text-[34px] leading-10 font-bold tracking-tight">
-                {listName(props.list)}
+              <h1 class="min-h-10 text-[34px] leading-10 font-bold tracking-tight">
+                {name()}
               </h1>
-              <p class="text-base text-ink-muted" data-suggestions-date>
-                {caughtUp()
-                  ? t('suggestions.dateNothingNeeded', { date: today() })
-                  : today()}
-              </p>
+              <Show when={underName()}>
+                {(line) => (
+                  <p class="text-base text-ink-muted" data-suggestions-date>
+                    {line()}
+                  </p>
+                )}
+              </Show>
             </header>
             <Switch>
               <Match when={view().kind === 'loading'}>
@@ -345,7 +423,7 @@ export function ForYouView(props: {
                 <Show when={caughtUp()}>
                   <CaughtUp
                     done={props.feed.counts()?.done ?? 0}
-                    fill={entries().length === 0}
+                    fill={groups().length === 0}
                     onSeeDone={() => selectList('done')}
                     onBrowseRoutines={openRoutines}
                   />
@@ -358,13 +436,12 @@ export function ForYouView(props: {
                     {emptyText(props.list)}
                   </p>
                 </Show>
-                <Show when={entries().length > 0}>
-                  <ul class="m-0 flex list-none flex-col p-0">
-                    <Key each={entries()} by={(entry) => entry.suggestion.id}>
-                      {row}
-                    </Key>
-                  </ul>
-                </Show>
+                <Key
+                  each={groups()}
+                  by={(group) => group.topic?.key ?? topic()?.key ?? ''}
+                >
+                  {rowsOf}
+                </Key>
               </Match>
             </Switch>
           </div>

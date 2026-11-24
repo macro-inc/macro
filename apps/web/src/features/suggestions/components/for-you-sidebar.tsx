@@ -6,9 +6,13 @@ import LightbulbIcon from '@icon/system/regular/lightbulb.svg';
 import RepeatIcon from '@icon/system/regular/repeat.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import SunIcon from '@icon/system/regular/sun.svg';
+import { Key } from '@solid-primitives/keyed';
+import { cn } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { FOR_YOU_LISTS, type ForYouList, type ListCounts } from '../core/lists';
+import type { ShownTopic } from '../core/topics';
+import { topicLook } from './topic-look';
 
 const LIST_ICONS: Record<ForYouList, Component<{ class?: string }>> = {
   today: SunIcon,
@@ -37,12 +41,68 @@ function Count(props: { value?: number; children?: JSX.Element }) {
   );
 }
 
+/** The topics that group Today's rows, with how many of each one's rows wait; choosing one shows it alone. */
+function Topics(props: {
+  topics: readonly ShownTopic[];
+  selected?: string;
+  onSelect(key: string): void;
+}) {
+  const [open, setOpen] = createSignal(true);
+
+  return (
+    <CollapsibleSection.Root
+      sectionId="topics"
+      sectionLabel={t('suggestions.topicsLabel')}
+      open={open()}
+      onOpenChange={setOpen}
+    >
+      <CollapsibleSection.Header>
+        <CollapsibleSection.Trigger>
+          <span class="min-w-0 truncate">{t('suggestions.topicsLabel')}</span>
+          <CollapsibleSection.Indicator />
+        </CollapsibleSection.Trigger>
+      </CollapsibleSection.Header>
+      <CollapsibleSection.Content>
+        <ViewSidebar.Nav aria-label={t('suggestions.topicsLabel')}>
+          <Key each={props.topics} by={(topic) => topic.key}>
+            {(topic) => {
+              const selected = () => props.selected === topic().key;
+              return (
+                <ViewSidebar.Item
+                  active={selected()}
+                  aria-current={selected() ? 'page' : undefined}
+                  onClick={() => props.onSelect(topic().key)}
+                  data-for-you-topic={topic().key}
+                >
+                  <ViewSidebar.Icon>
+                    <span class="flex size-4 items-center justify-center">
+                      <span
+                        class={cn(
+                          'size-2 rounded-xs',
+                          topicLook(topic().hue).square
+                        )}
+                      />
+                    </span>
+                  </ViewSidebar.Icon>
+                  <span class="min-w-0 flex-1 truncate">{topic().name}</span>
+                  <Count value={topic().waiting} />
+                </ViewSidebar.Item>
+              );
+            }}
+          </Key>
+        </ViewSidebar.Nav>
+      </CollapsibleSection.Content>
+    </CollapsibleSection.Root>
+  );
+}
+
 /**
  * The For you page's sidebar: its lists with how many rows wait in each,
- * then links to the person's routines.
+ * links to the person's routines, then the topics that group Today's rows.
  */
 export function ForYouSidebar(props: {
-  list: ForYouList;
+  /** The list shown; undefined while a topic is shown alone. */
+  list?: ForYouList;
   counts?: ListCounts;
   onSelect(list: ForYouList): void;
   /** Routine ideas Macro drafted; undefined until known. */
@@ -52,6 +112,10 @@ export function ForYouSidebar(props: {
   /** Saved routines; undefined until known. */
   routines?: number;
   onOpenRoutines(): void;
+  topics: readonly ShownTopic[];
+  /** The key of the topic shown alone. */
+  topic?: string;
+  onSelectTopic(key: string): void;
 }) {
   const [routinesOpen, setRoutinesOpen] = createSignal(true);
 
@@ -146,6 +210,13 @@ export function ForYouSidebar(props: {
             </ViewSidebar.Nav>
           </CollapsibleSection.Content>
         </CollapsibleSection.Root>
+        <Show when={props.topics.length > 0}>
+          <Topics
+            topics={props.topics}
+            selected={props.topic}
+            onSelect={props.onSelectTopic}
+          />
+        </Show>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );
