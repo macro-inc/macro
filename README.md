@@ -23,3 +23,5 @@ Dovecot and Mailpit are local stand-ins. Passwordless sign-in uses local test au
 Screenshots show before connection, pending first sync, first import, new arrival, ordinary send, threaded reply, and recovery. These are workflow before/after images from the same tested head, not main-versus-PR comparison screenshots. See [manifest](750eec99d0f/manifest.json).
 
 - [Connection recovery and retry-index evidence](round-one/connection-recovery-103f256f98ef/README.md) — source `103f256f98ef`; forward-migration upgrade and bounded SQL plans, synthetic database evidence only.
+
+- [Draft/send and overlapping command claim evidence](round-one/mutation-claims-f976aaa24a53/README.md) — source `f976aaa24a53`; bounded SQL claims, paired windows and native regression evidence, synthetic data only.
