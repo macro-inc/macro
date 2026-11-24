@@ -499,7 +499,7 @@ describe('createLocalChannelTimeline', () => {
         page: {
           __typename: 'GraphqlChannelTimelinePage',
           entries: older,
-          olderCursor: null,
+          olderCursor: 'past-the-page',
           newerCursor: null,
           seq: '9',
         } as never,
@@ -518,15 +518,21 @@ describe('createLocalChannelTimeline', () => {
         { waitMs: 60_000 }
       );
 
-      await mounted.timeline.loadOlder();
+      const loading = mounted.timeline.loadOlder();
       // Shown, but not covered while the delete may take it.
-      expect(mounted.timeline.entries()).toHaveLength(70);
+      await waitFor(() => mounted.timeline.entries().length === 70);
       const covered = () =>
         mounted.host.commits.filter((commit) => commit.coverage);
       expect(covered()).toEqual([]);
+      // A second scroll waits for the page still to be read again, rather
+      // than reading past it unheld.
+      expect(mounted.timeline.isLoadingOlder()).toBe(true);
+      await mounted.timeline.loadOlder();
+      expect(fetchPage).toHaveBeenCalledTimes(1);
 
       finishDelete();
       await deleting;
+      await loading;
       await waitFor(() => covered().length > 0);
       // The same older page, read again and covered this time.
       expect(fetchPage.mock.calls[1]?.[0]).toEqual(

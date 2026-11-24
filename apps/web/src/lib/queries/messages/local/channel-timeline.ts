@@ -521,18 +521,18 @@ export function createLocalChannelTimeline(
     const flag = direction === 'older' ? 'loadingOlder' : 'loadingNewer';
     if (cursor === null || state[flag] || state.phase !== 'ready') return;
     const token = loadToken;
-    const signal = (abort ??= new AbortController()).signal;
+    abort ??= new AbortController();
+    const signal = abort.signal;
     setState(flag, true);
     try {
       const settled = await fetchMore(direction, cursor, token);
       if (settled === 'stale' || settled === 'held') return;
       const wasHeld = held;
       held = false;
+      // Still loading until the page is read again: a scroll meanwhile
+      // would page past it from a window the device does not hold.
       if (wasHeld && settled !== 'unheld') {
-        fireAndForget(
-          fetchMoreAgain(direction, cursor, token, signal, settled),
-          'channel-local-sync'
-        );
+        await fetchMoreAgain(direction, cursor, token, signal, settled);
       }
     } catch (error) {
       // The window keeps what it shows; the next scroll asks again.
