@@ -64,7 +64,7 @@ export type SoupAstItemsQueryArgs = {
 
 export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
 
-interface SoupItemsQueryOptions {
+export interface SoupItemsQueryOptions {
   networkPaused?: boolean;
   keepPreviousData?: boolean;
   enabled?: boolean;
