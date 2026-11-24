@@ -515,6 +515,29 @@ it('waits for a pushed message to reach the timeline before fetching it by id', 
   }
 });
 
+it('looks an offscreen parent up while pushes keep arriving', async () => {
+  vi.useFakeTimers();
+  try {
+    const view = renderRootLookup(true);
+    const records = [notification('root-old', 10)];
+    const loaded: MessageListItem[] = [];
+    view.setRecords([...records]);
+    // A push every 250 ms, each shown by the device 150 ms after its
+    // notification.
+    for (let hour = 11; hour <= 23; hour++) {
+      records.unshift(notification(`push-${hour}`, hour));
+      view.setRecords([...records]);
+      await vi.advanceTimersByTimeAsync(150);
+      loaded.push(view.message(`push-${hour}`));
+      view.setLoaded([...loaded]);
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    expect(view.rootIds()).toEqual(['root-old']);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it('looks an unloaded parent up at once on the REST path', () => {
   const view = renderRootLookup(false);
   view.setRecords([notification('root-new', 12)]);

@@ -3,7 +3,14 @@ import {
   debounce as solidDebounce,
   throttle as solidThrottle,
 } from '@solid-primitives/scheduled';
-import { createEffect, createSignal, onCleanup, untrack } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
@@ -33,19 +40,41 @@ export function debouncedDependent<T>(source: () => T, delay = 300): () => T {
 }
 
 /**
- * A debounced view of a signal that starts from `initial`: its first value
- * also waits until the source has been still for `delay`.
+ * The ids `source` has listed for at least `delay`, in its order. Each id
+ * keeps its own clock from when it joined, so ids coming and going never
+ * postpone one that stays; an id that leaves starts again if it returns. An
+ * id shows within twice `delay` of joining.
  */
-export function settledDependent<T>(
-  source: () => T,
-  initial: T,
-  delay = 300
-): () => T {
-  const [settled, setSettled] = createSignal(initial);
-  const schedule = solidDebounce((v: T) => setSettled(() => v), delay);
-  createEffect(() => schedule(source()));
-  onCleanup(() => schedule.clear());
-  return settled;
+export function createRipeIds(
+  source: () => readonly string[],
+  delay: number
+): () => string[] {
+  const since = new Map<string, number>();
+  const [tick, setTick] = createSignal(0);
+  const recheck = solidThrottle(() => setTick((n) => n + 1), delay);
+  onCleanup(() => recheck.clear());
+  const state = createMemo(() => {
+    tick();
+    const ids = source();
+    const listed = new Set(ids);
+    const now = Date.now();
+    for (const id of since.keys()) if (!listed.has(id)) since.delete(id);
+    const ripe: string[] = [];
+    let waiting = false;
+    for (const id of ids) {
+      const joined = since.get(id) ?? now;
+      since.set(id, joined);
+      if (now - joined >= delay) ripe.push(id);
+      else waiting = true;
+    }
+    return { ripe, waiting };
+  });
+  createEffect(
+    on(state, ({ waiting }) => {
+      if (waiting) recheck();
+    })
+  );
+  return () => state().ripe;
 }
 
 /**

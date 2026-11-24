@@ -1,5 +1,5 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { settledDependent } from '@core/util/debounce';
+import { createRipeIds } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   isGraphqlServerFault,
@@ -86,18 +86,27 @@ export function createChannelUnreadNavigation(options: {
   // A reply's timestamp says nothing about where its parent sits in history.
   // Only the first unloaded unread parent can become the next target.
   // Resolve it without loading entire timelines or every offscreen thread.
-  const unloadedRoot = () => {
+  const unloadedRoots = () => {
     const loaded = new Set(options.messages().map((message) => message.id));
-    const target = unread().find((thread) => !loaded.has(thread.threadId));
-    return target ? [target.threadId] : [];
+    return unread()
+      .map((thread) => thread.threadId)
+      .filter((threadId) => !loaded.has(threadId));
   };
   // A pushed message shows once the device has reread it, which its
-  // notification can beat: wait for the timeline to settle before asking the
-  // server for it, or every push fetches its own message again.
-  const settledRoot = settledDependent(unloadedRoot, [], UNREAD_ROOT_SETTLE_MS);
+  // notification can beat: a parent is asked for only once it has been
+  // missing for a while, or every push fetches its own message again. Each
+  // parent keeps its own clock, so a channel whose pushes never stop still
+  // looks an older parent up.
+  const ripeRoots = createRipeIds(unloadedRoots, UNREAD_ROOT_SETTLE_MS);
+  const unloadedRoot = createMemo(() =>
+    options.followsPushes?.() ? ripeRoots()[0] : unloadedRoots()[0]
+  );
   const unreadRoots = useMessageTimelineByIdsQuery(
     () => ({ type: 'channel', id: options.channelId }),
-    () => (options.followsPushes?.() ? settledRoot() : unloadedRoot())
+    () => {
+      const root = unloadedRoot();
+      return root ? [root] : [];
+    }
   );
   const unreadChip = createMemo(() => {
     const positions = new Map<string, ThreadPosition>(
