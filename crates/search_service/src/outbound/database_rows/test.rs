@@ -215,10 +215,10 @@ async fn a_revoked_share_hides_the_row(pool: PgPool) {
         vec![ACME_ROW]
     );
 
-    sqlx::query(
+    sqlx::query!(
         "DELETE FROM entity_access WHERE entity_id = $1 AND source_id = 'macro|viewer@example.com'",
+        ACCOUNTS
     )
-    .bind(ACCOUNTS)
     .execute(&pool)
     .await
     .expect("revoke");
@@ -241,7 +241,7 @@ async fn leaving_the_team_hides_the_row_at_once(pool: PgPool) {
         vec![ACME_ROW]
     );
 
-    sqlx::query("DELETE FROM team_user WHERE user_id = 'macro|teammate@example.com'")
+    sqlx::query!("DELETE FROM team_user WHERE user_id = 'macro|teammate@example.com'")
         .execute(&pool)
         .await
         .expect("leave team");
@@ -264,7 +264,7 @@ async fn leaving_the_channel_hides_the_row_at_once(pool: PgPool) {
         vec![ACME_ROW]
     );
 
-    sqlx::query("UPDATE comms_channel_participants SET left_at = now() WHERE user_id = 'macro|channel@example.com'")
+    sqlx::query!("UPDATE comms_channel_participants SET left_at = now() WHERE user_id = 'macro|channel@example.com'")
         .execute(&pool)
         .await
         .expect("leave channel");
@@ -288,10 +288,10 @@ async fn moving_out_of_the_folder_hides_the_row(pool: PgPool) {
     );
 
     // Moving a database out of a folder removes the grants it inherited there.
-    sqlx::query(
+    sqlx::query!(
         "DELETE FROM entity_access WHERE entity_id = $1 AND granted_from_project_id IS NOT NULL",
+        ACCOUNTS
     )
-    .bind(ACCOUNTS)
     .execute(&pool)
     .await
     .expect("move out of folder");
@@ -314,7 +314,7 @@ async fn a_form_that_stops_sharing_responses_hides_the_row(pool: PgPool) {
         vec![ACME_ROW]
     );
 
-    sqlx::query("UPDATE forms SET responses_visible = false")
+    sqlx::query!("UPDATE forms SET responses_visible = false")
         .execute(&pool)
         .await
         .expect("stop sharing responses");
@@ -332,11 +332,13 @@ async fn a_form_that_stops_sharing_responses_hides_the_row(pool: PgPool) {
     fixtures(path = "../../../fixtures", scripts("database_rows"))
 )]
 async fn trashing_the_database_hides_its_rows(pool: PgPool) {
-    sqlx::query("UPDATE database_entities SET trashed_at = now() WHERE database_id = $1")
-        .bind(ACCOUNTS)
-        .execute(&pool)
-        .await
-        .expect("trash");
+    sqlx::query!(
+        "UPDATE database_entities SET trashed_at = now() WHERE database_id = $1",
+        ACCOUNTS
+    )
+    .execute(&pool)
+    .await
+    .expect("trash");
 
     assert!(
         search(&pool, "owner@example.com", "acme", 10)
@@ -351,8 +353,7 @@ async fn trashing_the_database_hides_its_rows(pool: PgPool) {
     fixtures(path = "../../../fixtures", scripts("database_rows"))
 )]
 async fn a_deleted_row_is_not_shown(pool: PgPool) {
-    sqlx::query("DELETE FROM database_rows WHERE id = $1")
-        .bind(ACME_ROW)
+    sqlx::query!("DELETE FROM database_rows WHERE id = $1", ACME_ROW)
         .execute(&pool)
         .await
         .expect("delete row");
@@ -371,7 +372,7 @@ async fn a_deleted_row_is_not_shown(pool: PgPool) {
 )]
 async fn an_edited_cell_shows_its_new_text_and_never_the_old(pool: PgPool) {
     // The index still says "Renewal with Acme due in May".
-    sqlx::query(
+    sqlx::query!(
         r#"UPDATE entity_properties SET values = '{"type": "String", "value": "Renewal moved to June"}'
            WHERE id = '70000000-0000-7000-8000-000000000002'"#,
     )
@@ -387,7 +388,7 @@ async fn an_edited_cell_shows_its_new_text_and_never_the_old(pool: PgPool) {
     let renewal_may = search(&pool, "owner@example.com", "renewal may", 10).await;
     assert!(renewal_may.rows.is_empty());
 
-    sqlx::query(
+    sqlx::query!(
         r#"UPDATE entity_properties SET values = '{"type": "String", "value": "Initech"}'
            WHERE id = '70000000-0000-7000-8000-000000000001'"#,
     )
@@ -410,7 +411,7 @@ async fn an_edited_cell_shows_its_new_text_and_never_the_old(pool: PgPool) {
 async fn the_next_page_comes_only_from_a_row_the_caller_may_see(pool: PgPool) {
     // Two rows match for the owner; the trashed, CRM and deleted proposals
     // after them must not promise a next page.
-    sqlx::query(
+    sqlx::query!(
         r#"UPDATE entity_properties SET values = '{"type": "String", "value": "Globex, formerly Acme"}'
            WHERE id = '70000000-0000-7000-8000-000000000003'"#,
     )
@@ -428,8 +429,7 @@ async fn the_next_page_comes_only_from_a_row_the_caller_may_see(pool: PgPool) {
     assert_eq!(second.next, None);
 
     // The viewer may see nothing past the first row either.
-    sqlx::query("DELETE FROM database_rows WHERE id = $1")
-        .bind(GLOBEX_ROW)
+    sqlx::query!("DELETE FROM database_rows WHERE id = $1", GLOBEX_ROW)
         .execute(&pool)
         .await
         .expect("delete globex");
