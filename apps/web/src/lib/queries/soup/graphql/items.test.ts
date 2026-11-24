@@ -3039,6 +3039,51 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('dates a loaded row by a delivered notification on a list sorted by update time', () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    mapSoupPageToEntityListMock.mockImplementation((page) =>
+      page.items.map((item: { id: string; notified_at?: string }) => ({
+        ...item,
+        notifiedAt: resolveNotifiedAt(item.id, item.notified_at),
+      }))
+    );
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'updated_at' }, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    const rows = () =>
+      (query.data()?.entities ?? []) as { id: string; notifiedAt?: string }[];
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ id: 'first' }, { id: 'second' }],
+          next_cursor: null,
+        })
+      );
+      expect(rows().map((entity) => entity.notifiedAt)).toEqual([
+        undefined,
+        undefined,
+      ]);
+
+      // Home dates its rows by notification time whatever the list sorts by;
+      // the order stays the server's.
+      raiseNotifiedFloor('second', '2026-11-18T11:00:00Z');
+      expect(rows().map((entity) => [entity.id, entity.notifiedAt])).toEqual([
+        ['first', undefined],
+        ['second', '2026-11-18T11:00:00Z'],
+      ]);
+      expect(fake.executions).toHaveLength(1);
+    } finally {
+      dispose();
+      clearNotifiedFloors();
+      mapSoupPageToEntityListMock.mockImplementation((page) => page.items);
+    }
+  });
+
   describe('email thread updatedAt on notified pages', () => {
     const mailPage = (
       rows: [id: string, updatedAt: string][],
