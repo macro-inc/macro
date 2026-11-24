@@ -364,6 +364,9 @@ export const createSearchResponseItemMapper = (
     switch (result.type) {
       case 'agentSession':
         return [mapAgentSessionSearchResult(result)];
+      // A row is not an entity; Cmd+K and the AI search tool list rows themselves.
+      case 'databaseRow':
+        return [];
       case 'company': {
         const primaryDomain = result.domains[0]?.domain;
         const nameHighlight = result.nameHighlighted

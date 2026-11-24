@@ -23,3 +23,8 @@ export const databaseWebhookKeys = createQueryKeys('database-webhooks', {
   /** A database's webhooks. */
   list: (databaseId: string) => ({ queryKey: [databaseId] }),
 });
+
+export const databaseRowSearchKeys = createQueryKeys('database-row-search', {
+  /** Rows matching a typed term, every other kind of result left out. */
+  term: (term: string, pageSize: number) => ({ queryKey: [term, pageSize] }),
+});

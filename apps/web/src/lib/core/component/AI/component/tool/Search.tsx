@@ -1,7 +1,17 @@
+import {
+  DatabaseRowIcon,
+  DatabaseRowSearchResult,
+} from '@app/features/block-database/component/DatabaseRowSearchResult';
+import { openDatabaseRow } from '@app/features/block-database/open-row';
+import {
+  type DatabaseRowMatch,
+  toDatabaseRowMatch,
+} from '@app/features/block-database/queries/row-search';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToChannelMessage } from '@block-channel/utils/link';
 import { getEntityClickContent } from '@channel/Attachments/attachment-utils';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EntityData,
   EntityRowIcon,
@@ -68,6 +78,19 @@ function SearchResultRow(props: {
   );
 }
 
+function DatabaseRowResultRow(props: {
+  row: DatabaseRowMatch;
+  onClick: (event: MouseEvent) => void;
+}) {
+  return (
+    <Tool.ListButton onClick={props.onClick}>
+      <Tool.ListItem icon={<DatabaseRowIcon class="size-3" />}>
+        <DatabaseRowSearchResult row={props.row} />
+      </Tool.ListItem>
+    </Tool.ListButton>
+  );
+}
+
 const UnifiedSearchToolResponse = (props: {
   results: UnifiedSearchResult[];
   query: string;
@@ -80,6 +103,19 @@ const UnifiedSearchToolResponse = (props: {
       (result) => mapResponseItem(result, props.query) ?? []
     )
   );
+
+  // Rows are not entities, so the mapper skips them; they list on their own.
+  const rows = createMemo(() =>
+    props.results.flatMap((result) =>
+      result.type === 'databaseRow' ? [toDatabaseRowMatch(result)] : []
+    )
+  );
+
+  const openRow = (row: DatabaseRowMatch, event: MouseEvent) =>
+    fireAndForget(
+      openDatabaseRow(row, { openInNewSplit: event.shiftKey }),
+      'ai-search-tool'
+    );
 
   const openEntity = async (entity: SearchEntity, event: MouseEvent) => {
     if (entity.type === 'channel_message') {
@@ -112,6 +148,14 @@ const UnifiedSearchToolResponse = (props: {
               />
             );
           }}
+        </For>
+        <For each={rows()}>
+          {(row) => (
+            <DatabaseRowResultRow
+              row={row}
+              onClick={(event) => openRow(row, event)}
+            />
+          )}
         </For>
       </Tool.List>
     </div>

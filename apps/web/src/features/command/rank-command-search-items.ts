@@ -31,6 +31,7 @@ function displayName(item: CommandMenuItem): string {
       { kind: 'search' },
       { kind: 'ask-ai' },
       { kind: 'new-project' },
+      { kind: 'database-row' },
       (row) => row.searchText
     )
     .exhaustive();

@@ -65,6 +65,7 @@ import { actOnCurrentSelection } from './act-on-current-selection';
 import { commandSearchResultKey } from './contact-items';
 import { defaultCommandResultIndex } from './core/default-result-index';
 import { shouldUseUniversalInput } from './core/universal-input-mode';
+import { useDatabaseRowDiscovery } from './database-row-discovery';
 import { createCommandResultOpener } from './open-command-result';
 import { trackCommandUsage } from './recency';
 import { CommandState } from './state';
@@ -73,6 +74,7 @@ import {
   type CommandMenuItem,
   isAskAiItem,
   isCommandItem,
+  isDatabaseRowItem,
   isEntityItem,
   isSearchItem,
   isUserItem,
@@ -164,10 +166,11 @@ export function CommandMenu() {
 
   const handleSelect = (item: CommandMenuItem) => {
     CommandState.setFocusDestinationOnClose(
-      isEntityItem(item) &&
-        (item.bucket === 'initiative' ||
-          (item.data.type !== 'foreign' &&
-            (!isGithubPrEntity(item.data) || USE_MACRO_PR_SUMMARY_BLOCK)))
+      isDatabaseRowItem(item) ||
+        (isEntityItem(item) &&
+          (item.bucket === 'initiative' ||
+            (item.data.type !== 'foreign' &&
+              (!isGithubPrEntity(item.data) || USE_MACRO_PR_SUMMARY_BLOCK))))
     );
     if (
       isSearchItem(item) ||
@@ -468,6 +471,7 @@ function CommandSearchMenu(
     : useCommandItems(query, categoryFilter, {
         searchActive: CommandState.isOpen,
         contactDiscovery: useCrmContactDiscovery,
+        databaseRowDiscovery: useDatabaseRowDiscovery,
       });
   const filteredItems = props.items ?? defaultCommandItems!.items;
   const pagination = defaultCommandItems?.pagination;
@@ -475,6 +479,10 @@ function CommandSearchMenu(
     defaultCommandItems?.isLoadingEntities() ?? false;
   const isSettling = () => defaultCommandItems?.isSettling() ?? false;
   usePending('quick_access.sources', isSettling);
+  usePending(
+    'quick_access.database_rows',
+    () => defaultCommandItems?.isSearchingDatabaseRows() ?? false
+  );
   usePending('quick_access.debounce', () => query() !== CommandState.query());
   const trackInput = (
     event: InputEvent & { currentTarget: HTMLTextAreaElement }
@@ -581,7 +589,10 @@ function CommandSearchMenu(
   };
   const selectedIsEntity = () => {
     const item = selectedItem();
-    return item && (isEntityItem(item) || isUserItem(item));
+    return (
+      item &&
+      (isEntityItem(item) || isUserItem(item) || isDatabaseRowItem(item))
+    );
   };
   /** Entities Cmd+K opens in a split, so they can open in a new tab too. */
   const selectedOpensInSplit = () => {
@@ -981,7 +992,10 @@ function CommandSearchMenu(
           scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
           pagination={pagination}
           loading={isLoadingEntities()}
-          searching={defaultCommandItems?.isSearchingEntities() ?? false}
+          searching={
+            (defaultCommandItems?.isSearchingEntities() ?? false) ||
+            (defaultCommandItems?.isSearchingDatabaseRows() ?? false)
+          }
         />
       </CommandMenuShell.Body>
 

@@ -194,6 +194,13 @@ export const enableGantt = defineFlag({
   default: LOCAL_ONLY || undefined,
 });
 
+/** Database rows in Cmd+K results; the backend checks the same key. */
+export const enableDatabaseRowSearch = defineFlag({
+  key: 'enable-database-row-search',
+  env: 'ENABLE_DATABASE_ROW_SEARCH',
+  default: onInDev,
+});
+
 export const ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE = defineFlag({
   env: 'ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE',
   default: true,

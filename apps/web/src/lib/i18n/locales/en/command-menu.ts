@@ -48,4 +48,9 @@ export default {
   searchFailed: 'Search failed. Please try again.',
   retry: 'Retry',
   unableToOpenResult: 'Unable to open result. Please try again.',
+  // A database row found by a typed search: its title when the row has none,
+  // and where it lives.
+  databaseRowUntitled: 'Untitled',
+  databaseRowLocation: '{{database}} / {{table}}',
+  databaseRowOpenFailed: 'This record could not be opened.',
 };

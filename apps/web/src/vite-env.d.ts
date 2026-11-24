@@ -43,6 +43,7 @@ interface ImportMetaEnv {
   readonly VITE_DISABLE_CRM_CONTACT_SEARCH?: string;
   readonly VITE_ENABLE_CONTACT_LISTS?: string;
   readonly VITE_ENABLE_WHATSAPP_LINKED?: string;
+  readonly VITE_ENABLE_DATABASE_ROW_SEARCH?: string;
 }
 
 interface ImportMeta {
