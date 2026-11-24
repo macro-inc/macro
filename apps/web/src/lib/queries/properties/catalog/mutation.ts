@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { createSignal, getOwner, onCleanup } from 'solid-js';
+import { isCatalogErrorCode } from './errors';
 
 type MaybePromise = unknown;
 
@@ -75,7 +76,16 @@ export function createCatalogMutation<TVars, TData>(
         data = await run(vars);
       } catch (cause) {
         const error = asError(cause);
-        await eachLayer(call, parent, (layer) => layer.onError?.(error, vars));
+        // A write dropped for another login or a sign-out did not fail; the
+        // hook's default report (its failure toast) is left out.
+        const dropped =
+          isCatalogErrorCode(error, 'ACCOUNT_CHANGED') ||
+          isCatalogErrorCode(error, 'SIGNED_OUT');
+        await eachLayer(call, parent, (layer) =>
+          dropped && layer === defaults
+            ? undefined
+            : layer.onError?.(error, vars)
+        );
         await eachLayer(call, parent, (layer) =>
           layer.onSettled?.(undefined, error, vars)
         );

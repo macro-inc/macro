@@ -565,6 +565,26 @@ describe('catalog mutations', () => {
     });
   });
 
+  it.each(['ACCOUNT_CHANGED', 'SIGNED_OUT'])(
+    'leaves a write dropped as %s out of the default failure report',
+    async (code) => {
+      await createRoot(async (dispose) => {
+        const reported = vi.fn();
+        const handled = vi.fn();
+        const dropped = new CatalogMutationError('dropped', code);
+        const mutation = createCatalogMutation(
+          () => Promise.reject(dropped),
+          { onError: reported },
+          { onError: handled }
+        );
+        await expect(mutation.mutateAsync(undefined)).rejects.toBe(dropped);
+        expect(reported).not.toHaveBeenCalled();
+        expect(handled).toHaveBeenCalledWith(dropped, undefined);
+        dispose();
+      });
+    }
+  );
+
   it('reports a refusal through onError; mutate does not reject', async () => {
     await createRoot(async (dispose) => {
       const onError = vi.fn();
