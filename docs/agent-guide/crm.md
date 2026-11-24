@@ -752,8 +752,9 @@ dialog, if one is open, and opens the app's add-inbox provider picker; in
 place without a reload, the row shows it with sharing still off until the
 member opts in.
 
-When selective contribution is enabled, **Sharing rules** sits below **Your
-email contribution** and above the blacklists and excluded threads. **Edit JSON**,
+When selective contribution is enabled, the contribution row holds **Change**
+and, while sharing, **Stop sharing my emails**, and **Sharing rules** sits below
+**Your email contribution** and above the blacklists and excluded threads. **Edit JSON**,
 **Preview counts**, and **History** open separate settings pages, including inside
 the phone settings sheet. Opening these pages never initializes consent.
 **Save and share** validates the JSON first and shows server validation problems,

@@ -339,7 +339,7 @@ export default {
   privacyTeamDescription:
     'Hides every thread with someone at these domains or their subdomains from everyone’s shared email, past and future. Only admins can remove a domain.',
   privacyPersonalDescription:
-    'Hides threads with these domains from your shared email only. A teammate’s copy can still be shared.',
+    'Works like the team blacklist, for your email only. A teammate’s copy can still be shared.',
   privacyNoDomains: 'No domains blocked.',
   privacyRemove: 'Remove',
   privacyRemoveDomain: 'Remove {{domain}}',
@@ -360,9 +360,10 @@ export default {
   privacyOn: 'Sharing on',
   privacyOff: 'Sharing off',
   privacyConsentDescription:
-    'Shares the full content of your past and future email with your team, except blocked threads. If you stop later, companies and contacts stay. Review both blacklists below first.',
+    'Shares the full content of this mailbox’s past and future email with your team, except blocked threads. If you stop later, companies and contacts stay. Review both blacklists below first.',
   privacyStopDescription:
     'Stopping withdraws your email from CRM. Companies and contacts stay.',
+  privacyReviewBlacklists: 'Review both blacklists below before you share.',
   privacyStop: 'Stop sharing my emails',
   privacyShare: 'Share my emails with CRM',
   privacyBanner: 'Your emails aren’t contributing to CRM.',

@@ -104,6 +104,21 @@ for (const admin of [false, true]) {
       .locator('xpath=ancestor::section')
       .getByRole('button', { name: 'Share my emails with CRM', exact: true });
     await expect(share).toBeInViewport();
+    // Beside the status on desktop, wrapped right under it on a phone, and
+    // above both blacklists either way.
+    const status = await dialog
+      .getByText('Sharing off', { exact: true })
+      .boundingBox();
+    const shareBox = await share.boundingBox();
+    const teamHeading = await dialog
+      .getByRole('heading', { name: 'Team blacklist', exact: true })
+      .boundingBox();
+    expect(
+      status && shareBox && shareBox.y < status.y + status.height + 16
+    ).toBe(true);
+    expect(
+      shareBox && teamHeading && shareBox.y + shareBox.height < teamHeading.y
+    ).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('privacy-review.png') });
     const teamRemove = dialog.getByRole('button', {
       name: 'Remove team.example.com',

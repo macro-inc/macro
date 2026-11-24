@@ -344,7 +344,11 @@ function LegacyEmailPrivacySettings(props: {
       >
         <SettingsCard class="@container">
           <SettingsRow
-            label={settings()?.mailboxEmail ?? t('crm.privacyConnect')}
+            label={
+              <span class="wrap-anywhere">
+                {settings()?.mailboxEmail ?? t('crm.privacyConnect')}
+              </span>
+            }
             description={
               settings()?.enabled ? t('crm.privacyOn') : t('crm.privacyOff')
             }
@@ -449,12 +453,18 @@ function SelectiveEmailPrivacy(
       <SettingsSection
         title={t('crm.privacyContributionTitle')}
         description={
-          policy()?.enabled ? t('crm.policyRecordsRemain') : undefined
+          policy()?.enabled
+            ? t('crm.privacyStopDescription')
+            : t('crm.privacyReviewBlacklists')
         }
       >
         <SettingsCard class="@container">
           <SettingsRow
-            label={mailbox() ?? t('crm.privacyConnect')}
+            label={
+              <span class="wrap-anywhere">
+                {mailbox() ?? t('crm.privacyConnect')}
+              </span>
+            }
             description={
               !policy()?.enabled
                 ? t('crm.policyOff')
