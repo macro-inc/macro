@@ -140,6 +140,27 @@ backlog and dropped-events monitors catch those. `failure` says why:
   entity id and the error; the same documents fail on every replay until the
   code or the mapping is fixed.
 
+## Refused stale writes
+
+OpenSearch refused email index writes or deletes because the document
+already held a later writer's version. Every email write carries the time its
+writer's thread lease was granted, with `external_gte` versioning, so an older
+writer can never undo a newer one or bring back a deleted message. Nothing is
+lost: the later write stands. Each writer leases its thread before reading it
+and holds the lease until its last write, so refusals should stay near zero.
+A burst means writers lost their leases (a dropped database connection or a
+primary failover) or ran past their 2-minute deadline (OpenSearch slow to
+answer). The fence then rests on the emails index remembering each delete's
+version for 15 minutes (`index.gc_deletes`); check that setting is still 15m
+on the live index (`GET emails/_settings/index.gc_deletes`).
+
+- `writer` says which work was refused: `live`, `bulk`, `property` or
+  `delete`. The `search.email.reconcile_threads` and
+  `search.email.reconcile_message` spans with `refused_stale` above 0 carry
+  the thread and message ids.
+- Look at the `search.email.lease` spans' `lock_ms` and the lease-wait graph:
+  long waits mean writers queue behind slow ones and reach their deadline.
+
 ## Offset reset
 
 librdkafka reset a partition's position after an error. Usually the position

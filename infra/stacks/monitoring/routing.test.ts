@@ -231,6 +231,7 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'search-probe-late',
     'search-probe-prefix-unseen',
     'search-probe-unseen',
+    'search-refused-stale',
     'sqs-dlq-inflow',
     'sqs-email-backfill-age',
     'sqs-email-backfill-backlog-anomaly',
