@@ -1,0 +1,28 @@
+docs/agent-guide/ui-conventions.md
+  s_b0738c327fac1e::t_4044204da8fb42 62-63
+docs/agent-guide/calendar.md
+  s_b0738c327fac1e::t_4044204da8fb42 453-454
+  s_b0738c327fac1e::t_6bcf4e8d8b43fd 455
+apps/web/tests/native/fixtures/server.ts
+  s_b0738c327fac1e::t_70fb6a1220a904 223-227
+apps/web/tests/native/README.md
+  s_b0738c327fac1e::t_4044204da8fb42 39-40
+apps/web/tests/native/driver.ts
+  s_b0738c327fac1e::t_23c21207b60428 195-196,206-211
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fde23b5926bee812ceb6e2ba72dd940d7e85e66f",
+  "prompts": {},
+  "sessions": {
+    "s_b0738c327fac1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dad57e5d-e59a-4fce-aa2c-dd92b16fd55e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
