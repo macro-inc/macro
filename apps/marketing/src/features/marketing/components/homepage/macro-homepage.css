@@ -112,7 +112,7 @@ html[data-homepage][data-theme-light='true'] :is(.site-nav-demo, .macro-home-dem
 /* The introduction follows the Email page: centered on desktop, left-aligned on phones. */
 .macro-homepage .macro-home-hero { padding: 132px 24px 56px; }
 .macro-homepage .macro-home-hero::before { display: none; }
-.macro-homepage .macro-home-hero h1 { margin: 0 0 24px; font-size: clamp(44px, 4vw, 53px); line-height: 1.1; }
+.macro-homepage .macro-home-hero h1 { margin: 0 0 24px; font-size: clamp(32px, 4vw, 53px); line-height: 1.1; white-space: nowrap; }
 .macro-homepage .macro-home-hero > .macro-home-tagline { width: min(640px, 100%); margin: 0; color: #a8a8a8; font: 370 17.5px/1.65 'Inter Variable', Inter, sans-serif; letter-spacing: normal; text-wrap: balance; }
 .macro-home-tagline-mobile { display: none; }
 .macro-home-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin-top: 32px; }
@@ -123,7 +123,7 @@ html[data-homepage][data-theme-light='true'] :is(.site-nav-demo, .macro-home-dem
 .macro-homepage .homepage-open-source-badges { margin-top: 40px; }
 @media (max-width: 699px) {
   .macro-homepage .macro-home-hero { padding: 100px 16px 32px; align-items: flex-start; text-align: left; }
-  .macro-homepage .macro-home-hero h1 { margin-bottom: 22px; font-size: clamp(26px, 8.6vw, 36px); line-height: 1.02; }
+  .macro-homepage .macro-home-hero h1 { margin-bottom: 22px; font-size: clamp(22px, 7.2vw, 36px); line-height: 1.1; white-space: nowrap; }
   .macro-homepage .macro-home-hero > .macro-home-tagline { width: 100%; font-size: 14px; line-height: 1.6; text-wrap: wrap; }
   .macro-home-tagline-desktop { display: none; }
   .macro-home-tagline-mobile { display: inline; }
