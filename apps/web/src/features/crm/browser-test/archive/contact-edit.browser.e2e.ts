@@ -265,6 +265,16 @@ test('a company set by the email domain stays read-only and opens from its name'
     animations: 'disabled',
     path: info.outputPath('read-only.png'),
   });
+  // The press leaves focus where it is, as entity links do, so the split
+  // already showing the company stays active once the router hands it over.
+  expect(
+    await name.evaluate(
+      (element) =>
+        !element.dispatchEvent(
+          new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+        )
+    )
+  ).toBe(true);
   await name.click();
   await expect(page).toHaveURL(/opened=company-1/);
   // A blank contact has no company, and can link one.

@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { ContactCompanyProperty } from '../components/contact-company-property';
@@ -93,6 +94,15 @@ export function ContactCompanyField(props: {
     return known ? contactCompanyName(known) : company()?.name;
   };
   const navigation = context.createNavigation();
+  const openCompany = useSplitNavigationHandler<HTMLButtonElement>((event) => {
+    const id = props.contact.companyId;
+    if (!id) return;
+    if (!event.shiftKey && props.onOpenCompany?.(id)) return;
+    navigation.openWithSplit(
+      { type: 'company', id },
+      { activate: true, preferNewSplit: event.shiftKey }
+    );
+  });
   // Older servers omit the classification; the relation then stays read-only.
   const independent = () => props.contact.companyDomain === false;
   return (
@@ -116,15 +126,7 @@ export function ContactCompanyField(props: {
           save={async (companyId) => {
             await mutation.mutateAsync({ contact: props.contact, companyId });
           }}
-          openCompany={(event) => {
-            const id = props.contact.companyId;
-            if (!id) return;
-            if (!event.shiftKey && props.onOpenCompany?.(id)) return;
-            navigation.openWithSplit(
-              { type: 'company', id },
-              { activate: true, preferNewSplit: event.shiftKey }
-            );
-          }}
+          openCompany={openCompany}
         />
       )}
     </Show>
