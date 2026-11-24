@@ -7,6 +7,10 @@
 -- decrypt. A refresh rotates the refresh token, so the row is rewritten under
 -- `SELECT ... FOR UPDATE` and replicas never spend one refresh token twice.
 -- The row goes with its user.
+--
+-- The foreign key takes SHARE ROW EXCLUSIVE on "User"; give up rather than
+-- queue behind a long query there and stall its writers.
+SET LOCAL lock_timeout = '5s';
 CREATE TABLE api_app_connections (
     user_id TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
     app TEXT NOT NULL,

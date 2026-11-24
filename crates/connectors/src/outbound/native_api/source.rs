@@ -26,6 +26,10 @@ mod test;
 
 /// An access token this close to expiry is refreshed before a call.
 const REFRESH_MARGIN: chrono::Duration = chrono::Duration::minutes(5);
+/// How many refreshes one process runs at once. Each holds a pooled
+/// connection in a row-locked transaction for as long as the vendor's token
+/// endpoint takes (up to 15 s), so a burst must not take the pool.
+const CONCURRENT_REFRESHES: usize = 4;
 /// How long one API call may take. Downloads of large designs go through
 /// the vendor's signed storage URLs, not through here.
 const CALL_TIMEOUT: Duration = Duration::from_secs(60);
@@ -37,6 +41,7 @@ struct Inner {
     cipher: GrantCipher,
     pending: Arc<dyn PendingSignIns>,
     http: reqwest::Client,
+    refreshes: tokio::sync::Semaphore,
 }
 
 /// REST apps Macro signs in to with its own OAuth client.
@@ -68,6 +73,7 @@ impl NativeApiSource {
                 cipher,
                 pending,
                 http,
+                refreshes: tokio::sync::Semaphore::new(CONCURRENT_REFRESHES),
             }),
         })
     }
@@ -156,6 +162,11 @@ impl Inner {
         client: &OAuthClient,
     ) -> Result<Zeroizing<String>, Report> {
         let app = &client.app().id;
+        let _permit = self
+            .refreshes
+            .acquire()
+            .await
+            .map_err(|_| rootcause::report!("the refresh limiter is closed"))?;
         let locked = self
             .repo
             .lock(user, app.as_str())

@@ -276,7 +276,9 @@ impl ApiAppRepo {
 
     /// Lock the user's row for `app` until the answer is committed or
     /// dropped, so only one replica spends its refresh token at a time.
-    /// `None` when there is no row.
+    /// `None` when there is no row. The transaction holds a pooled
+    /// connection while the caller refreshes; the source caps how many run
+    /// at once.
     #[tracing::instrument(name = "connectors.api_app_lock", skip(self, user), err)]
     pub(crate) async fn lock(
         &self,
