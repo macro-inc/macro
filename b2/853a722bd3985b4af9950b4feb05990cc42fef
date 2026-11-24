@@ -1,0 +1,21 @@
+packages/sdk/generated/notification/types.gen.ts
+  s_51c0af71ac0431::t_5ca163c02101d7 1849-1853
+packages/sdk/specs/notification.json
+  s_51c0af71ac0431::t_3fc42e8908eb45 4303-4309
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b2853a722bd3985b4af9950b4feb05990cc42fef",
+  "prompts": {},
+  "sessions": {
+    "s_51c0af71ac0431": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "54636b73-cf47-4c6a-ae6f-19350718fb13",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
