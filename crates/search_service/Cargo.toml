@@ -66,4 +66,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 bot_id = { path = "../bot_id" }
 macro_auth = { path = "../macro_auth", features = ["testing"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+tower = { workspace = true }
 tracing-subscriber = { workspace = true }

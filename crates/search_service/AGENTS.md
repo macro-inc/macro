@@ -50,6 +50,12 @@ per-entity-type search plus a unified search across them — mounted into
 ## Checks
 
 - `cargo test -p search_service` (`SQLX_OFFLINE` unset).
+- `simple_unified/test/delegated_inbox.rs` searches through both routes
+  against Postgres and OpenSearch, so it is ignored: run it with
+  `SEARCH_TEST_OPENSEARCH_URL` set to an OpenSearch with the search indices
+  (set up as `opensearch_client`'s AGENTS.md describes) and `--ignored`. It
+  cleans up the mail it indexes, so the content search tests can run after
+  it on the same node.
 - `SQLX_OFFLINE=true cargo check` (`just check` recipe in `justfile`).
 
 ## Gotchas
@@ -210,12 +216,20 @@ per-entity-type search plus a unified search across them — mounted into
   reaches), for `label:`, `in:<name>`, `include_labels` and `exclude_labels`
   alike, and a hit from any other inbox (a thread shared with the caller)
   comes back with no labels: the labels people make are theirs.
-- Email search scopes by the owners of the inboxes the caller can reach
-  (`fetch_search_inboxes_for_macro_id`), so a link's mail matches until its
-  documents are deleted. An inbox whose disconnect has started (`deleting_at`)
-  is excluded by `link_id` at once, because search-processing deletes its
-  documents only after the email service purges its rows. Threads someone
-  else shared from such an inbox are not excluded.
+- Email search reaches mail by the inbox holding it (`link_id`), in the
+  inboxes the caller can reach (`fetch_search_inboxes_for_macro_id`: the set
+  `fetch_inboxes_for_macro_id` returns, their own and those delegated to
+  them), plus the threads it names by id (shares, folders, view allowlists).
+  Never scope it by owner: the index files every inbox of one person under
+  that person's `user_id`, and inboxes are delegated one at a time, so the
+  owner's id reaches inboxes the caller was never given. These are
+  `UnifiedEmailSearchArgs::inbox_link_ids`, empty when a search reaches
+  threads by id alone (folders, view allowlists, shares only), unlike
+  `label_link_ids`, which keeps the caller's own labels matching there. An inbox whose
+  disconnect has started (`deleting_at`) is excluded by `link_id` at once,
+  because search-processing deletes its documents only after the email
+  service purges its rows. Threads someone else shared from such an inbox
+  are not excluded.
 - Email filters mean what the Email list query means by them, applied before
   pagination (`domain/email_search.rs`). Shared threads are resolved from
   `entity_access` grants to the caller's sources, leaving out their own
