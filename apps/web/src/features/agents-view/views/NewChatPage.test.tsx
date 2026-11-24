@@ -1917,6 +1917,8 @@ describe('agent-led new conversation', () => {
                 { value: 'high', name: 'High', description: null, group: null },
               ],
             },
+            speeds: ['standard', 'priority'],
+            speedValue: 'standard',
             onModel,
             onEffort: () => {},
             onSpeed: () => {},
@@ -1926,6 +1928,20 @@ describe('agent-led new conversation', () => {
       fireEvent.click(
         screen.getByRole('button', { name: 'Choose an agent or model' })
       );
+      const card = screen.getByRole('dialog');
+      const speed = within(card).getByRole('button', { name: 'Speed' });
+      const names = within(card)
+        .getAllByRole('button')
+        .filter((button) => button !== speed);
+      expect(names).toHaveLength(target === 'agentModels' ? 2 : 1);
+      for (const token of [
+        'not-touch:not-data-disabled:hover:bg-button-tertiary-hover',
+        'not-data-disabled:active:bg-button-tertiary-pressed',
+      ]) {
+        expect(speed.classList.contains(token)).toBe(true);
+        for (const name of names)
+          expect(name.classList.contains(token)).toBe(true);
+      }
       if (target === 'agentModels') {
         const modelField =
           screen.getByText('Model').parentElement!.parentElement!;

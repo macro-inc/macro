@@ -87,7 +87,7 @@ export function ModelSelectorModelRow(props: {
           disabled={state.disabled}
           onClick={props.onModels}
           class={cn(
-            'h-6 min-h-6 min-w-0 gap-1 rounded-full pl-2 pr-1.5 text-sm font-medium text-ink not-touch:hover:bg-hover active:bg-active',
+            'h-6 min-h-6 min-w-0 gap-1 rounded-full pl-2 pr-1.5 text-sm font-medium text-ink not-touch:not-data-disabled:hover:bg-button-tertiary-hover not-data-disabled:active:bg-button-tertiary-pressed',
             props.mobile && 'h-8 min-h-8 gap-1 text-base leading-[22px]'
           )}
         >

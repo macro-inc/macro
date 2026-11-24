@@ -35,7 +35,7 @@ export function ModelSelectorCard(props: {
           appearance="bare"
           onClick={props.onSelect}
           class={cn(
-            'min-w-0 rounded-full not-touch:hover:bg-hover active:bg-active text-ink font-medium',
+            'min-w-0 rounded-full not-touch:not-data-disabled:hover:bg-button-tertiary-hover not-data-disabled:active:bg-button-tertiary-pressed text-ink font-medium',
             props.mobile
               ? 'h-11 min-h-11 pl-2.5 pr-3 gap-2.5 text-base leading-[22px]'
               : 'h-7 min-h-7 pl-1.5 pr-2.5 gap-2 text-sm'
