@@ -119,8 +119,10 @@ declare global {
     notify: (id: string, kind: Arrival) => void;
     /** Read notifications, as scrolling past their messages does. */
     read: (ids: string[]) => void;
-    /** Leave the channel and open it again. */
-    reopen: () => void;
+    /** Leave the channel, and open it again a few seconds later. */
+    reopen: () => Promise<void>;
+    /** Mount the channel again at once, as moving its split does. */
+    remount: () => void;
   }
 }
 window.opened = [];
@@ -203,6 +205,8 @@ function Channel(props: { width: number }) {
     // Like the not-done read: nothing until it has answered.
     notDone: () => (status() === 'ready' ? records() : undefined),
     settled: () => status() === 'ready',
+    complete: () => true,
+    readAt: (n) => n.viewed_at ?? undefined,
     unreadSince: createChannelVisit('channel-1'),
     markDone: async (_stacks, notifications) => {
       const ids = notifications.map((n) => n.id);
@@ -289,11 +293,19 @@ function Channel(props: { width: number }) {
 function Fixture() {
   const [width, setWidth] = createSignal(Number(params.get('pane') ?? '1600'));
   window.resizeGutterPane = setWidth;
-  const [visit, setVisit] = createSignal(0);
-  window.reopen = () => setVisit((count) => count + 1);
+  // 0 while the channel is closed; a new number mounts it anew.
+  const [visit, setVisit] = createSignal(1);
+  let visits = 1;
+  window.remount = () => setVisit(++visits);
+  window.reopen = async () => {
+    setVisit(0);
+    // Longer than a remount, so it counts as leaving.
+    await new Promise((resolve) => setTimeout(resolve, 2_500));
+    setVisit(++visits);
+  };
 
   return (
-    <Show when={visit() + 1} keyed>
+    <Show when={visit()} keyed>
       {(count) => (
         <div data-visit={count}>
           <Channel width={width()} />

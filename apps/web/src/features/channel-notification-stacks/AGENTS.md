@@ -19,15 +19,17 @@ flag, `enable-channel-notification-gutter`
   `primitives/channel-notification-stacks.ts`). Nothing is listed until that
   read's first server answer (a cached answer comes first and can be stale).
   That answer lists every notification that was unread at open: unseen, or
-  read since the channel mounted. Its `viewed_at` decides, so the channel's
-  own reads of the messages on screen, and a Home or inbox row that marked its
-  stack read on the click that opened the channel, still count
-  (`primitives/channel-visits.ts`: from 15s before the mount, never before the
-  channel was last left in this page). Later answers add only thread replies
-  and mentions, read or not, never new top-level messages. A listed
-  notification stays when it is read; a row's unread dot follows its current
-  state. The list lives as long as the mounted channel, so reopening takes a
-  fresh one.
+  read since the channel mounted, so the channel's own reads of the messages
+  on screen, and a Home or inbox row that marked its stack read on the click
+  that opened the channel, still count (`primitives/channel-visits.ts`: from
+  15s before the mount, never before the channel was last left in this page;
+  a remount within 2s, such as a moved split, continues the visit). A read
+  made on this page is timed by the notification source's `localSeenAt`, this
+  device's clock; others by the server's `viewed_at`. Later answers add only
+  thread replies and mentions, read or not, never new top-level messages. A
+  listed notification stays when it is read; a row's unread dot follows its
+  current state, and an entry missing from a complete answer (under its 200
+  limit) was done elsewhere and leaves. Reopening takes a fresh list.
 - A check takes its entry off at once and marks it done together with every
   not-done notification in the channel's inbox stacks that share its key or one
   of its notifications (`notificationsToMarkDone`), so the whole inbox stack

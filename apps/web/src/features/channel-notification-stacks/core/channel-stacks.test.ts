@@ -177,6 +177,9 @@ const readAt = (record: UnifiedNotification, at: number) => ({
   viewed_at: new Date(at).toISOString(),
 });
 
+const serverReadAt = (record: UnifiedNotification) =>
+  record.viewed_at ?? undefined;
+
 describe('admitUnread', () => {
   it('lists nothing until the server answers, then everything unread since opening', () => {
     const notDone = [
@@ -189,13 +192,40 @@ describe('admitUnread', () => {
       NO_LISTED_NOTIFICATIONS,
       notDone,
       false,
-      OPENED_AT
+      OPENED_AT,
+      serverReadAt
     );
-    const settled = admitUnread(fromCache, notDone, true, OPENED_AT);
+    const settled = admitUnread(
+      fromCache,
+      notDone,
+      true,
+      OPENED_AT,
+      serverReadAt
+    );
 
     expect(fromCache).toBe(NO_LISTED_NOTIFICATIONS);
     expect(ids(settled.notifications)).toEqual(['a', 'read-opening']);
     expect(settled.closed).toBe(true);
+  });
+
+  it('times a read made on this page by its own clock', () => {
+    // The server's clock runs a minute behind this device's.
+    const read = readAt(send('a', 1, 'ana'), OPENED_AT - 60_000);
+    const localReadAt = () => new Date(OPENED_AT + 1_000).toISOString();
+
+    expect(
+      admitUnread(
+        NO_LISTED_NOTIFICATIONS,
+        [read],
+        true,
+        OPENED_AT,
+        serverReadAt
+      ).notifications
+    ).toHaveLength(0);
+    expect(
+      admitUnread(NO_LISTED_NOTIFICATIONS, [read], true, OPENED_AT, localReadAt)
+        .notifications
+    ).toHaveLength(1);
   });
 
   it('keeps a listed notification once it is read', () => {
@@ -203,10 +233,11 @@ describe('admitUnread', () => {
       NO_LISTED_NOTIFICATIONS,
       [unseen(send('a', 1, 'ana'))],
       true,
-      OPENED_AT
+      OPENED_AT,
+      serverReadAt
     );
 
-    expect(admitUnread(listed, [], true, OPENED_AT)).toBe(listed);
+    expect(admitUnread(listed, [], true, OPENED_AT, serverReadAt)).toBe(listed);
   });
 
   it('adds only replies and mentions that arrive after it settles', () => {
@@ -214,7 +245,8 @@ describe('admitUnread', () => {
       NO_LISTED_NOTIFICATIONS,
       [unseen(send('a', 1, 'ana'))],
       true,
-      OPENED_AT
+      OPENED_AT,
+      serverReadAt
     );
     const later = admitUnread(
       listed,
@@ -226,7 +258,8 @@ describe('admitUnread', () => {
         readAt(mention('new-mention', 7, 'mara'), OPENED_AT + 60_000),
       ],
       true,
-      OPENED_AT
+      OPENED_AT,
+      serverReadAt
     );
 
     expect(ids(later.notifications)).toEqual(['a', 'new-reply', 'new-mention']);

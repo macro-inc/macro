@@ -202,6 +202,14 @@ test('reopening the channel takes a fresh list', async ({ page }) => {
   await expect(row(page, 'New message from Ana')).toHaveCount(1);
 });
 
+test('moving the channel keeps its list', async ({ page }) => {
+  await open(page, 1600);
+  await page.evaluate(() => window.read(['n2', 'n3', 'n4']));
+  await page.evaluate(() => window.remount());
+  await expect(page.locator('[data-message="m1"]')).toBeVisible();
+  await expect(rows(page)).toHaveCount(3);
+});
+
 test('a failed read offers Retry, then lists', async ({ page }) => {
   await open(page, 1600, '&notDone=failed');
   await expect(list(page)).toContainText('Couldn’t load these notifications');

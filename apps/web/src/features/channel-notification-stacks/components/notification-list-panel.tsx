@@ -52,6 +52,17 @@ export function NotificationListPanel(props: {
           </div>
         </Match>
       </Switch>
+      {/* A refresh that fails under listed stacks says so, to retry. */}
+      <Show when={props.stacks.length > 0 && props.status === 'failed'}>
+        <div class="flex items-center gap-1 px-2">
+          <p class="text-xs text-ink-extra-muted">
+            {t('channelNotificationStacks.loadFailed')}
+          </p>
+          <Button variant="ghost" size="xs" onClick={() => props.onRetry()}>
+            {t('common.retry')}
+          </Button>
+        </div>
+      </Show>
       <Show when={props.stacks.length > 1}>
         <Button
           variant="ghost"

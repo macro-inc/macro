@@ -8,6 +8,7 @@ import {
   type ListedNotifications,
   NO_LISTED_NOTIFICATIONS,
   notificationsToMarkDone,
+  type ReadAt,
 } from '../core/channel-stacks';
 
 /**
@@ -21,6 +22,10 @@ export function createChannelNotificationStacks(sources: {
   notDone: Accessor<readonly UnifiedNotification[] | undefined>;
   /** `notDone` came from the server, not only from cache. */
   settled: Accessor<boolean>;
+  /** `notDone` holds every not-done notification, under the read's limit. */
+  complete: Accessor<boolean>;
+  /** When a notification was read; see `ReadAt`. */
+  readAt: ReadAt;
   /** Reads at or after this time (epoch ms) count as unread at open. */
   unreadSince: number;
   /** Mark notifications done; resolves false when that failed. */
@@ -39,7 +44,8 @@ export function createChannelNotificationStacks(sources: {
         previous,
         notDoneRecords(),
         sources.settled(),
-        sources.unreadSince
+        sources.unreadSince,
+        sources.readAt
       ),
     NO_LISTED_NOTIFICATIONS
   );
@@ -48,21 +54,18 @@ export function createChannelNotificationStacks(sources: {
 
   const listed = createMemo<ChannelStack[]>((previous) => {
     const takenIds = new Set(taken());
-    // Each entry shows its notifications' current state; one no longer in
-    // the read was done or read elsewhere, and is shown read.
+    // Each entry shows its notifications' current state. One missing from a
+    // complete read was done (here or elsewhere) and leaves; past the read's
+    // limit, its last known state stays.
     const current = new Map(notDoneRecords().map((n) => [n.id, n]));
-    const shown = gathered()
-      .notifications.filter(
-        (notification) =>
-          !takenIds.has(notification.id) && notification.state !== 'done'
-      )
-      .map((notification) => {
-        const now = current.get(notification.id);
-        if (now) return now;
-        return notification.state === 'unseen'
-          ? { ...notification, state: 'seen' as const }
-          : notification;
-      });
+    const complete = sources.settled() && sources.complete();
+    const shown = gathered().notifications.flatMap((notification) => {
+      if (takenIds.has(notification.id)) return [];
+      const now = current.get(notification.id);
+      if (now) return [now];
+      if (complete || notification.state === 'done') return [];
+      return [notification];
+    });
     return keepUnchangedStacks(previous, channelStacks(shown));
   }, []);
   const notDone = createMemo(() => channelStacks(notDoneRecords()));

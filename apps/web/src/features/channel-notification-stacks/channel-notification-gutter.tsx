@@ -9,7 +9,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import type { UnifiedNotification } from '@notifications/types';
-import { createChannelActiveNotificationsQuery } from '@queries/channel/active-notifications';
+import {
+  CHANNEL_ACTIVE_NOTIFICATION_LIMIT,
+  createChannelActiveNotificationsQuery,
+} from '@queries/channel/active-notifications';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { type Accessor, Show, untrack } from 'solid-js';
 import type { ChannelStack, StackListStatus } from './core/channel-stacks';
@@ -68,6 +71,13 @@ export function createChannelNotificationGutter(options: {
       activeQuery.data !== undefined &&
       !activeQuery.isFetching &&
       !activeQuery.isError,
+    complete: () =>
+      (activeQuery.data?.length ?? 0) < CHANNEL_ACTIVE_NOTIFICATION_LIMIT,
+    // Reads made on this page compare by this device's clock.
+    readAt: (notification) =>
+      notificationSource.localSeenAt?.(notification.id) ??
+      notification.viewed_at ??
+      undefined,
     unreadSince,
     markDone: (marked, notifications) =>
       markStacksDone({

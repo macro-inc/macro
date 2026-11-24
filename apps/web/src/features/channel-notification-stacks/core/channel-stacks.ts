@@ -195,13 +195,22 @@ export const NO_LISTED_NOTIFICATIONS: ListedNotifications = {
  */
 export const OPENING_GRACE_MS = 15_000;
 
+/**
+ * When a notification was read, by this device's clock when this page read
+ * it (the server's `viewed_at` is on the server's clock), or undefined.
+ */
+export type ReadAt = (notification: UnifiedNotification) => string | undefined;
+
 /** Unread when the channel opened, or arrived and read since then. */
-function unreadSinceOpen(notification: UnifiedNotification, since: number) {
+function unreadSinceOpen(
+  notification: UnifiedNotification,
+  since: number,
+  readAt: ReadAt
+) {
   if (notification.state === 'done') return false;
   if (notification.state === 'unseen') return true;
-  return (
-    !!notification.viewed_at && Date.parse(notification.viewed_at) >= since
-  );
+  const at = readAt(notification);
+  return !!at && Date.parse(at) >= since;
 }
 
 /** Notifications that join the list after the channel's first answer. */
@@ -212,7 +221,7 @@ function joinsAfterOpen(notification: UnifiedNotification) {
 
 /**
  * `listed`, with the not-done notifications that were unread when the channel
- * opened added: unseen, or read at or after `since` (epoch ms). Nothing joins until the read's first
+ * opened added: unseen, or read (`readAt`) at or after `since` (epoch ms). Nothing joins until the read's first
  * server answer (`settled`), so a stale cached answer lists nothing; that
  * answer lists everything unread, and later ones add only replies and
  * mentions. Returns `listed` itself when nothing changed.
@@ -221,14 +230,15 @@ export function admitUnread(
   listed: ListedNotifications,
   notDone: readonly UnifiedNotification[],
   settled: boolean,
-  since: number
+  since: number,
+  readAt: ReadAt
 ): ListedNotifications {
   if (!listed.closed && !settled) return listed;
   const known = new Set(listed.notifications.map((n) => n.id));
   const added = notDone.filter(
     (notification) =>
       !known.has(notification.id) &&
-      unreadSinceOpen(notification, since) &&
+      unreadSinceOpen(notification, since, readAt) &&
       (!listed.closed || joinsAfterOpen(notification))
   );
   if (added.length === 0 && listed.closed) return listed;

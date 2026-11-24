@@ -43,6 +43,8 @@ function setup(markDone: () => Promise<boolean>) {
     const stacks = createChannelNotificationStacks({
       notDone,
       settled: () => true,
+      complete: () => true,
+      readAt: (n) => n.viewed_at ?? undefined,
       unreadSince: Date.now() - 1_000,
       markDone: (_stacks, notifications) => {
         marked.push(notifications.map((n) => n.id));
@@ -64,6 +66,13 @@ describe('createChannelNotificationStacks', () => {
     ]);
     expect(stacks.listed()).toHaveLength(1);
     expect(stacks.listed()[0]?.notifications[0]?.state).toBe('seen');
+    dispose();
+  });
+
+  it('drops an entry done elsewhere', () => {
+    const { stacks, setNotDone, dispose } = setup(async () => true);
+    setNotDone([reply('older', 'seen')]);
+    expect(stacks.listed()).toHaveLength(0);
     dispose();
   });
 
