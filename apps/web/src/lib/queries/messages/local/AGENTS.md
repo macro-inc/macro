@@ -124,14 +124,15 @@ TanStack path in `../` runs untouched. A host whose database is away for now
   store is on the server and resolves with the server's copy
   (`LocalCommitFailedError.confirmed`, else asked for), never the device's older
   one. A write the queue settled before its host retired keeps that answer. One
-  that never reached the queue (`write-not-admitted`) is a refusal.
+  that never reached the queue (`write-not-admitted`) is a refusal, and so is
+  one the queue did not take (`MutationNotQueuedError`, `NOT_QUEUED`).
   A write whose enqueue lost its
   answer (`ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE`) looks for its mutation id in
   the queue: it waits for the one it finds, answers as a write that left the
   queue when there is none, and a queue that cannot be read makes a send
   `DELIVERY_UNKNOWN`, since a device copy may be the queue's own optimistic
-  record. A send that went straight out and lost the server's answer asks the
-  server, then is `DELIVERY_UNKNOWN`. Recovery runs as
+  record. A send whose answer was lost asks the server, then is
+  `DELIVERY_UNKNOWN`. Recovery runs as
   `channel.write.recover` in the write's trace, every lookup included. A page
   and each read of it again run in one `channel.load_page` span.
 - Outage: while the host is `paused` (or being proven readable again after it
@@ -140,13 +141,11 @@ TanStack path in `../` runs untouched. A host whose database is away for now
   writes wait (`channel.write.await_cache`) for the queue. A channel's writes
   reach it in the order they were asked for, each once the one before has been
   handed over (`takeTurn`, one lane per sign-in), and only a host the session
-  serves from takes them (`serving`). One the queue refused goes straight out
-  (`onForwarded`): until it ends, the channel's later writes on its message or
-  thread wait for it (`channel.write.await_related`) and the others go on
-  (`takePlace`); giving it up ends its request (`withdraw`). One that finds the
-  database away as it is handed over (`holdWhilePaused`), or whose sign-in ended
-  (`mayForward`), is held (`MutationHeldError`) instead of sent straight out; the
-  first is handed over again. `restartCache` in `graphql-soup.ts` ends the outage by
+  serves from takes them (`serving`). A write never goes past the queue
+  (`onlyQueued`): straight out it would overtake the writes the queue keeps. One
+  the queue refused is handed over again when the database was away by then,
+  fails with `CACHE_RETIRED` when its sign-in ended, and otherwise fails as not
+  sent, its draft restored. `restartCache` in `graphql-soup.ts` ends the outage by
   calling `resumed()` on the host's runtime, which catches up the channels on
   screen and reloads what they could not hold, and on its writes. An engine
   replaced over its storage without a pause resumes them too

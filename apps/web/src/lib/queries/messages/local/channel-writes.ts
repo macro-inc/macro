@@ -4,7 +4,7 @@ import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import {
   executeOptimisticMutation,
   LocalCommitFailedError,
-  MutationHeldError,
+  MutationNotQueuedError,
   type OptimisticResponse,
   optimisticMutationDispositionOf,
 } from '@graphql-cache/exchange/optimistic';
@@ -61,8 +61,8 @@ const RETRY_EXHAUSTED = 'MUTATION_RETRY_EXHAUSTED';
 /** Codes of a write whose queue can no longer say what became of it. */
 const QUEUE_LOST = ['CACHE_RESET', 'CACHE_RETIRED'];
 /**
- * How long a write the retired host had acknowledged waits for its answer: one
- * sent straight out may still get it, but nothing promises it.
+ * How long a write the retired host had acknowledged waits for its answer: its
+ * request may be in flight, but nothing promises that it is.
  */
 const RETIRED_ANSWER_BUDGET_MS = 10_000;
 /**
@@ -347,9 +347,9 @@ const unknownDelivery = () =>
 
 const cacheRetired = () => refusal('CACHE_RETIRED', 'device cache was retired');
 
-/** Whether the cache gave a write back, no queue and no server having it. */
-const held = (result: OperationResult<unknown, AnyVariables>) =>
-  result.error?.networkError instanceof MutationHeldError;
+/** Whether the queue refused a write, which then goes nowhere. */
+const notQueued = (result: OperationResult<unknown, AnyVariables>) =>
+  result.error?.networkError instanceof MutationNotQueuedError;
 
 /** What became of a write nothing more will be heard of. */
 const unanswered = (write: { operation: string }) =>
@@ -362,6 +362,7 @@ const unanswered = (write: { operation: string }) =>
  */
 function mayHaveArrived(error: CombinedError): boolean {
   if (error.networkError) {
+    if (error.networkError instanceof MutationNotQueuedError) return false;
     return !(
       'errorCode' in error.networkError &&
       error.networkError.errorCode === WRITE_NOT_ADMITTED
@@ -373,6 +374,8 @@ function mayHaveArrived(error: CombinedError): boolean {
 }
 
 function refusalOf(error: CombinedError): ThrownResultError {
+  if (error.networkError instanceof MutationNotQueuedError)
+    return refusal('NOT_QUEUED', error.message);
   const code = error.graphQLErrors[0]?.extensions.code;
   return refusal(
     typeof code === 'string' ? code : error.networkError && 'NETWORK_ERROR',
@@ -683,9 +686,8 @@ function pendingRoot(
 interface HandOver {
   uuid: string;
   onEnqueued: () => void;
-  onForwarded: (withdraw: () => void) => void;
-  holdWhilePaused: true;
-  mayForward: () => boolean;
+  /** Straight out, a write would pass the ones the queue keeps. */
+  onlyQueued: true;
 }
 
 /** One write's hand-off: the context it runs in and who hears of it. */
@@ -696,22 +698,12 @@ interface HandOff {
   /** Whether the queue has said what became of it. */
   settled: () => boolean;
   onEnqueued: () => void;
-  onForwarded: () => void;
-}
-
-/** A write no queue keeps the place of, until it ends. */
-interface Unqueued {
-  messageId: string;
-  threadId?: string;
-  ended: Deferred.Deferred<void>;
 }
 
 interface Write<TData, TVariables extends AnyVariables> {
   operation: string;
   channelId: string;
   messageId: string;
-  /** The thread a reply is sent to. */
-  threadId?: string;
   uuid: string;
   /**
    * The thread root as it reads with this write, from the device and the
@@ -758,15 +750,17 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
    * its hand-off holds none of this one's back.
    */
   const turns = new Map<string, Deferred.Deferred<void>>();
-  /** Per channel and sign-in, the writes no queue keeps the place of. */
-  const unqueued = new Map<string, Unqueued[]>();
 
   const until = (done: Deferred.Deferred<void>): Promise<void> =>
     Effect.runPromise(
       Effect.raceFirst(Deferred.await(done), Deferred.await(retired))
     );
 
-  /** One turn at handing over: taken as it is asked for, in that order. */
+  /**
+   * A write's turn at handing over, taken as it is asked for: however long the
+   * wait for the database or a read takes, the queue gets a channel's writes
+   * in that order, each once it has the one before.
+   */
   function takeTurn(lane: string) {
     const before = turns.get(lane);
     const done = Deferred.makeUnsafe<void>();
@@ -778,79 +772,6 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       pass() {
         Deferred.doneUnsafe(done, Effect.void);
         if (turns.get(lane) === done) turns.delete(lane);
-      },
-    };
-  }
-
-  /**
-   * A write's place among its channel's writes, taken as it is asked for:
-   * however long the wait for the database or a read takes, the queue gets
-   * them in that order, each once it has the one before. A write that went
-   * straight out has no queue to keep its place, so those that touch its
-   * message or thread wait for its answer, and the others go on.
-   */
-  function takePlace(
-    write: Pick<
-      Write<unknown, AnyVariables>,
-      'operation' | 'channelId' | 'messageId' | 'threadId'
-    >,
-    signIn: number | undefined
-  ) {
-    const lane = `${signIn}:${write.channelId}`;
-    const own: Unqueued = {
-      messageId: write.messageId,
-      threadId: write.threadId,
-      ended: Deferred.makeUnsafe<void>(),
-    };
-    let turn = takeTurn(lane);
-    const touchedBefore = () => {
-      const writes = unqueued.get(lane) ?? [];
-      const place = writes.indexOf(own);
-      return (place === -1 ? writes : writes.slice(0, place)).filter(
-        ({ messageId, threadId }) =>
-          [messageId, threadId].some(
-            (id) =>
-              id !== undefined && (id === own.messageId || id === own.threadId)
-          )
-      );
-    };
-    const unqueue = () => {
-      const writes = unqueued.get(lane) ?? [];
-      if (!writes.includes(own)) unqueued.set(lane, [...writes, own]);
-    };
-    return {
-      async come(trace: TraceContext): Promise<void> {
-        for (;;) {
-          await turn.come();
-          const before = touchedBefore();
-          if (before.length === 0) return;
-          // In its place before the turn passes: what touches it waits too.
-          unqueue();
-          turn.pass();
-          await trace.run(() =>
-            Telemetry.span('channel.write.await_related', async (span) => {
-              span.setAttr('channel.id', write.channelId);
-              span.setAttr('message.id', write.messageId);
-              span.setAttr('write.operation', write.operation);
-              span.setAttr('write.related', before.length);
-              for (const { ended } of before) await until(ended);
-            })
-          );
-          turn = takeTurn(lane);
-        }
-      },
-      /** It went straight out. */
-      leave() {
-        unqueue();
-        turn.pass();
-      },
-      /** The queue has it, or it ended. */
-      pass() {
-        const writes = unqueued.get(lane)?.filter((entry) => entry !== own);
-        if (writes?.length) unqueued.set(lane, writes);
-        else unqueued.delete(lane);
-        Deferred.doneUnsafe(own.ended, Effect.void);
-        turn.pass();
       },
     };
   }
@@ -1189,7 +1110,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
 
   /**
    * Waits out an outage of the host's database, until its queue has been read
-   * again: straight out, a write would pass the ones the queue keeps.
+   * again.
    */
   async function untilServed(
     write: Pick<
@@ -1215,7 +1136,6 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
    * Hands a write to the queue, and answers what came of that. One whose host
    * retires meanwhile may already be in the queue or on the server, and
    * nothing else says so: a send is then unknown, and another write failed.
-   * One sent straight out then has its request ended.
    */
   function handedOver<TData, TVariables extends AnyVariables>(
     write: Write<TData, TVariables>,
@@ -1223,9 +1143,6 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     handOff: HandOff
   ): Promise<OperationResult<TData, TVariables>> {
     let acknowledged = false;
-    // Ends the request of a write sent straight out; the queue's own is its
-    // runner's to end.
-    let withdraw: (() => void) | undefined;
     // Started here, in the caller's trace.
     const answer = write.run(
       deps.client(),
@@ -1235,13 +1152,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
           acknowledged = true;
           handOff.onEnqueued();
         },
-        onForwarded: (end) => {
-          acknowledged = true;
-          withdraw = end;
-          handOff.onForwarded();
-        },
-        holdWhilePaused: true,
-        mayForward: handOff.stands,
+        onlyQueued: true,
       },
       root
     );
@@ -1249,7 +1160,6 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       yield* Effect.exit(Deferred.await(retired));
       if (acknowledged && !handOff.settled())
         yield* Effect.sleep(RETIRED_ANSWER_BUDGET_MS);
-      withdraw?.();
       return yield* Effect.fail(unanswered(write));
     });
     return Effect.runPromise(
@@ -1263,7 +1173,8 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   /**
    * Hands a write over in its turn, and again when it found the database away
    * and waited for it. A write that outlasted its host or its sign-in is not
-   * handed over: `client` then answers for another.
+   * handed over: `client` then answers for another. One the queue refuses
+   * though the database is there goes nowhere, and fails.
    */
   async function handOver<TData, TVariables extends AnyVariables>(
     write: Write<TData, TVariables>,
@@ -1284,14 +1195,16 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
           const answer = await handedOver(write, root, handOff);
           span.setAttr(
             'write.disposition',
-            held(answer)
-              ? 'held'
+            notQueued(answer)
+              ? 'not_queued'
               : (optimisticMutationDispositionOf(answer)?.kind ?? 'direct')
           );
           return answer;
         })
       );
-      if (!held(result)) return result;
+      if (!notQueued(result)) return result;
+      if (!handOff.stands()) throw cacheRetired();
+      if (!away()) return result;
     }
   }
 
@@ -1301,7 +1214,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     // Taken before any await: recovery after a long wait joins the write's trace.
     const trace = Telemetry.captureContext();
     const signIn = deps.signIn?.();
-    const place = takePlace(write, signIn);
+    const turn = takeTurn(`${signIn}:${write.channelId}`);
     const settlements = watchSettlements(deps.host, retired, write.uuid);
     addPending(write.channelId, {
       uuid: write.uuid,
@@ -1318,11 +1231,10 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       // The optimistic record is on the device: windows read it from here, in
       // every tab.
       onEnqueued() {
-        place.pass();
+        turn.pass();
         deps.runtime.notifyChanged(write.channelId);
         announceWritten(write.channelId);
       },
-      onForwarded: place.leave,
     };
     try {
       const settled = async (transactionId: string): Promise<Message> => {
@@ -1360,7 +1272,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
           );
         return stored(write);
       };
-      await place.come(trace);
+      await turn.come();
       let result: OperationResult<TData, TVariables>;
       try {
         result = await handOver(write, handOff);
@@ -1370,7 +1282,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         if (transactionId === undefined) throw error;
         return await settled(transactionId);
       }
-      place.pass();
+      turn.pass();
       const disposition = optimisticMutationDispositionOf(result);
       if (disposition?.kind === 'queued')
         return await settled(disposition.transactionId);
@@ -1389,7 +1301,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       if (!result.data) throw refusal(undefined, 'empty response');
       return mapChannelMessage(write.written(result.data).message);
     } finally {
-      place.pass();
+      turn.pass();
       settlements.stop();
       removePending(write.channelId, write.uuid);
       // Committed or rolled back, the device's copy changed.
@@ -1410,7 +1322,6 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         operation: SEND_OPERATION,
         channelId: send.channelId,
         messageId: send.id,
-        threadId: rootId ?? undefined,
         uuid: send.id,
         predicted,
         unstored:

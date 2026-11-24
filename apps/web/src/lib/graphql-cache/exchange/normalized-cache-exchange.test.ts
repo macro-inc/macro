@@ -71,7 +71,7 @@ import {
 } from './normalized-cache-exchange';
 import {
   executeOptimisticMutation,
-  MutationHeldError,
+  MutationNotQueuedError,
   optimisticContextOf,
   optimisticMutationDispositionOf,
 } from './optimistic';
@@ -5434,6 +5434,27 @@ describe('normalizedCacheExchange', () => {
       expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
     });
 
+    it('answers for an only-queued mutation when the host is disabled', async () => {
+      const enqueued = vi.fn();
+      const disabledHost: CacheHost = { ...host, disabled: true };
+      const { ops, forwarded, results } = controlledQueryHarness(disabledHost);
+      const base = makeMutationOp(1, optimistic);
+      ops.next(
+        makeOperation(base.kind, base, {
+          ...base.context,
+          normalizedCacheOptimisticEnqueued: enqueued,
+          normalizedCacheOnlyQueued: true,
+        })
+      );
+      await tick();
+
+      expect(forwarded).toEqual([]);
+      expect(enqueued).not.toHaveBeenCalled();
+      expect(results.map(({ error }) => error?.networkError)).toEqual([
+        expect.any(MutationNotQueuedError),
+      ]);
+    });
+
     it.each([
       { refusal: 'owner lock', errorCode: OWNER_LOCK_UNAVAILABLE_ERROR_CODE },
       { refusal: 'plain', errorCode: undefined },
@@ -5458,11 +5479,9 @@ describe('normalizedCacheExchange', () => {
         ],
       },
     ])(
-      'sends a mutation straight out when its queue refused it ($refusal)',
+      'sends a mutation its queue refused straight out, unless only queued ($refusal)',
       async ({ errorCode, linkPatches = [] }) => {
         const enqueued = vi.fn();
-        const straightOut = vi.fn();
-        let mayForward = true;
         const warn = vi
           .spyOn(console, 'warn')
           .mockImplementation(() => undefined);
@@ -5473,7 +5492,7 @@ describe('normalizedCacheExchange', () => {
             Object.assign(new Error('refused'), errorCode && { errorCode })
           );
         const { ops, forwarded, results } = controlledQueryHarness(host);
-        const send = () =>
+        const send = (onlyQueued: boolean) =>
           ops.next(
             makeOperation(base.kind, base, {
               ...base.context,
@@ -5484,28 +5503,23 @@ describe('normalizedCacheExchange', () => {
                 revalidations: [],
               },
               normalizedCacheOptimisticEnqueued: enqueued,
-              normalizedCacheForwarded: straightOut,
-              normalizedCacheMayForward: () => mayForward,
+              normalizedCacheOnlyQueued: onlyQueued,
             })
           );
         try {
-          send();
+          send(false);
           await tick();
           // Sent, and not yet answered.
           expect(forwarded).toHaveLength(1);
           expect(results).toEqual([]);
-          expect(straightOut).toHaveBeenCalledOnce();
-          expect(enqueued).not.toHaveBeenCalled();
 
-          // The caller's no, by the time the queue refuses it.
-          send();
-          mayForward = false;
+          send(true);
           await tick();
           expect(forwarded).toHaveLength(1);
-          expect(straightOut).toHaveBeenCalledOnce();
           expect(results.map(({ error }) => error?.networkError)).toEqual([
-            expect.any(MutationHeldError),
+            expect.any(MutationNotQueuedError),
           ]);
+          expect(enqueued).not.toHaveBeenCalled();
         } finally {
           warn.mockRestore();
         }

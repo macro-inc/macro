@@ -16,8 +16,8 @@ const outcome = async (write: Promise<unknown>): Promise<string> => {
     await write;
     return 'delivered';
   } catch (error) {
-    const code = ['CACHE_RETIRED', 'DELIVERY_UNKNOWN'].find((name) =>
-      thrownResultErrorHasCode(error, name)
+    const code = ['CACHE_RETIRED', 'DELIVERY_UNKNOWN', 'NOT_QUEUED'].find(
+      (name) => thrownResultErrorHasCode(error, name)
     );
     return code ?? String(error);
   }
@@ -93,8 +93,10 @@ function setup(
   const host: CacheHost = {
     ...createNoopCacheHost(),
     ...device.host,
+    get paused() {
+      return device.availability.paused;
+    },
     disabled: false,
-    paused: false,
     enqueueOptimisticMutation,
   };
   const requests: Request[] = [];
@@ -144,83 +146,52 @@ afterEach(() => {
 const settle = () => vi.advanceTimersByTimeAsync(1);
 
 const root = graphqlMessage(1);
-const reply = graphqlMessage(7, { threadId: root.id });
 const other = graphqlMessage(8);
-const replyTo = (message: ChannelMessageFieldsFragment) =>
-  send(message.id, { content: 'reply', thread_id: root.id });
 
-describe('a write no queue took', () => {
-  it('goes ahead of the writes on its message and thread only', async () => {
+describe('a write the queue refuses', () => {
+  it('goes nowhere, and lets the writes after it go', async () => {
     vi.useFakeTimers();
-    const fixture = setup(refusing);
-    const writing = [
-      fixture.writes.send(send(root.id)),
-      fixture.writes.send(replyTo(reply)),
-      fixture.writes.edit(edit(root)),
-      fixture.writes.send(send(other.id)),
-    ];
+    const fixture = setup(
+      vi
+        .fn<CacheHost['enqueueOptimisticMutation']>(claimed)
+        .mockImplementationOnce(refusing)
+    );
+    const refusedSend = outcome(fixture.writes.send(send(root.id)));
+    const sending = fixture.writes.send(send(other.id));
     await settle();
-    expect(fixture.sent()).toEqual([root.id, other.id]);
-
-    fixture.requests[0].answer(json(written('sendChannelMessage', root)));
+    // Straight out it would pass the writes the queue keeps.
+    expect(fixture.sent()).toEqual([other.id]);
+    // Known not to have left: its draft can go again under any id.
+    expect(await refusedSend).toBe('NOT_QUEUED');
+    expect(fixture.writes.pendingCount(CHANNEL_ID)).toBe(1);
+    fixture.requests[0].answer(json(written('sendChannelMessage', other)));
     await settle();
-    expect(fixture.sent()).toEqual([root.id, other.id, reply.id]);
-
-    fixture.requests[1].answer(json(written('sendChannelMessage', other)));
-    fixture.requests[2].answer(json(written('sendChannelMessage', reply)));
-    await settle();
-    expect(fixture.sent()).toEqual([root.id, other.id, reply.id, root.id]);
-    fixture.requests[3].answer(json(written('editChannelMessage', root)));
-    await settle();
-    expect((await Promise.all(writing)).map(({ id }) => id)).toEqual([
-      root.id,
-      reply.id,
-      root.id,
-      other.id,
-    ]);
+    expect((await sending).id).toBe(other.id);
   });
 
-  it('keeps its place ahead of a write the queue would take', async () => {
+  it('is handed over again when the database was away', async () => {
     vi.useFakeTimers();
-    let refuses = true;
-    const enqueue = vi.fn<CacheHost['enqueueOptimisticMutation']>((...args) =>
-      refuses ? refusing(...args) : claimed(...args)
+    const refused = Promise.withResolvers<never>();
+    const fixture = setup(
+      vi
+        .fn<CacheHost['enqueueOptimisticMutation']>(claimed)
+        .mockImplementationOnce(() => refused.promise)
     );
-    const fixture = setup(enqueue);
     const sending = fixture.writes.send(send(root.id));
     await settle();
-    refuses = false;
-    const replying = fixture.writes.send(replyTo(reply));
-    // Waits on the reply, which waits on the root.
-    const editing = fixture.writes.edit(edit(reply));
+    fixture.availability.paused = true;
+    refused.reject(new Error('the queue refused it'));
     await settle();
-    expect(enqueue).toHaveBeenCalledOnce();
+    expect(fixture.sent()).toEqual([]);
+    expect(fixture.writes.pendingCount(CHANNEL_ID)).toBe(1);
 
-    fixture.requests[0].answer(json(written('sendChannelMessage', root)));
-    expect((await sending).id).toBe(root.id);
-    await settle();
-    expect(fixture.sent()).toEqual([root.id, reply.id]);
-    fixture.requests[1].answer(json(written('sendChannelMessage', reply)));
-    await settle();
-    expect((await replying).id).toBe(reply.id);
-    fixture.writes.retire();
-    await outcome(editing);
-  });
-
-  it('lets the writes after it go once it failed', async () => {
-    vi.useFakeTimers();
-    const fixture = setup(refusing);
-    const sending = outcome(fixture.writes.edit(edit(root, 'first')));
-    const second = fixture.writes.edit(edit(root, 'second'));
+    fixture.availability.paused = false;
+    fixture.writes.resumed();
     await settle();
     expect(fixture.sent()).toEqual([root.id]);
-    fixture.requests[0].answer(new Response('', { status: 500 }));
+    fixture.requests[0].answer(json(written('sendChannelMessage', root)));
     await settle();
-    expect(await sending).not.toBe('delivered');
-    expect(fixture.sent()).toEqual([root.id, root.id]);
-    fixture.requests[1].answer(json(written('editChannelMessage', root)));
-    await settle();
-    expect((await second).id).toBe(root.id);
+    expect((await sending).id).toBe(root.id);
   });
 
   it('does not go out under a later sign-in', async () => {
@@ -234,19 +205,6 @@ describe('a write no queue took', () => {
     await settle();
     expect(await sending).toBe('CACHE_RETIRED');
     expect(fixture.sent()).toEqual([]);
-  });
-
-  it('has its request ended once its host retired without an answer', async () => {
-    vi.useFakeTimers();
-    const fixture = setup(refusing);
-    const sending = outcome(fixture.writes.send(send(root.id)));
-    await settle();
-    fixture.writes.retire();
-    await vi.advanceTimersByTimeAsync(5_000);
-    expect(fixture.requests[0].signal?.aborted).toBe(false);
-    await vi.advanceTimersByTimeAsync(5_000);
-    expect(await sending).toBe('DELIVERY_UNKNOWN');
-    expect(fixture.requests[0].signal?.aborted).toBe(true);
   });
 });
 

@@ -104,7 +104,7 @@ describe('a host that retires', () => {
     installing.resolve();
   });
 
-  it('gives a write already sent straight out time to answer', async () => {
+  it('gives a write its queue acknowledged time to answer', async () => {
     vi.useFakeTimers();
     const answered = Promise.withResolvers<Answer>();
     const fixture = setup(() => answered.promise);

@@ -39,10 +39,8 @@ import { selectRecords } from './record-selection';
 const OPTIMISTIC_MUTATION_CONTEXT_KEY = 'normalizedCacheOptimistic';
 // Page-local acknowledgement; deliberately excluded from durable queue data.
 const OPTIMISTIC_ENQUEUED_CONTEXT_KEY = 'normalizedCacheOptimisticEnqueued';
-const FORWARDED_CONTEXT_KEY = 'normalizedCacheForwarded';
-/** Private operation-context field of a mutation that waits out an outage. */
-const HOLD_WHILE_PAUSED_CONTEXT_KEY = 'normalizedCacheHoldWhilePaused';
-const MAY_FORWARD_CONTEXT_KEY = 'normalizedCacheMayForward';
+/** Private operation-context field of a mutation that never passes its queue. */
+const ONLY_QUEUED_CONTEXT_KEY = 'normalizedCacheOnlyQueued';
 /** Private result-extension field carrying the queue disposition. */
 const OPTIMISTIC_MUTATION_DISPOSITION_KEY =
   'normalizedCacheMutationDisposition';
@@ -135,21 +133,10 @@ export type OptimisticMutationOptions = {
   /** Runs after durable layer installation, independently of HTTP settlement. */
   onEnqueued?: () => void;
   /**
-   * Runs as the mutation goes straight out, which no queue took. `withdraw`
-   * ends its request; the server may have it all the same.
+   * Answers with a `MutationNotQueuedError` when the queue does not take the
+   * mutation, instead of sending it straight out past the ones the queue keeps.
    */
-  onForwarded?: (withdraw: () => void) => void;
-  /**
-   * While the cache's database is away (`host.paused`), answers with a
-   * `MutationHeldError` instead of sending the mutation past its queue: the
-   * caller keeps it and hands it over again.
-   */
-  holdWhilePaused?: boolean;
-  /**
-   * Asked as a mutation no queue took would go straight out, which may be long
-   * after the call: a no answers with a `MutationHeldError` instead.
-   */
-  mayForward?: () => boolean;
+  onlyQueued?: boolean;
   updates?: readonly OptimisticUpdate[];
   /** Relevant queries that cannot safely be updated still revalidate on success. */
   revalidations?: readonly QueryRevalidation[];
@@ -610,30 +597,20 @@ export function optimisticMutationContext<TData>(
     ...(options.onEnqueued
       ? { [OPTIMISTIC_ENQUEUED_CONTEXT_KEY]: options.onEnqueued }
       : {}),
-    ...(options.onForwarded
-      ? { [FORWARDED_CONTEXT_KEY]: options.onForwarded }
-      : {}),
-    ...(options.holdWhilePaused
-      ? { [HOLD_WHILE_PAUSED_CONTEXT_KEY]: true }
-      : {}),
-    ...(options.mayForward
-      ? { [MAY_FORWARD_CONTEXT_KEY]: options.mayForward }
-      : {}),
+    ...(options.onlyQueued ? { [ONLY_QUEUED_CONTEXT_KEY]: true } : {}),
   };
 }
 
-/** Whether a mutation's caller keeps it rather than have it pass its queue. */
-export function holdsBack(op: Operation, paused: boolean): boolean {
-  if (paused && op.context[HOLD_WHILE_PAUSED_CONTEXT_KEY] === true) return true;
-  const mayForward: unknown = op.context[MAY_FORWARD_CONTEXT_KEY];
-  return typeof mayForward === 'function' && !mayForward();
+/** Whether a mutation must not pass its queue (`onlyQueued`). */
+export function isOnlyQueued(op: Operation): boolean {
+  return op.context[ONLY_QUEUED_CONTEXT_KEY] === true;
 }
 
-/** A held mutation's answer: no queue and no server got it. */
-export class MutationHeldError extends Error {
+/** An `onlyQueued` mutation's answer: neither the queue nor the server got it. */
+export class MutationNotQueuedError extends Error {
   constructor(options?: ErrorOptions) {
-    super('the mutation was held back from the server', options);
-    this.name = 'MutationHeldError';
+    super('the cache queue did not take the mutation', options);
+    this.name = 'MutationNotQueuedError';
   }
 }
 
@@ -655,24 +632,12 @@ export class LocalCommitFailedError extends Error {
   }
 }
 
-/** Tells the caller no queue took its mutation, which goes straight out. */
-export function notifyMutationForwarded(
-  op: Operation,
-  withdraw: () => void
-): void {
-  notify(op, FORWARDED_CONTEXT_KEY, withdraw);
-}
-
 /** Acknowledge installation without allowing caller code to interrupt queue routing. */
 export function notifyOptimisticMutationEnqueued(op: Operation): void {
-  notify(op, OPTIMISTIC_ENQUEUED_CONTEXT_KEY);
-}
-
-function notify(op: Operation, key: string, ...args: unknown[]): void {
-  const callback: unknown = op.context[key];
-  if (typeof callback !== 'function') return;
+  const notify: unknown = op.context[OPTIMISTIC_ENQUEUED_CONTEXT_KEY];
+  if (typeof notify !== 'function') return;
   try {
-    callback(...args);
+    notify();
   } catch (error) {
     console.warn('Optimistic enqueue acknowledgement failed', error);
   }

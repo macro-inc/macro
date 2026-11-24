@@ -115,10 +115,9 @@ import {
 } from './mutation-queue-telemetry';
 import type { QueryRevalidation } from './optimistic';
 import {
-  holdsBack,
-  MutationHeldError,
+  isOnlyQueued,
+  MutationNotQueuedError,
   normalizedEntityKey,
-  notifyMutationForwarded,
   notifyOptimisticMutationEnqueued,
   optimisticContextOf,
   withOptimisticMutationDisposition,
@@ -1236,20 +1235,19 @@ export function normalizedCacheExchange(
         op: Operation
       ): Promise<OperationResult | undefined> {
         const epoch = mutationQueue.epoch();
-        // Straight out, a mutation would overtake the ones the queue keeps.
-        const held = () => holdsBack(op, Boolean(host.paused));
-        const forwardPastQueue = () => {
-          notifyMutationForwarded(op, () =>
-            client.reexecuteOperation(makeOperation('teardown', op, op.context))
-          );
+        /** The queue did not take it: straight out, unless it may not go. */
+        const passQueue = (cause?: unknown): OperationResult | undefined => {
+          if (isOnlyQueued(op))
+            return uncertainEnqueueResult(
+              op,
+              new MutationNotQueuedError({ cause })
+            );
           enqueueForward(op);
+          return undefined;
         };
         if (host.disabled) {
-          if (held())
-            return uncertainEnqueueResult(op, new MutationHeldError());
-          notifyOptimisticMutationEnqueued(op);
-          forwardPastQueue();
-          return undefined;
+          if (!isOnlyQueued(op)) notifyOptimisticMutationEnqueued(op);
+          return passQueue();
         }
         // Reconstructed startup retries already have a durable transaction.
         if (queueAttemptOf(op)) {
@@ -1308,13 +1306,7 @@ export function normalizedCacheExchange(
           // an engine. Send it as a disabled cache would.
           if (isOwnerLockUnavailableError(error)) {
             enqueueTelemetry.failed('owner-lock');
-            if (held())
-              return uncertainEnqueueResult(
-                op,
-                new MutationHeldError({ cause: error })
-              );
-            forwardPastQueue();
-            return undefined;
+            return passQueue(error);
           }
           // A cached bin/page may disappear between inspect and enqueue. Do
           // not expose a partial relation move: retain entity optimism and
@@ -1322,13 +1314,7 @@ export function normalizedCacheExchange(
           if (args.linkPatches.length === 0) {
             enqueueTelemetry.failed('rejected');
             options.onCacheError?.(error, op);
-            if (held())
-              return uncertainEnqueueResult(
-                op,
-                new MutationHeldError({ cause: error })
-              );
-            forwardPastQueue();
-            return undefined;
+            return passQueue(error);
           }
           linkPatchesDegraded = true;
           // Deliberately loud: this fallback is durable but invisible until
@@ -1377,13 +1363,7 @@ export function normalizedCacheExchange(
               return uncertainEnqueueResult(op, fallbackError);
             }
             enqueueTelemetry.failed('rejected');
-            if (held())
-              return uncertainEnqueueResult(
-                op,
-                new MutationHeldError({ cause: fallbackError })
-              );
-            forwardPastQueue();
-            return undefined;
+            return passQueue(fallbackError);
           }
         }
         if (!mutationQueue.isCurrent(epoch)) {
