@@ -27,11 +27,14 @@ TanStack path in `../` runs untouched.
   session change. A page the device failed to store is read again from its
   own cursor, by the next page in that direction or the connection's return,
   and given up if refused again: the window then follows the device only
-  once it is loaded again. While a page it shows is still storing, the
-  window is neither read from the device nor kept for the next mount. A
-  failed older page waits for a scroll or the connection (`olderFailed`), so
-  the call panel, which pages whenever paging is idle, does not ask again at
-  once.
+  once it is loaded again. From a page's merge until its outcome is recorded,
+  the window is neither read from the device nor kept for the next mount; a
+  change that came meanwhile, or while the window loaded, is read once it
+  holds. A window loaded again forgets the old window's pages, and nothing
+  waits for a replaced window's store. A failed page sets `pageFailed`
+  (`olderFailed`) until a scroll, the connection, or a wait that doubles from
+  `PAGE_RETRY_MS` to `PAGE_RETRY_MAX_MS`, so the call panel, which pages
+  whenever paging is idle, asks at a bounded rate.
   Tabs share the device but hear only their own writes and the server's
   frames, so a write announces its channel to the other tabs once the queue
   stores it and once it settles (`channel-tab-writes.ts`, the

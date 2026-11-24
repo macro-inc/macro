@@ -64,9 +64,10 @@ export interface ChannelTimelineSource {
   isLoadingOlder: Accessor<boolean>;
   isLoadingNewer: Accessor<boolean>;
   /**
-   * The last older page failed and waits for a scroll or the connection's
-   * return, so code that pages whenever paging is idle leaves it be. The REST
-   * path retries its pages itself and never reports one.
+   * The last older page failed and waits for a scroll, the connection's
+   * return, or a growing wait, so code that pages whenever paging is idle
+   * leaves it be until then. The REST path retries its pages itself and never
+   * reports one.
    */
   olderFailed: Accessor<boolean>;
   loadOlder(): Promise<void>;

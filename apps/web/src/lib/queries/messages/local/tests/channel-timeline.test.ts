@@ -29,6 +29,7 @@ import {
   createChannelWindows,
   createLocalChannelTimeline,
   type LocalChannelTimeline,
+  PAGE_RETRY_MS,
 } from '../channel-timeline';
 import { fakeLocks } from './fake-locks';
 import {
@@ -1638,6 +1639,211 @@ describe('createLocalChannelTimeline when the connection comes back', () => {
     } finally {
       mounted.dispose();
       onlineManager.setOnline(true);
+    }
+  });
+
+  it('reads a change into a window loaded again while a page of the old one stores', async () => {
+    const rows = messages(70);
+    const cached = Promise.withResolvers<void>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise));
+    const mounted = mount({ rows, fetchPage });
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      const oldPage = mounted.timeline.loadOlder();
+      await until(() => mounted.timeline.entries().length === 70);
+      mounted.setHeld(true);
+      await mounted.timeline.retry();
+      expect(mounted.timeline.entries()).toHaveLength(50);
+
+      const latest = graphqlMessage(71);
+      mounted.addRow(latest);
+      mounted.runtime.changed();
+      await until(() => ids(mounted.timeline)[0] === latest.id);
+      cached.resolve();
+      await oldPage;
+    } finally {
+      cached.resolve();
+      mounted.dispose();
+    }
+  });
+
+  it('keeps for the next mount a window loaded again while a page of the old one stores', async () => {
+    const rows = messages(70);
+    const cached = Promise.withResolvers<void>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(serverPage(rows, 0, 20, cached.promise));
+    const windows = createChannelWindows();
+    const mounted = mount({ rows, fetchPage, windows });
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      const oldPage = mounted.timeline.loadOlder();
+      await until(() => mounted.timeline.entries().length === 70);
+      mounted.setHeld(true);
+      await mounted.timeline.retry();
+      mounted.dispose();
+      expect(windows.take(CHANNEL_ID)?.entries).toHaveLength(50);
+      cached.resolve();
+      await oldPage;
+    } finally {
+      cached.resolve();
+      mounted.dispose();
+    }
+  });
+
+  it('reads a change that came while the device read the window', async () => {
+    const rows = messages(70);
+    const mounted = mount({ rows });
+    const captured = Promise.withResolvers<void>();
+    const answer = Promise.withResolvers<void>();
+    try {
+      await settledOnDevice(mounted.runtime);
+      const read = mounted.host.channelTimeline;
+      let gated = false;
+      mounted.host.channelTimeline = async (request) => {
+        const result = await read(request);
+        if (!gated) {
+          gated = true;
+          captured.resolve();
+          await answer.promise;
+        }
+        return result;
+      };
+      const window = mounted.timeline.retry();
+      await captured.promise;
+      const latest = graphqlMessage(71);
+      mounted.addRow(latest);
+      mounted.runtime.changed();
+      answer.resolve();
+      await window;
+      await until(() => ids(mounted.timeline)[0] === latest.id);
+    } finally {
+      answer.resolve();
+      mounted.dispose();
+    }
+  });
+
+  it('reads nothing from the device between a page stored and its sibling marked unstored', async () => {
+    const rows = messages(250);
+    const readTooEarly: number[] = [];
+    for (let turns = 0; turns <= 20; turns += 1) {
+      const older = Promise.withResolvers<void>();
+      const newer = Promise.withResolvers<void>();
+      const fetchPage = vi
+        .fn<FetchChannelServerPage>()
+        .mockImplementation(async ({ before }) =>
+          before
+            ? serverPage(rows, 25, 75, older.promise)
+            : serverPage(rows, 125, 175, newer.promise)
+        );
+      const mounted = mount({ rows, around: rows[100]!.id, fetchPage });
+      try {
+        await settledOnDevice(mounted.runtime);
+        mounted.setHeld(false);
+        const loadOlder = mounted.timeline.loadOlder();
+        const loadNewer = mounted.timeline.loadNewer();
+        await until(() => mounted.timeline.entries().length === 150);
+        mounted.runtime.changed();
+        const reads = mounted.host.reads.length;
+
+        newer.resolve();
+        for (let turn = 0; turn < turns; turn += 1) await Promise.resolve();
+        older.reject(new Error('device write failed'));
+        await Promise.all([loadOlder, loadNewer]);
+        await settle();
+        if (mounted.host.reads.length > reads) readTooEarly.push(turns);
+      } finally {
+        older.resolve();
+        newer.resolve();
+        mounted.dispose();
+      }
+    }
+    expect(readTooEarly).toEqual([]);
+  });
+
+  it('goes to the live end once a window loaded since is shown, not once the old one stores', async () => {
+    const rows = messages(70);
+    const cached = Promise.withResolvers<void>();
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockResolvedValueOnce(serverPage(rows, 20, 70, cached.promise));
+    const mounted = mount({ rows, around: rows[0]!.id, fetchPage });
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      const latest = mounted.timeline.toLatest();
+      await until(() => mounted.timeline.entries().length === 50);
+      const replacement = settledOnDevice(mounted.runtime);
+      mounted.addRow(graphqlMessage(71));
+      mounted.setHeld(true);
+      mounted.setAround(undefined);
+      await replacement;
+      await latest;
+      expect(ids(mounted.timeline)[0]).toBe(graphqlMessage(71).id);
+    } finally {
+      cached.resolve();
+      mounted.dispose();
+    }
+  });
+
+  it('lets a view that pages whenever idle ask again for a failed page after a growing wait', async () => {
+    const rows = messages(70);
+    const fetchPage = vi
+      .fn<FetchChannelServerPage>()
+      .mockRejectedValue(new TypeError('Failed to fetch'));
+    const mounted = mount({ rows, fetchPage });
+    let dispose = () => {};
+    try {
+      await settledOnDevice(mounted.runtime);
+      mounted.setHeld(false);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      // The page path waits on zero-delay timers of its own: run those, and
+      // never the retry wait, which only the test moves past.
+      const failedAgain = async () => {
+        for (
+          let turn = 0;
+          turn < 100 && !mounted.timeline.olderFailed();
+          turn += 1
+        )
+          await vi.advanceTimersByTimeAsync(0);
+        expect(mounted.timeline.olderFailed()).toBe(true);
+      };
+      createRoot((cleanup) => {
+        dispose = cleanup;
+        createEffect(
+          on(
+            () =>
+              mounted.timeline.hasOlder() &&
+              !mounted.timeline.isLoadingOlder() &&
+              !mounted.timeline.olderFailed(),
+            (idle) => {
+              if (idle)
+                fireAndForget(mounted.timeline.loadOlder(), 'channel-call');
+            }
+          )
+        );
+      });
+      await failedAgain();
+      expect(fetchPage).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(PAGE_RETRY_MS - 1);
+      expect(fetchPage).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await failedAgain();
+      expect(fetchPage).toHaveBeenCalledTimes(2);
+      // The second wait is twice the first.
+      await vi.advanceTimersByTimeAsync(2 * PAGE_RETRY_MS - 1);
+      expect(fetchPage).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(1);
+      await failedAgain();
+      expect(fetchPage).toHaveBeenCalledTimes(3);
+    } finally {
+      dispose();
+      mounted.dispose();
+      vi.useRealTimers();
     }
   });
 });

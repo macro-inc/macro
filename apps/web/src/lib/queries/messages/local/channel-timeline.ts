@@ -1,4 +1,5 @@
 import type { EntityLoadError } from '@core/component/EntityLoadGate';
+import { untilAborted } from '@core/util/abort-signal';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import type { MessageTimelineEntry } from '@service-storage/messages';
@@ -34,6 +35,12 @@ import type { ChannelSyncRuntime } from './channel-sync-runtime';
 export const CHANNEL_PAGE_LIMIT = 50;
 /** Entries one device reread asks for while following the window. */
 const REREAD_PAGE_LIMIT = 100;
+/**
+ * The first wait before a failed page may be asked for again; it doubles with
+ * each failure in a row, up to `PAGE_RETRY_MAX_MS`.
+ */
+export const PAGE_RETRY_MS = 2_000;
+export const PAGE_RETRY_MAX_MS = 60_000;
 
 export type ChannelTimelineRuntime = Pick<
   ChannelSyncRuntime,
@@ -302,8 +309,23 @@ export function createLocalChannelTimeline(
   let loadToken = 0;
   // The device holds the window it loaded and every page stored since.
   let held = false;
-  // Pages merged in whose store has not answered yet.
+  // Pages of this window merged in whose outcome is not recorded yet: the
+  // store has not answered, or a refusal is not yet marked unstored.
   let storing = 0;
+  // Failed pages in a row per direction, and the wait before the next ask.
+  const pageRetries: Record<
+    PageDirection,
+    { failures: number; timer: ReturnType<typeof setTimeout> | undefined }
+  > = {
+    older: { failures: 0, timer: undefined },
+    newer: { failures: 0, timer: undefined },
+  };
+  const stopPageRetry = (direction: PageDirection, reset: boolean) => {
+    const retry = pageRetries[direction];
+    clearTimeout(retry.timer);
+    retry.timer = undefined;
+    if (reset) retry.failures = 0;
+  };
   // Bumped when a page is given up, so a window still storing as one is
   // given up does not then count as held.
   let givenUp = 0;
@@ -353,6 +375,8 @@ export function createLocalChannelTimeline(
     loadToken += 1;
     abort?.abort();
     stopReconnects();
+    stopPageRetry('older', true);
+    stopPageRetry('newer', true);
   });
 
   /**
@@ -395,8 +419,12 @@ export function createLocalChannelTimeline(
     const signal = abort.signal;
     held = false;
     missedReread = false;
+    // Pages still storing belong to the window this load replaces.
+    storing = 0;
     anchorId = around;
     stopReconnects();
+    stopPageRetry('older', true);
+    stopPageRetry('newer', true);
     const watch = watchReconnect();
     reconnect = watch;
     if (reloads === 0)
@@ -469,7 +497,15 @@ export function createLocalChannelTimeline(
     });
     // Pages can load from here on, while the window is still storing.
     const givenUpBefore = givenUp;
-    const settled = await settle(loaded, epoch, token);
+    let settled: Awaited<ReturnType<typeof settle>>;
+    try {
+      // A load that replaces this one aborts it: nothing then waits for this
+      // window's store, as going to the live end does.
+      settled = await untilAborted(settle(loaded, epoch, token), signal);
+    } catch (error) {
+      if (signal.aborted) return;
+      throw error;
+    }
     if (token !== loadToken) return;
     if (settled === 'session-changed' || settled === 'yielded') {
       // The new session can store what the old one could not, and a read
@@ -494,7 +530,11 @@ export function createLocalChannelTimeline(
   };
 
   const reread = async () => {
-    if (state.phase !== 'ready') return;
+    if (state.phase !== 'ready') {
+      // The window being read may predate the change: read it once it holds.
+      if (state.phase === 'loading') missedReread = true;
+      return;
+    }
     if (!holds()) {
       // Read once every page shown is stored, or the window reloaded.
       missedReread = true;
@@ -553,7 +593,8 @@ export function createLocalChannelTimeline(
     direction: 'older' | 'newer',
     cursor: string,
     token: number,
-    signal: AbortSignal
+    signal: AbortSignal,
+    merged: () => void
   ) => {
     const epoch = deps.runtime.epoch();
     const loaded = await loadChannelPage(
@@ -581,15 +622,8 @@ export function createLocalChannelTimeline(
         }
       })
     );
-    // The device lacks the page until it answers: nothing reads the window
-    // from it meanwhile, nor keeps it for the next mount.
-    storing += 1;
-    let settled: Awaited<ReturnType<typeof settle>>;
-    try {
-      settled = await settle(loaded, epoch, token);
-    } finally {
-      storing -= 1;
-    }
+    merged();
+    const settled = await settle(loaded, epoch, token);
     return token === loadToken ? settled : 'stale';
   };
 
@@ -604,6 +638,7 @@ export function createLocalChannelTimeline(
     cursor: string,
     token: number,
     signal: AbortSignal,
+    merged: () => void,
     first: 'session-changed' | 'yielded'
   ): Promise<'held' | 'unheld' | 'unstored' | 'stale'> => {
     let settled: Awaited<ReturnType<typeof fetchMore>> = first;
@@ -611,7 +646,7 @@ export function createLocalChannelTimeline(
       if (settled === 'yielded' && !(await afterDeletes(signal)))
         return 'stale';
       if (token !== loadToken) return 'stale';
-      settled = await fetchMore(direction, cursor, token, signal);
+      settled = await fetchMore(direction, cursor, token, signal, merged);
       if (settled !== 'yielded' && settled !== 'session-changed')
         return settled;
     }
@@ -640,7 +675,8 @@ export function createLocalChannelTimeline(
     cursor: string,
     again: boolean,
     token: number,
-    signal: AbortSignal
+    signal: AbortSignal,
+    merged: () => void
   ): Promise<PageOutcome | 'stale'> => {
     let settled: Awaited<ReturnType<typeof fetchMoreAgain>>;
     if (again) {
@@ -649,16 +685,13 @@ export function createLocalChannelTimeline(
         cursor,
         token,
         signal,
+        merged,
         'session-changed'
       );
     } else {
-      const first = await fetchMore(direction, cursor, token, signal);
+      const first = await fetchMore(direction, cursor, token, signal, merged);
       if (first === 'stale') return 'stale';
-      if (first === 'held') {
-        // A change that came while it stored was not read.
-        if (missedReread && holds()) scheduleReread();
-        return 'done';
-      }
+      if (first === 'held') return 'done';
       if (first === 'unheld' || !held) {
         letGo();
         return 'done';
@@ -666,7 +699,14 @@ export function createLocalChannelTimeline(
       // Marked before the page is read again, so a scroll as the read ends,
       // or a reread meanwhile, finds it.
       setState('unstored', direction, cursor);
-      settled = await fetchMoreAgain(direction, cursor, token, signal, first);
+      settled = await fetchMoreAgain(
+        direction,
+        cursor,
+        token,
+        signal,
+        merged,
+        first
+      );
       if (settled === 'unstored') return 'unstored';
     }
     if (settled === 'stale') return 'stale';
@@ -675,8 +715,8 @@ export function createLocalChannelTimeline(
       return 'done';
     }
     setState('unstored', direction, null);
-    // Held again once no page is missing: reread what changed meanwhile.
-    if (holds()) scheduleReread();
+    // Read what changed meanwhile, once the window holds every page again.
+    missedReread = true;
     return 'done';
   };
 
@@ -697,8 +737,17 @@ export function createLocalChannelTimeline(
     pageReconnects[direction]?.stop();
     const watch = watchReconnect();
     pageReconnects[direction] = watch;
+    stopPageRetry(direction, false);
     setState(flag, true);
     setState('pageFailed', direction, false);
+    // From the merge until its outcome is recorded, the device may lack the
+    // page: nothing reads the window from it, nor keeps it for the next mount.
+    let pending = false;
+    const merged = () => {
+      if (pending) return;
+      pending = true;
+      storing += 1;
+    };
     let outcome: PageOutcome | 'stale';
     try {
       outcome = await pageIn(
@@ -706,13 +755,20 @@ export function createLocalChannelTimeline(
         cursor,
         unstored !== null,
         token,
-        signal
+        signal,
+        merged
       );
     } catch (error) {
       // Aborted by a switch or unmount: nothing failed.
       outcome = token === loadToken ? 'failed' : 'stale';
       if (outcome === 'failed')
         Telemetry.error(error, { surface: 'channel-local-sync' });
+    }
+    // A later window load counted its own pages from zero.
+    if (pending && token === loadToken) {
+      storing -= 1;
+      // A change skipped while it stored is read once every page is held.
+      if (missedReread && holds()) scheduleReread();
     }
     if (outcome === 'stale' || token !== loadToken) {
       watch.stop();
@@ -727,9 +783,23 @@ export function createLocalChannelTimeline(
       })
     );
     if (outcome === 'done') {
+      stopPageRetry(direction, true);
       watch.stop();
       return;
     }
+    if (outcome === 'failed') {
+      // Online, the connection does not come back: a view that pages
+      // whenever paging is idle may ask again after a wait that grows.
+      const retry = pageRetries[direction];
+      retry.failures += 1;
+      retry.timer = setTimeout(
+        () => {
+          retry.timer = undefined;
+          setState('pageFailed', direction, false);
+        },
+        Math.min(PAGE_RETRY_MAX_MS, PAGE_RETRY_MS * 2 ** (retry.failures - 1))
+      );
+    } else stopPageRetry(direction, true);
     // The window keeps what it shows. The next scroll asks again, and so does
     // the connection coming back: scrolled to the end there is no next
     // scroll.
