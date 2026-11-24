@@ -27,6 +27,11 @@ where
     /// Refuses Markdown, DOCX, PDF and image documents (the first two keep
     /// their content elsewhere, the others serve their first version),
     /// collaborative documents, and more than 100 MiB.
+    ///
+    /// The new version is recorded before its bytes are stored, and removed
+    /// if storing them fails. A concurrent add of the same bytes can answer
+    /// that version before it is removed, so callers that add to one
+    /// document concurrently serialize their adds (an import's sync lease).
     #[tracing::instrument(
         skip_all,
         fields(document_id = %document.entity().entity_id, bytes = bytes.len(), created),
