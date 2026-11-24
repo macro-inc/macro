@@ -10,7 +10,10 @@ async fn appearance_and_history_commit_without_changing_scheduling(pool: PgPool)
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "routine"))
+        .create_action(
+            sample_action(user_owner(USER_A), "routine"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let id = created.id.unwrap();
@@ -100,7 +103,10 @@ async fn history_failure_rolls_back_the_appearance(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "routine"))
+        .create_action(
+            sample_action(user_owner(USER_A), "routine"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let id = created.id.unwrap();
@@ -150,7 +156,10 @@ async fn agent_picks_until_the_owner_chooses(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "routine"))
+        .create_action(
+            sample_action(user_owner(USER_A), "routine"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let id = created.id.unwrap();
@@ -202,7 +211,10 @@ async fn choosing_the_current_look_still_keeps_it(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool.clone());
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "routine"))
+        .create_action(
+            sample_action(user_owner(USER_A), "routine"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let id = created.id.unwrap();
@@ -300,7 +312,10 @@ async fn a_look_the_owner_set_before_the_column_stays_theirs(pool: PgPool) {
     let mut routines = Vec::new();
     for name in ["colored", "reset", "never", "blank"] {
         let created = repo
-            .create_action(sample_action(user_owner(USER_A), name))
+            .create_action(
+                sample_action(user_owner(USER_A), name),
+                crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+            )
             .await
             .unwrap();
         let id = created.id.unwrap();
@@ -430,7 +445,16 @@ async fn an_owners_choice_on_an_older_replica_stays_theirs(pool: PgPool) {
         sample_action(user_owner(USER_A), "the owner's look, then none"),
         template,
     ] {
-        routines.push(repo.create_action(action).await.unwrap().id.unwrap());
+        routines.push(
+            repo.create_action(
+                action,
+                crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+            )
+            .await
+            .unwrap()
+            .id
+            .unwrap(),
+        );
     }
     let [picked, reset, back, first, none_again, from_template] = routines[..] else {
         panic!("six routines were created");

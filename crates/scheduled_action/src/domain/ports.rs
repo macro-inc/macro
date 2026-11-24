@@ -4,8 +4,9 @@ use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, CreatedRoutine,
-    DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun, Requester, RunCaller,
-    RunHistory, RunningRun, ScheduledAction, ScheduledActionUpdate, SubRoutineKey,
+    DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun, Requester,
+    RoutineLimits, RunCaller, RunHistory, RunningRun, ScheduledAction, ScheduledActionUpdate,
+    SubRoutineKey,
 };
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
 use anyhow::Result;
@@ -91,9 +92,12 @@ pub trait LiveItems: Send + Sync + 'static {
 }
 
 pub trait ScheduledActionRepo: Send + Sync + 'static {
+    /// Save a new routine. A sub-routine is refused with `TooManySubRoutines`
+    /// when its parent already has `max_active_sub_routines` active ones.
     fn create_action(
         &self,
         action: ScheduledAction,
+        max_active_sub_routines: i64,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Account cleanup only: `WHERE owner = $1`. Never the HTTP list.
@@ -461,6 +465,25 @@ pub struct SuggestionOrigin {
     pub kind: &'static str,
     /// The surface it belongs to most.
     pub surface: Option<&'static str>,
+}
+
+/// The routine limits an owner's plan gives. Object-safe, so the services
+/// need not know the billing source's type. Never fails: an owner whose plan
+/// can't be read gets [`RoutineLimits::STANDARD`].
+#[async_trait::async_trait]
+pub trait RoutinePlans: Send + Sync + 'static {
+    /// The limits `owner`'s plan gives.
+    async fn limits(&self, owner: &MacroUserIdStr<'_>) -> RoutineLimits;
+}
+
+/// Everyone on [`RoutineLimits::STANDARD`]: a composition without billing.
+pub struct StandardRoutinePlans;
+
+#[async_trait::async_trait]
+impl RoutinePlans for StandardRoutinePlans {
+    async fn limits(&self, _owner: &MacroUserIdStr<'_>) -> RoutineLimits {
+        RoutineLimits::STANDARD
+    }
 }
 
 /// Finds what a suggestion was. Object-safe, so the scheduled action service

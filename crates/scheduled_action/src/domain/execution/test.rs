@@ -274,7 +274,11 @@ impl ScheduledActionRepo for Repo {
     async fn update_last_executed(&self, _: &Uuid, _: DateTime<Utc>) -> Result<()> {
         Ok(())
     }
-    async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        _: ScheduledAction,
+        _max_active_sub_routines: i64,
+    ) -> Result<ScheduledAction> {
         unimplemented!()
     }
     async fn get_owned_actions(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {

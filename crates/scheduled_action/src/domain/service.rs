@@ -28,13 +28,13 @@ use super::event_trigger::ActionTrigger;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionPolicyError, CheckedStepProblems,
     CreatedItem, DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun,
-    MAX_DESCRIPTION_CHARS, OwnerNotUserError, Requester, RoutineCheck, RunCaller, RunningRun,
-    ScheduledAction, SubRoutine, SubRoutineKey,
+    MAX_DESCRIPTION_CHARS, OwnerNotUserError, Requester, RoutineCheck, RoutineLimits, RunCaller,
+    RunningRun, ScheduledAction, SubRoutine, SubRoutineKey,
 };
 use super::ports::{
-    CodeUpgrades, DraftHandBacks, NoRoutineCode, RequestSessions, RoutineCode, SavedAction,
-    ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, StepProblems,
-    SubRoutines, SuggestionOrigins, TaskTargetValidator,
+    CodeUpgrades, DraftHandBacks, NoRoutineCode, RequestSessions, RoutineCode, RoutinePlans,
+    SavedAction, ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService,
+    StandardRoutinePlans, StepProblems, SubRoutines, SuggestionOrigins, TaskTargetValidator,
 };
 
 mod sub_routines;
@@ -74,6 +74,8 @@ pub struct ScheduledActionServiceImpl<
     run_sessions: Option<Arc<dyn RequestSessions>>,
     /// Where a stop of a run in progress is sent.
     stops: RunStops,
+    /// The routine limits each owner's plan gives.
+    plans: Arc<dyn RoutinePlans>,
 }
 
 /// What keeps a draft session's check as its answer.
@@ -124,6 +126,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             origins: None,
             run_sessions: None,
             stops: RunStops::default(),
+            plans: Arc::new(StandardRoutinePlans),
         }
     }
 }
@@ -150,6 +153,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             origins: self.origins,
             run_sessions: self.run_sessions,
             stops: self.stops,
+            plans: self.plans,
         }
     }
 
@@ -173,6 +177,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             origins: self.origins,
             run_sessions: self.run_sessions,
             stops: self.stops,
+            plans: self.plans,
         }
     }
 
@@ -196,6 +201,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             origins: self.origins,
             run_sessions: self.run_sessions,
             stops: self.stops,
+            plans: self.plans,
         }
     }
 
@@ -221,6 +227,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             origins: self.origins,
             run_sessions: self.run_sessions,
             stops: self.stops,
+            plans: self.plans,
         }
     }
 
@@ -255,6 +262,13 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
     /// executor that runs them.
     pub fn with_run_stops(mut self, stops: RunStops) -> Self {
         self.stops = stops;
+        self
+    }
+
+    /// Read each owner's sub-routine limit from their plan through `plans`
+    /// instead of giving everyone the standard one.
+    pub fn with_routine_plans(mut self, plans: Arc<dyn RoutinePlans>) -> Self {
+        self.plans = plans;
         self
     }
 
@@ -389,29 +403,39 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         let now = Utc::now();
         let next_run_at = next_run(&input.trigger, now, |_| false)?;
         let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
+        // Only a sub-routine is counted against a limit, so only it reads the
+        // owner's plan.
+        let max_active_sub_routines = if sub_routine.is_some() {
+            self.plans.limits(owner_user).await.active_sub_routines
+        } else {
+            RoutineLimits::STANDARD.active_sub_routines
+        };
         let created = self
             .repo
-            .create_action(ScheduledAction {
-                id: None,
-                owner,
-                name: input.name,
-                trigger: input.trigger,
-                kind: input.kind,
-                task,
-                enabled: input.enabled,
-                run_visibility: input.run_visibility,
-                created_at: now,
-                updated_at: now,
-                configuration_revision: ConfigurationRevision::INITIAL,
-                event_activated_at,
-                next_run_at,
-                claimed: None,
-                template_id,
-                appearance,
-                suggestion_id,
-                description,
-                sub_routine,
-            })
+            .create_action(
+                ScheduledAction {
+                    id: None,
+                    owner,
+                    name: input.name,
+                    trigger: input.trigger,
+                    kind: input.kind,
+                    task,
+                    enabled: input.enabled,
+                    run_visibility: input.run_visibility,
+                    created_at: now,
+                    updated_at: now,
+                    configuration_revision: ConfigurationRevision::INITIAL,
+                    event_activated_at,
+                    next_run_at,
+                    claimed: None,
+                    template_id,
+                    appearance,
+                    suggestion_id,
+                    description,
+                    sub_routine,
+                },
+                max_active_sub_routines,
+            )
             .await?;
         self.dispatcher_tx
             .send(DispatchEvent::Create(created.clone()))

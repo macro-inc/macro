@@ -661,7 +661,11 @@ impl ScheduledActionRepo for UnusedRepo {
         anyhow::bail!("appearance writes are not supported by this execution-only adapter")
     }
 
-    async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        _: ScheduledAction,
+        _max_active_sub_routines: i64,
+    ) -> Result<ScheduledAction> {
         unimplemented!()
     }
     async fn get_owned_actions(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {

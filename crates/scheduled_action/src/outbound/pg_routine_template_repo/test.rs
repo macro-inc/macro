@@ -35,7 +35,10 @@ async fn resharing_replaces_the_snapshot_and_counts_activations(pool: PgPool) {
     let actions = test_repo(pool.clone());
     let templates = PgRoutineTemplateRepo::new(pool);
     let source = actions
-        .create_action(sample_action(user_owner(USER_A), "digest"))
+        .create_action(
+            sample_action(user_owner(USER_A), "digest"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let id = source.id.unwrap();
@@ -49,7 +52,13 @@ async fn resharing_replaces_the_snapshot_and_counts_activations(pool: PgPool) {
 
     let mut activated = sample_action(user_owner(USER_B), "my digest");
     activated.template_id = Some(id);
-    let activated = actions.create_action(activated).await.unwrap();
+    let activated = actions
+        .create_action(
+            activated,
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap();
     assert_eq!(activated.template_id, Some(id));
     let reread = actions
         .get_action(&activated.id.unwrap())
@@ -75,7 +84,10 @@ async fn stopping_or_deleting_the_source_removes_the_template_only(pool: PgPool)
     let actions = test_repo(pool.clone());
     let templates = PgRoutineTemplateRepo::new(pool);
     let source = actions
-        .create_action(sample_action(user_owner(USER_A), "digest"))
+        .create_action(
+            sample_action(user_owner(USER_A), "digest"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let id = source.id.unwrap();
@@ -85,7 +97,13 @@ async fn stopping_or_deleting_the_source_removes_the_template_only(pool: PgPool)
         .unwrap();
     let mut activated = sample_action(user_owner(USER_B), "my digest");
     activated.template_id = Some(id);
-    let activated = actions.create_action(activated).await.unwrap();
+    let activated = actions
+        .create_action(
+            activated,
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap();
 
     templates.delete_template(&id).await.unwrap();
     templates.delete_template(&id).await.unwrap();

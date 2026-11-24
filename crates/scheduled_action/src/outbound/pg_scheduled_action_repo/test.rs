@@ -151,7 +151,10 @@ async fn create_action_returns_id_and_is_listable_by_owner(pool: PgPool) {
     let repo = test_repo(pool);
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(
+            sample_action(user_owner(USER_A), "standup"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .expect("create should succeed");
     assert_eq!(created.id.unwrap().get_version_num(), 7);
@@ -172,19 +175,28 @@ async fn last_runs_report_each_actions_latest_finished_run(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
     let failing = repo
-        .create_action(sample_action(user_owner(USER_A), "failing"))
+        .create_action(
+            sample_action(user_owner(USER_A), "failing"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap()
         .id
         .unwrap();
     let recovered = repo
-        .create_action(sample_action(user_owner(USER_A), "recovered"))
+        .create_action(
+            sample_action(user_owner(USER_A), "recovered"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap()
         .id
         .unwrap();
     let never_ran = repo
-        .create_action(sample_action(user_owner(USER_A), "never ran"))
+        .create_action(
+            sample_action(user_owner(USER_A), "never ran"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap()
         .id
@@ -228,9 +240,12 @@ async fn get_owned_actions_excludes_other_principals(pool: PgPool) {
     insert_user(&pool, USER_B).await;
     let repo = test_repo(pool);
 
-    repo.create_action(sample_action(user_owner(USER_A), "standup"))
-        .await
-        .expect("create should succeed");
+    repo.create_action(
+        sample_action(user_owner(USER_A), "standup"),
+        crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+    )
+    .await
+    .expect("create should succeed");
 
     let owner_listed = repo
         .get_owned_actions(&user(USER_A))
@@ -251,7 +266,10 @@ async fn update_action_changes_name_schedule_and_enabled(pool: PgPool) {
     let repo = test_repo(pool);
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(
+            sample_action(user_owner(USER_A), "standup"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .expect("create should succeed");
 
@@ -286,7 +304,13 @@ async fn update_action_changes_name_schedule_and_enabled(pool: PgPool) {
 async fn replacement_is_fenced_against_claims_and_stale_revisions(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
-    let action = repo.create_action(event_action()).await.unwrap();
+    let action = repo
+        .create_action(
+            event_action(),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap();
     let id = action.id.unwrap();
     let mut replacement = action.clone();
     replacement.configuration_revision = action.configuration_revision.next().unwrap();
@@ -333,7 +357,10 @@ async fn second_claim_returns_already_running(pool: PgPool) {
     let repo = test_repo(pool);
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(
+            sample_action(user_owner(USER_A), "standup"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -353,7 +380,10 @@ async fn claims_from_snapshots_older_than_a_pause_or_update_fail(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
     let polled = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(
+            sample_action(user_owner(USER_A), "standup"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let id = polled.id.unwrap();
@@ -400,7 +430,10 @@ async fn release_is_fenced_to_its_own_execution(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
     let action = repo
-        .create_action(sample_action(user_owner(USER_A), "fenced"))
+        .create_action(
+            sample_action(user_owner(USER_A), "fenced"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let id = action.id.unwrap();
@@ -443,7 +476,10 @@ async fn delete_action_removes_row_from_owner_list(pool: PgPool) {
     let repo = test_repo(pool.clone());
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(
+            sample_action(user_owner(USER_A), "standup"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -465,7 +501,10 @@ async fn create_action_registers_entity_row(pool: PgPool) {
     let repo = test_repo(pool.clone());
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(
+            sample_action(user_owner(USER_A), "standup"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -501,7 +540,10 @@ async fn delete_action_removes_entity_row(pool: PgPool) {
     let repo = test_repo(pool.clone());
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(
+            sample_action(user_owner(USER_A), "standup"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -524,7 +566,10 @@ async fn delete_action_succeeds_when_entity_row_is_missing(pool: PgPool) {
     let repo = test_repo(pool.clone());
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(
+            sample_action(user_owner(USER_A), "standup"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -559,7 +604,13 @@ fn event_action() -> ScheduledAction {
 async fn event_round_trip_and_bookkeeping_does_not_advance_configuration(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
-    let created = repo.create_action(event_action()).await.unwrap();
+    let created = repo
+        .create_action(
+            event_action(),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap();
     let id = created.id.unwrap();
     assert_eq!(id.get_version_num(), 7);
     let before = repo.get_action(&id).await.unwrap().unwrap();
@@ -621,7 +672,13 @@ async fn lookup_update_and_delete_are_id_scoped(pool: PgPool) {
     insert_user(&pool, USER_B).await;
     let repo = test_repo(pool.clone());
     for action in [sample_action(user_owner(USER_A), "cron"), event_action()] {
-        let created = repo.create_action(action).await.unwrap();
+        let created = repo
+            .create_action(
+                action,
+                crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+            )
+            .await
+            .unwrap();
         let id = created.id.unwrap();
         let loaded = repo.get_action(&id).await.unwrap().unwrap();
         assert_eq!(loaded.owner, user_owner(USER_A));
@@ -674,7 +731,10 @@ async fn trigger_transitions_replace_all_trigger_columns(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
     let cron = repo
-        .create_action(sample_action(user_owner(USER_A), "cron"))
+        .create_action(
+            sample_action(user_owner(USER_A), "cron"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let events = event_action();
@@ -718,14 +778,27 @@ async fn trigger_transitions_replace_all_trigger_columns(pool: PgPool) {
 async fn polling_returns_only_enabled_unclaimed_cron_rows(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
-    repo.create_action(event_action()).await.unwrap();
+    repo.create_action(
+        event_action(),
+        crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+    )
+    .await
+    .unwrap();
     let disabled = ScheduledAction {
         enabled: false,
         ..sample_action(user_owner(USER_A), "disabled")
     };
-    repo.create_action(disabled).await.unwrap();
+    repo.create_action(
+        disabled,
+        crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+    )
+    .await
+    .unwrap();
     let claimed = repo
-        .create_action(sample_action(user_owner(USER_A), "claimed"))
+        .create_action(
+            sample_action(user_owner(USER_A), "claimed"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     repo.claim_action(
@@ -736,7 +809,10 @@ async fn polling_returns_only_enabled_unclaimed_cron_rows(pool: PgPool) {
     .await
     .unwrap();
     let cron = repo
-        .create_action(sample_action(user_owner(USER_A), "cron"))
+        .create_action(
+            sample_action(user_owner(USER_A), "cron"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let candidates = repo.get_next_unclaimed_actions(1).await.unwrap();
@@ -968,7 +1044,13 @@ async fn exhausted_one_off_clears_firing_and_is_not_dispatched_again(pool: PgPoo
         timezone: chrono_tz::UTC,
     };
     action.next_run_at = Some(Utc::now() - chrono::Duration::hours(1));
-    let created = repo.create_action(action).await.unwrap();
+    let created = repo
+        .create_action(
+            action,
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap();
     let id = created.id.unwrap();
     let token = repo
         .claim_action(&id, created.configuration_revision, created.next_run_at)
@@ -1006,7 +1088,13 @@ async fn once_routine_fires_for_exactly_one_of_concurrent_claims_and_then_is_don
     let mut action = sample_action(user_owner(USER_A), "check back");
     action.trigger = ActionTrigger::Once { at };
     action.next_run_at = Some(at);
-    let created = repo.create_action(action).await.unwrap();
+    let created = repo
+        .create_action(
+            action,
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap();
     let id = created.id.unwrap();
     assert_eq!(
         repo.get_action(&id).await.unwrap().unwrap().trigger,
@@ -1056,7 +1144,13 @@ async fn once_inside_multiple_is_stored_and_other_shapes_are_rejected(pool: PgPo
     ]}))
     .unwrap();
     action.next_run_at = Some(at);
-    let created = repo.create_action(action.clone()).await.unwrap();
+    let created = repo
+        .create_action(
+            action.clone(),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap();
     assert_eq!(
         repo.get_action(&created.id.unwrap())
             .await
@@ -1107,7 +1201,13 @@ async fn multiple_triggers_survive_grant_listing_and_configuration_updates(pool:
     }))
     .unwrap();
     action.event_activated_at = Some(Utc::now());
-    let mut created = repo.create_action(action).await.unwrap();
+    let mut created = repo
+        .create_action(
+            action,
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap();
     let id = created.id.unwrap();
     let listed = repo.get_actions_by_ids(&[id]).await.unwrap();
     assert_eq!(listed[0].trigger, created.trigger);
@@ -1124,11 +1224,17 @@ async fn get_actions_by_ids_returns_another_owners_row(pool: PgPool) {
     insert_user(&pool, USER_B).await;
     let repo = test_repo(pool);
     let own = repo
-        .create_action(sample_action(user_owner(USER_A), "own"))
+        .create_action(
+            sample_action(user_owner(USER_A), "own"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let other = repo
-        .create_action(sample_action(user_owner(USER_B), "other"))
+        .create_action(
+            sample_action(user_owner(USER_B), "other"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
 
@@ -1152,10 +1258,10 @@ async fn bot_owner_create_writes_bot_and_sponsor_grants(pool: PgPool) {
         OwnedEntityRegistrar::new(OwnerGrantPolicy::new(SponsoredBy(sponsor))),
     );
     let created = repo
-        .create_action(sample_action(
-            Owner::Bot(bot_id::BotId::TEST_A),
-            "bot routine",
-        ))
+        .create_action(
+            sample_action(Owner::Bot(bot_id::BotId::TEST_A), "bot routine"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let bot_source = bot_id::BotId::TEST_A.into_storage_id().to_string();
@@ -1265,8 +1371,20 @@ async fn a_consumed_firing_is_not_due_again_after_its_claim_goes_stale(pool: PgP
         action.next_run_at = Some(Utc::now() - chrono::Duration::hours(1));
         action
     };
-    let consumed = repo.create_action(due("consumed")).await.unwrap();
-    let unconsumed = repo.create_action(due("unconsumed")).await.unwrap();
+    let consumed = repo
+        .create_action(
+            due("consumed"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap();
+    let unconsumed = repo
+        .create_action(
+            due("unconsumed"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap();
     for action in [&consumed, &unconsumed] {
         repo.claim_action(
             &action.id.unwrap(),
@@ -1310,7 +1428,10 @@ async fn run_history_is_the_last_run_and_the_last_success_ignoring_skipped_runs(
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
     let action = repo
-        .create_action(sample_action(user_owner(USER_A), "triage"))
+        .create_action(
+            sample_action(user_owner(USER_A), "triage"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let action_id = action.id.unwrap();

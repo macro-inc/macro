@@ -66,7 +66,11 @@ impl ScheduledActionRepo for FakeRepository {
         anyhow::bail!("appearance writes are not supported by this execution-only adapter")
     }
 
-    async fn create_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        action: ScheduledAction,
+        _max_active_sub_routines: i64,
+    ) -> Result<ScheduledAction> {
         Ok(action)
     }
 

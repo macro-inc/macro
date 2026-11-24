@@ -185,7 +185,11 @@ impl ScheduledActionRepo for FakeRepo {
         })
     }
 
-    async fn create_action(&self, mut action: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        mut action: ScheduledAction,
+        _max_active_sub_routines: i64,
+    ) -> Result<ScheduledAction> {
         action.id = Some(generate_uuid_v7());
         self.actions.lock().unwrap().push(action.clone());
         Ok(action)

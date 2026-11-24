@@ -20,8 +20,7 @@ use crate::domain::event_runs::{ClaimToken, ConfigurationRevision};
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, CreatedRoutine,
-    MAX_ACTION_TIME, MAX_ACTIVE_SUB_ROUTINES, RunHistory, RunningRun, Schedule, ScheduledAction,
-    SubRoutine, SubRoutineKey,
+    MAX_ACTION_TIME, RunHistory, RunningRun, Schedule, ScheduledAction, SubRoutine, SubRoutineKey,
 };
 use crate::domain::ports::{ScheduledActionRepo, SubRoutines};
 
@@ -213,7 +212,11 @@ impl TryFrom<&ActionTrigger> for TriggerColumns {
 }
 
 impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
-    async fn create_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        action: ScheduledAction,
+        max_active_sub_routines: i64,
+    ) -> Result<ScheduledAction> {
         let id = generate_uuid_v7();
         let owner = action.owner.principal_id();
         let trigger = TriggerColumns::try_from(&action.trigger)?;
@@ -221,7 +224,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
 
         let mut tx = self.pool.begin().await?;
         if let Some(link) = &action.sub_routine {
-            sub_routines::admit_child(&mut tx, link.parent_id).await?;
+            sub_routines::admit_child(&mut tx, link.parent_id, max_active_sub_routines).await?;
         }
         let link = action.sub_routine.as_ref();
         // A new routine's look, its template's or an agent's pick, is not its

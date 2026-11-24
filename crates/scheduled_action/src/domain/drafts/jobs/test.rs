@@ -664,7 +664,7 @@ async fn a_start_sent_again_at_the_limit_finds_its_job() {
     let rows = Arc::new(Rows::default());
     let sessions = hangs(&rows);
     let replica = Replica::new(&rows, &sessions);
-    for _ in 1..MAX_DRAFTING {
+    for _ in 1..crate::domain::models::RoutineLimits::STANDARD.drafting {
         replica.start(routine(BUG_REPORTS)).await.unwrap();
     }
     let client_id = macro_uuid::generate_uuid_v7();
@@ -679,7 +679,10 @@ async fn a_start_sent_again_at_the_limit_finds_its_job() {
         .unwrap();
 
     assert_eq!(again.id, job.id);
-    assert_eq!(sessions.prepared.lock().unwrap().len() as u32, MAX_DRAFTING);
+    assert_eq!(
+        sessions.prepared.lock().unwrap().len() as u32,
+        crate::domain::models::RoutineLimits::STANDARD.drafting
+    );
 }
 
 /// A cancel on any replica marks the row; the drafter, wherever it runs,
@@ -1178,13 +1181,44 @@ async fn requests_it_cannot_draft_are_refused_or_failed_at_once() {
     assert!(sessions.prepared.lock().unwrap().is_empty());
 }
 
+/// Every owner on the raised limits, as a Business or Max plan gives.
+struct RaisedPlans;
+
+#[async_trait::async_trait]
+impl crate::domain::ports::RoutinePlans for RaisedPlans {
+    async fn limits(&self, _owner: &MacroUserIdStr<'_>) -> crate::domain::models::RoutineLimits {
+        crate::domain::models::RoutineLimits::RAISED
+    }
+}
+
+/// A plan with raised limits drafts more at once, up to its own limit.
+#[tokio::test(start_paused = true)]
+async fn a_raised_plan_drafts_more_at_once() {
+    let rows = Arc::new(Rows::default());
+    let sessions = hangs(&rows);
+    let mut replica = Replica::new(&rows, &sessions);
+    replica.jobs = replica.jobs.with_routine_plans(Arc::new(RaisedPlans));
+    let raised = crate::domain::models::RoutineLimits::RAISED.drafting;
+    assert!(raised > crate::domain::models::RoutineLimits::STANDARD.drafting);
+    for _ in 0..raised {
+        replica.start(routine(BUG_REPORTS)).await.unwrap();
+    }
+
+    let error = replica.start(routine(BUG_REPORTS)).await.unwrap_err();
+
+    assert_eq!(
+        error.downcast_ref::<DraftJobError>(),
+        Some(&DraftJobError::TooMany)
+    );
+}
+
 /// One person has a few drafts drafting at once, no more.
 #[tokio::test(start_paused = true)]
 async fn too_many_drafts_at_once_are_refused() {
     let rows = Arc::new(Rows::default());
     let sessions = hangs(&rows);
     let replica = Replica::new(&rows, &sessions);
-    for _ in 0..MAX_DRAFTING {
+    for _ in 0..crate::domain::models::RoutineLimits::STANDARD.drafting {
         replica.start(routine(BUG_REPORTS)).await.unwrap();
     }
 

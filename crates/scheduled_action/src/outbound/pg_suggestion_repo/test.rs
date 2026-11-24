@@ -204,10 +204,22 @@ async fn suggestions_round_trip_and_dismissals_and_saves_are_the_persons(pool: P
     let actions = test_repo(pool);
     let mut saved = sample_action(user_owner(USER_A), "Weekly planning");
     saved.suggestion_id = Some(written);
-    actions.create_action(saved).await.unwrap();
+    actions
+        .create_action(
+            saved,
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap();
     let mut theirs = sample_action(user_owner(USER_B), "Digest");
     theirs.suggestion_id = Some(picked);
-    actions.create_action(theirs).await.unwrap();
+    actions
+        .create_action(
+            theirs,
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap();
     assert_eq!(repo.saved_from(&a).await.unwrap(), [written]);
     let stored = repo.suggestions(&a).await.unwrap();
     assert_eq!(
@@ -268,7 +280,10 @@ async fn a_drafted_suggestion_and_its_card_are_kept_and_closed_together(pool: Pg
     let mut routine = sample_action(user_owner(USER_A), "Weekly planning");
     routine.suggestion_id = Some(saved);
     let created = test_repo(pool.clone())
-        .create_action(routine)
+        .create_action(
+            routine,
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -361,7 +376,10 @@ async fn save_routine(pool: &PgPool, owner: &'static str, suggestion: Uuid) -> U
     let mut routine = sample_action(user_owner(owner), "Weekly planning");
     routine.suggestion_id = Some(suggestion);
     test_repo(pool.clone())
-        .create_action(routine)
+        .create_action(
+            routine,
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap()
         .id
@@ -711,7 +729,10 @@ async fn the_state_backfill_derives_what_readers_derived(pool: PgPool) {
         (USER_B, saved_by_someone_else),
     ] {
         let routine = test_repo(pool.clone())
-            .create_action(sample_action(user_owner(owner), "Digest"))
+            .create_action(
+                sample_action(user_owner(owner), "Digest"),
+                crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+            )
             .await
             .unwrap()
             .id

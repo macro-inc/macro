@@ -30,14 +30,20 @@ async fn deletes_user_actions_without_cascade_and_preserves_other_users(pool: Pg
     insert_user(&pool, USER_B).await;
     let repo = Arc::new(super::test_repo(pool.clone()));
     let enabled = repo
-        .create_action(sample_action(user_owner(USER_A), "enabled"))
+        .create_action(
+            sample_action(user_owner(USER_A), "enabled"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let disabled = repo
-        .create_action(ScheduledAction {
-            enabled: false,
-            ..sample_action(user_owner(USER_A), "disabled")
-        })
+        .create_action(
+            ScheduledAction {
+                enabled: false,
+                ..sample_action(user_owner(USER_A), "disabled")
+            },
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     repo.claim_action(
@@ -47,9 +53,18 @@ async fn deletes_user_actions_without_cascade_and_preserves_other_users(pool: Pg
     )
     .await
     .unwrap();
-    let event = repo.create_action(event_action()).await.unwrap();
+    let event = repo
+        .create_action(
+            event_action(),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap();
     let other = repo
-        .create_action(sample_action(user_owner(USER_B), "other"))
+        .create_action(
+            sample_action(user_owner(USER_B), "other"),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let (tx, _rx) = tokio::sync::mpsc::channel(10);

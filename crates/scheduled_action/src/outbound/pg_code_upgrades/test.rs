@@ -19,7 +19,13 @@ async fn routine(pool: &PgPool) -> ScheduledAction {
         "steps": [{ "type": "code", "title": "File", "source": "old" }],
         "sdk": "0.2.0+old",
     });
-    test_repo(pool.clone()).create_action(action).await.unwrap()
+    test_repo(pool.clone())
+        .create_action(
+            action,
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
+        .await
+        .unwrap()
 }
 
 async fn stored(pool: &PgPool, action: &ScheduledAction) -> ScheduledAction {
@@ -225,41 +231,50 @@ async fn a_sweep_brings_enabled_routines_with_code_to_the_current_sdk(pool: PgPo
         action
     };
     let nested = repo
-        .create_action(create(
-            json!({ "steps": [
+        .create_action(
+            create(
+                json!({ "steps": [
                 { "type": "agent", "model": "m", "instructions": "Read" },
                 { "type": "code", "title": "File", "source": "old" }
             ], "sdk": "0.2.0+old" }),
-            true,
-        ))
+                true,
+            ),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let never_checked = repo
-        .create_action(create(
-            json!({ "steps": [{ "type": "code", "title": "File", "source": "old" }] }),
-            true,
-        ))
+        .create_action(
+            create(
+                json!({ "steps": [{ "type": "code", "title": "File", "source": "old" }] }),
+                true,
+            ),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
     let current = repo
         .create_action(create(
             json!({ "steps": [{ "type": "code", "title": "File", "source": "new" }], "sdk": "0.3.0+new" }),
             true,
-        ))
+        ), crate::domain::models::RoutineLimits::STANDARD.active_sub_routines)
         .await
         .unwrap();
     let paused = repo
         .create_action(create(
             json!({ "steps": [{ "type": "code", "title": "File", "source": "old" }], "sdk": "0.2.0+old" }),
             false,
-        ))
+        ), crate::domain::models::RoutineLimits::STANDARD.active_sub_routines)
         .await
         .unwrap();
     let no_code = repo
-        .create_action(create(
-            json!({ "steps": [{ "type": "agent", "model": "m", "instructions": "Go" }] }),
-            true,
-        ))
+        .create_action(
+            create(
+                json!({ "steps": [{ "type": "agent", "model": "m", "instructions": "Go" }] }),
+                true,
+            ),
+            crate::domain::models::RoutineLimits::STANDARD.active_sub_routines,
+        )
         .await
         .unwrap();
 

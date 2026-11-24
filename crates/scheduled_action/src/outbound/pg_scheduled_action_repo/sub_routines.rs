@@ -8,13 +8,16 @@ mod test;
 /// Most finished one-time sub-routines a parent's list holds: the newest.
 const MAX_FINISHED_LISTED: i64 = 200;
 
-/// Admit one more sub-routine under `parent`, or refuse at the cap. Locks
+/// Admit one more sub-routine under `parent`, or refuse at `cap` active
+/// ones (the owner's plan's
+/// [`crate::domain::models::RoutineLimits::active_sub_routines`]). Locks
 /// the parent row until the transaction ends, so racing creates count each
 /// other; the lock doesn't block the key-share lock an insert's foreign key
 /// takes.
 pub(super) async fn admit_child(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     parent: Uuid,
+    cap: i64,
 ) -> Result<()> {
     let locked = sqlx::query_scalar!(
         r#"
@@ -40,7 +43,7 @@ pub(super) async fn admit_child(
     )
     .fetch_one(&mut **tx)
     .await?;
-    if active >= MAX_ACTIVE_SUB_ROUTINES {
+    if active >= cap {
         return Err(ActionPolicyError::TooManySubRoutines.into());
     }
     Ok(())
