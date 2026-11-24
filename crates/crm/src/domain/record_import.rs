@@ -15,6 +15,7 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
+use models_databases::MAX_OPTION_LABEL_LEN;
 use uuid::Uuid;
 
 use super::{
@@ -124,6 +125,43 @@ pub fn entries_by_link<'a>(
                 .map(move |link| (link, entry))
         })
         .collect()
+}
+
+/// The pipeline a source CRM's deal pipeline becomes. Its stages become the
+/// options of its Stage field, which is set only after the pipeline exists,
+/// so a stage the database would refuse is refused here, before anything is
+/// created: a pipeline left behind would be made again on the next import.
+fn new_deal_pipeline(name: &str, stages: &[String]) -> Result<NewPipeline, TransferError> {
+    let mut seen = std::collections::HashSet::new();
+    for stage in stages {
+        let label = stage.trim();
+        if label.is_empty() || label.chars().count() > MAX_OPTION_LABEL_LEN {
+            return Err(TransferError::Invalid(format!(
+                "Stage labels must have 1 to {MAX_OPTION_LABEL_LEN} characters."
+            )));
+        }
+        if !seen.insert(label.to_lowercase()) {
+            return Err(TransferError::Invalid(format!(
+                "The stage \"{label}\" appears twice; stage labels differ without case."
+            )));
+        }
+    }
+    let field = |name: &str, kind| NewField {
+        name: name.into(),
+        kind,
+        options: Vec::new(),
+    };
+    Ok(NewPipeline {
+        name: name.into(),
+        record_type: Some(PipelineRecordType::Company),
+        sharing: PipelineSharing::Team,
+        stages: stages.to_vec(),
+        fields: vec![
+            field(DEAL_FIELD, NewFieldKind::Text),
+            field(CLOSE_DATE_FIELD, NewFieldKind::Date),
+            field(SOURCE_LINK_FIELD, NewFieldKind::Link),
+        ],
+    })
 }
 
 /// Imported records through the CRM services, as the viewer.
@@ -350,27 +388,9 @@ where
         name: &str,
         stages: &[String],
     ) -> Result<Uuid, TransferError> {
-        let field = |name: &str, kind| NewField {
-            name: name.into(),
-            kind,
-            options: Vec::new(),
-        };
         let created = self
             .workflows
-            .create(
-                viewer,
-                NewPipeline {
-                    name: name.into(),
-                    record_type: Some(PipelineRecordType::Company),
-                    sharing: PipelineSharing::Team,
-                    stages: stages.to_vec(),
-                    fields: vec![
-                        field(DEAL_FIELD, NewFieldKind::Text),
-                        field(CLOSE_DATE_FIELD, NewFieldKind::Date),
-                        field(SOURCE_LINK_FIELD, NewFieldKind::Link),
-                    ],
-                },
-            )
+            .create(viewer, new_deal_pipeline(name, stages)?)
             .await?;
         Ok(created.pipeline.pipeline.id)
     }

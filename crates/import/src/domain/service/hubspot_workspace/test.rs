@@ -361,3 +361,31 @@ fn only_this_reviews_left_out_companies_count_against_contacts() {
     assert_eq!(without(current), Some(1));
     assert_eq!(without(older), None);
 }
+
+#[test]
+fn stage_labels_fit_a_select_option_and_differ_whatever_the_case() {
+    let long = "x".repeat(250);
+    let mut inventory = inventory();
+    inventory.pipelines[0].stages = [long.as_str(), long.as_str(), "Won", "won"]
+        .iter()
+        .enumerate()
+        .map(|(index, label)| Stage {
+            id: key(&format!("s{index}")),
+            label: (*label).into(),
+            closed: false,
+            probability: None,
+        })
+        .collect();
+    let rows = plan::rows(&inventory, &team(), &Rules::default()).unwrap();
+    let HubspotObject::Pipeline { stages } = meta(&rows[0]).object else {
+        panic!("not a pipeline");
+    };
+    // Every label is a valid option on its own, suffix included.
+    assert!(
+        stages.iter().all(|label| label.chars().count() <= 200),
+        "{stages:?}"
+    );
+    assert_eq!(stages[1], format!("{} (2)", "x".repeat(196)));
+    // Options are told apart without case, so "won" is a second option.
+    assert_eq!(&stages[2..], ["Won", "won (2)"]);
+}

@@ -4,6 +4,7 @@
 use std::collections::{HashMap, HashSet};
 
 use import_hubspot::domain::{CompanyLink, Deal, Inventory, ObjectType, RecordId};
+use models_databases::MAX_OPTION_LABEL_LEN;
 
 use super::{DealPlan, HubspotMeta, HubspotObject, PlanSummary};
 use crate::domain::models::{
@@ -49,6 +50,13 @@ fn record_url(inventory: &Inventory, object: ObjectType, id: &RecordId) -> Strin
 
 fn title(value: &str) -> String {
     value.trim().chars().take(TITLE_CHARS).collect()
+}
+
+/// `label` followed by `suffix`, shortened to fit a select option.
+fn fit(label: &str, suffix: &str) -> String {
+    let room = MAX_OPTION_LABEL_LEN - suffix.chars().count();
+    let base: String = label.chars().take(room).collect();
+    format!("{}{suffix}", base.trim_end())
 }
 
 /// The company a contact or deal is filed under: its primary, else its first
@@ -164,15 +172,20 @@ pub(in crate::domain::service) fn rows(
         let mut labels: Vec<String> = Vec::new();
         let mut by_id = HashMap::new();
         for stage in &pipeline.stages {
-            // Stage labels name options, so a repeated label gets a suffix.
+            // Stage labels name options, which differ without case and hold
+            // at most MAX_OPTION_LABEL_LEN characters: a repeated label gets
+            // a suffix, and the label is shortened to keep it within the limit.
             let mut label = title(&stage.label);
             if label.is_empty() {
                 label = format!("Stage {}", labels.len() + 1);
             }
-            let mut unique = label.clone();
+            let mut unique = fit(&label, "");
             let mut n = 2;
-            while labels.contains(&unique) {
-                unique = format!("{label} ({n})");
+            while labels
+                .iter()
+                .any(|taken| taken.to_lowercase() == unique.to_lowercase())
+            {
+                unique = fit(&label, &format!(" ({n})"));
                 n += 1;
             }
             by_id.insert(
