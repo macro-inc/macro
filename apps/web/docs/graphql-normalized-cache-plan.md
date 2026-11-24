@@ -516,7 +516,13 @@ holders cost that whole wait), the coordinator fails closed:
 it refuses queued requests with `owner-lock-unavailable` and tells every
 registered page `cache-unavailable`. Those pages retire their host for the rest
 of the page session, without quarantine, toast, or error report; only a tab
-that registers later tries again. Nothing waits in line for the lock, and a
+that registers later tries again. The notice carries why, as
+`unavailableReason`: `owner-lock-timeout` (the engine gave up on the lock),
+`no-takeover-channel` (no BroadcastChannel to ask the holder), `holder-kept`,
+or `files-busy` (below); a newer build taking over is `superseded`. The
+coordinator records it on its `graphql_cache.owner` event, the page logs one
+`graphql cache failed closed` warning per reason with `cache.unavailable_reason`,
+and recovery spans that stop on it carry the same attribute. Nothing waits in line for the lock, and a
 build only ever yields to a newer one. A rollback therefore leaves the rolled-back
 build uncached until the newer tabs close, instead of reloading tabs in a loop.
 

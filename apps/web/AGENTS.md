@@ -1192,6 +1192,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Report cache operation failures through `createCacheErrorThrottle`: one owner
   loss rejects every queued operation, and each report reaches the console and
   session replay. The next report for that kind carries `cache.suppressed_count`.
+  Kinds differ by operation, response code (exported as `cache.error_code`) and
+  message, so an uncertain admitted enqueue is never hidden by a plain
+  rejection with the same text.
 - Retry still-current query reads once when engine replacement invalidates their
   snapshot; do not strand urql's in-flight key or revive torn-down or superseded reads.
   Keep network forwarding deduplicated and cache-only reads off the network.
