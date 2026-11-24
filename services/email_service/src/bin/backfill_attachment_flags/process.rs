@@ -60,8 +60,10 @@ pub async fn run_pass(pool: &sqlx::PgPool, config: &Config) -> anyhow::Result<()
         config.start_block, config.blocks_per_batch
     );
 
-    let mut missing = 0;
-    let mut flagged = 0;
+    // Counts are per block range: a thread with attachments in two ranges
+    // counts in each, so these are updates and skips, not distinct threads.
+    let mut updates = 0;
+    let mut skips = 0;
     let mut first = config.start_block;
     let mut batches = 0u64;
     while first < end {
@@ -69,27 +71,25 @@ pub async fn run_pass(pool: &sqlx::PgPool, config: &Config) -> anyhow::Result<()
         let batch = run_batch(pool, first, next)
             .await
             .with_context(|| format!("stopped; resume with START_BLOCK={first}"))?;
-        missing += batch.missing;
-        flagged += batch.flagged;
+        updates += batch.flagged;
+        skips += batch.missing - batch.flagged;
         first = next;
         batches += 1;
 
         if batches.is_multiple_of(PROGRESS_EVERY) || first >= end {
             println!(
-                "block {first} of {end}: flagged {flagged} threads so far, \
-                 {} left for a rerun; resume with START_BLOCK={first}",
-                missing - flagged
+                "block {first} of {end}: {updates} thread updates, {skips} skipped as locked; \
+                 resume with START_BLOCK={first}"
             );
         }
         tokio::time::sleep(config.pause).await;
     }
 
-    let left = missing - flagged;
-    println!("\n=== Flagged {flagged} threads, {left} left for a rerun ===");
-    if left > 0 {
+    println!("\n=== {updates} thread updates, {skips} skipped as locked ===");
+    if skips > 0 {
         println!(
-            "{left} threads were being written by mail sync or another session; \
-             run again to pick them up."
+            "Some threads were being written by mail sync or another session; \
+             run again to flag them."
         );
     }
     Ok(())

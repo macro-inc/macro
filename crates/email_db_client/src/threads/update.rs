@@ -179,7 +179,8 @@ pub async fn sync_thread_attachment_flags(
     Ok(())
 }
 
-/// What one block range of `email_attachments` left to flag.
+/// What one block range of `email_attachments` left to flag. A thread with
+/// attachments in several ranges counts once in each.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AttachmentFlagBatch {
     /// Threads missing at least one flag their attachments in the range call for.
