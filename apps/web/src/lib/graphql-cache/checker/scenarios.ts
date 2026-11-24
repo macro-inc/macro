@@ -117,6 +117,15 @@ export const SCENARIOS: CheckedScenario[] = [
   },
   {
     scenario: {
+      name: "two tabs, the owner's engine dies and its page hides",
+      pages: [1, 1],
+      faults: ['crash-engine', 'hide'],
+      horizonMs: 15_000,
+    },
+    bound: { maxFaults: 2, maxDelays: 0, maxRuns: 50_000 },
+  },
+  {
+    scenario: {
       name: 'two tabs, two faults',
       pages: [1, 1],
       faults: EVERY_FAULT,
