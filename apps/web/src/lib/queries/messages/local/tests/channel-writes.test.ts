@@ -147,6 +147,47 @@ describe('createChannelWrites', () => {
     expect(writes.unstoredReplies(CHANNEL_ID, root.id)).toEqual([]);
   });
 
+  it('stops showing a waiting message once a delete of it waits too', async () => {
+    const root = graphqlMessage(1);
+    const sent = graphqlMessage(7);
+    const reply = graphqlMessage(8, { threadId: root.id });
+    let transaction = 3;
+    const { writes, settle } = setup(
+      () => ({
+        disposition: { kind: 'queued', transactionId: String(++transaction) },
+      }),
+      [root]
+    );
+
+    const sending = writes.send(send(sent.id));
+    const replying = writes.send(
+      send(reply.id, { content: 'reply', thread_id: root.id })
+    );
+    await settleMicrotasks();
+    expect(writes.unstoredRoots(CHANNEL_ID).map((row) => row.key)).toEqual([
+      channelMessageKey(sent.id),
+    ]);
+
+    // The device hides a deleted root, and its queue holds the delete: the
+    // row kept in memory for the send would bring it back.
+    const removing = writes.remove({
+      channelId: CHANNEL_ID,
+      id: sent.id,
+      nonce: 'd1',
+    });
+    const removingReply = writes.remove({
+      channelId: CHANNEL_ID,
+      id: reply.id,
+      nonce: 'd2',
+    });
+    expect(writes.unstoredRoots(CHANNEL_ID)).toEqual([]);
+    expect(writes.unstoredReplies(CHANNEL_ID, root.id)).toEqual([]);
+
+    for (const id of ['4', '5', '6', '7'])
+      settle({ transactionId: id, status: 'committed' });
+    await Promise.allSettled([sending, replying, removing, removingReply]);
+  });
+
   it('predicts no root for a reply whose root the device does not hold', async () => {
     const reply = graphqlMessage(8, { threadId: graphqlMessage(1).id });
     const { writes, calls } = setup(() => ({

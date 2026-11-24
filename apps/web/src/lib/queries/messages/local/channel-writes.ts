@@ -169,6 +169,8 @@ type PendingWrite = {
   unstored?: ChannelPageEntry;
   /** A reply this device sent, shown in its thread until the device has it. */
   reply?: UnstoredReply;
+  /** The message this write deletes, which no row kept here shows again. */
+  deletes?: string;
 };
 
 export interface ChannelWrites {
@@ -193,6 +195,10 @@ export interface ChannelWrites {
    */
   retire(): void;
 }
+
+/** The messages that writes waiting here delete. A send's uuid is its message id. */
+const deletedIds = (writes: readonly PendingWrite[]): ReadonlySet<string> =>
+  new Set(writes.flatMap((write) => (write.deletes ? [write.deletes] : [])));
 
 /** Ends a settlement wait with the refusal it carries. */
 type Lost = Deferred.Deferred<never, ThrownResultError>;
@@ -473,6 +479,8 @@ interface Write<TData, TVariables extends AnyVariables> {
   applied?: (message: ChannelMessageFieldsFragment) => boolean;
   unstored?: ChannelPageEntry;
   reply?: UnstoredReply;
+  /** The message this write deletes. */
+  deletes?: string;
   /** The trace the write was asked for in, when it awaited before starting. */
   trace?: TraceContext;
 }
@@ -632,6 +640,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       uuid: write.uuid,
       unstored: write.unstored,
       reply: write.reply,
+      deletes: write.deletes,
     });
     deps.runtime.notifyChanged(write.channelId);
     // The optimistic record is on the device: windows read it from here.
@@ -814,6 +823,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         channelId: deletion.channelId,
         messageId: deletion.id,
         uuid: crypto.randomUUID(),
+        deletes: deletion.id,
         applied: (message) => message.deletedAt !== null,
         run: (client, options) =>
           executeOptimisticMutation(
@@ -890,14 +900,26 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     },
 
     pendingCount: (channelId) => pending[channelId]?.length ?? 0,
-    unstoredRoots: (channelId) =>
-      (pending[channelId] ?? [])
-        .flatMap((write) => (write.unstored ? [write.unstored] : []))
-        .reverse(),
-    unstoredReplies: (channelId, rootId) =>
-      (pending[channelId] ?? []).flatMap((write) =>
-        write.reply?.rootId === rootId ? [write.reply.message] : []
-      ),
+    // A message deleted while its send waits stays hidden: the device hides
+    // a deleted root and a deleted reply, and this row would bring it back.
+    unstoredRoots: (channelId) => {
+      const writes = pending[channelId] ?? [];
+      const deleted = deletedIds(writes);
+      return writes
+        .flatMap((write) =>
+          write.unstored && !deleted.has(write.uuid) ? [write.unstored] : []
+        )
+        .reverse();
+    },
+    unstoredReplies: (channelId, rootId) => {
+      const writes = pending[channelId] ?? [];
+      const deleted = deletedIds(writes);
+      return writes.flatMap((write) =>
+        write.reply?.rootId === rootId && !deleted.has(write.reply.message.id)
+          ? [write.reply.message]
+          : []
+      );
+    },
     retire() {
       Deferred.doneUnsafe(
         retired,
