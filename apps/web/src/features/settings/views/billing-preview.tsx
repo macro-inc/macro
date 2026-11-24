@@ -156,10 +156,12 @@ export function BillingPreview(props: {
         <PreviewSelect
           label="Plan"
           value={plan()}
-          options={(['free', 'premium', 'business', 'max'] as const).map((tier) => ({
-            value: tier,
-            label: PLAN_BY_TIER[tier].name,
-          }))}
+          options={(['free', 'premium', 'business', 'max'] as const).map(
+            (tier) => ({
+              value: tier,
+              label: PLAN_BY_TIER[tier].name,
+            })
+          )}
           onChange={(value) => {
             setPlan(value);
             setHasPaid(value !== 'free');

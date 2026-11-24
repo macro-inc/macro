@@ -2987,8 +2987,23 @@ async fn missing_anchor_reads_the_subscription_period_once_and_stores_it() {
 
 #[tokio::test]
 async fn an_annual_subscription_is_metered_and_stored_by_the_month() {
-    let (svc, repo, payments, _) = premium_service(0);
-    let payer = user("payer@x.com");
+    let payer = user("payer@example.com");
+    let repo = FakeRepo::default();
+    let payments = FakePayments::default();
+    let svc = BillingServiceImpl::new(
+        FakeEntitlements::default()
+            .with(Entitlement::personal(payer.clone(), PlanTier::Business))
+            .with_customer(&payer, "cus_123"),
+        FakeUsage {
+            cents: Arc::new(Mutex::new(0)),
+            entries: Default::default(),
+        },
+        repo.clone(),
+        payments.clone(),
+        AiPricing::testing(),
+    )
+    .with_enforcement(AiUsageEnforcement::Enabled)
+    .with_billing(AiUsageBilling::Enabled);
     payments.set_period(PeriodReply::Found(BillingPeriod {
         start: d(2026, 1, 10),
         end: d(2027, 1, 10),

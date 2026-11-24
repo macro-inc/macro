@@ -7,8 +7,8 @@ import {
   planBenefits,
   planPriceAt,
 } from '@app/features/paywall/plans';
-import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import CheckIcon from '@phosphor-fill/check-fat-fill.svg';
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
 import type { BillingState } from '../core/billing-state';

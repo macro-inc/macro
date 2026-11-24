@@ -32,7 +32,12 @@ export const PLAN_COMPARISON = [
   },
   {
     feature: 'Storage',
-    values: { free: '5 GB', premium: '100 GB', business: '500 GB', max: '1 TB' },
+    values: {
+      free: '5 GB',
+      premium: '100 GB',
+      business: '500 GB',
+      max: '1 TB',
+    },
   },
   {
     feature: 'Calls, recording & transcription',

@@ -17,7 +17,11 @@ describe('onboardingCheckoutRequest', () => {
   it('buys Business annually when chosen, and Pro monthly whatever is chosen', () => {
     expect(
       onboardingCheckoutRequest(ONBOARDING, 'business', 'standard', 'year')
-    ).toMatchObject({ plan: 'business', interval: 'year', onboardingTrial: false });
+    ).toMatchObject({
+      plan: 'business',
+      interval: 'year',
+      onboardingTrial: false,
+    });
     expect(
       onboardingCheckoutRequest(ONBOARDING, 'premium', 'standard', 'year')
         .interval

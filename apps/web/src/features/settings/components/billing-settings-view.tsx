@@ -4,19 +4,12 @@ import {
   type PlanTier,
   soldAt,
 } from '@app/features/paywall/plans';
-import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import { plural } from '@core/util/string';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import { Button, Layer, Tabs } from '@ui';
-import {
-  createSignal,
-  For,
-  type JSX,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import {
   type BillingState,
   cardInterval,

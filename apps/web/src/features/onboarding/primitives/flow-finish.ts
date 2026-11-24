@@ -1,9 +1,9 @@
-import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import {
   billingMessage,
   type PaidPlanTier,
   type PlanTier,
 } from '@app/features/paywall/plans';
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import { type Accessor, createSignal } from 'solid-js';
 import type {
   CompletionResult,

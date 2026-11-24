@@ -1,6 +1,6 @@
-import { isUpgrade } from '@app/features/paywall/plans';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { SearchBar } from '@app/components/view-shell/SearchBar';
+import { isUpgrade } from '@app/features/paywall/plans';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
@@ -480,7 +480,9 @@ export function TeamMembers(props: { team: TeamSummary }) {
                             plan={
                               showSeatPlans() ? memberPlan(member()) : undefined
                             }
-                            pendingDowngrade={pendingDowngradeOf(member()) !== undefined}
+                            pendingDowngrade={
+                              pendingDowngradeOf(member()) !== undefined
+                            }
                             planPending={planMovePending()}
                             onPlanChange={(plan) => {
                               if (!props.team.id) return;

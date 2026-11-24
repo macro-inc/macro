@@ -45,7 +45,7 @@ function setupComparison(world: Partial<FakeOnboardingWorld> = {}) {
         disabled={false}
         onContinueFree={guest}
         onBackToPro={back}
-        onStartMax={() => checkout('max', 'standard')}
+        onStartPlan={(plan, interval) => checkout(plan, 'standard', interval)}
       />
     ),
     world
@@ -54,12 +54,12 @@ function setupComparison(world: Partial<FakeOnboardingWorld> = {}) {
 }
 
 describe('live trial checkout', () => {
-  it('offers Free, Pro, and Max with current catalog prices and allowances', () => {
+  it('offers Free, Pro, Business and Max with current catalog prices and allowances', () => {
     const catalog = defaultFakeWorld().planCatalog;
     catalog.plans[1].monthly_price_cents = 4500;
     catalog.plans[1].included_ai_cents_per_seat = 1750;
     const { checkout } = setupComparison({ planCatalog: catalog });
-    for (const name of ['Free', 'Pro', 'Max']) {
+    for (const name of ['Free', 'Pro', 'Business', 'Max']) {
       expect(
         screen.getByRole('columnheader', { name: new RegExp(`^${name}`) })
       ).toBeTruthy();
@@ -70,7 +70,27 @@ describe('live trial checkout', () => {
     expect(screen.getByText('10× usage')).toBeTruthy();
     expect(screen.queryByText(/17.50/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Continue with Max' }));
-    expect(checkout).toHaveBeenCalledWith('max', 'standard');
+    expect(checkout).toHaveBeenCalledWith('max', 'standard', 'year');
+  });
+
+  it('prices Business and Max annually first and buys at the interval shown', () => {
+    const { checkout } = setupComparison();
+    const business = () =>
+      screen.getByRole('columnheader', { name: /^Business/ }).textContent;
+    expect(business()).toContain('$80');
+    expect(business()).toContain('billed annually');
+    expect(
+      screen.getByRole('columnheader', { name: /^Pro/ }).textContent
+    ).toContain('$40');
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Billed monthly' }));
+
+    expect(business()).toContain('$90');
+    expect(business()).not.toContain('billed annually');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue with Business' })
+    );
+    expect(checkout).toHaveBeenCalledWith('business', 'standard', 'month');
   });
 
   it('keeps Free available when the catalog fails and disables paid checkout', () => {
@@ -92,7 +112,7 @@ describe('live trial checkout', () => {
 
   it('does not sell an unavailable paid tier', () => {
     const catalog = defaultFakeWorld().planCatalog;
-    catalog.plans[2].purchasable = false;
+    catalog.plans[3].purchasable = false;
     setupComparison({ planCatalog: catalog });
     expect(
       screen
