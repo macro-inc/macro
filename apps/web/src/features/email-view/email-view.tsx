@@ -54,6 +54,7 @@ import { focusEmailSearchResults } from './email-search-focus';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
 import { createEmailMobileSearch } from './primitives/create-email-mobile-search';
+import type { EmailDataSource } from './queries/use-email-query';
 import { useEmailSearchValues } from './queries/use-email-search-values';
 import type { EmailListPane } from './reader-pane';
 import { createEmailSearchSuggestions } from './search/create-email-search-suggestions';
@@ -114,6 +115,15 @@ function EmailListFallback() {
   );
 }
 
+/** The list shows the typed search's own answer, not rows kept from before. */
+const answersTypedSearch = (source: EmailDataSource) =>
+  !source.isLoading() &&
+  !source.isFetching() &&
+  !(source.showsPreviousRows?.() ?? false);
+
+const showsTypedSearchResults = (source: EmailDataSource) =>
+  answersTypedSearch(source) && source.items().length > 0;
+
 function DesktopEmailPanes(props: {
   list: JSX.Element;
   focusList: () => void;
@@ -130,6 +140,7 @@ function DesktopEmailPanes(props: {
     userId,
     search: () => state.search,
     setSearch: (query) => setState('search', query),
+    hasResults: () => showsTypedSearchResults(source),
     scopeAvailable: useEmailSearchScopeAvailability(),
     people: () => searchValues.people(),
     labels: () => searchValues.labels(),
@@ -139,10 +150,7 @@ function DesktopEmailPanes(props: {
     () => wideSearchFlag().enabled && recentSearches.focused()
   );
   const pickedResultsArrived = () =>
-    recentSearches.awaitsPickedResults() &&
-    !source.isLoading() &&
-    !source.isFetching() &&
-    !(source.showsPreviousRows?.() ?? false);
+    recentSearches.awaitsPickedResults() && answersTypedSearch(source);
   // The list is driven imperatively, so the arrival is an effect.
   createEffect(
     on(pickedResultsArrived, (arrived) => {
@@ -322,13 +330,14 @@ function EmailLayout(props: {
 }
 
 export function EmailMobileLayout(props: ParentProps) {
-  const { state, setState, registerSearchField } = useEmailView();
+  const { state, setState, registerSearchField, source } = useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
   const suggestions = createEmailSearchSuggestions({
     userId,
     search: () => state.search,
     setSearch: (query) => setState('search', query),
+    hasResults: () => showsTypedSearchResults(source),
     scopeAvailable: useEmailSearchScopeAvailability(),
     people: () => searchValues.people(),
     labels: () => searchValues.labels(),
