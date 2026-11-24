@@ -119,7 +119,9 @@ export function StartDueSelector(props: StartDueSelectorProps) {
         <span class={cn('truncate', !value() && 'text-ink-muted')}>
           {value() ? FIELD_DAY_FORMAT.format(value()!) : 'None'}
         </span>
-        <Show when={props.dates.timed && value()}>
+        <Show
+          when={props.dates.timed && props.dates.wholeDay !== end && value()}
+        >
           {(at) => <span class="text-ink-muted">{fieldTime(at())}</span>}
         </Show>
       </button>
@@ -129,6 +131,8 @@ export function StartDueSelector(props: StartDueSelectorProps) {
   const clear = (ends: DateField[]) => {
     const next = { ...props.dates };
     for (const end of ends) next[end] = null;
+    if (next.wholeDay && ends.includes(next.wholeDay))
+      next.wholeDay = undefined;
     props.onChange(next, ends);
   };
 

@@ -437,6 +437,27 @@ describe('routine history steps', () => {
     expect(details.getByRole('alert').textContent).toContain(reason);
   });
 
+  it('reads a run its owner stopped as stopped, not failed', () => {
+    const stopped = toHistoryRecord({
+      id: 'run-stopped',
+      result: { version: 1, resource: null, stopped: true },
+      start_time: '2026-10-09T10:00:00Z',
+      end_time: '2026-10-09T10:00:01Z',
+      is_success: false,
+    });
+    render(() => (
+      <RoutineHistory
+        {...sources()}
+        records={[stopped]}
+        isPending={false}
+        describeStep={describeRunStep}
+      />
+    ));
+    expect(row('Stopped')).toBeTruthy();
+    expect(screen.queryByText('Run failed')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('reads each run in two lines and shows the newest one beside the list', () => {
     const agentOnly = record('agent', 'agent-run', {
       result: {

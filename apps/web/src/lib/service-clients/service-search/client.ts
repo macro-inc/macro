@@ -1,4 +1,5 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { getDefaultTimezone } from '@core/util/cron';
 import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
@@ -48,6 +49,9 @@ type ChannelSearchArgs = {
   request: ChannelSearchRequest;
 };
 
+/** The zone ICU names when it cannot tell the host's. */
+const UNKNOWN_TIME_ZONE = 'Etc/Unknown';
+
 const buildSearchQuery = (params: SearchParams) => {
   const qp = new URLSearchParams();
   if (params.page_size !== undefined) {
@@ -61,12 +65,23 @@ const buildSearchQuery = (params: SearchParams) => {
 };
 
 export const searchClient = {
+  /**
+   * Dates typed into the search (`after:`, `newer_than:`) count days in the
+   * person's time zone unless the request names another. A browser that
+   * cannot tell its zone reports `Etc/Unknown`, which the service refuses, so
+   * that search names none and reads dates in UTC.
+   */
   async search(args: SearchArgs, init?: SafeFetchInit) {
     const url = `/search${buildSearchQuery(args.params)}`;
+    const zone = getDefaultTimezone();
+    const request = {
+      ...(zone === UNKNOWN_TIME_ZONE ? {} : { time_zone: zone }),
+      ...args.request,
+    };
     return (
       await searchServiceFetch<UnifiedSearchResponse>(url, {
         method: 'POST',
-        body: JSON.stringify(args.request),
+        body: JSON.stringify(request),
         ...init,
       })
     ).map((result) => result);

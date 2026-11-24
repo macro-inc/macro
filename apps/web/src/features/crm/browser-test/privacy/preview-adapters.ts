@@ -10,7 +10,7 @@ import type {
 import { EmailThreadMention } from '../../email-thread-mention';
 import { createEmailPolicySource } from '../../queries/email-policy';
 import { createEmailPrivacySource } from '../../queries/email-privacy';
-import { policyClient } from './policy-adapter';
+import { connectPolicyMailbox, policyClient } from './policy-adapter';
 
 // Rich mentions import the same optional capabilities as other app references.
 export * from '@app/lib/analytics/posthog.tsx';
@@ -46,6 +46,26 @@ const [state, setState] = createSignal<EmailPrivacy>({
   canRemoveTeamDomains: params.has('admin'),
 });
 export const [lastChange, setLastChange] = createSignal('');
+export const [mailboxConnections, setMailboxConnections] = createSignal(0);
+const [primaryLinkId, setPrimaryLinkId] = createSignal(
+  params.has('disconnected') ? undefined : mailboxId
+);
+/**
+ * Stands in for the add-inbox flow completing in place, as it does on native
+ * iOS: the backend now reports the mailbox and the app's email links list it as
+ * primary. Nothing here refreshes CRM queries or touches consent, so the
+ * privacy source must notice the new link itself and sharing stays off.
+ */
+function connectMailbox() {
+  setMailboxConnections((count) => count + 1);
+  setState((s) => ({
+    ...s,
+    mailboxEmail: 'member@example.com',
+    mailboxLinkId: mailboxId,
+  }));
+  connectPolicyMailbox();
+  setPrimaryLinkId(mailboxId);
+}
 export const [statusUnavailable, setStatusUnavailable] = createSignal(
   params.has('status-unavailable')
 );
@@ -99,6 +119,7 @@ export const useCrmContext = () => ({
   accessState: () => (crmAccess() ? 'allowed' : 'denied'),
   retryAccess: async () => {},
   EmailThreadMention,
+  connectMailbox,
   createEmailPrivacy: () =>
     createEmailPrivacySource(
       {
@@ -107,7 +128,8 @@ export const useCrmContext = () => ({
         feedback: toast,
       },
       () => '00000000-0000-4000-8000-000000000048',
-      useUserId()
+      useUserId(),
+      primaryLinkId
     ),
   createEmailPolicy: () =>
     createEmailPolicySource(

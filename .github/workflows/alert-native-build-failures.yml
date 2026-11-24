@@ -74,7 +74,11 @@ jobs:
             timed_out) outcome='timed out' ;;
             *) outcome=failed ;;
           esac
-          message="🚨 $SOURCE_WORKFLOW build $outcome on $SOURCE_REF. Failed jobs: $failed_jobs. $run_url"
+          message="🚨 $SOURCE_WORKFLOW build $outcome on $SOURCE_REF. Failed jobs: $failed_jobs."
+          if [[ "$failed_jobs" == *"QA macOS release app"* ]]; then
+            message="$message The macOS release app failed QA, so this version was not promoted to desktop-stable."
+          fi
+          message="$message $run_url"
           jq -n --arg content "$message" '{content: $content}' |
             curl --fail-with-body --silent --show-error --retry 3 \
               --header 'Content-Type: application/json' \

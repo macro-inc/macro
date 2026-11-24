@@ -412,6 +412,16 @@ tools — hexagonal, heavily feature-gated.
   when it belongs to an inbox in the reader’s Drafts scope. Apply the same
   rule to full and parsed thread reads.
 
+- Labels people make are theirs: a thread opened through a share, a folder, a
+  channel or a CRM Team view shows its reader the made labels of an inbox
+  they own or manage, and none from anyone else's inbox. Every label read
+  (`labels_by_thread_ids`, `labels_by_message_ids`) takes the reader and
+  returns made labels only from the inboxes that person owns or manages, and
+  system labels, which are message state, to everyone; a bot, a signed-out
+  reader and an internal receipt get system labels alone. Give a new read of
+  labels the same condition; `test/label_readers.rs` runs every receipt and row
+  read over two shared threads.
+
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - `domain/scheduled_delivery/{state,identity,deletion}.rs` owns claim
   classification, sent-identity adoption and retained-deletion sequencing.
@@ -448,7 +458,11 @@ tools — hexagonal, heavily feature-gated.
   fails is skipped. Subjects are cut to 200 characters and snippets to the
   caller's `snippet_chars` (the provider's 300 by default, at most 500, past
   the preview taken from the body) there, not in the adapters; each message
-  carries its label names.
+  carries its label names. `read_window` uses `WindowRead::folder` to read
+  the inbox (the default) or Sent from each mailbox over the last `days`
+  (at most 30). It keeps the newest `limit` messages across mailboxes (at
+  most 500) dated since the window's start, with snippets on only the newest
+  `texts`. The `email.recent_inbox` span records the folder.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
@@ -469,6 +483,17 @@ tools — hexagonal, heavily feature-gated.
 - Forwarded attachments register through `domain/draft_attachments.rs` and resolve
   bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
   source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.
+- Search indexes each message's label names, so any write that changes a
+  message's stored labels, or a label's name, must ask for its reindex: the
+  event of the change when it has one (`thread_labels_updated`,
+  `thread_read`, …), else `EmailMacroEvent::thread_reindex_requested`, as a
+  re-sync that changed labels (`upsert_message`) and a diff of only
+  IMPORTANT, SENT, DRAFT or category labels do. A rename (`sync_labels`)
+  queues its label's threads on the search event queue
+  (`ThreadReindexQueue`), the bulk lane backfills use, so a big label can't
+  delay new mail's events. It queues before it stores the name, and keeps the
+  old name when queueing fails, so the next sync finds the rename again: a
+  failed reindex must not stop a mailbox's sync. Label deletes ask for none.
 - A send with files staged before delivery goes through
   `StagedAttachmentSender` (`domain/service/attachments.rs`): draft, staged
   attachment rows, then the send. `DraftAttachmentSender` adds Macro documents

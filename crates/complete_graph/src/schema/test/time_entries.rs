@@ -6,8 +6,17 @@ use ::time_tracking::domain::{
     },
     service::{TaskEditReceipt, TaskViewReceipt, TimeTrackingService},
 };
+use ::time_tracking::domain::{
+    report::{
+        TimeBreakdown, TimeExport, TimeGroup, TimeGroupKey, TimePeriod, TimeScope, TimeSummary,
+    },
+    report_service::TimeReportService,
+};
 use chrono::{NaiveDate, TimeZone};
-use graphql_time_tracking::{TimeTrackingAuthorizer, TimeTrackingGraphqlContext};
+use graphql_time_tracking::{
+    TimeReportAuthorizer, TimeReportGraphqlContext, TimeTrackingAuthorizer,
+    TimeTrackingGraphqlContext,
+};
 
 use super::*;
 
@@ -152,6 +161,26 @@ impl TimeTrackingAuthorizer for EditsEveryTask {
     }
 }
 
+impl TimeReportAuthorizer for EditsEveryTask {
+    async fn authorize_project(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        project_id: Uuid,
+    ) -> Result<EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>, AccessError>
+    {
+        EntityAccessReceipt::try_new_authenticated_user(
+            user.clone(),
+            entity_access::domain::models::Entity {
+                entity_id: project_id.to_string(),
+                entity_type: EntityType::Initiative,
+            },
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::View,
+            },
+        )
+    }
+}
+
 async fn execute_time_query(harness: &TestHarness, query: &str) -> async_graphql::Response {
     let viewer = MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap();
     let context = TimeTrackingGraphqlContext::new(Arc::new(OneTaskTime), Arc::new(EditsEveryTask));
@@ -287,5 +316,96 @@ async fn a_document_that_is_not_a_task_has_no_entries_and_reads_none() {
     assert_eq!(
         response.data.into_json().unwrap()["user"]["soupEntity"]["timeEntries"],
         serde_json::json!({ "entries": [], "nextCursor": null })
+    );
+}
+
+/// One task's 90 minutes, for every scope.
+struct OneTaskSummary;
+
+impl TimeReportService for OneTaskSummary {
+    async fn summary(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: TimeScope,
+        period: TimePeriod,
+        _: TimeBreakdown,
+    ) -> Result<TimeSummary, TimeTrackingError> {
+        Ok(TimeSummary {
+            from: period.from(),
+            to: period.to(),
+            total_minutes: 90,
+            task_count: 1,
+            scope_task_count: None,
+            complete: true,
+            groups: vec![TimeGroup {
+                key: TimeGroupKey::Task {
+                    task_id: TASK_ID.to_string(),
+                },
+                minutes: 90,
+                task_count: 1,
+                rows: Vec::new(),
+            }],
+            then_totals: Vec::new(),
+        })
+    }
+
+    async fn export(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: TimeScope,
+        _: TimePeriod,
+    ) -> Result<TimeExport, TimeTrackingError> {
+        unimplemented!("the web downloads exports over REST")
+    }
+}
+
+#[tokio::test]
+async fn the_viewers_time_summary_resolves_each_task_row_to_its_task() {
+    let harness = harness();
+    harness
+        .primary_soup_service
+        .set_raw_response(vec![soup_task(TASK_ID)]);
+    let viewer = MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap();
+
+    let response = harness
+        .schema
+        .execute(
+            harness
+                .request(
+                    r#"{ user { timeSummary(input: {
+                        scope: TEAM, from: "2026-11-23", to: "2026-11-29", groupBy: TASK
+                    }) {
+                        totalMinutes
+                        groups { key { by taskId task { __typename id name } } minutes }
+                    } } }"#,
+                    authenticated_parts(),
+                )
+                .data(viewer)
+                .data(TimeReportGraphqlContext::new(
+                    Arc::new(OneTaskSummary),
+                    Arc::new(EditsEveryTask),
+                )),
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(
+        data["user"]["timeSummary"],
+        serde_json::json!({
+            "totalMinutes": 90,
+            "groups": [{
+                "key": {
+                    "by": "TASK",
+                    "taskId": TASK_ID.to_string(),
+                    "task": {
+                        "__typename": "GraphqlSoupDocument",
+                        "id": TASK_ID.to_string(),
+                        "name": format!("Document {TASK_ID}"),
+                    },
+                },
+                "minutes": 90,
+            }],
+        })
     );
 }

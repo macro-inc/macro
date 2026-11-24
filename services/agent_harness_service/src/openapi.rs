@@ -7,6 +7,7 @@ mod voice_gateway;
 mod computers {
     pub(crate) mod claude;
     pub(crate) mod harnessd;
+    pub(crate) mod screen;
 }
 
 use utoipa::OpenApi;

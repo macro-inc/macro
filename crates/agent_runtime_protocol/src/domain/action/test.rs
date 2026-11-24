@@ -616,3 +616,38 @@ fn each_prompt_carries_its_own_hidden_execution_turn_without_replacing_user_cont
         assert!(!text.contains(&if turn == first { second } else { first }.to_string()));
     }
 }
+
+#[test]
+fn a_prompt_that_withholds_content_says_so_in_its_meta_and_survives_the_queue() {
+    let plain = AgentAction::prompt("draft");
+    let persisted = serde_json::to_value(&plain).unwrap();
+    assert!(
+        !persisted.to_string().contains("withhold"),
+        "absent unless set: {persisted}"
+    );
+    let meta_of = |action: &AgentAction| {
+        let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = action
+            .to_runtime(&SessionId::new("s"), RequestId::Str("p".into()))
+            .unwrap()
+        else {
+            panic!("a prompt translates to an ACP request");
+        };
+        let parsed: ClientRequest =
+            ClientRequest::parse_message(&request.method, &request.params).unwrap();
+        let ClientRequest::PromptRequest(parsed) = parsed else {
+            panic!("a prompt translates to PromptRequest");
+        };
+        parsed.meta
+    };
+    assert!(!withholds_content(meta_of(&plain).as_ref()));
+
+    let mut private = AgentAction::prompt("draft from the mail");
+    let AgentAction::Prompt(prompt) = &mut private else {
+        unreachable!()
+    };
+    prompt.withhold_content = true;
+    let restored: AgentAction =
+        serde_json::from_value(serde_json::to_value(&private).unwrap()).unwrap();
+    assert_eq!(restored, private);
+    assert!(withholds_content(meta_of(&restored).as_ref()));
+}

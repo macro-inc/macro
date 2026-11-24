@@ -165,6 +165,7 @@ impl AsyncTool<SearchToolContext> for ContentSearch {
             // The tool description promises every term is ANDed.
             term_matching: models_search::TermMatching::All,
             collapse: None,
+            time_zone: None,
         };
 
         let response = search_context

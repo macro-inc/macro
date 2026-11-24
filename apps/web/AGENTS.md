@@ -229,7 +229,11 @@ header, `Tabs` and list controller, in a wide and a 700px split (stand-in
 panes, no `ViewShell`): Tab, Shift+Tab and the number keys move along a
 header's tabs from its list, are focus order on a header button, leave an
 open item that replaced the list open, and leave a thread beside the list
-open after a click on its text.
+open after a click on its text. Its `?sidebar` page adds a real `ViewSidebar`
+and a stand-in rail: a folder clicked there, a project whose tabs mount only
+once it opens, or the rail after it, leaves Tab to the header's tabs; the keyboard walks the sidebar in focus
+order, and a folder's disclosure caret or a control there that opens a menu
+or a dialog chooses nothing.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
@@ -279,6 +283,13 @@ engine, with stand-in panes: moving through two stacked splits beside three,
 returning to the split you came from, a list keeping `Shift+Up/Down` for its
 selection, and a grid marked `data-owns-arrow-keys` keeping `Shift+Arrow`:
 `bunx playwright test --config src/components/app/split-layout/focus-browser-test/playwright.config.ts`.
+
+A control marked `data-owns-keyboard` takes every key: the hotkey engine runs
+no hotkey for key events from inside it, input-proof hotkeys included, but
+its key-ups still release keys pressed before focus moved in, and focus
+entering it clears the pressed set. The agent screen viewer's keyboard field
+carries it while driving, so typing into a remote desktop never runs app
+hotkeys (`screen-stage.test.tsx`).
 
 One document open in two desktop tabs has a backend-free browser regression over
 the real router, tab manager, split layout, and orchestrator: each tab mounts its
@@ -465,6 +476,18 @@ The same suite covers where a sheet puts focus as it opens: on itself, leaving
 its first row unringed, unless the first tab stop is a text field, the sheet
 focused something itself, or it names its own target; Tab then moves into the
 rows, which do show the ring.
+Its `row-press.browser.e2e.ts` presses the real touch rows of Chat (a
+conversation and a pinned favorite), Home, a Soup list, the Notifications
+inbox, Agents (sidebar and phone list), Projects and Search on phone and
+tablet: each shows the same rendered grey at its centre and edge, holds it
+after release and through a quick tap's click, never shows it for a press that
+turns into a scroll, and drops it when a phone long press opens the row's
+action drawer (`ROW_PRESS_SCREENSHOT_DIR` saves the pressed screenshots); no
+element from a long-pressable row's owner down to its surface draws WebKit's
+tap highlight. `long-press-tap.browser.e2e.ts` long-presses a row of Mail's
+phone list (the real context menu and action drawer), dismisses the drawer and
+taps other rows, recording every press marker change: only the tapped row is
+ever pressed.
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
 personal-email contacts, contacts added by name alone, explicit company selection,
@@ -649,6 +672,8 @@ even for a matching Macro user.
 Only Macro users and groups participate in mobile People pinning.
 Rank scoped mention people by exact full or first name, prefix, literal match,
 then subsequence before recency and mobile pinning; preserve native directory order.
+A personal window ordered by contact list keeps the cache's order, where the list
+group outranks exact over prefix among word-start matches; don't rescore it by name.
 The channel browser suite below also checks project
 ranking and insertion on desktop and phone.
 
@@ -826,6 +851,11 @@ same suite's `swipe-done.browser.e2e.ts` swipes a row in the real
 feed takes it, the row below slides up without a jump, Undo restores it, and
 reduced motion skips the fold.
 
+Its `display-options.browser.e2e.ts` checks that desktop Notifications has
+All and Unread and Display options in place of a settings gear, that
+Condensed turns rows into Home's one-line rows and back, and that phones have
+no Display options.
+
 Its `stacks.browser.e2e.ts` runs the same view with a pointer: an open stack's
 row keeps its toggle in place as Hide (beside the Hide under its last
 notification), hovering a row swaps its time for Mark done without moving
@@ -959,8 +989,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - `openExternalUrl` opens only a link scheme (`isAllowedLinkUrl` in `packages/lexical-core/utils/link-url.ts`), a relative URL, or a scheme in its `OPENABLE_PROTOCOLS` (`core/util/url.ts`); add a scheme there when a caller needs one. Renderers that draw an anchor from saved content check the URL the same way.
 - Keep ordinary hyperlinks on the theme's link colors (blue by default), including Markdown renderers/editors and calendar descriptions; preserve mention decorators' separate styling.
-- Keep contact address edits (add, remove, make primary) and company edits (personal-provider
-  link/switch, Remove company unless an address is on the company's domain) in shared CRM field views, using Tasks
+- Keep contact address edits (add, remove, make primary), company edits (personal-provider
+  link/switch, Remove company unless an address is on the company's domain) and company domain
+  edits (add, remove) in shared CRM field views, using Tasks
   property primitives and committed-response/session-fenced cache updates. Close
   direct cache-write admission on logout and login replacement, and drain admitted
   durable writes before clearing storage, while starting independent local/server
@@ -1022,6 +1053,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Match record metadata to the 24px property-control scale while reserving separate
   44px touch targets; see the CRM README for the visible-face and hit-area contract.
   Keep explanations on the chip and retain company-only Email sharing controls.
+  Order both information panels with `RECORD_PANEL_ORDER` (References last) and
+  lay Record details on `SidePanel.Grid`/`SidePanel.Row`, like Properties.
   Use the explicit Visible/Archived filter for People, Companies and company Team;
   reset its admin-only choice on account/team/role/list changes and preserve search.
   Apply confirmed visibility changes to detail, list and normalized search caches;
@@ -1190,7 +1223,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep Quick Access cache availability reactive to `getGraphqlSoupCacheHost()`; the host can appear, change or be disabled after the provider mounts, and email has no legacy source fallback.
 - Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; with `enable-contact-lists` the backfill and exact lookup select `GraphqlContact.lists` (the `…WithLists` operations, never the fetch-only pages) and scan under checkpoint v3, so only clients the flag turns on rehydrate; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. An invalidation naming `changed` contacts also tops up just those ids through the exact lookup (`contacts/top-up.ts`), taking turns on the contact fence with scan pages (`write-turn.ts`); top-ups never delete. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
-- A surface orders its personal people window by contact list through `ContactPeoplePolicy.listPriority` (`QuickAccessListOptions.peopleListPriority`); with `enable-contact-lists` only @mention windows pass one (`useMentionListPriority` in `queries/contacts/lists.ts`, the order itself in `list-priority.ts`). `readContactDirectory` sends list fields only to a host that has answered a search with people policy 7 (5 and 6 refuse them); the first search on a host goes without and is resent once it answers 7. Keep orders within the host's bounds (16 groups, 64 keys, 128-byte keys). The real-engine regression is `people-list-order.browser.e2e.ts` in `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts`.
+- A surface orders its personal people window by contact list through `ContactPeoplePolicy.listPriority` (`QuickAccessListOptions.peopleListPriority`); with `enable-contact-lists` only @mention windows pass one (`useMentionListPriority` in `queries/contacts/lists.ts`, the order itself in `list-priority.ts`). `readContactDirectory` sends list fields only to a host that has answered a search with people policy 7 or later (5 and 6 refuse them); the first search on a host goes without and is resent once it answers. On policy 8, among names that start with the query (exact and word-prefix) the list group decides first, then exact before word-prefix, then recency; contains-only and address matches follow, each by group. Policy 7 hosts (native builds before the release that brings 8) rank by name stage before group, and their windows are kept as they come. Keep orders within the host's bounds (16 groups, 64 keys, 128-byte keys). The real-engine regression is `people-list-order.browser.e2e.ts` in `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts`.
 - Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
 - A tab without a usable local cache lists server contact pages, which the server does not rank. On the first page of a typed search `readServerWindow` (`queries/contacts/directory.ts`) also reads who the text names: the server's named people (`readServerNames`: with `enable-named-contact-search` the whole directory's exact and word-start matches, ranked by list group then exact names, from `GraphqlUser.contactsNamedBy`; without it the exact matches of a scan that stops after 2,000 contacts, which a server older than the field still answers), plus the team roster or a whole typed address looked up by ID, and it classifies them and the page's own rows with the local ranking's exact and word-prefix rules (`namedBy`). One of those extra reads failing never fails the page, and one still unanswered two seconds in never holds it once its own rows have landed (`NAMED_READ_BUDGET_MS`): it lists without the people that read would have added, and still ranks everyone it has. `createContactDirectoryList` orders that page: direct-message partners, then teammates, then everyone else, exact before word-start matches, with the looser matches after them in the same groups; later pages are never reordered. Give every people list `teammates` (`useTeammateIds` in `queries/team/roster`, which observes the roster the app shell keeps loaded and never fetches it), and `directMessages` where the surface has them.
 - Cmd+K and mobile name search show **Searching…** under the listed rows (`isSearchingEntities`, through `createSteadyFlag`) while the cache has not answered the typed query, since contacts, sessions and commands list first; only a slow search says so. A replay of an answered window is not a pending search, and `isLoadingEntities` still means an empty list is loading. A search refused while the cache changes owner (`owner-handoff-blocked`) stays pending and `createProjectedList` replays it when `onCacheGenerationChanged` reports the replacement engine; nothing else would until the next cache write.
@@ -1239,9 +1272,14 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   first item" command, so a list on `useListInteractions` lands on its first
   row with no code in the view; when that command finds no row (a search with
   no results), the keys stay in the field. `wide` lets the open field take the rest of
-  the header (the view hides its other actions from `onOpenChange`), and
+  the header (the view hides its other actions from `onOpenChange`), `open`
+  lets the view keep the open state and close the field itself, and
   `suggestions` lists rows under the field that the arrows walk before the
-  results; Email's wide search uses both. It registers the
+  results (a row that `editsQuery`, such as Email's `in:` views, keeps the
+  keyboard in the field); `operators` marks search operators (`in:sent`) in
+  the text, which `search-operator-text.tsx` draws as tokens behind the input
+  while the text stays ordinary editable text; future operators reuse it.
+  Email's wide search uses all of them. It registers the
   split's Escape that clears a search from the list; keep a view's own Escape
   steps (leaving a tab) conditional on no search, and selection clearing at
   `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.
@@ -1270,9 +1308,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Download selected GIFs without re-encoding through the shared abortable static-file uploader, and insert an `sfs` image only after success; preserve the caret, discard failed or unaccepted uploads, reject stale completions, and keep failure retry in the picker. Give explicit GIF picker opens precedence over formatting and link menus, and anchor to the editor when the browser selection is missing or has no rendered geometry.
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.
+- Desktop native crashes (Rust panics, Chromium crash dumps on macOS) reach PostHog as `$exception` with `native_crash_*` properties from the next webview start; a dump never leaves the machine, only its signature. Keep panic messages scrubbed and send nothing else from a dump. See `tauri/src-tauri/README.md#native-crash-reports`.
 - Diagnose desktop native updates with `native_update_outcome` and the `native.update.*` spans (`observability/native-update.ts`), which the page sends from the host's reports; keep their schema closed (versions, code-defined kinds), never error text or paths. See [update telemetry](tauri/src-tauri/README.md#update-telemetry).
 - Pass `$APPLOCALDATA` (Application Support on Apple platforms) as the native HTTP cookie storage directory; the plugin owns the `.cookies` filename. Never use purgeable caches. The location change intentionally requires one new sign-in, without migration. See `tauri/src-tauri/README.md#native-authentication-cookies`.
-- Store iOS OTA bundles and markers in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup; ignore legacy cache contents rather than migrating them. Other platforms keep the updater's existing cache location. See `tauri/src-tauri/README.md#ota-bundle-storage`.
+- Store mobile OTA bundles and markers outside purgeable caches: iOS in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup, and Android in `<app data>/bundle-updates`; ignore legacy cache contents rather than migrating them. Desktop keeps the updater's existing cache location. Startup serves a saved bundle only when every file its completion record lists is present. See `tauri/src-tauri/README.md#ota-bundle-storage`.
 - Inline agent steps reuse the session code-execution query for live SDK operation
   names; completed step snapshots come from the shared fold of the tool receipt.
   Session `ExecuteCode` calls join their segment's tool group as their SDK
@@ -1307,7 +1346,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   host shell, so the split manager's entity reuse cannot see it; the router's
   claims decide who shows it. `openWithSplit` activates the source split before
   a replace, so a visit the router yields to the claiming pane leaves that pane
-  active (`tests/claimed-replace.test.ts`).
+  active, and `createNewSplit` activates the claiming pane the router hands a
+  Shift-click's new split to (`tests/claimed-replace.test.ts`).
 - Bound Discussion comment readiness waits to ten seconds; recover from initial layout interruptions until the message is visible, and release the target on user input (including scrollbar pointer-down), timeout, or successful arrival.
 - Keep early DOCX opens loading while exports return processing (409); retry only
   that response, with a bounded wait. See the Word editor walkthrough in
@@ -1975,7 +2015,9 @@ unbroken titles, and keyboard opening.
 Inline property fields stay `readOnly`, never `disabled`, while they save: a
 browser moves focus off a disabled field, so a failed save would strand it. Enter
 and Escape return focus to the value through `Property.Root`; tabbing or clicking
-away leaves focus where the user put it. The backend-free regression is
+away leaves focus where the user put it. A Link value's remove × takes its own
+space after the title, which truncates before it; desktop shows it on hover or
+focus, touch always. The backend-free regression for both is
 `bunx playwright test --config src/features/property/editors/inline/browser-test/playwright.config.ts`.
 
 ### Assignee people scope

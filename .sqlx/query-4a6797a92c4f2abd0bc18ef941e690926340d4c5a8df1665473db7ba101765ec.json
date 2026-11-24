@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT started_at FROM computer_screen_drives\n            WHERE computer_id = $1 AND user_id = $2 AND ended_at IS NULL\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4a6797a92c4f2abd0bc18ef941e690926340d4c5a8df1665473db7ba101765ec"
+}

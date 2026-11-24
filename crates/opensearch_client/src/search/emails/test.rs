@@ -1,74 +1,72 @@
+use super::terms::{
+    build_address_query_string, build_segment_query_string, build_text_query_string,
+};
 use super::*;
 use opensearch_query_builder::ToOpenSearchJson;
 use serde_json::json;
 
 #[test]
-fn test_build_keyword_query_string_single_term() {
-    let result = build_keyword_query_string(&["hello".to_string()]);
-    assert_eq!(result, "(hello | hello@*)");
+fn addresses_match_a_word_by_local_part_or_segment() {
+    for (terms, addresses, segments) in [
+        (vec!["hello"], "(hello | hello@*)", "(hello)"),
+        (
+            vec!["hello", "test"],
+            "(hello | hello@*) + (test | test@*)",
+            "(hello) + (test)",
+        ),
+        (vec!["Teo"], "(Teo | teo@*)", "(Teo)"),
+        (
+            vec!["mary-jane"],
+            r"(mary\-jane | mary\-jane@*)",
+            r"(mary\-jane)",
+        ),
+    ] {
+        let terms: Vec<String> = terms.into_iter().map(str::to_string).collect();
+
+        assert_eq!(build_address_query_string(&terms, false), addresses);
+        assert_eq!(build_segment_query_string(&terms, false), segments);
+    }
 }
 
 #[test]
-fn test_build_keyword_query_string_multiple_terms() {
-    let result = build_keyword_query_string(&["hello".to_string(), "test".to_string()]);
-    assert_eq!(result, "(hello | hello@*) + (test | test@*)");
-}
+fn addresses_match_a_phrase_or_a_dotted_term_as_one_run_of_segments() {
+    // A quoted phrase arrives as one term with whitespace inside, its quotes
+    // already stripped by `split_search_terms`.
+    for (term, quoted) in [
+        ("hi there", r#""hi there""#),
+        ("hi\tthere", "\"hi\tthere\""),
+        ("example.com", r#""example.com""#),
+        ("alice@example.com", r#""alice@example.com""#),
+    ] {
+        let terms = [term.to_string(), "review".to_string()];
 
-#[test]
-fn test_build_keyword_query_string_multi_word_term_uses_phrase() {
-    // Multi-word terms come from quoted phrases via `split_search_terms`
-    // and must render as a phrase so simple_query_string's AND default
-    // operator doesn't decompose them into independent tokens.
-    let result = build_keyword_query_string(&["hi there".to_string()]);
-    assert_eq!(result, "\"hi there\"");
-}
-
-#[test]
-fn test_build_keyword_query_string_uppercase_lowercased_for_email() {
-    let result = build_keyword_query_string(&["Teo".to_string()]);
-    assert_eq!(result, "(Teo | teo@*)");
-}
-
-#[test]
-fn test_build_keyword_query_string_mixed_single_and_multi_word() {
-    let result = build_keyword_query_string(&["Teo".to_string(), "hello world".to_string()]);
-    assert_eq!(result, "(Teo | teo@*) + \"hello world\"");
-}
-
-#[test]
-fn test_build_keyword_query_string_dotted_term_uses_phrase() {
-    let result = build_keyword_query_string(&["example.com".to_string()]);
-    assert_eq!(result, "\"example.com\"");
-}
-
-#[test]
-fn test_build_keyword_query_string_email_term_uses_phrase() {
-    let result = build_keyword_query_string(&["alice@example.com".to_string()]);
-    assert_eq!(result, "\"alice@example.com\"");
-}
-
-#[test]
-fn test_build_keyword_query_string_email_term_mixed_with_word() {
-    let result =
-        build_keyword_query_string(&["alice@example.com".to_string(), "review".to_string()]);
-    assert_eq!(result, "\"alice@example.com\" + (review | review@*)");
+        assert_eq!(
+            build_address_query_string(&terms, false),
+            format!("{quoted} + (review | review@*)")
+        );
+        assert_eq!(
+            build_segment_query_string(&terms, false),
+            format!("{quoted} + (review)")
+        );
+    }
 }
 
 #[test]
 fn test_build_text_query_string_single_term_is_prefix() {
-    let result = build_text_query_string(&["scri".to_string()], "partial");
+    let result = build_text_query_string(&["scri".to_string()], "partial", false);
     assert_eq!(result, "scri*");
 }
 
 #[test]
 fn test_build_text_query_string_multiple_terms_are_prefixed_and_anded() {
-    let result = build_text_query_string(&["scri".to_string(), "test".to_string()], "partial");
+    let result =
+        build_text_query_string(&["scri".to_string(), "test".to_string()], "partial", false);
     assert_eq!(result, "scri* + test*");
 }
 
 #[test]
 fn test_build_text_query_string_exact_drops_prefix_wildcard() {
-    let result = build_text_query_string(&["scri".to_string(), "test".to_string()], "exact");
+    let result = build_text_query_string(&["scri".to_string(), "test".to_string()], "exact", false);
     assert_eq!(result, "(scri) + (test)");
 }
 
@@ -77,25 +75,25 @@ fn test_build_text_query_string_multi_word_term_uses_phrase() {
     // Multi-word terms come from quoted phrases via `split_search_terms`
     // and must render as a phrase so simple_query_string's AND default
     // operator doesn't decompose them into independent tokens.
-    let result = build_text_query_string(&["hi there".to_string()], "partial");
+    let result = build_text_query_string(&["hi there".to_string()], "partial", false);
     assert_eq!(result, "\"hi there\"");
 }
 
 #[test]
 fn test_build_text_query_string_email_term_uses_phrase() {
-    let result = build_text_query_string(&["alice@example.com".to_string()], "partial");
+    let result = build_text_query_string(&["alice@example.com".to_string()], "partial", false);
     assert_eq!(result, "\"alice@example.com\"");
 }
 
 #[test]
 fn test_build_text_query_string_short_term_skips_prefix() {
-    let result = build_text_query_string(&["ab".to_string()], "partial");
+    let result = build_text_query_string(&["ab".to_string()], "partial", false);
     assert_eq!(result, "(ab)");
 }
 
 #[test]
 fn test_build_text_query_string_three_char_term_gets_prefix() {
-    let result = build_text_query_string(&["abc".to_string()], "partial");
+    let result = build_text_query_string(&["abc".to_string()], "partial", false);
     assert_eq!(result, "abc*");
 }
 
@@ -103,7 +101,7 @@ fn test_build_text_query_string_three_char_term_gets_prefix() {
 fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Result<()> {
     // Regression: a quoted phrase like `"reply test"` arrives here as a
     // single term with internal whitespace (already stripped of quotes
-    // by `split_search_terms`). Both simple_query_string clauses must
+    // by `split_search_terms`). Every simple_query_string clause must
     // emit it as a phrase — otherwise `default_operator: "AND"` would
     // turn `(reply test)` into `reply AND test` and match each token
     // independently anywhere in the field.
@@ -119,6 +117,7 @@ fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Re
         cc: vec![],
         bcc: vec![],
         recipients: vec![],
+        label_link_ids: vec![],
         include_labels: vec![],
         exclude_labels: vec![],
         importance: None,
@@ -130,6 +129,11 @@ fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Re
         subject_only: false,
         tag_option_ids: vec![],
         match_all_tags: false,
+        text_conditions: vec![],
+        label_conditions: vec![],
+        exclude_thread_ids: vec![],
+        sent_after_millis: None,
+        sent_before_millis: None,
     }
     .into();
 
@@ -160,6 +164,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         cc: vec![],
         bcc: vec![],
         recipients: vec![],
+        label_link_ids: vec![],
         include_labels: vec![],
         exclude_labels: vec![],
         importance: None,
@@ -171,6 +176,11 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         subject_only: false,
         tag_option_ids: vec![],
         match_all_tags: false,
+        text_conditions: vec![],
+        label_conditions: vec![],
+        exclude_thread_ids: vec![],
+        sent_after_millis: None,
+        sent_before_millis: None,
     }
     .into();
 
@@ -179,31 +189,33 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         .as_array()
         .unwrap();
     assert_eq!(json["bool"]["must"][0]["bool"]["minimum_should_match"], 1);
-    assert_eq!(should.len(), 2);
-
-    let keyword_sqs = should
-        .iter()
-        .map(|s| &s["simple_query_string"])
-        .find(|s| {
-            s["fields"]
-                .as_array()
-                .is_some_and(|f| f.contains(&serde_json::json!("sender")))
+    assert_eq!(should.len(), 3);
+    assert_eq!(
+        should[0],
+        json!({
+            "simple_query_string": {
+                "query": "(hello | hello@*) + (test | test@*)",
+                "fields": ["sender", "reply_to", "recipients", "cc", "bcc"],
+                "default_operator": "AND"
+            }
         })
-        .unwrap();
-    assert_eq!(keyword_sqs["query"], "(hello | hello@*) + (test | test@*)");
-    assert_eq!(keyword_sqs["default_operator"], "AND");
-    let keyword_fields = keyword_sqs["fields"].as_array().unwrap();
-    assert!(keyword_fields.contains(&serde_json::json!("sender")));
-    assert!(keyword_fields.contains(&serde_json::json!("reply_to")));
-    assert!(keyword_fields.contains(&serde_json::json!("recipients")));
-    assert!(keyword_fields.contains(&serde_json::json!("cc")));
-    assert!(keyword_fields.contains(&serde_json::json!("bcc")));
-    assert!(keyword_fields.contains(&serde_json::json!("sender.parts")));
-    assert!(keyword_fields.contains(&serde_json::json!("reply_to.parts")));
-    assert!(keyword_fields.contains(&serde_json::json!("recipients.parts")));
-    assert!(keyword_fields.contains(&serde_json::json!("cc.parts")));
-    assert!(keyword_fields.contains(&serde_json::json!("bcc.parts")));
-    assert!(!keyword_fields.contains(&serde_json::json!("subject")));
+    );
+    assert_eq!(
+        should[1],
+        json!({
+            "simple_query_string": {
+                "query": "(hello) + (test)",
+                "fields": [
+                    "sender.parts",
+                    "reply_to.parts",
+                    "recipients.parts",
+                    "cc.parts",
+                    "bcc.parts"
+                ],
+                "default_operator": "AND"
+            }
+        })
+    );
 
     let text_sqs = should
         .iter()
@@ -317,8 +329,15 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                             {
                                 "simple_query_string": {
                                     "default_operator": "AND",
-                                    "fields": ["sender", "reply_to", "recipients", "cc", "bcc", "sender.parts", "reply_to.parts", "recipients.parts", "cc.parts", "bcc.parts"],
+                                    "fields": ["sender", "reply_to", "recipients", "cc", "bcc"],
                                     "query": "(test | test@*)"
+                                }
+                            },
+                            {
+                                "simple_query_string": {
+                                    "default_operator": "AND",
+                                    "fields": ["sender.parts", "reply_to.parts", "recipients.parts", "cc.parts", "bcc.parts"],
+                                    "query": "(test)"
                                 }
                             },
                             {
@@ -454,6 +473,7 @@ fn test_importance_true_with_exclude_labels_both_apply() -> anyhow::Result<()> {
         .user_id("user123")
         .collapse(false)
         .importance(Some(true))
+        .label_link_ids(vec!["own-link".to_string()])
         .exclude_labels(vec!["INBOX".to_string()]);
 
     let bool_query = builder.build_bool_query()?;
@@ -465,7 +485,9 @@ fn test_importance_true_with_exclude_labels_both_apply() -> anyhow::Result<()> {
     assert_eq!(must_not.len(), 3);
 
     // One should be the INBOX term exclusion
-    let has_inbox_exclusion = must_not.iter().any(|q| q["term"]["labels"] == "INBOX");
+    let has_inbox_exclusion = must_not
+        .iter()
+        .any(|q| *q == carrying(&["INBOX"], &["own-link"]));
     assert!(has_inbox_exclusion);
 
     // One should be the nested importance bool
@@ -484,6 +506,7 @@ fn test_importance_false_with_exclude_labels_both_apply() -> anyhow::Result<()> 
         .user_id("user123")
         .collapse(false)
         .importance(Some(false))
+        .label_link_ids(vec!["own-link".to_string()])
         .exclude_labels(vec!["CATEGORY_SOCIAL".to_string()]);
 
     let bool_query = builder.build_bool_query()?;
@@ -493,7 +516,7 @@ fn test_importance_false_with_exclude_labels_both_apply() -> anyhow::Result<()> 
     // Should have the explicit CATEGORY_SOCIAL exclusion
     let has_social_exclusion = must_not
         .iter()
-        .any(|q| q["term"]["labels"] == "CATEGORY_SOCIAL");
+        .any(|q| *q == carrying(&["CATEGORY_SOCIAL"], &["own-link"]));
     assert!(has_social_exclusion);
 
     // Should have the importance filter in filter array
@@ -626,5 +649,751 @@ fn test_required_thread_ids_narrow_on_top_of_access() -> anyhow::Result<()> {
         filters.contains(&json!({ "terms": { "entity_id": ["thread-a", "thread-b"] } })),
         "expected a required thread filter, got {filters:?}"
     );
+    Ok(())
+}
+
+fn subject_condition(text: &str, exclude: bool) -> EmailTextCondition {
+    EmailTextCondition {
+        fields: EmailTextFields::Subject,
+        text: text.to_string(),
+        exclude,
+    }
+}
+
+#[test]
+fn a_subject_condition_matches_the_subject_alone() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .text_conditions(vec![subject_condition("lunch", false)]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let must = json["bool"]["must"].as_array().unwrap();
+
+    assert_eq!(must.len(), 2);
+    assert_eq!(
+        must[1],
+        json!({
+            "bool": {
+                "should": [{
+                    "simple_query_string": {
+                        "query": "lunch*",
+                        "fields": ["subject"],
+                        "default_operator": "AND"
+                    }
+                }],
+                "minimum_should_match": 1
+            }
+        })
+    );
+    Ok(())
+}
+
+#[test]
+fn an_excluded_condition_leaves_its_messages_out() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .text_conditions(vec![subject_condition("team lunch", true)]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    assert_eq!(json["bool"]["must"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        json["bool"]["must_not"][0]["bool"]["should"][0]["simple_query_string"]["query"],
+        "\"team lunch\""
+    );
+    Ok(())
+}
+
+#[test]
+fn a_from_condition_matches_the_sender_by_name_or_address() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(Vec::new())
+        .match_type("partial")
+        .user_id("user123")
+        .text_conditions(vec![EmailTextCondition {
+            fields: EmailTextFields::From,
+            text: "ana".to_string(),
+            exclude: false,
+        }]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    assert_eq!(
+        json["bool"]["must"],
+        json!([{
+            "bool": {
+                "should": [
+                    {
+                        "simple_query_string": {
+                            "query": "(ana | ana@*)",
+                            "fields": ["sender"],
+                            "default_operator": "AND"
+                        }
+                    },
+                    {
+                        "simple_query_string": {
+                            "query": "(ana)",
+                            "fields": ["sender.parts"],
+                            "default_operator": "AND"
+                        }
+                    },
+                    {
+                        "simple_query_string": {
+                            "query": "ana*",
+                            "fields": ["sender_name"],
+                            "default_operator": "AND"
+                        }
+                    }
+                ],
+                "minimum_should_match": 1
+            }
+        }])
+    );
+    Ok(())
+}
+
+#[test]
+fn a_search_of_conditions_alone_keeps_the_access_filter() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(Vec::new())
+        .match_type("partial")
+        .user_id("user123")
+        .sent_between(Some(1_000), Some(2_000));
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    assert!(json["bool"]["must"].is_null());
+    assert_eq!(
+        access_filter(&json),
+        &json!({ "term": { "user_id": "user123" } })
+    );
+    let filters = json["bool"]["filter"].as_array().unwrap();
+    assert!(filters.contains(&json!({
+        "script": {
+            "script": {
+                "source": "doc['sent_at_millis'].size() > 0 \
+                    && doc['sent_at_millis'].value.toInstant().toEpochMilli() >= params.after \
+                    && doc['sent_at_millis'].value.toInstant().toEpochMilli() < params.before",
+                "lang": "painless",
+                "params": { "after": 1_000, "before": 2_000 }
+            }
+        }
+    })));
+    Ok(())
+}
+
+#[test]
+fn one_sent_bound_checks_only_that_bound() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .sent_between(None, Some(2_000));
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let script = json["bool"]["filter"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|filter| filter.get("script"))
+        .expect("the sent bound is a script filter");
+
+    assert_eq!(script["script"]["params"], json!({ "before": 2_000 }));
+    assert!(
+        !script["script"]["source"]
+            .as_str()
+            .unwrap()
+            .contains("params.after")
+    );
+    Ok(())
+}
+
+#[test]
+fn a_label_condition_matches_a_label_or_a_tag() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .label_link_ids(vec!["own-link".to_string()])
+        .label_conditions(vec![
+            EmailLabelCondition {
+                labels: vec!["Fundraising".to_string()],
+                tag_option_ids: vec!["opt-1".to_string()],
+                exclude: false,
+            },
+            EmailLabelCondition {
+                labels: vec!["Updates".to_string()],
+                tag_option_ids: Vec::new(),
+                exclude: true,
+            },
+            EmailLabelCondition {
+                labels: Vec::new(),
+                tag_option_ids: Vec::new(),
+                exclude: true,
+            },
+        ])
+        .exclude_thread_ids(vec!["thread-1".to_string()]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    let carries = json["bool"]["filter"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|filter| filter["bool"]["minimum_should_match"] == 1)
+        .expect("the label condition is a filter");
+    let should = carries["bool"]["should"].as_array().unwrap();
+    assert_eq!(should[0], carrying(&["Fundraising"], &["own-link"]));
+    assert!(should[1]["nested"].is_object());
+
+    assert_eq!(
+        json["bool"]["must_not"],
+        json!([
+            {
+                "bool": {
+                    "should": [carrying(&["Updates"], &["own-link"])],
+                    "minimum_should_match": 1
+                }
+            },
+            { "terms": { "entity_id": ["thread-1"] } }
+        ])
+    );
+    Ok(())
+}
+
+fn phrase_prefix(field: &str, term: &str) -> serde_json::Value {
+    json!({"match_phrase_prefix": {field: {"query": term, "max_expansions": 256}}})
+}
+
+fn terms_json(terms: &[&str], match_type: &str) -> serde_json::Value {
+    let terms: Vec<String> = terms.iter().map(|term| term.to_string()).collect();
+    terms_query(
+        &terms,
+        match_type,
+        EMAIL_KEYWORD_FIELDS,
+        EMAIL_TEXT_FIELDS,
+        false,
+    )
+    .to_json()
+}
+
+#[test]
+fn an_address_matches_apart_from_the_words_beside_it() {
+    for match_type in ["partial", "exact", "regexp"] {
+        for (terms, groups) in [
+            (
+                vec!["lunch", "ana@example.com", "menu"],
+                vec![vec!["ana@example.com"], vec!["lunch", "menu"]],
+            ),
+            (
+                vec!["example.com", "lunch"],
+                vec![vec!["example.com"], vec!["lunch"]],
+            ),
+            (
+                vec!["@example.com", "the menu"],
+                vec![vec!["@example.com"], vec!["the menu"]],
+            ),
+            (
+                vec!["ana@example.com", "bo@example.com", "lunch"],
+                vec![
+                    vec!["ana@example.com"],
+                    vec!["bo@example.com"],
+                    vec!["lunch"],
+                ],
+            ),
+            (
+                vec!["@ana", "lunch", "ana@", "a@b"],
+                vec![vec!["@ana"], vec!["ana@"], vec!["a@b"], vec!["lunch"]],
+            ),
+            (
+                vec!["lunch", "例え.テスト"],
+                vec![vec!["例え.テスト"], vec!["lunch"]],
+            ),
+            (
+                vec!["example.com,", "lunch"],
+                vec![vec!["example.com,"], vec!["lunch"]],
+            ),
+            (
+                vec!["«example.com»", "lunch"],
+                vec![vec!["«example.com»"], vec!["lunch"]],
+            ),
+        ] {
+            let matched: Vec<serde_json::Value> = groups
+                .iter()
+                .map(|group| terms_json(group, match_type))
+                .collect();
+            assert_eq!(
+                terms_json(&terms, match_type),
+                json!({"bool": {"must": matched}}),
+                "{terms:?} in {match_type} match"
+            );
+        }
+    }
+}
+
+#[test]
+fn words_the_analyzer_drops_are_left_out_beside_an_address() {
+    for (terms, kept) in [
+        (vec!["ana@example.com", "½"], vec!["ana@example.com"]),
+        (
+            vec!["ana@example.com", "½", "follow-up"],
+            vec!["ana@example.com", "follow-up"],
+        ),
+    ] {
+        assert_eq!(
+            terms_json(&terms, "partial"),
+            terms_json(&kept, "partial"),
+            "{terms:?}"
+        );
+    }
+}
+
+#[test]
+fn words_match_together_in_the_address_fields_or_in_the_text_fields() {
+    for (terms, addresses) in [
+        (
+            vec!["example", "lunch"],
+            "(example | example@*) + (lunch | lunch@*)",
+        ),
+        (vec!["3.5", "lunch"], r#""3.5" + (lunch | lunch@*)"#),
+        (vec!["10.50", "lunch"], r#""10.50" + (lunch | lunch@*)"#),
+        (vec!["p.m.", "lunch"], r#""p.m." + (lunch | lunch@*)"#),
+        (vec!["...and", "lunch"], r#""...and" + (lunch | lunch@*)"#),
+        (vec!["a..and", "lunch"], r#""a..and" + (lunch | lunch@*)"#),
+        (vec!["½", "lunch"], "(½ | ½@*) + (lunch | lunch@*)"),
+        (vec!["@", "lunch"], r#""@" + (lunch | lunch@*)"#),
+        (
+            vec!["ana@example.com said", "lunch"],
+            r#""ana@example.com said" + (lunch | lunch@*)"#,
+        ),
+    ] {
+        assert_eq!(
+            terms_json(&terms, "partial")["bool"]["should"][0]["simple_query_string"]["query"],
+            addresses,
+            "{terms:?}"
+        );
+    }
+}
+
+#[test]
+fn regexp_input_that_uses_syntax_stays_whole_beside_an_address() {
+    assert_eq!(
+        terms_json(&["ana@example.com", "lunch|menu"], "regexp")["bool"]["should"][0]["simple_query_string"]
+            ["query"],
+        r#""ana@example.com" + (lunch|menu | lunch|menu@*)"#
+    );
+}
+
+#[test]
+fn a_hyphenated_word_matches_its_words_together_in_one_field() {
+    let terms = vec!["menu".to_string(), "follow-up".to_string()];
+
+    let json = terms_query(&terms, "partial", &[], &["subject", "content"], false).to_json();
+
+    assert_eq!(
+        json,
+        json!({
+            "bool": {
+                "should": [{
+                    "bool": {
+                        "must": [
+                            {
+                                "simple_query_string": {
+                                    "query": "menu*",
+                                    "fields": ["subject", "content"],
+                                    "default_operator": "AND"
+                                }
+                            },
+                            {
+                                "bool": {
+                                    "should": [
+                                        phrase_prefix("subject", "follow-up"),
+                                        phrase_prefix("content", "follow-up")
+                                    ],
+                                    "minimum_should_match": 1
+                                }
+                            }
+                        ]
+                    }
+                }],
+                "minimum_should_match": 1
+            }
+        })
+    );
+}
+
+#[test]
+fn a_hyphenated_word_alone_needs_no_query_string() {
+    let terms = vec!["re-org".to_string()];
+
+    let json = terms_query(&terms, "partial", &[], &["subject"], false).to_json();
+
+    assert_eq!(
+        json["bool"]["should"][0],
+        json!({
+            "bool": {
+                "must": [{
+                    "bool": {
+                        "should": [phrase_prefix("subject", "re-org")],
+                        "minimum_should_match": 1
+                    }
+                }]
+            }
+        })
+    );
+}
+
+#[test]
+fn a_term_of_one_word_or_an_exact_short_or_quoted_one_stays_in_the_query_string() {
+    for (terms, match_type, query) in [
+        (vec!["follow-up"], "exact", "(follow\\-up)"),
+        (vec!["follow-up"], "regexp", "follow-up*"),
+        (vec!["東京"], "partial", "(東京)"),
+        (vec!["the follow-up"], "partial", "\"the follow\\-up\""),
+        (vec!["node.js"], "partial", "node.js*"),
+        (vec!["follow-"], "partial", "follow*"),
+        (vec!["Re:"], "partial", "(Re)"),
+        (vec!["c++"], "partial", "(c)"),
+        (vec!["नमस्ते"], "partial", "नमस्ते*"),
+    ] {
+        let terms: Vec<String> = terms.into_iter().map(str::to_string).collect();
+
+        let json = terms_query(&terms, match_type, &[], &["subject"], false).to_json();
+
+        assert_eq!(
+            json["bool"]["should"][0]["simple_query_string"]["query"], query,
+            "{terms:?} in {match_type} match"
+        );
+    }
+}
+
+#[test]
+fn a_run_unicode_splits_into_words_matches_as_a_phrase_prefix() {
+    for term in [
+        "東京都",
+        "AT&T",
+        "x²y",
+        "ไทย-ลาว",
+        "ไทย2",
+        "ปี๒๕๖๗",
+        "第１２",
+        "٢٠٢٤-٠٣",
+    ] {
+        let terms = vec![term.to_string()];
+
+        let json = terms_query(&terms, "partial", &[], &["subject"], false).to_json();
+
+        assert_eq!(
+            json["bool"]["should"][0]["bool"]["must"][0]["bool"]["should"][0],
+            phrase_prefix("subject", term),
+            "{term}"
+        );
+    }
+}
+
+#[test]
+fn a_terms_punctuation_is_never_read_as_query_syntax() {
+    for (term, address, segments, text) in [
+        ("-lunch", "(lunch | lunch@*)", "(lunch)", "lunch*"),
+        ("--force", "(force | force@*)", "(force)", "force*"),
+        ("(Lunch", "(Lunch | lunch@*)", "(Lunch)", "Lunch*"),
+        ("-नमस्ते", "(नमस्ते | नमस्ते@*)", "(नमस्ते)", "नमस्ते*"),
+        ("-", r"(\- | \-@*)", r"(\-)", r"(\-)"),
+        ("a+", "(a | a@*)", "(a)", "(a)"),
+        ("lunch*", "(lunch | lunch@*)", "(lunch)", "lunch*"),
+        ("C♯", "(C♯ | c♯@*)", "(C♯)", "(C♯)"),
+        (
+            r#"-team "lunch"#,
+            r#""\-team \"lunch""#,
+            r#""\-team \"lunch""#,
+            r#""\-team \"lunch""#,
+        ),
+        (
+            r"team lunch\",
+            r#""team lunch\\""#,
+            r#""team lunch\\""#,
+            r#""team lunch\\""#,
+        ),
+        (
+            "ana+news@probe.example",
+            r#""ana\+news@probe.example""#,
+            r#""ana\+news@probe.example""#,
+            r#""ana\+news@probe.example""#,
+        ),
+    ] {
+        let terms = [term.to_string()];
+
+        assert_eq!(build_address_query_string(&terms, false), address);
+        assert_eq!(build_segment_query_string(&terms, false), segments);
+        assert_eq!(build_text_query_string(&terms, "partial", false), text);
+    }
+    for (term, literal) in [
+        ("lunch~2", r"lunch\~2"),
+        ("lunch|menu", r"lunch\|menu"),
+        (r"lunch\|menu", r"lunch\\\|menu"),
+        ("lunch(menu)", r"lunch\(menu\)"),
+        ("lunch*menu", r"lunch\*menu"),
+    ] {
+        let terms = [term.to_string()];
+
+        assert_eq!(
+            build_address_query_string(&terms, false),
+            format!("({literal} | {literal}@*)")
+        );
+        assert_eq!(
+            build_segment_query_string(&terms, false),
+            format!("({literal})")
+        );
+        assert_eq!(
+            build_text_query_string(&terms, "exact", false),
+            format!("({literal})")
+        );
+    }
+}
+
+#[test]
+fn regexp_syntax_runs_as_typed_over_every_address_field() {
+    let terms = vec!["lunch|menu".to_string(), "-lunch".to_string()];
+
+    let json = terms_query(
+        &terms,
+        "regexp",
+        EMAIL_KEYWORD_FIELDS,
+        EMAIL_TEXT_FIELDS,
+        false,
+    )
+    .to_json();
+
+    assert_eq!(
+        json["bool"]["should"],
+        json!([
+            {
+                "simple_query_string": {
+                    "query": "(lunch|menu | lunch|menu@*) + (-lunch | -lunch@*)",
+                    "fields": EMAIL_KEYWORD_FIELDS,
+                    "default_operator": "AND"
+                }
+            },
+            {
+                "simple_query_string": {
+                    "query": "lunch|menu* + -lunch*",
+                    "fields": EMAIL_TEXT_FIELDS,
+                    "default_operator": "AND"
+                }
+            }
+        ])
+    );
+}
+
+/// The three clauses of a search of `terms`: whole addresses, address
+/// segments and text.
+fn term_clauses(terms: Vec<String>, match_type: &str) -> anyhow::Result<serde_json::Value> {
+    let json = EmailQueryBuilder::new(terms)
+        .match_type(match_type)
+        .user_id("user123")
+        .build_bool_query()?
+        .build()
+        .to_json();
+    Ok(json["bool"]["must"][0]["bool"]["should"].clone())
+}
+
+#[test]
+fn a_search_of_too_many_clauses_matches_every_term_in_one_clause_per_field() -> anyhow::Result<()> {
+    let hyphenated = |count: usize| -> Vec<String> {
+        let mut terms = vec!["menu".to_string(), "ab".to_string()];
+        terms.extend((0..count).map(|i| format!("word{i}-up")));
+        terms
+    };
+    let query = |json: &serde_json::Value| {
+        let query = json["simple_query_string"]["query"].as_str();
+        query.unwrap_or_default().to_string()
+    };
+
+    // Two words cost 21 each and a hyphenated one 32, so 28 of those fit.
+    let full = term_clauses(hyphenated(28), "partial")?;
+    assert!(
+        query(&full[0]).starts_with(r"(menu | menu@*) + (ab | ab@*) + (word0\-up | word0\-up@*)")
+    );
+    assert!(query(&full[1]).starts_with(r"(menu) + (ab) + (word0\-up) + "));
+    assert_eq!(query(&full[2]["bool"]["must"][0]), "menu* + (ab)");
+    assert_eq!(
+        full[2]["bool"]["must"][1]["bool"]["should"][0],
+        phrase_prefix("subject", "word0-up")
+    );
+
+    let compact = term_clauses(hyphenated(29), "partial")?;
+    assert!(query(&compact[0]).starts_with(r"menu@* + ab@* + word0\-up@* + "));
+    assert!(query(&compact[1]).starts_with(r#""menu" + "ab" + "word0\-up" + "#));
+    assert!(query(&compact[2]).starts_with(r#"menu* + "ab" + "word0\-up" + "#));
+
+    let exact = term_clauses(hyphenated(29), "exact")?;
+    assert!(query(&exact[2]).starts_with(r#""menu" + "ab" + "word0\-up" + "#));
+    Ok(())
+}
+
+#[test]
+fn text_conditions_count_toward_the_clauses_of_a_search() -> anyhow::Result<()> {
+    let text_clause = |count: usize| -> anyhow::Result<serde_json::Value> {
+        let conditions = (0..count).map(|i| EmailTextCondition {
+            fields: EmailTextFields::Any,
+            text: format!("word{i}-up"),
+            exclude: true,
+        });
+        let json = EmailQueryBuilder::new(vec!["follow-up".to_string()])
+            .match_type("partial")
+            .user_id("user123")
+            .text_conditions(conditions.collect())
+            .build_bool_query()?
+            .build()
+            .to_json();
+        Ok(json["bool"]["must"][0]["bool"]["should"][2].clone())
+    };
+
+    assert_eq!(
+        text_clause(1)?["bool"]["must"][0]["bool"]["should"][0],
+        phrase_prefix("subject", "follow-up")
+    );
+    assert_eq!(
+        text_clause(40)?["simple_query_string"]["query"],
+        r#""follow\-up""#
+    );
+    Ok(())
+}
+
+#[test]
+fn a_term_costs_a_clause_per_token_where_it_is_not_quoted() {
+    for (term, cost) in [
+        ("lunch", 10 + 5 + 6),
+        ("-lunch", 10 + 5 + 6),
+        ("team lunch", 16),
+        ("team\nlunch", 16),
+        ("ana@probe.example", 16),
+        ("follow-up", 10 + 5 * 2 + 6 * 2),
+        ("2025-03-01", 10 + 5 * 3 + 6 * 3),
+        ("東京", 10 + 5 * 2 + 6 * 2),
+        ("🎉😀word-l", 10 + 5 * 4 + 6 * 4),
+        ("probe.example/a-b", 5 + 5 + 6 * 3),
+        // A run of a script written without spaces is one token, and its
+        // digits another.
+        ("กานกก", 10 + 5 + 6),
+        ("กาน๒๕", 10 + 5 * 2 + 6 * 2),
+    ] {
+        assert_eq!(
+            clauses(term, EMAIL_KEYWORD_FIELDS, EMAIL_TEXT_FIELDS),
+            cost,
+            "{term}"
+        );
+    }
+}
+
+#[test]
+fn a_term_that_may_be_one_token_is_read_by_the_analyzer() {
+    for term in [
+        "CO₂",
+        "10½",
+        "②note",
+        "สวัสดี",
+        "฿500",
+        "500៛",
+        "①②③",
+        "lunch🎉",
+        "🎉🎉🎉",
+        "---",
+    ] {
+        let terms = vec![term.to_string()];
+
+        let json = terms_query(&terms, "partial", &[], &["subject"], false).to_json();
+
+        assert_eq!(
+            json["bool"]["should"][0]["bool"]["must"][0]["bool"]["should"][0],
+            json!({"match_bool_prefix": {"subject": {"query": term, "operator": "and"}}}),
+            "{term}"
+        );
+    }
+}
+
+#[test]
+fn a_short_regexp_term_runs_as_typed_in_the_compact_form() {
+    let terms = vec!["a*".to_string(), "東京".to_string(), "b".to_string()];
+
+    assert_eq!(
+        build_text_query_string(&terms, "regexp", true),
+        r#"(a*) + "東京" + "b""#
+    );
+}
+
+/// Whether a partial `follow-up` condition stays a phrase prefix in the search
+/// `set` describes, which the compact form would quote.
+fn keeps_phrase_prefix(
+    set: &dyn Fn(EmailQueryBuilder) -> EmailQueryBuilder,
+    terms: usize,
+) -> anyhow::Result<bool> {
+    let terms = (0..terms).map(|i| format!("word{i}")).collect();
+    let builder = EmailQueryBuilder::new(terms)
+        .match_type("partial")
+        .user_id("user123")
+        .text_conditions(vec![EmailTextCondition {
+            fields: EmailTextFields::Subject,
+            text: "follow-up".to_string(),
+            exclude: true,
+        }]);
+    let json = set(builder).build_bool_query()?.build().to_json();
+    let condition = json["bool"]["must_not"][0].to_string();
+    Ok(condition.contains("match_phrase_prefix"))
+}
+
+#[test]
+fn a_name_search_counts_its_terms_in_the_subject_alone() -> anyhow::Result<()> {
+    assert!(!keeps_phrase_prefix(&|builder| builder, 46)?);
+    assert!(keeps_phrase_prefix(
+        &|builder| builder.subject_only(true),
+        46
+    )?);
+    Ok(())
+}
+
+#[test]
+fn listed_filters_count_toward_the_clauses_of_a_search() -> anyhow::Result<()> {
+    let senders = |count: usize| -> Vec<String> {
+        (0..count).map(|i| format!("user{i}@example.com")).collect()
+    };
+
+    assert!(keeps_phrase_prefix(
+        &|builder| builder.sender(senders(10)),
+        40
+    )?);
+    assert!(!keeps_phrase_prefix(
+        &|builder| builder.sender(senders(120)),
+        40
+    )?);
+    Ok(())
+}
+
+/// Messages carrying any of `labels` in one of `links`.
+fn carrying(labels: &[&str], links: &[&str]) -> serde_json::Value {
+    json!({
+        "bool": {
+            "filter": [
+                { "terms": { "labels": labels } },
+                { "terms": { "link_id": links } }
+            ]
+        }
+    })
+}
+
+#[test]
+fn a_label_matches_only_in_inboxes_whose_labels_the_caller_reads() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .label_link_ids(vec!["own-link".to_string(), "managed-link".to_string()])
+        .include_labels(vec!["travel".to_string()])
+        .exclude_labels(vec!["newsletters".to_string(), "spam-ish".to_string()]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    let links = ["own-link", "managed-link"];
+    let filter = json["bool"]["filter"].as_array().unwrap();
+    assert!(filter.contains(&carrying(&["travel"], &links)));
+    let must_not = json["bool"]["must_not"].as_array().unwrap();
+    assert!(must_not.contains(&carrying(&["newsletters", "spam-ish"], &links)));
     Ok(())
 }

@@ -32,6 +32,7 @@ import {
   startDueOf,
 } from '@property/utils/start-due';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
+import { isTemporaryGraphqlProperty } from '@queries/properties/graphql-optimistic';
 import { useTagsQuery } from '@queries/properties/tags';
 import { Key } from '@solid-primitives/keyed';
 import {
@@ -109,6 +110,8 @@ export function InlineTaskProperties() {
     if (pendingPins().size === 0 || !state.editor.md.editor) return;
     for (const property of properties()) {
       if (!pendingPins().has(property.propertyDefinitionId)) continue;
+      // A value saved straight after the add shows with a temporary id first.
+      if (isTemporaryGraphqlProperty(property.propertyId)) continue;
       pins.pin(property.propertyId, titleProperties());
       clearPendingPin(property.propertyDefinitionId);
     }
@@ -120,6 +123,7 @@ export function InlineTaskProperties() {
       (property) =>
         selected.includes(property.propertyId) &&
         !property.isMetadata &&
+        property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.TIME_LOGGED &&
         !tagDefinitionIds().has(property.propertyDefinitionId)
     );
     if (documentKind !== 'task') return visible;
@@ -162,6 +166,15 @@ export function InlineTaskProperties() {
   // A task's start and due dates share one picker, and the due date's pill
   // reads as their range once a start is set.
   const startDateEnabled = useStartDateEnabled();
+  // While Unlink saves, both dates read as cleared, so the pill steps from the
+  // range straight to empty; a failed save drops this and the dates return.
+  const [unlinkingDates, setUnlinkingDates] = createSignal(false);
+  const shownDate = <T extends Property>(property: T): T =>
+    unlinkingDates() &&
+    isDateProperty(property) &&
+    dateFieldOf(property.propertyDefinitionId)
+      ? { ...property, value: null }
+      : property;
   const dateEnd = (field: DateField): DateProperty | undefined => {
     const definitionId =
       field === 'start'
@@ -171,7 +184,9 @@ export function InlineTaskProperties() {
       titleProperties().find(
         (candidate) => candidate.propertyDefinitionId === definitionId
       ) ?? (field === 'start' ? buildStartDateDefaultProperty() : undefined);
-    return property && isDateProperty(property) ? property : undefined;
+    return property && isDateProperty(property)
+      ? shownDate(property)
+      : undefined;
   };
   const datesText = (property: Property) => {
     if (
@@ -202,8 +217,19 @@ export function InlineTaskProperties() {
     return {
       available: () => setEnds().length > 0,
       clear: async () => {
-        for (const end of setEnds()) {
-          await saveOne(end, { valueType: 'DATE', value: null });
+        const ends = setEnds();
+        setUnlinkingDates(true);
+        try {
+          await saveMutation.mutateAsync({
+            properties: ends.map((end) => ({
+              entityId: blockId,
+              entityType,
+              property: end,
+              apiValues: { valueType: 'DATE' as const, value: null },
+            })),
+          });
+        } finally {
+          setUnlinkingDates(false);
         }
       },
     };
@@ -258,7 +284,7 @@ export function InlineTaskProperties() {
               );
               return (
                 <InlinePropertyValue
-                  property={property()}
+                  property={shownDate(property())}
                   entityId={blockId}
                   showLabel={
                     documentKind === 'task' &&
@@ -273,7 +299,7 @@ export function InlineTaskProperties() {
                       property().propertyDefinitionId
                     )
                   }
-                  valueText={datesText(property())}
+                  valueText={datesText(shownDate(property()))}
                   editor={editor}
                   unlink={datesUnlink(property())}
                 />

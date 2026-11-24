@@ -22,14 +22,17 @@ outbound = [
   "dep:system_properties",
   "dep:tokio-util",
 ]
+toolset = ["inbound", "dep:ai_toolset", "dep:schemars"]
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
+ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 chrono-tz = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }
+csv = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 feature_flags = { path = "../feature_flags", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
@@ -39,6 +42,7 @@ macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 rootcause = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 serde_with = { workspace = true, optional = true }

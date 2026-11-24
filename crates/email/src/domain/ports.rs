@@ -177,9 +177,15 @@ pub trait EmailRepo: Send + Sync + 'static {
         thread_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<Contact>, Self::Err>> + Send;
 
+    /// The labels on each thread, as `reader` may see them: system labels,
+    /// which say what state a message is in, and the labels people made in
+    /// the inboxes `reader` owns or manages. Labels people make are theirs, so
+    /// no one else reading the thread gets them; `None` (a bot, a signed-out
+    /// reader or an internal caller) gets system labels alone.
     fn labels_by_thread_ids(
         &self,
         thread_ids: &[Uuid],
+        reader: Option<&MacroUserIdStr<'_>>,
     ) -> impl Future<Output = Result<Vec<Label>, Self::Err>> + Send;
 
     fn link_by_fusionauth_and_macro_id(
@@ -203,6 +209,16 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Link>, Self::Err>> + Send;
+
+    /// Which of `ids` are among the inboxes [`Self::inboxes_for_macro_id`]
+    /// returns for `macro_id`, read by those ids alone, so the cost follows
+    /// `ids` and not how many inboxes the account reaches. The caller bounds
+    /// `ids`.
+    fn inbox_ids_among(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
 
     /// Fetch a thread by its database ID (without messages).
     fn thread_by_id(
@@ -259,10 +275,12 @@ pub trait EmailRepo: Send + Sync + 'static {
         message_ids: &[Uuid],
     ) -> impl Future<Output = Result<RecipientsByMessageId, Self::Err>> + Send;
 
-    /// Fetch labels for a set of message IDs, keyed by message ID.
+    /// Fetch labels for a set of message IDs, keyed by message ID, as `reader`
+    /// may see them (see [`Self::labels_by_thread_ids`]).
     fn labels_by_message_ids(
         &self,
         message_ids: &[Uuid],
+        reader: Option<&MacroUserIdStr<'_>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, Vec<MessageLabel>>, Self::Err>> + Send;
 
     /// Fetch saved calendar invitation components, keyed by message ID.

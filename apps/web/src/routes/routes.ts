@@ -1,3 +1,8 @@
+import { AGENT_SCREEN_ROUTE_ID } from '@app/features/agent-screen/core/route';
+import {
+  AGENTS_ARCHIVE_ROUTE_ID,
+  AGENTS_ARCHIVE_VIEW_ID,
+} from '@app/features/agents-view/archive-navigation';
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import {
@@ -447,6 +452,14 @@ export const settingsRoute = defineRoute({
 // a conversation swaps the pane beside the sidebar instead of rebuilding both.
 const AGENTS_WORKSPACE_MOUNT = 'agents-workspace';
 
+export const agentsArchiveRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: AGENTS_ARCHIVE_ROUTE_ID,
+  path: 'agents/archive',
+  mountKey: AGENTS_WORKSPACE_MOUNT,
+  search: '*' as const,
+  claim: () => ({ namespace: 'component', id: AGENTS_ARCHIVE_VIEW_ID }),
+});
 export const agentsRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'agents',
@@ -585,12 +598,6 @@ export const homeSplitRoute = defineRoute({
   id: 'view-home',
   path: 'home',
   search: '*' as const,
-});
-
-/** New Home's entry: it sends the split to the tab New Home was left on. */
-export const newHomeRoute = defineRoute({
-  id: 'view-new-home',
-  path: 'new-home',
 });
 
 export const recentRoute = defineRoute({
@@ -735,7 +742,7 @@ export const projectDetailRoute = defineRoute({
   path: 'projects/:projectId/:section',
   params: z.object({
     projectId: z.string().uuid(),
-    section: z.enum(['overview', 'tasks']),
+    section: z.enum(['overview', 'tasks', 'time']),
   }),
   remountKey: ({ projectId }) => projectId,
   claim: ({ projectId }) => ({
@@ -750,6 +757,26 @@ export const tasksProjectsRoute = defineRoute({
   id: 'tasks-projects',
   path: 'projects',
   params: z.object({}).transform(() => ({ projectsTab: 'projects' as const })),
+});
+
+/** Time across projects: the viewer's week, or their team's. */
+export const tasksTimeRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: 'tasks-time',
+  path: 'time/:timeView',
+  params: z.object({ timeView: z.enum(['week', 'team']) }),
+});
+
+/** A task opened from My week or Team, shown in their place. */
+export const tasksTimeTaskRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: 'tasks-time-task',
+  path: 'task/:taskId',
+  params: z.object({ taskId: z.string().min(1) }),
+  remountKey: ({ taskId }) => taskId,
+  claim: ({ taskId }) => ({ namespace: 'block', id: `md:${taskId}` }),
+  toReference: ({ taskId }) => uuidRouteReference(taskId, 'task'),
+  externalSearch: Object.values(MARKDOWN_URL_PARAMS),
 });
 
 export const tasksSplitRoute = defineRoute({
@@ -846,6 +873,18 @@ export const callDetailRoute = defineRoute({
   externalSearch: [CALL_URL_PARAMS.transcriptId, CALL_URL_PARAMS.messageId],
   remountKey: ({ callId }) => callId,
   claim: ({ callId }) => ({ namespace: 'block', id: `call:${callId}` }),
+});
+
+/** An agent teammate's computer screen: watch it, and take over (`agent-screen`). */
+export const agentScreenRoute = defineRoute({
+  id: AGENT_SCREEN_ROUTE_ID,
+  path: 'screen/:harnessId',
+  params: z.object({ harnessId: z.string().min(1) }),
+  remountKey: ({ harnessId }) => harnessId,
+  claim: ({ harnessId }) => ({
+    namespace: 'component',
+    id: `${AGENT_SCREEN_ROUTE_ID}:${harnessId}`,
+  }),
 });
 
 export const companiesRoute = defineRoute({

@@ -552,6 +552,9 @@ export function runCommand(
 export function normalizeEventKeyPress(e: KeyboardEvent): string {
   const key = e.key;
   if (key === ' ') return 'space';
+  // WebKitGTK (the Linux desktop app) reports Shift+Tab, which X maps to the
+  // ISO_Left_Tab keysym, as key 'Unidentified'; only its code says Tab.
+  if (key === 'Unidentified' && e.code === 'Tab') return 'tab';
   // Handle "dead" keys resulting from alt key press waiting for further input, e.g. opt+n
   // This is a hack, and will NOT work for non-US keyboards.
   if (key === 'Dead' && e.altKey) {

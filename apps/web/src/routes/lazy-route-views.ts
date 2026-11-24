@@ -30,6 +30,10 @@ export const AgentsRouteView = lazyNamed(
   () => import('@app/features/agents-view/route-views'),
   'AgentsRouteView'
 );
+export const AgentScreenRouteView = lazyNamed(
+  () => import('@app/features/agent-screen/route-views'),
+  'AgentScreenRouteView'
+);
 export const CallDetailRouteView = lazyNamed(
   () => import('@app/features/block-call/route-views'),
   'CallDetailRouteView'
@@ -107,10 +111,6 @@ export const FoldersRouteView = lazyNamed(
   () => import('@app/features/next-soup/route-views'),
   'FoldersRouteView'
 );
-export const NewHomeRouteView = lazyNamed(
-  () => import('@app/features/new-home/route-views'),
-  'NewHomeRouteView'
-);
 export const RecentRouteView = lazyNamed(
   () => import('@app/features/next-soup/route-views'),
   'RecentRouteView'
@@ -142,6 +142,10 @@ export const ProjectDetailRouteView = lazyNamed(
 export const ProjectTaskRouteView = lazyNamed(
   () => import('@app/features/tasks-view/route-views'),
   'ProjectTaskRouteView'
+);
+export const TasksTimeTaskRouteView = lazyNamed(
+  () => import('@app/features/tasks-view/route-views'),
+  'TasksTimeTaskRouteView'
 );
 export const TasksRouteView = lazyNamed(
   () => import('@app/features/tasks-view/route-views'),
@@ -182,11 +186,11 @@ export const LIKELY_NEXT_VIEWS = [
  * nobody warmed shows its skeleton while its code loads.
  */
 export const OTHER_APP_VIEWS = [
+  AgentScreenRouteView,
   ForYouRouteView,
   SearchRouteView,
   NotificationsRouteView,
   NotificationsCalendarRouteView,
-  NewHomeRouteView,
   RecentRouteView,
   FoldersRouteView,
   CallsRouteView,

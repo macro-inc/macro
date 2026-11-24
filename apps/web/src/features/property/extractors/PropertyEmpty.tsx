@@ -30,7 +30,10 @@ export function PropertyEmptyIcon(props: {
           <SourceIcon class={cn('size-full', props.muted && 'opacity-50')} />
         </Match>
         <Match
-          when={props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.DUE_DATE}
+          when={
+            props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.DUE_DATE ||
+            props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.START_DATE
+          }
         >
           <NoDueDateIcon class={cn('size-full', props.muted && 'opacity-50')} />
         </Match>

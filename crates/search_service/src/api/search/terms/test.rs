@@ -48,6 +48,34 @@ fn test_split_search_terms_quoted_mixed_with_unquoted() {
 }
 
 #[test]
+fn curly_quotes_split_as_straight_quotes_do() {
+    for (curly, straight) in [
+        ("“team lunch”", r#""team lunch""#),
+        (
+            "“team lunch” menu “next week”",
+            r#""team lunch" menu "next week""#,
+        ),
+        ("subject:“team lunch”", r#"subject:"team lunch""#),
+        ("-“team lunch”", r#"-"team lunch""#),
+        ("„team lunch“", r#""team lunch""#),
+        ("“team lunch\"", r#""team lunch""#),
+        ("“team lunch", r#""team lunch"#),
+        ("“lunch”", r#""lunch""#),
+        ("bo’s ‘lunch’", "bo’s ‘lunch’"),
+    ] {
+        assert_eq!(
+            split_search_terms(&[curly.to_string()]),
+            split_search_terms(&[straight.to_string()]),
+            "{curly}"
+        );
+    }
+    assert_eq!(
+        split_search_terms(&["subject:“team lunch” menu".to_string()]),
+        vec!["subject:team lunch", "menu"]
+    );
+}
+
+#[test]
 fn test_split_search_terms_empty_string() {
     let result: Vec<String> = split_search_terms(&["".to_string()]);
     assert!(result.is_empty());
@@ -318,5 +346,7 @@ fn trimmed_query_rejects_quotes_around_nothing() {
         trimmed_query("\" \""),
         Err(SearchError::EmptyQuery)
     ));
+    assert!(matches!(trimmed_query("“ ”"), Err(SearchError::EmptyQuery)));
     assert_eq!(trimmed_query("\"a\"").ok(), Some("\"a\""));
+    assert_eq!(trimmed_query("“a”").ok(), Some("“a”"));
 }

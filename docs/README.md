@@ -39,4 +39,6 @@ post from the TypeScript SDK).
 
 Agent session activity: [correlation and visibility](architecture/agent-activity-correlation.md).
 
+Agent screens: [watch and take over an agent teammate's desktop](design/agent-screen.md).
+
 CRM: [selective email contribution design](design/crm-selective-email-contribution.md).

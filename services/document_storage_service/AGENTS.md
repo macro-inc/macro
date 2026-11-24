@@ -146,7 +146,10 @@ threads, pins, recents, notifications, folders, activity.
 - `/time` mounts `crates/time_tracking` (entries and the running timer). Its
   writes need `enable-time-tracking` for the caller from the shared PostHog
   client, failing closed; a local stack uses `LocalTimeTracking` instead, so
-  time tracking is on there without a PostHog flag, as Passwords is.
+  time tracking is on there without a PostHog flag, as Passwords is. Its
+  report router (`/time/summary`, `/time/export`) is merged in with its own
+  state; summaries read the primary and exports the replica, and
+  `graphql_time_report_context` serves `timeSummary` from the same service.
 - Provision required `POSTHOG_API_KEY` before startup; the flag client
   evaluates `enable-programmatic-calls` per caller for the explicit call start,
   join, and leave routes; failures disable those routes.

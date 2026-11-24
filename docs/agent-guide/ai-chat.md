@@ -296,7 +296,8 @@ right preview instead of a standalone split. The Agents sidebar stays left and c
 be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
-The phone list shows startable custom agents as bubbles above the Favorites, Waiting on you, and Conversations sections. Tap a bubble to focus the accessory composer with that agent selected. New agent opens the roster creation flow. The title menu opens Conversations, Agents, Routines, and Archived. Archived has history-based Back and search, and keeps the navigation dock but no composer; Back restores the list or page it was opened from. Long-press a row for its entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
+The phone collection uses one measured floating header and one vertical list scroller. The scroller reserves the island row with top padding. Waiting on you, Favorites, and Conversations each contain their own normal in-flow heading and rows. Headings scroll with their sections instead of sticking over list content. Archived uses the same structure, with its heading immediately below the islands. Section gaps and padding own the spacing; the embedded empty panel does not add another scroller or top inset.
+The phone list shows startable custom agents as bubbles, followed by the Waiting on you and Favorites cards, then the **Conversations** section and its remaining rows. The hamburger opens the shell's left navigation drawer with Conversations, Archived, an Agents row with New agent, and routines with their schedules and New routine. Custom agents appear only in the bubbles, not as drawer rows. Choosing a destination closes the drawer. The Agents roster and Routines list keep the hamburger when opened from this drawer; external links and other entry points retain Back. This choice follows the current history entry on Back and Forward. Archived keeps the hamburger, has no bubbles or Back button, and retains the dock and accessory composer. Conversation and archive totals appear only after all pages load. Empty views use the shared AI illustration without search or filter controls; **Start a conversation** focuses the existing composer. Tap a bubble to focus that composer with its agent selected. Long-press a row for entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
 draft, attachments, agent, model, repository, and branch. Tap the agent/model pill to open the phone model sheet. Its search and
 Suggested models sit above Built-in and Your agents; All models opens a pushed
@@ -490,7 +491,7 @@ the shimmer.
   cannot receive their MCP callbacks. Check the runtime error before retrying, and
   start a new session after correcting its gateway network configuration.
 
-- Open **Go to Agents** → `/app/component/agents`. The workspace uses one
+- Open **Go to Agents** → `/app/agents` (`/app/component/agents` remains a compatibility link). The workspace uses one
   sidebar for Chat and Code.
   The desktop footer contains **Agents**, **Routines**, and **Archived**.
   **Agents** opens the same roster as the composer’s **Create agent** action.
@@ -578,14 +579,15 @@ the shimmer.
   not remount it.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
-  actions. On desktop, **Archived** in the footer opens a searchable main-pane
-  list with the loaded count, code identity, and archive date. Hover or focus a
+  actions. On desktop, **Archived** in the footer opens `/app/agents/archive`, a searchable main-pane
+  list with the loaded count, code identity, and archive date. Its single heading stays inside the list content padding, not in a separate workspace header. The phone drawer opens the same durable route with the normal collection heading and independent archive filters. Reload, direct links, and Back/Forward retain the destination; old in-place archive entries migrate without adding a history step. Hover or focus a
   row for **Unarchive** and **More actions**; right-click offers the same actions.
   Unarchive restores the row to the sidebar. Non-action code/date cells open the
   conversation while icons and action buttons retain their own behavior. The
   archived page reads more pages while fewer than 20 matching rows are loaded,
   then pages near the scroll end. Empty results appear only after paging finishes;
   counts describe loaded rows, not a server total. Phone has its own Archived view.
+  Conversation-name tooltips appear only when the rendered label is clipped. Each open request checks its current width, so resizing before reopening updates whether the tooltip appears; phone rows do not show hover tooltips.
   Runs of routines with **Show runs in Home and Agents** off (the default) are
   left out until **Show hidden routine runs** is checked in the **Filter
   conversations** menu, which adds it to the count in the filter button and unchecks it with
@@ -618,11 +620,7 @@ the shimmer.
   16px top padding when expanded. Light mode uses a faint shadow outline and
   layered outer shadow; dark mode retains the production glass rim and shadow.
   Both modes retain the production composer background.
-- The starting page uses the shared grouped **Auto / Chat / Code** Tabs pill,
-  below the input on desktop and above it in the phone drawer. The shared Tabs
-  component owns spacing, selection, focus, and touch treatment; the composer
-  does not resize or recolor its parts. Verify switching modes with the pointer
-  and keyboard on desktop and at 390×844.
+- Full new-session pages share Home's **Auto / Chat / Code** Tabs and repository row below the composer on desktop and phone, using the same composition, spacing, and alignment. The compact phone list accessory retains its grouped upper drawer. Opening a sent conversation leaves the preflight modes behind. The shared Tabs component owns selection, focus, and touch treatment; verify pointer and keyboard changes on desktop and at 390×844.
   Chat and Code limit the offered agents; the choice
   lasts only while the composer is mounted, and every composer opens in **Auto**. Auto is
   behind the `enable-composer-auto-mode` PostHog flag (Macro employees only), which the
@@ -668,11 +666,18 @@ the shimmer.
   names (for example, **Sonnet 5.5**) and provider or model icons aligned with the
   agent icons. The in-memory catalog leads with **Auto**, where Jev sorts each
   turn's prompt: hard prompts run on **Opus 5.5**, simple ones on **Gemini 3.8
-  Flash**, and the rest on **GPT-6.1 Sol**. It then offers the closed Anthropic and OpenAI chat
+  Flash**, and the rest on **GPT-6.2 Sol**. It then offers the closed Anthropic and OpenAI chat
   models; Kimi, DeepSeek, Muse, GLM, Qwen, MiniMax, GPT OSS, and Nemotron
   open-weight models; and Google's **Gemini 3.8 Flash**. The Anthropic models
-  are **Sonnet 5.5**, **Opus 5.5**, and **Haiku 4.5**; older Claude versions
-  (Sonnet 5, Opus 5, Fable 5.1) are not offered.
+  are **Sonnet 5.5**, **Opus 5.5**, and **Haiku 5.5**, and the OpenAI ones **GPT-6
+  Astra**, **GPT-6.2 Sol**, and **GPT-6 Luna**; older Claude versions (Sonnet 5,
+  Opus 5, Fable 5.1, Haiku 4.5) and GPT versions (GPT-6.1 Sol, GPT-5.6, GPT-5.6
+  mini, GPT-5.5, GPT-5 mini) are not offered. A retired model saved anywhere (an
+  agent, a routine step, a remembered choice, a draft, a chat, or a session
+  resumed after the change) runs on its replacement: Haiku 4.5 on Haiku 5.5,
+  GPT-6.1 Sol, GPT-5.6 and GPT-5.5 on GPT-6.2 Sol, and the minis on GPT-6 Luna
+  (`chat::domain::models::RETIRED_MODELS`, mirrored by the web's
+  `RETIRED_MODELS`).
   Selecting a model here selects
   the default runtime and applies that model to the next send, hiding the repository controls while keeping the mode bar visible.
   A model chosen from that catalog is remembered in local storage as the
@@ -733,14 +738,7 @@ the shimmer.
 - On Home and New conversation, selecting Code expands the input even
   with an empty or short draft. Both pages place the composer above the viewport's
   vertical center. The heading stays anchored while the composer expands downward,
-  with controls inside the composer. Only the plus attachment action stays on the
-  left of the bottom row. The right group contains mode/repository controls on
-  the Agents desktop composer, then the agent/model selector, dictation, and Send.
-  Home keeps mode and repository controls in its existing drawer below. Mode/repository
-  controls can wrap above the final model, dictation, and Send controls.
-  On mobile, grouped Auto/Chat/Code stays above the composer with repository
-  controls; both pickers open standard bottom drawers. Selecting Chat hides
-  repository controls without remounting the editor or losing the draft.
+  with model and send controls inside the composer. Only the plus attachment action stays on the left of the bottom row; the right group contains the agent/model selector, dictation, and Send. Home and full new-session views place mode and repository controls together in their shared row below the input. The compact phone list composer keeps grouped modes and repository controls in its upper drawer. Both pickers open standard bottom drawers. Selecting Chat hides repository controls without remounting the editor or losing the draft.
   Reduced-motion preferences disable the expansion animation. **Repository**
   (**Auto-detect** with a GitHub icon unless a default was saved) opens a searchable list:
   **Auto-detect**, then the repositories the signed-in user reaches
@@ -942,8 +940,7 @@ the shimmer.
 
 ## Routine run history
 
-On phones, Routines uses the shared header islands: Back to the previous page,
-its title, Search, and Create Routine actions stay above the list. Opening a routine replaces them with Back,
+On phones, the Routines list uses the shared hamburger drawer when opened from the Agents drawer, and Back when opened from elsewhere. Search and Create Routine actions remain above its in-page heading and count. Opening a routine replaces them with Back,
 the routine title, save status, and its action menu. Overview and Runs tabs remain
 in the page below the islands; desktop breadcrumbs and toolbar stay unchanged.
 
@@ -1084,13 +1081,14 @@ they never show a toast, browser or desktop alert, or phone push. Opening one
 opens the routine. The routine's own agent turn sends no "agent finished"
 notification; its questions still notify.
 
-The routines list shows **Failed** in failure color in the Status column while a
-routine's latest finished run failed, whether it is active, paused, or done; a
-run in progress still shows **Running**. The legacy Agents list shows **Last run
+A routine's card on the Routines page reads **Failed <when> · <why>** in failure
+color while its latest finished run failed (a red dot and the reason under
+Last run in the touch table); a run in progress reads **Running now**, and a
+routine that is off reads **Off**. The legacy Agents list shows **Last run
 failed** for the same routine. Verify by running a routine whose required app is
-disconnected: the row turns **Failed** and a "failed" notification appears in the
+disconnected: the card turns **Failed** and a "failed" notification appears in the
 inbox without an alert; reconnect and run again: a "finished" notification
-appears and the row returns to its normal status.
+appears and the card shows the new run.
 
 ## Legacy chats are read-only
 
@@ -1626,17 +1624,21 @@ credential is never exposed to the browser. Unsupported recording environments
 show a disabled microphone. Every supported browser uses Whisper; there are
 no browser speech-recognition or language-pack installation flows.
 
-While dictating, a scrolling microphone-volume timeline and **Cancel dictation** / **Use dictation**
-replace the composer controls. Cancel (or Escape) preserves the original draft.
+While dictating, a row covers the composer: **Cancel dictation** where + was,
+an Aa mark, a scrolling microphone-volume timeline, the elapsed time, and **Use
+dictation** drawn like Send. The row takes focus, so Enter or Space confirms and
+Escape cancels at every step. Cancel preserves the original draft.
 Bars sample microphone volume on a fixed timer (every 80ms), independent of recording chunks: silence stays dotted, louder speech
 creates taller bars, and earlier levels move left without changing height.
 Volume analysis stays on-device and stops on confirm, cancel, error, or close.
 Use dictation stops recording, waits for Whisper, and appends plain text to
 the draft without sending it. Existing rich text and attachments remain intact.
-If the browser stops listening on its own, **Ready** waits for confirmation.
-While **Finishing…**, the checkmark is disabled and Cancel remains available.
-No provider name or transcription hint appears below the composer; only the
-recording limit and failures do.
+If the browser stops listening at the limit, the row says **Limit reached** and
+waits for confirmation. While **Transcribing…**, the checkmark shows a spinner
+and Cancel remains available. A failed transcription is stated in the row and
+the checkmark becomes **Try transcribing again**. No provider name or
+transcription hint appears below the composer; notes there (no speech, a
+capture failure) clear after a few seconds or when the draft changes.
 Starting dictation in another composer releases the previous session without
 moving focus back to it. Closing the composer releases the microphone. Capture failures
 appear below the composer.
@@ -1645,10 +1647,9 @@ Whisper dictation supports WebM, MP4, and Ogg recording depending on browser.
 Recordings stop just before five minutes or near 8 MB and wait for confirmation.
 Cancel discards the recording; cancel during transcription aborts the request and
 ignores any late result. If the service is temporarily at capacity, the composer
-stays in **Finishing…** while TanStack retries up to twice with exponential backoff,
+stays in **Transcribing…** while TanStack retries up to twice with exponential backoff,
 jitter, and the server's `Retry-After` delay. Cancel also cancels these retries.
-Other failures keep the recording in memory for an explicit retry with the
-checkmark. No audio or transcript is stored in the query cache or persisted by the dictation
+Other failures keep the recording in memory for an explicit retry. No audio or transcript is stored in the query cache or persisted by the dictation
 endpoint. Provider diagnostics exclude response content. The server detects
 the audio container and inspects its duration before contacting OpenAI, requires a
 signed-in user (bots and internal callers are refused), and rate limits each
@@ -1662,7 +1663,7 @@ existing text sizing.
 
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
 - Model picker button showing the current model (e.g. `Gemini 3.8 Flash`). Paid plans list
-  `Sonnet 5.5`, `Opus 5.5`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`,
+  `Sonnet 5.5`, `Opus 5.5`, `Haiku 5.5`, `GPT-6 Astra`, `GPT-6.2 Sol`, `GPT-6 Luna`,
   and `Gemini 3.8 Flash`;
   in dev, heavy models carry a `2.5× usage` / `5× usage` hint.
   On the free plan everything but `Gemini 3.8 Flash` is
@@ -2531,7 +2532,7 @@ model triggers use a transparent round pill with a background only on hover,
 matching the production chat composer's proportions.
 
 Soup and recent-chat icons recognize the provider in the saved model ID even
-when that model is no longer selectable. For example, `openai/gpt-5.5` retains
+when that model is no longer selectable. For example, `openai/gpt-4o` retains
 the OpenAI logo; an unknown provider shows the standard chat icon instead of
 defaulting to Claude. A recognized per-chat selection takes precedence over the
 server model. New sends record that selection before navigation or a background
@@ -2676,10 +2677,16 @@ the caret after them, waiting for what to change.
 Ask the AI to find or reuse an existing booking link before creating another.
 `ListBookingLinks` returns personal links, current team IDs, full settings and
 shareable URLs (including paused links). It also supplies the revision used to
-protect edits from concurrent settings changes.
+protect edits from concurrent settings changes, and the connected accounts a
+personal link can book on: a draft's `emailLinkId` puts its bookings on that
+account's calendar, with invitations from its address. Saving refuses a newly
+chosen account you can't book on, and Google Meet newly asked of an account that
+can't add a video meeting; an unchanged choice whose account was removed since
+still saves, and that link takes no bookings until another account is chosen.
 
 Booking links are confirmed in conversation, with no special booking form. The AI
-first explains the proposed meeting details, ownership and named hosts, time zone,
+first explains the proposed meeting details, ownership and named hosts, the
+calendar account when it is not the primary one, time zone,
 availability and date exceptions, booking rules, guest questions and whether the
 link accepts bookings. It asks whether to proceed and waits for your reply before
 calling `CreateBookingLink` or `EditBookingLink`. An initial request to create a
@@ -2828,8 +2835,9 @@ attempting another send elsewhere. Review decisions produce durable system event
 for the same review ID. The card refreshes in place, with **Responding** below it
 until the agent starts its reply. This behaves the same on mobile. Approving an
 import plan only starts its write, so no **Responding** shows until the write
-ends; the card shows its final state and the agent's reply follows. A plan
-still being made when it was presented also wakes the agent once it is ready.
+ends; the card shows its final state and the agent's reply follows. Verify that
+sibling pages keep their review order while writing and after completion, even
+for a large plan staged together. A plan still being made when it was presented also wakes the agent once it is ready.
 These events create no user bubble; events without an existing card use a
 quiet timeline row.
 The agent can read final drafts and confirmed outcomes through **GetReview**.

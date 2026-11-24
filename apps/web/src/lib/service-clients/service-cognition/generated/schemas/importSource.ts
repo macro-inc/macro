@@ -16,4 +16,5 @@ export const ImportSource = {
   jira: 'jira',
   notion: 'notion',
   slack: 'slack',
+  hubspot: 'hubspot',
 } as const;

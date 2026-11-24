@@ -421,7 +421,9 @@ pub struct SearchGotoEmail {
     pub bcc: Vec<String>,
     /// The cc of the email
     pub cc: Vec<String>,
-    /// The labels of the email
+    /// The inbox holding the email
+    pub link_id: String,
+    /// The labels of the email, when the caller may read its inbox's labels
     pub labels: Vec<String>,
     /// The sent_at timestamp of the email
     pub sent_at: Option<chrono::DateTime<chrono::Utc>>,

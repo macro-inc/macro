@@ -16,10 +16,20 @@ through `crates/graphql_time_tracking`.
   start stops and saves the running timer.
 - `src/outbound/pg_time_repo.rs`: `time_entry`, `time_timer`, and the total.
 - `src/inbound/axum_router.rs`: the REST routes and the typed error body.
+- `src/domain/report.rs` + `report_service.rs`: reports over a period (a
+  project's tasks, the caller's time, the caller's team), their caps
+  (`MAX_PERIOD_DAYS`, `MAX_SCOPE_TASKS`, `MAX_EXPORT_ROWS`,
+  `MAX_EXPORT_BYTES`) and the CSV export; `src/outbound/pg_report_repo.rs`
+  and its `.sql` files hold the sums; `src/inbound/report_router.rs` serves
+  `GET /time/summary` and `GET /time/export`, merged into the `/time` router.
+- `src/inbound/toolset/`: `LogTime` and `ReadTimeEntries` for chat, channel
+  bots and MCP (feature `toolset`); code mode uses the SDK's `task.logTime`
+  and `task.timeEntries` and hides them.
 
 ## Scope
 
-- Owns: `time_entry`, `time_timer`, the `macro.time_entries` events, the
+- Owns: `time_entry`, `time_timer`, the reports over them, the
+  `macro.time_entries` events, the
   `time_logged` activity mapping (`domain/activity.rs`), the
   `time_tracking_changed` gateway hint, and the only writes of the Time logged
   system property (`0x16`).
@@ -29,11 +39,13 @@ through `crates/graphql_time_tracking`.
 ## Boundaries
 
 - Depends on: `entity_access` (receipts), `activity` (models only),
-  `system_properties`, `feature_flags` and `connection_gateway_client` (feature
-  `outbound`), `macro_event_broker`, `macro_event_topics`.
+  `system_properties` (the total, and a project's tasks for reports),
+  `feature_flags` and `connection_gateway_client` (feature `outbound`),
+  `ai_toolset` (feature `toolset`), `macro_event_broker`, `macro_event_topics`.
 - Used by: `services/document_storage_service` (the router, and the activity
   consumer's `TimeEntryMacroEvent` arm), `crates/soup_realtime` (the events,
-  mapped to a patch on the task), `crates/graphql_time_tracking`.
+  mapped to a patch on the task), `crates/graphql_time_tracking`, `ai_tools`
+  (the tools).
 
 ## Checks
 
@@ -51,8 +63,12 @@ through `crates/graphql_time_tracking`.
 - The day of an entry is chosen by the client (a timer's: its start in the
   stopping device's zone, UTC when none). Never derive it on read.
 - Writes need `enable-time-tracking` for the caller (`outbound/rollout.rs`);
-  a failed flag load is off. `document_storage_service` picks
-  `LocalTimeTracking` (always on) for the local environment only.
+  a failed flag load is off. `document_storage_service` and `ai_tools` pick
+  `LocalTimeTracking` (always on) for the local environment only, and
+  `ai_tools` picks `TimeTrackingOff` on a host without a flag client.
+- The tools mint the requesting user's receipt, never a bot's: the domain
+  takes the author from an authenticated-user receipt, so an agent's entry
+  is the person it acts for.
 - Events carry the task's new total and never the note. Two grouped consumers
   read the topic, both at `InitialOffset::Latest`: `soup_realtime` refreshes
   the task's row on every event, and DSS's activity consumer records one
@@ -70,7 +86,24 @@ through `crates/graphql_time_tracking`.
   and sent with the person in the request body (a failed request's error
   names its URL). Replayed logs, starts and stops and refused writes send
   nothing; a discard always sends one, since the repository does not say
-  whether a timer was there.
+  whether a timer was there. The agent tools send it too: `ai_tools` gives
+  them the same gateway adapter on the host's event broker tracker.
+- Reports resolve their scope first (a project's tasks from its Project
+  property, or the tasks the people logged on in the period), stop at 5,000
+  tasks (`complete: false`), keep the caller's visible ones in one
+  `generate_document_view_access_receipts` call, look up the live ones (and
+  their names, for the export) by id, then sum `time_entry` alone. The
+  access check keeps trashed documents; joining `"Document"` in the sums let
+  the planner hash the whole table.
+  Team is `team_user` read directly, as calendar's team view does: the
+  caller's teammates and the caller (a person has at most one team).
+- Summaries read the primary (`ReportRead::Latest`): the screens read them
+  again after each change, and the replica lags by seconds. Exports read the
+  replica. Every report transaction sets a five-second statement timeout and
+  `plan_cache_mode = force_custom_plan`: generic plans of these statements,
+  which take 1 to 5,000 ids and a grouping per request, read ten to eighty
+  times the rows on a 2-million-entry seed.
+- Reports, like a task's entry list, answer with the rollout off.
 
 ## Related
 

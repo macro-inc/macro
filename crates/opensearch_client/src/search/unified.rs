@@ -22,7 +22,10 @@ use crate::{
             DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
             DocumentSearchMode, DocumentTermMatching, PropertyFilterArg,
         },
-        emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
+        emails::{
+            EmailIndex, EmailLabelCondition, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig,
+            EmailTextCondition,
+        },
         model::{
             DefaultSearchResponse, Hit, MacroEm, SearchGotoCallRecord, SearchGotoChannel,
             SearchGotoContent, SearchGotoEmail, SearchHit, exclude_source_content,
@@ -118,12 +121,18 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             cc: args.email_search_args.cc,
             bcc: args.email_search_args.bcc,
             recipients: args.email_search_args.recipients,
+            label_link_ids: args.email_search_args.label_link_ids,
             include_labels: args.email_search_args.include_labels,
             exclude_labels: args.email_search_args.exclude_labels,
             importance: args.email_search_args.importance,
             subject_only: args.email_search_args.subject_only,
             tag_option_ids: args.email_search_args.tag_option_ids,
             match_all_tags: args.email_search_args.match_all_tags,
+            text_conditions: args.email_search_args.text_conditions,
+            label_conditions: args.email_search_args.label_conditions,
+            exclude_thread_ids: args.email_search_args.exclude_thread_ids,
+            sent_after_millis: args.email_search_args.sent_after_millis,
+            sent_before_millis: args.email_search_args.sent_before_millis,
         }
     }
 }
@@ -264,12 +273,23 @@ pub struct UnifiedEmailSearchArgs {
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
     pub recipients: Vec<String>,
+    /// The inboxes whose labels the caller may read: their own and the ones
+    /// they manage. Labels match, and come back on a hit, only in these.
+    pub label_link_ids: Vec<String>,
     pub include_labels: Vec<String>,
     pub exclude_labels: Vec<String>,
     pub importance: Option<bool>,
     pub subject_only: bool,
     pub tag_option_ids: Vec<String>,
     pub match_all_tags: bool,
+    pub text_conditions: Vec<EmailTextCondition>,
+    pub label_conditions: Vec<EmailLabelCondition>,
+    /// Threads no hit may belong to.
+    pub exclude_thread_ids: Vec<String>,
+    /// Only messages sent at or after this time, in epoch milliseconds.
+    pub sent_after_millis: Option<i64>,
+    /// Only messages sent before this time, in epoch milliseconds.
+    pub sent_before_millis: Option<i64>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -641,6 +661,7 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                         email_message_id: a.message_id,
                         bcc: a.bcc,
                         cc: a.cc,
+                        link_id: a.link_id,
                         labels: a.labels,
                         sent_at: millis_to_datetime(a.sent_at_millis),
                         sender: a.sender,
@@ -898,6 +919,19 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     Ok(search_request_builder.build())
 }
 
+/// Leaves the labels on an email hit only when the caller may read its
+/// inbox's labels: a thread shared from someone else's inbox comes back
+/// without the labels its owner made.
+fn keep_readable_labels(results: &mut [SearchHit], label_link_ids: &[String]) {
+    for hit in results {
+        if let Some(SearchGotoContent::Emails(goto)) = &mut hit.goto
+            && !label_link_ids.contains(&goto.link_id)
+        {
+            goto.labels.clear();
+        }
+    }
+}
+
 /// Trim a page of top-level OpenSearch hits and derive the next cursor.
 ///
 /// The query fetches `page_size + 1` *top-level* hits — one per parent entity
@@ -1045,7 +1079,8 @@ pub(crate) async fn search_unified(
         "opensearch response"
     );
 
-    let (results, cursor) = paginate_unified_hits(result.hits.hits, args.page_size as usize);
+    let (mut results, cursor) = paginate_unified_hits(result.hits.hits, args.page_size as usize);
+    keep_readable_labels(&mut results, &args.email_search_args.label_link_ids);
 
     Ok((results, cursor))
 }

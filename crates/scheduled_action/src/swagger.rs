@@ -62,6 +62,7 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
         crate::inbound::axum_router::delete_action,
         crate::inbound::axum_router::detach_action,
         crate::inbound::axum_router::execute_action,
+        crate::inbound::axum_router::stop_run,
         crate::inbound::axum_router::list_history,
         crate::inbound::axum_router::list_code_upgrades,
         crate::inbound::axum_router::list_unusable_items,

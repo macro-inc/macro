@@ -1,3 +1,4 @@
+import { createScreenUserCardAction } from '@app/features/agent-screen/screen-user-action';
 import { createCrmUserCardAction } from '@app/features/crm/crm-user-action';
 import { createBotSettingsUserCardAction } from '@app/features/settings/bot-settings-user-action';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -31,6 +32,7 @@ type UserCardActionId =
   | 'open-contact'
   | 'open-settings'
   | 'dm'
+  | 'view-screen'
   | 'assign-task';
 
 export type UserCardAction = {
@@ -84,6 +86,7 @@ export function useUserCardActions(
 
   const contactAction = createCrmUserCardAction(() => target().email);
   const settingsAction = createBotSettingsUserCardAction(userId);
+  const screenAction = createScreenUserCardAction(userId);
 
   const copyAction = (
     id: UserCardActionId,
@@ -156,6 +159,9 @@ export function useUserCardActions(
         onSelect: openDirectMessage,
       });
     }
+
+    const screen = screenAction();
+    if (screen) actions.push(screen);
 
     if (canTreatAsUser()) {
       actions.push({

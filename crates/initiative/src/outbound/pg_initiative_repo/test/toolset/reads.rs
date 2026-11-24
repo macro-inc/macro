@@ -32,7 +32,7 @@ impl InitiativeResources for VisibleResources {
         );
         Box::pin(async move {
             Ok(properties
-                .project_task_ids(id.as_uuid())
+                .project_task_ids(id.as_uuid(), None)
                 .await
                 .expect("project tasks"))
         })

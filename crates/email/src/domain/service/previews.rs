@@ -118,14 +118,15 @@ where
         let frecency_scores = get_frecency_scores(
             &self.frecency_service,
             include_frecency,
-            macro_id,
+            macro_id.copied(),
             ids.as_slice(),
         );
 
         let (attachment_map_result, participant_result, labels_result, frecency_scores) = tokio::join!(
             self.email_repo.attachments_by_thread_ids(&thread_ids),
             self.email_repo.contacts_by_thread_ids(&thread_ids),
-            self.email_repo.labels_by_thread_ids(&thread_ids),
+            self.email_repo
+                .labels_by_thread_ids(&thread_ids, Some(&macro_id)),
             frecency_scores,
         );
 

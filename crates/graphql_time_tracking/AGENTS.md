@@ -16,14 +16,18 @@ routes in `crates/time_tracking` instead.
   entries), and the viewer's `GraphqlTimeTracking`.
 - `src/loaders.rs`: `TimeEntriesLoader` behind the `timeEntries` edge that
   `complete_graph` composes onto `GraphqlSoupDocument`.
+- `src/reports.rs`: `GraphqlUser.timeSummary(input)` (composed in
+  `complete_graph`) over `TimeReportGraphqlContext`, which mints the
+  project's view receipt; task keys resolve to the task through
+  `PrimarySoupItemLoader`. Exports stay on REST, which the web downloads.
 - `src/lib.rs` `graphql_error`: error codes the web reads (`NOT_FOUND`,
   `FORBIDDEN`, `NOT_AUTHOR`, `BAD_USER_INPUT`, `TIMER_OVER_LIMIT` with the
   timer in the `timer` extension, `CONFLICT`, `UNAVAILABLE`).
 
 ## Scope
 
-- Owns: GraphQL types, inputs, the viewer read, the entries edge and the
-  mutations for time entries and the running timer.
+- Owns: GraphQL types, inputs, the viewer read, the entries edge, the
+  mutations for time entries and the running timer, and time summaries.
 - Not here: rules and storage → `crates/time_tracking`; the edge's mount on
   documents and `GraphqlUser.timeTracking` → `crates/complete_graph`.
 

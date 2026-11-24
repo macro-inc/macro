@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE crm_companies SET manually_created = TRUE WHERE id = $1 AND team_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fe31d6b9acb9a557a94569ff59212ba61f99f6c177785e39998ef8502bc62f3a"
+}

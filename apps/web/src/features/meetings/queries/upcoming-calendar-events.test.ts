@@ -1,3 +1,12 @@
+import type { CacheHost } from '@graphql-cache/index';
+import { mapCalendarOccurrence as restItem } from '@queries/calendar/graphql/map';
+import { CALENDAR_CACHE_READ_DEADLINE_MS } from '@queries/calendar/graphql/readiness';
+import { setActiveCalendarSyncController } from '@queries/calendar/graphql/sync-controller';
+import { fakeCalendarCache } from '@queries/calendar/graphql/tests/fake-calendar-cache';
+import {
+  graphqlEvent,
+  graphqlOccurrence,
+} from '@queries/calendar/graphql/tests/fixtures';
 import { invalidateCalendarOccurrences } from '@queries/calendar/occurrences';
 import { storageServiceClient } from '@service-storage/client';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
@@ -16,8 +25,9 @@ vi.mock('@service-storage/client', () => ({
   storageServiceClient: { listCalendarOccurrences: vi.fn() },
 }));
 
+let cacheHost: CacheHost | undefined;
 vi.mock('@queries/calendar/graphql/flag', () => ({
-  useGraphqlCalendarHost: () => () => undefined,
+  useGraphqlCalendarHost: () => () => cacheHost,
   markCalendarCacheUnsupported: vi.fn(),
 }));
 
@@ -125,6 +135,9 @@ beforeEach(() => {
 afterEach(() => {
   for (const dispose of disposers.splice(0)) dispose();
   client.clear();
+  cacheHost = undefined;
+  setActiveCalendarSyncController(undefined);
+  vi.useRealTimers();
 });
 
 describe('upcoming calendar events source', () => {
@@ -361,5 +374,109 @@ describe('upcoming calendar events source', () => {
     setUserId('macro|other@example.com');
     expect(result.events()).toEqual([]);
     expect(result.loading()).toBe(true);
+  });
+});
+
+function cachedOccurrence(day: number, title: string) {
+  const startsAt = new Date(2026, 8, 23 + day, 13).toISOString();
+  const endsAt = new Date(2026, 8, 23 + day, 14).toISOString();
+  const id = `cached-${day}`;
+  const time = {
+    __typename: 'GraphqlTimedEventTime' as const,
+    startsAt,
+    endsAt,
+    timeZone: null,
+  };
+  return graphqlOccurrence({
+    id: `${id}:${startsAt}`,
+    eventId: id,
+    occurrenceKey: startsAt,
+    time,
+    event: graphqlEvent({
+      id,
+      title,
+      calendarId: source.id,
+      sources: [],
+      eventType: 'DEFAULT',
+      recurrenceLines: [],
+      attendees: [],
+      time,
+    }),
+  });
+}
+
+/**
+ * The agenda read from a current calendar cache, with REST as the server, and
+ * the guest's cancellation: the server deletes the booking and pokes the tab.
+ */
+async function cachedAgendaWithBooking() {
+  const meeting = cachedOccurrence(1, 'Standup');
+  const booking = cachedOccurrence(2, 'Booking');
+  const cache = fakeCalendarCache([meeting, booking]);
+  cacheHost = cache.host;
+  setActiveCalendarSyncController(cache.controller);
+  let onServer = [meeting, booking];
+  list.mockImplementation(async ({ start, end }) =>
+    ok({
+      items: onServer
+        .filter(
+          (occurrence) =>
+            occurrence.time.__typename === 'GraphqlTimedEventTime' &&
+            occurrence.time.startsAt < end &&
+            occurrence.time.endsAt > start
+        )
+        .map(restItem),
+      hasMore: false,
+      syncStatus: 'ready',
+    })
+  );
+  await cache.controller.runDelta();
+  const { result } = setup();
+  const titles = () => result.events().map((event) => event.title);
+  await vi.waitFor(() => expect(titles()).toEqual(['Standup', 'Booking']));
+  expect(list).not.toHaveBeenCalled();
+  const cancelBooking = () => {
+    onServer = [meeting];
+    cache.deleteOnServer(booking.eventId);
+    return invalidateCalendarOccurrences();
+  };
+  return { cache, titles, cancelBooking };
+}
+
+describe('upcoming calendar events from the calendar cache', () => {
+  it('drops a booking the guest cancelled once the poke brings the cache forward', async () => {
+    const { cache, titles, cancelBooking } = await cachedAgendaWithBooking();
+
+    await cancelBooking();
+
+    await vi.waitFor(() => expect(titles()).toEqual(['Standup']));
+    expect(list).not.toHaveBeenCalled();
+    cache.controller.dispose();
+  });
+
+  it('drops a booking the guest cancelled when the delta for the poke fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { cache, titles, cancelBooking } = await cachedAgendaWithBooking();
+
+    cache.delta.mode = 'fail';
+    await cancelBooking();
+
+    await vi.waitFor(() => expect(titles()).toEqual(['Standup']));
+    cache.controller.dispose();
+    warn.mockRestore();
+  });
+
+  it('drops a booking the guest cancelled while the delta for the poke is held', async () => {
+    const { cache, titles, cancelBooking } = await cachedAgendaWithBooking();
+    vi.useFakeTimers();
+
+    cache.delta.mode = 'hold';
+    const poke = cancelBooking();
+    await vi.advanceTimersByTimeAsync(2 * CALENDAR_CACHE_READ_DEADLINE_MS);
+
+    await vi.waitFor(() => expect(titles()).toEqual(['Standup']));
+    cache.release();
+    await poke;
+    cache.controller.dispose();
   });
 });

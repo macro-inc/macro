@@ -5,6 +5,7 @@ pub(crate) mod test;
 
 mod association;
 mod company_contacts;
+mod company_domains;
 mod contact_filing;
 mod contact_listing;
 mod contact_update;
@@ -669,6 +670,15 @@ impl CompaniesRepositoryImpl {
                   -- A further address is one somebody attached to this
                   -- contact, whatever company its domain belongs to.
                   OR LOWER(BTRIM(ct.email)) IS DISTINCT FROM ce.email
+                  -- The team's only holder of the address, whatever domains
+                  -- its company holds now: a domain removed from the company
+                  -- leaves its contacts there, and teardown must reach them.
+                  OR NOT EXISTS (
+                      SELECT 1 FROM crm_contact_emails other_email
+                      JOIN crm_contacts other ON other.id = other_email.contact_id
+                      WHERE other_email.email = $2 AND other.team_id = $1
+                        AND other.id <> ct.id
+                  )
               )
               AND (NOT $4 OR (SELECT COUNT(*) FROM crm_contact_emails other_email
                    JOIN crm_contacts other ON other.id = other_email.contact_id
@@ -2489,6 +2499,17 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         include_hidden: bool,
     ) -> Result<CrmContact, CrmError> {
         self.update_contact_details(team_id, contact_id, update, include_hidden)
+            .await
+    }
+
+    async fn update_company_domains(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        update: &crate::domain::company_domains::CompanyDomainUpdate,
+        editor: crate::domain::company_domains::CompanyDomainEditor,
+    ) -> Result<CrmCompanyWithContacts, CrmError> {
+        self.update_company_domain_rows(team_id, company_id, update, editor)
             .await
     }
 

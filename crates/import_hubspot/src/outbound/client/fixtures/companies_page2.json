@@ -1,0 +1,4 @@
+{"results": [
+  {"id": "5003", "properties": {"name": "Gmail person", "domain": "gmail.com", "website": null}, "archived": false},
+  {"id": "not-a-number", "properties": {"name": "Broken"}, "archived": false}
+]}

@@ -2868,6 +2868,42 @@ export type SandboxSizeBody = {
 };
 
 /**
+ * A single-use screen ticket.
+ */
+export type ScreenTicket = {
+    /**
+     * When it stops working, a minute after it was issued.
+     */
+    expiresAt: string;
+    /**
+     * The ticket, for the socket's `ticket` query parameter. Works once.
+     */
+    ticket: string;
+    /**
+     * The socket's path under the agent harness service.
+     */
+    url: string;
+};
+
+/**
+ * `POST /computers/{harness_id}/screen/tickets` body.
+ */
+export type ScreenTicketRequest = {
+    /**
+     * `view` (watch) or `drive` (watch, and take over when free).
+     */
+    mode: string;
+    /**
+     * What to show: `desktop`.
+     */
+    surface: string;
+    /**
+     * How the screen reaches the browser.
+     */
+    transport: string;
+};
+
+/**
  * Only the selected type's fields can appear in a search suggestion.
  */
 export type SearchSuggestions = (QuerySearchSuggestions & {
@@ -5032,6 +5068,31 @@ export type ListCodingAgentsResponses = {
 };
 
 export type ListCodingAgentsResponse = ListCodingAgentsResponses[keyof ListCodingAgentsResponses];
+
+export type CreateComputerScreenTicketData = {
+    body: ScreenTicketRequest;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/computers/{harness_id}/screen/tickets';
+};
+
+export type CreateComputerScreenTicketErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+    429: unknown;
+};
+
+export type CreateComputerScreenTicketResponses = {
+    200: ScreenTicket;
+};
+
+export type CreateComputerScreenTicketResponse = CreateComputerScreenTicketResponses[keyof CreateComputerScreenTicketResponses];
 
 export type GetClaudeModeData = {
     body?: never;

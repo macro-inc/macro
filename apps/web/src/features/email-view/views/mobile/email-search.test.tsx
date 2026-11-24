@@ -3,8 +3,8 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createEmailSearchSuggestions } from '../../search/create-email-search-suggestions';
 import {
-  EmailMobileRecentSearches,
   EmailMobileSearchField,
+  EmailMobileSearchSuggestions,
 } from './email-search';
 
 afterEach(cleanup);
@@ -26,6 +26,7 @@ function renderPage(initialSearch = '') {
       userId: () => 'user-a',
       search,
       setSearch,
+      scopeAvailable: () => true,
     });
     return (
       <>
@@ -38,7 +39,7 @@ function renderPage(initialSearch = '') {
           suggestions={suggestions}
           onCancel={onCancel}
         />
-        <EmailMobileRecentSearches
+        <EmailMobileSearchSuggestions
           suggestions={suggestions}
           onPicked={() => input?.blur()}
         />
@@ -99,6 +100,39 @@ it('clears the field without leaving it, and Cancel or Escape leaves the page', 
   // Android Back arrives as this Escape; it must be marked handled.
   expect(fireEvent.keyDown(field, { key: 'Escape' })).toBe(false);
   expect(onCancel).toHaveBeenCalledTimes(2);
+});
+
+it('finishes a picked view as text in the field, marked as an operator, and keeps the keyboard up', () => {
+  const { field, search } = renderPage();
+  // The operators drawn behind the field, not the rows under it.
+  const drawnInField = () =>
+    field.parentElement?.querySelector('[data-search-operator]');
+  field.focus();
+  fireEvent.input(field, { target: { value: 'invoice in:se' } });
+  expect(drawnInField()).toBeNull();
+
+  fireEvent.click(screen.getByRole('option', { name: 'in:sent' }));
+  expect(search()).toBe('invoice in:sent ');
+  expect(document.activeElement).toBe(field);
+  expect((field as HTMLInputElement).value).toBe('invoice in:sent ');
+  expect(drawnInField()?.textContent).toBe('in:sent');
+
+  // Ordinary text: deleting into the operator unmarks it.
+  fireEvent.input(field, { target: { value: 'invoice in:sen' } });
+  expect(drawnInField()).toBeNull();
+});
+
+it('picks a listed view from a hardware keyboard and keeps the keyboard up', () => {
+  const { field, search } = renderPage();
+  field.focus();
+  fireEvent.input(field, { target: { value: 'invoice in:s' } });
+
+  // Signal, Sent, Shared: the second row is Sent.
+  fireEvent.keyDown(field, { key: 'ArrowDown' });
+  fireEvent.keyDown(field, { key: 'ArrowDown' });
+  fireEvent.keyDown(field, { key: 'Enter' });
+  expect(search()).toBe('invoice in:sent ');
+  expect(document.activeElement).toBe(field);
 });
 
 it('remembers the search it is left with', () => {

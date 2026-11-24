@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT computer_id FROM computer_screen_driver_leases WHERE expires_at <= now() LIMIT 500",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5a65d9858793911d9f7da3c1ef9140d386995f0ce07d69bedecea6ac80aebc2d"
+}

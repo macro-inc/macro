@@ -1,9 +1,13 @@
 // The people the bench generates suggestions for. Each persona is a folder:
 // `workspace.json` (a seed scenario without mail: users, team, projects,
-// documents, tasks, channels, calls), `inbox.json` (100 messages as a mail
-// provider lists them, labels included) and the answer keys,
-// `feed-truth.json` and `routines-truth.json`. The tune personas live in
-// `personas/`; held-out ones live outside the repository (see heldout.ts).
+// documents, tasks, channels, calls), `inbox.json` (their mail as a mail
+// provider lists it, labels included) and the answer keys,
+// `feed-truth.json` and `routines-truth.json`. Most have 100 messages; a
+// month persona (month.ts) has 30 days of mail, up to 500 messages, text
+// only for the newest 100, an owner-only workspace, no feed key, and a
+// third key, `streams-truth.json`: every stream its mail was written from.
+// The tune personas live in `personas/`; held-out ones live outside the
+// repository (see heldout.ts).
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -22,7 +26,16 @@ export type InboxMessage = {
   date: string;
   subject: string;
   labels: string[];
+  /** The body's opening; empty in a month persona's messages older than its newest 100. */
   snippet: string;
+  /** In a month persona, the stream of `streams-truth.json` it was written for. */
+  stream?: string;
+};
+
+/** A message the owner sent: `from` is the owner, its one label SENT. */
+export type SentMessage = InboxMessage & {
+  /** Its stream's `does`: a reply, a forward, or mail they start themselves. */
+  kind: 'reply' | 'forward' | 'new';
 };
 
 export type Inbox = {
@@ -31,6 +44,12 @@ export type Inbox = {
   /** The owner's time zone, which generations are started in. */
   timezone: string;
   messages: InboxMessage[];
+  /**
+   * A month persona written with sent mail (from `mdev2` on): what the owner
+   * sent in the same window, newest first. Never seeded: the provider's sent
+   * folder is read through the stand-in alone.
+   */
+  sent?: SentMessage[];
 };
 
 /** Something a good feed brings up, and what it should say. */
@@ -51,6 +70,8 @@ export type RoutineNeed = {
   drafted?: string;
   /** Sidebars it belongs in, best first. */
   surfaces: string[];
+  /** In a month persona's key, the streams whose mail shows it. */
+  streams?: string[];
 };
 /** A routine that looks plausible for this person but that they wouldn't keep. */
 export type RoutineDecoy = { id: string; what: string; why: string; catalog?: string[] };
@@ -62,6 +83,41 @@ export type RoutineDecoy = { id: string; what: string; why: string; catalog?: st
  * time; a drafted routine is the judge's call.
  */
 export type RoutinesTruth = { needs: RoutineNeed[]; decoys: RoutineDecoy[]; fine: string[]; misfit: string[] };
+
+/**
+ * One stream of a month persona's mail: `work` is recurring mail the person
+ * acts on (what a finding step should name), `noise` recurring mail they
+ * read or ignore, `thread` a one-off conversation about one matter.
+ */
+export type MailStream = {
+  id: string;
+  kind: 'work' | 'noise' | 'thread';
+  name: string;
+  senders: { name: string; email: string }[];
+  /** Messages of it in the 30 days, as written. */
+  count: number;
+  cadence: string;
+  /** What each message says. */
+  what: string;
+  /** What the person does with it, and who else handles it. */
+  action: string;
+  /**
+   * Written with sent mail: what they do with each message, in one word
+   * (`answers`, `forwards`, `files`, `leaves` to a colleague or tool,
+   * `nothing`, or `sends`: mail they start themselves), and to whom.
+   */
+  does?: Does;
+  to?: string[];
+  /** Messages of it they sent in the 30 days, as written. */
+  sent?: number;
+  labels: string[];
+  /** A few of its subjects, newest first. */
+  examples: string[];
+};
+export type StreamsTruth = { streams: MailStream[] };
+
+export const DOES = ['answers', 'forwards', 'files', 'leaves', 'nothing', 'sends'] as const;
+export type Does = (typeof DOES)[number];
 
 export type Persona = {
   name: string;
@@ -76,6 +132,8 @@ export type Persona = {
   inbox: Inbox;
   feedTruth?: FeedTruth;
   routinesTruth?: RoutinesTruth;
+  /** A month persona's streams key. */
+  streamsTruth?: StreamsTruth;
 };
 
 // A held-out writer makes addresses from first names, so one may carry an
@@ -140,7 +198,8 @@ function load(dir: string, name: string, heldout: boolean): Persona {
   if (!workspace || !inbox) throw new Error(`${dir} lacks workspace.json or inbox.json`);
   const feedTruth = readJson<FeedTruth>(join(dir, 'feed-truth.json'));
   const routinesTruth = readJson<RoutinesTruth>(join(dir, 'routines-truth.json'));
-  const spelled = asciiSpellings([workspace, inbox, feedTruth, routinesTruth]);
+  const streamsTruth = readJson<StreamsTruth>(join(dir, 'streams-truth.json'));
+  const spelled = asciiSpellings([workspace, inbox, feedTruth, routinesTruth, streamsTruth]);
   return {
     name,
     seat: 1,
@@ -150,11 +209,40 @@ function load(dir: string, name: string, heldout: boolean): Persona {
     inbox: spellAddresses(inbox, spelled),
     feedTruth: spellAddresses(feedTruth, spelled),
     routinesTruth: spellAddresses(routinesTruth, spelled),
+    streamsTruth: spellAddresses(streamsTruth, spelled),
   };
 }
 
 /** What a generation for `persona` reads (its workspace and mail, as spelled here), as a short digest a rejudge checks it reads the same. */
 export const personaDigest = (persona: Persona) => Bun.hash(JSON.stringify([persona.workspace, persona.inbox])).toString(36);
+
+/** What `persona`'s attempts are scored against (its answer keys, as spelled here), as a short digest two runs compare. */
+export const keyDigest = (persona: Persona) => Bun.hash(JSON.stringify([persona.routinesTruth ?? null, persona.feedTruth ?? null, persona.streamsTruth ?? null])).toString(36);
+
+/** `keyDigest` of each of `people`, by name. */
+export const keyDigests = (people: Persona[]) => Object.fromEntries(people.map((persona) => [persona.name, keyDigest(persona)]));
+
+/** How the bench names `persona` in what it prints: a held-out person never by name. */
+export const who = (persona: Pick<Persona, 'name' | 'heldout'>) => (persona.heldout ? 'a held-out person' : persona.name);
+
+/**
+ * `text` with what names held-out `persona` cut out: their name (and so
+ * their scenario's), and each workspace user's and the mail owner's address,
+ * its local part and domain, and their names. A tune persona's text is kept.
+ */
+export function unnamedPersona(persona: Persona, text: string): string {
+  if (!persona.heldout) return text;
+  const addresses = [persona.inbox.owner.email, ...Object.values(persona.workspace.users).map((user) => user.email)];
+  const users = Object.values(persona.workspace.users) as { name?: string; first_name?: string; last_name?: string }[];
+  const words = [
+    persona.name,
+    ...addresses.flatMap((address) => [address, ...address.split('@')]),
+    ...[persona.inbox.owner.name, ...users.flatMap((user) => [user.name, user.first_name, user.last_name])].flatMap((name) => (name ?? '').split(/\s+/)),
+  ]
+    .filter((word) => word && word.length > 1)
+    .sort((a, b) => b.length - a.length);
+  return [...new Set(words)].reduce((out, word) => out.replace(new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), () => '…'), text);
+}
 
 /** A set's people: its folders, leaving out the hidden ones a held-out writer is still filling. */
 export const folders = (root: string) =>
@@ -172,7 +260,7 @@ export function personas(set: 'tune' | string): Persona[] {
   const listed = join(root, 'people.json');
   if (existsSync(listed)) {
     const missing = (JSON.parse(readFileSync(listed, 'utf8')) as { slug: string }[]).map((person) => person.slug).filter((slug) => !existsSync(join(root, slug)));
-    if (missing.length) throw new Error(`held-out set ${set} is not finished (${missing.join(', ')}); run heldout make ${set} again first`);
+    if (missing.length) throw new Error(`held-out set ${set} is not finished (${missing.length} people not written); run heldout make ${set} again first`);
   }
   const found = folders(root).map((name) => load(join(root, name), name, true));
   if (!found.length) throw new Error(`no held-out set ${set} in ${HELDOUT_DIR}; make one with \`heldout make\``);
@@ -197,13 +285,25 @@ export const seatOf = (persona: Persona, seat: number): Persona => ({ ...persona
 const seatTag = (persona: Persona) => ((persona.seat ?? 1) > 1 ? `-s${persona.seat}` : '');
 
 /** The persona as `variant`: its own scenario name, and the signup copy's and later seats' addresses moved to a domain of their own. */
-function variantOf(persona: Persona, variant: Variant): Persona {
+export function variantOf(persona: Persona, variant: Variant): Persona {
   const tag = `${seatTag(persona)}${variant === 'signup' ? '-signup' : ''}`;
   if (!tag) return persona;
   const domain = domainOf(persona.inbox.owner.email);
   const moved = domain.replace(/\.example$/, `${tag}.example`);
-  const rename = <T>(value: T): T => JSON.parse(JSON.stringify(value).replaceAll(`@${domain}`, `@${moved}`));
+  // Not inside a longer domain, as `asWritten` reads it back: no letter, digit or hyphen follows, nor a dot and one.
+  const at = new RegExp(`@${domain.replaceAll('.', '\\.')}(?![A-Za-z0-9-]|\\.[A-Za-z0-9-])`, 'g');
+  const rename = <T>(value: T): T => JSON.parse(JSON.stringify(value).replace(at, `@${moved}`));
   return { ...persona, inbox: rename(persona.inbox), workspace: rename(persona.workspace) };
+}
+
+/** `text` with every seat's and copy's addresses as the persona was written: its answer keys name those. */
+export function asWritten(persona: Persona, text: string): string {
+  const domain = domainOf(persona.inbox.owner.email);
+  // A domain is letters, digits, hyphens and dots: only a dot is special in a pattern.
+  const name = domain.replace(/\.example$/, '').replaceAll('.', '\\.');
+  // Not inside a longer domain: no letter, digit or hyphen follows, nor a dot and one.
+  // Any case: an address's domain is case-insensitive, and a model may spell it in capitals.
+  return text.replace(new RegExp(`@${name}(?:-s\\d+)?(?:-signup)?\\.example(?![A-Za-z0-9-]|\\.[A-Za-z0-9-])`, 'gi'), `@${domain}`);
 }
 
 /** The scenario name the seed CLI marks a variant's rows with. */
@@ -281,7 +381,7 @@ export function scenario(persona: Persona, variant: Variant, now: number): Recor
   const workspace = contentKeys(shiftAll(copy.workspace, days), days);
   const inbox = shiftAll(copy.inbox, days);
   const ownerKey = Object.entries(workspace.users).find(([, user]) => user.email === inbox.owner.email)?.[0];
-  if (!ownerKey) throw new Error(`${persona.name}: no user with the inbox owner's address`);
+  if (!ownerKey) throw new Error(`${who(persona)}: no user with the inbox owner's address`);
   const threads = Object.fromEntries(
     inbox.messages.map((message, index) => {
       const head = [
@@ -314,28 +414,84 @@ export function scenario(persona: Persona, variant: Variant, now: number): Recor
   return { ...workspace, scenario: name, emails };
 }
 
+/** What the routines brief reads at most of the newest mail (`INBOX_MESSAGES` in scheduled_action). */
+export const RECENT_MESSAGES = 100;
+/** The month read: messages of the last `WINDOW_DAYS` days, at most `WINDOW_MESSAGES`, text for the newest `WINDOW_TEXTS`. */
+export const WINDOW_DAYS = 30;
+export const WINDOW_MESSAGES = 500;
+export const WINDOW_TEXTS = 100;
+/** The longest text the month read asks for (`SNIPPET_CHARS` in agent_harness_service's routine suggestions). */
+export const WINDOW_SNIPPET_CHARS = 500;
+/** The sent read: the owner's sent mail of the same `WINDOW_DAYS` days, at most `SENT_MESSAGES`, text for the newest `SENT_TEXTS`. */
+export const SENT_MESSAGES = 200;
+export const SENT_TEXTS = 50;
+
+/** `text`'s first `max` characters, as Rust counts them. */
+const chars = (text: string, max: number) => [...text].slice(0, max).join('');
+/** How long before the anchor `message` came, to the millisecond and at least a minute. */
+const msBefore = (message: InboxMessage) => Math.max(60_000, ANCHOR - Date.parse(message.date));
+
 /**
- * What email_service's `/internal/recent_messages/{user}` answers for the
- * owner at `now`, newest first: the routines brief reads the mailbox from
- * the provider, which the seed CLI never fills, so the bench's stand-in
- * serves this instead.
+ * The owner's inbox (or, with `folder` "sent", their sent mail) at `now` as
+ * email_service answers it, newest first, before any limit: Gmail and
+ * Outlook are read one folder at a time.
  */
-export function recentMessages(persona: Persona, variant: Variant, now: number) {
+function served(persona: Persona, variant: Variant, now: number, folder: 'inbox' | 'sent' = 'inbox') {
   const copy = variantOf(persona, variant);
   const inbox = shiftAll(copy.inbox, shiftDays(now));
-  const messages = inbox.messages
+  const written = folder === 'sent' ? persona.inbox.sent ?? [] : persona.inbox.messages;
+  return (folder === 'sent' ? inbox.sent ?? [] : inbox.messages)
     .map((message, index) => ({
       inbox: inbox.owner.email,
       from: { email: message.from.email, name: message.from.name },
       to: message.to,
       cc: message.cc,
-      subject: message.subject.slice(0, 200),
-      snippet: message.snippet.slice(0, 500),
-      received_at: new Date(now - minutesBefore(persona.inbox.messages[index]) * 60_000).toISOString(),
+      subject: chars(message.subject, 200),
+      snippet: chars(message.snippet, WINDOW_SNIPPET_CHARS) as string | null,
+      received_at: new Date(now - msBefore(written[index])).toISOString(),
       labels: message.labels,
     }))
+    .filter((message) => message.labels.includes(folder === 'sent' ? 'SENT' : 'INBOX'))
     .sort((a, b) => b.received_at.localeCompare(a.received_at));
-  return { messages };
+}
+
+/**
+ * What email_service's `/internal/recent_messages/{user}` answers for the
+ * owner at `now`, newest first: the routines brief reads the mailbox from
+ * the provider, which the seed CLI never fills, so the bench's stand-in
+ * serves this instead. It asks for the newest `RECENT_MESSAGES`.
+ */
+export function recentMessages(persona: Persona, variant: Variant, now: number) {
+  return { messages: served(persona, variant, now).slice(0, RECENT_MESSAGES) };
+}
+
+/**
+ * What the same route answers when asked for the last `WINDOW_DAYS` days:
+ * up to `WINDOW_MESSAGES` messages, newest first, with text (the snippet)
+ * only on the newest `WINDOW_TEXTS`.
+ */
+export function windowMessages(persona: Persona, variant: Variant, now: number) {
+  return { messages: windowOf(served(persona, variant, now), now, WINDOW_MESSAGES, WINDOW_TEXTS) };
+}
+
+/**
+ * What the route answers for the owner's sent mail of the last `WINDOW_DAYS`
+ * days (`folder=sent`): up to `SENT_MESSAGES`, newest first, text on the
+ * newest `SENT_TEXTS`. None for a person written without sent mail.
+ */
+export function sentMessages(persona: Persona, variant: Variant, now: number) {
+  return { messages: windowOf(served(persona, variant, now, 'sent'), now, SENT_MESSAGES, SENT_TEXTS) };
+}
+
+/** Whether `persona` was written with sent mail, which a build that reads it can read. */
+export const hasSent = (persona: Persona) => !!persona.inbox.sent?.length;
+
+function windowOf<T extends { received_at: string; snippet: string | null }>(messages: T[], now: number, limit: number, texts: number) {
+  const since = new Date(now - WINDOW_DAYS * 24 * 60 * 60_000).toISOString();
+  return messages
+    .filter((message) => message.received_at >= since)
+    .slice(0, limit)
+    .map((message, index) => (index < texts ? message : { ...message, snippet: null }));
 }
 
 /** The persona's answer keys with their dates moved to now, as the judge reads them. */

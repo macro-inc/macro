@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
   type Accessor,
@@ -113,6 +114,16 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
     setRetainedAssigneeIds((current) => [...new Set([...current, ...ids])]);
   };
 
+  const addPropertyInBackground = async (definitionId: string) => {
+    try {
+      await props.addProperty?.(definitionId);
+      props.onPropertyAdded([definitionId]);
+    } catch (error) {
+      props.onPropertyAddFailed?.(definitionId);
+      console.error('Failed to add property to entity', error);
+    }
+  };
+
   // Property Selector actions
   const openPropertySelector = () => {
     if (!props.canEdit) return;
@@ -128,7 +139,7 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
       'selector',
       undefined,
       {
-        onPropertyAdded: async (definitionIds) => {
+        onPropertyAdded: (definitionIds) => {
           if (!definitionIds?.length) {
             props.onPropertyAdded();
             return;
@@ -147,13 +158,9 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
             }
 
             props.onPropertyAdded([definitionId]);
-            try {
-              await props.addProperty?.(definitionId);
-              props.onPropertyAdded([definitionId]);
-            } catch (error) {
-              props.onPropertyAddFailed?.(definitionId);
-              console.error('Failed to add property to entity', error);
-            }
+            // The editor opens the value field without waiting for the add; a
+            // value saved meanwhile is held until the add is answered.
+            fireAndForget(addPropertyInBackground(definitionId), 'properties');
           }
         },
       }

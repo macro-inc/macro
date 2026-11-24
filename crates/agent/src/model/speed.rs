@@ -28,9 +28,9 @@ impl ModelSpeed {
     pub fn supported(self, model: &str) -> bool {
         match self {
             Self::Standard => true,
-            Self::Priority => matches!(model, "openai/gpt-6-astra" | "openai/gpt-6.1-sol"),
+            Self::Priority => matches!(model, "openai/gpt-6-astra" | "openai/gpt-6.2-sol"),
             Self::Fast => ANTHROPIC_FAST_MODE_ENABLED && model == "anthropic/claude-opus-5-5",
-            Self::Ultrafast => matches!(model, "openai/gpt-6-astra" | "openai/gpt-6.1-sol"),
+            Self::Ultrafast => matches!(model, "openai/gpt-6-astra" | "openai/gpt-6.2-sol"),
         }
     }
 
@@ -46,8 +46,29 @@ impl ModelSpeed {
     pub fn has_per_call_pricing(model: &str) -> bool {
         matches!(
             model,
-            "openai/gpt-6-astra" | "openai/gpt-6.1-sol" | "anthropic/claude-opus-5-5"
+            "openai/gpt-6-astra"
+                | "openai/gpt-6.2-sol"
+                | "openai/gpt-6-luna"
+                | "anthropic/claude-opus-5-5"
+                | "anthropic/claude-haiku-5-5"
         )
+    }
+
+    /// The prompt size, in tokens counting cache reads and writes, above which
+    /// one provider call of `model` is billed at its `:long` price.
+    ///
+    /// OpenAI prices every GPT-6 model by prompt length above 272,000 tokens
+    /// (https://developers.openai.com/api/docs/pricing); Claude Haiku 5.5 above
+    /// 100,000 (https://platform.claude.com/docs/en/about-claude/pricing#long-context-pricing).
+    /// Other Claude models charge one price across their context window.
+    pub(crate) fn long_context_threshold(model: &str) -> Option<u64> {
+        if model.starts_with("openai/") {
+            Some(272_000)
+        } else if model == "anthropic/claude-haiku-5-5" {
+            Some(100_000)
+        } else {
+            None
+        }
     }
 
     /// Every speed a caller may request for `model`, slowest first.

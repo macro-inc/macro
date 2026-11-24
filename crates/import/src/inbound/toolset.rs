@@ -21,8 +21,10 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod import_from_hubspot;
 mod import_from_notion;
 mod import_from_tracker;
+pub use import_from_hubspot::{HubspotImportResponse, ImportFromHubspot};
 pub use import_from_tracker::{ImportFromJira, ImportFromLinear, TrackerImportResponse};
 
 pub use import_from_notion::{ImportFromNotion, ImportFromNotionResponse, NotionImportAction};
@@ -80,6 +82,7 @@ pub fn import_toolset<T: ImportStager + NotionPageImporter + WorkspaceImporter>(
         .add_tool::<ImportFromNotion, ImportToolContext<T>>()
         .add_tool::<ImportFromLinear, ImportToolContext<T>>()
         .add_tool::<ImportFromJira, ImportToolContext<T>>()
+        .add_tool::<ImportFromHubspot, ImportToolContext<T>>()
         .add_tool::<DeleteImportEntity, ImportToolContext<T>>()
         .add_tool::<ListImportEntities, ImportToolContext<T>>()
 }

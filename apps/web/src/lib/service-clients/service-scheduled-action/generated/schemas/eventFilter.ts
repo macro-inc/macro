@@ -8,6 +8,7 @@
 import type { EventFilterCondition } from './eventFilterCondition';
 import type { EventFilterGithub } from './eventFilterGithub';
 import type { EventFilterIds } from './eventFilterIds';
+import type { EventFilterInboxes } from './eventFilterInboxes';
 import type { EventFilterMatch } from './eventFilterMatch';
 import type { EventFilterProperty } from './eventFilterProperty';
 import type { EventName } from './eventName';
@@ -31,6 +32,9 @@ invoice?". The routine runs only when the answer is yes.
   events: EventName[];
   github?: EventFilterGithub;
   ids?: EventFilterIds;
+  /** The inboxes (email link ids) whose new mail starts the routine. Absent:
+every inbox the owner reads, their own and those delegated to them. */
+  inboxes?: EventFilterInboxes;
   /** Exact tests on the payload, all of which must pass. */
   match?: EventFilterMatch;
   property?: EventFilterProperty;

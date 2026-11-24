@@ -51,18 +51,25 @@ export function HeaderActionButton(props: {
       aria-busy={props.busy}
       class={cn(
         !iconOnly() && 'px-2',
-        !iconOnly() && !counted() && '@max-[600px]/split-header:p-0',
+        // Icon-only in a narrow split header, or when the row hides labels
+        // (`data-labels-hidden` on a `group/header-labels` ancestor).
+        !iconOnly() &&
+          !counted() &&
+          '@max-[600px]/split-header:p-0 group-data-[labels-hidden]/header-labels:p-0',
         !iconOnly() &&
           !counted() &&
           (props.grouped && props.size !== 'md'
-            ? '@max-[600px]/split-header:w-7'
-            : '@max-[600px]/split-header:w-8'),
+            ? '@max-[600px]/split-header:w-7 group-data-[labels-hidden]/header-labels:w-7'
+            : '@max-[600px]/split-header:w-8 group-data-[labels-hidden]/header-labels:w-8'),
         props.class
       )}
     >
       {props.icon}
       <Show when={!iconOnly()}>
-        <span data-header-action-label class="@max-[600px]/split-header:hidden">
+        <span
+          data-header-action-label
+          class="@max-[600px]/split-header:hidden group-data-[labels-hidden]/header-labels:hidden"
+        >
           {props.label}
         </span>
       </Show>

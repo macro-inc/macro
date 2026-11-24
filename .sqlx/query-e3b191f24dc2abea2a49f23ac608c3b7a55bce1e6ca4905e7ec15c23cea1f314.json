@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT custom_name IS NOT NULL AS \"team_named!\" FROM crm_companies\n               WHERE id = $1 AND team_id = $2 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_named!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e3b191f24dc2abea2a49f23ac608c3b7a55bce1e6ca4905e7ec15c23cea1f314"
+}

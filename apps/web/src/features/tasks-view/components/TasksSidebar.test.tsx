@@ -64,6 +64,7 @@ vi.mock('../tasks-view-context', () => ({
     setSidebarSectionOpen: vi.fn(),
   }),
 }));
+vi.mock('../time-view', () => ({ useTasksTimeView: () => () => undefined }));
 vi.mock('../views/task-saved-views', () => ({
   TaskSavedViewsList: () => null,
 }));
