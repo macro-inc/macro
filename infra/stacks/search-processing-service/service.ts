@@ -240,6 +240,14 @@ export class SearchProcessingService extends pulumi.ComponentResource {
           subnets: vpc.privateSubnetIds,
           securityGroups: [this.serviceSg.id],
         },
+        // Stop every old task before a new one starts, for the release that
+        // fences email index writes: an old task's unversioned write could
+        // otherwise undo a fenced task's newer one, or bring back a message it
+        // deleted. Indexing pauses while the new tasks boot; Kafka and the
+        // queue hold the events. Restore rolling deploys (the defaults, 100
+        // and 200) in the next release, once every task writes fenced.
+        deploymentMinimumHealthyPercent: 0,
+        deploymentMaximumPercent: 100,
         continueBeforeSteadyState: DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
         deploymentCircuitBreaker: {
           enable: true,

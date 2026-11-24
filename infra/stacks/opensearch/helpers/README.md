@@ -58,6 +58,22 @@ for future imports. Running `create_indices.ts` alone does not clear an existing
 `copy_to` parameter. After applying, verify a body search returns
 `highlight.content` and an imported-author search still finds its message.
 
+## Email index writes are versioned
+
+Every write of the email index carries its writer's version as an
+`external_gte` version (search-processing's README, "Email indexing fence").
+Never run a script that writes it without one, such as an update-by-query
+(`copy_entity_id.ts`, `update_updated_at_seconds_for_email.ts`,
+`remove_field_from_index.ts`), while search-processing is writing: an
+unversioned write raises a document's version by one, so an older writer's
+write applies again. A rebuild through `reindex_with_alias_swap.ts` copies with
+internal versioning, so the copies start at version 1 and the new index
+remembers none of the old one's deletes; pause email writes (stop
+search-processing's email consumers and queue workers) for the copy and swap.
+`gc_deletes: '15m'` in the emails body is what lets a delete's version refuse a
+slower writer; a new email index gets it from `create_indices.ts`, an existing
+one from `PUT <index>/_settings {"index": {"gc_deletes": "15m"}}`.
+
 ## Manual provisioning
 
 Provision indices and aliases manually using the canonical declarations in

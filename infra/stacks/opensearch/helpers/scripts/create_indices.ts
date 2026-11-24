@@ -811,6 +811,12 @@ const EMAIL_BODY = {
   settings: {
     ...SHARD_SETTINGS,
     refresh_interval: '2s',
+    // Every email write carries its writer's lease version (external_gte),
+    // and a delete's version is what refuses a slower writer that read the
+    // message before it was deleted. OpenSearch forgets a delete's version
+    // after gc_deletes (60s by default); 15 minutes outlasts any writer, whose
+    // lease ends after 2 minutes and whose request times out after 5.
+    gc_deletes: '15m',
     analysis: EMAIL_PARTS_ANALYSIS,
   },
   mappings: {
