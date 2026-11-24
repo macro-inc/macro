@@ -10,6 +10,7 @@ import {
   addMinutes,
   differenceInCalendarDays,
   differenceInMinutes,
+  endOfDay,
   isSameDay,
   startOfDay,
   startOfHour,
@@ -165,7 +166,8 @@ export function formatStartDueCompact(
 export function startDueLength(dates: StartDue): string | undefined {
   const { start, due } = dates;
   if (!start || !due) return undefined;
-  if (dates.timed) {
+  // A date without a time has no time to count hours from.
+  if (dates.timed && !dates.wholeDay) {
     const minutes = differenceInMinutes(due, start);
     if (minutes >= 0 && minutes < 24 * 60) return formatDuration(minutes);
   }
@@ -215,9 +217,10 @@ export function withoutTimes(dates: StartDue): StartDue {
  * The dates after a clock time is picked for `field`, as minutes past the
  * midnight of `day`. A new start time moves the due date with it, keeping
  * the length, as a calendar event's end follows its start. With no length to
- * keep (no start yet, or a start after the due date), a start time past the
- * due date moves the due date to it. A due time before the start moves the
- * start back to it.
+ * keep (no start yet, a start after the due date, or an end saved without a
+ * time), a start time past the due date moves the due date to it, and one
+ * before it leaves the due date as it is. A due time before the start moves
+ * the start back to it.
  */
 export function pickTime(
   dates: StartDue,
@@ -226,33 +229,43 @@ export function pickTime(
   minutes: number
 ): { dates: StartDue; changed: DateField[] } {
   const at = atClock(day, minutes);
+  // An end a pick gives a time no longer stands for a whole day.
+  const timed = (next: StartDue, changed: DateField[]) => ({
+    dates:
+      next.wholeDay && changed.includes(next.wholeDay)
+        ? { ...next, wholeDay: undefined }
+        : next,
+    changed,
+  });
   if (field === 'start') {
-    const { start, due } = dates;
-    if (start && due && due >= start) {
-      return {
-        dates: {
+    const { start, due, wholeDay } = dates;
+    if (start && due && due >= start && !wholeDay) {
+      return timed(
+        {
           ...dates,
           start: at,
           due: addMinutes(at, differenceInMinutes(due, start)),
         },
-        changed: ['start', 'due'],
-      };
+        ['start', 'due']
+      );
     }
     if (due && at > due) {
-      return {
-        dates: { ...dates, start: at, due: at },
-        changed: ['start', 'due'],
-      };
+      // A due date without a time on the start's day is held at the end of
+      // that day rather than given the start's time.
+      if (wholeDay === 'due' && isSameDay(at, due)) {
+        return {
+          dates: { ...dates, start: at, due: endOfDay(due) },
+          changed: ['start', 'due'],
+        };
+      }
+      return timed({ ...dates, start: at, due: at }, ['start', 'due']);
     }
-    return { dates: { ...dates, start: at }, changed: ['start'] };
+    return timed({ ...dates, start: at }, ['start']);
   }
   if (dates.start && at < dates.start) {
-    return {
-      dates: { ...dates, start: at, due: at },
-      changed: ['start', 'due'],
-    };
+    return timed({ ...dates, start: at, due: at }, ['start', 'due']);
   }
-  return { dates: { ...dates, due: at }, changed: ['due'] };
+  return timed({ ...dates, due: at }, ['due']);
 }
 
 /** One end a timeline drag saves: its new moment and whether it keeps a time. */
@@ -268,7 +281,9 @@ export type RescheduledEnd = {
  * due date first when the new start passes the saved due date, as the
  * server keeps a start on or before it. A bar drawn from the created date,
  * for a task with no start, gains a start only when its start moved. A timed
- * bar's `wholeDay` end, saved without a time, stays a whole day.
+ * bar's `wholeDay` end, saved without a time, stays a whole day, held at the
+ * same time of its new day (midnight, or the end of a day a suggestion picked)
+ * so it never lands before a start on that day.
  */
 export function rescheduledStartDue(
   previous: { start: Date; due: Date | null; wholeDay?: DateField },
@@ -281,19 +296,54 @@ export function rescheduledStartDue(
     (wholeDay(field)
       ? !isSameDay(before, after)
       : before.getTime() !== after.getTime());
-  const end = (field: DateField, value: Date): RescheduledEnd => ({
+  const onDayOf = (before: Date | null, after: Date) =>
+    before
+      ? addDays(before, differenceInCalendarDays(after, before))
+      : startOfDay(after);
+  // A start without a time is held at the start of its new day, never after
+  // a due date on it; a due date at the time of day it was held at.
+  const heldOn = (field: DateField, before: Date | null, value: Date) =>
+    field === 'start' ? startOfDay(value) : onDayOf(before, value);
+  const end = (
+    field: DateField,
+    before: Date | null,
+    value: Date
+  ): RescheduledEnd => ({
     field,
-    value: wholeDay(field) && !range.allDay ? startOfDay(value) : value,
+    value:
+      wholeDay(field) && !range.allDay ? heldOn(field, before, value) : value,
     hasTime: !wholeDay(field),
   });
   const ends: RescheduledEnd[] = [];
   if (moved('start', previous.start, range.start)) {
-    ends.push(end('start', range.start));
+    ends.push(end('start', previous.start, range.start));
   }
   if (moved('due', previous.due, range.end)) {
-    ends.push(end('due', range.end));
+    ends.push(end('due', previous.due, range.end));
   }
-  if (ends.length === 2 && previous.due && range.start > previous.due) {
+  // A due date without a time that the start lands after on its own day is
+  // held at the end of that day, so the server never pulls the start back.
+  const start =
+    ends.find((saved) => saved.field === 'start')?.value ?? previous.start;
+  const dueIndex = ends.findIndex((saved) => saved.field === 'due');
+  const due =
+    ends.find((saved) => saved.field === 'due')?.value ?? previous.due;
+  if (
+    !range.allDay &&
+    previous.wholeDay === 'due' &&
+    due &&
+    start > due &&
+    isSameDay(start, due)
+  ) {
+    const held: RescheduledEnd = {
+      field: 'due',
+      value: endOfDay(due),
+      hasTime: false,
+    };
+    if (dueIndex >= 0) ends[dueIndex] = held;
+    else ends.push(held);
+  }
+  if (ends.length === 2 && previous.due && start > previous.due) {
     ends.reverse();
   }
   return ends;
@@ -341,13 +391,16 @@ export function pickDay(
 
 /**
  * `pickDay` for dates with times: each end that moves keeps its own time of
- * day on its new day.
+ * day on its new day. An end saved without a time (`wholeDay`) stays one,
+ * held at the same time of its new day, and gives no length to keep: a start
+ * day past the due date takes the due date to the start's day.
  */
 export function pickTimedDay(
   dates: StartDue,
   field: DateField,
   day: Date
 ): { dates: StartDue; changed: DateField[] } {
+  const { wholeDay } = dates;
   const clockOf = (end: DateField) => {
     const value = dates[end] ?? dates[end === 'start' ? 'due' : 'start'];
     return value ? value.getHours() * 60 + value.getMinutes() : 0;
@@ -360,9 +413,34 @@ export function pickTimedDay(
     field,
     startOfDay(day)
   );
+  const days =
+    wholeDay && field === 'start' && picked.changed.includes('due')
+      ? { ...picked.dates, due: picked.dates.start }
+      : picked.dates;
   const next = { ...dates };
   for (const end of picked.changed) {
-    next[end] = atClock(picked.dates[end]!, clockOf(end));
+    const before = dates[end];
+    next[end] =
+      end === wholeDay && before
+        ? addDays(before, differenceInCalendarDays(days[end]!, before))
+        : atClock(days[end]!, clockOf(end));
+  }
+  // A due date without a time on the start's day is held at the end of that
+  // day rather than before the start, where the server would pull the start
+  // back to it.
+  if (
+    wholeDay === 'due' &&
+    next.start &&
+    next.due &&
+    next.due < next.start &&
+    isSameDay(next.due, next.start)
+  ) {
+    return {
+      dates: { ...next, due: endOfDay(next.due) },
+      changed: picked.changed.includes('due')
+        ? picked.changed
+        : [...picked.changed, 'due'],
+    };
   }
   // Back on one day, the restored times can put the due date before the
   // start; the end that was picked wins, as a picked time does.

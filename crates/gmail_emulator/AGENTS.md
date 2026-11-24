@@ -137,6 +137,8 @@ a local stack, without Google accounts.
 - The aliases a mailbox can send from: `GmailEmulator::set_send_as(email,
   aliases)` replaces them, and `settings.sendAs.list` answers them after the
   primary address. A Rust method only; there is no `/_emulator/` route.
+- A label renamed in Gmail's own client: `GmailEmulator::rename_label(email,
+  label_id, name)`. A Rust method only; it records no history, as at Google.
 - Add a Gmail endpoint: a `Route` variant with its quota units in
   `src/fault.rs` → a handler through `gate::mailbox_request` in
   `src/gmail_routes.rs` → a test in `src/test/` that calls it with the real

@@ -473,6 +473,17 @@ tools — hexagonal, heavily feature-gated.
 - Forwarded attachments register through `domain/draft_attachments.rs` and resolve
   bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
   source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.
+- Search indexes each message's label names, so any write that changes a
+  message's stored labels, or a label's name, must ask for its reindex: the
+  event of the change when it has one (`thread_labels_updated`,
+  `thread_read`, …), else `EmailMacroEvent::thread_reindex_requested`, as a
+  re-sync that changed labels (`upsert_message`) and a diff of only
+  IMPORTANT, SENT, DRAFT or category labels do. A rename (`sync_labels`)
+  queues its label's threads on the search event queue
+  (`ThreadReindexQueue`), the bulk lane backfills use, so a big label can't
+  delay new mail's events. It queues before it stores the name, and keeps the
+  old name when queueing fails, so the next sync finds the rename again: a
+  failed reindex must not stop a mailbox's sync. Label deletes ask for none.
 - A send with files staged before delivery goes through
   `StagedAttachmentSender` (`domain/service/attachments.rs`): draft, staged
   attachment rows, then the send. `DraftAttachmentSender` adds Macro documents

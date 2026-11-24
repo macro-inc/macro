@@ -13,8 +13,10 @@ mod transaction;
 use crate::outbound::email_api::GmailApi;
 use crate::outbound::persistence_error::InboxPersistenceError;
 use email::domain::backfill_jobs::worker::*;
+use email::domain::mailbox::inbox_sync::ThreadReindexQueue;
 use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts};
 use futures::future::BoxFuture;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::backfill::BackfillPubsubMessage;
 use uuid::Uuid;
 
@@ -92,6 +94,20 @@ impl BackfillGmail for GmailBackfill {
         provider: &'a str,
     ) -> BoxFuture<'a, Result<Option<MessageWithCalendarParts>, EmailApiError>> {
         Box::pin(self.0.get_message(link, provider))
+    }
+}
+
+impl ThreadReindexQueue for BackfillSqs {
+    type ReindexError = InboxPersistenceError;
+
+    async fn enqueue_thread_reindex(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        threads: Vec<Uuid>,
+    ) -> Result<(), Self::ReindexError> {
+        crate::outbound::thread_reindex::enqueue(&self.0, owner, threads)
+            .await
+            .map_err(Into::into)
     }
 }
 

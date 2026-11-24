@@ -11,7 +11,9 @@ The main Tasks list (List layout, not project or CRM task lists) starts with the
 The single-row desktop header contains the title, `Filter`, a separate
 `Task layout` single-select icon group for `List`, `Board`, and enabled `Gantt`,
 `Sort`, `Group`, `New`, and an expandable Search icon
-(`Ctrl+F` opens it). The active-filter count sits beside the filter icon inside
+(`Ctrl+F` opens it). A pane too narrow for those actions hides the layout
+group, then Sort and Group, before New or Search would leave the pane; each
+comes back once there is room (`s` sorts only while Sort shows). The active-filter count sits beside the filter icon inside
 its button, without overlapping the icon or the group border;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 Project, and Tags submenus. They use the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
@@ -469,7 +471,9 @@ hours is refused on stop:
 the dialog sets when you stopped, logs all of it (up to 24 hours) or discards
 it. Timer changes are refused offline, and one that gets no answer (the
 request failed, so it may still have landed) re-reads the running timer before
-the next press; the change is never resent. Other sessions of the same person
+the next press; the change is never resent. When the server shows it landed,
+the app says nothing (no failure, and no saved-entry toast or Undo, since the
+reply that held them is lost). Other sessions of the same person
 re-read on the gateway's `time_tracking_changed`, and every session re-reads
 when its live connection comes back.
 

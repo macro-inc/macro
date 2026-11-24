@@ -74,7 +74,8 @@ sender name, checkbox or actions, Load more, a header button), in the search
 field, in an open thread, and in another mailbox, whose header has no tabs,
 `Tab` is browser focus order. Leaving the
 search field (`Escape`, `ArrowDown`, `Enter`, or picking a recent search)
-hands the keyboard to the view, so `Tab` switches tabs there too. Calendar mail
+hands the keyboard to the view; a search shows no tabs, so `Tab` and `1`–`3`
+switch them again once it is cleared. Calendar mail
 remains available through
 the calendar filter and existing Calendar route. Touch shows the same Inbox
 pills as desktop: Signal and Noise, with Focus first when enabled. Other
@@ -91,7 +92,7 @@ focus) hides it on that device for good (`localStorage`
 keyboard focus skips it.
 Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
-use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` within the surface: it focuses the list header's search field, and when a thread or a new email has replaced the list it is left to the browser's find. Outside a text field, `/` opens the app's Search view from Email in every state, as in every other view. The Email sidebar has no search field.
+use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` within the surface: it focuses the list header's search field, and when a thread or a new email has replaced the list it is left to the browser's find. Outside a text field, `/` opens the app's Search view from Email in every state, as in every other view. The Email sidebar has no search field. The search field takes Gmail-style operators as typed text (`subject:lunch`, `from:ana`, `is:unread`, `has:attachment`, `after:2025/01/31`, `newer_than:1m`, `-in:inbox`), which the search service reads; the list in `crates/search_service/AGENTS.md` is the reference.
 
 Email search covers all mail from every tab ("Search all mail"), as the All
 tab lists it, except Spam and Trash, which the search index leaves out (they
@@ -108,12 +109,19 @@ wins, an `in:` still being typed is left out of the words, and any other `in:`
 is searched as a word. Picking a tab while a search runs narrows it to that
 tab's view and keeps the words (All mail goes back to all mail, the sidebar's
 Inbox gives `in:inbox`); Scheduled, Reminders, Spam and Trash, which the index
-has no view of, end the search. While a search runs, the sidebar and the
-header show the view its `in:` filter names (the Inbox tabs only while it is
-in the Inbox); a search with no `in:` selects nothing, and the header says
-Search. Check from Inbox with a
+has no view of, end the search, and so does any tab picked before a word is
+typed. While a search runs, the sidebar and the header show the view its `in:`
+filter names (the header says Focus, and the sidebar selects Inbox, for
+`in:focus`); a search with no `in:` selects nothing, and the header says
+Search. The Focus, Signal and Noise tabs never show while the field holds a
+query, whatever it says, on desktop or phone; clearing it brings them back on
+the tab that was open. Text with no words yet (`in:`, `in:se`, or a view alone
+such as `in:focus`) runs no search of its own: the list, header and sidebar
+stay on the last search that had words, or on the open view when there was
+none (the text was pasted). Check from Inbox with a
 term that only Noise or archived mail holds, then the same term with each
-`in:`, then pick Sent, Signal and All mail while it runs.
+`in:`, then pick Sent and All mail in the sidebar while it runs; then type
+`in`, `in:`, pick Focus and type a word, and clear the field.
 
 ### Wide search (flagged)
 
@@ -451,8 +459,8 @@ or a scoped `Loading email` spinner until they arrive—not the previous tab's r
 under the new heading. Active searches also hide retained results and show loading
 while selected tag sets are pending. Background refreshes retain the current list.
 
-While the search field has text the list shows only search states: no Watch
-tutorial row, a spinner while the search runs (from the first character), and
+While the search field has words the list shows only search states: no Watch
+tutorial row (nor with an `in:` alone), a spinner while the search runs (from the first character), and
 `No results` when nothing matches, naming the view an `in:` filter narrowed it
 to. `Load More` appears under result
 rows. A page that adds no row (an alias, saved view or client-side filter drops
@@ -831,7 +839,8 @@ that driver.
 **Reading pane.** On desktop the header's columns button (or `Shift+V`) shows
 threads beside the list instead of in its place; the choice is remembered per
 browser. A pane too narrow for the header's actions hides the columns button
-and the Focus sort before Search would leave the pane; `Shift+V` still works
+and the Focus sort before Search would leave the pane, then shows the inbox
+tabs as icons alone (a third of a small window); `Shift+V` still works
 there. The list keeps its own keys: j/k and arrows move the cursor and the
 pane follows it (replacing history rather than adding entries) while the list
 keeps focus, even if the thread is still loading; Mark done on

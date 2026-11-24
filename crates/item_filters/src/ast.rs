@@ -119,9 +119,10 @@ pub enum ExpandErr {
     /// a value in crm_addresses does not parse as a fully-qualified email address
     #[error("invalid crm_addresses value (must be a fully-qualified email): {0}")]
     InvalidCrmAddress(String),
-    /// email_filters.view scopes a search; listing email takes its view separately
-    #[error("email_filters.view applies only to search; list email with its view parameter")]
-    SearchOnlyEmailView,
+    /// an email filter that only search applies, such as `view`; listing
+    /// email takes its view as a parameter of its own
+    #[error("email_filters.{0} applies only to search")]
+    SearchOnlyEmailFilter(&'static str),
 }
 
 /// CRM-scoped query authorization tag produced by [`EmailFilters`] expansion.

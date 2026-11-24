@@ -196,7 +196,6 @@ export default {
   removeContactEmail: 'Remove',
   removeContactEmailNamed: 'Remove {{email}}',
   addEmailPlaceholder: 'Add an email address',
-  saveContact: 'Save',
   savingContact: 'Saving…',
   cancel: 'Cancel',
   company: 'Company',
@@ -226,8 +225,12 @@ export default {
   addDomain: 'Add domain',
   manageCompanyDomain: 'Domain options for {{domain}}',
   primaryDomain: 'Primary',
-  primaryCompanyDomain: '{{domain}} (primary)',
-  removeCompanyDomain: 'Remove',
+  companyDomainLabel: 'Domain: {{domain}}',
+  companyDomainSummary: {
+    one: 'Domain: {{domain}} and {{count}} more',
+    other: 'Domain: {{domain}} and {{count}} more',
+  },
+  removeCompanyDomainNamed: 'Remove {{domain}}',
   companyDomainPlaceholder: 'example.com',
   companyDomainAddHelp:
     'Mail and new contacts from this domain go to this company.',

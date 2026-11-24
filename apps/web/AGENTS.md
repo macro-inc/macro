@@ -1336,7 +1336,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   host shell, so the split manager's entity reuse cannot see it; the router's
   claims decide who shows it. `openWithSplit` activates the source split before
   a replace, so a visit the router yields to the claiming pane leaves that pane
-  active (`tests/claimed-replace.test.ts`).
+  active, and `createNewSplit` activates the claiming pane the router hands a
+  Shift-click's new split to (`tests/claimed-replace.test.ts`).
 - Bound Discussion comment readiness waits to ten seconds; recover from initial layout interruptions until the message is visible, and release the target on user input (including scrollbar pointer-down), timeout, or successful arrival.
 - Keep early DOCX opens loading while exports return processing (409); retry only
   that response, with a bounded wait. See the Word editor walkthrough in

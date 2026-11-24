@@ -17,6 +17,9 @@ const TIMER: RunningTimer = {
 const query = vi.hoisted(() => ({
   refetch: vi.fn(),
   startTimer: vi.fn(),
+  stopTimer: vi.fn(),
+  discardTimer: vi.fn(),
+  readRunningTimer: vi.fn(),
   onChange: undefined as
     | ((change: TimeTrackingChange) => Promise<unknown>)
     | undefined,
@@ -35,8 +38,9 @@ vi.mock('../queries/timer', () => ({
     refetch: query.refetch,
   }),
   startTimer: query.startTimer,
-  stopTimer: vi.fn(),
-  discardTimer: vi.fn(),
+  stopTimer: query.stopTimer,
+  discardTimer: query.discardTimer,
+  readRunningTimer: query.readRunningTimer,
 }));
 vi.mock('../queries/time-tracking-changes', () => ({
   refreshOnTimeTrackingChanges: (
@@ -59,6 +63,10 @@ beforeEach(() => {
   offline = false;
   query.refetch.mockReset();
   query.startTimer.mockReset();
+  query.stopTimer.mockReset();
+  query.discardTimer.mockReset();
+  query.readRunningTimer.mockReset();
+  query.refetch.mockResolvedValue({ error: null });
 });
 
 afterEach(() => {
@@ -115,7 +123,7 @@ it('starts through the server when online', async () => {
   const result = await mountTimer().start({ taskId: 'task-1' });
   expect(result.isOk()).toBe(true);
   expect(query.startTimer).toHaveBeenCalledWith(
-    { taskId: 'task-1' },
+    { id: expect.any(String), taskId: 'task-1' },
     expect.anything()
   );
 });
@@ -144,36 +152,114 @@ it('reads the current time even while no timer runs', () => {
   expect(state.now()).toBe(Date.parse('2026-11-23T11:10:00.000Z'));
 });
 
-it('shows the timer the server holds after a start whose reply is lost', async () => {
-  query.startTimer.mockResolvedValue(
-    err({ kind: 'failed', error: new Error('network') })
+const LOST = err({ kind: 'failed', error: new Error('connection closed') });
+
+/** The timer the server runs for the start under test, under the id it was sent. */
+function serverRunsTheStart() {
+  query.readRunningTimer.mockImplementation(async () =>
+    ok({ ...TIMER, id: query.startTimer.mock.calls[0]?.[0].id })
   );
-  let reread: () => void = () => undefined;
-  query.refetch.mockReturnValue(
-    new Promise<void>((resolve) => {
-      reread = () => {
-        setTimer(TIMER);
-        resolve();
-      };
+}
+
+it('counts a start whose reply is lost as done when the server runs it', async () => {
+  query.startTimer.mockResolvedValue(LOST);
+  serverRunsTheStart();
+  const result = await mountTimer().start({ taskId: 'task-1' });
+  expect(result.isOk() && result.value).toEqual({
+    kind: 'committed',
+    data: undefined,
+  });
+  expect(query.startTimer).toHaveBeenCalledOnce();
+});
+
+it('asks the server, not a refetch that settles before the screen catches up', async () => {
+  query.startTimer.mockResolvedValue(LOST);
+  query.refetch.mockResolvedValue({ error: null });
+  serverRunsTheStart();
+  const state = mountTimer();
+  expect(state.timer()).toBeUndefined();
+  const result = await state.start({ taskId: 'task-1' });
+  expect(result.isOk()).toBe(true);
+});
+
+it('holds the next press until the server has answered', async () => {
+  query.startTimer.mockResolvedValue(LOST);
+  let answer: (value: unknown) => void = () => undefined;
+  query.readRunningTimer.mockReturnValue(
+    new Promise((resolve) => {
+      answer = resolve;
     })
   );
   const state = mountTimer();
   const pressed = state.start({ taskId: 'task-1' });
-  await vi.waitFor(() => expect(query.refetch).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(query.readRunningTimer).toHaveBeenCalledOnce());
   const again = await state.start({ taskId: 'task-1' });
   expect(again.isErr() && again.error).toMatchObject({ code: 'BUSY' });
-  reread();
-  await pressed;
-  expect(state.timer()).toEqual(TIMER);
-  expect(state.busy()).toBe(false);
   expect(query.startTimer).toHaveBeenCalledOnce();
+  answer(ok({ ...TIMER, id: query.startTimer.mock.calls[0]?.[0].id }));
+  await pressed;
+  expect(state.busy()).toBe(false);
 });
 
-it('does not re-read after a refusal the server answered', async () => {
+it('keeps the failure when the lost start did not land', async () => {
+  query.startTimer.mockResolvedValue(LOST);
+  query.readRunningTimer.mockResolvedValue(ok(undefined));
+  const result = await mountTimer().start({ taskId: 'task-1' });
+  expect(result.isErr() && result.error.kind).toBe('failed');
+});
+
+it('keeps the failure when another timer runs on that task', async () => {
+  query.startTimer.mockResolvedValue(LOST);
+  query.readRunningTimer.mockResolvedValue(ok(TIMER));
+  const result = await mountTimer().start({ taskId: TIMER.taskId });
+  expect(result.isErr() && result.error.kind).toBe('failed');
+});
+
+it('keeps the failure when the server cannot be read either', async () => {
+  query.stopTimer.mockResolvedValue(LOST);
+  query.readRunningTimer.mockResolvedValue(err(new Error('offline')));
+  const result = await mountTimer().stop({ timerId: TIMER.id });
+  expect(result.isErr() && result.error.kind).toBe('failed');
+});
+
+it.each(['stop', 'discard'] as const)(
+  'counts a lost %s as done once the timer is gone from the server, even while the screen still shows it',
+  async (action) => {
+    setTimer(TIMER);
+    query.stopTimer.mockResolvedValue(LOST);
+    query.discardTimer.mockResolvedValue(LOST);
+    query.readRunningTimer.mockResolvedValue(ok(undefined));
+    const state = mountTimer();
+    const result =
+      action === 'stop'
+        ? await state.stop({ timerId: TIMER.id })
+        : await state.discard(TIMER.id);
+    expect(result.isOk()).toBe(true);
+    expect(state.timer()).toEqual(TIMER);
+  }
+);
+
+it.each(['stop', 'discard'] as const)(
+  'keeps the failure when a lost %s left the timer running',
+  async (action) => {
+    query.stopTimer.mockResolvedValue(LOST);
+    query.discardTimer.mockResolvedValue(LOST);
+    query.readRunningTimer.mockResolvedValue(ok(TIMER));
+    const state = mountTimer();
+    const result =
+      action === 'stop'
+        ? await state.stop({ timerId: TIMER.id })
+        : await state.discard(TIMER.id);
+    expect(result.isErr() && result.error.kind).toBe('failed');
+  }
+);
+
+it('reads nothing after a refusal the server answered', async () => {
   query.startTimer.mockResolvedValue(
     err({ kind: 'refused', code: 'FORBIDDEN', message: 'no' })
   );
   await mountTimer().start({ taskId: 'task-1' });
+  expect(query.readRunningTimer).not.toHaveBeenCalled();
   expect(query.refetch).not.toHaveBeenCalled();
 });
 

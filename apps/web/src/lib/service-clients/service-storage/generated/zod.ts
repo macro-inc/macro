@@ -56644,6 +56644,30 @@ export const postItemsSoupBody = zod
           .describe(
             'Exclude emails that have any of these labels. Supports both Gmail system labels (e.g. \"CATEGORY_PROMOTIONS\") and user-created labels. Empty to not exclude any labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they are already excluded by default.'
           ),
+        exclude_views: zod
+          .array(
+            zod
+              .enum(['sent', 'drafts', 'calendar'])
+              .describe(
+                'A mailbox view the Email list scopes a search to, as its tabs do.'
+              )
+          )
+          .optional()
+          .describe(
+            'Leave out the threads in these mailbox views. Search only.'
+          ),
+        favorite: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "True for the caller's favorite threads only, false to leave them out.\nSearch only."
+          ),
+        has_attachment: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'True for threads with an attachment on any message, false for threads\nwith none. Search only.'
+          ),
         importance: zod
           .boolean()
           .nullish()
@@ -56661,6 +56685,28 @@ export const postItemsSoupBody = zod
           .nullish()
           .describe(
             "Filter by the email thread's read flag, independently of notification state."
+          ),
+        label_names: zod
+          .array(
+            zod
+              .object({
+                exclude: zod
+                  .boolean()
+                  .optional()
+                  .describe('Leave out the threads that carry it instead.'),
+                name: zod
+                  .string()
+                  .describe(
+                    "The label of one of the caller's tags, or the name of a label in one\nof the caller's inboxes, ignoring case."
+                  ),
+              })
+              .describe(
+                'A tag or provider label that an email thread must, or must not, carry,\nnamed by its label.'
+              )
+          )
+          .optional()
+          .describe(
+            "Tags or labels each thread must carry, or must not, by name, as typing\n`label:` or `in:<name>` into the search does. A name matches the\ncaller's tags with that label and the labels with that name in the\ncaller's inboxes, ignoring case; a name that is neither matches\nnothing. Search only."
           ),
         link_ids: zod
           .array(zod.string())
@@ -56703,17 +56749,56 @@ export const postItemsSoupBody = zod
           .describe(
             "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
           ),
+        sent_after: zod.iso
+          .datetime({})
+          .nullish()
+          .describe(
+            'Only messages sent at or after this instant. Mail with no sent time\nnever matches. Search only.'
+          ),
+        sent_before: zod.iso
+          .datetime({})
+          .nullish()
+          .describe(
+            'Only messages sent before this instant. Mail with no sent time never\nmatches. Search only.'
+          ),
         shared: zod
           .enum(['exclude', 'include', 'only'])
           .optional()
           .describe(
             'Controls whether shared email threads are included in results.'
           ),
+        text_matches: zod
+          .array(
+            zod
+              .object({
+                exclude: zod
+                  .boolean()
+                  .optional()
+                  .describe('Leave out the messages that match instead.'),
+                part: zod
+                  .enum(['any', 'subject', 'from', 'to', 'cc', 'bcc'])
+                  .describe(
+                    'The part of an email message a search condition matches.'
+                  ),
+                text: zod
+                  .string()
+                  .describe(
+                    'One word, matched as a search word is (a prefix unless the search is\nexact), or several words, matched as an adjacent phrase.'
+                  ),
+              })
+              .describe(
+                'A word or phrase that must, or must not, appear in one part of a message.'
+              )
+          )
+          .optional()
+          .describe(
+            'Words or phrases each message must contain, or must not, in one part\nof it, as typing `subject:`, `from:`, `to:`, `cc:`, `bcc:` or a minus\ninto the search does. Search only.'
+          ),
         view: zod
           .union([
             zod.null(),
             zod
-              .enum(['sent', 'drafts'])
+              .enum(['sent', 'drafts', 'calendar'])
               .describe(
                 'A mailbox view the Email list scopes a search to, as its tabs do.'
               ),

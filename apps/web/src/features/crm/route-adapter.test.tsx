@@ -47,9 +47,10 @@ let route: CrmRoute;
 /** Each pane's route, in pane order. */
 let mounted: CrmRoute[] = [];
 let capture = vi.fn();
+let activate = vi.fn();
 
 function Customers() {
-  route = createCrmRoute(capture);
+  route = createCrmRoute({ captureEntryState: capture, activate });
   mounted.push(route);
   return (
     <>
@@ -97,6 +98,7 @@ const routes: SplitRoutes = {
 
 function renderCustomers(url: string) {
   capture = vi.fn();
+  activate = vi.fn();
   mounted = [];
   const history = createMemoryHistory(url);
   const testPolicy = createTestPolicy();
@@ -132,6 +134,8 @@ function renderCustomers(url: string) {
     activated: testPolicy.activated,
     paneAt: (index: number) => router!.panes()[index]!,
     settled: () => router!.settled(),
+    activatePane: (index: number) =>
+      router!.activatePane(router!.panes()[index]!),
     go: (delta: number) => router!.navigatePane(pane(), delta),
     navigate: (path: string) => router!.navigatePane(pane(), path),
   };
@@ -488,6 +492,56 @@ it('opens a file with no file type as an unknown file, not a note', async () => 
   route.openItem({ type: 'document', id: 'file-2', name: 'Attachment' });
   await vi.waitFor(() => expect(route.item()?.name).toBe('Attachment'));
   expect(url()).toBe('/companies/company/acme/files/document/file-2/unknown');
+});
+
+it.each([
+  { active: 'the file', index: 1 },
+  { active: 'Customers', index: 0 },
+])(
+  'brings up the split already showing a file when $active was active',
+  async ({ index }) => {
+    const { activated, activatePane, paneAt, settled, url } = renderCustomers(
+      '/companies/company/acme/files/~/companies/document/file-1/pdf'
+    );
+    await vi.waitFor(() => expect(mounted).toHaveLength(2));
+    activatePane(index);
+    const before = activated.length;
+    let activatedWhenCustomersActivated: number | undefined;
+    activate.mockImplementation(() => {
+      activatedWhenCustomersActivated = activated.length;
+    });
+
+    mounted[0]!.openItem({
+      type: 'document',
+      id: 'file-1',
+      name: 'Contract',
+      fileType: 'pdf',
+    });
+    await settled();
+
+    // Customers takes activation first, so the click's own focus cannot take
+    // it back after the router brings up the split showing the file.
+    expect(activate).toHaveBeenCalledTimes(1);
+    expect(activatedWhenCustomersActivated).toBe(before);
+    expect(activated.slice(before)).toEqual([paneAt(1)]);
+    expect(url()).toBe(
+      '/companies/company/acme/files/~/companies/document/file-1/pdf'
+    );
+  }
+);
+
+it('activates Customers when it opens an item in its own split', async () => {
+  const { url, shows } = renderCustomers('/companies/company/acme/files');
+  await shows('tab:active section:files records:company:acme:');
+  route.openItem({
+    type: 'document',
+    id: 'file-1',
+    name: 'Contract',
+    fileType: 'pdf',
+  });
+  await vi.waitFor(() => expect(route.item()?.name).toBe('Contract'));
+  expect(activate).toHaveBeenCalledTimes(1);
+  expect(url()).toBe('/companies/company/acme/files/document/file-1/pdf');
 });
 
 it('skips consecutive items when restoring the captured record section', async () => {
