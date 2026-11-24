@@ -127,7 +127,9 @@ TanStack path in `../` runs untouched. A host whose database is away for now
   way, from the device copy first; an edit, delete or reaction it could not
   store is on the server and resolves with the server's copy
   (`LocalCommitFailedError.confirmed`, else asked for), never the device's older
-  one, and with none when neither can be read: what is confirmed never rejects. A write the queue settled before its host retired keeps that answer. One
+  one, and with none when neither can be read: what is confirmed never rejects. An answer the queue
+  holds while its commit to the device is in doubt (`disposition.confirmed`)
+  is the write's at once. A write the queue settled before its host retired keeps that answer. One
   that never reached the queue (`write-not-admitted`) is a refusal, and so is
   one the queue did not take (`MutationNotQueuedError`, `NOT_QUEUED`).
   A write whose enqueue lost its

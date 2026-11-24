@@ -176,13 +176,18 @@ export type OptimisticMutationContext<TData = unknown> = {
 /** Caller-facing disposition of one durable optimistic mutation submission. */
 export type OptimisticMutationDisposition<TData> =
   | { kind: 'committed'; data: TData | undefined }
-  | { kind: 'queued'; transactionId: string }
+  | {
+      kind: 'queued';
+      transactionId: string;
+      /** The server's answer, which the device may not have stored yet. */
+      confirmed?: TData;
+    }
   | { kind: 'permanently-failed'; error: CombinedError };
 
 /** Exchange-private metadata attached after queue routing or settlement. */
 export type OptimisticMutationDispositionMetadata =
   | { kind: 'committed'; transactionId?: string }
-  | { kind: 'queued'; transactionId: string }
+  | { kind: 'queued'; transactionId: string; confirmed?: unknown }
   | {
       kind: 'superseded';
       transactionId: string;
@@ -287,7 +292,13 @@ export function optimisticMutationDispositionOf<
 
   const metadata = value as OptimisticMutationDispositionMetadata;
   if (metadata.kind === 'queued' && metadata.transactionId) {
-    return { kind: 'queued', transactionId: metadata.transactionId };
+    return {
+      kind: 'queued',
+      transactionId: metadata.transactionId,
+      ...(metadata.confirmed != null && {
+        confirmed: metadata.confirmed as TData,
+      }),
+    };
   }
   if (metadata.kind === 'superseded' && metadata.replacementTransactionId) {
     return {
