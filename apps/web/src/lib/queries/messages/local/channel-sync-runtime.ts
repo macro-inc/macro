@@ -590,12 +590,14 @@ export function createChannelSyncRuntime(
       // may have written older ones over them: read again from the page,
       // which carries each record as it is now. A page with more after it is
       // read again by the next one.
-      const overwritten =
-        !delta.hasMore && out.newestFrame !== undefined && out.newestFrame > to;
-      // Left as a repair until a page read again holds, so a drop or a
-      // failure before then repairs from here.
+      const overtakenPage =
+        out.newestFrame !== undefined && out.newestFrame > to;
+      const overwritten = !delta.hasMore && overtakenPage;
+      // Left as a repair until a page read again holds, or the next page
+      // after one with more, so a drop or a failure before then repairs from
+      // here.
       if (
-        overwritten &&
+        overtakenPage &&
         (state.repairFrom === undefined || to < state.repairFrom)
       ) {
         state.repairFrom = to;

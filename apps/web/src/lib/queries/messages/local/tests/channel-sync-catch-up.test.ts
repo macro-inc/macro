@@ -1234,3 +1234,49 @@ it('asks nothing more from a prewarm pass that was replaced', async () => {
     test.stop();
   }
 });
+
+it.each(['alone', 'with a gap asked meanwhile'])(
+  'repairs an edit a page with more after it overwrote when the next page fails (%s)',
+  async (variant) => {
+    vi.useFakeTimers();
+    quiet();
+    const test = setup();
+    const older = graphqlMessage(6, { content: 'old edit' });
+    const newer = graphqlMessage(6, { content: 'live edit' });
+    const key = `GraphqlChannelMessage:${newer.id}`;
+    try {
+      await vi.advanceTimersByTimeAsync(600);
+      expect(cursors(test)).toEqual(['5']);
+      // The page reads through 205 with more after it, and the old text,
+      // before the edit at 207; both frames store before it lands.
+      test.push('206', graphqlMessage(206));
+      await vi.advanceTimersByTimeAsync(20);
+      test.push('207', newer);
+      await vi.advanceTimersByTimeAsync(20);
+      expect(test.records.get(key)).toBe(newer.content);
+      if (variant !== 'alone') {
+        test.runtime.noteServerRead(CHANNEL_ID, '5', test.runtime.epoch(), '5');
+        await vi.advanceTimersByTimeAsync(600);
+      }
+      test.requests[0].answer(
+        delta('205', { hasMore: true, messages: [older] })
+      );
+      await vi.advanceTimersByTimeAsync(20);
+      expect(cursors(test)).toEqual(['5', '205']);
+      test.requests[1].fail();
+      await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MS + 600);
+
+      // The retry replays from the overwritten page.
+      expect(cursors(test)).toEqual(['5', '205', '205']);
+      test.requests[2].answer(delta('207', { messages: [newer] }));
+      await vi.advanceTimersByTimeAsync(20);
+      await expect(test.runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe(
+        'current'
+      );
+      expect(test.seq()).toBe('207');
+      expect(test.records.get(key)).toBe(newer.content);
+    } finally {
+      test.stop();
+    }
+  }
+);
