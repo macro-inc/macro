@@ -44,7 +44,7 @@ type Section = {
   screen: string;
   alt: string;
   fit?: 'bleed' | 'full';
-  page?: { title: string; path: ProductPagePath };
+  page?: { title: string; path: ProductPagePath | '/docs/product/home' };
 };
 
 // Above each graphic: one simple sentence that fills nearly two lines on desktop.
@@ -61,6 +61,7 @@ const SECTIONS: readonly Section[] = [
     tutorial: 'home',
     screen: inboxScreen,
     alt: 'Macro Home with a pull request open beside the list: its description, status and a review request',
+    page: { title: 'Home', path: '/docs/product/home' },
   },
   {
     id: 'email',
@@ -239,20 +240,13 @@ export function HomepageSections() {
             aura={section.tutorial}
             title={section.title}
             description={section.description}
-            more={
-              section.page && (
-                <HomepageFeatureDetails
-                  title={section.page.title}
-                  path={section.page.path}
-                />
-              )
-            }
           >
             <HomepageScreen
               tutorial={section.tutorial}
               src={section.screen}
               alt={section.alt}
               fit={section.fit}
+              page={section.page}
             />
             <SectionCaption sentences={section.caption} />
             {section.id === 'home' && <Shortcuts />}

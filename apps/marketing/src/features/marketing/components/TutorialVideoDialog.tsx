@@ -31,9 +31,16 @@ function PlayDisc() {
 
 /**
  * A "Watch demo" button that opens the Block's tutorial video in a dialog,
- * paused behind the app's play pill until the visitor presses it.
+ * paused behind the app's play pill until the visitor presses it (unless
+ * `autoPlay` is set for direct play triggers).
  */
-export function TutorialVideoDialog(props: { tutorial: TutorialVideoId }) {
+export function TutorialVideoDialog(props: {
+  tutorial: TutorialVideoId;
+  triggerClass?: string;
+  triggerLabel?: string;
+  lengthClass?: string;
+  autoPlay?: boolean;
+}) {
   const [open, setOpen] = createSignal(false);
   const [started, setStarted] = createSignal(false);
   let video: HTMLVideoElement | undefined;
@@ -78,10 +85,14 @@ export function TutorialVideoDialog(props: { tutorial: TutorialVideoId }) {
 
   return (
     <Dialog open={open()} onOpenChange={changeOpen} modal>
-      <Dialog.Trigger class="site-nav-demo tutorial-video-trigger">
+      <Dialog.Trigger
+        class={props.triggerClass ?? 'site-nav-demo tutorial-video-trigger'}
+      >
         <Play aria-hidden="true" />
-        <span>Watch demo</span>
-        <span class="tutorial-video-trigger-length">{tutorial().length}</span>
+        <span>{props.triggerLabel ?? 'Watch demo'}</span>
+        <span class={props.lengthClass ?? 'tutorial-video-trigger-length'}>
+          {tutorial().length}
+        </span>
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay class="tutorial-video-overlay" />
@@ -97,7 +108,12 @@ export function TutorialVideoDialog(props: { tutorial: TutorialVideoId }) {
           </header>
           <div class="tutorial-video-stage">
             <video
-              ref={video}
+              ref={(element) => {
+                video = element;
+                if (props.autoPlay && open()) {
+                  queueMicrotask(() => void play());
+                }
+              }}
               src={tutorialVideoUrl(props.tutorial)}
               poster={tutorialPosterUrl(props.tutorial)}
               preload="metadata"

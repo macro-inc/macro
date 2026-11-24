@@ -1,4 +1,7 @@
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import { Show } from 'solid-js';
 import type { TutorialVideoId } from '../../core/tutorial-videos';
+import { TutorialVideoDialog } from '../TutorialVideoDialog';
 import { TutorialWallpaper } from '../TutorialWallpaper';
 import './homepage-screen.css';
 
@@ -11,7 +14,15 @@ export function HomepageScreen(props: {
   src: string;
   alt: string;
   fit?: 'bleed' | 'full';
+  page?: { title: string; path: string };
 }) {
+  const pageLabel = () => {
+    if (!props.page) return '';
+    return props.page.title === 'CRM'
+      ? props.page.title
+      : props.page.title.toLowerCase();
+  };
+
   return (
     <figure class="homepage-screen" data-fit={props.fit ?? 'bleed'}>
       <div class="homepage-screen-wallpaper" aria-hidden="true">
@@ -26,6 +37,26 @@ export function HomepageScreen(props: {
         loading="lazy"
         decoding="async"
       />
+      <div class="homepage-screen-actions">
+        <TutorialVideoDialog
+          tutorial={props.tutorial}
+          triggerClass="homepage-screen-action homepage-screen-action--video"
+          lengthClass="homepage-screen-action-length"
+          triggerLabel="Watch"
+          autoPlay
+        />
+        <Show when={props.page}>
+          {(page) => (
+            <a
+              class="homepage-screen-action homepage-screen-action--page"
+              href={page().path}
+            >
+              <span>Learn about {pageLabel()}</span>
+              <ArrowRight aria-hidden="true" />
+            </a>
+          )}
+        </Show>
+      </div>
     </figure>
   );
 }

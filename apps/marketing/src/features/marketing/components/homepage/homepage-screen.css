@@ -77,3 +77,121 @@
     margin-bottom: -9%;
   }
 }
+
+.homepage-screen-actions {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: calc(100% - 28px);
+}
+
+.feature-page .homepage-screen-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 999px;
+  background: rgb(14 14 16 / 0.8);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 8px 24px rgb(0 0 0 / 0.48);
+  color: #fff;
+  font: 450 13.5px/1 'Inter Variable', Inter, sans-serif;
+  letter-spacing: -0.005em;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease;
+}
+
+.feature-page .homepage-screen-action:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.homepage-screen-action--video svg {
+  flex-shrink: 0;
+  width: 11px;
+  height: 11px;
+  color: #fff;
+}
+
+.homepage-screen-action-length {
+  color: rgb(255 255 255 / 0.58);
+  font-variant-numeric: tabular-nums;
+}
+
+.homepage-screen-action-length::before {
+  content: '·';
+  margin-right: 7px;
+}
+
+.homepage-screen-action--page svg {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  color: rgb(255 255 255 / 0.72);
+  transition: transform 150ms ease, color 150ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .feature-page .homepage-screen-action:hover {
+    background: rgb(28 28 32 / 0.9);
+    border-color: rgb(255 255 255 / 0.28);
+    transform: translateY(-1px);
+  }
+
+  .feature-page .homepage-screen-action--page:hover svg {
+    color: #fff;
+    transform: translateX(2px);
+  }
+}
+
+@media (max-width: 699px) {
+  .homepage-screen-actions {
+    right: 10px;
+    bottom: 10px;
+    gap: 6px;
+    max-width: calc(100% - 20px);
+  }
+
+  .feature-page .homepage-screen-action {
+    height: 32px;
+    padding: 0 11px;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .homepage-screen-action-length::before {
+    margin-right: 5px;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .feature-page .homepage-screen-action {
+    background: #141416;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-page .homepage-screen-action,
+  .homepage-screen-action--page svg {
+    transition: none;
+    transform: none;
+  }
+}

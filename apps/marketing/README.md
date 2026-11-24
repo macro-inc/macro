@@ -32,7 +32,7 @@ star count on mount above the August trending caption. `HomepageSections`
 then gives each product one
 `FeaturePageSection` in the feature pages' 640px reading column with a centered
 graphic up to 720px wide and 16:9 on desktop. Use the product page's hero heading and one simple sentence that fills nearly two lines on desktop above
-the capture, with a “Learn about [feature] →” link where the product has a page.
+the capture. Place two frosted dark glass pills on the bottom right of each capture: a “Watch · [length]” button that opens `TutorialVideoDialog` (auto-playing the Block's walkthrough video) and a “Learn about [feature] →” link to that Block's page.
 Let the heading wrap at its normal size. Follow each capture with one or two short
 sentences in the same type as the introduction that reference other Blocks with `ProductCopy` icon links and explain how they integrate. Below 768px, pricing lists the included modules with an icon and a link to each page. Follow the feature sections with `HomepageTestimonials`, `HomepageBlog` (a horizontal strip on desktop and a vertical post list on phones), and `HomepageClosing`. The captures
 in `src/assets/homepage/`
@@ -57,7 +57,7 @@ Lazy-load the lower `HomepageSections` chunk inside its own Suspense boundary so
 
 Keep legal pages (`/terms`, `/privacy`, `/dpa`, `/partners/terms`, and `/delete-account`) on the shared `RouteLegal.css` layout: centered slab titles and dates, a 640px reading column, Inter body copy, and spaced section rules. Preserve legal wording, clause numbering, and DPA table navigation when changing presentation.
 
-Use quiet text links labeled “Learn about [feature] →” under each homepage section's introduction, set in Inter at 370 weight, 14px desktop / 13px phone, and 1.65 line height. Scale arrows to the text. Preserve 44px touch targets and direct product-page destinations.
+On each homepage product capture, place the “Watch · [length]” video dialog trigger and “Learn about [feature] →” page link together in the bottom-right corner as frosted glass pills; keep “Learn about pricing →” under the mobile-only pricing introduction.
 The hero never intercepts scrolling. The shared website sidebar handles
 navigation; do not add a separate homepage index.
 Hide the homepage Downloads and Links resources rail below 1440px instead of
