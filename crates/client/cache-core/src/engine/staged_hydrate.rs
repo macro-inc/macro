@@ -174,6 +174,7 @@ impl<S: Storage> Engine<S> {
             search_changed_buckets,
             viewer_fields,
             channel,
+            channels: _,
         } = self.apply_persist(plan, projections).await?;
         let affected_ops = self.deps.ops_for_changes(&changed, &viewer_fields);
         if fence.is_some() {

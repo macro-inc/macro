@@ -4,6 +4,7 @@ use cache_core::channel_timeline::{
     ChannelCommitStatus, ChannelEviction, ChannelTimelineCommit, TIMELINE_HEAD, TIMELINE_START,
     TOMBSTONE_REPLAY,
 };
+use cache_core::engine::channel_changes::{ChannelChange, ChannelChangeKind};
 use cache_core::engine::{
     BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, NetworkWrite, ReadResult,
 };
@@ -13,6 +14,7 @@ use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::store::InMemoryStorage;
 use pollster::block_on;
 use serde_json::{Value, json};
+use std::sync::{Arc, Mutex};
 
 #[path = "support/channels.rs"]
 mod channels;
@@ -635,5 +637,99 @@ fn a_staged_page_commits_with_what_it_covers() {
             (Some("12"), ChannelCommitStatus::Applied)
         );
         assert_eq!(roots(&mut engine).await, covered(&["m4", "m3", "m2"]));
+    });
+}
+
+#[test]
+fn every_transaction_that_changes_a_channel_names_it_once() {
+    block_on(async {
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let mut engine = held_with_mutations().await;
+        let listener = heard.clone();
+        engine.set_channel_listener(move |changes: &[ChannelChange]| {
+            listener.lock().unwrap().push(changes.to_vec());
+        });
+        let heard = move || std::mem::take(&mut *heard.lock().unwrap());
+        let named = |kind| {
+            vec![vec![ChannelChange {
+                channel_id: "c1".into(),
+                kind,
+            }]]
+        };
+        let changed = || named(ChannelChangeKind::Changed);
+
+        // What a read could not tell apart is not reported.
+        let same = [root("m2", "20"), root("m1", "10")];
+        apply(&mut engine, "10", &same, &whole("10")).await;
+        let touch = ChannelTimelineCommit {
+            touched_at_ms: Some(1),
+            ..commit("c1")
+        };
+        engine.channel_timeline_commit(&touch).await.unwrap();
+        assert_eq!(heard(), Vec::<Vec<_>>::new());
+
+        // A live frame, its watermark alone, and a removal.
+        apply(
+            &mut engine,
+            "11",
+            &[root("m3", "30")],
+            &changes("c1", "10", "11"),
+        )
+        .await;
+        assert_eq!(heard(), changed());
+        apply(&mut engine, "12", &[], &changes("c1", "11", "12")).await;
+        assert_eq!(heard(), changed());
+        let removal = removing(changes("c1", "12", "13"), &["m1"]);
+        apply(&mut engine, "13", &[], &removal).await;
+        assert_eq!(heard(), changed());
+
+        // A stamped answer without a commit.
+        write_page(
+            &mut engine,
+            "c1",
+            "14",
+            &[saying(root("m2", "20"), "edit")],
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(heard(), changed());
+
+        // A pending send: queued, over a live frame, rolled back, settled.
+        let (transaction, claim) = queue(&mut engine, &root("local", "\u{7e}"), true).await;
+        assert_eq!(heard(), changed());
+        apply(
+            &mut engine,
+            "15",
+            &[root("m4", "40")],
+            &changes("c1", "13", "15"),
+        )
+        .await;
+        assert_eq!(heard(), changed());
+        engine
+            .rollback_optimistic_write(transaction, claim)
+            .await
+            .unwrap();
+        assert_eq!(heard(), changed());
+        let claim = queue(&mut engine, &root("local", "\u{7e}"), true).await;
+        settle(&mut engine, claim, &sent("16", &root("m5", "50"))).await;
+        assert_eq!(heard(), [changed(), changed()].concat());
+
+        engine.delete_keys(&[key("m5")]).await.unwrap();
+        assert_eq!(heard(), changed());
+        let reset = ChannelTimelineCommit {
+            reset: true,
+            ..whole("20")
+        };
+        apply(&mut engine, "20", &[root("m1", "10")], &reset).await;
+        assert_eq!(heard(), named(ChannelChangeKind::Reset));
+        engine
+            .channel_timeline_evict(&ChannelEviction {
+                touched_before_ms: 2,
+                max_channels: 5,
+            })
+            .await
+            .unwrap();
+        assert_eq!(heard(), named(ChannelChangeKind::Evicted));
     });
 }

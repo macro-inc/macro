@@ -1,5 +1,6 @@
 //! Local channel timeline reads, commits and eviction.
 
+use super::channel_changes::ChannelChangeKind;
 use super::channel_write::Refused;
 use super::{ComposedChanges, Engine, EngineError, WriteResult, effective_records, layer_keys};
 use crate::channel_timeline::{
@@ -120,8 +121,16 @@ impl<S: ChannelTimelineStorage> Engine<S> {
             .channel_timeline_evict(eviction)
             .await
             .map_err(EngineError::Storage)?;
+        let write = self.record_deletions(outcome.deleted_keys)?;
+        self.report_channels(
+            outcome
+                .channel_ids
+                .iter()
+                .map(|channel_id| (channel_id.clone(), ChannelChangeKind::Evicted))
+                .collect(),
+        );
         Ok(ChannelEvictionResult {
-            write: self.record_deletions(outcome.deleted_keys)?,
+            write,
             channel_ids: outcome.channel_ids,
             has_more: outcome.has_more,
         })

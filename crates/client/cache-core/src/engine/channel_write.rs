@@ -1,5 +1,6 @@
 //! Admission of channel content, and the channel half of a record write.
 
+use super::channel_changes::{ChannelChangeKind, ChannelChanges};
 use super::{Engine, EngineError, Storage};
 use crate::channel_timeline::{
     ChannelCommitOutcome, ChannelCommitStatus, ChannelEntries, ChannelGuard, ChannelGuardQuery,
@@ -38,6 +39,8 @@ pub(super) struct ChannelAdmission {
     pub(super) deleted: BTreeSet<EntityKey<'static>>,
     /// Whether timeline reads may change beyond the records written.
     pub(super) changes_reads: bool,
+    /// The channels whose timelines the write changes.
+    pub(super) changes: ChannelChanges,
     stamped: HashMap<EntityKey<'static>, Admitted>,
     /// Records written whole: nothing they held before is merged into.
     replaced: BTreeSet<EntityKey<'static>>,
@@ -78,8 +81,19 @@ impl ChannelAdmission {
         self.replaced.contains(key)
     }
 
+    fn note_change(&mut self, channel_id: &str, kind: ChannelChangeKind) {
+        let change = self.changes.entry(channel_id.to_owned()).or_insert(kind);
+        *change = kind.max(*change);
+    }
+
     /// Takes the row of a merged entry the write stores.
     pub(super) fn note_record(&mut self, key: &EntityKey<'static>, record: &Record, changed: bool) {
+        if changed
+            && is_channel_entry(key)
+            && let Some(channel_id) = entry_channel_id(record)
+        {
+            self.note_change(channel_id, ChannelChangeKind::Changed);
+        }
         let Some(admitted) = self.stamped.get(key) else {
             return;
         };
@@ -89,7 +103,10 @@ impl ChannelAdmission {
         }
         match project_channel_timeline(key, record) {
             Some(row) => {
-                self.changes_reads |= admitted.held.is_none();
+                if admitted.held.is_none() {
+                    self.changes_reads = true;
+                    self.note_change(&row.channel_id, ChannelChangeKind::Changed);
+                }
                 self.write.rows.push(ChannelRowWrite { row, seq });
             }
             None => {
@@ -304,6 +321,14 @@ impl<S: Storage> Engine<S> {
             || commit.reset
             || !admission.write.coverage.is_empty()
             || !admission.deleted.is_empty();
+        if admission.changes_reads {
+            let kind = if commit.reset {
+                ChannelChangeKind::Reset
+            } else {
+                ChannelChangeKind::Changed
+            };
+            admission.note_change(channel_id, kind);
+        }
         Ok(())
     }
 

@@ -4,6 +4,7 @@
 
 pub mod authority;
 mod calendar;
+pub mod channel_changes;
 mod channel_timeline;
 mod channel_write;
 mod hydration;
@@ -287,6 +288,8 @@ struct PersistedChanges {
     search_changed_buckets: BTreeSet<String>,
     viewer_fields: ViewerFields,
     channel: Option<ChannelCommitOutcome>,
+    /// The channels reported changed.
+    channels: channel_changes::ChannelChanges,
 }
 
 /// Records a write would leave, not yet written; `None` deletes one.
@@ -542,6 +545,7 @@ pub struct Engine<S: Storage> {
     optimistic_hydrated: bool,
     /// What the last projection passes read, for the write that follows.
     kept_reads: Option<pass_reads::KeptReads>,
+    channel_listener: Option<Box<dyn channel_changes::ChannelListener>>,
 }
 
 impl<S: Storage> Engine<S> {
@@ -577,6 +581,7 @@ impl<S: Storage> Engine<S> {
             optimistic: Vec::new(),
             optimistic_hydrated: false,
             kept_reads: None,
+            channel_listener: None,
         }
     }
 
@@ -726,6 +731,7 @@ impl<S: Storage> Engine<S> {
             .collect();
         let affected_ops = self.deps.ops_for_keys(changed.iter());
         let revision = self.advance_revision()?;
+        self.report_channels(channel_changes::composed(&before_all, &after));
         self.live_queries.record(
             revision,
             live_query::Changes {
@@ -1829,6 +1835,7 @@ impl<S: Storage> Engine<S> {
             search_changed_buckets,
             viewer_fields,
             channel,
+            channels: _,
         } = persisted;
         let mut affected_ops = if is_query {
             self.deps.ops_for_changes(&visible_changed, &viewer_fields)
@@ -2034,6 +2041,9 @@ impl<S: Storage> Engine<S> {
             .await?;
         self.optimistic = replacement;
         persisted.field_changes = crate::field_changes::between(&before, &after);
+        let mut channels = channel_changes::composed(&before, &after);
+        channels.retain(|channel, _| !persisted.channels.contains_key(channel));
+        self.report_channels(channels);
         if persisted.revision_advanced {
             self.live_queries.extend(
                 persisted.revision,
@@ -2311,6 +2321,7 @@ impl<S: Storage> Engine<S> {
         } else {
             self.revision
         };
+        self.report_channels(admission.changes.clone());
         if revision_advanced {
             self.live_queries.record(
                 revision,
@@ -2344,6 +2355,7 @@ impl<S: Storage> Engine<S> {
             search_changed_buckets,
             viewer_fields,
             channel: admission.outcome,
+            channels: admission.changes,
         })
     }
 
@@ -2681,6 +2693,7 @@ impl<S: Storage> Engine<S> {
             affected_ops.remove(&origin);
         }
         let revision = self.advance_revision()?;
+        self.report_channels(channel_changes::composed(&before, &after));
         self.live_queries.record(
             revision,
             live_query::Changes {
@@ -3452,6 +3465,9 @@ impl<S: Storage> Engine<S> {
             .filter(|key| before.get(key) != after.get(key))
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
+        let mut channels = channel_changes::composed(&before, &after);
+        channels.extend(admission.changes);
+        self.report_channels(channels);
         self.live_queries.record(
             revision,
             live_query::Changes {
@@ -3562,6 +3578,7 @@ impl<S: Storage> Engine<S> {
             .filter(|key| before.get(key) != after.get(key))
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
+        self.report_channels(channel_changes::composed(&before, &after));
         self.live_queries.record(
             revision,
             live_query::Changes {
@@ -3811,6 +3828,7 @@ impl<S: Storage> Engine<S> {
         self.ensure_revision_can_advance()?;
         let keys = &*without_metadata(keys);
         let affected = self.deps.ops_for_keys(keys.iter());
+        let channels = self.channels_holding(keys).await?;
         self.storage
             .delete_batch(keys)
             .await
@@ -3825,6 +3843,7 @@ impl<S: Storage> Engine<S> {
             self.hot.pop(key);
         }
         self.advance_revision()?;
+        self.report_channels(channels);
         Ok(self.revisioned(affected))
     }
 
@@ -3984,6 +4003,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
         self.ensure_revision_can_advance()?;
         let keys = &*without_metadata(keys);
         let affected = self.deps.ops_for_keys(keys.iter());
+        let channels = self.channels_holding(keys).await?;
         self.storage
             .delete_batch_with_projection_changes(keys, projections)
             .await
@@ -3998,6 +4018,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
             self.hot.pop(key);
         }
         self.advance_revision()?;
+        self.report_channels(channels);
         Ok(self.revisioned(affected))
     }
 
