@@ -34,6 +34,10 @@ the Soup-backed thread list, and saved email views.
   `components/EmailRowStylePreview.tsx` draws Settings' inert sample of it
   with the real row, restoring Mail's list tokens that the settings card
   overrides.
+- `primitives/create-email-row-labels.ts`: the labels each row shows after its
+  tags (`ListEntity.labels`), named from the viewer's label list once per list
+  through `@queries/email/label-names`, which the open thread's pill and side
+  panel share.
 - `primitives/create-search-scroll-reset.ts`: a new search starts at the top
   once its own results replace the rows kept on screen.
 - `search/`: the `in:<view>` filter (`email-search-scope.ts`: parsing, the

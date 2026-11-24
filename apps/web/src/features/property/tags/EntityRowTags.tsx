@@ -28,6 +28,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { LabelIcon, LabelPill, type RowLabel } from './LabelPill';
 import { TagDot } from './TagDot';
 import { type EditableTag, TagEditorDialog } from './TagEditorDialog';
 import { TagPicker, TagSheetPicker } from './TagPicker';
@@ -98,6 +99,43 @@ function HoverTagRow(props: {
         <PencilIcon class="size-3.5" />
       </Button>
     </div>
+  );
+}
+
+function HoverLabelRow(props: { label: RowLabel }) {
+  return (
+    <div class="flex min-w-0 items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-1 text-ink">
+      <LabelIcon />
+      <span class={hoverMenuLabelClass}>{props.label.fullName}</span>
+    </div>
+  );
+}
+
+/** Hidden labels when no tag is hidden: a read-only count, listed on hover. */
+function LabelOverflow(props: { labels: RowLabel[]; visibleCount: number }) {
+  return (
+    <Layer depth={2}>
+      <HoverCard
+        placement="bottom-end"
+        content={
+          <div class="flex flex-col gap-0.5">
+            <For each={props.labels}>
+              {(label) => <HoverLabelRow label={label} />}
+            </For>
+          </div>
+        }
+      >
+        <span
+          class={badgeTriggerClasses({
+            variant: 'outline',
+            size: 'xs',
+            class: 'border-edge bg-surface-2 text-ink-muted touch:min-h-0',
+          })}
+        >
+          {`${props.visibleCount > 0 ? '+' : ''}${props.labels.length}`}
+        </span>
+      </HoverCard>
+    </Layer>
   );
 }
 
@@ -236,6 +274,8 @@ function TagChip(props: {
 
 function TagOverflow(props: {
   tags: ResolvedTag[];
+  /** Hidden labels, which come after the hidden tags and share the count. */
+  labels: RowLabel[];
   visibleCount: number;
   createDocTags: CreateDocTags;
   onFilterByTag?: (id: string) => void;
@@ -252,8 +292,12 @@ function TagOverflow(props: {
     if (pickerActive()) props.onActiveChange(false);
   });
   const dots = () => props.tags.slice(0, MAX_OVERFLOW_DOTS);
-  const count = () =>
-    `${props.visibleCount > 0 ? '+' : ''}${props.tags.length} ${props.tags.length === 1 ? 'tag' : 'tags'}`;
+  const count = () => {
+    const plus = props.visibleCount > 0 ? '+' : '';
+    if (props.labels.length > 0)
+      return `${plus}${props.tags.length + props.labels.length}`;
+    return `${plus}${props.tags.length} ${props.tags.length === 1 ? 'tag' : 'tags'}`;
+  };
 
   return (
     <Layer depth={2}>
@@ -270,6 +314,9 @@ function TagOverflow(props: {
                   onEdit={props.onEdit}
                 />
               )}
+            </For>
+            <For each={props.labels}>
+              {(label) => <HoverLabelRow label={label} />}
             </For>
           </div>
         }
@@ -312,13 +359,17 @@ function TagOverflow(props: {
  * shows up to `maxVisible` chips then a "+N tags" chip, or "N tags" when every tag
  * is collapsed. Clicking a chip opens the TagPicker to edit the entity's tags.
  * Hovering a chip surfaces a "Filter by" link; hovering the overflow lists hidden
- * tags. onFilterByTag applies a tag filter to the list.
+ * tags. onFilterByTag applies a tag filter to the list. An email's provider
+ * labels follow its tags as read-only pills under the same limit, and the
+ * overflow then counts both ("+2").
  */
 export function EntityRowTags(props: {
   entityId: string;
   entityType: EntityType;
   properties: SoupProperty[] | undefined;
   maxVisible?: number;
+  /** Read-only provider labels, after the tags. */
+  labels?: readonly RowLabel[];
   /** The host's measured overflow controller; hide trailing tags before truncating its title. */
   collapse?: PriorityCollapser;
   class?: string;
@@ -334,11 +385,13 @@ export function EntityRowTags(props: {
   const [activeChipId, setActiveChipId] = createSignal<string>();
   const [visibleLimit, setVisibleLimit] = createSignal(Infinity);
   const id = createUniqueId();
+  const labels = () => props.labels ?? [];
+  const itemCount = () => appliedTags().length + labels().length;
   const limit = createMemo(() =>
-    Math.min(appliedTags().length, props.maxVisible ?? DEFAULT_MAX_VISIBLE)
+    Math.min(itemCount(), props.maxVisible ?? DEFAULT_MAX_VISIBLE)
   );
   const maxVisible = () => {
-    if (appliedTags().length === 1) return 1;
+    if (itemCount() === 1) return 1;
     return props.collapse ? Math.min(limit(), visibleLimit()) : limit();
   };
 
@@ -346,7 +399,7 @@ export function EntityRowTags(props: {
     const collapse = props.collapse;
     const count = limit();
     // Keep triggers mounted through the picker and any nested tag editor.
-    if (!collapse || pickerActive() || appliedTags().length === 1) return;
+    if (!collapse || pickerActive() || itemCount() === 1) return;
     for (let index = 0; index < count; index++) {
       onCleanup(
         collapse.register({
@@ -365,7 +418,7 @@ export function EntityRowTags(props: {
   });
   const visible = () => {
     const tags = appliedTags();
-    const count = maxVisible();
+    const count = Math.min(maxVisible(), tags.length);
     const activeId = activeChipId();
     if (
       !activeId ||
@@ -387,10 +440,13 @@ export function EntityRowTags(props: {
     const visibleIds = new Set(visible().map((tag) => tag.optionId));
     return appliedTags().filter((tag) => !visibleIds.has(tag.optionId));
   };
+  const visibleLabels = () =>
+    labels().slice(0, Math.max(0, maxVisible() - visible().length));
+  const hiddenLabels = () => labels().slice(visibleLabels().length);
   const [editingTag, setEditingTag] = createSignal<ResolvedTag>();
 
   return (
-    <Show when={appliedTags().length > 0}>
+    <Show when={itemCount() > 0}>
       <div
         class={cn(
           'flex items-center gap-1',
@@ -414,10 +470,24 @@ export function EntityRowTags(props: {
             />
           )}
         </Key>
-        <Show when={hidden().length > 0}>
+        <For each={visibleLabels()}>
+          {(label) => <LabelPill label={label} class="max-w-[14ch]" />}
+        </For>
+        <Show
+          when={hidden().length > 0}
+          fallback={
+            <Show when={hiddenLabels().length > 0}>
+              <LabelOverflow
+                labels={hiddenLabels()}
+                visibleCount={visible().length + visibleLabels().length}
+              />
+            </Show>
+          }
+        >
           <TagOverflow
             tags={hidden()}
-            visibleCount={visible().length}
+            labels={hiddenLabels()}
+            visibleCount={visible().length + visibleLabels().length}
             createDocTags={createDocTags}
             onFilterByTag={props.onFilterByTag}
             onEdit={setEditingTag}

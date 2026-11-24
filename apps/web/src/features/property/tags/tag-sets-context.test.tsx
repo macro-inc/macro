@@ -410,4 +410,76 @@ describe('EntityRowTags live insertions', () => {
     expect(removed.isConnected).toBe(false);
     expect(registrations.size).toBe(2);
   });
+
+  describe('email labels on a row', () => {
+    const tagSets = (): TagSetResponse[] => [
+      {
+        definition: { id: 'tag-definition' },
+        scope: 'user',
+        options: ['First', 'Second', 'Third', 'Fourth'].map((name, index) => ({
+          id: `${name.toLowerCase()}-tag`,
+          propertyDefinitionId: 'tag-definition',
+          displayOrder: index,
+          value: { type: 'string', value: name },
+        })),
+      } as TagSetResponse,
+    ];
+    const tagged = (...ids: string[]) => [
+      {
+        id: 'property-assignment',
+        definition: { id: 'tag-definition' },
+        value: { type: 'SelectOption', value: ids },
+      } as SoupProperty,
+    ];
+    const label = (name: string, fullName = name) => ({
+      id: `${name}-label`,
+      name,
+      fullName,
+    });
+    const renderRow = (
+      properties: SoupProperty[],
+      labels: ReturnType<typeof label>[]
+    ) =>
+      render(() => (
+        <QueryClientProvider client={new QueryClient()}>
+          <TagSetsProvider tagSets={tagSets}>
+            <EntityRowTags
+              entityId="thread-1"
+              entityType={EntityType.THREAD}
+              properties={properties}
+              labels={labels}
+            />
+          </TagSetsProvider>
+        </QueryClientProvider>
+      ));
+
+    it('follows the tags and shares their limit of three', () => {
+      const view = renderRow(tagged('first-tag', 'second-tag'), [
+        label('Larkspur', 'Customers / Larkspur'),
+        label('Orders'),
+      ]);
+      expect(view.getByRole('button', { name: 'First' })).toBeTruthy();
+      expect(view.getByRole('button', { name: 'Second' })).toBeTruthy();
+      expect(view.getByText('Larkspur')).toBeTruthy();
+      expect(view.queryByText('Orders')).toBeNull();
+      expect(view.getByText('+1')).toBeTruthy();
+    });
+
+    it('counts hidden tags and labels together', () => {
+      const view = renderRow(
+        tagged('first-tag', 'second-tag', 'third-tag', 'fourth-tag'),
+        [label('Orders')]
+      );
+      expect(view.getByRole('button', { name: 'Third' })).toBeTruthy();
+      expect(view.queryByRole('button', { name: 'Fourth' })).toBeNull();
+      expect(view.queryByText('Orders')).toBeNull();
+      expect(view.getByText('+2')).toBeTruthy();
+    });
+
+    it('shows a sole label by its own name', () => {
+      const view = renderRow([], [label('Larkspur', 'Customers / Larkspur')]);
+      expect(view.getByText('Larkspur')).toBeTruthy();
+      expect(view.queryByText('Customers / Larkspur')).toBeNull();
+    });
+  });
 });
