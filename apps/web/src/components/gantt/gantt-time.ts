@@ -150,7 +150,11 @@ function exactlyRescheduled(
       start: new Date(
         Math.min(
           moved(start).getTime(),
-          Math.max(end.getTime() - step, start.getTime())
+          // On the grid even when the end is held at the end of its day.
+          Math.max(
+            snapGanttInstant(new Date(end.getTime() - step), snap).getTime(),
+            start.getTime()
+          )
         )
       ),
       end,

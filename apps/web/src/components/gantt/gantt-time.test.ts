@@ -255,6 +255,20 @@ describe('rescheduling a timed range', () => {
     ).toEqual(wholeDayStart);
   });
 
+  it('stops the start edge on the grid before a due date held at the end of its day', () => {
+    const endOfDay = new Date(2026, 9, 13, 23, 59, 59, 999);
+    expect(
+      rescheduledGanttTimes(
+        { start: new Date(2026, 9, 13, 9), end: endOfDay },
+        'start',
+        october9,
+        october9 + 1,
+        60,
+        'end'
+      )
+    ).toEqual({ start: new Date(2026, 9, 13, 23), end: endOfDay });
+  });
+
   it('measures a move across a clock change at the start', () => {
     // From Oct 30, 3 days 11 hours later is Nov 2, 8 PM, short of half a day past 3 days.
     expect(

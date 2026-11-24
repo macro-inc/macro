@@ -10,6 +10,7 @@ import {
   addMinutes,
   differenceInCalendarDays,
   differenceInMinutes,
+  endOfDay,
   isSameDay,
   startOfDay,
   startOfHour,
@@ -288,13 +289,18 @@ export function rescheduledStartDue(
     before
       ? addDays(before, differenceInCalendarDays(after, before))
       : startOfDay(after);
+  // A start without a time is held at the start of its new day, never after
+  // a due date on it; a due date at the time of day it was held at.
+  const heldOn = (field: DateField, before: Date | null, value: Date) =>
+    field === 'start' ? startOfDay(value) : onDayOf(before, value);
   const end = (
     field: DateField,
     before: Date | null,
     value: Date
   ): RescheduledEnd => ({
     field,
-    value: wholeDay(field) && !range.allDay ? onDayOf(before, value) : value,
+    value:
+      wholeDay(field) && !range.allDay ? heldOn(field, before, value) : value,
     hasTime: !wholeDay(field),
   });
   const ends: RescheduledEnd[] = [];
@@ -304,7 +310,29 @@ export function rescheduledStartDue(
   if (moved('due', previous.due, range.end)) {
     ends.push(end('due', previous.due, range.end));
   }
-  if (ends.length === 2 && previous.due && range.start > previous.due) {
+  // A due date without a time that the start lands after on its own day is
+  // held at the end of that day, so the server never pulls the start back.
+  const start =
+    ends.find((saved) => saved.field === 'start')?.value ?? previous.start;
+  const dueIndex = ends.findIndex((saved) => saved.field === 'due');
+  const due =
+    ends.find((saved) => saved.field === 'due')?.value ?? previous.due;
+  if (
+    !range.allDay &&
+    previous.wholeDay === 'due' &&
+    due &&
+    start > due &&
+    isSameDay(start, due)
+  ) {
+    const held: RescheduledEnd = {
+      field: 'due',
+      value: endOfDay(due),
+      hasTime: false,
+    };
+    if (dueIndex >= 0) ends[dueIndex] = held;
+    else ends.push(held);
+  }
+  if (ends.length === 2 && previous.due && start > previous.due) {
     ends.reverse();
   }
   return ends;
