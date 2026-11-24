@@ -354,6 +354,13 @@ function TagOverflow(props: {
           <span>{count()}</span>
         </TagPicker>
       </HoverCard>
+      {/* The trigger is named for editing tags, so name the folded labels
+          beside it for screen readers. */}
+      <Show when={props.labels.length > 0}>
+        <span class="sr-only">
+          {props.labels.map((label) => label.fullName).join(', ')}
+        </span>
+      </Show>
     </Layer>
   );
 }

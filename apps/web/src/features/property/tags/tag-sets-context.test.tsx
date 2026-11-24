@@ -476,8 +476,9 @@ describe('EntityRowTags live insertions', () => {
       );
       expect(view.getByRole('button', { name: 'Third' })).toBeTruthy();
       expect(view.queryByRole('button', { name: 'Fourth' })).toBeNull();
-      expect(view.queryByText('Orders')).toBeNull();
       expect(view.getByText('+2')).toBeTruthy();
+      // The folded label is named for screen readers beside the tags' trigger.
+      expect(view.getByText('Orders').classList).toContain('sr-only');
     });
 
     it('shows a sole label by its own name', () => {
