@@ -86,11 +86,15 @@ export function assertQueryAccount(
 const IDENTITY_WAIT_MS = 10_000;
 
 /**
- * Whether a sign-in may have replaced `userId`, who the app keeps showing
- * until it says who signed in: waits for that, or assumes so after a while.
+ * Whether a sign-in may have replaced `userId`, who the app can keep showing
+ * after it: while one has not said who signed in this waits for that, or
+ * assumes so after a while.
  */
 export async function replacedBySignIn(userId: string): Promise<boolean> {
-  if (!accountSession().pending) return false;
+  if (!accountSession().pending) {
+    const current = currentQueryAccount();
+    return current !== undefined && current.userId !== userId;
+  }
   const proven = until(() => !accountSession().pending);
   try {
     await Promise.race([proven, promiseTimeout(IDENTITY_WAIT_MS)]);
