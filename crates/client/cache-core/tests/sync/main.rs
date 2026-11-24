@@ -17,6 +17,7 @@ use std::convert::Infallible;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 mod fence;
+mod lane_completion;
 
 const TASKS: &str = "query SoupBackfillSyncTasks($input: SoupInput!) { user { id soup(input: $input) { items { __typename id ... on GraphqlSoupDocument { name } } nextCursor } } }";
 const TASK_IDS: &str = "query SoupBackfillSyncTaskIds($input: SoupInput!) { user { id soup(input: $input) { items { __typename id } nextCursor } } }";

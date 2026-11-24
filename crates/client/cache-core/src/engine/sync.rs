@@ -456,19 +456,29 @@ where
             }
             SyncLaneKind::Calendar { coverage } => {
                 let links = std::mem::take(&mut stored.pending_watermark);
-                let commit = CalendarCommit {
-                    coverage: coverage.clone(),
-                    watermark: (!links.is_empty())
-                        .then_some(CalendarWatermarkUpdate::Merge { links }),
-                    ..CalendarCommit::default()
+                // Only a window listed to its end is covered; a capped one
+                // still vouches for the watermark of the pages it wrote.
+                let coverage = match reason {
+                    SyncLaneDoneReason::Complete => coverage.clone(),
+                    SyncLaneDoneReason::MaxItems => Vec::new(),
                 };
-                let result = self
-                    .calendar_commit(&commit)
-                    .await
-                    .map_err(SyncWriteError::Engine)?;
-                SyncApplied::CalendarCommitted {
-                    lane: lane.id.clone(),
-                    result,
+                if coverage.is_empty() && links.is_empty() {
+                    SyncApplied::Recorded
+                } else {
+                    let commit = CalendarCommit {
+                        coverage,
+                        watermark: (!links.is_empty())
+                            .then_some(CalendarWatermarkUpdate::Merge { links }),
+                        ..CalendarCommit::default()
+                    };
+                    let result = self
+                        .calendar_commit(&commit)
+                        .await
+                        .map_err(SyncWriteError::Engine)?;
+                    SyncApplied::CalendarCommitted {
+                        lane: lane.id.clone(),
+                        result,
+                    }
                 }
             }
         };
