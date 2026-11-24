@@ -1,3 +1,4 @@
+import { COMPOSER_STORAGE_CLEARED } from '@core/auth/clear-composer-storage';
 import { deepEqual } from '@core/util/compareUtils';
 import { thrownResultErrorHasCode } from '@core/util/result';
 
@@ -35,19 +36,31 @@ const samePlace = (a: UncertainSend, b: UncertainSend) =>
  * would post it again. A send is keyed by who sends it, where it goes and
  * what it says. Only the next send to that place can be the retry: once
  * something else is sent there, the same words sent later are a new message.
+ * The end of a session (sign-out or expiry) forgets everything, sends still
+ * out included: their drafts go with it. One is made once per page, never per
+ * view, so nothing removes its listener.
  */
 export function createUncertainSends(newId: () => string) {
   let uncertain: { send: UncertainSend; id: string }[] = [];
+  // Ids given out this session: one from before does not come back.
+  const issued = new Set<string>();
+  window.addEventListener(COMPOSER_STORAGE_CLEARED, () => {
+    uncertain = [];
+    issued.clear();
+  });
   return {
     /** The id to send `send` under. */
     idFor(send: UncertainSend): string {
       const key = canonical(send);
       const entry = uncertain.find((e) => deepEqual(e.send, key));
       uncertain = uncertain.filter((e) => !samePlace(e.send, key));
-      return entry?.id ?? newId();
+      const id = entry?.id ?? newId();
+      issued.add(id);
+      return id;
     },
     /** Notes a failed send whose draft the composer shows again. */
     restored(send: UncertainSend, id: string, error: unknown) {
+      if (!issued.delete(id)) return;
       if (!thrownResultErrorHasCode(error, DELIVERY_UNKNOWN)) return;
       const key = structuredClone(canonical(send));
       uncertain = [

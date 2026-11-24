@@ -40,6 +40,10 @@ import { FloatRegions } from '@components/app/mobile/float-regions/float-region-
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import {
+  composerStorageGeneration,
+  composerStorageWritable,
+} from '@core/auth/clear-composer-storage';
 import { EntityLoadGate } from '@core/component/EntityLoadGate';
 import { FindBar } from '@core/component/FindBar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -818,6 +822,7 @@ export function Channel(props: ChannelProps) {
     // channel, or from another account, is another message.
     const uncertainKey = { senderId, channelId, message: payload.message };
     const optimisticId = UNCERTAIN_SENDS.idFor(uncertainKey);
+    const storageGeneration = composerStorageGeneration();
     // Send to the optimistic message's paint; channel.send follows delivery.
     const sendUi = startUiOperation('message.send', {
       attributes: { 'channel.id': channelId, 'message.id': optimisticId },
@@ -844,7 +849,9 @@ export function Channel(props: ChannelProps) {
             !handle ||
             sendSurfaceDisposed ||
             props.channelId !== channelId ||
-            userId() !== senderId
+            userId() !== senderId ||
+            // Nothing goes back to a composer its sign-out has emptied.
+            !composerStorageWritable(storageGeneration)
           ) {
             span.setAttr('composer.outcome', 'unmounted');
             return;

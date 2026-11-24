@@ -97,7 +97,7 @@ TanStack path in `../` runs untouched.
   same place and from any view of it, under the same id
   (`features/channel/Input/utils/uncertain-sends.ts`, which ignores mention
   order), until another message is sent there; the ids live in memory, so a
-  reload forgets them. The
+  reload forgets them, and so does the end of a session. The
   reply composer awaits its send, since it unmounts as it sends, and puts a
   failed reply back through the thread's stored draft, which every open reply
   input holds (`features/channel/Thread/reply-drafts.ts`): a view opened later

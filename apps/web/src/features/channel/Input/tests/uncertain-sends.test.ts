@@ -1,3 +1,7 @@
+import {
+  clearComposerStorage,
+  endComposerStorageClear,
+} from '@core/auth/clear-composer-storage';
 import { ThrownResultError } from '@core/util/result';
 import { describe, expect, it } from 'vitest';
 import { createUncertainSends } from '../utils/uncertain-sends';
@@ -93,6 +97,25 @@ describe('createUncertainSends', () => {
     const first = sends.idFor(send('@ada @ben', 'a', 'ada', [ada, ben]));
     sends.restored(send('@ada @ben', 'a', 'ada', [ada, ben]), first, unknown);
     expect(sends.idFor(send('@ada @ben', 'a', 'ada', [ben, ada]))).toBe(first);
+  });
+
+  it('forgets every uncertain send when the session ends', () => {
+    const sends = ids();
+    const first = sends.idFor(send('hello'));
+    sends.restored(send('hello'), first, unknown);
+    clearComposerStorage();
+    endComposerStorageClear();
+    // The same person signed in again: the draft is gone, so this is new.
+    expect(sends.idFor(send('hello'))).not.toBe(first);
+  });
+
+  it('remembers no send that failed after its session ended', () => {
+    const sends = ids();
+    const first = sends.idFor(send('hello'));
+    clearComposerStorage();
+    sends.restored(send('hello'), first, unknown);
+    endComposerStorageClear();
+    expect(sends.idFor(send('hello'))).not.toBe(first);
   });
 
   it('reuses an uncertain id once', () => {
