@@ -60,6 +60,47 @@ pub(crate) async fn list_messages(
         .collect())
 }
 
+/// Lists one page of up to `max_results` (capped at 500) provider ids of
+/// messages received at or after `since_seconds` (Unix time), newest first,
+/// carrying all of `label_ids`; `page_token` continues a previous page.
+/// Gmail may answer a page short of `maxResults` with more to come.
+#[tracing::instrument(skip(client, access_token, page_token), err)]
+pub(crate) async fn list_messages_since(
+    client: &GmailClient,
+    access_token: &str,
+    max_results: u32,
+    label_ids: &[&str],
+    since_seconds: i64,
+    page_token: Option<&str>,
+) -> Result<ListMessagesResponse, GmailApiHttpError> {
+    // Gmail's `after:` takes seconds as well as dates, and compares the time Gmail received the message.
+    let mut query_params = vec![
+        (
+            "maxResults",
+            min(max_results, LIST_MESSAGES_BATCH_SIZE).to_string(),
+        ),
+        ("q", format!("after:{}", since_seconds.saturating_sub(1))),
+    ];
+    for label_id in label_ids {
+        query_params.push(("labelIds", label_id.to_string()));
+    }
+    if let Some(token) = page_token {
+        query_params.push(("pageToken", token.to_string()));
+    }
+    let response = client
+        .inner
+        .get(format!("{}/users/me/messages", client.base_url))
+        .bearer_auth(access_token)
+        .query(&query_params)
+        .send()
+        .await
+        .map_err(GmailApiHttpError::transport)?;
+    if !response.status().is_success() {
+        return Err(unsuccessful_response(response).await);
+    }
+    decode_json_response(response).await
+}
+
 /// Finds a unique sent message, including messages moved into spam or trash.
 /// Ambiguous or incomplete search responses must never count as proof of absence.
 #[tracing::instrument(skip(client, access_token, message_id), err)]

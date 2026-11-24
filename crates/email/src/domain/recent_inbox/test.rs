@@ -22,20 +22,31 @@ impl RecentInboxMailboxes for Mailboxes {
 }
 
 /// Answers each inbox with its scripted messages, or fails it when it has
-/// none, and records the limit each read asked for.
+/// none, and records what each read asked for.
 #[derive(Default)]
 struct Reader {
     messages: HashMap<Uuid, Vec<RecentInboxMessage>>,
-    limits: Mutex<Vec<u16>>,
+    reads: Mutex<Vec<RecentRead>>,
+}
+
+impl Reader {
+    fn limits(&self) -> Vec<u16> {
+        self.reads
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|read| read.limit)
+            .collect()
+    }
 }
 
 impl RecentInboxReader for Reader {
     async fn recent(
         &self,
         mailbox: &RecentInboxMailbox,
-        limit: u16,
+        read: RecentRead,
     ) -> Result<Vec<RecentInboxMessage>, EmailApiError> {
-        self.limits.lock().unwrap().push(limit);
+        self.reads.lock().unwrap().push(read);
         self.messages
             .get(&mailbox.key.link_id)
             .cloned()
@@ -115,7 +126,16 @@ async fn merges_inboxes_newest_first_and_skips_one_that_fails() {
             ("work@example.com", Some("Outlook middle")),
         ]
     );
-    assert_eq!(*service.reader.limits.lock().unwrap(), vec![2, 2, 2]);
+    assert_eq!(service.reader.limits(), vec![2, 2, 2]);
+    assert!(
+        service
+            .reader
+            .reads
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|read| read.since.is_none() && read.folder == RecentMailFolder::Inbox)
+    );
 }
 
 #[tokio::test]
@@ -136,10 +156,7 @@ async fn limits_outside_one_to_a_hundred_are_clamped() {
         .await
         .unwrap();
 
-    assert_eq!(
-        *service.reader.limits.lock().unwrap(),
-        vec![1, MAX_RECENT_MESSAGES]
-    );
+    assert_eq!(service.reader.limits(), vec![1, MAX_RECENT_MESSAGES]);
 }
 
 #[tokio::test]
@@ -222,4 +239,156 @@ async fn a_longer_snippet_comes_from_the_body_only_when_asked_for() {
     assert!(snippet.starts_with("Your order shipped. Details"));
     assert_eq!(snippet.chars().count(), usize::from(MAX_SNIPPET_CHARS));
     assert_eq!(messages[0].body, None);
+}
+
+fn at(time: &str) -> DateTime<Utc> {
+    time.parse().unwrap()
+}
+
+#[tokio::test]
+async fn a_sent_window_merges_mailboxes_and_keeps_text_for_only_the_newest() {
+    let gmail = mailbox("owner@example.com", UserProvider::Gmail);
+    let outlook = mailbox("work@example.com", UserProvider::Outlook);
+    let texted = |inbox: &str, subject: &str, received_at: &str| {
+        let mut message = message(inbox, subject, received_at);
+        message.snippet = Some(format!("{subject} text"));
+        message.body = Some(format!("  {subject} text\nwith detail  "));
+        message
+    };
+    let mut undated = texted("owner@example.com", "Undated", "2026-11-20T00:00:00Z");
+    undated.received_at = None;
+    let reader = Reader {
+        messages: HashMap::from([
+            (
+                gmail.key.link_id,
+                vec![
+                    texted("owner@example.com", "Today", "2026-11-20T08:00:00Z"),
+                    texted("owner@example.com", "Last week", "2026-11-13T08:00:00Z"),
+                    // A provider answering past the window's start.
+                    texted("owner@example.com", "Too old", "2026-11-09T23:59:59Z"),
+                    undated,
+                ],
+            ),
+            (
+                outlook.key.link_id,
+                vec![
+                    texted("work@example.com", "Yesterday", "2026-11-19T08:00:00Z"),
+                    texted("work@example.com", "Ten days ago", "2026-11-10T00:00:00Z"),
+                ],
+            ),
+        ]),
+        ..Reader::default()
+    };
+    let service = RecentInboxService::new(Mailboxes(Ok(vec![gmail, outlook])), reader);
+    let owner = actor();
+    let read = |limit| {
+        service.read_window(
+            &owner,
+            WindowRead {
+                folder: RecentMailFolder::Sent,
+                days: 10,
+                limit,
+                texts: 2,
+                snippet_chars: MAX_SNIPPET_CHARS,
+            },
+            at("2026-11-20T00:00:00Z") + Duration::hours(12),
+        )
+    };
+    let subjects = |messages: Vec<RecentInboxMessage>| {
+        messages
+            .into_iter()
+            .map(|message| (message.subject, message.snippet))
+            .collect::<Vec<_>>()
+    };
+    let text = |subject: &str| {
+        (
+            Some(subject.to_owned()),
+            Some(format!("{subject} text with detail")),
+        )
+    };
+
+    // Room for every message: only those of the window are kept.
+    assert_eq!(
+        subjects(read(10).await.unwrap()),
+        vec![
+            text("Today"),
+            text("Yesterday"),
+            (Some("Last week".to_owned()), None),
+        ]
+    );
+    // The newest across both inboxes.
+    assert_eq!(
+        subjects(read(2).await.unwrap()),
+        vec![text("Today"), text("Yesterday")]
+    );
+    let read = |limit| RecentRead {
+        folder: RecentMailFolder::Sent,
+        limit,
+        since: Some(at("2026-11-10T12:00:00Z")),
+    };
+    assert_eq!(
+        *service.reader.reads.lock().unwrap(),
+        vec![read(10), read(10), read(2), read(2)]
+    );
+
+    // A limit of 0 reads one message, and a `texts` past the limit gives
+    // it its snippet.
+    let one = service
+        .read_window(
+            &owner,
+            WindowRead {
+                folder: RecentMailFolder::Sent,
+                days: 10,
+                limit: 0,
+                texts: u16::MAX,
+                snippet_chars: MAX_SNIPPET_CHARS,
+            },
+            at("2026-11-20T00:00:00Z") + Duration::hours(12),
+        )
+        .await
+        .unwrap();
+    assert_eq!(subjects(one), vec![text("Today")]);
+}
+
+#[tokio::test]
+async fn a_window_read_reaches_back_a_month_and_five_hundred_messages_at_most() {
+    let inbox = mailbox("owner@example.com", UserProvider::Gmail);
+    let reader = Reader {
+        messages: HashMap::from([(inbox.key.link_id, Vec::new())]),
+        ..Reader::default()
+    };
+    let service = RecentInboxService::new(Mailboxes(Ok(vec![inbox])), reader);
+    let now = at("2026-11-20T00:00:00Z");
+    let window = |days, limit| WindowRead {
+        folder: RecentMailFolder::default(),
+        days,
+        limit,
+        texts: 100,
+        snippet_chars: DEFAULT_SNIPPET_CHARS,
+    };
+
+    service
+        .read_window(&actor(), window(90, 900), now)
+        .await
+        .unwrap();
+    service
+        .read_window(&actor(), window(0, 0), now)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *service.reader.reads.lock().unwrap(),
+        vec![
+            RecentRead {
+                folder: RecentMailFolder::Inbox,
+                limit: MAX_WINDOW_MESSAGES,
+                since: Some(now - Duration::days(i64::from(MAX_WINDOW_DAYS))),
+            },
+            RecentRead {
+                folder: RecentMailFolder::Inbox,
+                limit: 1,
+                since: Some(now - Duration::days(1)),
+            },
+        ]
+    );
 }
