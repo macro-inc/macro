@@ -41526,7 +41526,12 @@
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "The company."
+            "description": "The requested company id."
+          },
+          "mergedInto": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The company the requested one was merged into, which is the one the\nrest of the preview shows. Absent for a company that was not merged."
           },
           "name": {
             "type": ["string", "null"],

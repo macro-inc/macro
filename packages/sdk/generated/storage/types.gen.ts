@@ -6232,9 +6232,14 @@ export type CrmCompanyFilters = {
  */
 export type CrmCompanyPreview = {
     /**
-     * The company.
+     * The requested company id.
      */
     id: string;
+    /**
+     * The company the requested one was merged into, which is the one the
+     * rest of the preview shows. Absent for a company that was not merged.
+     */
+    mergedInto?: string | null;
     /**
      * The team's name override, else the primary domain's directory name.
      */
