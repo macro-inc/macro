@@ -12,7 +12,11 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
-import { onReconnect, SESSION_CHANGE_RELOADS } from './channel-network';
+import {
+  type ReconnectWatch,
+  SESSION_CHANGE_RELOADS,
+  watchReconnect,
+} from './channel-network';
 import {
   type ChannelPage,
   type ChannelPageDeps,
@@ -287,12 +291,14 @@ export function createLocalChannelTimeline(
   let abort: AbortController | undefined;
   let currentLoad: Promise<void> = Promise.resolve();
   // Loads the window again when the connection returns after a failed load.
-  let stopReconnect = () => {};
+  let reconnect: ReconnectWatch | undefined;
   // Pages again in a direction whose page failed, when the connection returns.
-  const pageReconnects = { older: () => {}, newer: () => {} };
-  const stopPageReconnects = () => {
-    pageReconnects.older();
-    pageReconnects.newer();
+  const pageReconnects: Record<'older' | 'newer', ReconnectWatch | undefined> =
+    { older: undefined, newer: undefined };
+  const stopReconnects = () => {
+    reconnect?.stop();
+    pageReconnects.older?.stop();
+    pageReconnects.newer?.stop();
   };
 
   const release = deps.runtime.open(channelId);
@@ -312,8 +318,7 @@ export function createLocalChannelTimeline(
     release();
     loadToken += 1;
     abort?.abort();
-    stopReconnect();
-    stopPageReconnects();
+    stopReconnects();
   });
 
   /**
@@ -356,8 +361,9 @@ export function createLocalChannelTimeline(
     const signal = abort.signal;
     held = false;
     anchorId = around;
-    stopReconnect();
-    stopPageReconnects();
+    stopReconnects();
+    const watch = watchReconnect();
+    reconnect = watch;
     if (reloads === 0)
       setState({
         phase: 'loading',
@@ -384,6 +390,7 @@ export function createLocalChannelTimeline(
         },
         signal
       );
+      watch.stop();
     } catch (error) {
       if (token !== loadToken) return;
       // A reload keeps the window it already shows, and pages from it again.
@@ -391,11 +398,11 @@ export function createLocalChannelTimeline(
         setState({ loadingOlder: false, loadingNewer: false });
         return;
       }
-      setState({ phase: 'failed', error });
       // With no connection nothing on screen retries it: its return does.
-      stopReconnect = onReconnect(() =>
-        fireAndForget(load(around), 'channel-local-sync')
-      );
+      // Armed before the failure shows: a view that answers the failure by
+      // loading another window stops this retry as that load starts.
+      watch.failed(() => fireAndForget(load(around), 'channel-local-sync'));
+      setState({ phase: 'failed', error });
       return;
     }
     if (token !== loadToken) return;
@@ -546,35 +553,61 @@ export function createLocalChannelTimeline(
     }
   };
 
-  const loadMore = async (direction: 'older' | 'newer') => {
+  /**
+   * Pages past the window's end in `direction`. With `again`, reads that
+   * page again instead: it was merged in, but the device did not take it.
+   */
+  const loadMore = async (
+    direction: 'older' | 'newer',
+    again?: { cursor: string }
+  ) => {
     const cursor =
-      direction === 'older' ? state.olderCursor : state.newerCursor;
+      again?.cursor ??
+      (direction === 'older' ? state.olderCursor : state.newerCursor);
     const flag = direction === 'older' ? 'loadingOlder' : 'loadingNewer';
     if (cursor === null || state[flag] || state.phase !== 'ready') return;
     const token = loadToken;
     abort ??= new AbortController();
     const signal = abort.signal;
+    pageReconnects[direction]?.stop();
+    const watch = watchReconnect();
+    pageReconnects[direction] = watch;
+    // The page past `cursor` is in the window, but not yet on the device.
+    let merged = again !== undefined;
     setState(flag, true);
     try {
-      const settled = await fetchMore(direction, cursor, token, signal);
-      if (settled === 'stale' || settled === 'held') return;
-      const wasHeld = held;
-      held = false;
-      // Still loading until the page is read again: a scroll meanwhile
-      // would page past it from a window the device does not hold.
-      if (wasHeld && settled !== 'unheld') {
-        await fetchMoreAgain(direction, cursor, token, signal, settled);
+      if (again) {
+        await fetchMoreAgain(
+          direction,
+          cursor,
+          token,
+          signal,
+          'session-changed'
+        );
+      } else {
+        const settled = await fetchMore(direction, cursor, token, signal);
+        if (settled === 'stale' || settled === 'held') return;
+        const wasHeld = held;
+        held = false;
+        // Still loading until the page is read again: a scroll meanwhile
+        // would page past it from a window the device does not hold.
+        if (wasHeld && settled !== 'unheld') {
+          merged = true;
+          await fetchMoreAgain(direction, cursor, token, signal, settled);
+        }
       }
+      watch.stop();
     } catch (error) {
       // Aborted by a switch or unmount: nothing failed.
       if (token !== loadToken) return;
       // The window keeps what it shows. The next scroll asks again, and so
       // does the connection coming back: scrolled to the end there is no
-      // next scroll.
+      // next scroll. A page shown but not stored is read again from its own
+      // cursor, not from the one it moved the window's end to.
       Telemetry.error(error, { surface: 'channel-local-sync' });
-      pageReconnects[direction]();
-      pageReconnects[direction] = onReconnect(() =>
-        fireAndForget(loadMore(direction), 'channel-local-sync')
+      const retry = merged ? { cursor } : undefined;
+      watch.failed(() =>
+        fireAndForget(loadMore(direction, retry), 'channel-local-sync')
       );
     } finally {
       if (token === loadToken) setState(flag, false);

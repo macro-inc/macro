@@ -512,6 +512,40 @@ describe('createLocalChannelThread', () => {
     }
   });
 
+  it('loads a thread again when the connection came back before its request failed', async () => {
+    const host = fakeHost(() => devicePage([], { covered: false }));
+    const server = serverThread();
+    const pending =
+      Promise.withResolvers<Awaited<ReturnType<FetchChannelThreadPage>>>();
+    const fetchPage = vi
+      .fn<FetchChannelThreadPage>()
+      .mockImplementationOnce(() => pending.promise)
+      .mockImplementation(server);
+    onlineManager.setOnline(false);
+    const { thread, dispose } = createRoot((dispose) => ({
+      dispose,
+      thread: createLocalChannelThread(
+        { host, runtime: runtime(), fetchPage },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      ),
+    }));
+    try {
+      await vi.waitFor(() => expect(fetchPage).toHaveBeenCalledTimes(1));
+      // Back while the request sent with no connection is still out.
+      onlineManager.setOnline(true);
+      pending.reject(new TypeError('Failed to fetch'));
+
+      await vi.waitFor(() => expect(thread.replies()).toHaveLength(2));
+      expect(fetchPage).toHaveBeenCalledTimes(2);
+    } finally {
+      dispose();
+      onlineManager.setOnline(true);
+    }
+  });
+
   it('aborts the load in flight when the thread closes', async () => {
     const host = fakeHost([devicePage([], { covered: false })]);
     const signals: AbortSignal[] = [];

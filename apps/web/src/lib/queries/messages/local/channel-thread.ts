@@ -27,10 +27,11 @@ import {
 } from './channel-map';
 import {
   cacheSessionChanged,
-  onReconnect,
   queryChannelNetwork,
+  type ReconnectWatch,
   SESSION_CHANGE_RELOADS,
   storeFailure,
+  watchReconnect,
 } from './channel-network';
 import {
   afterDeletes,
@@ -403,7 +404,7 @@ export function createLocalChannelThread(
   let abort: AbortController | undefined;
   // Loads the thread again when the connection returns after a failed load:
   // nothing on screen retries it.
-  let stopReconnect = () => {};
+  let reconnect: ReconnectWatch | undefined;
 
   const show = (thread: MessageThread) =>
     setState('replies', reconcile(thread.replies, { key: 'id' }));
@@ -412,7 +413,9 @@ export function createLocalChannelThread(
     const current = ++token;
     held = false;
     abort?.abort();
-    stopReconnect();
+    reconnect?.stop();
+    const watch = watchReconnect();
+    reconnect = watch;
     abort = new AbortController();
     const signal = abort.signal;
     // Taken before any await: the catch-up joins the open's trace.
@@ -423,6 +426,7 @@ export function createLocalChannelThread(
         fetchPage: deps.fetchPage,
         signal,
       });
+      watch.stop();
       if (current !== token) return;
       if (loaded === 'unsupported') {
         onUnsupported();
@@ -463,9 +467,7 @@ export function createLocalChannelThread(
     } catch (error) {
       if (current !== token) return;
       setState('error', error);
-      stopReconnect = onReconnect(() =>
-        fireAndForget(load(root), 'channel-thread')
-      );
+      watch.failed(() => fireAndForget(load(root), 'channel-thread'));
     }
   };
 
@@ -512,7 +514,7 @@ export function createLocalChannelThread(
       onCleanup(() => {
         token += 1;
         abort?.abort();
-        stopReconnect();
+        reconnect?.stop();
         stop();
         release();
       });

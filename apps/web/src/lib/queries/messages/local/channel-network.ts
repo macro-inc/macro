@@ -104,16 +104,50 @@ export async function storeFailure(
   }
 }
 
+/** The connection, watched from the start of one load. */
+export interface ReconnectWatch {
+  /**
+   * The load failed: `reload` runs now when the connection came back since
+   * the watch began, else the next time it does.
+   */
+  failed: (reload: () => void) => void;
+  stop: () => void;
+}
+
 /**
- * Calls `reload` the next time the connection comes back, as a failed query
- * refetches on reconnect; returns a stop. A load that failed with no
- * connection has nothing on screen to retry it.
+ * Watches the connection over one load, as a failed query refetches on
+ * reconnect: a load that failed with no connection has nothing on screen to
+ * retry it. Started before the request, so a request that fails after the
+ * connection already came back still loads again.
  */
-export function onReconnect(reload: () => void): () => void {
+export function watchReconnect(): ReconnectWatch {
+  let offline = !onlineManager.isOnline();
+  let cameBack = false;
+  let reload: (() => void) | undefined;
   const stop = onlineManager.subscribe((online) => {
-    if (!online) return;
+    if (!online) {
+      offline = true;
+      return;
+    }
+    if (!offline) return;
+    offline = false;
+    if (!reload) {
+      cameBack = true;
+      return;
+    }
+    const run = reload;
     stop();
-    reload();
+    run();
   });
-  return stop;
+  return {
+    failed: (next) => {
+      if (!cameBack) {
+        reload = next;
+        return;
+      }
+      stop();
+      next();
+    },
+    stop,
+  };
 }

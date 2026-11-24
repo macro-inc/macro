@@ -1,8 +1,13 @@
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import { onlineManager } from '@tanstack/solid-query';
 import { gql } from '@urql/core';
 import { describe, expect, it, vi } from 'vitest';
 import { fromValue } from 'wonka';
-import { cacheSessionChanged, queryChannelNetwork } from '../channel-network';
+import {
+  cacheSessionChanged,
+  queryChannelNetwork,
+  watchReconnect,
+} from '../channel-network';
 
 const session = vi.hoisted(() => ({ generation: 'generation-1' }));
 const answer = vi.hoisted(() => ({
@@ -71,4 +76,59 @@ describe('queryChannelNetwork', () => {
 
     await expect(cached).rejects.toThrow('channel query could not be cached');
   });
+});
+
+describe('watchReconnect', () => {
+  const offline = async (run: () => void | Promise<void>) => {
+    onlineManager.setOnline(false);
+    try {
+      await run();
+    } finally {
+      onlineManager.setOnline(true);
+    }
+  };
+
+  it('loads again once the connection is back after a load failed with none', () =>
+    offline(() => {
+      const reload = vi.fn();
+      const watch = watchReconnect();
+      watch.failed(reload);
+      expect(reload).not.toHaveBeenCalled();
+
+      onlineManager.setOnline(true);
+      expect(reload).toHaveBeenCalledTimes(1);
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+      expect(reload).toHaveBeenCalledTimes(1);
+    }));
+
+  it('loads again at once when the connection came back before the load failed', () =>
+    offline(() => {
+      const reload = vi.fn();
+      // The request was sent with no connection, which came back meanwhile.
+      const watch = watchReconnect();
+      onlineManager.setOnline(true);
+
+      watch.failed(reload);
+      expect(reload).toHaveBeenCalledTimes(1);
+    }));
+
+  it('waits for the connection to come back after a load failed with one', () => {
+    const reload = vi.fn();
+    const watch = watchReconnect();
+    watch.failed(reload);
+    expect(reload).not.toHaveBeenCalled();
+    watch.stop();
+  });
+
+  it('loads nothing once stopped', () =>
+    offline(() => {
+      const reload = vi.fn();
+      const watch = watchReconnect();
+      watch.failed(reload);
+      watch.stop();
+
+      onlineManager.setOnline(true);
+      expect(reload).not.toHaveBeenCalled();
+    }));
 });
