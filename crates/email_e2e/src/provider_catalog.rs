@@ -90,31 +90,4 @@ impl Stack {
             Provider::Outlook => Ok(name.to_owned()),
         }
     }
-
-    /// Renames a Gmail label in Gmail's own client, as the mailbox's owner
-    /// does there. Gmail records no change to any message for it.
-    pub async fn rename_gmail_label(
-        &self,
-        inbox: &Inbox,
-        label_id: &str,
-        name: &str,
-    ) -> Result<(), Report> {
-        let response = inbox
-            .user()
-            .http()
-            .patch(format!(
-                "{}/users/me/labels/{label_id}",
-                self.gmail().gmail_url()
-            ))
-            .bearer_auth(self.gmail().access_token(inbox.email())?)
-            .json(&json!({ "name": name }))
-            .send()
-            .await?;
-        let status = response.status();
-        if !status.is_success() {
-            let body: Value = response.json().await?;
-            bail!("Gmail answered {status} for a label rename: {body}");
-        }
-        Ok(())
-    }
 }

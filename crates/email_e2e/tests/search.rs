@@ -853,8 +853,8 @@ async fn gmail_a_renamed_label_finds_its_mail_under_the_new_name() -> Result<(),
     wait_for_found(&ada, "label:clients", &["Quarterly numbers"]).await?;
 
     stack
-        .rename_gmail_label(&inbox, &label, "Customers")
-        .await?;
+        .gmail()
+        .rename_label(inbox.email(), &label, "Customers")?;
     // Gmail tells of no change, so the next mail's sync finds the new name.
     indexed_mail(&inbox, &ada, "Something new").await?;
 
