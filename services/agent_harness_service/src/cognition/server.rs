@@ -667,6 +667,11 @@ pub async fn build(
     );
 
     let entity_creator = ai_tools::ToolEntityCreator {
+        notion_link_editor: Some(ai_tools::NotionLinkEditor::new(
+            document_tool_context.lexical_client.clone(),
+            sync_service_client.clone(),
+            document_tool_context.document_permission_jwt_secret.clone(),
+        )),
         document_creator: document_tool_context.creator.clone(),
         entity_access_service: entity_access_service.clone(),
         channel_service: channel_tool_context.service.clone(),

@@ -531,6 +531,49 @@ pub struct NotionLinks {
     pub users: HashMap<NotionId, NotionUserLink>,
 }
 
+/// A reference parsed from an imported body.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct NotionLinkReference {
+    /// Exact Notion page or database container.
+    pub id: NotionId,
+    /// The selected view, when one was specified.
+    pub view_id: Option<NotionId>,
+}
+
+/// A currently available, confirmed import destination.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotionLinkDestination {
+    /// Imported page identity.
+    Page(Uuid),
+    /// Imported database, starter table and optional saved view.
+    Database {
+        /// Database identity.
+        database: Uuid,
+        /// Recorded table identity.
+        table: models_databases::TableId,
+        /// Selected existing view.
+        view: Option<models_databases::views::ViewId>,
+    },
+}
+
+/// A Notion body read at its import-produced revision.
+pub struct ImportedLinkBody {
+    /// The collaborative state used to prepare a delta.
+    pub snapshot: Vec<u8>,
+    /// The expected version vector for compare-and-set.
+    pub revision: Vec<u8>,
+    /// Exact references represented by owned hyperlink nodes.
+    pub references: Vec<NotionLinkReference>,
+}
+
+/// Output of a workspace body write, including an optional deferred-link receipt.
+pub struct CreatedImportDocument {
+    /// Destination document identifier.
+    pub id: String,
+    /// Fingerprint of the initial body revision, minted only on creation.
+    pub link_revision: Option<Uuid>,
+}
+
 /// A resolved or unavailable database placement in one body.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NotionDatabaseOccurrence {
@@ -658,6 +701,8 @@ pub struct NewDatabase {
 pub struct RecordedDatabaseMapping {
     /// The exact imported table, regardless of its current UI tab position.
     pub table: models_databases::TableId,
+    /// Exact saved view receipt, if a Notion view was requested.
+    pub view: Option<models_databases::views::ViewId>,
     /// Losses from the copy being reused.
     pub warnings: Vec<crate::domain::models::FidelityWarning>,
 }
@@ -877,7 +922,32 @@ pub trait WorkspaceWriter: ImportedTargetReader {
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
         visibility: ImportVisibility,
-    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+    ) -> impl Future<Output = anyhow::Result<CreatedImportDocument>> + Send;
+
+    /// Verify the actual owner of a personal link destination. An owned
+    /// ledger row can point at a teammate's copy the user adopted earlier.
+    fn owns_notion_link_target(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        target: ImportedTarget,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
+
+    /// Read link candidates only if the owner and the import-produced revision still match.
+    fn inspect_import_links(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        document: Uuid,
+        receipt: Uuid,
+    ) -> impl Future<Output = anyhow::Result<Option<ImportedLinkBody>>> + Send;
+
+    /// Apply only the resolved hyperlink replacements at the inspected revision.
+    fn rewrite_import_links(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        document: Uuid,
+        body: ImportedLinkBody,
+        links: &[(NotionLinkReference, NotionLinkDestination)],
+    ) -> impl Future<Output = anyhow::Result<usize>> + Send;
 
     /// Reapply a marked task's assignee under its current reviewed visibility.
     /// Preserve its content and other properties; return property-write failures.
@@ -1365,6 +1435,7 @@ pub trait WrittenObjects: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         source: &NotionId,
         database: Uuid,
+        view: Option<&NotionId>,
     ) -> impl Future<Output = Result<Option<RecordedDatabaseMapping>>> + Send;
 
     /// Retain distinct fidelity losses on a plan row across attempts.

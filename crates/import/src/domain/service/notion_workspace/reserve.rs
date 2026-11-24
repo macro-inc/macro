@@ -393,7 +393,7 @@ async fn reuse_database<Writer: WorkspaceWriter, Store: WrittenObjects>(
         ));
     }
     let mapping = store
-        .database_mapping(user, source, database)
+        .database_mapping(user, source, database, None)
         .await?
         .ok_or(crate::domain::models::SourceStopReason::HolderMarkerMissing)?;
     let database = writer

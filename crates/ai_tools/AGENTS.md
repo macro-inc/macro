@@ -35,8 +35,12 @@ execution, display) that don't belong to a single domain.
   are created with their page's dates (`NewDocumentMetadata::created_at` /
   `updated_at`), and folders through
   `ProjectService::create_project_dated_by_contents`, so the copy keeps
-  Notion's dates. Reviewed workspace imports carry a typed `ImportVisibility`
-  through document, task, folder and tracker-project creation: personal items
+  Notion's dates. The workspace writer captures a Notion document's initial
+  snapshot revision. The deferred rewrite requires a matching ledger receipt
+  and owner access, then calls sync-service's internal link update with the
+  inspected revision. Reviewed workspace imports carry a typed
+  `ImportVisibility` through document, task, folder and tracker-project
+  creation: personal items
   get an exact OFF override before insertion; shared items retain defaults.
   Personal tasks also omit teammate assignees, returning a typed notice for the
   import report; keep the same verdict on every property pass, including retries.

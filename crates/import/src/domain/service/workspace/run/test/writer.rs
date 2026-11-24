@@ -35,6 +35,19 @@ pub(super) struct Writer {
 
     pub(super) tasks: Mutex<Vec<Uuid>>,
     pub(super) documents: Mutex<Vec<(Uuid, String, NotionLinks)>>,
+    pub(super) link_inputs: HashMap<Uuid, Vec<crate::domain::ports::NotionLinkReference>>,
+    pub(super) edited_bodies: std::collections::HashSet<Uuid>,
+    pub(super) teammate_documents: std::collections::HashSet<Uuid>,
+    pub(super) inaccessible_documents: std::collections::HashSet<Uuid>,
+    pub(super) replaced_links: Mutex<
+        HashMap<
+            Uuid,
+            Vec<(
+                crate::domain::ports::NotionLinkReference,
+                crate::domain::ports::NotionLinkDestination,
+            )>,
+        >,
+    >,
     pub(super) shares: Mutex<Vec<SharedEntity>>,
     pub(super) hold: Option<(Arc<Notify>, tokio_util::sync::CancellationToken)>,
     pub(super) tracker_tasks: Mutex<Vec<Uuid>>,
@@ -63,6 +76,16 @@ impl crate::domain::ports::ImportedTargetReader for Writer {
         &self,
         target: crate::domain::ports::ImportedTarget,
     ) -> anyhow::Result<bool> {
+        if let crate::domain::ports::ImportedTarget::Document(id) = target
+            && self
+                .documents
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(created, _, _)| *created == id)
+        {
+            return Ok(true);
+        }
         if let Some(pool) = &self.target_pool {
             let live = match target {
                 crate::domain::ports::ImportedTarget::Document(id) => sqlx::query_scalar!(
@@ -281,7 +304,7 @@ impl WorkspaceWriter for Writer {
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
         visibility: crate::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<crate::domain::ports::CreatedImportDocument> {
         self.visibilities.lock().unwrap().push((id, visibility));
         self.document_dates.lock().unwrap().push((id, dates));
         self.document_folders.lock().unwrap().push((id, folder));
@@ -300,7 +323,65 @@ impl WorkspaceWriter for Writer {
         {
             ready.notify_one();
         }
-        Ok(id.to_string())
+        Ok(crate::domain::ports::CreatedImportDocument {
+            id: id.to_string(),
+            link_revision: self.link_inputs.contains_key(&id).then_some(id),
+        })
+    }
+
+    async fn owns_notion_link_target(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        target: crate::domain::ports::ImportedTarget,
+    ) -> anyhow::Result<bool> {
+        Ok(match target {
+            crate::domain::ports::ImportedTarget::Document(id) => {
+                !self.teammate_documents.contains(&id) && !self.inaccessible_documents.contains(&id)
+            }
+            crate::domain::ports::ImportedTarget::Database(_) => !self.deny_database_access,
+            _ => false,
+        })
+    }
+
+    async fn inspect_import_links(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        document: Uuid,
+        receipt: Uuid,
+    ) -> anyhow::Result<Option<crate::domain::ports::ImportedLinkBody>> {
+        if document != receipt
+            || self.edited_bodies.contains(&document)
+            || self.replaced_links.lock().unwrap().contains_key(&document)
+        {
+            return Ok(None);
+        }
+        Ok(self.link_inputs.get(&document).map(|references| {
+            crate::domain::ports::ImportedLinkBody {
+                references: references.clone(),
+                snapshot: Vec::new(),
+                revision: Vec::new(),
+            }
+        }))
+    }
+
+    async fn rewrite_import_links(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        document: Uuid,
+        _: crate::domain::ports::ImportedLinkBody,
+        links: &[(
+            crate::domain::ports::NotionLinkReference,
+            crate::domain::ports::NotionLinkDestination,
+        )],
+    ) -> anyhow::Result<usize> {
+        assert!(
+            self.replaced_links
+                .lock()
+                .unwrap()
+                .insert(document, links.to_vec())
+                .is_none()
+        );
+        Ok(links.len())
     }
 
     async fn reapply_task_assignee(
@@ -474,9 +555,11 @@ impl EntityCreator for Writer {
         &self,
         _: &MacroUserIdStr<'static>,
         _: crate::domain::models::ImportSource,
-        _: &str,
+        id: &str,
     ) -> anyhow::Result<bool> {
-        Ok(true)
+        Ok(id
+            .parse()
+            .map_or(true, |id| !self.inaccessible_documents.contains(&id)))
     }
     async fn create_task(
         &self,

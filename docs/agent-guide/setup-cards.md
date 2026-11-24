@@ -55,6 +55,12 @@ folder stays as it is. A later shared plan uses a separate shared folder when
 reusing the old folder would expose personal contents, and the report explains
 that separation.
 
+In a Notion workspace import, links between imported pages and databases open
+the matching Macro copy once both writes have finished. Links to pages left
+out of the import, inaccessible targets, and unresolved block anchors keep
+their original URLs. Imported pages keep their Notion creation and
+last-edited dates.
+
 - Files also offers **Upload files** and **Upload a folder** (Drive's own
   uploads), and Customers offers **Upload a CSV** (the existing CSV import).
   Each closes the dialog first.

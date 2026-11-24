@@ -686,7 +686,7 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                 let id = derived_id(item.import_id, &format!("body/{}", row.id.as_str()));
                 let mut row_links = links.read().await.clone();
                 row_links.databases = database_links;
-                let document: Uuid = writer
+                let document = writer
                     .create_document(
                         user,
                         id,
@@ -698,10 +698,9 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                         Some(SourceDates::from(&row)),
                         visibility,
                     )
-                    .await?
-                    .parse()?;
-                progress
-                    .record_for(WrittenKind::Body, &row.id, document)
+                    .await?;
+                let document = progress
+                    .record_document(WrittenKind::Body, &row.id, &document)
                     .await?;
                 Ok(Some(change(document)))
             }

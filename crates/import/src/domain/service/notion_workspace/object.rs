@@ -15,8 +15,7 @@ use super::super::ImportServiceImpl;
 use super::run::JobControl;
 use super::{Place, databases, failure_text, plan, reserve::Reservations, values, write};
 use crate::domain::models::{
-    ImportEntity, ImportKind, ImportStatus, NotionAlreadyImported, NotionDecision, TeamClaim,
-    WrittenObject,
+    ImportKind, ImportStatus, NotionAlreadyImported, NotionDecision, TeamClaim, WrittenObject,
 };
 use crate::domain::ports::{
     CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility, NotionLinks,
@@ -83,7 +82,8 @@ where
         target: &Target<'_, databases::CachedNotion<N::Api>>,
         control: &JobControl,
     ) -> Outcome {
-        let progress = write::Progress::new(&self.repo, user, item.import_id, target.written);
+        let progress = write::Progress::new(&self.repo, user, item.import_id, target.written)
+            .in_review(target.review_id);
         let result = async {
             let result = self.write_item(user, item, target, &progress).boxed().await;
             progress.flush_warnings().await?;
@@ -149,24 +149,6 @@ where
             }
             _ => TeamClaim::Free,
         };
-        let destination = match &claim {
-            TeamClaim::Linked {
-                entity_id,
-                entity_type,
-            } if matches!(entity_type.as_str(), "md" | "task") => Uuid::parse_str(entity_id).ok(),
-            TeamClaim::Waiting { holder } if item.kind != ImportKind::DataSource => {
-                Some(write::document_id(*holder))
-            }
-            TeamClaim::Held | TeamClaim::Free if item.kind != ImportKind::DataSource => {
-                Some(write::document_id(item.import_id))
-            }
-            _ => None,
-        };
-        if let Some(document) = destination
-            && let Some(page) = target.links.write().await.pages.get_mut(&item.notion_id)
-        {
-            page.document_id = document;
-        }
         let share = match claim {
             TeamClaim::Linked {
                 entity_id,
@@ -347,19 +329,19 @@ where
                         ImportVisibility::from_shared(item.shared),
                     )
                     .await?;
+                progress
+                    .record_document(
+                        crate::domain::models::WrittenKind::Document,
+                        &item.notion_id,
+                        &document,
+                    )
+                    .await?;
                 if share {
                     self.creator
                         .share_with_team(user, SharedEntity::Document(id))
                         .await?;
                 }
-                progress
-                    .record_for(
-                        crate::domain::models::WrittenKind::Document,
-                        &item.notion_id,
-                        id,
-                    )
-                    .await?;
-                (document, write::DOCUMENT_ENTITY)
+                (document.id, write::DOCUMENT_ENTITY)
             }
         };
         if item.shared && item.kind == ImportKind::DataSource {
@@ -371,70 +353,41 @@ where
         })
     }
 
-    /// Where the plan's pages and people resolve in Macro, known before
-    /// anything is written: the user's own document when it exists, the
-    /// team's copy of a shared page (written, or being written by a
-    /// teammate), otherwise the document the page becomes.
-    pub(super) async fn links(
+    /// Refresh stale copies before a reviewed write claims pages, and count
+    /// earlier copies that the ledger could no longer reuse.
+    pub(super) async fn unavailable_page_copies(
         &self,
         user: &MacroUserIdStr<'static>,
         items: &[write::WriteItem],
-        people: &PeopleMap,
-    ) -> Result<(NotionLinks, usize)> {
-        let pages: Vec<&write::WriteItem> = items
+    ) -> Result<usize> {
+        let pages: Vec<_> = items
             .iter()
             .filter(|item| item.kind != ImportKind::DataSource)
             .collect();
-        let foreign_ids: Vec<String> = pages
+        let foreign_ids: Vec<_> = pages
             .iter()
             .filter(|item| item.shared || item.already_imported)
-            .map(|item| item.notion_id.as_str().to_string())
+            .map(|item| item.notion_id.as_str().to_owned())
             .collect();
-        let copies: HashMap<String, ImportEntity> = super::super::lifecycle::team_copies(
-            &self.repo,
-            self.creator.as_ref(),
-            user,
-            &foreign_ids,
-        )
-        .await?
-        .into_iter()
-        .map(|copy| (copy.foreign_id.clone(), copy))
-        .collect();
-        let mut imported = HashMap::new();
-        let mut unavailable = std::collections::HashSet::new();
+        super::super::lifecycle::team_copies(&self.repo, self.creator.as_ref(), user, &foreign_ids)
+            .await?;
+
+        let mut unavailable = 0;
         for item in pages {
-            let own = self
-                .repo
-                .get(user, item.import_id)
-                .await?
-                .filter(|row| row.status == ImportStatus::Imported);
-            if let Some(row) = &own
+            if let Some(row) = self.repo.get(user, item.import_id).await?
+                && row.status == ImportStatus::Imported
                 && !super::super::lifecycle::live_for_write(
                     &self.repo,
                     self.creator.as_ref(),
                     user,
-                    row,
+                    &row,
                 )
                 .await?
             {
-                unavailable.insert(item.notion_id.clone());
-                continue;
-            }
-            let document = match (own, copies.get(item.notion_id.as_str())) {
-                (Some(row), _) => imported_document(&row),
-                (None, Some(copy)) if copy.status == ImportStatus::Importing => {
-                    Some(write::document_id(copy.id))
-                }
-                (None, Some(copy)) => imported_document(copy),
-                (None, None) => None,
-            };
-            if let Some(document) = document {
-                imported.insert(item.notion_id.clone(), document);
+                unavailable += 1;
             }
         }
-        let mut links = write::notion_links(items, &imported, people);
-        links.pages.retain(|id, _| !unavailable.contains(id));
-        Ok((links, unavailable.len()))
+        Ok(unavailable)
     }
 
     /// Teammates' copies shared with the team of the planned objects, by
@@ -477,14 +430,6 @@ where
     }
 }
 
-/// The document an imported row became, when it became one.
-fn imported_document(row: &ImportEntity) -> Option<Uuid> {
-    if row.entity_type.as_deref() != Some(write::DOCUMENT_ENTITY) {
-        return None;
-    }
-    row.entity_id.as_deref()?.parse().ok()
-}
-
 /// How writing one object ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Outcome {
@@ -510,6 +455,7 @@ enum Written {
 /// Everything one object's write needs from the write around it.
 pub(super) struct Target<'a, Api> {
     pub api: &'a Api,
+    pub review_id: Uuid,
     pub team_id: Option<Uuid>,
     pub place: Place<'a>,
     pub people: &'a PeopleMap,

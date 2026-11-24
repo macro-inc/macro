@@ -104,6 +104,7 @@ async fn imported_access(
                             visibility,
                         )
                         .await?
+                        .id
                 }
                 "Notion task" => {
                     host.creator
@@ -201,7 +202,8 @@ async fn team_folder_link_does_not_open_an_owner_only_child(pool: PgPool) -> any
             None,
             ImportVisibility::Personal,
         )
-        .await?;
+        .await?
+        .id;
     assert_eq!(
         access
             .get_document_access(&document, Some(&users.teammate.0))
@@ -309,7 +311,8 @@ async fn a_new_personal_child_of_a_previously_shared_folder_stays_owner_only(
                 None,
                 ImportVisibility::Personal,
             )
-            .await?;
+            .await?
+            .id;
         assert_eq!(
             PgAccessRepository::new(pool.clone())
                 .get_document_access(&document, Some(&users.teammate.0))
@@ -422,6 +425,7 @@ async fn teamless_shared_imports_keep_markdown_defaults(pool: PgPool) -> anyhow:
                             visibility,
                         )
                         .await?
+                        .id
                 }
                 "Notion task" => {
                     host.creator

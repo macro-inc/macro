@@ -115,6 +115,8 @@ pub enum WrittenKind {
     Folder,
     /// The document a page became; minted before it is written.
     Document,
+    /// Fingerprint of the import-produced body revision, keyed by destination document id.
+    LinkBodyRevision,
     /// The database a data source became.
     Database,
     /// A saved view, keyed by the original view id.

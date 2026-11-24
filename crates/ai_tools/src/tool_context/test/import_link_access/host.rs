@@ -129,6 +129,7 @@ pub(super) async fn host(pool: &PgPool) -> Host {
     );
     Host {
         creator: crate::ToolEntityCreator {
+            notion_link_editor: None,
             document_creator: documents.creator,
             document_service: documents.service,
             entity_access_service: access.clone(),

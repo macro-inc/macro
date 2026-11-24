@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::notifications::PendingNotification;
-use import_notion::domain::model::ImportScope;
+use import_notion::domain::model::{ImportScope, NotionId};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -848,26 +848,30 @@ SELECT EXISTS (SELECT 1 FROM owned) AS "owned!"
         user: &MacroUserIdStr<'static>,
         source: &import_notion::domain::model::NotionId,
         database: Uuid,
+        view: Option<&NotionId>,
     ) -> Result<Option<crate::domain::ports::RecordedDatabaseMapping>> {
         let table = sqlx::query!(
             r#"
-            SELECT table_marker.macro_id, COALESCE(holder.metadata->'warnings', '[]'::jsonb) AS "warnings!"
+            SELECT table_marker.macro_id, view_marker.macro_id AS "view_id?", COALESCE(holder.metadata->'warnings', '[]'::jsonb) AS "warnings!"
             FROM import_entity AS holder
             JOIN import_entity_written AS database_marker ON database_marker.import_id = holder.id
                 AND database_marker.kind = 'database' AND database_marker.object = ''
             JOIN import_entity_written AS table_marker ON table_marker.import_id = holder.id
                 AND table_marker.kind = 'table' AND table_marker.object = ''
+            LEFT JOIN import_entity_written AS view_marker ON view_marker.import_id = holder.id
+                AND view_marker.kind = 'view' AND view_marker.object = $4
             WHERE holder.source = 'notion' AND holder.kind = 'data_source'
                 AND holder.foreign_id = $2 AND holder.status = 'imported'
                 AND holder.entity_type = 'database' AND holder.entity_id = $3::uuid::text
                 AND database_marker.macro_id = $3
                 AND (holder.user_id = $1 OR holder.team_id = (SELECT team_id FROM team_user WHERE user_id = $1))
             "#,
-            user.as_ref(), source.as_str(), database,
+            user.as_ref(), source.as_str(), database, view.map(NotionId::as_str),
         ).fetch_optional(&self.pool).await?;
         Ok(
             table.map(|row| crate::domain::ports::RecordedDatabaseMapping {
                 table: models_databases::TableId::from_uuid(row.macro_id),
+                view: row.view_id.map(models_databases::views::ViewId::from_uuid),
                 warnings: crate::domain::models::FidelityWarning::decode_entries(&row.warnings),
             }),
         )

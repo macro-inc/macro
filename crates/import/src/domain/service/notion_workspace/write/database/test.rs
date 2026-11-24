@@ -273,7 +273,7 @@ impl WorkspaceWriter for FakeWriter {
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
         visibility: crate::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<crate::domain::ports::CreatedImportDocument> {
         let mut documents = self.documents.lock().unwrap();
         // Like Macro: a document id already in use is the earlier attempt's.
         if !documents.iter().any(|document| document.id == id) {
@@ -287,7 +287,40 @@ impl WorkspaceWriter for FakeWriter {
                 visibility,
             });
         }
-        Ok(id.to_string())
+        Ok(crate::domain::ports::CreatedImportDocument {
+            id: id.to_string(),
+            link_revision: None,
+        })
+    }
+
+    async fn owns_notion_link_target(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: crate::domain::ports::ImportedTarget,
+    ) -> anyhow::Result<bool> {
+        Ok(true)
+    }
+
+    async fn inspect_import_links(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: Uuid,
+    ) -> anyhow::Result<Option<crate::domain::ports::ImportedLinkBody>> {
+        Ok(None)
+    }
+
+    async fn rewrite_import_links(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: crate::domain::ports::ImportedLinkBody,
+        _: &[(
+            crate::domain::ports::NotionLinkReference,
+            crate::domain::ports::NotionLinkDestination,
+        )],
+    ) -> anyhow::Result<usize> {
+        Ok(0)
     }
 
     async fn reapply_task_assignee(

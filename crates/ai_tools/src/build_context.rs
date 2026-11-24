@@ -647,6 +647,11 @@ pub async fn build_tool_service_context_from_env(
                 crate::tool_context::build_import_repo(pool.clone()),
                 Arc::clone(&connections),
                 Arc::new(crate::ToolEntityCreator {
+                    notion_link_editor: Some(crate::NotionLinkEditor::new(
+                        document_tool_context.lexical_client.clone(),
+                        sync_client.as_ref().clone(),
+                        document_tool_context.document_permission_jwt_secret.clone(),
+                    )),
                     document_creator: document_tool_context.creator.clone(),
                     entity_access_service: entity_access_service.clone(),
                     channel_service: channel_tool_context.service.clone(),

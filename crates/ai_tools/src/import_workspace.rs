@@ -15,8 +15,9 @@ use documents::domain::ports::DocumentService as _;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService as _;
 use import::domain::ports::{
-    DatabaseWriteFailure, ImportedDocumentProperties, ImportedTarget, ImportedTaskProperties,
-    NewDatabase, NotionLinks, SharedEntity, SourceDates, TeamMember,
+    CreatedImportDocument, DatabaseWriteFailure, ImportedDocumentProperties, ImportedLinkBody,
+    ImportedTarget, ImportedTaskProperties, NewDatabase, NotionLinkDestination,
+    NotionLinkReference, NotionLinks, SharedEntity, SourceDates, TeamMember,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
@@ -26,6 +27,74 @@ use projects::domain::ports::ProjectService as _;
 use uuid::Uuid;
 
 mod lifecycle;
+
+/// Host services for reading and committing an import-owned hyperlink revision.
+#[derive(Clone)]
+pub struct NotionLinkEditor {
+    lexical: std::sync::Arc<lexical_client::LexicalClient>,
+    sync: sync_service_client::SyncServiceClient,
+    jwt_secret: String,
+}
+
+fn revision_receipt(revision: &[u8]) -> Uuid {
+    Uuid::new_v5(&Uuid::NAMESPACE_OID, revision)
+}
+
+impl NotionLinkEditor {
+    /// Use the same lexical and sync services as normal document creation.
+    pub fn new(
+        lexical: std::sync::Arc<lexical_client::LexicalClient>,
+        sync: sync_service_client::SyncServiceClient,
+        jwt_secret: String,
+    ) -> Self {
+        Self {
+            lexical,
+            sync,
+            jwt_secret,
+        }
+    }
+
+    pub(crate) async fn initial_revision(&self, snapshot: &[u8]) -> Option<Uuid> {
+        if snapshot.len() > sync_service_client::document_state::MAX_DOCUMENT_BINARY_BYTES {
+            return None;
+        }
+        let result = self.lexical.notion_link_delta(snapshot, &[]).await;
+        match result {
+            Ok(delta) if !delta.references.is_empty() => {
+                delta.revision_bytes().ok().as_deref().map(revision_receipt)
+            }
+            Ok(_) => None,
+            Err(_) => {
+                tracing::warn!("could not inspect the initial Notion document revision");
+                None
+            }
+        }
+    }
+
+    async fn owner_token(
+        &self,
+        creator: &ToolEntityCreator,
+        user: &MacroUserIdStr<'static>,
+        document: Uuid,
+    ) -> anyhow::Result<sync_service_client::document_state::DocumentPermissionToken> {
+        let receipt = creator
+            .entity_access_service
+            .generate_entity_access_receipt::<OwnerAccessLevel>(
+                user,
+                None,
+                &document.to_string(),
+                model_entity::EntityType::Document,
+            )
+            .await?;
+        Ok(
+            documents::domain::permission_token::encode_receipt_permission_token(
+                &receipt,
+                AccessLevel::Owner,
+                &self.jwt_secret,
+            )?,
+        )
+    }
+}
 
 #[cfg(test)]
 mod test;
@@ -250,7 +319,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         folder: Option<Uuid>,
         dates: Option<SourceDates>,
         visibility: import::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<CreatedImportDocument> {
         let created = self
             .create_imported_document(
                 user,
@@ -263,7 +332,134 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                 visibility,
             )
             .await;
-        already_created(created, id)
+        match created {
+            Ok(document) => Ok(document),
+            Err(error) => Ok(CreatedImportDocument {
+                id: already_created(Err(error), id)?,
+                link_revision: None,
+            }),
+        }
+    }
+
+    async fn owns_notion_link_target(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        target: ImportedTarget,
+    ) -> anyhow::Result<bool> {
+        use model_entity::EntityType;
+        let (id, kind) = match target {
+            ImportedTarget::Document(id) => (id, EntityType::Document),
+            ImportedTarget::Database(id) => (id, EntityType::Database),
+            _ => return Ok(false),
+        };
+        match self
+            .entity_access_service
+            .generate_entity_access_receipt::<OwnerAccessLevel>(user, None, &id.to_string(), kind)
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(error) if crate::tool_context::refuses_view(&error) => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    #[tracing::instrument(skip_all, fields(document), err)]
+    async fn inspect_import_links(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        document: Uuid,
+        receipt: Uuid,
+    ) -> anyhow::Result<Option<ImportedLinkBody>> {
+        let Some(editor) = &self.notion_link_editor else {
+            return Ok(None);
+        };
+        let token = editor.owner_token(self, user, document).await?;
+        let state = editor
+            .sync
+            .document_state(&document.to_string(), &token)
+            .await?;
+        if revision_receipt(&state.revision) != receipt {
+            return Ok(None);
+        }
+        let parsed = editor
+            .lexical
+            .notion_link_delta(&state.snapshot, &[])
+            .await?;
+        Ok(Some(ImportedLinkBody {
+            snapshot: state.snapshot,
+            revision: state.revision,
+            references: parsed
+                .references
+                .into_iter()
+                .filter_map(|source| {
+                    Some(NotionLinkReference {
+                        id: source.id.try_into().ok()?,
+                        view_id: match source.view_id {
+                            Some(id) => Some(id.try_into().ok()?),
+                            None => None,
+                        },
+                    })
+                })
+                .collect(),
+        }))
+    }
+
+    #[tracing::instrument(skip_all, fields(document, references = links.len()), err)]
+    async fn rewrite_import_links(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        document: Uuid,
+        body: ImportedLinkBody,
+        links: &[(NotionLinkReference, NotionLinkDestination)],
+    ) -> anyhow::Result<usize> {
+        use lexical_client::notion::{
+            NotionLinkDestination as Destination, NotionLinkReference as Source,
+            NotionLinkReplacement,
+        };
+        let Some(editor) = &self.notion_link_editor else {
+            return Ok(0);
+        };
+        let replacements: Vec<_> = links
+            .iter()
+            .map(|(source, destination)| NotionLinkReplacement {
+                source: Source {
+                    id: source.id.as_str().to_owned(),
+                    view_id: source.view_id.as_ref().map(|id| id.as_str().to_owned()),
+                },
+                destination: match destination {
+                    NotionLinkDestination::Page(id) => Destination::Page {
+                        document_id: id.to_string(),
+                    },
+                    NotionLinkDestination::Database {
+                        database,
+                        table,
+                        view,
+                    } => Destination::Database {
+                        database_id: database.to_string(),
+                        table_id: table.to_string(),
+                        view_id: view.map(|id| id.to_string()),
+                    },
+                },
+            })
+            .collect();
+        let prepared = editor
+            .lexical
+            .notion_link_delta(&body.snapshot, &replacements)
+            .await?;
+        let Some(delta) = prepared.update_bytes()? else {
+            return Ok(0);
+        };
+        let token = editor.owner_token(self, user, document).await?;
+        let result = editor
+            .sync
+            .update_import_links(&document.to_string(), &token, &body.revision, &delta)
+            .await?;
+        Ok(match result {
+            sync_service_client::document_state::DocumentUpdate::Applied { .. } => {
+                prepared.rewritten
+            }
+            sync_service_client::document_state::DocumentUpdate::Conflict => 0,
+        })
     }
 
     #[tracing::instrument(skip(self, user, name, notion_markdown, links, properties), err)]

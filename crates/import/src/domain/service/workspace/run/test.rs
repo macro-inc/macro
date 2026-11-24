@@ -70,9 +70,24 @@ impl NotionApi for Pages {
 
     async fn retrieve_view(
         &self,
-        _id: &NotionId,
+        id: &NotionId,
     ) -> std::result::Result<import_notion::domain::views::NotionView, NotionError> {
-        Err(NotionError::NotFound)
+        if *id != page_id('1') && *id != page_id('2') {
+            return Err(NotionError::NotFound);
+        }
+        Ok(import_notion::domain::views::NotionView {
+            id: id.clone(),
+            parent: import_notion::domain::views::ViewParent {
+                database_id: page_id('6'),
+            },
+            name: "Work Board".to_owned(),
+            data_source_id: Some(page_id('5')),
+            kind: import_notion::domain::views::ViewType::Board,
+            filter: None,
+            sorts: None,
+            configuration: None,
+            extra: Default::default(),
+        })
     }
 
     async fn search(
@@ -135,7 +150,7 @@ impl NotionApi for Pages {
         &self,
         _: &NotionId,
     ) -> std::result::Result<Vec<NotionId>, NotionError> {
-        unimplemented!("only pages here")
+        Ok(Vec::new())
     }
 
     async fn query_data_source(
@@ -188,6 +203,7 @@ impl NotionConnections for AfterReplacement {
     }
 }
 
+mod links;
 mod writer;
 use writer::Writer;
 
@@ -493,7 +509,17 @@ async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool
         .unwrap();
 
     let tracker = TaskTracker::new();
-    let writer = Arc::new(Writer::default());
+    let writer = Arc::new(Writer {
+        link_inputs: [(
+            write::document_id(rows[1]),
+            vec![crate::domain::ports::NotionLinkReference {
+                id: page_id('a'),
+                view_id: None,
+            }],
+        )]
+        .into(),
+        ..Default::default()
+    });
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
         no_connections(),
@@ -512,10 +538,17 @@ async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool
     let (spec, name, links) = &documents[0];
     assert_eq!(name, "Spec");
     assert_eq!(*spec, write::document_id(rows[1]));
+    assert!(links.pages.is_empty());
     assert_eq!(
-        links.pages[&page_id('a')].document_id,
-        roadmap,
-        "Spec still mentions the Roadmap written before"
+        writer.replaced_links.lock().unwrap()[spec],
+        vec![(
+            crate::domain::ports::NotionLinkReference {
+                id: page_id('a'),
+                view_id: None
+            },
+            crate::domain::ports::NotionLinkDestination::Page(roadmap),
+        )],
+        "Spec links to the Roadmap written before the lease was adopted"
     );
     assert!(
         writer.folders.lock().unwrap().is_empty(),

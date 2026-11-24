@@ -96,7 +96,7 @@ from this import's other databases into it are not linked.
 - `src/domain/service/tracker_workspace.rs` (+ `plan`, `values`): Linear/Jira
   group decisions, frozen source snapshots, task/project writes and relationships.
 - `src/domain/service/notion_workspace.rs` (+ `plan`, `triage`, `sharing`,
-  `object`, `databases`, `reserve`, `start`, `dependency_review`, `write`, `values`, `report`): the Notion workspace import —
+  `object`, `databases`, `links`, `reserve`, `start`, `dependency_review`, `write`, `values`, `report`): the Notion workspace import —
   planning, the decision model, who sees what, writing one object (claim,
   link or write), cancel and the report. Database columns and cells come
   from `import_notion::domain::macro_cells`.
@@ -148,13 +148,16 @@ from this import's other databases into it are not linked.
   import service's `N` type parameter is the Notion connection factory, and
   hosts that never call `.with_notion_connections` report Notion as not
   connected.
-- Notion page bodies are never parsed here: they go to lexical-service
-  (`POST /snapshot/notion`) as Notion markdown with a `NotionLinks` map. The
-  workspace write knows every planned page's document id up front
-  (`write::notion_links`, derived from the ledger row) so pages mention each
-  other; only the import guards
-  (`check_notion_markdown`: tool-result wrappers, database-only pages) stay in
-  Rust.
+- Send Notion bodies to lexical-service (`POST /snapshot/notion`) for
+  conversion with user and database-card mappings. Keep original hyperlinks in
+  the initial workspace write. Once the reviewed writes finish, resolve exact
+  page, database and view references against live, imported ledger destinations
+  in the same personal or team audience. Verify ownership for a personal
+  target because an adopted ledger row can point to a teammate’s copy. This
+  handles earlier imports and forward or cyclic links. Apply only hyperlink changes to page and database-row
+  bodies with `LinkBodyRevision` receipts for that review and a matching sync
+  revision. Keep the original link for an unresolved target or a changed body.
+  Rust keeps the `check_notion_markdown` tool-wrapper and database-only guards.
 - Planning and writing run detached on the host's `TaskTracker`
   (`with_job_shutdown`) and survive their process (`workspace/run.rs`):
   the running process holds a lease on the run row (`lease_owner`,

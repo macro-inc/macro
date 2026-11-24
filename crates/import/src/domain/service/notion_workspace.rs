@@ -41,6 +41,7 @@ use run::{IMPORT_STOPPED, JobControl, Stop, WriteSet};
 mod databases;
 mod dependency_review;
 mod fidelity;
+mod links;
 mod object;
 mod personal;
 pub(super) mod plan;
@@ -621,8 +622,8 @@ where
         set.pending
             .retain(|item| !excluded_dependencies.contains(&item.import_id));
         let set = &set;
-        let (links, unavailable) = self.links(user, &set.all, &people).await?;
-        let links = tokio::sync::RwLock::new(links);
+        let unavailable = self.unavailable_page_copies(user, &set.all).await?;
+        let links = tokio::sync::RwLock::new(write::notion_links(&people));
         let root = self.root_folder(user).await?;
 
         // Folders first, parents before children. A folder is shared only
@@ -697,6 +698,7 @@ where
         let written = self.repo.written(user, &ids).await?;
         let target = Target {
             api: &api,
+            review_id: set.review_id,
             team_id,
             place,
             reservations: &reservations,
@@ -778,6 +780,10 @@ where
                     .await
         {
             tracing::warn!(error = ?error, "notion relations were not linked");
+        }
+        if !cancel.stopped() {
+            self.rewrite_notion_links(&api, user, team_id, set, cancel)
+                .await?;
         }
         Ok(failed)
     }

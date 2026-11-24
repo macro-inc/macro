@@ -1641,6 +1641,8 @@ pub(crate) enum ImportedContent {
 /// the import itself.
 #[derive(Clone)]
 pub struct ToolEntityCreator {
+    /// Internal link-only editing for newly imported markdown.
+    pub notion_link_editor: Option<crate::import_workspace::NotionLinkEditor>,
     /// Backend-owned document creation use case (shared with document tools).
     pub document_creator:
         documents::inbound::toolset::DefaultDocumentToolCreator<ToolDocumentService>,
@@ -1736,7 +1738,7 @@ impl ToolEntityCreator {
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
         visibility: import::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<documents::domain::create::CreatedDocument> {
         use std::str::FromStr as _;
         let mut metadata = imported_document_metadata(name, visibility);
         if let Some(id) = id {
@@ -1780,13 +1782,7 @@ impl ToolEntityCreator {
                     .await?
             }
         };
-        Ok(created
-            .into_response()
-            .document_response
-            .document_metadata
-            .metadata
-            .document_id
-            .to_string())
+        Ok(created)
     }
 
     /// The user's team id (when they have one) and its member ids.
@@ -1851,7 +1847,9 @@ impl ToolEntityCreator {
         };
         let task_id = self
             .create_doc(user, id, name, content, subtype, folder, dates, visibility)
-            .await?;
+            .await?
+            .document_id()
+            .to_owned();
         let notice = self
             .apply_task_properties(user, &task_id, properties, &roster, visibility)
             .await;
@@ -1877,8 +1875,8 @@ impl ToolEntityCreator {
         folder: Option<uuid::Uuid>,
         dates: Option<import::domain::ports::SourceDates>,
         visibility: import::domain::ports::ImportVisibility,
-    ) -> anyhow::Result<String> {
-        let document_id = self
+    ) -> anyhow::Result<import::domain::ports::CreatedImportDocument> {
+        let created = self
             .create_doc(
                 user,
                 id,
@@ -1890,6 +1888,15 @@ impl ToolEntityCreator {
                 visibility,
             )
             .await?;
+        let document_id = created.document_id().to_owned();
+        let link_revision = match (id, &self.notion_link_editor, created.initial_snapshot()) {
+            (Some(_), Some(editor), Some(snapshot)) => editor.initial_revision(snapshot).await,
+            _ => None,
+        };
+        let output = import::domain::ports::CreatedImportDocument {
+            id: document_id.clone(),
+            link_revision,
+        };
         let access = match self
             .entity_access_service
             .generate_entity_access_receipt::<EditAccessLevel>(
@@ -1907,13 +1914,13 @@ impl ToolEntityCreator {
                     error = ?error,
                     "failed to authorize imported document properties"
                 );
-                return Ok(document_id);
+                return Ok(output);
             }
         };
         self.document_properties
             .apply(user, &access, &document_id, properties)
             .await;
-        Ok(document_id)
+        Ok(output)
     }
 
     /// Apply imported task properties best-effort: each one logs and is
@@ -2152,6 +2159,7 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             import::domain::ports::ImportVisibility::Shared,
         )
         .await
+        .map(|document| document.id)
     }
 
     async fn create_channel(

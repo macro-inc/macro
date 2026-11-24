@@ -19,6 +19,7 @@ mod import_channels;
 mod import_jobs;
 mod import_trackers;
 mod import_workspace;
+pub use import_workspace::NotionLinkEditor;
 mod mcp_app_catalog;
 pub mod memory;
 mod schemas;
