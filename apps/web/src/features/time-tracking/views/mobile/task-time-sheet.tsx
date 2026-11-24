@@ -25,15 +25,32 @@ type Mode =
   | { kind: 'new' }
   | { kind: 'edit'; entry: TimeEntryFieldsFragment };
 
-/** The Time pill and its bottom sheet, on touch devices. */
-export function TaskTimeSheet(props: TaskTimeViewProps): JSX.Element {
-  const [open, setOpen] = createSignal(false);
+/**
+ * The Time pill and its bottom sheet, on touch devices. Given `open`, the
+ * sheet opens for whoever holds it (My week's Log time) and the pill stays
+ * out.
+ */
+export function TaskTimeSheet(
+  props: TaskTimeViewProps & {
+    open?: boolean;
+    onOpenChange?(open: boolean): void;
+  }
+): JSX.Element {
+  const [ownOpen, setOwnOpen] = createSignal(false);
+  const controlled = () => props.open !== undefined;
+  const open = () => props.open ?? ownOpen();
+  const setOpen = (next: boolean) => {
+    if (props.onOpenChange) props.onOpenChange(next);
+    else setOwnOpen(next);
+  };
   const [mode, setMode] = createSignal<Mode>({ kind: 'list' });
   const [list, setList] = createSignal<HTMLElement>();
   // Entries load when the panel first opens; the pill reads the total from
   // the task.
   const [opened, setOpened] = createSignal(false);
-  const time = createTaskTime(() => (opened() ? props.taskId : undefined));
+  const time = createTaskTime(() =>
+    opened() || (controlled() && open()) ? props.taskId : undefined
+  );
   const today = () => localDay(new Date());
   const capabilities = useTimeTracking();
   const timer = capabilities.runningTimer;
@@ -48,16 +65,18 @@ export function TaskTimeSheet(props: TaskTimeViewProps): JSX.Element {
 
   return (
     <>
-      <TimePill
-        minutes={props.minutes}
-        aria-expanded={open()}
-        class="min-h-9"
-        onClick={() => {
-          setMode({ kind: 'list' });
-          setOpened(true);
-          setOpen(true);
-        }}
-      />
+      <Show when={!controlled()}>
+        <TimePill
+          minutes={props.minutes}
+          aria-expanded={open()}
+          class="min-h-9"
+          onClick={() => {
+            setMode({ kind: 'list' });
+            setOpened(true);
+            setOpen(true);
+          }}
+        />
+      </Show>
       <MobileDrawer side="bottom" open={open()} onOpenChange={setOpen}>
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay />

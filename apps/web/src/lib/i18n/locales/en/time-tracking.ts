@@ -100,4 +100,16 @@ export default {
     other:
       'Exported {{count}} entries and left the rest out: there are more than one export holds.',
   },
+  // The Time section in Tasks: My week and Team.
+  timeSection: 'Time',
+  myWeek: 'My week',
+  team: 'Team',
+  previousWeek: 'Previous week',
+  nextWeek: 'Next week',
+  totalColumn: 'Total',
+  noTimeThisWeek: 'No time logged this week',
+  addTask: 'Add task',
+  cellLabel: '{{task}}, {{day}}: {{length}}',
+  cellEmptyLabel: '{{task}}, {{day}}: no time',
+  cellTitle: '{{task}} · {{day}}',
 };

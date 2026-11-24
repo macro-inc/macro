@@ -1,6 +1,7 @@
 import { useCreateContext } from '@app/features/command/context/create-context';
 import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
 import { composeEmail } from '@app/features/email-view/compose-email';
+import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
@@ -236,12 +237,14 @@ export function createAppCrmContext(): CrmContext {
         userId
       );
     },
+    connectMailbox: () => openAddInboxDialog(),
     createEmailPrivacy: () => {
       const team = useCurrentTeamQuery();
       return createEmailPrivacySource(
         { ...deps, privacy: crmEmailPrivacyClient },
         () => (team.isSuccess ? team.data?.team.id : undefined),
-        userId
+        userId,
+        usePrimaryEmailLinkId()
       );
     },
     registerTaskComposerRecord(source) {
