@@ -1414,7 +1414,8 @@ fn every_searched_index_contributes_a_named_clause() -> anyhow::Result<()> {
         .filter_map(|clause| clause["bool"]["_name"].as_str())
         .collect();
 
-    // The unified request does not search database rows yet.
+    // Database rows are never part of the unified request: their own query
+    // (`search::database_rows`) proposes them and Postgres decides each one.
     for entity in
         OpenSearchEntityType::iter().filter(|entity| *entity != OpenSearchEntityType::DatabaseRows)
     {
