@@ -21,7 +21,7 @@ use uuid::Uuid;
 
 mod file;
 mod read;
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
 
 pub use file::SalvageFile;
