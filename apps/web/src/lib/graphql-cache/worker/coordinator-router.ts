@@ -49,7 +49,6 @@ import {
 } from './coordinator-takeover';
 import {
   createEffectWorkerTransport,
-  EFFECT_WORKER_CLOSE_FRAME,
   type EffectWorkerTransport,
 } from './effect-worker-transport';
 import {
@@ -116,7 +115,6 @@ type EngineRoute = {
   tabId: string;
   ownerEpoch: number;
   transport: EffectWorkerTransport<CoordinatorToEngineEnvelope>;
-  port: MessagePort;
 };
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 2_000;
@@ -237,8 +235,6 @@ export class CoordinatorRouter {
     PendingRegistration
   >();
   private engineRoute: EngineRoute | undefined;
-  /** Engines whose page left, heard out for damage they had reported. */
-  private readonly leftRoutes = new Set<EngineRoute>();
   private activationTimer: ReturnType<typeof setTimeout> | undefined;
   private heartbeatIntervalTimer: ReturnType<typeof setTimeout> | undefined;
   private heartbeatTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
@@ -619,11 +615,9 @@ export class CoordinatorRouter {
       >({
         endpoint: transferredPort,
         onMessage: (message) => {
-          if (!route) return;
-          if (this.engineRoute === route)
+          if (route && this.engineRoute === route) {
             this.handleEngineMessage(route, message);
-          else if (this.leftRoutes.has(route))
-            this.handleLeftEngineMessage(route, message);
+          }
         },
         onError: (error) => {
           if (route && this.engineRoute === route) {
@@ -645,65 +639,9 @@ export class CoordinatorRouter {
       );
       return;
     }
-    route = { tabId, ownerEpoch, transport, port: transferredPort };
+    route = { tabId, ownerEpoch, transport };
     this.engineRoute = route;
     void transport.ready.catch(() => undefined);
-  }
-
-  private closeEngineTransport(route: EngineRoute): void {
-    void Effect.runPromise(route.transport.close()).catch(() => undefined);
-  }
-
-  /** Ends an engine whose page left, and reads what it sent before: its port
-   * is not ordered with the page's news of leaving. */
-  private hearOutEngine(route: EngineRoute): void {
-    this.leftRoutes.add(route);
-    try {
-      route.port.postMessage(EFFECT_WORKER_CLOSE_FRAME);
-    } catch {
-      // Closing the port below is enough.
-    }
-    this.setTimeoutFn(() => {
-      this.leftRoutes.delete(route);
-      this.closeEngineTransport(route);
-    }, this.heartbeatIntervalMs);
-  }
-
-  private handleLeftEngineMessage(
-    route: EngineRoute,
-    rawMessage: unknown
-  ): void {
-    const parsed = validateEngineToCoordinatorEnvelope(rawMessage);
-    const core = this.coreValue;
-    if (!core || !parsed.ok) return;
-    const message = parsed.value;
-    if (
-      message.kind !== 'engine-fatal' ||
-      message.fatalCode !== 'storage-reset-required' ||
-      message.ownerEpoch !== route.ownerEpoch
-    )
-      return;
-    this.leftRoutes.clear();
-    core.requireWipe();
-    const state = core.state;
-    if (
-      state.kind === 'activating' ||
-      state.kind === 'active' ||
-      state.kind === 'draining'
-    ) {
-      this.failOwner(
-        state.tabId,
-        state.ownerEpoch,
-        message.reason,
-        message.fatalCode
-      );
-      return;
-    }
-    this.nextRecoveryResetReason = 'storage-reset-required';
-    this.recordStorageResetRequired(
-      message.ownerEpoch,
-      'storage-reset-required'
-    );
   }
 
   private handleEngineMessage(route: EngineRoute, rawMessage: unknown): void {
@@ -778,8 +716,6 @@ export class CoordinatorRouter {
         );
         break;
       case 'engine-ready': {
-        if (message.databaseActionProof === 'wiped-before-open')
-          this.leftRoutes.clear();
         const actions = core.engineReady({
           ...message,
           expectedOwnerLockName: databaseOwnerLockName(core.scope),
@@ -946,7 +882,6 @@ export class CoordinatorRouter {
             ownerEvent: 'elected',
           });
           if (action.databaseAction === 'wipe-before-open') {
-            this.leftRoutes.clear();
             this.pendingRecoveryResetEpochs.set(
               action.ownerEpoch,
               this.nextRecoveryResetReason ?? 'abrupt-owner-loss'
@@ -1071,8 +1006,9 @@ export class CoordinatorRouter {
           ) {
             const route = this.engineRoute;
             this.engineRoute = undefined;
-            if (action.left) this.hearOutEngine(route);
-            else this.closeEngineTransport(route);
+            void Effect.runPromise(route.transport.close()).catch(
+              () => undefined
+            );
           }
           break;
         case 'drop-tab':

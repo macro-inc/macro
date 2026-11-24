@@ -276,7 +276,6 @@ describe('CoordinatorCore', () => {
       kind: 'close-engine-route',
       tabId: 'tab-a',
       ownerEpoch: 1,
-      left: true,
     });
     expect(departure.some((action) => action.kind === 'elect-owner')).toBe(
       false
@@ -926,12 +925,7 @@ describe('CoordinatorCore', () => {
     ready(core, 'tab-a', 1, 'opened-existing');
 
     expect(core.departForNavigation('tab-a', 1, 'refresh')).toEqual([
-      {
-        kind: 'close-engine-route',
-        tabId: 'tab-a',
-        ownerEpoch: 1,
-        left: true,
-      },
+      { kind: 'close-engine-route', tabId: 'tab-a', ownerEpoch: 1 },
       { kind: 'drop-tab', tabId: 'tab-a' },
     ]);
     expect(core.state).toEqual({
