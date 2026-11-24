@@ -190,6 +190,17 @@ export interface ChannelSyncRuntime {
   dispose(): void;
 }
 
+/**
+ * Records may be older than the device's from `from` on: the next catch-up
+ * replays from there, and until it does the channel is not current, so a
+ * read that marked it current cannot skip that catch-up.
+ */
+function leaveRepair(state: ChannelState, from: bigint): void {
+  if (state.repairFrom === undefined || from < state.repairFrom)
+    state.repairFrom = from;
+  state.current = false;
+}
+
 /** What the device held of a channel, dropped: it is read again when needed. */
 function forgetState(state: ChannelState): void {
   state.seq = undefined;
@@ -522,11 +533,13 @@ export function createChannelSyncRuntime(
     let after = repair !== undefined && repair < from ? repair : from;
     let changes = 0;
     let rereads = 0;
-    // Frames past an overtaken page: the page read again after them covers
-    // those it commits through.
+    // Frames that stored while a page was out: each later page that lands
+    // covers those it commits through.
     const covering: bigint[] = [];
-    // The lowest repair this catch-up left for an overtaken page.
+    // The lowest repair this catch-up left for an overtaken last page.
     let overtaken: bigint | undefined;
+    // The repair left for the previous page, which had more after it.
+    let pageRepair: bigint | undefined;
     for (let page = 0; page < MAX_CHANGE_PAGES + rereads; page += 1) {
       const out: PageOut = { newestFrame: undefined, frames: [] };
       state.pagesOut.add(out);
@@ -569,8 +582,7 @@ export function createChannelSyncRuntime(
               if (state.forgets !== forgets) return;
               if (out.newestFrame === undefined || out.newestFrame <= to)
                 return;
-              if (state.repairFrom === undefined || to < state.repairFrom)
-                state.repairFrom = to;
+              leaveRepair(state, to);
             })
           )
         );
@@ -593,32 +605,35 @@ export function createChannelSyncRuntime(
       const overtakenPage =
         out.newestFrame !== undefined && out.newestFrame > to;
       const overwritten = !delta.hasMore && overtakenPage;
-      // Left as a repair until a page read again holds, or the next page
-      // after one with more, so a drop or a failure before then repairs from
-      // here.
+      // Frames through the page stored before it landed, while it or an
+      // earlier page was out: it carries their records as they were at the
+      // page or later, so they need no repair.
+      covering.push(...out.frames);
+      for (const seq of covering) if (seq <= to) state.covered.add(seq);
+      // This page read every change after the previous one as it is now.
+      if (pageRepair !== undefined && state.repairFrom === pageRepair)
+        state.repairFrom = undefined;
+      pageRepair = undefined;
+      // Left as a repair until a page read again holds, or until the next
+      // page after one with more lands, so a drop or a failure before then
+      // repairs from here.
       if (
         overtakenPage &&
         (state.repairFrom === undefined || to < state.repairFrom)
       ) {
-        state.repairFrom = to;
-        if (overtaken === undefined || to < overtaken) overtaken = to;
+        leaveRepair(state, to);
+        if (delta.hasMore) pageRepair = to;
+        else if (overtaken === undefined || to < overtaken) overtaken = to;
       }
       if (overwritten && rereads < MAX_PAGE_REREADS) {
-        covering.push(...out.frames.filter((seq) => seq > to));
         rereads += 1;
         continue;
       }
       if (!delta.hasMore) {
         if (state.repairFrom === repair || state.repairFrom === overtaken)
           state.repairFrom = undefined;
-        for (const seq of covering) if (seq <= to) state.covered.add(seq);
         // Still overwritten: the next catch-up repairs from the page.
-        if (
-          overwritten &&
-          (state.repairFrom === undefined || to < state.repairFrom)
-        ) {
-          state.repairFrom = to;
-        }
+        if (overwritten) leaveRepair(state, to);
         yield* applyHeld(channelId, state);
         if (!overwritten && epoch === socketEpoch && isConnected)
           state.current = true;

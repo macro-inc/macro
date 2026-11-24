@@ -1280,3 +1280,123 @@ it.each(['alone', 'with a gap asked meanwhile'])(
     }
   }
 );
+
+const answerUpTo = (
+  test: ReturnType<typeof setup>,
+  from: number,
+  seq: string,
+  newer: ReturnType<typeof graphqlMessage>
+) => {
+  for (const request of test.requests.slice(from)) {
+    request.answer(
+      delta(seq, {
+        messages: Number(request.after) < Number(seq) ? [newer] : [],
+      })
+    );
+  }
+};
+
+it('repairs an overwritten page after a server read marked the channel current', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  const older = graphqlMessage(6, { content: 'old edit' });
+  const newer = graphqlMessage(6, { content: 'live edit' });
+  const key = `GraphqlChannelMessage:${newer.id}`;
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    // A timeline read settles at 5 before any frame reached this client.
+    test.runtime.noteServerRead(CHANNEL_ID, '5', test.runtime.epoch(), '5');
+    test.push('206', graphqlMessage(206));
+    test.push('207', newer);
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[0].answer(delta('205', { hasMore: true, messages: [older] }));
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[1].fail();
+    await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MS + 600);
+    expect(cursors(test)).toEqual(['5', '205', '205']);
+    answerUpTo(test, 2, '207', newer);
+    await vi.advanceTimersByTimeAsync(20);
+    await expect(test.runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe(
+      'current'
+    );
+    expect(test.records.get(key)).toBe(newer.content);
+  } finally {
+    test.stop();
+  }
+});
+
+it.each(['clean', 'overtaken'])(
+  'retries from the next page once it lands, the second page %s',
+  async (second) => {
+    vi.useFakeTimers();
+    quiet();
+    const test = setup();
+    const older = graphqlMessage(6, { content: 'original text' });
+    const first = graphqlMessage(6, { content: 'first edit' });
+    try {
+      await vi.advanceTimersByTimeAsync(600);
+      test.push('207', first);
+      await vi.advanceTimersByTimeAsync(20);
+      test.requests[0].answer(
+        delta('205', { hasMore: true, messages: [older] })
+      );
+      await vi.advanceTimersByTimeAsync(20);
+      if (second === 'overtaken') {
+        test.push('406', graphqlMessage(406));
+        await vi.advanceTimersByTimeAsync(20);
+      }
+      // The page after 205 carries the edit at 207 as it is now.
+      test.requests[1].answer(
+        delta('405', { hasMore: true, messages: [first] })
+      );
+      await vi.advanceTimersByTimeAsync(20);
+      expect(cursors(test)).toEqual(['5', '205', '405']);
+      test.requests[2].fail();
+      await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MS + 600);
+      // Not from 205, which may be past the server's replay window by now.
+      expect(cursors(test)).toEqual(['5', '205', '405', '405']);
+    } finally {
+      test.stop();
+    }
+  }
+);
+
+it('asks nothing more for in-order frames a clean page carried', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.push('206', graphqlMessage(206));
+    test.push('207', graphqlMessage(6, { content: 'live edit' }));
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[0].answer(
+      delta('205', {
+        hasMore: true,
+        messages: [graphqlMessage(6, { content: 'old edit' })],
+      })
+    );
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[1].fail();
+    await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MS + 600);
+
+    // Each repair's page includes the next edit, whose frame stored while
+    // the page was out.
+    for (let i = 2; i < 6 && i < test.requests.length; i += 1) {
+      const next = 206 + i;
+      const message = graphqlMessage(6, { content: `edit ${next}` });
+      test.push(String(next), message);
+      await vi.advanceTimersByTimeAsync(20);
+      const messages =
+        Number(test.requests[i].after) < 206
+          ? [graphqlMessage(206), message]
+          : [message];
+      test.requests[i].answer(delta(String(next), { messages }));
+      await vi.advanceTimersByTimeAsync(600);
+    }
+    expect(cursors(test)).toEqual(['5', '205', '205']);
+  } finally {
+    test.stop();
+  }
+});
