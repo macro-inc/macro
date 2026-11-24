@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { CoordinatorRestartsExhaustedError } from '@graphql-cache/host/worker-host';
 import {
   isCacheSupersededError,
   isOwnerHandoffBlockedError,
@@ -23,12 +24,15 @@ export const MAX_RECOVERY_RELAPSES = 10;
 /** How long a restarted cache must stay up before its failures count afresh. */
 export const RECOVERY_HEALTHY_MS = 60_000;
 
-/** Only known untouched/bootstrap or owner-handoff failures permit reopening.
- * A newer build that took the database over never hands it back to this one. */
+/** Only known untouched/bootstrap, owner-handoff, or coordinator-restart
+ * failures permit reopening: each leaves the database preserved and its scope
+ * unquarantined. A newer build that took the database over never hands it back
+ * to this one. */
 export function canRetryCacheFailure(error: unknown): boolean {
   if (isCacheSupersededError(error)) return false;
   return (
     error instanceof CacheBootstrapExhaustedError ||
+    error instanceof CoordinatorRestartsExhaustedError ||
     isOwnerLockUnavailableError(error) ||
     isOwnerHandoffBlockedError(error)
   );
@@ -119,9 +123,10 @@ export function createCacheRecovery(
     }
     clearHealthyTimer();
     // Only these typed errors prove restarting cannot bypass a quarantined
-    // journal: nothing opened storage, or a read was refused while the database
-    // moved between owners. Unknown storage/transport failures stay closed, and
-    // so does a cache that kept failing after every restart.
+    // journal: nothing opened storage, a read was refused while the database
+    // moved between owners, or the coordinator kept restarting with storage
+    // preserved. Unknown storage/transport failures stay closed, and so does a
+    // cache that kept failing after every restart.
     const recoverable =
       canRetryCacheFailure(error) && relapses < MAX_RECOVERY_RELAPSES;
     const stopping = !recoverable && state() !== 'recovery-required';

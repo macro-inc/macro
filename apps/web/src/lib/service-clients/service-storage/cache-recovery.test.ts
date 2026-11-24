@@ -1,3 +1,4 @@
+import { CoordinatorRestartsExhaustedError } from '@graphql-cache/host/worker-host';
 import { CacheBootstrapExhaustedError } from '@graphql-cache/worker/startup';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
@@ -102,6 +103,33 @@ it('retries after a read refused while the database changed owners', async () =>
   await vi.advanceTimersByTimeAsync(2_000);
   expect(rebuild).toHaveBeenCalledOnce();
   expect(recovery.state()).toBe('ready');
+  recovery.reset();
+});
+
+it('retries after the coordinator kept restarting before its handshake', async () => {
+  const rebuild = vi.fn(async () => {});
+  const recovery = createCacheRecovery(rebuild);
+  recovery.failed(new CoordinatorRestartsExhaustedError());
+  expect(recovery.state()).toBe('unavailable');
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(rebuild).toHaveBeenCalledOnce();
+  expect(recovery.state()).toBe('ready');
+  recovery.reset();
+});
+
+it('keeps an engine transport failure closed even when it looks like a lost owner', async () => {
+  const rebuild = vi.fn(async () => {});
+  const recovery = createCacheRecovery(rebuild);
+  const lost = Object.assign(
+    new Error('cache coordinator transport restarted'),
+    {
+      errorCode: 'owner-epoch-lost',
+    }
+  );
+  recovery.failed(lost);
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(rebuild).not.toHaveBeenCalled();
+  expect(recovery.state()).toBe('recovery-required');
   recovery.reset();
 });
 

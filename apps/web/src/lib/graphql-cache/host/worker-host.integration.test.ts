@@ -7,7 +7,10 @@ import { installCacheEngineWorker } from '../worker/cache-engine-runtime';
 import { createCacheCoordinatorPageAdapter } from '../worker/coordinator-page-adapter';
 import { CoordinatorRouter } from '../worker/coordinator-router';
 import { EFFECT_WORKER_CLOSE_FRAME } from '../worker/effect-worker-transport';
-import { createWorkerCacheHost } from './worker-host';
+import {
+  CoordinatorRestartsExhaustedError,
+  createWorkerCacheHost,
+} from './worker-host';
 import {
   exchangeHarness,
   LinkedMessageChannel,
@@ -483,9 +486,9 @@ describe('worker CacheHost coordinator integration', () => {
     ).rejects.toMatchObject({
       errorCode: 'owner-epoch-lost',
     });
-    expect(await fallback.promise).toMatchObject({
-      errorCode: 'owner-epoch-lost',
-    });
+    const failure = await fallback.promise;
+    expect(failure).toBeInstanceOf(CoordinatorRestartsExhaustedError);
+    expect(failure).toMatchObject({ errorCode: 'owner-epoch-lost' });
     expect(sharedWorkers).toHaveLength(3);
     expect(dedicatedWorkers.every((worker) => worker.terminated)).toBe(true);
     expect(localStorage.getItem('graphql-cache:scope')).toBe(

@@ -189,6 +189,23 @@ class CacheResponseError extends Error {
   }
 }
 
+/**
+ * The coordinator SharedWorker restarted on every reconnect before a
+ * handshake completed. The host stopped with the database preserved and its
+ * scope unquarantined, as an in-place reconnect does, so the page may build a
+ * new host later.
+ */
+export class CoordinatorRestartsExhaustedError extends CacheResponseError {
+  constructor(options?: ErrorOptions) {
+    super(
+      'cache coordinator transport restarted',
+      OWNER_EPOCH_LOST_ERROR_CODE,
+      options
+    );
+    this.name = 'CoordinatorRestartsExhaustedError';
+  }
+}
+
 const isOwnerEpochLoss = (error: unknown): error is CacheResponseError =>
   error instanceof CacheResponseError &&
   error.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
@@ -1105,9 +1122,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     // Bound restarts during startup just like registration retries. A completed
     // handshake resets this budget; separate later restarts can recover again.
     if (++coordinatorRestarts >= COORDINATOR_CONNECT_ATTEMPTS) {
+      const exhausted = new CoordinatorRestartsExhaustedError({ cause });
       stopStorageHealthSampling();
-      stopForSession(error, { uncertain: true, preserveDatabase: true });
-      reportFailure(error);
+      stopForSession(exhausted, { uncertain: true, preserveDatabase: true });
+      reportFailure(exhausted);
       return;
     }
     suspendTransport(error);
