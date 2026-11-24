@@ -1442,6 +1442,7 @@ export function createSplitLayout(
       return existing.topLevelSplit;
     }
 
+    const existingSplits = new Set(state.splits.map((split) => split.id));
     const result = openPane(initialContent, {
       beside,
       referredFrom,
@@ -1451,7 +1452,12 @@ export function createSplitLayout(
     if (result instanceof Promise) return;
     if (result.status !== 'committed') return;
 
-    return getSplit(splitOf(result.pane));
+    const split = getSplit(splitOf(result.pane));
+    // The router hands content another pane already shows (a hosted detail
+    // that findOpenView can't see) to that pane instead of a new one; bring
+    // it up as the open asked, as a replace does.
+    if (activate && split && existingSplits.has(split.id)) split.activate();
+    return split;
   }
 
   /** Removes a split; the last one shows the default content instead. */
