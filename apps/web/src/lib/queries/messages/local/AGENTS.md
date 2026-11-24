@@ -24,7 +24,8 @@ TanStack path in `../` runs untouched.
   connection comes back (`watchReconnect`, started before each request, so a
   request that fails after the connection is already back loads again at
   once): nothing else retries them on its own (a failed window still shows
-  Retry), nor a window read again after a session change. A page the device
+  Retry), nor a window read again after a session change, except the wait
+  after a failed page below. A page the device
   failed to store is read again from its own cursor, by the next page in that
   direction or the connection's return, and given up if refused again: the
   window then follows the device only once it is loaded again. From a page's
@@ -49,11 +50,14 @@ TanStack path in `../` runs untouched.
   edit, delete or reaction resolves only when the device copy shows it
   (`applied`; another tab may have rolled it back, `NOT_APPLIED`), and a send
   answers from the device copy, else the server copy (`ChannelMessage`), else
-  `NOT_SENT`, or `DELIVERY_UNKNOWN` when the server cannot say; the composers
+  `DELIVERY_UNKNOWN`: a request the server has not answered can still
+  commit, so an absent copy proves nothing, and each question waits at most
+  `SERVER_LOOKUP_BUDGET_MS`; the composers
   send a restored draft of that message again, from the same person to the
   same place and from any view of it, under the same id
   (`features/channel/Input/utils/uncertain-sends.ts`, which ignores mention
-  order), until another message is sent there. The
+  order), until another message is sent there; the ids live in memory, so a
+  reload forgets them. The
   reply composer awaits its send, since it unmounts as it sends, and puts a
   failed reply back through the thread's stored draft, which every open reply
   input holds (`features/channel/Thread/reply-drafts.ts`): a view opened later
@@ -67,8 +71,9 @@ TanStack path in `../` runs untouched.
   (`graphql-mutation-retry.ts`): the server dedupes them by message id, while a
   replayed edit or reaction could undo a newer one; every write is still sent
   again after a transport failure. A send the queue stops retrying answers
-  with the server copy when there is one. Recovery runs as
-  `channel.write.recover` in the write's trace.
+  the same way, from the device copy first. Recovery runs as
+  `channel.write.recover` in the write's trace, every lookup included. A page
+  and each read of it again run in one `channel.load_page` span.
 - Ahead: `channel-prewarm.ts` fetches unread then recent channels while the
   person is idle, and evicts channels untouched for 30 days. A pushed frame
   for a channel the device does not hold gives it an empty sync row once the

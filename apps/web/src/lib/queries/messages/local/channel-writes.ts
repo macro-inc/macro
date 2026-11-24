@@ -51,6 +51,11 @@ const WRITE_TYPENAME = 'GraphqlChannelMessageWrite';
 const SEND_OPERATION = 'channel.write.send';
 /** The queue's code for a write it stopped retrying. */
 const RETRY_EXHAUSTED = 'MUTATION_RETRY_EXHAUSTED';
+/**
+ * How long a server copy of a send waits to be stored on the device before
+ * it answers anyway; the server's answer is what decides the send.
+ */
+const SERVER_COPY_STORE_BUDGET_MS = 5_000;
 
 /** Reads one message from the server; null when the server does not have it. */
 export type FetchChannelMessage = (
@@ -67,12 +72,21 @@ const fetchServerMessage: FetchChannelMessage = async (
     messageId,
   });
   // The views reread when the write ends, so the device should hold it then;
-  // a copy that could not be stored is still the answer.
-  try {
-    await cached;
-  } catch (error) {
-    Telemetry.error(error, { surface: 'channel-writes' });
-  }
+  // a copy that could not be stored, or is still storing after
+  // `SERVER_COPY_STORE_BUDGET_MS`, is still the answer.
+  const stored = Effect.promise(async () => {
+    try {
+      await cached;
+    } catch (error) {
+      Telemetry.error(error, { surface: 'channel-writes' });
+    }
+  });
+  await Effect.runPromise(
+    Effect.timeoutOrElse(stored, {
+      duration: SERVER_COPY_STORE_BUDGET_MS,
+      orElse: () => Effect.succeed(undefined),
+    })
+  );
   return data.user.channelMessage;
 };
 
@@ -241,6 +255,8 @@ const QUEUE_RECHECK_MS = 1_000;
 const QUEUE_RECHECK_MAX_MS = 30_000;
 /** Waits before asking the server again whether it has a send. */
 const SERVER_LOOKUP_RETRIES_MS = [500, 1_000];
+/** How long one such question waits for its answer, stored on the device. */
+const SERVER_LOOKUP_BUDGET_MS = 10_000;
 /**
  * How long a delete waits for the device's copy of a reply's root before it
  * goes without the root: the server's answer brings the root then.
@@ -645,15 +661,17 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   /**
    * A write that left the queue while this page heard nothing, delivered or
    * rolled back by another tab. A send is delivered when the device or the
-   * server holds it, was not sent when neither does, and is unknown when the
-   * server cannot say. Another write is delivered when the device's copy
+   * server holds it, and unknown otherwise: a request the server has not
+   * answered can still commit, and only the same id makes sending it again
+   * safe. Another write is delivered when the device's copy
    * shows it (`applied`), which a rollback undoes.
    */
   async function missedOutcome(
     write: Pick<
       Write<unknown, AnyVariables>,
       'channelId' | 'messageId' | 'operation' | 'applied'
-    >
+    >,
+    trace: TraceContext
   ): Promise<Message> {
     const message = await readMessage(write.messageId);
     if (message && (write.applied?.(message) ?? true))
@@ -664,11 +682,9 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     if (write.operation !== SEND_OPERATION) {
       throw refusal('NOT_FOUND', 'the message is not on the device');
     }
-    const delivered = await askServer(write);
+    const delivered = await askServer(write, trace);
     if (delivered) return delivered;
-    throw delivered === null
-      ? refusal('NOT_SENT', 'the send was rolled back elsewhere')
-      : unknownDelivery();
+    throw unknownDelivery();
   }
 
   /**
@@ -676,15 +692,39 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
    * second copy of one that arrived: ask the server more than once.
    */
   async function askServer(
-    write: Pick<Write<unknown, AnyVariables>, 'channelId' | 'messageId'>
+    write: Pick<Write<unknown, AnyVariables>, 'channelId' | 'messageId'>,
+    trace: TraceContext
   ): Promise<Message | null | undefined> {
-    let delivered = await serverCopy(write);
+    // Every question, after a wait too, joins the recovery's trace.
+    const ask = () => trace.run(() => boundedServerCopy(write));
+    let delivered = await ask();
     for (const waitMs of SERVER_LOOKUP_RETRIES_MS) {
       if (delivered !== undefined) break;
       await new Promise((resolve) => setTimeout(resolve, waitMs));
-      delivered = await serverCopy(write);
+      delivered = await ask();
     }
     return delivered;
+  }
+
+  /**
+   * `serverCopy`, answered within `SERVER_LOOKUP_BUDGET_MS`: a request or a
+   * device write that never answers leaves the send unknown instead of
+   * pending forever.
+   */
+  function boundedServerCopy(
+    write: Pick<Write<unknown, AnyVariables>, 'channelId' | 'messageId'>
+  ): Promise<Message | null | undefined> {
+    // Started here, in the caller's trace; the timeout only stops waiting.
+    const copy = serverCopy(write);
+    return Effect.runPromise(
+      Effect.timeoutOrElse(
+        Effect.promise(() => copy),
+        {
+          duration: SERVER_LOOKUP_BUDGET_MS,
+          orElse: () => Effect.succeed(undefined),
+        }
+      )
+    );
   }
 
   /** Reads a waiting write's outcome from the device and the server. */
@@ -694,14 +734,16 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       'operation' | 'channelId' | 'messageId'
     >,
     reason: 'missed' | 'retry_exhausted',
-    read: () => Promise<T>
+    read: (trace: TraceContext) => Promise<T>
   ): Promise<T> {
     return Telemetry.span('channel.write.recover', async (span) => {
+      // Taken before any await: the reads that follow one join this span.
+      const trace = Telemetry.captureContext();
       span.setAttr('channel.id', write.channelId);
       span.setAttr('message.id', write.messageId);
       span.setAttr('write.operation', write.operation);
       span.setAttr('write.recovery', reason);
-      const outcome = await read();
+      const outcome = await read(trace);
       span.setAttr('write.recovered', outcome !== undefined);
       return outcome;
     });
@@ -709,22 +751,28 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
 
   /**
    * A send the queue gave up on after retrying it may still have reached the
-   * server: a restored draft would go out again under a new id. The server's
-   * copy, when it has one, is the send's answer; when the server cannot say,
-   * the send is unknown, so the composer sends it again under its own id.
+   * server, or reach it later: a restored draft would go out again under a
+   * new id. The device's copy (a frame may have stored the server's row),
+   * else the server's, is the send's answer; without either the send is
+   * unknown, so the composer sends it again under its own id.
    */
   async function deliveredAfterAll(
     write: Pick<
       Write<unknown, AnyVariables>,
       'channelId' | 'messageId' | 'operation'
     >,
-    error: unknown
+    error: unknown,
+    trace: TraceContext
   ): Promise<Message | undefined> {
     if (write.operation !== SEND_OPERATION) return undefined;
     if (!thrownResultErrorHasCode(error, RETRY_EXHAUSTED)) return undefined;
-    const delivered = await askServer(write);
-    if (delivered === undefined) throw unknownDelivery();
-    return delivered ?? undefined;
+    // The queue rolled its optimistic record back before it settled: a copy
+    // here is the server's.
+    const stored = await readMessage(write.messageId);
+    if (stored) return mapChannelMessage(stored);
+    const delivered = await askServer(write, trace);
+    if (delivered) return delivered;
+    throw unknownDelivery();
   }
 
   async function queuedWrite<TData, TVariables extends AnyVariables>(
@@ -772,8 +820,8 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
           outcome = await settlements.committed(disposition.transactionId);
         } catch (error) {
           const delivered = await traced(() =>
-            recovered(write, 'retry_exhausted', () =>
-              deliveredAfterAll(write, error)
+            recovered(write, 'retry_exhausted', (recovery) =>
+              deliveredAfterAll(write, error, recovery)
             )
           );
           if (delivered) return delivered;
@@ -781,7 +829,9 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         }
         if (outcome === 'missed')
           return await traced(() =>
-            recovered(write, 'missed', () => missedOutcome(write))
+            recovered(write, 'missed', (recovery) =>
+              missedOutcome(write, recovery)
+            )
           );
         return await stored(write);
       }

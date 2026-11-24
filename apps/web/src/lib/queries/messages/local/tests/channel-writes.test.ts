@@ -39,6 +39,16 @@ const settled = async (write: Promise<unknown>) => {
   }
 };
 
+/** What a write failed with, or undefined when it did not fail. */
+const failure = async (write: Promise<unknown>): Promise<unknown> => {
+  try {
+    await write;
+    return undefined;
+  } catch (error) {
+    return error;
+  }
+};
+
 // A test that times out under fake timers would leave them on for the next.
 afterEach(() => {
   vi.useRealTimers();
@@ -548,7 +558,7 @@ describe('createChannelWrites', () => {
     expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
   });
 
-  it('rejects a send a reset emptied from the queue that the server never got', async () => {
+  it('calls a send a reset emptied from the queue that the server lacks unknown', async () => {
     const id = graphqlMessage(7).id;
     const { writes, reset, fetched } = setup(() => ({
       disposition: { kind: 'queued', transactionId: '4' },
@@ -557,7 +567,8 @@ describe('createChannelWrites', () => {
     await settleMicrotasks();
     reset();
     const error = await sending.catch((thrown: unknown) => thrown);
-    expect(thrownResultErrorHasCode(error, 'NOT_SENT')).toBe(true);
+    // The request may still commit: only the same id is safe to send again.
+    expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
     expect(fetched).toEqual([id]);
   });
 
@@ -629,7 +640,7 @@ describe('createChannelWrites', () => {
     await expect(sending).resolves.toEqual(mapChannelMessage(delivered));
   });
 
-  it('rejects a send the queue stopped retrying that the server does not have', async () => {
+  it('calls a send the queue stopped retrying that the server lacks unknown', async () => {
     const id = graphqlMessage(7).id;
     const { writes, settle, fetched } = setup(() => ({
       disposition: { kind: 'queued', transactionId: '4' },
@@ -643,10 +654,67 @@ describe('createChannelWrites', () => {
       error: 'stopped after 3 server failures',
     });
     const error = await sending.catch((thrown: unknown) => thrown);
-    expect(thrownResultErrorHasCode(error, 'MUTATION_RETRY_EXHAUSTED')).toBe(
+    expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
+    expect(fetched).toEqual([id]);
+  });
+
+  it('answers a send the queue stopped retrying from the device copy', async () => {
+    // A frame stored the server's row; the queue's own record is rolled back.
+    const delivered = graphqlMessage(7);
+    const { client } = fakeClient(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    const device = writeHost([delivered]);
+    const fetchMessage = vi.fn(() => Promise.reject(new Error('offline')));
+    const writes = createChannelWrites({
+      host: device.host,
+      runtime: { notifyChanged: vi.fn() },
+      client: () => client,
+      now: () => NOW,
+      fetchMessage,
+    });
+    const sending = writes.send(send(delivered.id));
+    await settleMicrotasks();
+    device.settle({
+      transactionId: '4',
+      status: 'permanently-failed',
+      errorCode: 'MUTATION_RETRY_EXHAUSTED',
+      error: 'stopped after 3 server failures',
+    });
+    await expect(sending).resolves.toEqual(mapChannelMessage(delivered));
+    expect(fetchMessage).not.toHaveBeenCalled();
+  });
+
+  it('calls a send unknown when the server never answers whether it has it', async () => {
+    vi.useFakeTimers();
+    const id = graphqlMessage(7).id;
+    const { client } = fakeClient(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    const device = writeHost();
+    const fetchMessage = vi.fn(() => new Promise<never>(() => {}));
+    const writes = createChannelWrites({
+      host: device.host,
+      runtime: { notifyChanged: vi.fn() },
+      client: () => client,
+      now: () => NOW,
+      fetchMessage,
+    });
+    const sending = writes.send(send(id));
+    const error = failure(sending);
+    await vi.advanceTimersByTimeAsync(0);
+    device.settle({
+      transactionId: '4',
+      status: 'permanently-failed',
+      errorCode: 'MUTATION_RETRY_EXHAUSTED',
+      error: 'stopped after 3 server failures',
+    });
+    // Three questions of 10 s each, 500 ms and 1 s apart.
+    await vi.advanceTimersByTimeAsync(31_500);
+    expect(thrownResultErrorHasCode(await error, 'DELIVERY_UNKNOWN')).toBe(
       true
     );
-    expect(fetched).toEqual([id]);
+    expect(fetchMessage).toHaveBeenCalledTimes(3);
   });
 
   it('calls a send the queue stopped retrying unknown when the server cannot say', async () => {
@@ -700,7 +768,7 @@ describe('createChannelWrites', () => {
     expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
   });
 
-  it('rejects a send the queue rolled back while this page was away', async () => {
+  it('calls a send the queue rolled back while this page was away unknown', async () => {
     const { writes, queued, restore } = setup(() => ({
       disposition: { kind: 'queued', transactionId: '4' },
     }));
@@ -711,7 +779,8 @@ describe('createChannelWrites', () => {
     restore();
 
     const error = await sending.catch((thrown: unknown) => thrown);
-    expect(thrownResultErrorHasCode(error, 'NOT_SENT')).toBe(true);
+    // The request may still commit: only the same id is safe to send again.
+    expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
   });
 
   describe('a write that left the queue while the page was away', () => {
@@ -889,7 +958,8 @@ describe('createChannelWrites', () => {
     queued.push({ transactionId: '4', uuid: crypto.randomUUID() });
     restore();
     const error = await sending.catch((thrown: unknown) => thrown);
-    expect(thrownResultErrorHasCode(error, 'NOT_SENT')).toBe(true);
+    // The request may still commit: only the same id is safe to send again.
+    expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
     expect(fetched).toEqual([id]);
   });
 
@@ -937,7 +1007,6 @@ describe('createChannelWrites', () => {
     device.queued.length = 0;
     device.restore();
     const error = await sending.catch((thrown: unknown) => thrown);
-    expect(thrownResultErrorHasCode(error, 'NOT_SENT')).toBe(false);
     expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
   });
 

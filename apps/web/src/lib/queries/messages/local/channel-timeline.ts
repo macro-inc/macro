@@ -800,14 +800,23 @@ export function createLocalChannelTimeline(
     };
     let outcome: PageOutcome | 'stale';
     try {
-      outcome = await pageIn(
-        direction,
-        cursor,
-        unstored !== null,
-        token,
-        signal,
-        merged
-      );
+      // One span for the page and every read of it again, so they share a
+      // trace whether or not the scroll that asked had one.
+      outcome = await Telemetry.span('channel.load_page', async (span) => {
+        span.setAttr('channel.id', channelId);
+        span.setAttr('page.direction', direction);
+        span.setAttr('page.again', unstored !== null);
+        const result = await pageIn(
+          direction,
+          cursor,
+          unstored !== null,
+          token,
+          signal,
+          merged
+        );
+        span.setAttr('page.outcome', result);
+        return result;
+      });
     } catch (error) {
       // Aborted by a switch or unmount: nothing failed.
       outcome = token === loadToken ? 'failed' : 'stale';

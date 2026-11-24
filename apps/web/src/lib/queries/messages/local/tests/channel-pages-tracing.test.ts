@@ -1,3 +1,4 @@
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import type { CacheRevision } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
@@ -25,6 +26,7 @@ import {
   type ChannelTimelineRuntime,
   createLocalChannelTimeline,
 } from '../channel-timeline';
+import { createChannelWrites } from '../channel-writes';
 import {
   CHANNEL_ID,
   devicePage,
@@ -32,7 +34,14 @@ import {
   graphqlMessage,
   keyOf,
 } from './fixtures';
-import { send, setup, written } from './write-fixtures';
+import {
+  fakeClient,
+  NOW,
+  send,
+  setup,
+  writeHost,
+  written,
+} from './write-fixtures';
 
 context.setGlobalContextManager(new StackContextManager().enable());
 const exporter = new InMemorySpanExporter();
@@ -215,7 +224,9 @@ it('lists the channels to prewarm in the pass span', async () => {
   ]);
 });
 
-it('keeps a page read again after a session change in the scroll trace', async () => {
+async function readPageAgain(
+  scroll: (load: () => Promise<void>) => Promise<void>
+) {
   const newest = graphqlMessage(2);
   // The window is held; the page before it is not.
   const host = fakeHost(
@@ -263,17 +274,87 @@ it('keeps a page read again after a session change in the scroll trace', async (
   });
   try {
     await vi.waitFor(() => expect(timeline.hasOlder()).toBe(true));
-    await Telemetry.span('channel.scroll', () => timeline.loadOlder());
+    await scroll(() => timeline.loadOlder());
   } finally {
     dispose();
   }
+  expect(fetchPage).toHaveBeenCalledTimes(2);
+  return requestTraces;
+}
 
+it('keeps a page read again after a session change in the scroll trace', async () => {
+  exporter.reset();
+  const traces = await readPageAgain((load) =>
+    Telemetry.span('channel.scroll', load)
+  );
   const scroll = exporter
     .getFinishedSpans()
     .find((span) => span.name === 'channel.scroll');
-  expect(fetchPage).toHaveBeenCalledTimes(2);
-  expect(requestTraces).toEqual([
+  expect(traces).toEqual([
     scroll?.spanContext().traceId,
     scroll?.spanContext().traceId,
   ]);
+});
+
+it('keeps a page and its read again in one trace when the scroll has none', async () => {
+  exporter.reset();
+  const traces = await readPageAgain((load) => load());
+  const page = exporter
+    .getFinishedSpans()
+    .find((span) => span.name === 'channel.load_page');
+  expect(page?.parentSpanContext).toBeUndefined();
+  expect(traces).toEqual([
+    page?.spanContext().traceId,
+    page?.spanContext().traceId,
+  ]);
+});
+
+it('asks the server about a send in the recovery trace, after each wait too', async () => {
+  vi.useFakeTimers();
+  try {
+    exporter.reset();
+    const id = graphqlMessage(7).id;
+    const { client } = fakeClient(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    const device = writeHost();
+    const lookupTraces: (string | undefined)[] = [];
+    const writes = createChannelWrites({
+      host: device.host,
+      runtime: { notifyChanged: vi.fn() },
+      client: () => client,
+      now: () => NOW,
+      fetchMessage: async () => {
+        lookupTraces.push(trace.getActiveSpan()?.spanContext().traceId);
+        throw new Error('offline');
+      },
+    });
+    const sending = writes.send(send(id));
+    let failure: unknown;
+    const answered = (async () => {
+      try {
+        await sending;
+      } catch (error) {
+        failure = error;
+      }
+    })();
+    await vi.advanceTimersByTimeAsync(0);
+    device.settle({
+      transactionId: '4',
+      status: 'permanently-failed',
+      errorCode: 'MUTATION_RETRY_EXHAUSTED',
+      error: 'stopped after 3 server failures',
+    });
+    await vi.advanceTimersByTimeAsync(2_000);
+    await answered;
+    expect(thrownResultErrorHasCode(failure, 'DELIVERY_UNKNOWN')).toBe(true);
+    const recover = exporter
+      .getFinishedSpans()
+      .find((span) => span.name === 'channel.write.recover');
+    const traceId = recover?.spanContext().traceId;
+    expect(traceId).toBeDefined();
+    expect(lookupTraces).toEqual([traceId, traceId, traceId]);
+  } finally {
+    vi.useRealTimers();
+  }
 });
