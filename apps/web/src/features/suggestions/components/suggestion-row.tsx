@@ -68,16 +68,17 @@ function RowLine(props: { class?: string; children: JSX.Element }) {
   );
 }
 
-const NEUTRAL_TILE = 'bg-hover text-ink-muted';
-
 /** A 32px tile: the kind's glyph on its topic's colour or its own, or how the row stands. */
 function RowTile(props: { entry: FeedEntry; hue?: TopicHue | 'none' }) {
   const look = () => suggestionLook(props.entry.suggestion);
-  const tile = () =>
-    match(props.hue)
-      .with(undefined, () => cn(look().fill, look().tint))
-      .with('none', () => NEUTRAL_TILE)
-      .otherwise((hue) => topicLook(hue).tile);
+  // A row still to do or under way has its topic's colour or its kind's; one
+  // that settled, or that has no topic where others do, is neutral.
+  const hue = () =>
+    match(props.entry.state)
+      .with('markedDone', 'done', 'dismissed', () => 'none' as const)
+      .with('open', 'running', 'routineOn', () => props.hue ?? 'kind')
+      .with('failed', 'finished', () => undefined)
+      .exhaustive();
 
   return (
     <Item.Media
@@ -85,14 +86,11 @@ function RowTile(props: { entry: FeedEntry; hue?: TopicHue | 'none' }) {
         'size-8 self-center rounded-lg',
         props.entry.state === 'failed' && 'bg-failure/15 text-failure',
         props.entry.state === 'finished' && 'bg-success/15 text-success',
-        (props.entry.state === 'markedDone' ||
-          props.entry.state === 'done' ||
-          props.entry.state === 'dismissed') &&
-          NEUTRAL_TILE,
-        (props.entry.state === 'open' ||
-          props.entry.state === 'running' ||
-          props.entry.state === 'routineOn') &&
-          tile()
+        match(hue())
+          .with(undefined, () => undefined)
+          .with('none', () => 'bg-hover text-ink-muted')
+          .with('kind', () => cn(look().fill, look().tint))
+          .otherwise((topic) => topicLook(topic).tile)
       )}
       aria-hidden="true"
       data-suggestion-tile

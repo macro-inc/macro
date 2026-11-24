@@ -125,7 +125,14 @@ it('reads the topics, and each suggestion’s own', () => {
     suggestions: [{ ...WIRE, topic }],
     counts: COUNTS,
     topics: [
-      { ...topic, reason: 'Renews December 1', open: 1 },
+      {
+        ...topic,
+        reason: {
+          text: 'Renews December 1',
+          source: { entityType: 'email_thread', entityId: 'thread' },
+        },
+        open: 1,
+      },
       { key: 'event:offsite', name: 'Offsite', reason: null, open: 0 },
     ],
   });

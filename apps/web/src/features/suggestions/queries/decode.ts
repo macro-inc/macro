@@ -145,7 +145,7 @@ export function toFeed(feed: WireFeed): SuggestionFeed {
     topics: (feed.topics ?? []).map(({ key, name, reason }) => ({
       key,
       name,
-      ...(reason ? { reason } : {}),
+      ...(reason ? { reason: reason.text } : {}),
     })),
   };
 }

@@ -53,6 +53,9 @@ function ForYouPage() {
           { history: 'replace' }
         )
       }
+      onTopicGone={() =>
+        setSearch({ topic: undefined }, { history: 'replace' })
+      }
       routines={routines}
       parts={SUGGESTION_ITEM_PARTS}
       refresh={refresh}

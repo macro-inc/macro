@@ -354,13 +354,17 @@ function Fixture() {
     FOR_YOU_LISTS.find(
       (name) => name === new URLSearchParams(search()).get('list')
     ) ?? 'today';
-  const show = (shown: { list?: ForYouList; topic?: string }) => {
+  const at = (shown: { list?: ForYouList; topic?: string }) => {
     const url = new URL(location.href);
     url.searchParams.delete('list');
     url.searchParams.delete('topic');
     for (const [name, value] of Object.entries(shown)) {
       url.searchParams.set(name, value);
     }
+    return url;
+  };
+  const go = (shown: { list?: ForYouList; topic?: string }) => {
+    const url = at(shown);
     history.pushState(null, '', url);
     setSearch(url.search);
   };
@@ -393,9 +397,14 @@ function Fixture() {
             <ForYouView
               feed={feed}
               list={list()}
-              onSelectList={(next) => show({ list: next })}
+              onSelectList={(next) => go({ list: next })}
               topicKey={new URLSearchParams(search()).get('topic') ?? undefined}
-              onSelectTopic={(topic) => show({ topic })}
+              onSelectTopic={(topic) => go({ topic })}
+              onTopicGone={() => {
+                const url = at({});
+                history.replaceState(null, '', url);
+                setSearch(url.search);
+              }}
               routines={routines}
               parts={PARTS}
               refresh={refresh}

@@ -161,7 +161,7 @@ test('the sidebar lists topics with their counts, and choosing one shows its row
   await expect(title(page)).toHaveText('Spring offsite');
   await expect(page.locator('[data-suggestions-date]')).toHaveCount(0);
 
-  await page.goBack();
+  await topics.first().click();
   await expect(title(page)).toHaveText('Acme renewal');
   await page.reload();
   await expect(title(page)).toHaveText('Acme renewal');
@@ -198,6 +198,8 @@ test('a link to a topic that groups nothing shows Today', async ({ page }) => {
   await page.goto('/?scenario=topics&topic=project:launch');
   await expect(title(page)).toHaveText('Today');
   await expect(rows(page)).toHaveCount(9);
+  // It isn't asked for any more: rows that come back to it stay in Today.
+  await expect(page).toHaveURL(/\?scenario=topics$/);
 });
 
 test('the Routines section links to ideas and saved routines', async ({

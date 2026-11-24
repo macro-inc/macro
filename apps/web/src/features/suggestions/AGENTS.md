@@ -145,8 +145,8 @@ only, behind `enable-suggestions`.
   under "Everything else", or with no heading when there is no topic: then
   Today is one flat list. The sidebar lists the same topics with how many of
   their rows wait; choosing one (`?topic=`, which replaces `?view=`) shows its
-  rows alone, its name as the page's and its reason in place of the date. A
-  topic that groups nothing falls back to the list. A reason is shown as
+  rows alone, its name as the page's and its reason in place of the date. One
+  that groups nothing falls back to the list and leaves the URL. A reason is shown as
   written or not at all: never build one here.
 - Where topics group rows, a topic's hue tints its rows' tiles in every list
   and its square in the sidebar, and other rows' tiles are neutral. Hues are

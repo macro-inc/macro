@@ -130,6 +130,8 @@ export function ForYouView(props: {
   /** The key of the topic asked for, shown alone in place of the list. */
   topicKey?: string;
   onSelectTopic(key: string): void;
+  /** The topic asked for groups nothing (any more): the list is shown. */
+  onTopicGone(): void;
   routines: RoutinesSource;
   parts: SuggestionItemParts;
   refresh: Refresh;
@@ -137,9 +139,14 @@ export function ForYouView(props: {
   onRetry(): void;
 }) {
   const view = () => props.feed.view(props.list);
-  // One that groups nothing (any more) leaves the list shown.
   const topic = () =>
     props.feed.topics().find((other) => other.key === props.topicKey);
+  // One that groups nothing leaves the list shown, and isn't asked for any
+  // more: rows that bring it back later don't take the page over.
+  createEffect(() => {
+    const known = view().kind === 'rows' || view().kind === 'empty';
+    if (props.topicKey && known && !topic()) untrack(() => props.onTopicGone());
+  });
   const groups = () => props.feed.groups(props.list, topic());
   const name = () => {
     const shown = topic();
@@ -340,7 +347,7 @@ export function ForYouView(props: {
   // suggestion scrolls to it instead.
   createEffect(
     on(
-      [() => props.list, () => props.topicKey],
+      [() => props.list, () => topic()?.key],
       () => {
         if (!props.focusedId) scroller?.scrollTo({ top: 0 });
       },
@@ -354,7 +361,7 @@ export function ForYouView(props: {
     props.onSelectList(list);
   };
   const selectTopic = (key: string) => {
-    if (key === props.topicKey) scroller?.scrollTo({ top: 0 });
+    if (key === topic()?.key) scroller?.scrollTo({ top: 0 });
     props.onSelectTopic(key);
   };
 

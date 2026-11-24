@@ -12,6 +12,7 @@ import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { FOR_YOU_LISTS, type ForYouList, type ListCounts } from '../core/lists';
 import type { ShownTopic } from '../core/topics';
+import { Cut } from './cut';
 import { topicLook } from './topic-look';
 
 const LIST_ICONS: Record<ForYouList, Component<{ class?: string }>> = {
@@ -84,7 +85,9 @@ function Topics(props: {
                       />
                     </span>
                   </ViewSidebar.Icon>
-                  <span class="min-w-0 flex-1 truncate">{topic().name}</span>
+                  <Cut>
+                    <span class="truncate">{topic().name}</span>
+                  </Cut>
                   <Count value={topic().waiting} />
                 </ViewSidebar.Item>
               );
