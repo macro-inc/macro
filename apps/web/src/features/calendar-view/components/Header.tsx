@@ -110,7 +110,7 @@ export function Header(props: {
   // A narrow pane (the desktop window has no minimum width) shows Today as
   // its icon, then wraps Search below the other controls, rather than push
   // Search past the pane's edge.
-  const [controls, setControls] = createSignal<HTMLDivElement>();
+  const [controls, setControls] = createSignal<HTMLElement>();
   const collapsed = createLabelCollapse(
     controls,
     () => CONTROLS_COLLAPSE_ORDER,
