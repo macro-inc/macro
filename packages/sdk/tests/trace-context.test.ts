@@ -38,6 +38,7 @@ const w3c: TextMapPropagator = {
     const span = trace.getSpanContext(ctx);
     if (span === undefined) return;
     setter.set(carrier, 'traceparent', `00-${span.traceId}-${span.spanId}-01`);
+    setter.set(carrier, 'tracestate', 'macro=1');
   },
   extract: (ctx) => ctx,
   fields: () => ['traceparent'],
@@ -90,4 +91,20 @@ test('without it, no trace context is sent even with a propagator and a span', a
 test('with it but no propagator registered, nothing is sent', async () => {
   context.setGlobalContextManager(fixed);
   expect((await call(true)).get('traceparent')).toBeNull();
+});
+
+test('only traceparent and tracestate are sent, never baggage a propagator writes', async () => {
+  context.setGlobalContextManager(fixed);
+  propagation.setGlobalPropagator({
+    inject: (ctx, carrier, setter) => {
+      w3c.inject(ctx, carrier, setter);
+      setter.set(carrier, 'baggage', 'user=someone@example.com');
+    },
+    extract: (ctx) => ctx,
+    fields: () => ['traceparent', 'tracestate', 'baggage'],
+  });
+  const headers = await call(true);
+  expect(headers.get('traceparent')).toBe(traceparent);
+  expect(headers.get('tracestate')).toBe('macro=1');
+  expect(headers.get('baggage')).toBeNull();
 });

@@ -310,10 +310,19 @@ export class MacroClient {
   }
 }
 
-/** Writes the active trace context into `headers`; nothing without a propagator or span. */
+/** The only headers `traceContext` sends: W3C trace context, never baggage. */
+const traceContextHeaders = new Set(['traceparent', 'tracestate']);
+
+/**
+ * Writes the active trace context into `headers`: only `traceparent` and
+ * `tracestate`, whatever else the registered propagator writes (a baggage
+ * propagator's `baggage` included); nothing without a propagator or span.
+ */
 export function injectTraceContext(headers: Headers): void {
   propagation.inject(context.active(), headers, {
-    set: (carrier, key, value) => carrier.set(key, value),
+    set: (carrier, key, value) => {
+      if (traceContextHeaders.has(key.toLowerCase())) carrier.set(key, value);
+    },
   });
 }
 

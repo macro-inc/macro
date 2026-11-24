@@ -197,6 +197,17 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
             );
           },
           last.traceparent
-        ).finally(() => waiting.release(channelId));
+        )
+          // The run is detached: its bookkeeping failing must not become an
+          // unhandled rejection. Logged (log.event never throws), and the
+          // conversation is released either way.
+          .catch((error: unknown) =>
+            log.event(replyLog, {
+              channel: conversation.channel,
+              failed: 'bookkeeping',
+              error: String(error),
+            })
+          )
+          .finally(() => waiting.release(channelId));
       }
     );
