@@ -48,6 +48,7 @@ import { match } from 'ts-pattern';
 import { DatabaseSearch } from '../../database/components/database-search';
 import type { ShownLayout } from '../../database/components/database-toolbar';
 import type { DatabaseRelatedDestination } from '../../database/core/database-relations';
+import type { CreateTable } from '../../database/core/table-creation';
 import type { NewView } from '../../database/core/view-creation';
 import type { ViewChange } from '../../database/core/view-state';
 import {
@@ -60,13 +61,17 @@ import { createDatabaseSearch } from '../../database/primitives/database-search'
 import { createDatabaseUndo } from '../../database/primitives/undo-controller';
 import { createViewCreation } from '../../database/primitives/view-creation';
 import { databaseChat } from '../core/chat-context';
-import { DatabasePageToolbar } from '../database-page-toolbar';
+import {
+  DatabasePageNoTables,
+  DatabasePageToolbar,
+} from '../database-page-controls';
 import { databaseDetailSearch } from '../database-route';
 import {
   createDatabaseViewSelection,
   followRouteLocation,
   selectLocation,
 } from '../primitives/view-selection';
+import { createTableWithName } from '../queries/create-table';
 import { searchDatabase } from '../queries/database-search';
 import { toViewColumn } from '../queries/table-rows';
 import { trashDatabase } from '../queries/trash-database';
@@ -312,6 +317,12 @@ const Block: Component = () => {
       </Suspense>
     );
   };
+  const createTable = (): CreateTable | undefined => {
+    if (!canEdit()) return undefined;
+
+    return (name, existingTableId) =>
+      createTableWithName({ databaseId, name, existingTableId });
+  };
   function selectTable(tableId: string) {
     setSelection((current) => ({ ...current, tableId }));
   }
@@ -449,9 +460,10 @@ const Block: Component = () => {
                 <Show
                   when={activeTable()}
                   fallback={
-                    <div class="grid flex-1 place-items-center p-6 text-sm text-ink-muted">
-                      Add a table to start organizing your data.
-                    </div>
+                    <DatabasePageNoTables
+                      onCreateTable={createTable()}
+                      onOpenTable={selectTable}
+                    />
                   }
                 >
                   <Show
@@ -536,6 +548,7 @@ const Block: Component = () => {
                                 }))}
                                 activeTableId={activeTableId()}
                                 onSelectTable={selectTable}
+                                onCreateTable={createTable()}
                                 tableMenuItems={tableMenuItems()}
                                 search={
                                   <DatabaseSearch

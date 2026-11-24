@@ -6,7 +6,10 @@ async function open(page: Page, query: string) {
   await page.evaluate(() => document.fonts.ready);
 }
 
-/** How far the pressed view tab reaches past either edge of the view rail, in pixels. */
+/**
+ * How far the pressed view tab reaches past either edge of the view rail, in
+ * pixels. Tests poll it: no locator assertion measures one box against another.
+ */
 function selectedTabOverflow(page: Page) {
   return page.getByRole('group', { name: 'Views' }).evaluate((rail) => {
     const tab = rail.querySelector('[aria-pressed="true"]');
@@ -88,6 +91,32 @@ for (const width of [320, 390, 430]) {
       await expect(page.getByRole('menu')).toHaveCount(0);
       await expect(
         page.getByRole('button', { name: 'Table: Invoices' })
+      ).toBeFocused();
+    });
+
+    test('names and creates a table from the table menu', async ({ page }) => {
+      await open(page, 'mobile');
+
+      await page.getByRole('button', { name: /^Table: / }).tap();
+      await page.getByRole('menuitem', { name: 'New table' }).tap();
+      const name = page.getByRole('textbox', { name: 'Name' });
+      await expect(name).toBeFocused();
+
+      await name.fill('Invoices');
+      await page.getByRole('button', { name: 'Create table' }).tap();
+      await expect(page.getByRole('alert')).toHaveText(
+        'A table with this name already exists. Try another name.'
+      );
+
+      // When this fails, closing the dialog left the page ignoring taps.
+      await page.getByRole('button', { name: 'Cancel' }).tap();
+      await page.getByRole('button', { name: /^Table: / }).tap();
+      await page.getByRole('menuitem', { name: 'New table' }).tap();
+      await name.fill('Risks');
+      await page.getByRole('button', { name: 'Create table' }).tap();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(
+        page.getByRole('button', { name: 'Table: Risks' })
       ).toBeVisible();
     });
 
@@ -140,10 +169,17 @@ for (const width of [320, 390, 430]) {
 
       await page.getByRole('button', { name: 'View actions' }).tap();
       await page.getByRole('menuitem', { name: 'Delete view' }).tap();
+      await page.getByRole('button', { name: 'Cancel' }).tap();
+      await page.getByRole('button', { name: 'View actions' }).tap();
+      await page.getByRole('menuitem', { name: 'Delete view' }).tap();
       await page.getByRole('button', { name: 'Delete view' }).tap();
       await expect(renamed).toHaveCount(0);
       await expect(
         page.getByRole('button', { name: 'All records' })
+      ).toHaveAttribute('aria-pressed', 'true');
+      await page.getByRole('button', { name: 'Active', exact: true }).tap();
+      await expect(
+        page.getByRole('button', { name: 'Active', exact: true })
       ).toHaveAttribute('aria-pressed', 'true');
     });
   });

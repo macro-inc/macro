@@ -49,7 +49,7 @@ function storedView(id: string, name: string): DatabaseView {
   };
 }
 
-const TABLES = [
+const INITIAL_TABLES = [
   { id: 'table-1', name: 'Vendors' },
   { id: 'table-2', name: 'Contract renewals for the coming fiscal year' },
   { id: 'table-3', name: 'Invoices' },
@@ -62,6 +62,7 @@ function ToolbarFixture() {
   const [selected, setSelected] = createSignal(
     params.get('selected') ?? undefined
   );
+  const [tables, setTables] = createSignal(INITIAL_TABLES);
   const [table, setTable] = createSignal('table-2');
   const [term, setTerm] = createSignal('');
   const [searching, setSearching] = createSignal(false);
@@ -129,16 +130,26 @@ function ToolbarFixture() {
         when={params.has('mobile')}
         fallback={<DatabaseToolbar {...toolbar} />}
       >
-        <MobileDatabaseToolbar
-          {...toolbar}
-          tables={
-            <TablePicker
-              tables={TABLES}
-              activeTableId={table()}
-              onSelect={setTable}
+        {/* The database page draws its toolbar again for each table. */}
+        <Show when={table()} keyed>
+          {(activeTableId) => (
+            <MobileDatabaseToolbar
+              {...toolbar}
+              tables={
+                <TablePicker
+                  tables={tables()}
+                  activeTableId={activeTableId}
+                  onSelect={setTable}
+                  onCreate={(name) => {
+                    const id = `table-${tables().length + 1}`;
+                    setTables((current) => [...current, { id, name }]);
+                    return okAsync({ tableId: id, ready: true });
+                  }}
+                />
+              }
             />
-          }
-        />
+          )}
+        </Show>
       </Show>
     </main>
   );

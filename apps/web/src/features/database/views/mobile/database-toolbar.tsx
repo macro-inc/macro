@@ -3,7 +3,6 @@ import { isMobile } from '@core/mobile/isMobile';
 import MoreIcon from '@icon/system/regular/dots-three.svg';
 import RenameIcon from '@icon/system/regular/pencil-line.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
-import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { Dropdown } from '@ui/components/Dropdown';
 import { type JSX, Show } from 'solid-js';
 import {
@@ -28,8 +27,11 @@ export function MobileDatabaseToolbar(
   }
 ) {
   const views = createViewControls(props);
-  /** Renaming waits for the view actions menu to close: an open menu holds focus. */
-  let renameOnMenuClose: DatabaseView | undefined;
+  /**
+   * What a View actions item starts once the menu has closed: an open menu
+   * holds focus, and one closing over an open dialog leaves the page inert.
+   */
+  let afterMenuClose: (() => void) | undefined;
 
   return (
     <div class="shrink-0 bg-canvas-base">
@@ -75,13 +77,13 @@ export function MobileDatabaseToolbar(
                 <Dropdown.Content
                   class="min-w-48"
                   onCloseAutoFocus={(event) => {
-                    const view = renameOnMenuClose;
-                    renameOnMenuClose = undefined;
-                    if (!view) return;
+                    const start = afterMenuClose;
+                    afterMenuClose = undefined;
+                    if (!start) return;
 
-                    // The name field takes focus, not the menu button.
+                    // What starts takes focus, not the menu button.
                     event.preventDefault();
-                    views.beginRename(view);
+                    start();
                   }}
                 >
                   <Show when={views.selectedView()}>
@@ -96,14 +98,18 @@ export function MobileDatabaseToolbar(
                                 'input[aria-label="View name"]',
                                 { touchOnly: true }
                               );
-                              renameOnMenuClose = selected();
+                              const view = selected();
+                              afterMenuClose = () => views.beginRename(view);
                             }}
                           >
                             <RenameIcon class="size-4" />
                             Rename view
                           </Dropdown.Item>
                           <Dropdown.Item
-                            onSelect={() => views.confirmDelete(selected())}
+                            onSelect={() => {
+                              const view = selected();
+                              afterMenuClose = () => views.confirmDelete(view);
+                            }}
                           >
                             <TrashIcon class="size-4" />
                             Delete view

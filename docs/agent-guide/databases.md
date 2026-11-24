@@ -29,12 +29,13 @@ a title does not enter the grid, and a failed rename shows a toast. Reload to ve
 the saved name persists. Viewers cannot enter rename from either entry point and
 see the split header's `viewer` badge instead.
 
-On touch devices the page's first row holds **New** record and search, and the
-second row the view tabs, filter, sort and **View actions** (rename or delete the
-selected view, or create one). The selected view's tab is scrolled into view. On
-phones the split header has no table tabs: the first row starts with the table
-menu (the open table's name), which lists every table and the open table's
-forms. Create, rename, reorder and delete tables on a tablet or desktop.
+On touch devices the page's first row holds the **New** button for records and
+search, and the second row the view tabs, filter, sort and **View actions** (rename
+or delete the selected view, or create one). The selected view's tab is scrolled
+into view. On phones the split header has no table tabs: the first row starts with
+the table menu (the open table's name), which lists every table, **New table**
+(a dialog asks for its name) and the open table's forms. Rename, reorder and
+delete tables on a tablet or desktop.
 
 **Database actions → Duplicate** (any grant, viewers included) copies the database
 into a new one named "<name> copy" that you own, and opens it in the same split.
@@ -463,7 +464,7 @@ the table in its own order. Filters, sorts and column changes made on All record
 change only what you see, until you make a view of them. Viewers can search and use
 All records; only editors change stored views.
 
-**New view** (the **+** beside the tabs) opens a dropdown with **Table**,
+**New view** (the **+** beside the tabs; under **View actions** on touch devices) opens a dropdown with **Table**,
 **Board**, and **Timeline**. Choosing one immediately creates and opens it with an
 available default name, keeping the current filter and sort. A board starts grouped
 by the first single-select or single-person column, or creates a Status column if
