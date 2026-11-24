@@ -21,7 +21,9 @@ vi.mock('@queries/soup/graphql/active-queries', () => ({
 import {
   useCreateCompanyMutation,
   useCreateContactMutation,
+  useEditCompanyDomainMutation,
   useSetCompanyNameMutation,
+  useSetEmailSyncMutation,
 } from './companies';
 import { crmKeys } from './keys';
 
@@ -29,6 +31,9 @@ const storage = {
   createCompany: vi.fn(),
   createContact: vi.fn(),
   setCompanyName: vi.fn(),
+  addCompanyDomain: vi.fn(),
+  removeCompanyDomain: vi.fn(),
+  setEmailSync: vi.fn(),
 };
 let client: QueryClient;
 
@@ -38,6 +43,9 @@ beforeEach(() => {
   storage.createCompany.mockReset();
   storage.createContact.mockReset();
   storage.setCompanyName.mockReset();
+  storage.addCompanyDomain.mockReset();
+  storage.removeCompanyDomain.mockReset();
+  storage.setEmailSync.mockReset();
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
 });
 afterEach(() => {
@@ -51,12 +59,16 @@ function mount() {
     company: ReturnType<typeof useCreateCompanyMutation>;
     contact: ReturnType<typeof useCreateContactMutation>;
     rename: ReturnType<typeof useSetCompanyNameMutation>;
+    domain: ReturnType<typeof useEditCompanyDomainMutation>;
+    emailSync: ReturnType<typeof useSetEmailSyncMutation>;
   };
   function Probe() {
     mutations = {
       company: useCreateCompanyMutation(deps),
       contact: useCreateContactMutation(deps),
       rename: useSetCompanyNameMutation(deps),
+      domain: useEditCompanyDomainMutation(deps),
+      emailSync: useSetEmailSyncMutation(deps),
     };
     return null;
   }
@@ -104,6 +116,89 @@ it('reads GraphQL lists that can show companies again after a create', async () 
   expect(
     where({ ccf: { l: { id: '00000000-0000-0000-0000-000000000000' } } })
   ).toBe(false);
+});
+
+const EXCLUDED = { l: { id: '00000000-0000-0000-0000-000000000000' } };
+const NO_CRM = { ccf: EXCLUDED };
+const COMPANIES = { ccf: { l: { id: 'other' } } };
+const CONTACTS = { ccf: EXCLUDED, crmf: { l: { id: 'other' } } };
+
+/** The predicate of the one GraphQL list refresh the write started. */
+function refreshedLists() {
+  expect(refreshGraphqlLists).toHaveBeenCalledOnce();
+  const [options] = refreshGraphqlLists.mock.calls[0] as unknown as [
+    { where: (body: unknown) => boolean; unmaintainedOnly?: boolean },
+  ];
+  // These writes return no Soup row, so even cache-maintained lists read again.
+  expect(options.unmaintainedOnly).toBeUndefined();
+  return options.where;
+}
+
+it('reads GraphQL lists that can show contacts again after a contact create', async () => {
+  storage.createContact.mockResolvedValue(
+    ok({ id: 'contact-1', companyId: 'company-1' })
+  );
+  const mutations = mount();
+
+  await mutations.contact.mutateAsync({ companyId: 'company-1', name: 'Ada' });
+
+  const where = refreshedLists();
+  expect(where(CONTACTS)).toBe(true);
+  expect(where(COMPANIES)).toBe(false);
+  expect(where(NO_CRM)).toBe(false);
+});
+
+it('reads GraphQL lists that can show the company again after a rename', async () => {
+  storage.setCompanyName.mockResolvedValue(ok({}));
+  const mutations = mount();
+
+  await mutations.rename.mutateAsync({ companyId: 'company-1', name: 'Acme' });
+
+  const where = refreshedLists();
+  expect(where(COMPANIES)).toBe(true);
+  expect(where(CONTACTS)).toBe(true);
+  expect(where(NO_CRM)).toBe(false);
+});
+
+it.each(['add', 'remove'] as const)(
+  'reads GraphQL lists that can show the company again after a domain %s',
+  async (change) => {
+    const answer = ok({ id: 'company-1', domains: [{ domain: 'acme.com' }] });
+    storage.addCompanyDomain.mockResolvedValue(answer);
+    storage.removeCompanyDomain.mockResolvedValue(answer);
+    const mutations = mount();
+
+    await mutations.domain.mutateAsync({
+      companyId: 'company-1',
+      domain: 'acme.io',
+      change,
+    });
+
+    const where = refreshedLists();
+    expect(where(COMPANIES)).toBe(true);
+    expect(where(NO_CRM)).toBe(false);
+  }
+);
+
+it("reads the company and its domains' email lists again after an email sync change", async () => {
+  storage.setEmailSync.mockResolvedValue(ok({}));
+  client.setQueryData(crmKeys.company('company-1').queryKey, {
+    id: 'company-1',
+    domains: [{ domain: 'acme.com' }],
+  });
+  const mutations = mount();
+
+  await mutations.emailSync.mutateAsync({
+    companyId: 'company-1',
+    emailSync: false,
+  });
+
+  const where = refreshedLists();
+  expect(where(COMPANIES)).toBe(true);
+  expect(where({ ...NO_CRM, ecd: ['acme.com'] })).toBe(true);
+  expect(where({ ...NO_CRM, ef: { ed: ['acme.com'] } })).toBe(true);
+  expect(where({ ...NO_CRM, ecd: ['sub.acme.com'] })).toBe(false);
+  expect(where(NO_CRM)).toBe(false);
 });
 
 it('reports nothing when creation fails', async () => {
