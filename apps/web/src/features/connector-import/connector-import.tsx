@@ -5,10 +5,11 @@ import {
 } from '@app/features/sidebar-promotion/sidebar-promotion';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
-import { createSignal, type JSX, Show, Suspense } from 'solid-js';
-import { IMPORT_CATEGORIES } from './core/catalog';
+import { createMemo, createSignal, type JSX, Show, Suspense } from 'solid-js';
+import { IMPORT_CATEGORIES, withProviders } from './core/catalog';
 import type { ImportCategory } from './core/providers';
 import { importPromotionId } from './primitives/promotion';
+import { createProviderFlags } from './primitives/provider-flags';
 import type { ImportAlternative } from './views/import-dialog';
 
 export type { ImportAlternative } from './views/import-dialog';
@@ -52,7 +53,10 @@ export function ConnectorImportPromotion(props: {
   secondaryAction?: PromoAction;
   class?: string;
 }): JSX.Element {
-  const config = () => IMPORT_CATEGORIES[props.category];
+  const shown = createProviderFlags();
+  const config = createMemo(() =>
+    withProviders(IMPORT_CATEGORIES[props.category], shown)
+  );
   const dialogConfig = config;
   const [open, setOpen] = createSignal(false);
   // The dialog's code loads on first open (and is fetched ahead on hover).

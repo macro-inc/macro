@@ -1,3 +1,4 @@
+import { createImportSources } from '@app/features/connector-import/primitives/provider-flags';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { toast } from '@core/component/Toast/Toast';
 import { ConnectorIcon } from '@core/connectors/ConnectorIcon';
@@ -88,6 +89,7 @@ export function CatalogRows(props: {
 
 function CatalogRow(props: { entry: CatalogApp }) {
   const name = () => props.entry.name;
+  const importSource = createImportSources();
   const { connect, busy } = createConnectAction({
     key: () => props.entry.key,
     name,
@@ -105,7 +107,7 @@ function CatalogRow(props: { entry: CatalogApp }) {
       }
       name={name()}
       kind="mcp"
-      description={connectorDescription(props.entry.slug, name())}
+      description={connectorDescription(importSource(props.entry.slug), name())}
       categories={catalogCategories(props.entry)}
       status="available"
     >

@@ -9,7 +9,7 @@ import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ConnectorImportProvider } from '../context/connector-import-context';
 import type { ConnectorImportContext } from '../context/contracts';
-import { IMPORT_CATEGORIES } from '../core/catalog';
+import { IMPORT_CATEGORIES, withProviders } from '../core/catalog';
 import type { ImportCategory } from '../core/providers';
 import { ConnectorImportDialog } from '../views/import-dialog';
 
@@ -42,10 +42,15 @@ const context: ConnectorImportContext = {
   },
 };
 
+const flagsOff = new URLSearchParams(location.search).get('flags') === 'off';
+
 function Sidebar(props: { category: ImportCategory }) {
   const [open, setOpen] = createSignal(false);
   const [hidden, setHidden] = createSignal(false);
-  const config = IMPORT_CATEGORIES[props.category];
+  // `?flags=off` stands in for every provider flag reading off (or loading).
+  const config = flagsOff
+    ? withProviders(IMPORT_CATEGORIES[props.category], (p) => !p.flag)
+    : IMPORT_CATEGORIES[props.category];
   return (
     <aside
       class="flex h-[440px] w-64 flex-col bg-panel px-2 py-3"

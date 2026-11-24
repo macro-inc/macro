@@ -1,5 +1,10 @@
+import {
+  enableFusionImport,
+  type RemoteFlag,
+} from '@core/constant/featureFlags';
 import IconAirtable from '@icon/import/airtable.svg';
 import IconAsana from '@icon/import/asana.svg';
+import IconAutodeskFusion from '@icon/import/autodesk-fusion.svg';
 import IconBox from '@icon/import/box.svg';
 import IconClose from '@icon/import/close.svg';
 import IconConfluence from '@icon/import/confluence.svg';
@@ -73,6 +78,14 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
         name: 'Confluence',
         detail: 'Spaces and pages',
         icon: IconConfluence as ImportIcon,
+      },
+      {
+        appSlug: 'autodesk',
+        name: 'Autodesk Fusion',
+        detail: 'CAD designs and their versions',
+        icon: IconAutodeskFusion as ImportIcon,
+        importer: 'fusion',
+        flag: enableFusionImport,
       },
     ],
   },
@@ -186,10 +199,41 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
   },
 };
 
-/** Where Macro can import an app's data from, if it can. */
+/** An app's import provider and the category it imports into. */
+export type ImportSourceMatch = {
+  config: ImportCategoryConfig;
+  provider: ImportProvider;
+};
+
+/** A category with only the providers `shown` keeps. */
+export function withProviders(
+  config: ImportCategoryConfig,
+  shown: (provider: ImportProvider) => boolean
+): ImportCategoryConfig {
+  const providers = config.providers.filter(shown);
+  return providers.length === config.providers.length
+    ? config
+    : { ...config, providers };
+}
+
+/** Every flag a catalog provider is gated on, once each. */
+export function catalogFlags(): RemoteFlag[] {
+  const flags = new Map<string, RemoteFlag>();
+  for (const config of Object.values(IMPORT_CATEGORIES)) {
+    for (const provider of config.providers) {
+      if (provider.flag) flags.set(provider.flag.key, provider.flag);
+    }
+  }
+  return [...flags.values()];
+}
+
+/**
+ * Where Macro can import an app's data from, if it can, flags aside: callers
+ * that show it check the provider's flag (`createProviderFlags`).
+ */
 export function importSourceFor(
   appSlug: string
-): { config: ImportCategoryConfig; provider: ImportProvider } | undefined {
+): ImportSourceMatch | undefined {
   for (const config of Object.values(IMPORT_CATEGORIES)) {
     const provider = config.providers.find((row) => row.appSlug === appSlug);
     if (provider) return { config, provider };
