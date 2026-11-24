@@ -150,6 +150,9 @@ through the same service.
   delivery; keep tombstone checks when changing either delivery boundary.
 - Channel join requests count in both top-level and channel-feed notification
   filters; keep these filters aligned with the web notification classifier.
+  Channel invites count in the top-level filter only: the notifications inbox
+  lists an invite on its channel's top-level row, so Chat's unread edge must
+  show it too, while Home's channel feed leaves invites out.
 - A `calendar_event_join_request` insert is skipped by a `notification` trigger
   when its event has gone or been cancelled or its request is no longer pending,
   since queued ingress can run after that cleanup. `create_notification` reads

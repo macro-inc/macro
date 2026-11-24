@@ -25,6 +25,7 @@ import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { isTaggableEntityType, TagsRow } from '@property/tags';
 import type {
+  DateApiValue,
   DateProperty,
   Property,
   PropertyApiValues,
@@ -381,9 +382,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                   getEmptyLabel={props.getEmptyLabel}
                   property={property()}
                   otherDateEnd={() => otherDateEnd(property())}
-                  saveOtherDateEnd={(end, value) =>
-                    saveOne(end, { valueType: 'DATE', value })
-                  }
+                  saveOtherDateEnd={(end, value) => saveOne(end, value)}
                   canRemoveFromEntity={
                     !defaultPinnedDefinitionIds().has(
                       property().propertyDefinitionId
@@ -623,7 +622,7 @@ function SidePanelPropertyRow(props: {
   otherDateEnd?: () => DateProperty | undefined;
   saveOtherDateEnd?: (
     property: DateProperty,
-    value: Date | null
+    value: DateApiValue
   ) => Promise<unknown>;
 }) {
   const ctx = usePropertiesContext();
