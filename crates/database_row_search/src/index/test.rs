@@ -53,7 +53,10 @@ async fn a_table_is_searchable_only_in_a_live_database_entity(pool: PgPool) {
             table_ids: vec![TRASHED_TABLE],
         })
     );
-    assert_eq!(read_database_tables(&pool, Uuid::nil()).await.unwrap(), None);
+    assert_eq!(
+        read_database_tables(&pool, Uuid::nil()).await.unwrap(),
+        None
+    );
     assert_eq!(
         read_searchable_database_ids(&pool, None, 10).await.unwrap(),
         vec![DATABASE]

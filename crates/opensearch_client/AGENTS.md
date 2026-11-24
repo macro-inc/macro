@@ -4,8 +4,8 @@
 
 Part of the Search feature. Typed client for Macro's search index:
 per-entity-type upsert/delete and search for documents, emails, channel
-messages, chats, agent sessions, calendar events, call records, and
-projects.
+messages, chats, agent sessions, calendar events, call records,
+projects, and database rows.
 
 ## Start here
 
@@ -96,6 +96,11 @@ projects.
   write by explicit id or by query. Starting a background task is not, so
   `start_email_link_delete` sends it once and, when the connection drops,
   looks for the task by its `X-Opaque-Id` instead.
+- Database row writes (`src/database_row.rs`) carry the row's table version
+  as an `external_gte` version, and a version conflict or a delete of a
+  missing document counts as done, not failed: the index already holds a
+  newer state. Their delete-by-query runs with `conflicts=proceed`, so a
+  document written while it runs is skipped rather than failing the sweep.
 - Put `instrument(err)` on the public method, not the inner function it
   retries, so a recovered attempt does not record an error span.
 - Requests time out after five minutes (`REQUEST_TIMEOUT`). A delete that can

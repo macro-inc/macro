@@ -39,6 +39,7 @@ mod call;
 mod channel;
 mod chat;
 mod context;
+mod database;
 mod document;
 mod email;
 mod entity_type;
@@ -67,6 +68,7 @@ use ::chat::domain::events::ChatMacroEvent;
 use ::email::domain::events::EmailMacroEvent;
 use calendar_events::domain::events::CalendarMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
+use databases::domain::events::DatabaseMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
 use kafka_util::{
     GroupName, InitialOffset, KafkaEventConsumer, Prefetch, consumer_span, record_span_error,
@@ -146,6 +148,7 @@ macro_event_broker::declare_topics!(
         CallMacroEvent,
         ChannelMacroEvent,
         ChatMacroEvent,
+        DatabaseMacroEvent,
         DocumentMacroEvent,
         EmailMacroEvent,
         MessageMacroEvent,
@@ -162,6 +165,7 @@ macro_event_broker::declare_topics!(
         CallMacroEvent,
         ChannelMacroEvent,
         ChatMacroEvent,
+        DatabaseMacroEvent,
         DocumentMacroEvent,
         MessageMacroEvent,
         ProjectMacroEvent,
@@ -231,6 +235,7 @@ impl From<LiveLaneEvent> for DeclaredMacroEvent {
             LiveLaneEvent::CallMacroEvent(event) => Self::CallMacroEvent(event),
             LiveLaneEvent::ChannelMacroEvent(event) => Self::ChannelMacroEvent(event),
             LiveLaneEvent::ChatMacroEvent(event) => Self::ChatMacroEvent(event),
+            LiveLaneEvent::DatabaseMacroEvent(event) => Self::DatabaseMacroEvent(event),
             LiveLaneEvent::DocumentMacroEvent(event) => Self::DocumentMacroEvent(event),
             LiveLaneEvent::MessageMacroEvent(event) => Self::MessageMacroEvent(event),
             LiveLaneEvent::ProjectMacroEvent(event) => Self::ProjectMacroEvent(event),
@@ -421,6 +426,7 @@ fn ordering_key(event: &DeclaredMacroEvent) -> Cow<'_, str> {
         DeclaredMacroEvent::CallMacroEvent(event) => Cow::Borrowed(event.key()),
         DeclaredMacroEvent::ChannelMacroEvent(event) => Cow::Borrowed(event.key()),
         DeclaredMacroEvent::ChatMacroEvent(event) => Cow::Borrowed(event.key()),
+        DeclaredMacroEvent::DatabaseMacroEvent(event) => Cow::Borrowed(event.key()),
         DeclaredMacroEvent::DocumentMacroEvent(event) => Cow::Borrowed(event.key()),
         DeclaredMacroEvent::EmailMacroEvent(event) => email_ordering_key(event),
         DeclaredMacroEvent::MessageMacroEvent(event) => Cow::Borrowed(event.key()),
@@ -435,6 +441,7 @@ fn changes_search_index(event: &DeclaredMacroEvent) -> bool {
         DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => {
             agent_session::changes_search_projection(event)
         }
+        DeclaredMacroEvent::DatabaseMacroEvent(event) => database::changes_search_index(event),
         DeclaredMacroEvent::CalendarMacroEvent(_)
         | DeclaredMacroEvent::CallMacroEvent(_)
         | DeclaredMacroEvent::ChannelMacroEvent(_)
@@ -455,7 +462,9 @@ fn coalescible_reread_key(event: &DeclaredMacroEvent) -> Option<String> {
             Some(agent_session::reread_key(event))
         }
         DeclaredMacroEvent::EmailMacroEvent(event) => email::reread_key(event),
-        DeclaredMacroEvent::CalendarMacroEvent(_)
+        // Not coalesced: each event names its own tables.
+        DeclaredMacroEvent::DatabaseMacroEvent(_)
+        | DeclaredMacroEvent::CalendarMacroEvent(_)
         | DeclaredMacroEvent::CallMacroEvent(_)
         | DeclaredMacroEvent::ChannelMacroEvent(_)
         | DeclaredMacroEvent::ChatMacroEvent(_)
@@ -692,6 +701,9 @@ fn event_type(event: &DeclaredMacroEvent) -> &'static str {
         DeclaredMacroEvent::ChatMacroEvent(event) => {
             describe_chat_event(&event.event().event).event_type
         }
+        DeclaredMacroEvent::DatabaseMacroEvent(event) => {
+            database::describe_database_event(&event.event().event).event_type
+        }
         DeclaredMacroEvent::DocumentMacroEvent(event) => {
             describe_document_event(&event.event().event).event_type
         }
@@ -718,6 +730,7 @@ fn event_topic(event: &DeclaredMacroEvent) -> &'static str {
         DeclaredMacroEvent::CallMacroEvent(event) => event.topic(),
         DeclaredMacroEvent::ChannelMacroEvent(event) => event.topic(),
         DeclaredMacroEvent::ChatMacroEvent(event) => event.topic(),
+        DeclaredMacroEvent::DatabaseMacroEvent(event) => event.topic(),
         DeclaredMacroEvent::DocumentMacroEvent(event) => event.topic(),
         DeclaredMacroEvent::EmailMacroEvent(event) => event.topic(),
         DeclaredMacroEvent::MessageMacroEvent(event) => event.topic(),
@@ -741,6 +754,7 @@ fn event_id(event: &DeclaredMacroEvent) -> Uuid {
         DeclaredMacroEvent::CallMacroEvent(event) => event.event().event_id,
         DeclaredMacroEvent::ChannelMacroEvent(event) => event.event().event_id,
         DeclaredMacroEvent::ChatMacroEvent(event) => event.event().event_id,
+        DeclaredMacroEvent::DatabaseMacroEvent(event) => event.event().event_id,
         DeclaredMacroEvent::DocumentMacroEvent(event) => event.event().event_id,
         DeclaredMacroEvent::EmailMacroEvent(event) => event.event().event_id,
         DeclaredMacroEvent::MessageMacroEvent(event) => event.event().event_id,
@@ -871,6 +885,9 @@ async fn process_event(
         }
         DeclaredMacroEvent::ChatMacroEvent(event) => {
             process_chat_event(db, opensearch_client, event, partition, offset, attempts).await
+        }
+        DeclaredMacroEvent::DatabaseMacroEvent(event) => {
+            database::process_database_event(context, event, attempts).await
         }
         DeclaredMacroEvent::DocumentMacroEvent(event) => {
             process_document_event(context, event, partition, offset, attempts).await

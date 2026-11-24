@@ -4,6 +4,7 @@ This service owns the search-event pipeline:
 
 - **Live calls**: the `search-processing-service` Kafka consumer reads call lifecycle events from `macro.calls` and indexes them into OpenSearch.
 - **Agent sessions**: the same consumer subscribes to `macro.agent_session_lifecycle`, rereads the primary database, and indexes messages produced by `agent_fold`. User prompts and agent replies are searchable as a collapsed transcript shows them (`FoldedMessage::searchable_text`): thoughts and the work inside tool calls are not indexed, and raw ACP envelopes never are. Links and mentions in that text are indexed as `mention_utils`' `PlainTextFormatter` writes them (over its lenient parse, as agent notifications do), and a paste or quoted reply as its content; from a `<m-*>` tag that does not parse, the text up to the next paste is indexed as written. Changing what is indexed takes effect for a session on its next reconcile; `POST /internal/backfill/agent-sessions` with `{}` brings every session up to date. Agent-session backfills use this same direct indexing path, not SQS.
+- **Database rows**: the consumer subscribes to `macro.databases` and keeps the `database_rows` index (one document per row) in step with Postgres; see "Database rows" below.
 - **Other live entities**: Kafka handlers and legacy SQS workers drain events for the remaining search entities.
 - **Backfills**: internal HTTP endpoints start tracked jobs. Most enqueue records onto SQS; agent sessions, properties, and the email attachment status index directly.
 
@@ -25,6 +26,18 @@ The orchestrator is the single inbound contract for HTTP handlers. Swapping an a
 ## Ingestion Ownership and Event Mapping
 
 Kafka subscriptions are declared in `src/inbound/kafka_consumer.rs`, including agent-session lifecycle events. SQS remains available for legacy producers and backfills other than agent sessions and direct property indexing. The SQS call message contract and handler remain available so `POST /internal/backfill/calls` can enqueue call records with the existing backfill path.
+
+### Database rows
+
+`database.*` events from `macro.databases` (live lane, keyed by database) are hints to reread: each pass reads the primary database through `crates/database_row_search`, whose `read_row_search_text` is also what search re-checks a hit against, so the index and the exposure gate share one definition of a row's text.
+
+- `database.tables_changed` catches up the named tables; `created`, `trashed`, `restored` and `purged` reconcile every table of the database. A database that is gone, trashed or has no database entity (CRM and forms storage) has its documents removed by query and its watermarks forgotten. Renames, sharing and appearance change nothing indexed.
+- A table is caught up from its change journal (`database_change_rows`) between its watermark (`database_row_search_watermarks`, the version the index holds it at) and its current version. A missing or more than 200 versions old watermark, a gap in the journal, or a column change that rewrites rows' text without naming them (type change, deleted or reordered column, relabelled or removed option) reindexes the table whole, then removes the table's documents below the version read at the start. The watermark is raised only after every write succeeded, so a failed pass is redone from the old mark through the replay queue.
+- Every write and delete carries the table version its text was read at as an `external_gte` version, so a delayed or replayed pass never overwrites a newer state; a refused write counts as done.
+- Paths that publish no event (a tag set's option relabelled outside a database, writes that bypass the databases service) are covered by the backfill route. Every task runs a stale sweep every six hours, led by one task at a time through a Postgres advisory lock: it pages the index and removes documents whose rows are gone or no longer searchable, and the documents and watermarks of tables that are gone.
+- Search never trusts the index for access or text: it authorizes and rebuilds every hit from Postgres. A stale document can cost a missed hit, never a leaked one.
+
+Before the first deploy, create the index and alias in each environment (`INDEX=database_rows` with `scripts/create_indices.ts`, see "Agent-session indexing and rollout"), then run the backfill.
 
 ### Agent-session indexing and rollout
 
@@ -244,6 +257,7 @@ Every search-indexed entity has a POST endpoint on sps's internal surface. They 
 | Documents | `POST /internal/backfill/documents` | `{"file_types": ["pdf"], "sub_type": "task", "updated_after": "...", "updated_before": "..."}` |
 | Emails | `POST /internal/backfill/emails` | `{"thread_ids": ["<uuid>"], "since": "2026-03-16T00:00:00Z", "index_override": "emails_v2", "batch_size": 100}` |
 | Email attachment status | `POST /internal/backfill/email-attachment-status` | `{"after_document_id": "<cursor>", "page_size": 500, "docs_per_second": 100}` — `{}` = every document linked to an email attachment, updated directly; see below |
+| Database rows | `POST /internal/backfill/database-rows` | `{"database_ids": ["<uuid>"]}` — `{}` = every searchable database reindexed whole, then stale documents removed; indexed directly |
 | Deleted chat messages | `POST /internal/backfill/deleted-chat-messages` | `{"dry_run": false, "after_message_id": "<cursor>", "page_size": 500, "messages_per_second": 1000}` — `{}` = a dry run over every indexed chat message; see below |
 
 ### Search event queue workers

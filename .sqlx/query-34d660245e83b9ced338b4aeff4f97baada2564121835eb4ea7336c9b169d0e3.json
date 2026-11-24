@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pg_try_advisory_lock($1) AS \"led!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "led!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "34d660245e83b9ced338b4aeff4f97baada2564121835eb4ea7336c9b169d0e3"
+}

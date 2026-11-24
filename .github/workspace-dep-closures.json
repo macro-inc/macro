@@ -14718,6 +14718,7 @@
       "crates/cowlike",
       "crates/crm",
       "crates/database_env_vars",
+      "crates/database_row_search",
       "crates/database_sql",
       "crates/databases",
       "crates/document_sub_type",

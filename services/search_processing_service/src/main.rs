@@ -70,6 +70,12 @@ pub type AgentSessionIndexer = domain::agent_session_index::AgentSessionIndexSer
     outbound::agent_session_search::OpenSearchAgentSessionIndex,
 >;
 
+/// Production wiring for the database rows index.
+pub type DatabaseRowIndexer = domain::database_row_index::DatabaseRowIndexService<
+    outbound::database_row_index::PgDatabaseRows,
+    outbound::database_row_index::OpenSearchDatabaseRows,
+>;
+
 /// Production wiring for the email attachment status backfill.
 pub type EmailAttachmentStatusBackfill =
     domain::email_attachment_status::EmailAttachmentStatusBackfill<
@@ -280,6 +286,11 @@ async fn main() -> anyhow::Result<()> {
         outbound::agent_session_search::OpenSearchAgentSessionIndex(opensearch_client.clone()),
     ));
 
+    let database_row_indexer = Arc::new(DatabaseRowIndexer::new(
+        outbound::database_row_index::PgDatabaseRows::new(db.clone()),
+        outbound::database_row_index::OpenSearchDatabaseRows(opensearch_client.clone()),
+    ));
+
     let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let backfill_control = DynamoBackfillControl::new(
         dynamodb_client.clone(),
@@ -329,6 +340,8 @@ async fn main() -> anyhow::Result<()> {
     let mailbox_delete_tracker = TaskTracker::new();
     #[cfg(feature = "processing")]
     let backlog_tracker = TaskTracker::new();
+    #[cfg(feature = "processing")]
+    let stale_sweep_tracker = TaskTracker::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
@@ -362,6 +375,7 @@ async fn main() -> anyhow::Result<()> {
 
         let kafka_processing_context = KafkaProcessingContext {
             agent_session_indexer: agent_session_indexer.clone(),
+            database_row_indexer: database_row_indexer.clone(),
             db: db.clone(),
             opensearch_client: opensearch_client.clone(),
             s3_client: s3_client.clone(),
@@ -403,6 +417,12 @@ async fn main() -> anyhow::Result<()> {
             ),
             shutdown_token.clone(),
         ));
+        stale_sweep_tracker.spawn(inbound::database_row_sweep::run_stale_sweeps(
+            database_row_indexer.clone(),
+            inbound::database_row_sweep::STALE_SWEEP_INTERVAL,
+            shutdown_token.clone(),
+        ));
+        stale_sweep_tracker.close();
         let brokers = config.kafka_brokers.as_ref().to_owned();
         let leave = LeaveTogether::new(2);
         let email = tokio::spawn(supervise_event_consumer::<EmailLaneEvent>(
@@ -438,6 +458,7 @@ async fn main() -> anyhow::Result<()> {
     let api_result = api::setup_and_serve(
         ApiContext {
             agent_session_indexer,
+            database_row_indexer,
             db,
             authorization_state,
             opensearch_client,
@@ -474,6 +495,7 @@ async fn main() -> anyhow::Result<()> {
         mailbox_delete_tracker.wait().await;
         backlog_tracker.close();
         backlog_tracker.wait().await;
+        stale_sweep_tracker.wait().await;
     }
 
     tracing::info!("waiting for event broker publishes to drain");

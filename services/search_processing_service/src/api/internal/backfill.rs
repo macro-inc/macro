@@ -43,6 +43,7 @@ pub fn router() -> Router<ApiContext> {
         .route("/calls", post(calls))
         .route("/chats", post(chats))
         .route("/deleted-chat-messages", post(deleted_chat_messages))
+        .route("/database-rows", post(database_rows))
         .route("/channels", post(channels))
         .route("/documents", post(documents))
         .route("/email-attachment-status", post(email_attachment_status))
@@ -73,6 +74,25 @@ async fn agent_sessions(
         service,
         jobs,
         "agent-sessions",
+        move |svc, progress, cancel| async move { svc.backfill(req, &gate, progress, cancel).await },
+    )
+    .await
+}
+
+#[tracing::instrument(skip(service, jobs, gate, _internal_authorization, req))]
+async fn database_rows(
+    State(service): State<Arc<crate::DatabaseRowIndexer>>,
+    State(jobs): State<BackfillJobs>,
+    State(gate): State<BackfillGate>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+    extract::Json(req): extract::Json<
+        crate::domain::database_row_index::DatabaseRowBackfillRequest,
+    >,
+) -> Response {
+    spawn_backfill(
+        service,
+        jobs,
+        "database-rows",
         move |svc, progress, cancel| async move { svc.backfill(req, &gate, progress, cancel).await },
     )
     .await

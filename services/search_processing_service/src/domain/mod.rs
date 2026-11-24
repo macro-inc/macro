@@ -11,6 +11,7 @@ pub mod agent_session_index;
 pub mod backfill_gate;
 pub mod backlog;
 pub mod chat_message_repair;
+pub mod database_row_index;
 pub mod email_attachment_status;
 pub mod jobs;
 pub mod models;
