@@ -134,7 +134,8 @@ impl BillingRepo for PgBillingRepo {
                  WHERE change.user_id = ai_billing_usage_period.user_id
                    AND change.period_start = ai_billing_usage_period.period_start
                    AND change.changed_at < $3
-                   AND (change.new_plan = 'max' OR change.previous_plan = 'max' AND change.changed_at > change.period_start)
+                   AND (change.new_plan IN ('business', 'max')
+                        OR change.previous_plan IN ('business', 'max') AND change.changed_at > change.period_start)
              )",
             &users,
             period.start,

@@ -723,6 +723,8 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         let started = tracing::Span::current();
         let session = AgentSessionId::new();
         let id = session.as_uuid();
+        // Read the plan first, so the row's start time is when it is written.
+        let limits = self.plans.limits(&owner).await;
         let job = NewDraftJob {
             session: id,
             owner: owner.clone(),
@@ -736,7 +738,6 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         // Jobs drafting longer than this have lost their drafter, and
         // don't count against the limit.
         let since = job.created_at - chrono::Duration::from_std(INTERRUPTED_AFTER)?;
-        let limits = self.plans.limits(&owner).await;
         match self.store.begin_job(&job, limits.drafting, since).await? {
             Begun::Started => {}
             Begun::Repeated => {

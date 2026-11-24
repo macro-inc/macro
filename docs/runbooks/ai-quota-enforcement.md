@@ -417,6 +417,9 @@ procedure. Operators must approve and record each release gate.
    `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS`,
    `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`, and `AI_USAGE_OVERAGE_MARKUP_PERCENT` are mandatory for these same hosts
    whatever the flags say; see [Settlement](#settlement-enable_ai_usage_billing).
+   A host refuses to start without one, so register a newly required pricing
+   value (as `AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS` was) in every
+   participating config before deploying the release that reads it.
    Before starting the agent harness, MCP, or scheduled action service,
    register `AUTHENTICATION_SERVICE_SECRET_KEY` (the authentication service's
    Secrets Manager name in deployed configs)

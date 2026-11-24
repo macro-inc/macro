@@ -4,6 +4,7 @@ use crate::service::subscription_plan::{
 };
 use crate::service::subscription_status::{SubscriptionPlanFacts, SubscriptionStatusGateway};
 use ai_billing::domain::SubscriptionScope;
+use hosted_runtimes::domain::models::BillingInterval;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -197,8 +198,19 @@ impl<
                 .map_err(anyhow::Error::from)?,
             None => None,
         };
+        let interval = subscription
+            .items
+            .data
+            .iter()
+            .find_map(|item| item.price.as_ref()?.recurring.as_ref())
+            .and_then(|recurring| match recurring.interval {
+                stripe::RecurringInterval::Month => Some(BillingInterval::Month),
+                stripe::RecurringInterval::Year => Some(BillingInterval::Year),
+                stripe::RecurringInterval::Day | stripe::RecurringInterval::Week => None,
+            });
         Ok(Some(SubscriptionPlanFacts {
             period_end,
+            interval,
             scheduled_change,
             billing: if read_billing {
                 self.billing
