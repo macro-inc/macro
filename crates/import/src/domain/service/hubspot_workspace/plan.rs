@@ -60,7 +60,8 @@ fn fit(label: &str, suffix: &str) -> String {
 }
 
 /// The company a contact or deal is filed under: its primary, else its first
-/// link, among companies the plan holds; and whether it had others.
+/// link, among companies the plan holds; and whether it linked to others,
+/// counting companies outside the plan, whose link is lost too.
 fn company_of<'a>(
     links: &'a [CompanyLink],
     planned: &HashSet<&RecordId>,
@@ -74,7 +75,8 @@ fn company_of<'a>(
         .find(|link| link.primary)
         .or(known.first())
         .map(|link| &link.company);
-    (chosen, known.len() > 1)
+    let linked: HashSet<&RecordId> = links.iter().map(|link| &link.company).collect();
+    (chosen, linked.len() > 1)
 }
 
 /// The host of a website URL, as a domain candidate.

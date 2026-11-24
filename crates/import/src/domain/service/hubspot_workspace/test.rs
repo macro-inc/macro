@@ -415,3 +415,45 @@ fn a_teammates_copy_counts_as_already_imported_while_under_review() {
     // Left out of the import: not counted.
     assert_eq!(count(ImportStatus::Discarded), 0);
 }
+
+#[test]
+fn a_link_to_a_company_outside_the_plan_counts_as_an_extra_link() {
+    let mut inventory = inventory();
+    inventory.contacts = vec![import_hubspot::domain::Contact {
+        id: id("20"),
+        first_name: Some("Ada".into()),
+        last_name: None,
+        email: None,
+        additional_emails: vec![],
+        // 99 is not in the inventory, as an archived company is not.
+        companies: vec![
+            CompanyLink {
+                company: id("10"),
+                primary: true,
+            },
+            CompanyLink {
+                company: id("99"),
+                primary: false,
+            },
+        ],
+        owner: None,
+    }];
+    let rows = plan::rows(&inventory, &team(), &Rules::default()).unwrap();
+    let contact = rows
+        .iter()
+        .find(|row| row.foreign_id == "7:contact:20")
+        .map(meta)
+        .unwrap();
+    assert_eq!(
+        contact.object,
+        HubspotObject::Contact {
+            emails: vec![],
+            company: Some("7:company:10".into())
+        }
+    );
+    assert!(
+        contact.losses.contains(&HubspotLoss::ExtraCompanyLinks),
+        "{:?}",
+        contact.losses
+    );
+}
