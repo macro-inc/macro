@@ -2579,6 +2579,111 @@ describe('CoordinatorRouter', () => {
     });
   });
 
+  describe('when an owner that left had found its storage damaged', () => {
+    const leave = async (others: string[]) => {
+      vi.useFakeTimers();
+      const router = new CoordinatorRouter({
+        heartbeatIntervalMs: 5,
+        verifyTabLockHeld: async () => true,
+        watchTabLock: () => () => {},
+      });
+      const tabA = new FakePort();
+      await register(router, tabA, 'tab-a');
+      const tabs: FakePort[] = [];
+      for (const tabId of others) {
+        const tab = new FakePort();
+        await register(router, tab, tabId);
+        tabs.push(tab);
+      }
+      const engine = new FakePort();
+      await attach(router, tabA, 'tab-a', 1, engine);
+      ready(engine, 'tab-a', 1, 'opened-existing');
+      await router.handleTabMessage(tabA as CoordinatorMessagePort, {
+        ...version,
+        kind: 'navigation-departure',
+        tabId: 'tab-a',
+        ownerEpoch: 1,
+        reason: 'pagehide',
+      });
+      const report = (fatalCode = 'storage-reset-required') =>
+        engine.receive({
+          ...version,
+          kind: 'engine-fatal',
+          tabId: 'tab-a',
+          ownerEpoch: 1,
+          reason: 'cache storage requested physical reset',
+          fatalCode,
+        });
+      const elections = () =>
+        tabs.flatMap((tab) =>
+          messagesOfKind(tab, 'become-owner').map(
+            ({ ownerEpoch, databaseAction }) => [ownerEpoch, databaseAction]
+          )
+        );
+      return { router, tabs, engine, report, elections };
+    };
+
+    it('wipes with the first tab that comes', async () => {
+      const { router, report } = await leave([]);
+      report();
+      const tab = new FakePort();
+      await register(router, tab, 'tab-c');
+      expect(messagesOfKind(tab, 'become-owner')).toEqual([
+        expect.objectContaining({
+          ownerEpoch: 2,
+          databaseAction: 'wipe-before-open',
+        }),
+      ]);
+    });
+
+    it.each(['before it opened anything', 'after it opened'] as const)(
+      'replaces the next owner %s',
+      async (when) => {
+        const { router, tabs, report, elections } = await leave(['tab-b']);
+        if (when === 'after it opened') {
+          const engine = new FakePort();
+          await attach(router, tabs[0]!, 'tab-b', 2, engine);
+          ready(engine, 'tab-b', 2, 'opened-existing');
+        }
+        report();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(messagesOfKind(tabs[0]!, 'terminate-engine')).toEqual([
+          expect.objectContaining({ ownerEpoch: 2 }),
+        ]);
+        expect(elections()).toEqual([
+          [2, 'open-existing'],
+          [3, 'wipe-before-open'],
+        ]);
+        // The wipe answers every later report.
+        report();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(elections()).toHaveLength(2);
+      }
+    );
+
+    it('keeps a next owner that wiped the database itself', async () => {
+      const { router, tabs, report, elections } = await leave(['tab-b']);
+      const engine = new FakePort();
+      await attach(router, tabs[0]!, 'tab-b', 2, engine);
+      ready(engine, 'tab-b', 2, 'wiped-before-open', 'reset-corrupt');
+      report();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(elections()).toEqual([[2, 'open-existing']]);
+    });
+
+    it('hears only of damage, and only for a while', async () => {
+      const { tabs, engine, report, elections } = await leave(['tab-b']);
+      report('runtime-failure');
+      expect(engine.closed).toBe(false);
+      await vi.advanceTimersByTimeAsync(5);
+      expect(engine.closed).toBe(true);
+      report();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(elections()).toEqual([[2, 'open-existing']]);
+      expect(messagesOfKind(tabs[0]!, 'terminate-engine')).toEqual([]);
+    });
+  });
+
   it('lets a page leave gracefully while its engine is still opening', async () => {
     const router = new CoordinatorRouter({
       verifyTabLockHeld: async () => true,

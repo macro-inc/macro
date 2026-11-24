@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   CACHE_SUPERSEDED_ERROR_CODE,
@@ -105,7 +106,13 @@ export type CoordinatorAction =
     }
   | { kind: 'release-owner'; tabId: string; ownerEpoch: OwnerEpoch }
   | { kind: 'handoff-pending'; ownerEpoch: OwnerEpoch }
-  | { kind: 'close-engine-route'; tabId: string; ownerEpoch: OwnerEpoch }
+  | {
+      kind: 'close-engine-route';
+      tabId: string;
+      ownerEpoch: OwnerEpoch;
+      /** The engine's page left: the engine may have said why before it ended. */
+      left?: true;
+    }
   | { kind: 'drop-tab'; tabId: string }
   | { kind: 'retire-tab'; tabId: string; ownerEpoch: OwnerEpoch }
   | { kind: 'schedule-reset-activation' }
@@ -765,7 +772,7 @@ export class CoordinatorCore {
     this.removeTabRecord(tabId);
     this.retiringTabs.delete(tabId);
     actions.push(
-      { kind: 'close-engine-route', tabId, ownerEpoch },
+      { kind: 'close-engine-route', tabId, ownerEpoch, left: true },
       { kind: 'drop-tab', tabId }
     );
     this.stateValue = { kind: 'waiting-for-tab', nextDatabaseAction };
@@ -776,6 +783,23 @@ export class CoordinatorCore {
     );
     this.assertInvariants();
     return actions;
+  }
+
+  /** An owner that left had found its storage damaged, which no open looks
+   * for: the next open wipes it. */
+  requireWipe(): void {
+    const databaseAction: DatabaseAction = 'wipe-before-open';
+    this.stateValue = match(this.stateValue)
+      .with({ kind: 'waiting-for-tab' }, { kind: 'parked' }, (state) => ({
+        ...state,
+        nextDatabaseAction: databaseAction,
+      }))
+      .with(
+        { kind: 'activating' },
+        { kind: 'resetting-after-loss' },
+        (state) => ({ ...state, databaseAction })
+      )
+      .otherwise((state) => state);
   }
 
   resumeAfterLoss(): CoordinatorAction[] {
