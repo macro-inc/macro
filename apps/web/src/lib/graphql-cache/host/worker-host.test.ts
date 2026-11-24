@@ -7,7 +7,10 @@ import type {
   WorkerMessage,
   WriteResult,
 } from '../protocol';
-import { INITIAL_CACHE_REVISION } from '../protocol';
+import {
+  INITIAL_CACHE_REVISION,
+  isOwnerHandoffBlockedError,
+} from '../protocol';
 import type { CacheUnavailableReason } from '../telemetry';
 import type {
   CacheCoordinatorPageAdapter,
@@ -856,6 +859,56 @@ describe('createWorkerCacheHost', () => {
       host.dispose();
     }
   );
+
+  it('reports its owner ready again after a start, a refused handoff and a replaced engine', async () => {
+    vi.useFakeTimers();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+    });
+    const ready = vi.fn();
+    const unsubscribe = host.onOwnerReady?.(ready);
+    await host.currentRevision();
+    expect(ready).toHaveBeenCalledTimes(1);
+    const adapter = requireAdapter();
+
+    // Nothing held a read.
+    adapter.options.onCacheReadAvailabilityChanged?.('ready');
+    expect(ready).toHaveBeenCalledTimes(1);
+
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    adapter.options.onCacheReadAvailabilityChanged?.('blocked');
+    const refusal: unknown = await host
+      .readRecordsByKeys({
+        document: 'fragment Item on GraphqlSoupDocument { id }',
+        fragmentName: 'Item',
+        keys: ['GraphqlSoupDocument:a'],
+      })
+      .catch((error: unknown) => error);
+    expect(isOwnerHandoffBlockedError(refusal)).toBe(true);
+    expect(ready).toHaveBeenCalledTimes(1);
+    adapter.options.onCacheReadAvailabilityChanged?.('ready');
+    expect(ready).toHaveBeenCalledTimes(2);
+
+    // The handshake with a new engine comes first.
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    adapter.ignoredKinds.add('init');
+    adapter.replace(2);
+    adapter.options.onCacheReadAvailabilityChanged?.('ready');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ready).toHaveBeenCalledTimes(2);
+    const handshake = adapter.requests.at(-1);
+    if (handshake?.kind !== 'init') throw new Error('missing handshake');
+    adapter.respond(handshake.id, null);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ready).toHaveBeenCalledTimes(3);
+
+    unsubscribe?.();
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    adapter.options.onCacheReadAvailabilityChanged?.('ready');
+    expect(ready).toHaveBeenCalledTimes(3);
+    host.dispose();
+  });
 
   it('keeps a search queued through a blocked handoff and answers it from the replacement engine', async () => {
     vi.useFakeTimers();

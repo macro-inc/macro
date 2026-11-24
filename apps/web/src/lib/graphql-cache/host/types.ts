@@ -258,6 +258,16 @@ export interface CacheHost {
     cb: (change: CacheGenerationChange) => void
   ): () => void;
 
+  /**
+   * The cache's owner answers again: after the host starts, after an owner
+   * change that replaced the engine, and after one that was called off. For a
+   * reader with no network to turn to, refused with
+   * `isOwnerHandoffBlockedError` or ended by a `CacheRequestTimeoutError`
+   * while it waited. Nothing is replayed to a late subscriber. Absent on a host
+   * whose reads never wait for an owner.
+   */
+  onOwnerReady?(cb: () => void): () => void;
+
   /** Subscribes to final commit, rollback, or supersession events. */
   onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;
 

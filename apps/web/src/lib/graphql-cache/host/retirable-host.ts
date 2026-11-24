@@ -131,6 +131,10 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
       current.onCacheGenerationChanged((...args) => {
         if (current === inner) cb(...args);
       }),
+    onOwnerReady: (cb) =>
+      current.onOwnerReady?.(() => {
+        if (current === inner) cb();
+      }) ?? (() => undefined),
     onMutationSettled: (cb) =>
       current.onMutationSettled((...args) => {
         if (current === inner) cb(...args);

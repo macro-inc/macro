@@ -288,6 +288,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const affectedSubscribers = new Set<AffectedOperationsListener>();
   const cacheChangeSubscribers = new Set<CacheChangeListener>();
   const hydrationSubscribers = new Set<CacheChangeListener>();
+  const ownerReadySubscribers = new Set<() => void>();
   const generationChangeSubscribers = new Set<
     (change: CacheGenerationChange) => void
   >();
@@ -491,6 +492,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     for (const cb of affectedSubscribers) cb(opKeys);
   }
 
+  /** Only once this host may ask it, and no owner change is holding reads. */
+  function emitOwnerReady(): void {
+    if (state !== 'ready' || readAvailability.timeoutsPaused) return;
+    for (const cb of [...ownerReadySubscribers]) {
+      if (ownerReadySubscribers.has(cb)) cb();
+    }
+  }
+
   function emitGenerationChange(change: CacheGenerationChange): void {
     // A transport replacement can preserve the durable permission generation.
     // Keep its witness until the replacement handshake reads the owner again;
@@ -543,6 +552,13 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       else if (isReadOnlyCacheRequest(entry.kind))
         armRequestTimeout(id, entry, requestTimeoutMs);
     }
+  }
+
+  /** A replaced engine is announced by the handshake with it instead. */
+  function onOwnerAvailable(): void {
+    const heldReads = readAvailability.timeoutsPaused;
+    resumeCacheReads();
+    if (heldReads) emitOwnerReady();
   }
 
   function waitForCacheReads(): void {
@@ -655,7 +671,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       onCacheReadAvailabilityChanged: (availability) => {
         if (adapter !== created) return;
         match(availability)
-          .with('ready', resumeCacheReads)
+          .with('ready', onOwnerAvailable)
           .with('waiting', waitForCacheReads)
           .with('blocked', onOwnerHandoffBlocked)
           .exhaustive();
@@ -857,6 +873,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     cacheChangeSubscribers.clear();
     hydrationSubscribers.clear();
     generationChangeSubscribers.clear();
+    ownerReadySubscribers.clear();
     settlementSubscribers.clear();
   }
 
@@ -1472,6 +1489,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           replacementReadOpKeys.clear();
           emitAffectedKeys(opKeys);
         }
+        emitOwnerReady();
       },
       (error: unknown) => {
         const initializationFailure = asError(error);
@@ -2003,6 +2021,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     ): () => void {
       generationChangeSubscribers.add(cb);
       return () => generationChangeSubscribers.delete(cb);
+    },
+
+    onOwnerReady(cb: () => void): () => void {
+      ownerReadySubscribers.add(cb);
+      return () => ownerReadySubscribers.delete(cb);
     },
 
     onMutationSettled(
