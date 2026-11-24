@@ -64,8 +64,8 @@ impl NotionLinkEditor {
                 delta.revision_bytes().ok().as_deref().map(revision_receipt)
             }
             Ok(_) => None,
-            Err(_) => {
-                tracing::warn!("could not inspect the initial Notion document revision");
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not inspect the initial Notion document revision");
                 None
             }
         }
@@ -363,7 +363,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         }
     }
 
-    #[tracing::instrument(skip_all, fields(document), err)]
+    #[tracing::instrument(skip_all, fields(document = %document), err)]
     async fn inspect_import_links(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -404,7 +404,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         }))
     }
 
-    #[tracing::instrument(skip_all, fields(document, references = links.len()), err)]
+    #[tracing::instrument(skip_all, fields(document = %document, references = links.len()), err)]
     async fn rewrite_import_links(
         &self,
         user: &MacroUserIdStr<'static>,

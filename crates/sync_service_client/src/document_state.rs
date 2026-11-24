@@ -6,10 +6,13 @@
 //! - `POST /document/{id}/update` takes `{"expectedRevision", "update"}` (a
 //!   Loro update, not a snapshot) and answers `{"revision", "applied"}`; `409`
 //!   when the state moved past the expected revision.
+//! - `POST /document/{id}/import-links` uses the same revision check and wire
+//!   format for an internal import link update. It requires both the internal
+//!   auth key and a document permission JWT with owner access to `id`.
 //!
-//! Both authenticate with `Authorization: Bearer <document permission JWT>`
-//! scoped to `id`; sync-service never accepts the internal key for these
-//! routes. The token and the payloads are never logged.
+//! All three routes require `Authorization: Bearer <document permission JWT>`
+//! scoped to `id`. The internal key alone grants no access. Credentials and
+//! payloads are never logged.
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 pub use macro_sync_service_jwt::DocumentPermissionToken;
@@ -229,7 +232,7 @@ impl SyncServiceClient {
 
     /// Apply an import-produced link delta through the internal CAS endpoint.
     /// Callers must fence it against the active import's initial body receipt.
-    #[tracing::instrument(skip_all, fields(document_id, update_len = update.len()), err)]
+    #[tracing::instrument(skip_all, fields(document_id = %document_id, update_len = update.len()), err)]
     pub async fn update_import_links(
         &self,
         document_id: &str,

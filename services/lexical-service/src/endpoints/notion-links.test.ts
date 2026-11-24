@@ -27,6 +27,36 @@ function post(path: string, body: unknown, authenticated = true) {
   );
 }
 
+it('resolves an unmapped child-page placeholder without rewriting ordinary block links', async () => {
+  const child = '3FB60732-3E2E-8062-9886-FC0C028D50A7';
+  const anchor = `https://www.notion.so/Parent-${container}#${child}`;
+  const response = await post('/snapshot/notion', {
+    markdown: `<unknown alt="child_page" title="Child" url="${anchor}"/>\n\n[Ordinary block](${anchor})`,
+    links: { pages: {}, users: {} },
+  });
+  expect(response.status).toBe(200);
+  const { snapshot } = (await response.json()) as { snapshot: string };
+  const bytes = Buffer.from(snapshot, 'base64');
+  const doc = new LoroDoc();
+  try {
+    doc.import(bytes);
+    expect(JSON.stringify(doc.toJSON())).toContain(
+      `https://www.notion.so/${page}`
+    );
+    expect(notionLinkDelta(bytes, []).references).toEqual([{ id: page }]);
+    const delta = notionLinkDelta(bytes, [
+      { id: page, destination: { type: 'page', documentId } },
+    ]);
+    expect(delta.rewritten).toBe(1);
+    doc.import(Buffer.from(delta.update ?? '', 'base64'));
+    const updated = JSON.stringify(doc.toJSON());
+    expect(updated).toContain(`/app/md/${documentId}`);
+    expect(updated).toContain(anchor);
+  } finally {
+    doc.free();
+  }
+});
+
 it('rewrites only exact hyperlink registers in a real Notion snapshot and replays as a no-op', async () => {
   const pageUrl = `https://www.notion.so/Start-Here-${page}`;
   const viewUrl = `https://www.notion.so/${container}?v=${view}`;

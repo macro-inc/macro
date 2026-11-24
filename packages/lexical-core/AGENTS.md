@@ -82,4 +82,7 @@ Creation-time markdown snapshots write explicit root pins as `pending:<definitio
 
 The Notion importer parses exact page and view references in `notion/links.ts`.
 Keep malformed and external URLs, code, and unmapped block anchors intact.
+Recognize an exact child-page block anchor only on a typed child-page placeholder.
+Use the child's Notion page URL when the placeholder has no mapped mention so
+the deferred workspace import pass can resolve it.
 Database cards remain a separate occurrence-based conversion.

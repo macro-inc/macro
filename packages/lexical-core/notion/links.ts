@@ -110,10 +110,10 @@ export function findNotionPage(
 export function findNotionChildPage(
   links: NotionLinks,
   reference: string
-): NotionPageLink | undefined {
+): { id: string; page: NotionPageLink | undefined } | undefined {
   const url = notionUrl(reference);
   const id = normalizeId(url?.hash.slice(1) ?? '');
-  if (id) return links.pages[id];
+  if (id) return { id, page: links.pages[id] };
 }
 
 function hasLinkUrl(

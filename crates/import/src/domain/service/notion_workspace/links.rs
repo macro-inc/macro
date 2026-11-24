@@ -116,7 +116,7 @@ where
                             match resolution {
                                 Ok(Some(destination)) => replacements.push((source.clone(), destination.clone())),
                                 Ok(None) => {}
-                                Err(_) => tracing::warn!(source_id = %source.id, "an imported link destination could not be verified"),
+                                Err(error) => tracing::warn!(error = ?error, source_id = %source.id, "an imported link destination could not be verified"),
                             }
                         }
                         if replacements.is_empty() || cancel.stopped() {
@@ -128,8 +128,8 @@ where
                     }.await;
                     match result {
                         Ok(counts) => counts,
-                        Err(_) => {
-                            tracing::warn!(%document, "could not finish rewriting imported links");
+                        Err(error) => {
+                            tracing::warn!(error = ?error, %document, "could not finish rewriting imported links");
                             (0, 0)
                         }
                     }
