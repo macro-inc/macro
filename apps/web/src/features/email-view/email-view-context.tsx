@@ -76,6 +76,7 @@ import {
   canSearchEmailTab,
   DEFAULT_EMAIL_FOCUS_SORT,
   DEFAULT_EMAIL_TAB,
+  type EmailShownView,
   isEmailInboxTab,
 } from './constants';
 import {
@@ -149,26 +150,28 @@ type EmailListController = ListController<
   EmailListActivationMetadata
 >;
 
-/** What the navigation and the header show as selected; see `shownTab`. */
-export type EmailShownView = EmailTab | 'inbox' | 'search';
-
 export type EmailViewContext = {
   state: Store<EmailViewState>;
   setState: SetStoreFunction<EmailViewState>;
   /**
    * Opens a tab. During a search it narrows the search to that tab's view
    * (`in:<view>`) and keeps the words; a tab with no view in the search index
-   * (Scheduled, Reminders, Spam, Trash) ends the search.
+   * (Scheduled, Reminders, Spam, Trash), or a search with no words typed yet,
+   * ends the search.
    */
   setTab: (tab: EmailTab) => void;
   /** Opens the Inbox view last open (Focus, Signal or Noise), or `in:inbox`. */
   selectInbox: () => void;
   /**
    * The view the navigation and the header show as selected: the open tab,
-   * or while a search runs the view its `in:` filter names (`inbox` for the
-   * whole Inbox); `search` for a search of all mail, which selects none.
+   * or the view the search on screen runs in (`inbox` for the whole Inbox);
+   * `search` for a search of all mail, which selects none.
    */
   shownTab: Accessor<EmailShownView>;
+  /** The search field holds a query, whatever it says. */
+  searchOpen: Accessor<boolean>;
+  /** Focus, Signal and Noise show as tabs: in the Inbox, never in a search. */
+  showsInboxTabs: Accessor<boolean>;
   setInboxIds: (ids: string[] | undefined) => void;
   setAliasFilter: (alias: NonNullable<EmailViewState['aliasFilter']>) => void;
   setFacets: (facets: EmailViewState['facets']) => void;
@@ -188,7 +191,10 @@ export type EmailViewContext = {
   /** The selected tags' names on All, where they alone scope the list. */
   tagViewTitle: Accessor<string | undefined>;
   source: EmailDataSource;
-  /** The searched words and the view an `in:` filter narrows them to. */
+  /**
+   * The search on screen: its words and the view an `in:` filter narrows them
+   * to. Text with no words yet keeps the search before it.
+   */
   parsedSearch: Accessor<ParsedEmailSearch>;
   list: EmailListController;
   registerListActivationHandler: (
@@ -453,17 +459,30 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       scope: conditions && resolveEmailSavedViewScope(conditions, new Date()),
     };
   });
+  const searchOpen = () =>
+    canSearchEmailTab(state.tab) && state.search.trim() !== '';
+  const typedSearch = createMemo(() => parseEmailSearch(state.search));
   // A search covers all mail from any tab; only an `in:` filter narrows it.
-  const parsedSearch = createMemo(() => parseEmailSearch(state.search));
-  const searching = () =>
-    canSearchEmailTab(state.tab) && parsedSearch().query !== '';
+  // Text with no words (an `in:` still being typed, or a view alone) runs no
+  // search of its own, so the last one that had words stays on screen.
+  const parsedSearch = createMemo<ParsedEmailSearch>(
+    (onScreen) => {
+      const typed = typedSearch();
+      if (typed.query === '' && state.search.trim() !== '') return onScreen;
+      return typed;
+    },
+    { query: '' }
+  );
   const shownTab = (): EmailShownView => {
-    if (!searching()) return state.tab;
+    const { query, scope } = parsedSearch();
+    // With no search to stay on, the list is still the open tab's.
+    if (!searchOpen() || query === '') return state.tab;
 
-    const scope = parsedSearch().scope;
     if (!scope) return 'search';
     return emailSearchScopeTab(scope) ?? 'inbox';
   };
+  const showsInboxTabs = () =>
+    !searchOpen() && !savedViewActive() && isEmailInboxTab(state.tab);
   const listInput: EmailDataSourceInput = {
     get tab() {
       return listFilters().tab;
@@ -711,23 +730,23 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   // During a search, a tab narrows it rather than leaving it: the navigation
   // reads as the view searched, and the words stay.
   const selectTab = (tab: EmailTab, scope = emailSearchScopeForTab(tab)) => {
-    const search = parsedSearch();
-    const narrows =
-      !savedViewActive() &&
-      canSearchEmailTab(state.tab) &&
-      (search.query !== '' || search.scope !== undefined);
-    if (!narrows) {
+    if (savedViewActive() || !searchOpen()) {
       setTabNow(tab);
       return;
     }
 
+    const { query } = typedSearch();
     batch(() => {
       setTabNow(tab);
+      // With no words typed there is nothing to narrow, so the tab just opens.
+      if (!scope || query === '') {
+        setState('search', '');
+        return;
+      }
+
       setState(
         'search',
-        scope
-          ? formatEmailSearch(scope === 'all' ? undefined : scope, search.query)
-          : ''
+        formatEmailSearch(scope === 'all' ? undefined : scope, query)
       );
     });
   };
@@ -909,6 +928,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         )
       ),
     shownTab,
+    searchOpen,
+    showsInboxTabs,
     setInboxIds,
     setAliasFilter,
     setFacets,
