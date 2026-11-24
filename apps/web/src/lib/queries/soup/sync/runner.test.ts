@@ -502,19 +502,20 @@ describe('runCacheSync', () => {
 
   // 426: the sync protocol; 404, 405, 410: no stream endpoint; 400: the
   // request itself.
-  it.each([
-    426, 404, 405, 410, 400,
-  ])('falls back to the paged backfill at once when the server answers %i', async (status) => {
-    runSyncPass.mockResolvedValue({
-      ok: false,
-      failure: { kind: 'http', status },
-    });
-    const host = fakeHost();
-    const fiber = await start(runCacheSync('user-1', asHost(host), true));
-    expect(runSyncPass).toHaveBeenCalledOnce();
-    expect(host.currentStorageGeneration).toHaveBeenCalled();
-    await Effect.runPromise(Fiber.interrupt(fiber));
-  });
+  it.each([426, 404, 405, 410, 400])(
+    'falls back to the paged backfill at once when the server answers %i',
+    async (status) => {
+      runSyncPass.mockResolvedValue({
+        ok: false,
+        failure: { kind: 'http', status },
+      });
+      const host = fakeHost();
+      const fiber = await start(runCacheSync('user-1', asHost(host), true));
+      expect(runSyncPass).toHaveBeenCalledOnce();
+      expect(host.currentStorageGeneration).toHaveBeenCalled();
+      await Effect.runPromise(Fiber.interrupt(fiber));
+    }
+  );
 
   it.each([
     { kind: 'http', status: 401 },
