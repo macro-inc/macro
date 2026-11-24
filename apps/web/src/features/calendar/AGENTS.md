@@ -13,6 +13,8 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 | `components/CalendarPagerContext.tsx` | FullCalendar page handles, retained data, and deferred rendering. |
 | `../../components/ui/components/SnapPager/SnapPager.tsx` | Native horizontal paging and discrete desktop commands. |
 | `components/CalendarViewContext.tsx` | Selection, source visibility, and preferences. |
+| `core/page-range.ts` | Exact date windows shared by grid rendering and adjacent preloads. |
+| `primitives/create-calendar-page-mounts.ts` | First-paint-first mounting of the bounded page ring. |
 | `hooks/use-calendar-occurrence-data.ts` | Account/range reads and event projection. |
 | `components/composer/parts/ComposerRoot.tsx` | Composer context and shared parts. |
 | `primitives/create-calendar-composer.ts` | Form permissions, metadata, and shared When model. |
@@ -46,6 +48,7 @@ Shared calendar rendering, event editing, preferences, and occurrence presentati
 - Keep unsaved Day-grid resizing bound to the mounted draft, not persisted-event mutations.
 - Preserve native momentum until scrollend or observed stillness; complete controlled 140ms slides without relying on native events.
 - Disable wheel snapping during controlled alignment until the virtual destination rows are mounted.
+- Preload five page keys independently of render jobs after date anchors commit; retain stable slots and freeze phone axis measurements during paging.
 
 ## Checks
 

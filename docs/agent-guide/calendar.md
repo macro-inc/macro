@@ -39,9 +39,10 @@ calendar account metadata and other conferencing providers keep their original U
 - Phone swipes settle before recycling pages. Slow drags must pass halfway;
   clear flicks can commit sooner. Plain taps must not leave paging stuck.
   Event drag/resize locks horizontal paging.
-- Resizing preserves the period and last visible hour. Phone hour labels stay
-  outside the timed card and aligned during swipes. Midnight and the current-time
-  label remain readable; weekends receive no special fill.
+- Resizing preserves the period and last visible hour. One fixed phone time column
+  sits beside the pager; hour labels retain their geometry during horizontal motion.
+  The current-time marker starts at the boundary between that column and the days.
+  Midnight and the current-time label remain readable.
 - Reduced motion removes nonessential transitions without changing destinations.
 
 ## Cached saves
@@ -171,12 +172,12 @@ request's included: seen is not answered, so the row stays listed until the
 request is settled. Verify these on desktop and mobile, including a delayed read
 response and a failed write followed by another click.
 
-Opening a grid view draws the visible period first. Four neighboring periods
-mount on later tasks once the visible period has its events, or after a moment
-when that load is slow. They start beside whatever period is on screen by then;
-paging never waits for their render jobs. On the iOS and Android apps the periods seen last and
-the calendar list are kept on the device for a week, so a cold start draws them
-before the cache answers; the fresh read then replaces them.
+Opening a grid view paints the visible period first, then mounts its four neighbors
+on yielding tasks without waiting for events. The same five exact date ranges begin
+loading independently of those render jobs, with two ranges on each side. Forward
+and reverse settlement extend that rolling window without prepending DOM or shifting
+the current page. On the iOS and Android apps, recently seen periods and the calendar
+list remain on the device for a week; fresh reads replace those restored results.
 
 Period selection updates its label and route immediately. The active grid redraws
 on a deferred task; hidden neighboring periods follow on separate tasks. Calendar
@@ -360,16 +361,13 @@ toast
 follows the same rule: it asks once per own inbox missing calendar permission,
 never for an inbox another Macro user delegated to the viewer (a **Shared** row
 in Settings → Email, whose per-inbox Enable calendar button stays available).
-The calendar view's setup prompt decides and acts on own inboxes alone too: a
-delegate with no inbox of their own sees **Connect your calendar**, the Calendar
-is off vs Enable calendar wording counts only own inboxes, and Grant access, Turn
-on and Reconnect only start consent for one of them. It covers the grid only in a
-week without events and with no working calendar the viewer can see. Otherwise
-(a teammate's out-of-office on the grid, or a working calendar shared with them)
-it is a banner in the page's flow with the same title, description and action,
-above the grid on desktop and tablets and below it on phones, where
-`RangeUnavailableBanner` sits, so it never covers an event. A delegate whose only
-working calendar is shared sees the banner in every week.
+The calendar view counts a working delegated calendar as a connection, so it does
+not ask its viewer to connect again. A newly connected account hides the generic
+invitation immediately, without waiting for occurrence loading. Repair actions still
+apply only to the viewer's own inboxes: Calendar is off, Enable calendar, and Reconnect
+retain their provider-specific consent. Setup always sits above the grid rather than
+covering an empty calendar. Phone setup cards use the calendar's rounded card edge
+and put the text above the action.
 An own inbox whose calendar used to sync but lost calendar access without the
 user turning it off (a Google grant from before Macro narrowed its calendar
 scopes, which the server turns off and clears hourly) shows **Calendar for
