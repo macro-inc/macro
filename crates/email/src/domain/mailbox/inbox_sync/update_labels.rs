@@ -154,15 +154,31 @@ where
         .await?;
     }
 
-    if !labels_to_delete.is_empty() {
-        remove_message_labels(
+    if !labels_to_delete.is_empty()
+        && let Err(error) = remove_message_labels(
             &ctx.repository,
             link,
             db_message.db_id,
             db_message.thread_db_id,
             &labels_to_delete,
         )
-        .await?
+        .await
+    {
+        // The additions are committed, so a retry won't find their gains
+        // again: report them now, and the removal when the retry makes it.
+        if !gained_label_ids.is_empty() {
+            publish_label_diff_events(
+                ctx,
+                link,
+                &db_message,
+                &labels_to_add,
+                &[],
+                &db_message_labels,
+                gained_label_ids,
+            )
+            .await;
+        }
+        return Err(error);
     }
 
     if has_label_changes {

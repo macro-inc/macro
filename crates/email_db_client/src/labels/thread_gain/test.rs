@@ -145,3 +145,22 @@ async fn a_thread_imported_whole_gains_what_its_earlier_messages_lack(pool: PgPo
     assert_eq!(new_to_thread(&pool, DRAFT).await?, Vec::<Uuid>::new());
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("thread_gain"))
+)]
+async fn of_two_messages_at_the_same_time_only_one_brings_a_label(pool: PgPool) -> Result<()> {
+    sqlx::query!(
+        "UPDATE email_messages SET internal_date_ts = (SELECT internal_date_ts FROM email_messages WHERE id = $1) WHERE id = $2",
+        OLDER,
+        NEWER
+    )
+    .execute(&pool)
+    .await?;
+    label_message(&pool, NEWER, FINANCE).await?;
+
+    assert_eq!(new_to_thread(&pool, OLDER).await?, [FINANCE]);
+    assert_eq!(new_to_thread(&pool, NEWER).await?, Vec::<Uuid>::new());
+    Ok(())
+}

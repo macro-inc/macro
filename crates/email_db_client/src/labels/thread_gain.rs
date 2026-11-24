@@ -97,7 +97,8 @@ pub async fn carried_by_messages(
 
 /// The user labels a message carries that no earlier message of its thread
 /// does, for a thread imported whole: there is no state before the write to
-/// compare with. A later message counts as having arrived with its own labels.
+/// compare with. A later message counts as having arrived with its own labels;
+/// of two at the same time, the one with the lower id came first.
 pub async fn new_to_thread(
     pool: &sqlx::PgPool,
     message_id: Uuid,
@@ -116,8 +117,8 @@ pub async fn new_to_thread(
                 SELECT o.id
                 FROM target t
                 JOIN email_messages o ON o.thread_id = t.thread_id
-                WHERE o.id <> $1 AND NOT o.is_draft
-                    AND COALESCE(o.internal_date_ts, o.created_at) < t.at
+                WHERE NOT o.is_draft
+                    AND (COALESCE(o.internal_date_ts, o.created_at), o.id) < (t.at, $1)
             ))
         )
         SELECT ml.label_id AS "label_id!"

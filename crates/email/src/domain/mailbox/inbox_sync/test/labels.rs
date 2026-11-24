@@ -567,3 +567,27 @@ async fn labels_the_thread_gained_are_reported_on_the_label_event() {
         );
     }
 }
+
+#[tokio::test]
+async fn a_gain_is_reported_when_the_removal_after_it_fails() {
+    let gained = Uuid::from_u128(0x99);
+    let (service, fake) = make_service(false);
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.provider = Ok(Some(vec!["Label_1".into()]));
+        state.gained_labels = vec![gained];
+        state.failures.push(("remove", 1));
+    }
+    service.process(Ok(input(operation()))).await;
+    let calls = fake.calls();
+    let updated: Vec<_> = events(&calls)
+        .into_iter()
+        .filter(|event| event["event_type"] == "email.thread_labels_updated")
+        .collect();
+    assert_eq!(updated.len(), 1);
+    assert_eq!(
+        updated[0]["metadata"]["labels_gained"],
+        serde_json::json!([gained])
+    );
+    assert_eq!(updated[0]["metadata"]["removed"], serde_json::json!([]));
+}

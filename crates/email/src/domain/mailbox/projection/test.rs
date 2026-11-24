@@ -329,6 +329,30 @@ async fn arriving_mail_reports_its_categories_on_its_received_event() {
 }
 
 #[tokio::test]
+async fn sent_mail_reports_its_categories_on_a_label_event_and_spam_reports_none() {
+    let mut sent = context();
+    sent.message.as_mut().unwrap().message.is_sent = true;
+    let id = Uuid::now_v7();
+    let reported = gains(message_event(false, true, gained(id, false)), sent, true).await;
+    assert_eq!(reported.len(), 1);
+    assert_eq!(reported[0].0.event_id, id);
+    assert!(matches!(
+        reported[0].0.event,
+        EmailTopicEvent::ThreadLabelsUpdated(_)
+    ));
+
+    let mut junk = context();
+    junk.message.as_mut().unwrap().in_junk = true;
+    let reported = gains(
+        message_event(false, true, gained(Uuid::now_v7(), false)),
+        junk,
+        true,
+    )
+    .await;
+    assert!(reported.is_empty());
+}
+
+#[tokio::test]
 async fn a_stored_message_reports_its_new_categories_under_their_own_id() {
     let id = Uuid::now_v7();
     let reported = gains(

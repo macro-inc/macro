@@ -568,23 +568,30 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
                         self.effects.contacts(correspondence).await?;
                         effects.crm_jobs += crm_jobs;
                     }
-                    // Arriving mail reports what it gave its thread on its own
-                    // event; a stored message, on a label event of the provider's.
+                    // Received mail reports what it gave its thread on its own
+                    // event; sent mail and a stored message, on a label event of
+                    // the provider's; mail arriving in spam or trash, nowhere.
                     let gained = labels_gained.as_ref().filter(|_| !import);
                     let event =
                         live_event(&context, *is_new, *is_new_thread, *was_draft, actor.clone())
                             .filter(|_| !import);
-                    match (event, gained) {
-                        (Some(event), gained) => {
-                            let gained = gained.map(|gained| gained.label_ids.clone());
-                            let event = event.with_arrival_labels(gained.unwrap_or_default());
-                            self.effects.publish(event.with_event_id(lease.id)).await?;
-                        }
-                        (None, Some(gained)) => {
-                            self.publish_gained(&context.link, *thread_id, gained)
-                                .await?;
-                        }
-                        (None, None) => {}
+                    let (carried, apart) =
+                        match (event.as_ref().map(EmailMacroEvent::arrival_gains), gained) {
+                            (Some(ArrivalGains::OnThisEvent), Some(gained)) => {
+                                (gained.label_ids.clone(), None)
+                            }
+                            (Some(ArrivalGains::OnLabelEvent) | None, gained) => {
+                                (Vec::new(), gained)
+                            }
+                            _ => (Vec::new(), None),
+                        };
+                    if let Some(event) = event {
+                        let event = event.with_arrival_labels(carried);
+                        self.effects.publish(event.with_event_id(lease.id)).await?;
+                    }
+                    if let Some(gained) = apart {
+                        self.publish_gained(&context.link, *thread_id, gained)
+                            .await?;
                     }
                     if should_notify(import, *is_new, current) {
                         for notification in notifications(lease, &context) {

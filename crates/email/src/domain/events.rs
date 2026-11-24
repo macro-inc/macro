@@ -546,6 +546,17 @@ impl TopicEvent for EmailTopicEvent {
     const SCHEMA_VERSION: u8 = 1;
 }
 
+/// Where arriving mail reports the labels its thread gained.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrivalGains {
+    /// On its own event: received mail.
+    OnThisEvent,
+    /// On a label event of the provider's: other arriving mail, such as sent.
+    OnLabelEvent,
+    /// Nowhere: mail that arrives in spam or trash.
+    Dropped,
+}
+
 /// Publishable event for [`MacroEmailTopic`], keyed by link (inbox) id.
 pub struct EmailMacroEvent {
     key: String,
@@ -828,6 +839,18 @@ impl EmailMacroEvent {
             metadata.labels_gained = labels_gained;
         }
         self
+    }
+
+    /// Where the mail this event announces reports labels its thread gained,
+    /// as Gmail sync does (`upsert_message`).
+    pub fn arrival_gains(&self) -> ArrivalGains {
+        match &self.event.event {
+            EmailTopicEvent::MessageReceived(metadata) if metadata.is_spam_or_trash => {
+                ArrivalGains::Dropped
+            }
+            EmailTopicEvent::MessageReceived(_) => ArrivalGains::OnThisEvent,
+            _ => ArrivalGains::OnLabelEvent,
+        }
     }
 
     /// Build an event from a topic-specific event variant.
