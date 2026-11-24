@@ -1401,6 +1401,21 @@ pub async fn remove_stale_cache_database(
             queued_mutations: None,
         });
     };
+    // Opening creates files where only the side file is left.
+    match salvage::pending(&owner).await {
+        Ok(0) => {}
+        Ok(queued) => {
+            owner.release().await.map_err(err_js)?;
+            return to_js(&StaleDatabaseCleanup {
+                outcome: "queued-mutations",
+                queued_mutations: Some(queued),
+            });
+        }
+        Err(error) => {
+            owner.release().await.map_err(err_js)?;
+            return Err(err_js(error));
+        }
+    }
     let owner = match open_owner(owner).await? {
         OpenResult::Ready(session) => {
             let connected = session.connect().map_err(err_js)?;
@@ -1431,20 +1446,6 @@ pub async fn remove_stale_cache_database(
         // Only one of the pair exists, so it never held a complete database.
         OpenResult::ResetRequired(session) => session.reset().await.map_err(err_js)?,
     };
-    match salvage::pending(&owner).await {
-        Ok(0) => {}
-        Ok(queued) => {
-            owner.release().await.map_err(err_js)?;
-            return to_js(&StaleDatabaseCleanup {
-                outcome: "queued-mutations",
-                queued_mutations: Some(queued),
-            });
-        }
-        Err(error) => {
-            owner.release().await.map_err(err_js)?;
-            return Err(err_js(error));
-        }
-    }
     owner.remove_and_release().await.map_err(err_js)?;
     to_js(&StaleDatabaseCleanup {
         outcome: "removed",
@@ -3023,11 +3024,11 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.forget_prepared_projections();
-            let result = state.engine_mut()?.clear().await;
             let forgotten = salvage::forget(&state.sidecar).await;
+            let result = state.engine_mut()?.clear().await;
             let revision = state.engine_result(result)?;
-            to_js(&JsRevisionResult {
             forgotten?;
+            to_js(&JsRevisionResult {
                 revision: revision.to_string(),
             })
         })

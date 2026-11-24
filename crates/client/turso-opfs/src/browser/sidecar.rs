@@ -55,7 +55,16 @@ impl Sidecar {
     /// Reports success only once the bytes are durable.
     pub async fn write_tail(&self, offset: u64, bytes: &[u8]) -> Result<(), OpfsError> {
         owner_binding(self.owner)?;
-        let deadline = BusyDeadline::start();
+        self.write_tail_by(BusyDeadline::start(), offset, bytes)
+            .await
+    }
+
+    async fn write_tail_by(
+        &self,
+        deadline: BusyDeadline,
+        offset: u64,
+        bytes: &[u8],
+    ) -> Result<(), OpfsError> {
         let root = worker_root()
             .await
             .map_err(|error| js_error(OpfsErrorKind::Open, "OPFS side file root", &error))?;
@@ -75,7 +84,7 @@ impl Sidecar {
             .await
             .map_err(|error| js_error(OpfsErrorKind::Remove, "OPFS side file root", &error))?;
         match remove_if_present(&root, &self.path, false, deadline).await {
-            Err(_) => self.write_tail(0, &[]).await,
+            Err(_) => self.write_tail_by(deadline, 0, &[]).await,
             removed => removed,
         }
     }

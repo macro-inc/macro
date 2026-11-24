@@ -339,6 +339,35 @@ async fn a_clear_that_leaves_the_copy_behind_fails() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn a_side_file_whose_database_is_gone_is_cleaned_up() {
+    const SCOPE: &str = "cache-wasm-salvage-alone";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let copy = read_side_file(SCOPE).await;
+    destroy_cache(SCOPE.into()).await.expect("destroy");
+    let older = format!("{}:s0.v0.t2", legacy_cache_database_name(SCOPE));
+    remove_opfs_pair(&older).await;
+    for (bytes, expected) in [
+        (
+            &*copy,
+            serde_json::json!({ "outcome": "queued-mutations", "queuedMutations": 1 }),
+        ),
+        (
+            &*SalvageFile::read_attempt(),
+            serde_json::json!({ "outcome": "removed" }),
+        ),
+    ] {
+        let owner = OpfsOwner::acquire(&older).await.expect("older owner");
+        owner.sidecar().write_tail(0, bytes).await.expect("write");
+        owner.release().await.expect("release");
+        assert_eq!(stale_cleanup(SCOPE, &older).await, expected);
+        assert!(!opfs_file_exists(&older).await, "nothing else was created");
+    }
+    assert!(!opfs_file_exists(&format!("{older}-salvage")).await);
+    remove_opfs_pair(&database_identity(SCOPE)).await;
+}
+
+#[wasm_bindgen_test(async)]
 async fn deliberate_wipes_take_the_copy_too() {
     const SCOPE: &str = "cache-wasm-salvage-deliberate";
     closed_with_queue(SCOPE).await;
