@@ -941,7 +941,16 @@ fn a_term_of_one_word_or_an_exact_short_or_quoted_one_stays_in_the_query_string(
 
 #[test]
 fn a_run_unicode_splits_into_words_matches_as_a_phrase_prefix() {
-    for term in ["東京都", "AT&T", "x²y", "ไทย-ลาว", "ไทย2"] {
+    for term in [
+        "東京都",
+        "AT&T",
+        "x²y",
+        "ไทย-ลาว",
+        "ไทย2",
+        "ปี๒๕๖๗",
+        "第１２",
+        "٢٠٢٤-٠٣",
+    ] {
         let terms = vec![term.to_string()];
 
         let json = terms_query(&terms, "partial", &[], &["subject"], false).to_json();
@@ -1156,11 +1165,9 @@ fn a_term_that_may_be_one_token_is_read_by_the_analyzer() {
         "10½",
         "②note",
         "สวัสดี",
-        "ปี๒๕๖๗",
         "฿500",
         "500៛",
-        "第１２",
-        "٢٠٢٤-٠٣",
+        "①②③",
         "lunch🎉",
         "🎉🎉🎉",
         "---",

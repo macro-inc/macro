@@ -449,17 +449,19 @@ async fn a_term_of_one_token_finds_its_mail_whatever_shares_its_prefix() -> anyh
         message_holding(42, "pa1 and pa2"),
         message_holding(43, "กานกก๒๕๖๗"),
         message_holding(44, "第１２３回 lunch🎉"),
+        // The same tokens, apart.
+        message_holding(45, "１２３ then 第, and ๒๕๖๗ then กานกก"),
     ];
     let mut cases = vec![
         case("a word and a superscript", &["pa²"], &[41]),
         case("a word before a currency sign", &["pa៛"], &[41]),
         case("a word after a currency sign", &["฿pa"], &[41, 42]),
-        case("a Thai run still being typed", &["กาน"], &[41, 43]),
+        case("a Thai run still being typed", &["กาน"], &[41, 43, 45]),
         case("a Thai run and digits", &["กานกก๒๕"], &[43]),
         case("an ideograph and full-width digits", &["第１２"], &[44]),
         case("a word and an emoji", &["lunch🎉"], &[44]),
     ];
-    let mut left_out = case("a word and a superscript, left out", &[], &[42, 43, 44]);
+    let mut left_out = case("a word and a superscript, left out", &[], &[42, 43, 44, 45]);
     left_out.args.text_conditions = vec![text(EmailTextFields::Any, "pa²", true)];
     cases.push(left_out);
     search_seeded(messages, cases).await

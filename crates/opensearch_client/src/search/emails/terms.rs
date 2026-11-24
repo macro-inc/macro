@@ -73,28 +73,36 @@ fn most_tokens(term: &str) -> usize {
 }
 
 /// The fewest tokens the analyzer splits `term` into: its Unicode (UAX #29)
-/// words that hold a letter or an ASCII digit, and a run of a spaceless script
-/// counted once. The tokenizer drops the other words `unicode_words` finds,
-/// such as the `₂` of `CO₂`.
+/// words that hold a letter or a digit, the letters of a run of a spaceless
+/// script counted once and its digits once. The tokenizer drops the other
+/// words `unicode_words` finds, such as the `₂` of `CO₂`.
 fn fewest_tokens(term: &str) -> usize {
     let mut tokens = 0;
-    let mut run_counted = false;
+    let mut run_letters = false;
+    let mut run_digits = false;
     for segment in term.split_word_bounds() {
         let letters = segment.chars().any(char::is_alphabetic);
+        let digits = segment.chars().any(is_decimal_digit);
         if segment.chars().all(in_spaceless_script) {
-            if letters && !run_counted {
-                tokens += 1;
-                run_counted = true;
-            }
+            tokens += usize::from(letters && !run_letters);
+            tokens += usize::from(digits && !run_digits);
+            run_letters |= letters;
+            run_digits |= digits;
             continue;
         }
-        run_counted = false;
+        run_letters = false;
+        run_digits = false;
 
-        if letters || segment.chars().any(|c| c.is_ascii_digit()) {
-            tokens += 1;
-        }
+        tokens += usize::from(letters || digits);
     }
     tokens
+}
+
+/// Whether `c` is a digit of any script that the tokenizer keeps: UAX #29
+/// joins it to a digit after it, which it does not do to a superscript, a
+/// fraction or a circled number.
+fn is_decimal_digit(c: char) -> bool {
+    c.is_numeric() && format!("{c}1").split_word_bounds().nth(1).is_none()
 }
 
 /// Whether `term` is quoted in the text fields: a phrase in quotes or an
@@ -378,7 +386,7 @@ const MIN_PREFIX_LEN: usize = 3;
 ///
 /// A term that is one word with punctuation around it (`follow-`, `Re:`,
 /// `-lunch`) matches by that word alone ([`one_word`]), as
-/// [`child_content_query`](super::query::child_content_query) does.
+/// [`child_content_query`](crate::search::query::child_content_query) does.
 pub(super) fn build_text_query_string(terms: &[String], match_type: &str, compact: bool) -> String {
     terms
         .iter()
