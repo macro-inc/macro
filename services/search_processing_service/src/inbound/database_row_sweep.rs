@@ -41,7 +41,7 @@ pub(crate) async fn run_sweeps(
             _ = ticks.tick() => {}
         }
         round = round.wrapping_add(1);
-        let scan_index = round % ROUNDS_PER_INDEX_SCAN == 0;
+        let scan_index = round.is_multiple_of(ROUNDS_PER_INDEX_SCAN);
         let relabelled_since = chrono::Utc::now() - RELABEL_LOOKBACK;
 
         // One span per round, so each round is its own finished trace.
