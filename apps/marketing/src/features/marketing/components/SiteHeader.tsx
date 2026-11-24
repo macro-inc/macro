@@ -1,7 +1,8 @@
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 import { DocumentationNavigation } from '../../documentation/components/DocumentationNavigation';
 import '../../documentation/components/documentation-navigation.css';
-import { DEMO_BOOKING_URL, routePhoneToMobileSignup } from '../core/navigation';
+import { handleSignupLinkClick } from '../../../app/utils/utilCta';
+import { DEMO_BOOKING_URL } from '../core/navigation';
 import { preloadTutorialPreview } from '../primitives/preloadTutorialPreview';
 import { DemoBookingDialog } from './DemoBookingDialog';
 import './site-navigation.css';
@@ -204,7 +205,7 @@ export function SiteHeader(props: {
             onFocus={centerGlow}
             target="_self"
             href="/app/signup"
-            onClick={routePhoneToMobileSignup}
+            onClick={(event) => handleSignupLinkClick(event, '/app/signup')}
           >
             <span>Sign Up</span>
             <svg

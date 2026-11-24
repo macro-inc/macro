@@ -12518,6 +12518,12 @@ type NotificationInboxUnreadCount {
 	100, so present a total of 100 or more as "99+".
 	"""
 	count: Int!
+	"""
+	How many of `count` Chat shows as unread: channel rows holding an
+	unseen top-level message or a mention. Replies, reactions and pings
+	are unread in the inbox alone. Counting stops as `count`'s does.
+	"""
+	chatCount: Int!
 }
 
 """

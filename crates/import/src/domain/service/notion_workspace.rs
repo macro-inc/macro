@@ -171,10 +171,16 @@ where
         sharing: Option<NotionSharing>,
         wait: Duration,
     ) -> Result<NotionImportReport> {
-        let sharing = match (sharing, self.repo.user_team_id(user).await?) {
-            (Some(sharing), _) => sharing,
-            (None, None) => NotionSharing::Personal,
-            (None, Some(_)) => return Err(ImportError::NotionSharingRequired),
+        let sharing = if self.workspace_source == ImportSource::Hubspot {
+            // CRM records belong to the team; there is no personal copy.
+            self.check_crm_access(user).await?;
+            NotionSharing::Team
+        } else {
+            match (sharing, self.repo.user_team_id(user).await?) {
+                (Some(sharing), _) => sharing,
+                (None, None) => NotionSharing::Personal,
+                (None, Some(_)) => return Err(ImportError::NotionSharingRequired),
+            }
         };
         self.reap_stale_runs(user).await;
         self.adopt_stalled(Some(user)).await;

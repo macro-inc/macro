@@ -6,8 +6,10 @@ import { pathToFileURL } from 'node:url';
 const CONFIG = 'apps/web/tauri/desktop-release.json';
 const CEF_CONFIG = 'apps/web/tauri/desktop-cef/tauri.conf.json';
 const TARGETS = {
-  'darwin-aarch64': '-aarch64-darwin.app.tar.gz',
-  'linux-x86_64': '-x86_64-linux.AppImage',
+  'darwin-aarch64': { suffix: '-aarch64-darwin.app.tar.gz', required: true },
+  // Intel Macs: a failed or skipped Intel build leaves the feed without it.
+  'darwin-x86_64': { suffix: '-x86_64-darwin.app.tar.gz', required: false },
+  'linux-x86_64': { suffix: '-x86_64-linux.AppImage', required: true },
 };
 
 /** Map existing four-part desktop tags to sortable SemVer and OTA build IDs. */
@@ -58,8 +60,10 @@ export function createManifest(directory, tag, repository, macosMinimum) {
   if (!/^\d+\.\d+(\.\d+)?$/.test(macosMinimum ?? '')) throw new Error(`Invalid minimum macOS version: ${macosMinimum}`);
   const files = readdirSync(directory);
   const platforms = {};
-  for (const [target, suffix] of Object.entries(TARGETS)) {
-    const metadata = JSON.parse(readFileSync(join(directory, `${target}.release.json`), 'utf8'));
+  for (const [target, { suffix, required }] of Object.entries(TARGETS)) {
+    const metadataName = `${target}.release.json`;
+    if (!required && !files.includes(metadataName)) continue;
+    const metadata = JSON.parse(readFileSync(join(directory, metadataName), 'utf8'));
     if (!metadata.enabled || metadata.version !== identity.version || metadata.nativeBuild !== identity.nativeBuild) {
       throw new Error(`Packaged identity disagrees with release tag for ${target}`);
     }

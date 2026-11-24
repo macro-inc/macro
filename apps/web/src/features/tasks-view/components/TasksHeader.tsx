@@ -19,6 +19,7 @@ import { TASK_TABS } from '../constants';
 import { taskSavedViewTitle } from '../primitives/create-task-saved-view-draft';
 import { TasksCreateAction } from '../tasks-create-action';
 import { useTasksView } from '../tasks-view-context';
+import { useTasksTimeView } from '../time-view';
 import {
   TaskSavedViewActions,
   TaskSavedViewMenu,
@@ -37,11 +38,16 @@ export type TasksHeaderProps = {
 export function TaskViewBreadcrumbItem() {
   const { state, savedViews } = useTasksView();
   const projectViews = useProjectSavedViews();
+  const timeView = useTasksTimeView();
   const projectSavedView = () =>
     projectViews?.active() ? projectViews.draft.view() : undefined;
   const savedViewActive = () =>
-    state.savedViewActive || projectSavedView()?.kind === 'saved';
+    !timeView() &&
+    (state.savedViewActive || projectSavedView()?.kind === 'saved');
   const tabTitle = () => {
+    const view = timeView();
+    if (view === 'week') return t('timeTracking.myWeek');
+    if (view === 'team') return t('timeTracking.team');
     const projectView = projectSavedView();
     if (projectView?.kind === 'saved') return projectView.record.name;
     if (projectView?.kind === 'new') return t('viewMenus.newView');

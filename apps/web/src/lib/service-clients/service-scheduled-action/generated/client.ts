@@ -39,6 +39,7 @@ import type {
   RoutineCheck,
   RoutineSuggestions,
   RoutineTemplate,
+  RunReport,
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
@@ -1703,6 +1704,70 @@ export const listScheduledActionHistory = async (
   } as listScheduledActionHistoryResponse;
 };
 
+/**
+ * Stop the routine's run in progress. It ends as stopped shortly after; with no run in progress, nothing changes.
+ */
+export type stopScheduledActionRunResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type stopScheduledActionRunResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type stopScheduledActionRunResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type stopScheduledActionRunResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type stopScheduledActionRunResponseSuccess =
+  stopScheduledActionRunResponse204 & {
+    headers: Headers;
+  };
+export type stopScheduledActionRunResponseError = (
+  | stopScheduledActionRunResponse401
+  | stopScheduledActionRunResponse404
+  | stopScheduledActionRunResponse500
+) & {
+  headers: Headers;
+};
+
+export type stopScheduledActionRunResponse =
+  | stopScheduledActionRunResponseSuccess
+  | stopScheduledActionRunResponseError;
+
+export const getStopScheduledActionRunUrl = (id: string) => {
+  return `/scheduled-actions/${id}/stop`;
+};
+
+export const stopScheduledActionRun = async (
+  id: string,
+  options?: RequestInit
+): Promise<stopScheduledActionRunResponse> => {
+  const res = await fetch(getStopScheduledActionRunUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: stopScheduledActionRunResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as stopScheduledActionRunResponse;
+};
+
 export type getScheduledActionTemplateResponse200 = {
   data: RoutineTemplate;
   status: 200;
@@ -2486,6 +2551,85 @@ export const reviewSuggestions = async (
 };
 
 /**
+ * @summary A suggestion's background run says, in one line for the person, what it
+did and what it sent.
+ */
+export type reportSuggestionRunResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type reportSuggestionRunResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type reportSuggestionRunResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type reportSuggestionRunResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type reportSuggestionRunResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type reportSuggestionRunResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type reportSuggestionRunResponseSuccess =
+  reportSuggestionRunResponse200 & {
+    headers: Headers;
+  };
+export type reportSuggestionRunResponseError = (
+  | reportSuggestionRunResponse400
+  | reportSuggestionRunResponse401
+  | reportSuggestionRunResponse403
+  | reportSuggestionRunResponse404
+  | reportSuggestionRunResponse500
+) & {
+  headers: Headers;
+};
+
+export type reportSuggestionRunResponse =
+  | reportSuggestionRunResponseSuccess
+  | reportSuggestionRunResponseError;
+
+export const getReportSuggestionRunUrl = () => {
+  return `/suggestions/runs/report`;
+};
+
+export const reportSuggestionRun = async (
+  runReport: RunReport,
+  options?: RequestInit
+): Promise<reportSuggestionRunResponse> => {
+  const res = await fetch(getReportSuggestionRunUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(runReport),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportSuggestionRunResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as reportSuggestionRunResponse;
+};
+
+/**
  * @summary The caller loaded the app in their time zone.
  */
 export type recordSuggestionsSeenResponse204 = {
@@ -2939,8 +3083,9 @@ export const attachSuggestionDraft = async (
 };
 
 /**
- * @summary The caller, or their own agent, takes back dismissing a suggestion, within
-five minutes of it.
+ * @summary The caller, or their own agent, takes back dismissing a suggestion, or
+completing one by acting on it (not a finished run or an answered reply),
+within five minutes of it.
  */
 export type restoreSuggestionResponse204 = {
   data: void;
@@ -3086,4 +3231,72 @@ export const retireSuggestion = async (
     status: res.status,
     headers: res.headers,
   } as retireSuggestionResponse;
+};
+
+/**
+ * @summary The caller, or their own agent, stops an open suggestion's run without
+dismissing it.
+ */
+export type stopSuggestionRunResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type stopSuggestionRunResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type stopSuggestionRunResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type stopSuggestionRunResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type stopSuggestionRunResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type stopSuggestionRunResponseSuccess = stopSuggestionRunResponse204 & {
+  headers: Headers;
+};
+export type stopSuggestionRunResponseError = (
+  | stopSuggestionRunResponse401
+  | stopSuggestionRunResponse403
+  | stopSuggestionRunResponse404
+  | stopSuggestionRunResponse500
+) & {
+  headers: Headers;
+};
+
+export type stopSuggestionRunResponse =
+  | stopSuggestionRunResponseSuccess
+  | stopSuggestionRunResponseError;
+
+export const getStopSuggestionRunUrl = (id: string) => {
+  return `/suggestions/${id}/stop`;
+};
+
+export const stopSuggestionRun = async (
+  id: string,
+  options?: RequestInit
+): Promise<stopSuggestionRunResponse> => {
+  const res = await fetch(getStopSuggestionRunUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: stopSuggestionRunResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as stopSuggestionRunResponse;
 };

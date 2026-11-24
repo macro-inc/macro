@@ -622,3 +622,31 @@ fn a_relative_date_on_a_repeated_hour_takes_its_earlier_instant() {
         Some(Utc.with_ymd_and_hms(2026, 11, 1, 5, 30, 0).unwrap())
     );
 }
+
+#[derive(serde::Deserialize)]
+struct TypedOperator {
+    typed: String,
+    operator: bool,
+}
+
+/// The terms Mail's search field draws as operators, which its web tests read
+/// too: each is read as exactly one operator here, and each other one stays a
+/// word.
+#[test]
+fn mail_search_draws_exactly_the_operators_the_service_reads() {
+    let cases: Vec<TypedOperator> = serde_json::from_str(include_str!("typed_operators.json"))
+        .expect("typed_operators.json lists terms and whether each is an operator");
+
+    let wrong: Vec<&str> = cases
+        .iter()
+        .filter(|case| {
+            let query = read(&case.typed);
+            let read_as_operator =
+                query.operators == 1 && query.terms.is_empty() && query.excluded_words.is_empty();
+            read_as_operator != case.operator
+        })
+        .map(|case| case.typed.as_str())
+        .collect();
+
+    assert!(wrong.is_empty(), "read otherwise than listed: {wrong:?}");
+}

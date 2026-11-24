@@ -15,8 +15,14 @@ Home keeps `g h`. The retired New Home view's `/app/new-home` and its saved
 With unified notifications on, the outer rail and mobile dock show unread dots
 from the inbox's `notificationInboxUnreadUpdates` subscription. The updates
 follow reads, done, clears and new activity within about a second on each open
-tab. With unified notifications off, the buttons use their earlier presence
-checks.
+tab. Home and the bell light for any unread row and Mail for unread mail rows, as
+Notifications lists them. Chat lights only for what its sidebar shows: a channel
+row with an unseen top-level message or a mention, thread mentions included. A
+thread reply, a reaction or a ping is unread in Notifications and on Home and the
+bell without lighting Chat; an invite is listed, and is never unread. Against a
+server from before `chatCount` the client drops that field and Chat lights for
+every unread channel row. With unified notifications off, the buttons use their
+earlier presence checks.
 The notification service makes no row for activity it receives while a type
 is turned off in Settings → Notifications ("New email", say), whichever the
 flag. With unified notifications on, rows made before stay unread, and keep
@@ -26,8 +32,8 @@ setting and goes out at once.
 Unread numbers are off by default in every environment while their accuracy is
 under investigation. Set `VITE_ENABLE_NAVIGATION_UNREAD_COUNTS=true` for a
 frontend build to show numbers alongside the unified inbox. The Notifications
-button counts all unread rows, Channels counts channel rows, and Mail counts
-mail rows. Counts above 99 show as `99+`. Home keeps a dot on the desktop rail.
+button counts all unread rows, Chat counts the channel rows that light it, and
+Mail counts mail rows. Counts above 99 show as `99+`. Home keeps a dot on the desktop rail.
 On the mobile dock the Home bell opens Notifications and carries the total.
 
 Each list row is one row of the server's notification inbox
@@ -74,7 +80,9 @@ morning**, **Yesterday**, and so on), by each row's newest notification; `j`/`k`
 skip them.
 
 Click a row or press Enter to preview it beside the list, opened at the
-notification's message, thread, or comment. A conversation's composer takes
+notification's message, thread, or comment. Links and mentions in a row's
+text are part of the row: clicking or tapping one opens the row, never the
+link, and Tab skips them. A conversation's composer takes
 focus, and Esc returns to the row; see
 [composer focus and Esc](channels.md#composer-focus-and-esc). The shown row and stacked
 notification live in the URL (`sN.inbox.row`, `sN.inbox.item`), so each opened

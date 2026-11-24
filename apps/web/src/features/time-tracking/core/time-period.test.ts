@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { periodName, periodRange, weekRange } from './time-period';
+import { periodName, periodRange, weekName, weekRange } from './time-period';
 
 describe('periodRange', () => {
   it('starts a week on the calendar preference', () => {
@@ -52,5 +52,35 @@ describe('periodName', () => {
     expect(
       periodName('this-week', periodRange('this-week', today, 1), today, 'en')
     ).toMatch(/^Nov 23\s–\s29$/);
+  });
+
+  it('names last week with its year when it was in last year', () => {
+    const today = '2027-01-02';
+    expect(
+      periodName('last-week', periodRange('last-week', today, 0), today, 'en')
+    ).toMatch(/^Dec 20\s–\s26, 2026$/);
+  });
+});
+
+describe('weekName', () => {
+  it('leaves out the year for a week in this year', () => {
+    expect(
+      weekName({ from: '2026-11-23', to: '2026-11-29' }, '2026-11-24', 'en')
+    ).toMatch(/^Nov 23\s–\s29$/);
+  });
+
+  it('names a week in another year with its year', () => {
+    expect(
+      weekName({ from: '2027-01-03', to: '2027-01-09' }, '2026-11-24', 'en')
+    ).toMatch(/^Jan 3\s–\s9, 2027$/);
+    expect(
+      weekName({ from: '2025-11-23', to: '2025-11-29' }, '2026-11-24', 'en')
+    ).toMatch(/^Nov 23\s–\s29, 2025$/);
+  });
+
+  it('names a week across two years with both', () => {
+    expect(
+      weekName({ from: '2026-12-27', to: '2027-01-02' }, '2026-11-24', 'en')
+    ).toMatch(/^Dec 27, 2026\s–\sJan 2, 2027$/);
   });
 });
