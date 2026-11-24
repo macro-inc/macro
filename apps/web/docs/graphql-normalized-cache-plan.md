@@ -279,14 +279,15 @@ Protocol v10 reports tab visibility and epoch-fenced read states: `ready`,
 gets focus, and one that hides for less than a second keeps serving. After that,
 stop routing new work into that engine and ask it to drain, without waiting for
 another visible consumer. An engine
-already loading/opening first finishes startup before draining. The runtime waits
+already loading/opening first finishes startup before draining, and the time its
+page was hidden meanwhile counts. The runtime waits
 for admitted work and closes OPFS before acknowledging. Only then may another
 eligible visible page acquire the owner lock and open the existing database.
 A drain is looked at every five seconds in which some page is visible, or a newer
-build waits for it. An engine whose lock is free is ended as a silently dead one
-is. One still draining at the third look, 15 s in, is ended as if its page had
-left (`ownerEvent: drain-timed-out`), so the next owner opens the existing
-database. A frozen one keeps its lock until it thaws or its page goes, and the
+build waits for it. One whose lock is free, after a heartbeat interval for its
+`engine-drained` to arrive, and one still draining at the third look, 15 s in, are
+ended as if their page had left (`ownerEvent: drain-timed-out`), so the next owner
+opens the existing database: a drain never ends in a wipe. A frozen one keeps its lock until it thaws or its page goes, and the
 next owner then runs into the lock's own time limit.
 Clients and their subscribers stay connected; an explicit page disposal can join
 the same drain and retire that page normally. A host disposed before it is ready

@@ -1914,11 +1914,15 @@ export class CoordinatorRouter {
   ): Promise<void> {
     const core = this.coreValue;
     if (!core) return;
-    const { tabId, ownerEpoch } = route;
     const lockHeld = await this.ownerLockHeld(core.scope);
     if (!draining()) return;
     if (!lockHeld) {
-      this.endUnlockedOwner(route);
+      // Its engine closed the database, and the news of it may be on its way,
+      // or it died: the two look the same, so this is no sign of damage.
+      drain.timer = this.setTimeoutFn(() => {
+        if (this.drain === drain && this.engineRoute === route)
+          this.endStuckDrain(route, 'draining engine released its lock');
+      }, this.heartbeatIntervalMs);
       return;
     }
     drain.checks += 1;
@@ -1927,6 +1931,12 @@ export class CoordinatorRouter {
       this.scheduleDrainCheck(drain);
       return;
     }
+    this.endStuckDrain(route, 'engine drain timed out');
+  }
+
+  private endStuckDrain({ tabId, ownerEpoch }: EngineRoute, reason: string) {
+    const core = this.coreValue;
+    if (!core) return;
     this.recordOwnerLeft(ownerEpoch, {
       outcome: 'error',
       ownerEvent: 'drain-timed-out',

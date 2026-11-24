@@ -2509,7 +2509,7 @@ describe('CoordinatorRouter', () => {
       expect(router.snapshot()?.ownerEpoch).toBe(2);
     });
 
-    it('ends an engine that died before its drain', async () => {
+    it('keeps the database of an engine that died, or closed it unheard', async () => {
       const { tabB } = await drainOwner({ lockHeld: async () => false });
       // One look at its lock, then the time a leaving page gets.
       await vi.advanceTimersByTimeAsync(11);
@@ -2521,6 +2521,24 @@ describe('CoordinatorRouter', () => {
           databaseAction: 'wipe-before-open',
         }),
       ]);
+    });
+
+    it('lets an engine end its drain after its lock was found free', async () => {
+      const { router, tabA, engine } = await drainOwner({
+        lockHeld: async () => false,
+      });
+      await vi.advanceTimersByTimeAsync(11);
+      engine.receive({
+        ...version,
+        kind: 'engine-drained',
+        tabId: 'tab-a',
+        ownerEpoch: 1,
+      });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(messagesOfKind(tabA, 'terminate-engine')).toEqual([
+        expect.objectContaining({ reason: 'visibility handoff drained' }),
+      ]);
+      expect(router.snapshot()?.ownerEpoch).toBe(2);
     });
 
     it('ends an engine that died, hidden while its lock was looked for', async () => {
@@ -2539,7 +2557,10 @@ describe('CoordinatorRouter', () => {
       heartbeatProbe.resolve(false);
       await vi.advanceTimersByTimeAsync(12);
       expect(messagesOfKind(tabB, 'become-owner')).toEqual([
-        expect.objectContaining({ ownerEpoch: 2 }),
+        expect.objectContaining({
+          ownerEpoch: 2,
+          databaseAction: 'open-existing',
+        }),
       ]);
     });
 
@@ -2615,7 +2636,7 @@ describe('CoordinatorRouter', () => {
       expect(messagesOfKind(tabB, 'become-owner')).toEqual([
         expect.objectContaining({
           ownerEpoch: 2,
-          databaseAction: 'wipe-before-open',
+          databaseAction: 'open-existing',
         }),
       ]);
     }
