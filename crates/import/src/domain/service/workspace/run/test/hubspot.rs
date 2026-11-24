@@ -227,9 +227,9 @@ struct Crm {
     /// Creating the company with this name first settles this ledger row
     /// elsewhere, so the write finds it no longer importing.
     settle_on_create: Mutex<Option<(String, PgPool, String)>>,
-    /// Run once when the first pipeline is created: a teammate's write
-    /// changing the ledger while this one runs.
-    on_pipeline: Mutex<Option<(PgPool, String)>>,
+    /// When the first pipeline is created, this ledger row is linked to this
+    /// company, as a teammate's write finishing meanwhile would.
+    on_pipeline: Mutex<Option<(PgPool, Uuid, Uuid)>>,
 }
 
 impl Crm {
@@ -290,10 +290,12 @@ impl CrmImportWriter for Crm {
             .unwrap()
             .take_if(|(settle, ..)| settle == name);
         if let Some((_, pool, key)) = settle {
-            sqlx::query("UPDATE import_entity SET status = 'discarded' WHERE foreign_id = $1")
-                .bind(key)
-                .execute(&pool)
-                .await?;
+            sqlx::query!(
+                "UPDATE import_entity SET status = 'discarded' WHERE foreign_id = $1",
+                key
+            )
+            .execute(&pool)
+            .await?;
         }
         let id = Uuid::now_v7();
         self.companies
@@ -336,8 +338,14 @@ impl CrmImportWriter for Crm {
         stages: &[String],
     ) -> anyhow::Result<Uuid> {
         let hook = self.on_pipeline.lock().unwrap().take();
-        if let Some((pool, statement)) = hook {
-            sqlx::query(&statement).execute(&pool).await?;
+        if let Some((pool, row, company)) = hook {
+            sqlx::query!(
+                "UPDATE import_entity SET status = 'imported', entity_id = $1, entity_type = 'crm_company', waiting_on = NULL WHERE id = $2",
+                company.to_string(),
+                row
+            )
+            .execute(&pool)
+            .await?;
         }
         let id = Uuid::now_v7();
         self.pipelines
@@ -1052,21 +1060,17 @@ async fn a_company_a_teammate_finishes_during_the_write_is_filed_under(pool: PgP
     let acme_row = row_id(&pool, &owner, "company:10").await;
     let pipeline_row = row_id(&pool, &owner, "pipeline:default").await;
     // Acme waits on a teammate's copy when the write starts...
-    sqlx::query("UPDATE import_entity SET waiting_on = $1 WHERE id = $2")
-        .bind(pipeline_row)
-        .bind(acme_row)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query!(
+        "UPDATE import_entity SET waiting_on = $1 WHERE id = $2",
+        pipeline_row,
+        acme_row
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     // ...and the teammate's write links it while this one makes the pipeline.
     let acme = Uuid::now_v7();
-    *crm.on_pipeline.lock().unwrap() = Some((
-        pool.clone(),
-        format!(
-            "UPDATE import_entity SET status = 'imported', entity_id = '{acme}', \
-             entity_type = 'crm_company', waiting_on = NULL WHERE id = '{acme_row}'"
-        ),
-    ));
+    *crm.on_pipeline.lock().unwrap() = Some((pool.clone(), acme_row, acme));
 
     finish(planned, &owner, NotionWriteChoices::default()).await;
 
