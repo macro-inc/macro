@@ -29,7 +29,9 @@ grouped notified-at lists, after every notification patch: a new
 notification, or one marked seen, done or deleted elsewhere; or a Soup
 deletion of a channel the viewer was in; and again three
 seconds after the last one; reads start at least two seconds apart, never two at once,
-and a hidden tab reads when shown; that sort has no local projection).
+and a hidden tab reads when shown; that sort has no local projection, but a
+loaded row takes the delivered time at once from the reactive notified-at
+floor, so it moves before the read).
 Read the DM,
 return to Home, and repeat; also check a row previously marked done and a thread
 reply. Delay the Home list response while allowing single-entity hydration to
