@@ -15,10 +15,13 @@ import {
   fetchExchange,
   subscriptionExchange,
 } from '@urql/core';
+import * as Effect from 'effect/Effect';
 import { afterEach, expect, it, vi } from 'vitest';
+import { createChannelTouches } from '../channel-pages';
+import { prewarmChannels } from '../channel-prewarm';
 import { createChannelStream } from '../channel-stream';
 import { channelSyncRuntime } from '../channel-sync';
-import { COMMIT_BUDGET_MS } from '../channel-sync-runtime';
+import { CATCH_UP_RETRY_MS, COMMIT_BUDGET_MS } from '../channel-sync-runtime';
 import { CHANNEL_ID, devicePage, graphqlMessage } from './fixtures';
 
 const network = vi.hoisted(() => ({ client: undefined as Client | undefined }));
@@ -111,6 +114,7 @@ function setup({ retirable = false } = {}) {
   let push:
     | ((seq: string, message: ReturnType<typeof graphqlMessage>) => void)
     | undefined;
+  let endStream: (() => void) | undefined;
   network.client = createClient({
     url: 'https://example.invalid/graphql',
     exchanges: [
@@ -119,6 +123,9 @@ function setup({ retirable = false } = {}) {
       subscriptionExchange({
         forwardSubscription: () => ({
           subscribe(observer) {
+            // The subscription alone ends, the socket staying up.
+            endStream = () =>
+              observer.error(new Error('subscription fell behind'));
             push = (seq, message) =>
               observer.next({
                 data: {
@@ -134,6 +141,7 @@ function setup({ retirable = false } = {}) {
             return {
               unsubscribe: () => {
                 push = undefined;
+                endStream = undefined;
               },
             };
           },
@@ -201,6 +209,10 @@ function setup({ retirable = false } = {}) {
     push(seq: string, message: ReturnType<typeof graphqlMessage>) {
       if (!push) throw new Error('channel stream did not subscribe');
       push(seq, message);
+    },
+    endStream() {
+      if (!endStream) throw new Error('channel stream did not subscribe');
+      endStream();
     },
     stop() {
       stream.dispose();
@@ -693,32 +705,44 @@ it('replays an overwritten edit when a drop lands during the page commit', async
   }
 });
 
-it('leaves a failed repair to the next open instead of retrying at once', async () => {
+it('tries a failed repair again after a wait that doubles', async () => {
   vi.useFakeTimers();
   vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
   const test = setup();
+  const older = graphqlMessage(6, { content: 'older edit' });
+  const newer = graphqlMessage(6, { content: 'newer edit' });
   try {
     await vi.advanceTimersByTimeAsync(600);
-    test.requests[0].answer(delta('6', { messages: [graphqlMessage(6)] }));
+    test.requests[0].answer(delta('6', { messages: [newer] }));
     await vi.advanceTimersByTimeAsync(20);
-    // A frame at or below the sequence held asks for a repair.
-    test.push('6', graphqlMessage(6));
+    // A late frame writes an older copy and asks for a repair.
+    test.push('5', older);
     await vi.advanceTimersByTimeAsync(600);
-    expect(cursors(test)).toEqual(['5', '5']);
-    test.requests[1].fail();
-    await vi.advanceTimersByTimeAsync(5_000);
-    expect(test.requests).toHaveLength(2);
+    expect(cursors(test)).toEqual(['5', '4']);
+    expect(test.records.get(recordKey(6))).toBe('older edit');
 
-    const open = test.runtime.ensureCurrent(CHANNEL_ID);
+    test.requests[1].fail();
+    await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MS - 100);
+    expect(test.requests).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(cursors(test)).toEqual(['5', '4', '4']);
+    test.requests[2].fail();
+    // The second wait is twice the first.
+    await vi.advanceTimersByTimeAsync(2 * CATCH_UP_RETRY_MS - 100);
+    expect(test.requests).toHaveLength(3);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(cursors(test)).toEqual(['5', '4', '4', '4']);
+    test.requests[3].answer(delta('6', { messages: [newer] }));
     await vi.advanceTimersByTimeAsync(20);
-    expect(cursors(test)).toEqual(['5', '5', '5']);
-    test.requests[2].answer(delta('6', { messages: [graphqlMessage(6)] }));
-    await expect(open).resolves.toBe('applied');
+    expect(test.records.get(recordKey(6))).toBe('newer edit');
+    await expect(test.runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe(
+      'current'
+    );
+    expect(test.requests).toHaveLength(4);
   } finally {
     test.stop();
   }
 });
-
 it('reads the device again once a page commit goes unanswered', async () => {
   vi.useFakeTimers();
   vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
@@ -832,6 +856,188 @@ it('retiring the host ends an open catch-up request', async () => {
     expect(test.requests[0].signal.aborted).toBe(true);
     await expect(outcome).resolves.toBe('skipped');
     expect(test.commits).toHaveLength(0);
+  } finally {
+    test.stop();
+  }
+});
+
+it.each(['lands before', 'lands after'])(
+  'replays an edit a page overwrote when its commit, which %s the budget, goes unanswered',
+  async (when) => {
+    vi.useFakeTimers();
+    vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+    const test = setup();
+    const ack = Promise.withResolvers<void>();
+    const commit = test.host.channelTimelineCommit;
+    const read = test.host.channelTimeline;
+    const landsLate = when === 'lands after';
+    if (landsLate) {
+      // The device applies the commit only once the budget is spent, before a
+      // later read of it returns.
+      const applied = Promise.withResolvers<void>();
+      vi.spyOn(test.host, 'channelTimeline').mockImplementation(async () => {
+        await applied.promise;
+        return read();
+      });
+      vi.spyOn(test.host, 'channelTimelineCommit').mockImplementationOnce(
+        async (args: ChannelTimelineCommitArgs) => {
+          await ack.promise;
+          const result = await commit(args);
+          applied.resolve();
+          return result;
+        }
+      );
+    } else {
+      vi.spyOn(test.host, 'channelTimelineCommit').mockImplementationOnce(
+        async (args: ChannelTimelineCommitArgs) => {
+          const result = await commit(args);
+          await ack.promise;
+          return result;
+        }
+      );
+    }
+    const older = graphqlMessage(6, { content: 'older edit' });
+    const newer = graphqlMessage(6, { content: 'newer edit' });
+    // The server answers the newer edit to any cursor before 7.
+    const answerAll = async () => {
+      for (const request of test.requests.slice(1)) {
+        request.answer(
+          delta('7', { messages: request.after === '7' ? [] : [newer] })
+        );
+        await vi.advanceTimersByTimeAsync(20);
+      }
+    };
+    try {
+      await vi.advanceTimersByTimeAsync(600);
+      test.push('7', newer);
+      await vi.advanceTimersByTimeAsync(20);
+      test.requests[0].answer(delta('6', { messages: [older] }));
+      await vi.advanceTimersByTimeAsync(20);
+      expect(test.records.get(recordKey(6))).toBe('older edit');
+      await vi.advanceTimersByTimeAsync(COMMIT_BUDGET_MS + 50);
+      ack.resolve();
+      await vi.advanceTimersByTimeAsync(100);
+      await answerAll();
+      test.reconnect();
+      await vi.advanceTimersByTimeAsync(600);
+      await answerAll();
+
+      await expect(test.runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe(
+        'current'
+      );
+      expect(test.seq()).toBe('7');
+      expect(cursors(test)).toContain('6');
+      expect(test.records.get(recordKey(6))).toBe('newer edit');
+    } finally {
+      ack.resolve();
+      test.stop();
+    }
+  }
+);
+
+it('frees the channel when a reset commit goes unanswered', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+  const test = setup();
+  const ack = Promise.withResolvers<void>();
+  const commit = test.host.channelTimelineCommit;
+  const reset = vi
+    .spyOn(test.host, 'channelTimelineCommit')
+    .mockImplementationOnce(async (args: ChannelTimelineCommitArgs) => {
+      await ack.promise;
+      return commit(args);
+    });
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.requests[0].answer(delta('6', { resetRequired: true }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(reset).toHaveBeenCalledWith(
+      expect.objectContaining({ reset: true }),
+      expect.anything()
+    );
+    // The reconnect's catch-up waits for the channel, then runs.
+    test.reconnect();
+    await vi.advanceTimersByTimeAsync(COMMIT_BUDGET_MS - 100);
+    expect(cursors(test)).toEqual(['5']);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(cursors(test)).toEqual(['5', '5']);
+  } finally {
+    ack.resolve();
+    await vi.advanceTimersByTimeAsync(20);
+    test.stop();
+  }
+});
+
+it('finishes warming an offscreen channel across a stream-only drop', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+  const test = setup();
+  test.release();
+  const edit = graphqlMessage(6, { content: 'edit while away' });
+  try {
+    const warmed = Effect.runPromise(
+      prewarmChannels({
+        host: test.host,
+        runtime: test.runtime,
+        touches: createChannelTouches(),
+        listChannels: async () => [CHANNEL_ID],
+        idle: Effect.void,
+        online: () => true,
+      })
+    );
+    await vi.advanceTimersByTimeAsync(20);
+    expect(cursors(test)).toEqual(['5']);
+    test.endStream();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.runtime.connected()).toBe(false);
+    // The stream subscribes again, which ends the first ask: the channel is
+    // not on screen, so prewarm asks once more.
+    await vi.advanceTimersByTimeAsync(1_600);
+    expect(test.runtime.connected()).toBe(true);
+    expect(test.requests[0].signal.aborted).toBe(true);
+    expect(cursors(test)).toEqual(['5', '5']);
+    test.requests[1].answer(delta('6', { messages: [edit] }));
+    await expect(warmed).resolves.toMatchObject({ held: 1, failed: 0 });
+    expect(test.records.get(recordKey(6))).toBe('edit while away');
+    expect(test.seq()).toBe('6');
+  } finally {
+    test.stop();
+  }
+});
+
+it('applies an open catch-up HTTP answers while the socket is down', async () => {
+  vi.useFakeTimers();
+  const test = setup();
+  const edit = graphqlMessage(6, { content: 'edit while away' });
+  try {
+    const open = test.runtime.ensureCurrent(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(cursors(test)).toEqual(['5']);
+    test.disconnect();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.requests[0].signal.aborted).toBe(false);
+    test.requests[0].answer(delta('6', { messages: [edit] }));
+    await expect(open).resolves.toBe('applied');
+    expect(test.records.get(recordKey(6))).toBe('edit while away');
+    expect(test.seq()).toBe('6');
+  } finally {
+    test.stop();
+  }
+});
+
+it('ends a forgotten channel open catch-up when the socket connects again', async () => {
+  vi.useFakeTimers();
+  const errors = vi.spyOn(Telemetry, 'error');
+  const test = setup();
+  try {
+    const open = test.runtime.ensureCurrent(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(20);
+    test.runtime.forget([CHANNEL_ID]);
+    test.reconnect();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.requests[0].signal.aborted).toBe(true);
+    await expect(open).resolves.toBe('skipped');
+    expect(errors).not.toHaveBeenCalled();
   } finally {
     test.stop();
   }

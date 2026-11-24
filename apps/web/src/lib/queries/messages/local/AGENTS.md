@@ -26,11 +26,16 @@ TanStack path in `../` runs untouched.
   read again (`MAX_PAGE_REREADS`); the repair is left in place until a reread
   holds, so a drop or a failure on the way repairs from it. Only the request
   can be interrupted: a commit the device takes always records its sequence
-  and tells the views, and one it leaves unanswered past `COMMIT_BUDGET_MS`
-  frees the channel and makes the runtime read the sequence from the device
-  again. A catch-up that failed schedules no follow-up of its own: the next
-  open, frame or reconnect asks. `ensureCurrent`'s catch-up runs in the
-  runtime's scope, so a drop or dispose ends its request (`skipped`). A window or a thread that
+  and tells the views, and one it leaves unanswered past `COMMIT_BUDGET_MS`,
+  a reset's included, frees the channel and makes the runtime read the
+  sequence from the device again; a page commit that fails after a newer
+  frame stored records leaves a repair from the page. A failed catch-up of a
+  channel on screen is tried again after a wait that doubles from
+  `CATCH_UP_RETRY_MS` to `CATCH_UP_RETRY_MAX_MS`, unless another is already
+  scheduled. `ensureCurrent`'s catch-up runs in the runtime's scope and goes
+  on over HTTP while the socket is down; the next connection or dispose ends
+  its request (`skipped`), and prewarm then asks once more, since a reconnect
+  catches up only the channels on screen. A window or a thread that
   failed to load, and an older or newer page that failed, load again when the
   connection comes back (`watchReconnect`, started before each request, so a
   request that fails after the connection is already back loads again at

@@ -167,9 +167,16 @@ const warmChannel = (
         return 'fetched' as const;
       }
       deps.runtime.noteStoredSeq(channelId, seq);
-      // After awaits: the catch-up joins the pass's trace again.
-      await parent.run(() => deps.runtime.ensureCurrent(channelId));
-      return 'held' as const;
+      // After awaits: the catch-up joins the pass's trace again. One a new
+      // connection ended is asked once more: a reconnect catches up only the
+      // channels on screen. Ended twice, the next pass warms it.
+      for (let ask = 0; ask < 2; ask += 1) {
+        const caughtUp = await parent.run(() =>
+          deps.runtime.ensureCurrent(channelId)
+        );
+        if (caughtUp !== 'skipped') return 'held' as const;
+      }
+      return 'failed' as const;
     },
     catch: (error) => error,
   }).pipe(

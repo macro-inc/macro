@@ -10,6 +10,7 @@ import * as Cause from 'effect/Cause';
 import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
 import * as Fiber from 'effect/Fiber';
+import * as Option from 'effect/Option';
 import * as Scope from 'effect/Scope';
 import * as Semaphore from 'effect/Semaphore';
 import { channelEntryKeys } from './channel-map';
@@ -50,6 +51,12 @@ const MAX_PAGE_REREADS = 2;
  * runtime reads the sequence from the device again.
  */
 export const COMMIT_BUDGET_MS = 20_000;
+/**
+ * A failed catch-up of a channel on screen is tried again after this wait,
+ * doubled after each failure in a row up to the maximum.
+ */
+export const CATCH_UP_RETRY_MS = 2_000;
+export const CATCH_UP_RETRY_MAX_MS = 60_000;
 
 export type ChannelSyncHost = Pick<
   CacheHost,
@@ -124,8 +131,10 @@ type ChannelState = {
    */
   covered: Set<bigint>;
   debounce?: Fiber.Fiber<unknown, unknown>;
-  /** Catch-ups `ensureCurrent` runs, which a drop ends too. */
+  /** Catch-ups `ensureCurrent` runs, which a new connection ends too. */
   opens: Set<Fiber.Fiber<unknown, unknown>>;
+  /** Catch-ups that failed in a row, which set the wait before the next. */
+  failures: number;
 };
 
 export interface ChannelSyncRuntime {
@@ -231,6 +240,7 @@ export function createChannelSyncRuntime(
         pagesOut: new Set(),
         covered: new Set(),
         opens: new Set(),
+        failures: 0,
       };
       channels.set(channelId, state);
     }
@@ -305,28 +315,39 @@ export function createChannelSyncRuntime(
       // A commit runs uninterruptibly; one that would start after dispose
       // ends its fiber instead.
       if (disposed) return Effect.interrupt;
-      const pending = deps.host.channelTimelineCommit(
-        { channelId, ...args },
-        generation
-      );
-      return Effect.tryPromise(() => pending).pipe(
-        Effect.timeoutOption(COMMIT_BUDGET_MS),
-        Effect.flatMap((answer) => {
-          if (answer._tag === 'Some') return Effect.succeed(answer.value);
-          // Unanswered: what the device holds is unknown until it is read
-          // again, and the views read again once the device answers.
-          const state = stateOf(channelId);
-          state.seq = undefined;
-          state.current = false;
-          fireAndForget(notifyWhenSettled(pending, channelId), 'channel-sync');
-          return Effect.fail(new Error('channel commit went unanswered'));
-        })
+      return bounded(
+        channelId,
+        deps.host.channelTimelineCommit({ channelId, ...args }, generation)
       );
     });
 
-  const notifyWhenSettled = async (pending: Promise<unknown>, id: string) => {
+  /**
+   * Waits at most `COMMIT_BUDGET_MS` for the device to answer a commit. Left
+   * unanswered, what the device holds is unknown until it is read again: the
+   * channel forgets its sequence, and its views read again once the device
+   * answers.
+   */
+  const bounded = <A>(channelId: string, pending: Promise<A>) =>
+    Effect.tryPromise(() => pending).pipe(
+      Effect.timeoutOption(COMMIT_BUDGET_MS),
+      Effect.flatMap((answer) => {
+        if (Option.isSome(answer)) return Effect.succeed(answer.value);
+        const state = stateOf(channelId);
+        state.seq = undefined;
+        state.current = false;
+        fireAndForget(
+          whenAnswered(pending, () => {
+            if (!disposed) notifyChanged(channelId);
+          }),
+          'channel-sync'
+        );
+        return Effect.fail(new Error('channel commit went unanswered'));
+      })
+    );
+
+  const whenAnswered = async (pending: Promise<unknown>, then: () => void) => {
     await Promise.allSettled([pending]);
-    if (!disposed) notifyChanged(id);
+    then();
   };
 
   /**
@@ -400,25 +421,35 @@ export function createChannelSyncRuntime(
    * A catch-up ended: the views reread what it changed, an interrupted one's
    * commits included, and a repair a finished one left behind (its pages
    * kept landing under newer frames) runs once things settle. One that
-   * failed leaves its repair to the next open, frame or reconnect, so a
-   * server that keeps failing is not asked at the debounce's pace.
+   * failed is tried again after a wait that doubles with each failure in a
+   * row, so a server that keeps failing is not asked at the debounce's pace;
+   * one that was ended (replaced, a new connection, dispose) is not, nor one
+   * another catch-up is already scheduled after (`fiber` runs this one).
    */
   const settled = (
     channelId: string,
     exit: Exit.Exit<ChannelCatchUpOutcome, unknown>,
-    progress: { committed: boolean }
+    progress: { committed: boolean },
+    fiber: Fiber.Fiber<unknown, unknown>
   ) => {
     const state = stateOf(channelId);
     const outcome = Exit.isSuccess(exit) ? exit.value : undefined;
     if (progress.committed || (outcome && outcome !== 'current'))
       notifyChanged(channelId);
-    if (
-      outcome &&
-      isConnected &&
-      state.repairFrom !== undefined &&
-      !state.current
-    )
-      scheduleCatchUp(channelId, 'gap');
+    if (!isConnected || state.current) return;
+    if (state.debounce !== undefined && state.debounce !== fiber) return;
+    if (outcome) {
+      state.failures = 0;
+      if (state.repairFrom !== undefined) scheduleCatchUp(channelId, 'gap');
+      return;
+    }
+    if (Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)) return;
+    const wait = Math.min(
+      CATCH_UP_RETRY_MS * 2 ** state.failures,
+      CATCH_UP_RETRY_MAX_MS
+    );
+    state.failures += 1;
+    scheduleCatchUp(channelId, 'gap', wait);
   };
 
   /**
@@ -444,7 +475,9 @@ export function createChannelSyncRuntime(
           const progress = { committed: false };
           return catchUpIn(span, channelId, reason, restore, progress).pipe(
             Effect.onExit((exit) =>
-              Effect.sync(() => settled(channelId, exit, progress))
+              Effect.withFiber((fiber) =>
+                Effect.sync(() => settled(channelId, exit, progress, fiber))
+              )
             )
           );
         }),
@@ -518,6 +551,18 @@ export function createChannelSyncRuntime(
             }),
           },
           generation
+        ).pipe(
+          // Failed or unanswered, the commit may still have moved the device
+          // to the page, whose records a newer frame's may lie under: the
+          // next catch-up repairs from it.
+          Effect.tapError(() =>
+            Effect.sync(() => {
+              if (out.newestFrame === undefined || out.newestFrame <= to)
+                return;
+              if (state.repairFrom === undefined || to < state.repairFrom)
+                state.repairFrom = to;
+            })
+          )
         );
         if (committed.kind !== 'committed') break;
         progress.committed = true;
@@ -580,17 +625,19 @@ export function createChannelSyncRuntime(
     // that holds the fence too long cannot keep the channel from resetting.
     yield* Effect.tryPromise(() =>
       whileNoFills(
-        async () => {
-          try {
-            return await deps.host.channelTimelineCommit(
-              { channelId, reset: true },
-              generation
-            );
-          } finally {
-            // Counted again once it answers, for a fill that read after the
-            // fence let it go.
-            noteChannelReset(deps.host, channelId);
-          }
+        () => {
+          const pending = deps.host.channelTimelineCommit(
+            { channelId, reset: true },
+            generation
+          );
+          // Counted again once it answers, for a fill that read after the
+          // fence let it go.
+          fireAndForget(
+            whenAnswered(pending, () => noteChannelReset(deps.host, channelId)),
+            'channel-sync'
+          );
+          // Bounded like any commit, so an unanswered one frees the channel.
+          return run(bounded(channelId, pending));
         },
         { orRun: true, waitMs: RESET_FENCE_WAIT_MS }
       )
@@ -619,12 +666,16 @@ export function createChannelSyncRuntime(
       .pipe(Effect.withSpan('channel.sync.locked_catch_up'));
   };
 
-  /** Catches up a channel on screen once things settle. */
-  const scheduleCatchUp = (channelId: string, reason: 'gap' | 'reconnect') => {
+  /** Catches up a channel on screen once things settle, or after `delay`. */
+  const scheduleCatchUp = (
+    channelId: string,
+    reason: 'gap' | 'reconnect',
+    delay = CATCH_UP_DEBOUNCE_MS
+  ) => {
     const state = stateOf(channelId);
     if (state.views === 0 || disposed) return;
     if (state.debounce) Effect.runFork(Fiber.interrupt(state.debounce));
-    const wait = CATCH_UP_DEBOUNCE_MS + random() * CATCH_UP_JITTER_MS;
+    const wait = delay + random() * CATCH_UP_JITTER_MS;
     const fiber = fork(
       Effect.sleep(wait).pipe(
         Effect.andThen(() => lockedCatchUp(channelId, reason)),
@@ -755,7 +806,6 @@ export function createChannelSyncRuntime(
         // next connection and write older records over it: end it, and the
         // reconnect, or the next open, reads from the stored sequence.
         if (state.debounce) Effect.runFork(Fiber.interrupt(state.debounce));
-        for (const open of state.opens) Effect.runFork(Fiber.interrupt(open));
         state.covered.clear();
       }
     },
@@ -763,6 +813,11 @@ export function createChannelSyncRuntime(
       if (disposed) return;
       isConnected = true;
       for (const [channelId, state] of channels) {
+        // A channel opened while the socket was down still catches up over
+        // HTTP; a request it has out now could land after the new
+        // connection's frames, so it ends and the reconnect replaces it.
+        for (const open of state.opens) Effect.runFork(Fiber.interrupt(open));
+        state.failures = 0;
         if (state.views > 0 && state.seq !== null) {
           scheduleCatchUp(channelId, 'reconnect');
         }
@@ -810,8 +865,9 @@ export function createChannelSyncRuntime(
       // Taken before any await: the catch-up's span is a child of the open.
       const trace = Telemetry.captureContext();
       const state = stateOf(channelId);
-      // In the runtime's scope, so a drop or dispose ends its request too;
-      // an ended one reports `skipped`, and the reconnect catches up.
+      // In the runtime's scope, so a new connection or dispose ends its
+      // request too; an ended one reports `skipped`, and the reconnect
+      // catches up a channel on screen.
       const open = Effect.runSync(
         lockedCatchUp(channelId, 'open', trace).pipe(Effect.forkIn(scope))
       );
