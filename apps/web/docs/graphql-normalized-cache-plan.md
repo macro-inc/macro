@@ -830,13 +830,32 @@ Without the cache, writes read mounted Soup lists again
 into the cache. A row read while the engine is still opening is written only
 once it opens, in line with lists that loaded meanwhile, so list-sync reads the
 row again after the host's `whenReady()` (`isReady()` says whether it is
-open); a host without them is always ready. The reread runs after its pass, so
+open); a host without them is always ready, and a retired host
+(`createRetirableCacheHost` after `dispose()`) is never ready, so nothing
+reads into it. The reread runs after its pass, so
 later events never wait for the engine, and gives up after 60 s. A list that never shows, filters or sorts
 by unread state (the Quick Access and menu feeds) passes
 `ignoresNotifications: true`, and notification and email read-state writes
 refresh with `notificationsOnly: true`, which skips it. Such a list also reads
 its rows with `SoupPreviewPage` (the `preview` projection), so the server does
 not look up notifications for rows it never shows.
+
+A list's `staleTime` works as it does in TanStack: within `staleTime` of the
+last network answer this client gave to the same query (projection and first
+page), a list that mounts again reads with `cache-first` instead of
+`cache-and-network` (`soup/graphql/network-freshness.ts`), so menus and
+pickers that open often don't read the server each time. Writes, Soup updates
+and `refreshActiveGraphqlSoupQueries` still update it. A
+`graphqlCacheFirstEntities` lookup reads the cache only with a sort the cache
+can order (`created_at` or `updated_at`, `isLocallySortable`); any other sort
+goes to the network.
+
+A write whose answer carries no Soup row (CRM contact creates, company renames,
+domain and email sync edits, pipeline imports) reads again the mounted lists that
+can show it, narrowed by `where` (`features/crm/queries/list-refresh.ts`). A
+chat rename from another client reaches maintained lists through Soup updates,
+so it reads again only the lists the cache does not maintain
+(`unmaintainedOnly`; every list when the cache is off).
 
 `createLiveQuery` is a document-first wrapper over `createUrqlQuery`: the
 document and variables are arguments, other options pass through, and the result
