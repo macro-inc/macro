@@ -53,6 +53,7 @@ const OPEN_FAILED =
 const HOLDER_KEPT_RETIRED =
   'S2:host retired on CacheUnavailableError:owner-lock-unavailable:holder-kept';
 const UNAVAILABLE = 'L1:cache not back (unavailable, probe read not made)';
+
 /** Faults that make a tab ask for the database a tab of another build has. */
 const CONTENDING: InjectedFault[] = [
   'open-newer',
@@ -62,10 +63,13 @@ const CONTENDING: InjectedFault[] = [
   'crash-engine owner',
   'restart-coordinator',
   'hold-files',
+  'fail-assets',
+  'stall-assets',
 ];
 
 export const KNOWN_VIOLATIONS: KnownViolation[] = [
   ...known(WIPE, ['crash-engine owner'], [WIPED]),
+  ...known(WIPE, ['require-reset owner'], [WIPED]),
   ...known(
     SUPERSEDED_AT_STARTUP,
     [],
@@ -99,7 +103,7 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
     DRAIN_UNBOUNDED,
     ['freeze owner', 'hide owner'],
     [
-      'L1:cache not back (ready, probe read CacheResponseError:owner-handoff-blocked)',
+      'L1:cache not back (ready, probe draft pending, probe read CacheResponseError:owner-handoff-blocked)',
       'L2:no active engine (draining)',
       'L3:draft never settled',
     ]

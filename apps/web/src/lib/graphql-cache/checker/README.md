@@ -40,10 +40,10 @@ to lock requests are messages too. Otherwise the oldest message goes first, and
 timers fire only when no message is waiting.
 
 A schedule is skipped when it reaches a state (`World.signature`) already
-explored with as much budget left: every context has handled the same events in
-the same order, with the same messages, locks, databases and armed timers. The
-time and heartbeats are left out, which is the one approximation; the deep run
-repeats the scenarios with a single fault or delay with `prune: false`, and both
+explored with as much budget and time left: every context has handled the same
+events in the same order, with the same messages, locks and databases, and as
+long to go on every armed timer. The heartbeats a context handled are left out,
+which is the one approximation; the deep run repeats the scenarios with a single fault or delay with `prune: false`, and both
 must find the same.
 Reaching `maxRuns` or a step cap fails the test.
 
