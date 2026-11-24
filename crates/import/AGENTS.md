@@ -334,9 +334,15 @@ which the shared report reads as text). Writes go pipelines, companies,
 contacts, deals. Each object is claimed for the team, then reuses a
 `WrittenKind::CrmRecord` marker from a stopped write, then a natural key
 (company domain, the contact's primary address, the deal's HubSpot URL in
-the `Source link` of its company's entries in that pipeline, read once per
-company and pipeline per write), and only then
-creates. A contact or deal whose company is not imported yet fails and retries;
+the `Source link` of its company's entries in that pipeline, matched by its
+path since the host follows the portal's region, read once per company and
+pipeline per write), and only then
+creates. Stage labels are shortened to fit a select option, suffix included,
+and told apart without case. A company a teammate links during the write is
+read again before its contacts and deals are refused. A shutdown leaves the
+object it cut short importing for the adopting process, and only a row the
+write marked imported becomes a link target.
+A contact or deal whose company is not imported yet fails and retries;
 only a company the owner left out leaves its contacts without one
 (`ContactWithoutCompany`, counted for this review only). Left open: a crash between creating a name-only company, an
 address-less contact or a pipeline and recording its marker duplicates that
