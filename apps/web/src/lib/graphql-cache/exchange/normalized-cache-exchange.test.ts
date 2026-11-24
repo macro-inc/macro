@@ -5510,6 +5510,25 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
+    it('marks an enqueue that storage changed under as uncertain too', async () => {
+      const enqueue = host.enqueueOptimisticMutation.bind(host);
+      host.enqueueOptimisticMutation = async (args, claim) => {
+        const queued = await enqueue(args, claim);
+        host.pushGeneration({ storage: 'reset' });
+        return queued;
+      };
+      const { ops, results, forwarded } = harness(host);
+
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+
+      expect(forwarded).toHaveLength(0);
+      expect(results[0]?.error?.networkError).toMatchObject({
+        message: 'cache storage changed during enqueue',
+        errorCode: 'admitted-enqueue-uncertain',
+      });
+    });
+
     it('keeps a standby enqueue off the API while graceful disposal waits for its response', async () => {
       const enqueue = host.enqueueOptimisticMutation.bind(host);
       let releaseResponse!: () => void;

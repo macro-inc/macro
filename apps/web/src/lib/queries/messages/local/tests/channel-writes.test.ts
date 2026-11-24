@@ -1,4 +1,6 @@
 import { thrownResultErrorHasCode } from '@core/util/result';
+import { ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE } from '@graphql-cache/protocol';
+import { CombinedError } from '@urql/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   channelMessageKey,
@@ -1064,6 +1066,89 @@ describe('createChannelWrites', () => {
     expect(writes.unstoredRoots(CHANNEL_ID)).toEqual([]);
     // The rollback changed the device's copy.
     expect(runtime.notifyChanged).toHaveBeenCalledWith(CHANNEL_ID);
+  });
+
+  // The queue answered neither way: its entry, if it made one, may still go out.
+  describe('a write whose enqueue lost its answer', () => {
+    const uncertain = () =>
+      new CombinedError({
+        networkError: Object.assign(new Error('the owner left'), {
+          errorCode: ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
+        }),
+      });
+
+    it('calls a send that neither the queue nor the server has unknown', async () => {
+      const id = graphqlMessage(7).id;
+      const { writes, fetched } = setup(() => ({ error: uncertain() }));
+      const error = await failure(writes.send(send(id)));
+      expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
+      expect(fetched).toEqual([id, id, id]);
+    });
+
+    it('waits for a send the queue holds after all', async () => {
+      const stored = graphqlMessage(7);
+      const { writes, queued, settle, fetched } = setup(
+        () => ({ error: uncertain() }),
+        [stored]
+      );
+      queued.push({ transactionId: '4', uuid: stored.id });
+      const sending = writes.send(send(stored.id));
+      await settleMicrotasks();
+      expect(writes.pendingCount(CHANNEL_ID)).toBe(1);
+
+      settle({ transactionId: '4', status: 'committed' });
+      await expect(sending).resolves.toEqual(mapChannelMessage(stored));
+      expect(fetched).toEqual([]);
+    });
+
+    it('answers a send that already left the queue from the server', async () => {
+      const delivered = graphqlMessage(7);
+      const { writes } = setup(() => ({ error: uncertain() }), [], [delivered]);
+      await expect(writes.send(send(delivered.id))).resolves.toEqual(
+        mapChannelMessage(delivered)
+      );
+    });
+
+    it('takes no device copy for delivered while the queue cannot be read', async () => {
+      // The copy can be the queue's own optimistic record.
+      const id = graphqlMessage(7).id;
+      const { writes, queue } = setup(
+        () => ({ error: uncertain() }),
+        [graphqlMessage(7)]
+      );
+      queue.unreadable = true;
+      const error = await failure(writes.send(send(id)));
+      expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
+    });
+
+    it('rejects an edit the device does not show', async () => {
+      const { writes } = setup(
+        () => ({ error: uncertain() }),
+        [graphqlMessage(7)]
+      );
+      const error = await failure(
+        writes.edit({
+          channelId: CHANNEL_ID,
+          id: graphqlMessage(7).id,
+          content: 'edited',
+          mentions: [],
+          removeAttachmentIds: [],
+          addAttachments: [],
+          nonce: 'n',
+        })
+      );
+      expect(thrownResultErrorHasCode(error, 'NOT_APPLIED')).toBe(true);
+    });
+  });
+
+  it('calls a send unknown when the server’s direct answer was lost', async () => {
+    // No queue takes the write, so it went straight out and may have arrived.
+    const id = graphqlMessage(7).id;
+    const { writes } = setup(() => ({
+      error: new CombinedError({ networkError: new Error('fetch failed') }),
+    }));
+    const error = await failure(writes.send(send(id)));
+    expect(thrownResultErrorHasCode(error, 'DELIVERY_UNKNOWN')).toBe(true);
   });
 
   it('rejects a refused write with the server code', async () => {

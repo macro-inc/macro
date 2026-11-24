@@ -8,7 +8,10 @@ import {
 } from '@graphql-cache/exchange/optimistic';
 import type { CacheGenerationChange } from '@graphql-cache/host/types';
 import type { CacheHost } from '@graphql-cache/index';
-import type { MutationSettlement } from '@graphql-cache/protocol';
+import {
+  isAdmittedEnqueueUncertainError,
+  type MutationSettlement,
+} from '@graphql-cache/protocol';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
   ChannelMessageDocument,
@@ -817,7 +820,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       Write<unknown, AnyVariables>,
       'operation' | 'channelId' | 'messageId'
     >,
-    reason: 'missed' | 'retry_exhausted',
+    reason: 'missed' | 'retry_exhausted' | 'enqueue_uncertain' | 'answer_lost',
     read: (trace: TraceContext) => Promise<T>
   ): Promise<T> {
     return Telemetry.span('channel.write.recover', async (span) => {
@@ -855,6 +858,54 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     const stored = await readMessage(write.messageId);
     if (stored) return mapChannelMessage(stored);
     const delivered = await askServer(write, trace);
+    if (delivered) return delivered;
+    throw unknownDelivery();
+  }
+
+  /** The transaction the queue holds a write under; undefined when it does not. */
+  async function queuedAs(uuid: string): Promise<string | undefined> {
+    if (!deps.host.inspectMutations) throw new Error('queue cannot be listed');
+    const queue = await deps.host.inspectMutations();
+    return queue.find((entry) => entry.uuid === uuid)?.transactionId;
+  }
+
+  /**
+   * The write's answer when the queue, the server or the network lost it on
+   * the way; undefined for an answer that says what became of the write.
+   */
+  async function lostAnswer(
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'channelId' | 'messageId' | 'operation' | 'applied' | 'uuid'
+    >,
+    error: CombinedError,
+    trace: TraceContext,
+    settled: (transactionId: string) => Promise<Message>
+  ): Promise<Message | undefined> {
+    if (isAdmittedEnqueueUncertainError(error.networkError)) {
+      let transactionId: string | undefined;
+      try {
+        transactionId = await trace.run(() =>
+          recovered(write, 'enqueue_uncertain', () => queuedAs(write.uuid))
+        );
+      } catch (failure) {
+        Telemetry.error(failure, { surface: 'channel-writes' });
+        // A copy on the device can be the optimistic record of a queue that
+        // holds the write, so it says nothing about the server.
+        if (write.operation === SEND_OPERATION) throw unknownDelivery();
+        return undefined;
+      }
+      if (transactionId) return settled(transactionId);
+      return trace.run(() =>
+        recovered(write, 'missed', (recovery) => missedOutcome(write, recovery))
+      );
+    }
+    // Sent straight out, past the queue: the server may have it.
+    if (!error.networkError || write.operation !== SEND_OPERATION)
+      return undefined;
+    const delivered = await trace.run(() =>
+      recovered(write, 'answer_lost', (recovery) => askServer(write, recovery))
+    );
     if (delivered) return delivered;
     throw unknownDelivery();
   }
@@ -897,11 +948,10 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
           return answer;
         })
       );
-      const disposition = optimisticMutationDispositionOf(result);
-      if (disposition?.kind === 'queued') {
+      const settled = async (transactionId: string): Promise<Message> => {
         let outcome: 'committed' | 'missed';
         try {
-          outcome = await settlements.committed(disposition.transactionId);
+          outcome = await settlements.committed(transactionId);
         } catch (error) {
           const delivered = await traced(() =>
             recovered(write, 'retry_exhausted', (recovery) =>
@@ -917,9 +967,19 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
               missedOutcome(write, recovery)
             )
           );
-        return await stored(write);
+        return stored(write);
+      };
+      const disposition = optimisticMutationDispositionOf(result);
+      if (disposition?.kind === 'queued')
+        return await settled(disposition.transactionId);
+      const { error } = result;
+      if (error) {
+        const answer = disposition
+          ? undefined
+          : await lostAnswer(write, error, trace, settled);
+        if (answer) return answer;
+        throw refusalOf(error);
       }
-      if (result.error) throw refusalOf(result.error);
       if (!result.data) throw refusal(undefined, 'empty response');
       return mapChannelMessage(write.written(result.data).message);
     } finally {

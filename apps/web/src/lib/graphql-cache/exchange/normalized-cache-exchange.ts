@@ -77,6 +77,7 @@ import {
 import { supportsStoreReconciliation } from '../../urql-solid/reactive-selection';
 import type { CacheHost } from '../host/types';
 import {
+  ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type CacheReadPriority,
   type CacheRevision,
   type ClaimedMutation,
@@ -433,6 +434,17 @@ function operationCacheEffects(data: unknown): CacheEffect[] {
       }
       return { kind: 'write' as const, data: wrapped };
     })
+  );
+}
+
+/**
+ * Storage was replaced while an enqueue was out: the entry may be in either
+ * queue, as when an admitted enqueue loses its reply.
+ */
+function storageChangedDuringEnqueue(cause?: unknown): Error {
+  return Object.assign(
+    new Error('cache storage changed during enqueue', { cause }),
+    { errorCode: ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE }
   );
 }
 
@@ -1268,9 +1280,7 @@ export function normalizedCacheExchange(
             enqueueTelemetry.failed('storage-changed');
             return uncertainEnqueueResult(
               op,
-              new Error('cache storage changed during enqueue', {
-                cause: error,
-              })
+              storageChangedDuringEnqueue(error)
             );
           }
           if (isAdmittedEnqueueUncertainError(error)) {
@@ -1334,9 +1344,7 @@ export function normalizedCacheExchange(
               enqueueTelemetry.failed('storage-changed');
               return uncertainEnqueueResult(
                 op,
-                new Error('cache storage changed during enqueue', {
-                  cause: fallbackError,
-                })
+                storageChangedDuringEnqueue(fallbackError)
               );
             }
             options.onCacheError?.(fallbackError, op);
@@ -1351,10 +1359,7 @@ export function normalizedCacheExchange(
         }
         if (!mutationQueue.isCurrent(epoch)) {
           enqueueTelemetry.failed('storage-changed');
-          return uncertainEnqueueResult(
-            op,
-            new Error('cache storage changed during enqueue')
-          );
+          return uncertainEnqueueResult(op, storageChangedDuringEnqueue());
         }
         enqueueTelemetry.persisted({
           transactionId: enqueue.transactionId,

@@ -111,7 +111,13 @@ TanStack path in `../` runs untouched.
   (`graphql-mutation-retry.ts`): the server dedupes them by message id, while a
   replayed edit or reaction could undo a newer one; every write is still sent
   again after a transport failure. A send the queue stops retrying answers
-  the same way, from the device copy first. Recovery runs as
+  the same way, from the device copy first. A write whose enqueue lost its
+  answer (`ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE`) looks for its mutation id in
+  the queue: it waits for the one it finds, answers as a write that left the
+  queue when there is none, and a queue that cannot be read makes a send
+  `DELIVERY_UNKNOWN`, since a device copy may be the queue's own optimistic
+  record. A send that went straight out and lost the server's answer asks the
+  server, then is `DELIVERY_UNKNOWN`. Recovery runs as
   `channel.write.recover` in the write's trace, every lookup included. A page
   and each read of it again run in one `channel.load_page` span.
 - Ahead: `channel-prewarm.ts` fetches unread then recent channels while the
