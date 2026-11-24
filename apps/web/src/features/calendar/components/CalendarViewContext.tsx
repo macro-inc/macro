@@ -1,6 +1,10 @@
 import { useCalendarFocus } from '@app/features/calendar-view/calendar-focus-target';
 import { beginInteraction } from '@app/observability/flow';
 import { createAssertedContextProvider } from '@core/context/createContext';
+import {
+  createdCalendarEventId,
+  isCalendarEventCreating,
+} from '@queries/calendar/graphql/mutations';
 import { subscribeToTeamCalendarReset } from '@queries/calendar/team-cache';
 import {
   batch,
@@ -60,13 +64,26 @@ export function createCalendarEventSelection(
       setAnchor(nextAnchor);
       setOrigin(nextOrigin);
     });
-    // Opaque team projections have no direct-event navigation capability.
+    // Opaque team projections have no direct-event navigation capability,
+    // and a local id the server never issued names no event to navigate to;
+    // a created event is reported once it lands.
     onFocusedEventIdChange?.(
-      nextEvent.teamProjection ? undefined : nextEvent.eventId
+      nextEvent.teamProjection || isCalendarEventCreating(nextEvent.eventId)
+        ? undefined
+        : nextEvent.eventId
     );
   };
   const refresh = (nextEvent: CalendarEvent) => {
     if (event()?.id === nextEvent.id) setEvent(nextEvent);
+  };
+  /** Moves the selection from a created event's local id to its server id. */
+  const land = (nextEvent: CalendarEvent, nextChip?: HTMLElement) => {
+    batch(() => {
+      setEvent(() => nextEvent);
+      // A list selection stays on its row, as in `reanchor`.
+      if (nextChip && origin() === 'grid') setAnchor(nextChip);
+    });
+    onFocusedEventIdChange?.(nextEvent.eventId);
   };
   // A grid selection follows its chip when the grid replaces it. A list
   // selection stays on its row, so a chip mounting late never moves it.
@@ -74,7 +91,24 @@ export function createCalendarEventSelection(
     if (origin() === 'grid') select(nextEvent, nextAnchor);
   };
 
-  return { anchor, close, event, origin, reanchor, refresh, select };
+  return { anchor, close, event, land, origin, reanchor, refresh, select };
+}
+
+/** The event a selected create became once it landed under the server's id. */
+function landedEvent(
+  selected: CalendarEvent,
+  eventsById: ReadonlyMap<string, CalendarEvent>
+): CalendarEvent | undefined {
+  const serverId = createdCalendarEventId(selected.eventId);
+  if (!serverId) return undefined;
+  const occurrences = [...eventsById.values()].filter(
+    (event) => event.eventId === serverId
+  );
+  return (
+    occurrences.find(
+      (event) => event.occurrenceKey === selected.occurrenceKey
+    ) ?? (occurrences.length === 1 ? occurrences[0] : undefined)
+  );
 }
 
 export const [CalendarViewContextProvider, useCalendarView] =
@@ -141,6 +175,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
               focusedEventId !== previousEventId &&
               selectedEvent &&
               !selectedEvent.teamProjection &&
+              !isCalendarEventCreating(selectedEvent.eventId) &&
               selectedEvent.eventId !== focusedEventId
             ) {
               selection.close(false);
@@ -167,15 +202,25 @@ export const [CalendarViewContextProvider, useCalendarView] =
 
       const refreshSelectedEventFromPage = (
         eventsById: ReadonlyMap<string, CalendarEvent>,
-        rangeIsCurrent: boolean
+        rangeIsCurrent: boolean,
+        chipFor?: (id: string) => HTMLElement | undefined
       ) => {
         const selected = selection.event();
         if (!selected) return;
         const event = eventsById.get(selected.id);
+        const landed = event ? undefined : landedEvent(selected, eventsById);
         if (event) {
           if (isCalendarEventVisible(event, isSourceVisible))
             selection.refresh(event);
           else closeEventDetails();
+        } else if (landed) {
+          if (isCalendarEventVisible(landed, isSourceVisible))
+            selection.land(landed, chipFor?.(landed.id));
+          else closeEventDetails();
+        } else if (isCalendarEventCreating(selected.eventId)) {
+          // The server's copy replaces a created event's local one; its
+          // details stay open until the server's id is known.
+          return;
         } else if (
           (rangeIsCurrent || selected.teamProjection) &&
           selection.origin() === 'grid'

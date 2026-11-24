@@ -245,7 +245,7 @@ browser verification. The Vite boundary plugin additionally rejects app and
 workspace modules in the resolved production build.
 
 Normal navigation and explicit public endpoints are allowed: links to `/app`,
-Google sign-in, and the unauthenticated mobile email handoff do not load app UI.
+and Google sign-in do not load app UI.
 Public integration selections are preview preferences, not OAuth connections.
 Local preview data must not be presented as server-backed account state.
 The preview proceeds from integration selection directly to workspace setup;
@@ -271,7 +271,7 @@ the authenticated `/app/*` routes. In standalone dev and preview servers,
 GET/HEAD navigation to `/app` or `/app/*` redirects to the same path and query
 on `VITE_APP_BASE_URL` (default `https://macro.com`), where signup and the real
 app run. Set it to the separate `apps/web` origin for local signup testing. This prevents Vite's
-website fallback from rendering an empty shell for app links. Keep `target="_self"` on the hero and header signup links so the website router cannot intercept the app handoff; phone clicks still open `/mobile-signup`. Verify a real document navigation, not only a changed URL. Production routing
+website fallback from rendering an empty shell for app links. Keep `target="_self"` on the hero and header signup links so the website router cannot intercept the app handoff; phones open `/app/signup` too. The retired `/mobile-signup` and `/mobile-signup-sent` paths only forward to `/app/signup` with their query. In Instagram, Facebook and Threads in-app browsers, signup links go through `leaveInAppBrowser` (`utilCta`): iOS hands the page to Safari (`x-safari-https://`, iOS 17+), Android to the default browser (`intent://`), each with the ad parameters appended and loading in place if the page is still showing after 1.5 seconds; an unknown platform opens a new tab. Route new signup links through `handleCtaClick` or `handleSignupLinkClick`, never a bare `href`. Verify a real document navigation, not only a changed URL. Production routing
 is unchanged; run `apps/web` separately when testing local signup changes.
 
 `/download` is headed “Download Macro Alpha” and says “Available for macOS and
@@ -282,7 +282,14 @@ tablets (an iPad's Mac user agent is told apart by its touch screen) and
 undetected computers (and the prerendered HTML) get every installer as equal
 secondary buttons and a note pointing to the web app; Windows's note says a
 native Windows app is on the way. Platforms come from `DESKTOP_PLATFORMS` in
-`desktopDownloads.ts`, so a new installer (Intel Mac) is one entry there.
+`desktopDownloads.ts`. The Intel Mac installer is offered only once
+`seo/download-redirects.json` has `/download/mac-intel` (added after the first
+release that publishes it). Then a Mac's button is for the chip Chromium's
+architecture hint (`navigator.userAgentData`) reports, Apple silicon when the
+browser can't say, the other chip is the first “Also available for” link, and a
+browser that can't say adds "Not sure? Apple menu → About This Mac shows your
+chip." Off a Mac both read “Mac (Apple silicon)” and “Mac (Intel)”. Intel clicks
+send `platform: 'macos-intel'`.
 The buttons and links send `desktop_download_clicked` and link to
 `/download/mac` and `/download/linux`, which redirect to the current release's
 installers (`seo/download-redirects.json`), so the page never names a version

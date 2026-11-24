@@ -9,17 +9,25 @@ import { FeaturePage } from '../../features/marketing/components/FeaturePage';
 import {
   DESKTOP_DOWNLOAD_URLS,
   DESKTOP_PLATFORM_DETAILS,
-  DESKTOP_PLATFORMS,
   DESKTOP_RELEASE_URL,
+  type DesktopInstaller,
   type DesktopPlatform,
   detectPhonePlatform,
   detectVisitorPlatform,
+  installerLabel,
   installerPlatform,
+  intelMacPublished,
+  MAC_CHIP_HINT,
+  type MacArchitecture,
   PHONE_PLATFORM_DETAILS,
   PHONE_PLATFORMS,
   type PhonePlatform,
   phonePlatformOrder,
+  publishedInstallers,
+  readMacArchitecture,
+  type UserAgentData,
   type VisitorPlatform,
+  visitorInstaller,
 } from '../../features/marketing/core/desktopDownloads';
 import { analytics } from '../utils/utilAnalytic';
 import { setPageSeo } from '../utils/utilSeo';
@@ -34,6 +42,14 @@ const STORE_TABS = PHONE_PLATFORMS.map((platform) => ({
   label: PHONE_PLATFORM_DETAILS[platform].device,
 }));
 
+/** Undefined until the browser answers; `unknown` once it can't say. */
+type ChipAnswer = MacArchitecture | 'unknown' | undefined;
+
+async function loadMacArchitecture(set: (answer: ChipAnswer) => void) {
+  const browser = navigator as Navigator & { userAgentData?: UserAgentData };
+  set((await readMacArchitecture(browser.userAgentData)) ?? 'unknown');
+}
+
 export function RouteDownload() {
   setPageSeo({
     title: 'Download Macro Alpha',
@@ -41,13 +57,20 @@ export function RouteDownload() {
     path: '/download',
   });
 
+  // The Intel Mac installer is offered once the edge links to it.
+  const intel = intelMacPublished();
   const [visitor, setVisitor] = createSignal<VisitorPlatform>();
   const [phone, setPhone] = createSignal<PhonePlatform>();
+  const [chip, setChip] = createSignal<ChipAnswer>();
 
   onMount(() => {
     const { userAgent, maxTouchPoints } = navigator;
-    setVisitor(detectVisitorPlatform(userAgent, maxTouchPoints));
+    const visiting = detectVisitorPlatform(userAgent, maxTouchPoints);
+    setVisitor(visiting);
     setPhone(detectPhonePlatform(userAgent, maxTouchPoints));
+    // Only a Mac's own browser can say which chip it has. readMacArchitecture
+    // never rejects: a refused hint reads as unknown.
+    if (intel && visiting === 'macos') void loadMacArchitecture(setChip);
   });
 
   return (
@@ -88,9 +111,15 @@ export function RouteDownload() {
         <div class="downloads-action downloads-desktop-only">
           <Show
             when={installerPlatform(visitor())}
-            fallback={<AnyInstaller visitor={visitor()} />}
+            fallback={<AnyInstaller visitor={visitor()} intel={intel} />}
           >
-            {(platform) => <VisitorInstaller platform={platform()} />}
+            {(platform) => (
+              <VisitorInstaller
+                platform={platform()}
+                intel={intel}
+                chip={chip()}
+              />
+            )}
           </Show>
         </div>
 
@@ -107,9 +136,9 @@ export function RouteDownload() {
   );
 }
 
-/** A tracked link to a platform's installer. */
+/** A tracked link to an installer. */
 function InstallerLink(props: {
-  platform: DesktopPlatform;
+  platform: DesktopInstaller;
   class?: string;
   'aria-label'?: string;
   children: JSX.Element;
@@ -134,39 +163,60 @@ function InstallerLink(props: {
 }
 
 /**
- * The installer for the visitor's computer, with the other platforms as quiet
- * links so they stay reachable.
+ * The installer for the visitor's computer, with the others as quiet links so
+ * they stay reachable. On a Mac, once Intel is published, the button is for
+ * the chip the browser reports (Apple silicon when it can't say), the other
+ * chip is the first link, and a browser that can't say gets a hint on finding
+ * the chip.
  */
-function VisitorInstaller(props: { platform: DesktopPlatform }) {
+function VisitorInstaller(props: {
+  platform: DesktopPlatform;
+  intel: boolean;
+  chip: ChipAnswer;
+}) {
+  const onMac = () => props.platform === 'macos';
+  const primary = () =>
+    visitorInstaller(
+      props.platform,
+      props.chip === 'unknown' ? undefined : props.chip,
+      props.intel
+    );
   const others = () =>
-    DESKTOP_PLATFORMS.filter((platform) => platform !== props.platform);
+    publishedInstallers(props.intel).filter(
+      (installer) => installer !== primary()
+    );
+  const label = (installer: DesktopInstaller) =>
+    installerLabel(installer, props.intel, onMac());
 
   return (
     <>
       <ul class="downloads-installers" aria-label="Desktop installers">
         <li>
-          <InstallerLink platform={props.platform} class="site-nav-start">
-            Download for {DESKTOP_PLATFORM_DETAILS[props.platform].label}
+          <InstallerLink platform={primary()} class="site-nav-start">
+            Download for {label(primary())}
           </InstallerLink>
-          <span>{DESKTOP_PLATFORM_DETAILS[props.platform].requirement}</span>
+          <span>{DESKTOP_PLATFORM_DETAILS[primary()].requirement}</span>
         </li>
       </ul>
       <p class="downloads-alternatives">
         Also available for{' '}
         <For each={others()}>
-          {(platform, index) => (
+          {(installer, index) => (
             <>
               <Show when={index() > 0}> · </Show>
               <InstallerLink
-                platform={platform}
-                aria-label={`Download for ${DESKTOP_PLATFORM_DETAILS[platform].label}`}
+                platform={installer}
+                aria-label={`Download for ${label(installer)}`}
               >
-                {DESKTOP_PLATFORM_DETAILS[platform].label}
+                {label(installer)}
               </InstallerLink>
             </>
           )}
         </For>
       </p>
+      <Show when={onMac() && props.intel && props.chip === 'unknown'}>
+        <p class="downloads-alternatives">{MAC_CHIP_HINT}</p>
+      </Show>
     </>
   );
 }
@@ -176,15 +226,18 @@ function VisitorInstaller(props: { platform: DesktopPlatform }) {
  * for (Windows, ChromeOS) or one it can't detect, with the web app as the way
  * to use Macro there.
  */
-function AnyInstaller(props: { visitor: VisitorPlatform | undefined }) {
+function AnyInstaller(props: {
+  visitor: VisitorPlatform | undefined;
+  intel: boolean;
+}) {
   return (
     <>
       <ul class="downloads-installers" aria-label="Desktop installers">
-        <For each={DESKTOP_PLATFORMS}>
+        <For each={publishedInstallers(props.intel)}>
           {(platform) => (
             <li>
               <InstallerLink platform={platform} class="site-nav-demo">
-                Download for {DESKTOP_PLATFORM_DETAILS[platform].label}
+                Download for {installerLabel(platform, props.intel, false)}
               </InstallerLink>
               <span>{DESKTOP_PLATFORM_DETAILS[platform].requirement}</span>
             </li>

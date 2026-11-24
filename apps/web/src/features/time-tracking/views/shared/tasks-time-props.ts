@@ -1,6 +1,9 @@
 import type { JSX } from 'solid-js';
 import type { OpenReportTask } from '../../components/time-breakdown';
-import type { PersonLabel } from '../../components/time-key-label';
+import type {
+  PersonLabel,
+  TaskLabelParts,
+} from '../../components/time-key-label';
 import type { ProjectTimeClock } from '../../primitives/create-project-time';
 
 /** A task someone picked. */
@@ -28,6 +31,7 @@ export type TasksTimeViewProps = {
   /** The calendar's Show weekends preference. */
   showWeekends: () => boolean;
   person: PersonLabel;
+  task: TaskLabelParts;
   onOpenTask: OpenReportTask;
   pickTask: TaskPicker;
   editAccess: TaskEditAccess;
