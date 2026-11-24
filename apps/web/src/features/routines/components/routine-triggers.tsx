@@ -394,6 +394,7 @@ function AddTrigger(
         onSelect={setPending}
         renderGroup={props.renderEventGroup}
         offerEvents={props.offerEvents}
+        hiddenEvents={props.hiddenEvents}
         triggerLabel="Add trigger"
         triggerVariant={props.variant}
         triggerSize={props.size}
@@ -439,11 +440,14 @@ function switchEvent(
   // Choosing the event it already has changes nothing.
   if (eventTriggerLabel(next) === eventTriggerLabel(current)) return current;
   const sameItems = eventScopeKind(current) === eventScopeKind(next);
+  const labeled = (trigger: EventTriggerDraft) =>
+    trigger.events.includes('email.labeled');
   return {
     ...current,
     events: next.events,
     ids: sameItems ? current.ids : next.ids,
     inboxes: sameItems ? current.inboxes : undefined,
+    labels: labeled(current) && labeled(next) ? current.labels : undefined,
     ...switchGithub(current, next),
   };
 }
@@ -507,6 +511,7 @@ function EventToken(
         current={eventTriggerLabel(props.trigger)}
         renderGroup={props.renderEventGroup}
         offerEvents={props.offerEvents}
+        hiddenEvents={props.hiddenEvents}
         onSelect={(value) => {
           if (value.kind !== 'event') {
             setSchedule({ ...value, id: props.trigger.id });
@@ -589,8 +594,12 @@ function ScopeToken(
   );
 }
 
-/** "in All repositories": a GitHub trigger's selector and payload tests, in its panel. */
-function GithubToken(
+/**
+ * "in All repositories" or "with Any label": a trigger's own settings in its
+ * panel, a GitHub trigger's selector and payload tests or the labels an email
+ * label trigger watches.
+ */
+function SettingsToken(
   props: EventSlots & {
     trigger: EventTriggerDraft;
     onSave: (trigger: RoutineTriggerDraft) => void;
@@ -688,6 +697,13 @@ function TriggerSentence(
                 when={hasScope(value())}
                 fallback={
                   <Switch>
+                    {/* The labels an email label trigger watches, picked in its panel. */}
+                    <Match when={value().events.includes('email.labeled')}>
+                      <span class="flex min-w-0 max-w-full items-center gap-2">
+                        <span class="text-sm text-ink-muted">with</span>
+                        <SettingsToken {...props} trigger={value()} />
+                      </span>
+                    </Match>
                     {/* Email watches the owner's inboxes; an inbox filter narrows them. */}
                     <Match when={eventScopeKind(value()) === 'THREAD'}>
                       <span class="flex min-w-0 max-w-full items-center gap-2">
@@ -700,7 +716,7 @@ function TriggerSentence(
                     <Match when={eventScopeKind(value()) === 'GITHUB'}>
                       <span class="flex min-w-0 max-w-full items-center gap-2">
                         <span class="text-sm text-ink-muted">in</span>
-                        <GithubToken {...props} trigger={value()} />
+                        <SettingsToken {...props} trigger={value()} />
                       </span>
                     </Match>
                   </Switch>
@@ -755,6 +771,7 @@ export function RoutineTriggers(
     renderInboxesLabel: props.renderInboxesLabel,
     renderEventGroup: props.renderEventGroup,
     offerEvents: props.offerEvents,
+    hiddenEvents: props.hiddenEvents,
   });
   return (
     <Switch>
