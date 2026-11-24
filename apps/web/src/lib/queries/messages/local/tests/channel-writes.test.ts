@@ -1,5 +1,6 @@
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE } from '@graphql-cache/protocol';
+import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { CombinedError } from '@urql/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -466,6 +467,48 @@ describe('createChannelWrites', () => {
       sendChannelMessage: { root: null },
     });
     expect(writes.unstoredRoots(CHANNEL_ID)).toEqual([]);
+  });
+
+  // The device answers nothing for a root whose enqueue is still out.
+  it('counts replies to a root the queue has not stored yet', async () => {
+    const root = graphqlMessage(7);
+    const replies = [
+      graphqlMessage(8, { threadId: root.id }),
+      graphqlMessage(9, { threadId: root.id }),
+    ];
+    const { writes, calls, settle } = setup(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    const sending = writes.send(send(root.id));
+    const [first, second] = replies.map((reply) =>
+      writes.send(send(reply.id, { content: 'r', thread_id: root.id }))
+    );
+    await settleMicrotasks();
+
+    const roots = calls.slice(1).map(
+      (call) =>
+        call.context.optimisticResponse as {
+          sendChannelMessage: { root: ChannelMessageFieldsFragment | null };
+        }
+    );
+    expect(
+      roots.map(({ sendChannelMessage: { root: predicted } }) => [
+        predicted?.id,
+        predicted?.thread?.replyCount,
+        predicted?.thread?.preview.map(({ id }) => id),
+      ])
+    ).toEqual([
+      [root.id, 1, [replies[0].id]],
+      [root.id, 2, replies.map(({ id }) => id)],
+    ]);
+    // A worker clones what it is sent, which refuses a store proxy.
+    expect(() => structuredClone(roots)).not.toThrow();
+    expect(writes.unstoredRoots(CHANNEL_ID)).toMatchObject([
+      { entry: { message: { thread: { reply_count: 2 } } } },
+    ]);
+
+    settle({ transactionId: '4', status: 'committed' });
+    await Promise.allSettled([sending, first, second]);
   });
 
   it('keeps a held write pending until the queue delivers it, then reads the stored message', async () => {

@@ -36,7 +36,7 @@ import type {
 } from '@urql/core';
 import * as Deferred from 'effect/Deferred';
 import * as Effect from 'effect/Effect';
-import { createStore, produce } from 'solid-js/store';
+import { createStore, produce, unwrap } from 'solid-js/store';
 import {
   CHANNEL_MESSAGE_TYPENAME,
   channelMessageKey,
@@ -252,6 +252,8 @@ type UnstoredReply = { rootId: string; message: Message };
 
 type PendingWrite = {
   uuid: string;
+  /** The row a send predicts, its replies not counted. */
+  predicted?: ChannelMessageFieldsFragment;
   /** A root this device sent that the device does not show yet. */
   unstored?: ChannelPageEntry;
   /** A reply this device sent, shown in its thread until the device has it. */
@@ -599,6 +601,23 @@ function newestCreatedAt(
   return newest?.at;
 }
 
+/** A root being sent as it reads with the replies to it being sent too. */
+function pendingRoot(
+  writes: readonly PendingWrite[],
+  rootId: string
+): ChannelMessageFieldsFragment | undefined {
+  const root = writes.find((write) => write.uuid === rootId)?.predicted;
+  if (!root) return undefined;
+  const deleted = deletedIds(writes);
+  return writes.reduce(
+    (counted, { predicted: reply }) =>
+      reply?.threadId === rootId && !deleted.has(reply.id)
+        ? predictedRoot(counted, reply)
+        : counted,
+    root
+  );
+}
+
 interface Write<TData, TVariables extends AnyVariables> {
   operation: string;
   channelId: string;
@@ -918,6 +937,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     const settlements = watchSettlements(deps.host, retired, write.uuid);
     addPending(write.channelId, {
       uuid: write.uuid,
+      predicted: write.predicted,
       unstored: write.unstored,
       reply: write.reply,
       deletes: write.deletes,
@@ -1001,7 +1021,12 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       const predicted = predictedMessage(send, createdAt);
       const rootId = send.message.thread_id;
       // A reply also moves its root's count; the queue applies both at once.
-      const root = rootId && predicted ? await readMessage(rootId) : undefined;
+      // The device has nothing yet of a root whose own send is not stored.
+      const root =
+        rootId && predicted
+          ? ((await readMessage(rootId)) ??
+            pendingRoot(unwrap(pending)[send.channelId] ?? [], rootId))
+          : undefined;
       const entry = predicted && mapChannelTimelineEntry(predicted);
       return queuedWrite({
         operation: SEND_OPERATION,
@@ -1214,9 +1239,14 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       const writes = pending[channelId] ?? [];
       const deleted = deletedIds(writes);
       return writes
-        .flatMap((write) =>
-          write.unstored && !deleted.has(write.uuid) ? [write.unstored] : []
-        )
+        .flatMap((write) => {
+          if (!write.unstored || deleted.has(write.uuid)) return [];
+          if (!writes.some(({ reply }) => reply?.rootId === write.uuid))
+            return [write.unstored];
+          const root = pendingRoot(writes, write.uuid);
+          const entry = root && mapChannelTimelineEntry(root);
+          return [entry ? { ...write.unstored, entry } : write.unstored];
+        })
         .reverse();
     },
     unstoredReplies: (channelId, rootId) => {
