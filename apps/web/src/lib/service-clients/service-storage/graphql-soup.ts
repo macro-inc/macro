@@ -528,7 +528,13 @@ export function subscribeGraphqlSoupReconnected(
 }
 
 function notifyReconnected(): void {
-  for (const listener of reconnectListeners) listener();
+  for (const listener of reconnectListeners) {
+    try {
+      listener();
+    } catch (error) {
+      Telemetry.error(error, { 'error.source': 'graphql-soup-reconnect' });
+    }
+  }
 }
 
 function createGraphqlSoupWebSocketClient(
@@ -1019,14 +1025,24 @@ export function getGraphqlSoupClient(): Client {
       suspendOnPagehide: !native,
     });
     const lifetime = new AbortController();
-    const startSubscriptions = async (target: CacheHost) => {
+    /** Whether the host still served this page's client once they could start. */
+    const startSubscriptions = async (target: CacheHost): Promise<boolean> => {
       await initializeCrmCacheOwner();
       if (
-        cachedClient &&
-        cachedCacheHost === target &&
-        !isCacheHostGone(target)
+        !cachedClient ||
+        cachedCacheHost !== target ||
+        isCacheHostGone(target)
       )
-        subscriptionsLifecycle.replace(cachedClient, target);
+        return false;
+      subscriptionsLifecycle.replace(cachedClient, target);
+      return !target.disabled;
+    };
+    const resume = async (target: CacheHost): Promise<void> => {
+      if (!(await startSubscriptions(target))) return;
+      // Soup updates were off meanwhile, as while a socket is down.
+      subscriptionsLifecycle.connected();
+      notifyReconnected();
+      await cacheRecovery.available();
     };
     const cleanup = () => {
       unregisterHost();
@@ -1057,14 +1073,7 @@ export function getGraphqlSoupClient(): Client {
       const target = host;
       if (!target || cachedCacheHost !== target) return;
       installCrmCacheHost(target);
-      fireAndForget(
-        startSubscriptions(target).then(() => {
-          // Soup updates were off meanwhile, as while a socket is down.
-          notifyReconnected();
-          return cacheRecovery.available();
-        }),
-        'graphql-cache-recovery'
-      );
+      fireAndForget(resume(target), 'graphql-cache-recovery');
     };
     const onInitializationError = (error: Error) => {
       if (!host || cachedCacheHost !== host) return;

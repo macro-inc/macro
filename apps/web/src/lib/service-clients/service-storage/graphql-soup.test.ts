@@ -399,6 +399,7 @@ const mocks = vi.hoisted(() => {
   const plainClient = { kind: 'plain' };
   const realtimeClient = { kind: 'realtime' };
   const replaceSubscriptions = vi.fn();
+  const subscriptionsConnected = vi.fn();
   const platformFetch = vi.fn();
   const toastFailure = vi.fn();
   return {
@@ -445,6 +446,7 @@ const mocks = vi.hoisted(() => {
     plainClient,
     realtimeClient,
     replaceSubscriptions,
+    subscriptionsConnected,
     initializeCrmCacheOwner: vi.fn(async () => {}),
     cachedQuery: vi.fn(),
     platformFetch,
@@ -645,6 +647,7 @@ vi.mock('./graphql-soup-websocket', () => ({
   }),
   createGraphqlSoupSubscriptionsLifecycle: () => ({
     replace: mocks.replaceSubscriptions,
+    connected: mocks.subscriptionsConnected,
     dispose: vi.fn(() => mocks.recordSubscriptionDisposal()),
   }),
 }));
@@ -2370,12 +2373,26 @@ describe('GraphQL Soup browser cache session gate', () => {
       expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
 
       const reconnected = vi.fn();
+      const throwing = vi.fn(() => {
+        throw new Error('a listener failed');
+      });
+      soup.subscribeGraphqlSoupReconnected(throwing);
       soup.subscribeGraphqlSoupReconnected(reconnected);
+      // Gone again before its subscriptions could start: nothing to hear.
+      pause(false);
+      mocks.available();
+      pause(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(reconnected).not.toHaveBeenCalled();
+      expect(mocks.subscriptionsConnected).not.toHaveBeenCalled();
+
       pause(false);
       mocks.available();
       await vi.advanceTimersByTimeAsync(0);
 
       // What arrived meanwhile was missed, as while a socket is down.
+      expect(mocks.subscriptionsConnected).toHaveBeenCalledOnce();
+      expect(throwing).toHaveBeenCalledOnce();
       expect(reconnected).toHaveBeenCalledOnce();
       expect(soup.graphqlCacheRecoveryState()).toBe('ready');
       expect(soup.graphqlCacheEnabled()).toBe(true);
