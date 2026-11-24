@@ -27,6 +27,7 @@ import type {
   ListRoutineSuggestionsParams,
   ListScheduledActionsParams,
   ListSuggestionsParams,
+  NameTopic,
   NewSuggestion,
   RecordSuggestionsSeenParams,
   RegenerateSuggestionsParams,
@@ -2699,6 +2700,85 @@ export const recordSuggestionsSeen = async (
     status: res.status,
     headers: res.headers,
   } as recordSuggestionsSeenResponse;
+};
+
+/**
+ * @summary Name a topic suggestions may belong to, from a suggestions generation
+session, or change the name and reason of the one with its key.
+ */
+export type nameSuggestionTopicResponse200 = {
+  data: SuggestionWriteOutcome;
+  status: 200;
+};
+
+export type nameSuggestionTopicResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type nameSuggestionTopicResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type nameSuggestionTopicResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type nameSuggestionTopicResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type nameSuggestionTopicResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type nameSuggestionTopicResponseSuccess =
+  nameSuggestionTopicResponse200 & {
+    headers: Headers;
+  };
+export type nameSuggestionTopicResponseError = (
+  | nameSuggestionTopicResponse400
+  | nameSuggestionTopicResponse401
+  | nameSuggestionTopicResponse403
+  | nameSuggestionTopicResponse404
+  | nameSuggestionTopicResponse500
+) & {
+  headers: Headers;
+};
+
+export type nameSuggestionTopicResponse =
+  | nameSuggestionTopicResponseSuccess
+  | nameSuggestionTopicResponseError;
+
+export const getNameSuggestionTopicUrl = () => {
+  return `/suggestions/topics`;
+};
+
+export const nameSuggestionTopic = async (
+  nameTopic: NameTopic,
+  options?: RequestInit
+): Promise<nameSuggestionTopicResponse> => {
+  const res = await fetch(getNameSuggestionTopicUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(nameTopic),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: nameSuggestionTopicResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as nameSuggestionTopicResponse;
 };
 
 /**

@@ -8,6 +8,7 @@ import type {
   SuggestionStatus,
   SuggestionWriteOutcome as SuggestionWriteRecord,
   Target,
+  TopicName,
 } from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -40,6 +41,8 @@ export interface SuggestionChanges {
   summary?: string;
   importance?: number;
   categories?: Category[];
+  /** The key of the topic it now belongs to, named with `macro.suggestions.nameTopic` first; `null` for none. */
+  topic?: string | null;
   about?: SuggestionItem[];
   /** Only on prompt suggestions. */
   prompt?: string;
@@ -128,6 +131,11 @@ export class Suggestion {
   /** The feed's filters it shows under. */
   get categories(): Category[] {
     return this.record.categories;
+  }
+
+  /** The topic it belongs to, as `{ key, name }`; undefined without one. */
+  get topic(): TopicName | undefined {
+    return this.record.topic ?? undefined;
   }
 
   /** Where it is for the user: `dismissed` ones were turned down by the user, `retired` ones by a session. */
@@ -323,8 +331,8 @@ export class Suggestion {
   }
 
   /**
-   * Rewrite this open suggestion's title, summary, prompt, importance, categories
-   * or items, with a `reason`. Only a suggestions generation session may; its kind,
+   * Rewrite this open suggestion's title, summary, prompt, importance, categories,
+   * topic or items, with a `reason`. Only a suggestions generation session may; its kind,
    * run mode and action never change. Routine suggestions aren't rewritten.
    */
   async rewrite(changes: SuggestionChanges): Promise<SuggestionWriteOutcome> {

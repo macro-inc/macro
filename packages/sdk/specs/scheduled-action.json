@@ -2527,6 +2527,85 @@
         }
       }
     },
+    "/suggestions/topics": {
+      "put": {
+        "tags": ["suggestions"],
+        "summary": "Name a topic suggestions may belong to, from a suggestions generation\nsession, or change the name and reason of the one with its key.",
+        "operationId": "name_suggestion_topic",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NameTopic"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the topic was named, and what to fix when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestions generation session may name a topic",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the user",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/suggestions/viewed": {
       "post": {
         "tags": ["suggestions"],
@@ -4887,6 +4966,26 @@
           }
         }
       },
+      "NameTopic": {
+        "type": "object",
+        "description": "A topic a generation session names, or names again, through\n`macro.suggestions.nameTopic`.",
+        "required": ["key", "name"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Names the topic across nights; the same key updates the same topic."
+          },
+          "name": {
+            "type": "string",
+            "description": "What it is, in a few words."
+          },
+          "reason": {
+            "type": ["string", "null"],
+            "description": "Why it matters now, in one line; left out when its items don't say."
+          }
+        },
+        "additionalProperties": false
+      },
       "NamedItemKind": {
         "type": "string",
         "description": "What a text knob's value names: one of its owner's items, which a client\nmatches by name or lets them pick.",
@@ -4966,6 +5065,10 @@
           "title": {
             "type": "string",
             "description": "What to do, in a few words."
+          },
+          "topic": {
+            "type": ["string", "null"],
+            "description": "The key of the topic it belongs to, named with\n`macro.suggestions.nameTopic` first; none when left out."
           }
         },
         "additionalProperties": false
@@ -5208,6 +5311,10 @@
           "title": {
             "type": ["string", "null"],
             "description": "A new title."
+          },
+          "topic": {
+            "type": ["string", "null"],
+            "description": "The key of the topic it now belongs to, or null for none."
           }
         },
         "additionalProperties": false
@@ -6551,6 +6658,17 @@
                 "type": "string",
                 "description": "What to do, in a few words."
               },
+              "topic": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TopicName",
+                    "description": "The topic it belongs to, if any; never on a routine suggestion."
+                  }
+                ]
+              },
               "updatedAt": {
                 "type": "string",
                 "format": "date-time",
@@ -6616,6 +6734,13 @@
               "$ref": "#/components/schemas/Suggestion"
             },
             "description": "The open suggestions, at most `limit` of them."
+          },
+          "topics": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/Topic"
+            },
+            "description": "The topics the open suggestions belong to, in the order they first\nappear among them; left out when the feed was read with a `limit`."
           }
         }
       },
@@ -6824,7 +6949,7 @@
       "SuggestionsReview": {
         "type": "object",
         "description": "What a generation session reads before managing the person's suggestions:\nevery suggestion they have, open or not, and how many more it may add.",
-        "required": ["suggestions", "open", "openLimit", "newLeft"],
+        "required": ["suggestions", "topics", "open", "openLimit", "newLeft"],
         "properties": {
           "newLeft": {
             "type": "integer",
@@ -6850,6 +6975,13 @@
               "$ref": "#/components/schemas/Suggestion"
             },
             "description": "Open suggestions first, best first, then closed ones newest first. A\ndismissed suggestion's `stateChangedAt` is when the person dismissed it."
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Topic"
+            },
+            "description": "The topics those suggestions belong to, in the order they first\nappear, each with how many of its suggestions are open."
           }
         }
       },
@@ -6953,6 +7085,46 @@
           }
         ],
         "description": "A user-specific part of a shared routine."
+      },
+      "Topic": {
+        "type": "object",
+        "description": "One thing in the person's work that several suggestions may belong to,\nsuch as a customer, an event or a hire, as generation sessions named it.",
+        "required": ["key", "name", "open"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Names the topic across nights."
+          },
+          "name": {
+            "type": "string",
+            "description": "What it is, in a few words."
+          },
+          "open": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many of the listed suggestions are open and belong to it.",
+            "minimum": 0
+          },
+          "reason": {
+            "type": ["string", "null"],
+            "description": "Why it matters now, in one line, when its items say."
+          }
+        }
+      },
+      "TopicName": {
+        "type": "object",
+        "description": "A topic, as a suggestion names it.",
+        "required": ["key", "name"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Names the topic across nights."
+          },
+          "name": {
+            "type": "string",
+            "description": "What it is, in a few words."
+          }
+        }
       },
       "UnusableKnob": {
         "type": "object",

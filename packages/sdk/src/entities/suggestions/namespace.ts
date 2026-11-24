@@ -18,11 +18,34 @@ import {
 export interface SuggestionsReview {
   /** Open suggestions first, best first, then closed ones newest first. */
   readonly suggestions: Suggestion[];
+  /** The topics those suggestions belong to, in the order they first appear. */
+  readonly topics: SuggestionTopic[];
   /** Open suggestions the user has, and the most they may have. */
   readonly open: number;
   readonly openLimit: number;
   /** Suggestions this session's generation may still add or bring back. */
   readonly newLeft: number;
+}
+
+/** One thing in the user's work that suggestions are grouped under, such as a customer or an event. */
+export interface SuggestionTopic {
+  /** Names the topic across nights. */
+  readonly key: string;
+  readonly name: string;
+  /** Why it matters now, in one line; undefined without one, or once one of its suggestions was done since it was written. */
+  readonly reason: string | undefined;
+  /** How many open suggestions belong to it. */
+  readonly open: number;
+}
+
+/** A topic to name, or to name again: its key's name and reason are replaced. */
+export interface SuggestionTopicInput {
+  /** A short lowercase key, the same every night for the same topic, such as `customer:northwind`. */
+  key: string;
+  /** What it is, in one to four words. Names no one's email address, phone number or street address. */
+  name: string;
+  /** Why it matters now, in one line, likewise; left out when its suggestions' items don't say. */
+  reason?: string;
 }
 
 /** How much of the user's feed to read, and for which time zone. */
@@ -48,6 +71,8 @@ interface SuggestionBase {
   /** 0 to 100. */
   importance: number;
   categories?: Category[];
+  /** The key of the topic it belongs to, named with `nameTopic` first; none when left out. */
+  topic?: string;
   /** The items it is about, as handles the SDK returned. */
   about?: SuggestionItem[];
   /** Why, for the change log; required to bring back a suggestion the user dismissed. */
@@ -90,7 +115,7 @@ export type SuggestionInput =
  *
  * ### In a suggestions generation session
  *
- * - Read every suggestion first with `macro.suggestions.review()`. Then add with `suggest`, change with `suggestion.rewrite`, and retire with `suggestion.retire` what no longer matters. Never `list`, `accept` or `dismiss`: those are the user's, and a generation session gets a 403.
+ * - Read every suggestion first with `macro.suggestions.review()`. Then add with `suggest` (naming a topic several suggestions share with `nameTopic` first), change with `suggestion.rewrite`, and retire with `suggestion.retire` what no longer matters. Never `list`, `accept` or `dismiss`: those are the user's, and a generation session gets a 403.
  * - Each write answers `{ ok, problems }`: when `ok` is false, fix what `problems` says and try again.
  * - Name items in `about`, never in words: titles, summaries and prompts name no one's email address, phone number or street address.
  * - A reply suggestion may carry a reply draft: write it with `macro.email.createDraft({thread, replyingTo, ...}, await thread.link())`, never send it, and attach it with `suggestion.attachDraft(draft, reason)`. Write none in a thread that already holds a draft (`thread.drafts()`).
@@ -139,6 +164,10 @@ export class SuggestionNamespace {
       suggestions: review.suggestions.map((suggestion) =>
         Suggestion.from(this.client, suggestion),
       ),
+      topics: review.topics.map((topic) => ({
+        ...topic,
+        reason: topic.reason ?? undefined,
+      })),
       open: review.open,
       openLimit: review.openLimit,
       newLeft: review.newLeft,
@@ -171,6 +200,30 @@ export class SuggestionNamespace {
         await this.client.scheduledAction.addSuggestion({
           body: { ...rest, about: targets(about ?? []) },
         }),
+      ),
+    );
+  }
+
+  /**
+   * Name a topic suggestions may belong to, or replace the name and reason of
+   * the one with the same `key`. Then give suggestions its key as `topic`.
+   * Only a suggestions generation session may.
+   *
+   * @example
+   * const outcome = await macro.suggestions.nameTopic({
+   *   key: 'customer:northwind',
+   *   name: 'Northwind renewal',
+   *   reason: 'Renewal is November 30',
+   * });
+   * if (!outcome.ok) return outcome.problems;
+   */
+  async nameTopic(
+    topic: SuggestionTopicInput,
+  ): Promise<SuggestionWriteOutcome> {
+    return outcome(
+      this.client,
+      unwrap(
+        await this.client.scheduledAction.nameSuggestionTopic({ body: topic }),
       ),
     );
   }

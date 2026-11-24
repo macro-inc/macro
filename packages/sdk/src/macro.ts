@@ -635,6 +635,8 @@ export {
 export type {
   SuggestionInput,
   SuggestionsReview,
+  SuggestionTopic,
+  SuggestionTopicInput,
 } from './entities/suggestions/namespace';
 export {
   Suggestion,

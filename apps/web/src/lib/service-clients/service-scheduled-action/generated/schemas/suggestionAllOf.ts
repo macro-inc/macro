@@ -10,6 +10,7 @@ import type { Category } from './category';
 import type { SuggestionAllOfResult } from './suggestionAllOfResult';
 import type { SuggestionAllOfRun } from './suggestionAllOfRun';
 import type { SuggestionAllOfStateReason } from './suggestionAllOfStateReason';
+import type { SuggestionAllOfTopic } from './suggestionAllOfTopic';
 import type { SuggestionState } from './suggestionState';
 import type { SuggestionStatus } from './suggestionStatus';
 import type { Target } from './target';
@@ -50,6 +51,7 @@ it; false everywhere else. */
   summary: string;
   /** What to do, in a few words. */
   title: string;
+  topic?: SuggestionAllOfTopic;
   /** When it last changed. */
   updatedAt: string;
 };

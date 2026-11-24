@@ -26,6 +26,80 @@ const REPLY_SUGGESTION: SuggestionRecord = {
   isNew: false,
 };
 
+describe('Suggestion topics', () => {
+  const TOPIC = { key: 'event:offsite', name: 'Spring offsite' };
+
+  test('nameTopic sends the topic and answers what to fix', async () => {
+    const requests: unknown[] = [];
+    const namespace = new SuggestionNamespace({
+      scheduledAction: {
+        nameSuggestionTopic: async (request: unknown) => {
+          requests.push(request);
+          return { data: { ok: false, problems: ['Shorten the name'] } };
+        },
+      },
+    } as unknown as MacroClient);
+
+    const outcome = await namespace.nameTopic({ ...TOPIC, reason: 'June 2' });
+
+    expect(requests).toEqual([{ body: { ...TOPIC, reason: 'June 2' } }]);
+    expect(outcome).toMatchObject({
+      ok: false,
+      problems: ['Shorten the name'],
+    });
+  });
+
+  test('review names the topics, and each suggestion its own', async () => {
+    const review = await new SuggestionNamespace({
+      scheduledAction: {
+        reviewSuggestions: async () => ({
+          data: {
+            suggestions: [
+              { ...REPLY_SUGGESTION, topic: TOPIC },
+              REPLY_SUGGESTION,
+            ],
+            topics: [{ ...TOPIC, reason: null, open: 2 }],
+            open: 2,
+            openLimit: 30,
+            newLeft: 12,
+          },
+        }),
+      },
+    } as unknown as MacroClient).review();
+
+    expect(review.topics).toEqual([{ ...TOPIC, reason: undefined, open: 2 }]);
+    expect(review.suggestions.map((suggestion) => suggestion.topic)).toEqual([
+      TOPIC,
+      undefined,
+    ]);
+  });
+
+  test('a rewrite moves a suggestion to a topic, or out of one with null', async () => {
+    const bodies: unknown[] = [];
+    const suggestion = Suggestion.from(
+      {
+        scheduledAction: {
+          rewriteSuggestion: async ({ body }: { body: unknown }) => {
+            bodies.push(body);
+            return {
+              data: { ok: true, problems: [], suggestion: REPLY_SUGGESTION },
+            };
+          },
+        },
+      } as unknown as MacroClient,
+      REPLY_SUGGESTION,
+    );
+
+    await suggestion.rewrite({ topic: TOPIC.key, reason: 'Part of it' });
+    await suggestion.rewrite({ topic: null, reason: 'No longer' });
+
+    expect(bodies).toEqual([
+      expect.objectContaining({ topic: TOPIC.key }),
+      expect.objectContaining({ topic: null }),
+    ]);
+  });
+});
+
 describe('Suggestion drafts', () => {
   test('attachDraft sends the draft handle as its id, with the reason', async () => {
     const requests: unknown[] = [];

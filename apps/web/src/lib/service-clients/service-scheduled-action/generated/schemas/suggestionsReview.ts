@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Suggestion } from './suggestion';
+import type { Topic } from './topic';
 
 /**
  * What a generation session reads before managing the person's suggestions:
@@ -30,4 +31,7 @@ export interface SuggestionsReview {
   /** Open suggestions first, best first, then closed ones newest first. A
 dismissed suggestion's `stateChangedAt` is when the person dismissed it. */
   suggestions: Suggestion[];
+  /** The topics those suggestions belong to, in the order they first
+appear, each with how many of its suggestions are open. */
+  topics: Topic[];
 }
