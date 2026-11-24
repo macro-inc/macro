@@ -479,6 +479,7 @@ async fn refusals_carry_their_rest_status_class() {
         (PropertiesErr::NotFound, "NOT_FOUND"),
         (PropertiesErr::OptionNotFound, "NOT_FOUND"),
         (PropertiesErr::DuplicateOptionValue, "CONFLICT"),
+        (PropertiesErr::DuplicateDefinitionName, "CONFLICT"),
         (PropertiesErr::ReservedName("Tags"), "CONFLICT"),
         (PropertiesErr::PermissionDenied, "FORBIDDEN"),
         (PropertiesErr::ManagedDefinition, "FORBIDDEN"),
@@ -489,7 +490,7 @@ async fn refusals_carry_their_rest_status_class() {
         let (_, errors) = run(
             FakeWriter::refusing(err),
             &format!(
-                r#"mutation {{ deletePropertyDefinition(propertyDefinitionId: "{DEFINITION}") {{ entityId }} }}"#
+                r#"mutation {{ updatePropertyOption(input: {{ propertyDefinitionId: "{DEFINITION}", optionId: "{OPTION}", value: "Won" }}) {{ id }} }}"#
             ),
         )
         .await;
@@ -599,4 +600,58 @@ async fn a_writer_without_catalog_support_refuses() {
         errors,
         [json!({ "message": "property catalog write failed", "code": "INTERNAL" })]
     );
+}
+
+#[tokio::test]
+async fn a_delete_of_something_already_gone_answers_with_its_deletion() {
+    // A queued delete whose reply was lost is sent again; the row is gone by then.
+    for (err, mutation, field, type_name, id) in [
+        (
+            PropertiesErr::NotFound,
+            format!(
+                r#"mutation {{ deletePropertyDefinition(propertyDefinitionId: "{DEFINITION}") {{ graphqlTypeName entityId }} }}"#
+            ),
+            "deletePropertyDefinition",
+            "GraphqlPropertyDefinition",
+            DEFINITION,
+        ),
+        (
+            PropertiesErr::OptionNotFound,
+            format!(
+                r#"mutation {{ deletePropertyOption(propertyDefinitionId: "{DEFINITION}", optionId: "{OPTION}") {{ graphqlTypeName entityId }} }}"#
+            ),
+            "deletePropertyOption",
+            "GraphqlPropertyOption",
+            OPTION,
+        ),
+        (
+            PropertiesErr::NotFound,
+            format!(
+                r#"mutation {{ deletePropertyOption(propertyDefinitionId: "{DEFINITION}", optionId: "{OPTION}") {{ graphqlTypeName entityId }} }}"#
+            ),
+            "deletePropertyOption",
+            "GraphqlPropertyOption",
+            OPTION,
+        ),
+    ] {
+        let (data, errors) = run(FakeWriter::refusing(err), &mutation).await;
+        assert!(errors.is_empty(), "{mutation}: {errors:?}");
+        assert_eq!(
+            data[field],
+            json!({ "graphqlTypeName": type_name, "entityId": id.to_string() })
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_delete_refused_for_another_reason_still_fails() {
+    let (_, errors) = run(
+        FakeWriter::refusing(PropertiesErr::SystemPropertyNotModifiable),
+        &format!(
+            r#"mutation {{ deletePropertyDefinition(propertyDefinitionId: "{DEFINITION}") {{ entityId }} }}"#
+        ),
+    )
+    .await;
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0]["code"], json!("FORBIDDEN"));
 }

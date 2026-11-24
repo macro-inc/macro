@@ -287,6 +287,7 @@ fn catalog_error(err: PropertiesErr) -> async_graphql::Error {
         | PropertiesErr::OptionNotFound
         | PropertiesErr::EntityPropertyNotFound => "NOT_FOUND",
         PropertiesErr::DuplicateOptionValue
+        | PropertiesErr::DuplicateDefinitionName
         | PropertiesErr::ConflictingTeamLabel(_)
         | PropertiesErr::ReservedName(_) => "CONFLICT",
         PropertiesErr::PermissionDenied
@@ -302,6 +303,18 @@ fn catalog_error(err: PropertiesErr) -> async_graphql::Error {
     };
     async_graphql::Error::new(err.to_string())
         .extend_with(|_, extensions| extensions.set("code", code))
+}
+
+/// A delete whose target is gone has the outcome it asked for. Not found also
+/// covers a row the caller does not own; both answer alike, as both 404 alike.
+fn already_gone(err: PropertiesErr) -> Result<(), PropertiesErr> {
+    match err {
+        PropertiesErr::NotFound | PropertiesErr::OptionNotFound => {
+            tracing::info!(error = %err, "catalog delete found nothing to delete");
+            Ok(())
+        }
+        err => Err(err),
+    }
 }
 
 /// A malformed catalog write, refused before it reaches the domain.
@@ -704,6 +717,8 @@ where
     }
 
     /// Delete a property definition and identify its normalized cache record.
+    /// A definition the caller cannot find answers as deleted, so a queued
+    /// delete sent again after a lost reply settles instead of failing.
     #[tracing::instrument(
         skip_all,
         err(Debug),
@@ -724,6 +739,7 @@ where
         writer
             .delete_property_definition(definition_id)
             .await
+            .or_else(already_gone)
             .map_err(catalog_error)?;
         Ok(GraphqlCacheDeletion::new(
             "GraphqlPropertyDefinition",
@@ -801,7 +817,8 @@ where
         Ok(option.into())
     }
 
-    /// Delete one option and identify its normalized cache record.
+    /// Delete one option and identify its normalized cache record. An option
+    /// or definition the caller cannot find answers as deleted, as above.
     #[tracing::instrument(
         skip_all,
         err(Debug),
@@ -829,6 +846,7 @@ where
         writer
             .delete_property_option(definition_id, option_uuid)
             .await
+            .or_else(already_gone)
             .map_err(catalog_error)?;
         Ok(GraphqlCacheDeletion::new(
             "GraphqlPropertyOption",
