@@ -33,8 +33,9 @@ calendar account metadata and other conferencing providers keep their original U
 - Account/calendar checkboxes control visibility, not availability. Swatches
   change local colors. Settings and Busy calendars use separate pages.
 - Desktop horizontal trackpad gestures move one period per gesture; vertical
-  scrolling does not change periods. Buttons ignore presses during a slide.
-  Idle repeated presses reach their cumulative target without waiting for data.
+  scrolling does not change periods. Period slides use the shared ease-out curve
+  over 140ms on desktop and phone. Buttons ignore presses during a slide; rapid
+  presses after it finishes jump to their cumulative target without waiting for data.
 - Phone swipes settle before recycling pages. Slow drags must pass halfway;
   clear flicks can commit sooner. Plain taps must not leave paging stuck.
   Event drag/resize locks horizontal paging.
@@ -46,8 +47,9 @@ calendar account metadata and other conferencing providers keep their original U
 ## Month and Agenda
 
 Phone Month uses equal-height week rows above the bottom controls. All-day and
-multi-day spans precede stacked timed entries. Times follow titles and can wrap.
-Adjacent-month dates are muted, but events remain readable. The final fitting row
+multi-day spans precede stacked timed entries. Every pill is one fixed-height line;
+times stay beside truncated titles without wrapping. Adjacent-month dates are muted,
+but events remain readable. The final fitting row
 becomes `+N` when events overflow. Tap a day/count for its complete event sheet;
 select an event for details, the date heading for Day, or Add for a new event.
 Desktop Month shares its event presentation between grid and overflow popover.
@@ -57,12 +59,11 @@ Arrows move one week; scrolling loads older/newer windows within supported dates
 Loading, errors, empty days, and unavailable dates are distinct. Confirmed empty
 neighbors share a range heading, except Today. Date navigation anchors that heading.
 Late data and prepends preserve the visible day; equal-height event moves remain
-an anchoring limit. Rows open details; RSVP lives in details and Needs reply.
+an anchoring limit. Rows open details; RSVP lives in details.
 Back from Search or Settings restores date and scroll position, including midnight.
 
-Needs reply shows bounded unanswered invitations with recurring-scope and retry
-controls. Failed refreshes retain loaded rows. Account changes and permission
-invalidation never reuse another account's data.
+Upcoming events retains the main sidebar's chronological event rows and actions,
+including meetings in progress, rather than a separate unanswered-invitation list.
 
 ## Date pickers and shortcuts
 
@@ -407,7 +408,7 @@ Calendar button beside the switch, with a sample `23m` pill only while it is on.
 The calendar header has a `Booking links` dropdown. Select an active link to
 copy it. The `Manage booking links` footer opens the Scheduling workspace, even
 while links load or when none are active. At narrow desktop pane widths, the
-dropdown moves from the header into the calendar sidebar above `Needs reply`
+dropdown moves from the header into the calendar sidebar above `Upcoming events`
 and its menu matches the trigger's width. Phones retain the header dropdown
 because they do not expose that sidebar. The calendar automatically sets up a
 default personal link for a new profile. Public
@@ -449,7 +450,7 @@ failing`, under the `scheduling.busy_time` span, carry `calendar_id`,
 
 The standalone Calendar view has a left navigation sidebar. The `New` menu
 above the mini calendar offers `Event`, feature-gated `Call`, and `Booking link`.
-An icon-only shortcut in the `Needs reply` header opens the
+An icon-only shortcut in the `Upcoming events` header opens the
 availability dialog. Start/end time selectors and a weekend switch sit above
 copy ranges that wrap on narrow screens. The dialog checks all ranges using one
 calendar-occurrence query; ranges without free time are disabled, show an X
@@ -459,7 +460,7 @@ Copying rechecks the occurrences and current time, so changes since opening do
 not enter the copied text. The option keeps its width while a left spinner and
 `Copying…` crossfade to `Copied` with a green check icon; the button keeps its
 neutral styling. Reduced-motion preferences skip the crossfade and spin.
-Collapsible `Needs reply` and `Calendars` sections follow. Connected accounts
+The main `Upcoming events` list and the `Calendars` section follow. Connected accounts
 start expanded, with trailing disclosure buttons and animated collapse. Calendar
 rows align with their account controls and use 16px visibility checkboxes before
 the swatch and label. Account and individual-calendar visibility remain separate;
@@ -478,25 +479,15 @@ lives in the `Booking links` dropdown rather than a separate footer shortcut.
 On a tablet the footer adds `--mobile-content-inset-bottom` to its padding, so
 `Settings` sits above the floating dock instead of under it.
 An account checkbox toggles its calendars together in one update. The checkbox
-responds immediately; Needs reply filters hidden sources immediately, while each grid
+responds immediately; Upcoming events filters hidden sources, while each grid
 page refreshes on deferred tasks rather than re-rendering all pages during the click.
 The sidebar can be resized or collapsed on desktop; in narrow desktop panes
 it opens over the grid. Phones use the shell's left navigation drawer.
 
-`Needs reply` shows up to five actionable unanswered invitations from the existing
-progressive upcoming-calendar source. It searches 14 days first and extends through
-30, 90, 180, 365, then 729 days only while fewer than five invitations match. This is
-a bounded upcoming list, not an all-time invitation count. Each row opens the event
-or sends `Yes` / `No` through the shared RSVP mutation. Desktop sidebar replies
-use compact 24px Yes/No controls while retaining the shared pending indicator,
-recurring-scope choice, and error feedback. Recurring invitations ask `This event`
-or `All events`; a responding row stays visible until the request settles so its
-selection, pending state, and failure remain visible. Failed writes
-restore the invitation. Switching accounts or hiding its source removes the row
-immediately. Loading, empty, and error/retry states are distinct.
-A failed background refresh keeps the last loaded invitations visible alongside
-an error and Retry, including invitations from later search windows. An initial
-failure or an uncached account/date range shows no retained invitations.
+`Upcoming events` uses the existing main sidebar component and progressive
+upcoming-event source. It includes meetings in progress and preserves event
+selection, calendar colors, Join actions, and loading/error states. Hidden
+calendars, cancelled events, and declined invitations are omitted.
 The phone header has four separate islands: the shell's menu toggle, month and
 caret, Today, and circular Search. There is no large title beneath them. The menu
 opens the same shell `NavigationSheet` used by Email, with Calendar in the fixed
@@ -594,7 +585,7 @@ All Join buttons use a camera icon. Generated Macro invitation paragraphs are
 hidden from event descriptions. Google Meet URLs in an event's location or
 description also supply Join actions. Recurring results wait for matching
 occurrence details before showing Join. Selecting a result preserves the search
-text. Availability lives in the desktop sidebar's Needs reply section and
+text. Availability lives in the desktop sidebar's Upcoming events header and
 in the mobile header.
 
 Desktop date navigation, Day/Week/Month/Agenda tabs, and search occupy the first
@@ -611,11 +602,12 @@ while room allows, then becomes an icon. The loading skeleton uses the same
 two-row desktop geometry.
 Touch devices use separate shell menu, month selector, Today, and Search islands.
 Search opens `/app/calendar/search` as a full page, with Back and an initially
-focused, full-width search field below its header island and safe area. It reuses
-the same filters, debounced query,
-loading/empty/error states, result actions, and read-only out-of-range preview as
-the desktop popover. Results are full-width rows. Back restores the previous
-calendar view, date, and grid scroll or Agenda day offset. Direct phone links
+focused, full-width search field below its header island and safe area, padded
+horizontally to match the content. It reuses the same filters, debounced query,
+loading/error states, result actions, and read-only out-of-range preview as the
+desktop popover. The shared empty state centers in the remaining space and offers
+Create event (using the entered query as title) and Clear search. Results are full-width
+rows. Back restores the previous calendar view, date, and grid scroll or Agenda day offset. Direct phone links
 fall back to the preferred Calendar view; desktop links return to Calendar,
 whose header retains its popover search. The right island has no separate
 create or call buttons.
