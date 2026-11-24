@@ -276,8 +276,9 @@ export function ContactEmailList(props: ContactEmailProps) {
   const expandedFrom = (element: HTMLElement | undefined) =>
     open() && !!element && anchor() === element;
 
+  // One change at a time: a row action still saving keeps the editor shut.
   const openEditor = (element: HTMLElement) => {
-    if (editing.saving()) return;
+    if (editing.saving() || request.saving()) return;
     request.clearError();
     editing.clearError();
     setAnchor(element);
