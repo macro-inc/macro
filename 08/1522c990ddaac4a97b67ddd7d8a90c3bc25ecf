@@ -1,0 +1,19 @@
+apps/web/tests/native/runner.ts
+  s_9d3802eede733c::t_0713ff88a2fe78 277-308
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "081522c990ddaac4a97b67ddd7d8a90c3bc25ecf",
+  "prompts": {},
+  "sessions": {
+    "s_9d3802eede733c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d99d634e-e651-4b79-9c72-0c70c17501c1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
