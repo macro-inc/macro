@@ -300,6 +300,39 @@ async fn export_lists_entries_oldest_first(pool: PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("time_reports"))
+)]
+async fn tasks_without_time_in_the_period_sum_to_zero(pool: PgPool) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let december = TimePeriod::new(
+        NaiveDate::from_ymd_opt(2026, 12, 1).unwrap(),
+        NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(),
+    )?;
+    for people in [None, Some(&[user(VIEWER)][..])] {
+        let sums = repo
+            .summary_sums(
+                ReportFilter {
+                    task_ids: &tasks(&[BRIEF, REVIEW]),
+                    people,
+                    period: december,
+                },
+                TimeBreakdown::new(TimeGrouping::Person, Some(TimeGrouping::Day))?,
+                ReportRead::Latest,
+            )
+            .await?;
+        assert_eq!(
+            sums,
+            [SummarySum::Total {
+                minutes: 0,
+                task_count: 0,
+            }]
+        );
+    }
+    Ok(())
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn every_read_runs_under_a_statement_timeout_and_its_own_plan(
     pool: PgPool,

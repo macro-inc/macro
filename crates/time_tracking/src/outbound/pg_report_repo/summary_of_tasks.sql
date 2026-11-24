@@ -30,7 +30,8 @@ SELECT
     then_user,
     then_task,
     then_day,
-    sum(minutes)::bigint AS "minutes!",
+    -- The whole period's set has a row even when no entry matched.
+    COALESCE(sum(minutes), 0)::bigint AS "minutes!",
     count(DISTINCT task_id)::bigint AS "task_count!"
 FROM keyed
 GROUP BY GROUPING SETS (
