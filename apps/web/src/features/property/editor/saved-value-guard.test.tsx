@@ -151,7 +151,6 @@ const SAVED_AREAS: Property = {
   displayName: 'Areas',
   isMultiSelect: true,
   owner: { scope: 'team', team_id: 'team' },
-  options: AREAS.options,
   createdAt: new Date(0),
   updatedAt: new Date(0),
   valueType: 'SELECT_STRING',

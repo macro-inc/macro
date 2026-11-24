@@ -1387,11 +1387,13 @@ function PropertyValueEditor(props: {
     if ('value' in property) return property;
 
     const properties = props.properties ?? entityPropertiesQuery.data ?? [];
-    return (
-      properties.find(
-        (entityProperty) => entityProperty.propertyDefinitionId === property.id
-      ) ?? property
+    const saved = properties.find(
+      (entityProperty) => entityProperty.propertyDefinitionId === property.id
     );
+    if (!saved) return property;
+
+    // An item's own copy of a custom property carries no options.
+    return { ...saved, options: saved.options ?? property.options };
   });
 
   // A definition says nothing about the value a saved item already holds, so
