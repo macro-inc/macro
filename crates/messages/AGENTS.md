@@ -106,7 +106,10 @@ channel message tools change a message as their bot only when
   Channel counter appends retain a five-second lock-timeout guard; ordinary
   statement cancellation remains a repository error.
 - Channel change rows retain 30 days of history; the calendar outbox worker
-  runs their bounded hourly prune even when calendar sync is disabled. Changes
+  runs their hourly prune even when calendar sync is disabled. A prune round
+  runs at most ten 10,000-row transactions and reports `more`; the worker then
+  runs the next round on its next pass, so a backlog never stalls its other
+  work. One pruner runs at a time (advisory lock); never add `SKIP LOCKED`. Changes
   pages cover 200 rows; a pruned position, a reset row, or a lag over 1,000
   requires a fresh snapshot. Realtime pushes carry the committed sequence.
 - `MessageKind::CallRoot` messages stand for a channel call. Only `ensure_call_root` creates them, and

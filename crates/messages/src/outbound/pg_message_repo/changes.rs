@@ -149,6 +149,16 @@ impl ChannelChangeLogPruner for PgMessageRepository {
             .execute(&mut *tx)
             .await
             .map_err(database_error)?;
+        // One pruner at a time. Two would pick the same oldest rows, and the
+        // second would wait on the first's row locks only to remove nothing.
+        // Skipping locked rows instead could remove newer rows while older
+        // ones stay, and a channel's retained floor is its oldest row.
+        if !channel_change_db_utils::try_lock_prune_in(&mut tx)
+            .await
+            .map_err(database_error)?
+        {
+            return Ok(0);
+        }
         let removed = channel_change_db_utils::prune_in(&mut tx, cutoff, limit)
             .await
             .map_err(database_error)?;

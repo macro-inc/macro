@@ -23,6 +23,8 @@ pub const MAX_CHANNEL_CHANGE_LAG: usize = 1000;
 pub const CHANGE_LOG_RETENTION: chrono::Duration = chrono::Duration::days(30);
 /// Most rows removed by one retention transaction.
 pub const CHANGE_LOG_PRUNE_BATCH: usize = 10_000;
+/// Most retention transactions one round runs before it returns to its host.
+pub const CHANGE_LOG_PRUNE_ROUND_BATCHES: usize = 10;
 
 /// The current state a log row asks a client to load.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,6 +114,15 @@ pub trait ChannelChangeLogPruner: Send + Sync + 'static {
     ) -> impl Future<Output = Result<usize, MessageError>> + Send;
 }
 
+/// What one retention round removed, and whether old rows remain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelPruneRound {
+    /// Rows removed by this round.
+    pub removed: usize,
+    /// The round stopped at its batch limit; run another one soon.
+    pub more: bool,
+}
+
 /// Removes old channel changes without resetting their monotonic counters.
 pub struct ChannelChangeLogRetention<R> {
     repository: R,
@@ -123,23 +134,33 @@ impl<R: ChannelChangeLogPruner> ChannelChangeLogRetention<R> {
         Self { repository }
     }
 
-    /// Prune everything older than retention as of `now`, in bounded batches.
-    #[tracing::instrument(name = "messages.prune_channel_changes", skip_all, fields(removed = tracing::field::Empty), err)]
-    pub async fn run_once(&self, now: DateTime<Utc>) -> Result<usize, MessageError> {
+    /// Prune rows older than retention as of `now`, in bounded batches.
+    ///
+    /// A round runs at most [`CHANGE_LOG_PRUNE_ROUND_BATCHES`] transactions, so
+    /// a backlog never keeps the loop that hosts it from its other work; the
+    /// host runs the next round soon while `more` is set.
+    #[tracing::instrument(name = "messages.prune_channel_changes", skip_all, fields(removed = tracing::field::Empty, more = tracing::field::Empty), err)]
+    pub async fn run_once(&self, now: DateTime<Utc>) -> Result<ChannelPruneRound, MessageError> {
         let cutoff = now - CHANGE_LOG_RETENTION;
-        let mut removed = 0;
-        loop {
+        let mut round = ChannelPruneRound {
+            removed: 0,
+            more: true,
+        };
+        for _ in 0..CHANGE_LOG_PRUNE_ROUND_BATCHES {
             let batch = self
                 .repository
                 .prune_channel_change_log(cutoff, CHANGE_LOG_PRUNE_BATCH)
                 .await?;
-            removed += batch;
+            round.removed += batch;
             if batch < CHANGE_LOG_PRUNE_BATCH {
-                tracing::Span::current()
-                    .record("removed", i64::try_from(removed).unwrap_or(i64::MAX));
-                return Ok(removed);
+                round.more = false;
+                break;
             }
         }
+        let span = tracing::Span::current();
+        span.record("removed", i64::try_from(round.removed).unwrap_or(i64::MAX));
+        span.record("more", round.more);
+        Ok(round)
     }
 }
 

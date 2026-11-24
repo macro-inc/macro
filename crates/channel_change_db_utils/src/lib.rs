@@ -11,7 +11,7 @@ mod read;
 mod test;
 
 pub use append::{append_activities_in, append_in};
-pub use prune::prune_in;
+pub use prune::{prune_in, try_lock_prune_in};
 pub use read::{current_seq, read_log};
 use uuid::Uuid;
 
