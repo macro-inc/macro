@@ -74,7 +74,9 @@ TanStack path in `../` runs untouched.
 ## Gotchas
 
 - Never commit coverage or a sequence before the records are stored:
-  `queryChannelNetwork`'s `cached` settles only then.
+  `queryChannelNetwork`'s `cached` settles only then. When the cache refuses
+  a read because the session changed after it was sent, `cached` fails as a
+  session change (`cacheSessionChanged`) and the view reads again.
 - Capture `cacheSessionGeneration` before a fetch and pass it to the commit; a
   later session must not store what an earlier one read.
 - A read touches a channel at most every 6 hours (`CHANNEL_TOUCH_INTERVAL_MS`),
