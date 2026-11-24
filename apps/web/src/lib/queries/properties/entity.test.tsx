@@ -568,6 +568,21 @@ describe('useEntityPropertiesQuery transport', () => {
       expect(listPropertiesMock).not.toHaveBeenCalled();
     });
 
+    it('reads no definitions for tags, which name their options from the tag sets', async () => {
+      const tags = {
+        ...phase,
+        propertyDefinitionId: 'labels',
+        isTag: true,
+      } as Property;
+      renderEntityQuery(false);
+
+      deliver([tags]);
+
+      await vi.waitFor(() => expect(entityQuery.data).toEqual([tags]));
+      expect(entityQuery.isLoading).toBe(false);
+      expect(listPropertiesMock).not.toHaveBeenCalled();
+    });
+
     it('still shows its values when the definitions fail to load', async () => {
       listPropertiesMock.mockResolvedValue(
         err([{ code: 'UNKNOWN', message: 'failed' }])

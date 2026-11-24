@@ -19,7 +19,8 @@ export function needsDefinitionOptions(property: Property): boolean {
   return (
     (property.valueType === 'SELECT_STRING' ||
       property.valueType === 'SELECT_NUMBER') &&
-    property.options === undefined
+    property.options === undefined &&
+    property.isTag !== true
   );
 }
 
