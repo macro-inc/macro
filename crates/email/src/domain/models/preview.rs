@@ -150,6 +150,10 @@ impl SortOn<SimpleSortMethod> for EnrichedEmailThreadPreview {
     }
 }
 
+/// Most threads one [`GetEmailsRequest`] returns: a larger `limit` is
+/// clamped to it.
+pub const MAX_PREVIEW_PAGE: u32 = 500;
+
 pub struct GetEmailsRequest {
     pub view: PreviewView,
     /// Every inbox the caller can read for this request. Multi-element when

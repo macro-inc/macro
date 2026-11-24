@@ -20,12 +20,14 @@ use channels::domain::{
 };
 use cowlike::CowLike;
 use crm::domain::{
-    auth::CrmTeamReceipt, companies_repo::CrmCompanyListSort, contact_listing::CrmContactListQuery,
-    service::CrmService,
+    auth::CrmTeamReceipt,
+    companies_repo::CrmCompanyListSort,
+    contact_listing::CrmContactListQuery,
+    service::{CrmService, MAX_CONTACT_SEARCH_LIMIT},
 };
 use either::Either;
 use email::domain::{
-    models::{EmailErr, GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
+    models::{EmailErr, GetEmailsRequest, MAX_PREVIEW_PAGE, PreviewView, PreviewViewStandardLabel},
     ports::EmailPreviewServiceReadOnly,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -115,11 +117,6 @@ impl SoupCandidate {
         }
     }
 }
-
-/// Largest page the email and CRM-contact legs return (their services clamp
-/// to it). The repository legs, channels, channel threads, calls, CRM
-/// companies and foreign entities take any page size.
-const CAPPED_LEG_PAGE: u16 = 500;
 
 /// Upper bound on candidate pages one notified-at page may consume while
 /// refilling after hydration drops (see `handle_notified_request`).
@@ -1921,12 +1918,21 @@ where
         }
         let sort_direction = req.sort_direction;
         // A merged page larger than a leg's own cap would skip that leg's rows
-        // past its cap, so an active capped leg bounds the page.
-        let limit = if email_request.is_some() || crm_contact_request.is_some() {
-            limit.min(CAPPED_LEG_PAGE)
-        } else {
-            limit
-        };
+        // past its cap, so an active capped leg bounds the page. The email and
+        // CRM-contact services clamp their pages; the repository legs,
+        // channels, channel threads, calls, CRM companies and foreign entities
+        // take any page size.
+        let limit = [
+            email_request
+                .is_some()
+                .then(|| u16::try_from(MAX_PREVIEW_PAGE).unwrap_or(u16::MAX)),
+            crm_contact_request
+                .is_some()
+                .then_some(MAX_CONTACT_SEARCH_LIMIT),
+        ]
+        .into_iter()
+        .flatten()
+        .fold(limit, u16::min);
 
         let output: Result<SoupOutput<R, SoupCandidate>, SoupErr> = match req.cursor {
             SoupQuery::Property(cursor) => {

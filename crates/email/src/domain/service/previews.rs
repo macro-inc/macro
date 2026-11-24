@@ -4,8 +4,8 @@ use entity_access::domain::models::ViewAccessLevel;
 
 use crate::domain::{
     models::{
-        EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery, PreviewView,
-        PreviewViewStandardLabel, UserProvider,
+        EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, MAX_PREVIEW_PAGE,
+        PreviewCursorQuery, PreviewView, PreviewViewStandardLabel, UserProvider,
     },
     ports::EmailRepo,
 };
@@ -36,12 +36,13 @@ const MAX_FOLDER_LOOKUPS: usize = 20;
 
 const DEFAULT_PAGE: u32 = 20;
 const MIN_PAGE: u32 = 1;
-const MAX_PAGE: u32 = 500;
 
 /// The page size for a preview request: the documented default when the
 /// caller names none, and never outside the allowed range.
 fn page_limit(requested: Option<u32>) -> u32 {
-    requested.unwrap_or(DEFAULT_PAGE).clamp(MIN_PAGE, MAX_PAGE)
+    requested
+        .unwrap_or(DEFAULT_PAGE)
+        .clamp(MIN_PAGE, MAX_PREVIEW_PAGE)
 }
 
 async fn get_frecency_scores<U: FrecencyQueryService>(
