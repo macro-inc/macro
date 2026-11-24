@@ -1,4 +1,7 @@
-import type { ChannelTimelineEvictCacheResult } from '@graphql-cache/protocol';
+import type {
+  CacheRevision,
+  ChannelTimelineEvictCacheResult,
+} from '@graphql-cache/protocol';
 import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -250,10 +253,11 @@ describe('evictIdleChannels', () => {
 
     finish({
       kind: 'evicted',
+      revision: '1' as CacheRevision,
       changed: [],
       channelIds: ['a'],
       hasMore: true,
-    } as ChannelTimelineEvictCacheResult);
+    });
     await vi.waitFor(() => expect(runtime.forget).toHaveBeenCalledWith(['a']));
     // Interrupted: no further pass.
     expect(evict).toHaveBeenCalledTimes(1);
