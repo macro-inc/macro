@@ -51,8 +51,11 @@ TanStack path in `../` runs untouched.
   (`applied`; another tab may have rolled it back, `NOT_APPLIED`), and a send
   answers from the device copy, else the server copy (`ChannelMessage`), else
   `DELIVERY_UNKNOWN`: a request the server has not answered can still
-  commit, so an absent copy proves nothing, and each question waits at most
-  `SERVER_LOOKUP_BUDGET_MS`; the composers
+  commit, so an absent copy proves nothing. It asks three times, reading the
+  device again between questions (another tab may store the send meanwhile);
+  a request unanswered within `SERVER_LOOKUP_BUDGET_MS` is cancelled, so the
+  next question sends a new one rather than joining it, and an answer waits
+  at most `SERVER_COPY_STORE_BUDGET_MS` for the device to store it. The composers
   send a restored draft of that message again, from the same person to the
   same place and from any view of it, under the same id
   (`features/channel/Input/utils/uncertain-sends.ts`, which ignores mention

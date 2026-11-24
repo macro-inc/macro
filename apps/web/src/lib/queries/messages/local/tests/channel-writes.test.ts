@@ -692,7 +692,10 @@ describe('createChannelWrites', () => {
       disposition: { kind: 'queued', transactionId: '4' },
     }));
     const device = writeHost();
-    const fetchMessage = vi.fn(() => new Promise<never>(() => {}));
+    const fetchMessage = vi.fn(
+      (_channelId: string, _messageId: string, _signal: AbortSignal) =>
+        new Promise<never>(() => {})
+    );
     const writes = createChannelWrites({
       host: device.host,
       runtime: { notifyChanged: vi.fn() },
@@ -709,12 +712,14 @@ describe('createChannelWrites', () => {
       errorCode: 'MUTATION_RETRY_EXHAUSTED',
       error: 'stopped after 3 server failures',
     });
-    // Three questions of 10 s each, 500 ms and 1 s apart.
-    await vi.advanceTimersByTimeAsync(31_500);
+    // Three questions of 15 s each, 500 ms and 1 s apart, each cancelled.
+    await vi.advanceTimersByTimeAsync(46_500);
     expect(thrownResultErrorHasCode(await error, 'DELIVERY_UNKNOWN')).toBe(
       true
     );
-    expect(fetchMessage).toHaveBeenCalledTimes(3);
+    expect(
+      fetchMessage.mock.calls.map(([, , signal]) => signal.aborted)
+    ).toEqual([true, true, true]);
   });
 
   it('calls a send the queue stopped retrying unknown when the server cannot say', async () => {

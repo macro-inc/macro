@@ -102,4 +102,15 @@ describe('createUncertainSends', () => {
     expect(sends.idFor(send('hello'))).toBe(first);
     expect(sends.idFor(send('hello'))).not.toBe(first);
   });
+
+  it('keeps the id of every restored message, however many places have one', () => {
+    const sends = ids();
+    const first = sends.idFor(send('hello'));
+    sends.restored(send('hello'), first, unknown);
+    for (let place = 1; place <= 40; place += 1) {
+      const other = send('hello', `channel-${place}`);
+      sends.restored(other, sends.idFor(other), unknown);
+    }
+    expect(sends.idFor(send('hello'))).toBe(first);
+  });
 });

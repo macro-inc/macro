@@ -1,3 +1,4 @@
+import { anyAbortSignal } from '@core/util/abort-signal';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import {
@@ -51,26 +52,71 @@ const WRITE_TYPENAME = 'GraphqlChannelMessageWrite';
 const SEND_OPERATION = 'channel.write.send';
 /** The queue's code for a write it stopped retrying. */
 const RETRY_EXHAUSTED = 'MUTATION_RETRY_EXHAUSTED';
+/** Waits before asking the server again whether it has a send. */
+const SERVER_LOOKUP_RETRIES_MS = [500, 1_000];
 /**
- * How long a server copy of a send waits to be stored on the device before
- * it answers anyway; the server's answer is what decides the send.
+ * How long one such question waits for the server: an unanswered request is
+ * cancelled, so the next question sends a fresh one rather than joining it.
+ */
+const SERVER_LOOKUP_BUDGET_MS = 10_000;
+/**
+ * How long a server copy of a send then waits to be stored on the device
+ * before it answers anyway; the server's answer is what decides the send.
  */
 const SERVER_COPY_STORE_BUDGET_MS = 5_000;
 
-/** Reads one message from the server; null when the server does not have it. */
+/**
+ * Reads one message from the server; null when the server does not have it.
+ * `signal` cancels the request.
+ */
 export type FetchChannelMessage = (
   channelId: string,
-  messageId: string
+  messageId: string,
+  signal: AbortSignal
 ) => Promise<ChannelMessageFieldsFragment | null>;
+
+type Settled<T> = { ok: true; value: T } | { ok: false; error: unknown };
+
+async function settle<T>(promise: Promise<T>): Promise<Settled<T>> {
+  try {
+    return { ok: true, value: await promise };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
 
 const fetchServerMessage: FetchChannelMessage = async (
   channelId,
-  messageId
+  messageId,
+  signal
 ) => {
-  const { data, cached } = await queryChannelNetwork(ChannelMessageDocument, {
-    channelId,
-    messageId,
-  });
+  // Cancelled when unanswered within the budget: urql would hand the next
+  // question the same request rather than send a new one.
+  const request = new AbortController();
+  const answer = await Effect.runPromise(
+    Effect.timeoutOrElse(
+      Effect.promise(() =>
+        settle(
+          queryChannelNetwork(
+            ChannelMessageDocument,
+            { channelId, messageId },
+            anyAbortSignal([signal, request.signal])
+          )
+        )
+      ),
+      {
+        duration: SERVER_LOOKUP_BUDGET_MS,
+        orElse: () =>
+          Effect.sync(() => {
+            request.abort();
+            return undefined;
+          }),
+      }
+    )
+  );
+  if (!answer) throw new Error('the server did not answer in time');
+  if (!answer.ok) throw answer.error;
+  const { data, cached } = answer.value;
   // The views reread when the write ends, so the device should hold it then;
   // a copy that could not be stored, or is still storing after
   // `SERVER_COPY_STORE_BUDGET_MS`, is still the answer.
@@ -253,10 +299,6 @@ function refusalOf(error: CombinedError): ThrownResultError {
 /** First wait before asking an unanswering queue again, doubled up to the cap. */
 const QUEUE_RECHECK_MS = 1_000;
 const QUEUE_RECHECK_MAX_MS = 30_000;
-/** Waits before asking the server again whether it has a send. */
-const SERVER_LOOKUP_RETRIES_MS = [500, 1_000];
-/** How long one such question waits for its answer, stored on the device. */
-const SERVER_LOOKUP_BUDGET_MS = 10_000;
 /**
  * How long a delete waits for the device's copy of a reply's root before it
  * goes without the root: the server's answer brings the root then.
@@ -644,12 +686,14 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
    * device, so the views show it.
    */
   async function serverCopy(
-    write: Pick<Write<unknown, AnyVariables>, 'channelId' | 'messageId'>
+    write: Pick<Write<unknown, AnyVariables>, 'channelId' | 'messageId'>,
+    signal: AbortSignal
   ): Promise<Message | null | undefined> {
     try {
       const message = await (deps.fetchMessage ?? fetchServerMessage)(
         write.channelId,
-        write.messageId
+        write.messageId,
+        signal
       );
       return message && mapChannelMessage(message);
     } catch (error) {
@@ -689,39 +733,52 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
 
   /**
    * A failed send restores its draft, and sending that again would post a
-   * second copy of one that arrived: ask the server more than once.
+   * second copy of one that arrived: ask the server more than once, and the
+   * device again after each answer that settled nothing, since a frame or
+   * another tab may store the send meanwhile.
    */
   async function askServer(
     write: Pick<Write<unknown, AnyVariables>, 'channelId' | 'messageId'>,
     trace: TraceContext
-  ): Promise<Message | null | undefined> {
+  ): Promise<Message | undefined> {
     // Every question, after a wait too, joins the recovery's trace.
     const ask = () => trace.run(() => boundedServerCopy(write));
+    const onDevice = async () => {
+      const stored = await trace.run(() => readMessage(write.messageId));
+      return stored && mapChannelMessage(stored);
+    };
     let delivered = await ask();
     for (const waitMs of SERVER_LOOKUP_RETRIES_MS) {
       if (delivered !== undefined) break;
+      const stored = await onDevice();
+      if (stored) return stored;
       await new Promise((resolve) => setTimeout(resolve, waitMs));
       delivered = await ask();
     }
-    return delivered;
+    return delivered ?? (await onDevice());
   }
 
   /**
-   * `serverCopy`, answered within `SERVER_LOOKUP_BUDGET_MS`: a request or a
-   * device write that never answers leaves the send unknown instead of
-   * pending forever.
+   * `serverCopy`, answered within `SERVER_LOOKUP_BUDGET_MS` and
+   * `SERVER_COPY_STORE_BUDGET_MS`: a lookup that never answers leaves the
+   * send unknown instead of pending forever, and its request is cancelled.
    */
   function boundedServerCopy(
     write: Pick<Write<unknown, AnyVariables>, 'channelId' | 'messageId'>
   ): Promise<Message | null | undefined> {
-    // Started here, in the caller's trace; the timeout only stops waiting.
-    const copy = serverCopy(write);
+    const request = new AbortController();
+    // Started here, in the caller's trace.
+    const copy = serverCopy(write, request.signal);
     return Effect.runPromise(
       Effect.timeoutOrElse(
         Effect.promise(() => copy),
         {
-          duration: SERVER_LOOKUP_BUDGET_MS,
-          orElse: () => Effect.succeed(undefined),
+          duration: SERVER_LOOKUP_BUDGET_MS + SERVER_COPY_STORE_BUDGET_MS,
+          orElse: () =>
+            Effect.sync(() => {
+              request.abort();
+              return undefined;
+            }),
         }
       )
     );

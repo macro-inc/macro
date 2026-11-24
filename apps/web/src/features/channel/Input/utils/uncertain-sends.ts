@@ -4,9 +4,6 @@ import { thrownResultErrorHasCode } from '@core/util/result';
 /** The code a send fails with when the server could not say whether it has it. */
 const DELIVERY_UNKNOWN = 'DELIVERY_UNKNOWN';
 
-/** How many restored drafts of unknown delivery keep their ids. */
-const KEPT = 20;
-
 /**
  * Who sends a message and where it goes (every field but `message`), plus
  * what it says.
@@ -56,7 +53,7 @@ export function createUncertainSends(newId: () => string) {
       uncertain = [
         ...uncertain.filter((entry) => !deepEqual(entry.send, key)),
         { send: key, id },
-      ].slice(-KEPT);
+      ];
     },
   };
 }
