@@ -2,7 +2,7 @@
 //! become, against a real OpenSearch: each runs inside the unified request,
 //! with its sort and highlighter, and keeps exactly the messages it names.
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::LazyLock};
 
 use anyhow::bail;
 use models_search_cursor::SearchCursorOption;
@@ -410,6 +410,55 @@ fn punctuated_cases() -> Vec<Case> {
 #[tokio::test]
 async fn a_term_matches_by_its_words_whatever_punctuation_it_carries() -> anyhow::Result<()> {
     search_seeded(punctuated_messages(), punctuated_cases()).await
+}
+
+/// A message whose subject, body and every name field hold `text`.
+fn message_holding(n: u128, text: &'static str) -> Message {
+    Message {
+        thread: thread(n),
+        owner: VIEWER,
+        subject: text,
+        content: text,
+        sender: (text, BO.1),
+        recipients: vec![(text, ANA.1)],
+        cc: vec![(text, CY.1)],
+        bcc: vec![(text, DI.1)],
+        labels: vec!["INBOX"],
+        sent_at_millis: Some(MARCH_2025),
+        tagged: false,
+    }
+}
+
+/// Three hundred words that start with `pa`, three hundred Thai runs that
+/// start with `กาน`, and `pa²`, which the tokenizer reads as `pa`.
+static SHARED_PREFIXES: LazyLock<String> = LazyLock::new(|| {
+    let consonant = |n: usize| ('ก'..='ฮ').nth(n).unwrap_or('ก');
+    let words: String = (0..300)
+        .map(|n| format!("pa{n} กาน{}{} ", consonant(n / 46), consonant(n % 46)))
+        .collect();
+    format!("{words} pa²")
+});
+
+fn one_token_cases() -> Vec<Case> {
+    vec![
+        case("a word and a superscript", &["pa²"], &[41]),
+        case("the same, left out", &[], &[42, 43]),
+        case("a Thai run still being typed", &["กาน"], &[41, 43]),
+    ]
+}
+
+/// A term the app reads as several words and the tokenizer as one. A phrase
+/// prefix of it costs a clause for each word that shares its prefix.
+#[tokio::test]
+async fn a_term_of_one_token_finds_its_mail_whatever_shares_its_prefix() -> anyhow::Result<()> {
+    let messages = vec![
+        message_holding(41, SHARED_PREFIXES.as_str()),
+        message_holding(42, "pa1 and pa2"),
+        message_holding(43, "กานกก"),
+    ];
+    let mut cases = one_token_cases();
+    cases[1].args.text_conditions = vec![text(EmailTextFields::Any, "pa²", true)];
+    search_seeded(messages, cases).await
 }
 
 /// Seeds `messages` into an `emails` index holding nothing else, runs each

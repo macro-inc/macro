@@ -168,12 +168,14 @@ projects.
 - Email text terms go into one `simple_query_string`
   (`emails::build_text_query_string`), where a `term*` prefix is not
   analyzed: `follow-up*` looks for one token `follow-up`, which the index
-  never holds. A partial term of several UAX #29 words is matched with
+  never holds. A partial term of several tokens is matched with
   `create_query` instead (`emails::text_terms_query`), so it follows the
-  rules above, a Thai run included. A term of one word with punctuation
-  around it (`follow-`, `Re:`, `-lunch`) matches by that word alone, as a
-  prefix or, under three characters, as the whole word; one `single_word`
-  does not count (a Devanagari word with a virama) is an uncapped `term*`
+  rules above. Never give `match_phrase_prefix` a term the tokenizer may read
+  as one token (`CO₂` is `co`): it becomes a clause per word that shares the
+  prefix, up to 256 in each field. A term that is one token with ASCII
+  punctuation around it (`follow-`, `Re:`, `-lunch`, a Thai run) matches by
+  that word alone, as a prefix or, under three characters, as the whole word;
+  one `single_word` does not count (a Devanagari word with a virama) is an uncapped `term*`
   too. A term with a symbol in it (`C♯`) stays whole, since the tokenizer
   keeps symbols. Everything a `simple_query_string` would read as syntax is
   escaped (`emails::escape_syntax`): unescaped, the address clause of

@@ -916,6 +916,10 @@ fn a_term_of_one_word_or_an_exact_short_or_quoted_one_stays_in_the_query_string(
         (vec!["Re:"], "partial", "(Re)"),
         (vec!["c++"], "partial", "(c)"),
         (vec!["नमस्ते"], "partial", "नमस्ते*"),
+        // One token each: a Thai run, and the words of `CO₂` and `10½`.
+        (vec!["สวัสดี"], "partial", "สวัสดี*"),
+        (vec!["CO₂"], "partial", "\"CO₂\""),
+        (vec!["10½"], "partial", "\"10½\""),
     ] {
         let terms: Vec<String> = terms.into_iter().map(str::to_string).collect();
 
@@ -930,7 +934,7 @@ fn a_term_of_one_word_or_an_exact_short_or_quoted_one_stays_in_the_query_string(
 
 #[test]
 fn a_run_unicode_splits_into_words_matches_as_a_phrase_prefix() {
-    for term in ["東京都", "AT&T", "สวัสดี"] {
+    for term in ["東京都", "AT&T", "x²y", "ไทย-ลาว"] {
         let terms = vec![term.to_string()];
 
         let json = terms_query(&terms, "partial", &[], &["subject"]).to_json();

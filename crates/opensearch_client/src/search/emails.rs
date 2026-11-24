@@ -230,20 +230,44 @@ fn text_terms_query<'a>(
     all.build().into()
 }
 
-/// Whether a partial `term` long enough to match as a prefix holds several
-/// Unicode (UAX #29) words (`follow-up`, `AT&T`, `東京都`, and a Thai run,
-/// which the tokenizer keeps as one token), as the shared term builder
-/// decides. A phrase in quotes or an address already matches as a phrase in
-/// [`build_text_query_string`], and a short term as its analyzed words. A
-/// word UAX #29 keeps whole stays an uncapped prefix, even one the shared
-/// term builder does not count as one, such as a Devanagari word with a
-/// virama.
+/// The fewest tokens the analyzer splits `term` into: its Unicode (UAX #29)
+/// words that hold a letter or a digit, a run of a script written without
+/// spaces counted once. The tokenizer drops the other words `unicode_words`
+/// finds, such as the `₂` of `CO₂`.
+fn fewest_tokens(term: &str) -> usize {
+    let mut tokens = 0;
+    let mut in_run = false;
+    for segment in term.split_word_bounds() {
+        let run = segment.chars().all(in_spaceless_script);
+        let word = segment
+            .chars()
+            .any(|c| c.is_alphabetic() || c.is_ascii_digit());
+        if (run && !in_run) || (word && !run) {
+            tokens += 1;
+        }
+        in_run = run;
+    }
+    tokens
+}
+
+/// Whether the standard tokenizer keeps a run of characters like `c` as one
+/// token: Thai, Lao, Myanmar and Khmer.
+fn in_spaceless_script(c: char) -> bool {
+    matches!(c, '\u{0E00}'..='\u{0EFF}' | '\u{1000}'..='\u{109F}' | '\u{1780}'..='\u{17FF}')
+}
+
+/// Whether a partial `term` long enough to match as a prefix is several tokens
+/// (`follow-up`, `AT&T`, `東京都`). A phrase in quotes or an address already
+/// matches as a phrase in [`build_text_query_string`], and a short term as its
+/// analyzed words. A term the analyzer may read as one token, such as a Thai
+/// run or `CO₂`, is never a phrase prefix: OpenSearch expands a phrase prefix
+/// of one token into a clause for each word that starts with it.
 fn reads_as_several_words(term: &str, match_type: &str) -> bool {
     match_type == "partial"
         && !term.contains('@')
         && !term.contains(' ')
         && term.chars().count() >= MIN_PREFIX_LEN
-        && term.unicode_words().nth(1).is_some()
+        && fewest_tokens(term) >= 2
 }
 
 /// Builds the simple_query_string over the email-address fields.
@@ -280,12 +304,18 @@ fn build_keyword_query_string(terms: &[String], match_type: &str) -> String {
         .join(" + ")
 }
 
-/// The word of a term that is one Unicode (UAX #29) word with nothing but
-/// ASCII punctuation around it (`-lunch`, `(lunch`, `Re:`), or the whole term.
-/// A prefix is not analyzed, so with the punctuation it would look for a token
-/// the index never holds. The index does hold a symbol as a token, so a term
-/// with one (`C♯`) stays whole, as regexp input does.
+/// The word of a term that is one token with nothing but ASCII punctuation
+/// around it (`-lunch`, `(lunch`, `Re:`), one Unicode (UAX #29) word or a Thai
+/// run, or the whole term. A prefix is not analyzed, so with the punctuation
+/// it would look for a token the index never holds. The index does hold a
+/// symbol as a token, so a term with one (`C♯`) stays whole, as regexp input
+/// does.
 fn one_word<'a>(term: &'a str, match_type: &str) -> &'a str {
+    let run = term.trim_matches(|c: char| c.is_ascii_punctuation());
+    if match_type != "regexp" && !run.is_empty() && run.chars().all(in_spaceless_script) {
+        return run;
+    }
+
     let mut words = term.unicode_word_indices();
     let (Some((start, word)), None) = (words.next(), words.next()) else {
         return term;
@@ -338,7 +368,9 @@ const MIN_PREFIX_LEN: usize = 3;
 ///
 /// A term that is one word with punctuation around it (`follow-`, `Re:`,
 /// `-lunch`) matches by that word alone ([`one_word`]), as
-/// [`child_content_query`](super::query::child_content_query) does.
+/// [`child_content_query`](super::query::child_content_query) does. A partial
+/// term of several Unicode words that is not a phrase prefix (`CO₂`) cannot be
+/// a prefix, which is one token, so it is quoted.
 fn build_text_query_string(terms: &[String], match_type: &str) -> String {
     let exact = match_type == "exact";
     terms
@@ -349,8 +381,12 @@ fn build_text_query_string(terms: &[String], match_type: &str) -> String {
             }
             let word = one_word(term, match_type);
             let literal = escape_syntax(word, match_type);
+            let several_words = word.unicode_words().nth(1).is_some();
+            let one_token = word.chars().all(in_spaceless_script);
             if exact || word.chars().count() < MIN_PREFIX_LEN {
                 format!("({})", literal)
+            } else if match_type == "partial" && several_words && !one_token {
+                format!("\"{}\"", literal)
             } else {
                 format!("{}*", literal)
             }
