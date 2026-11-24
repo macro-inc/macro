@@ -91,3 +91,26 @@ it('cancels foreground deadlines when everyone hides, but failure alone never re
   handoff.ready(2);
   expect(handoff.readState?.state).toBe('ready');
 });
+
+it('gives the transition after a canceled one its own foreground budget', async () => {
+  const handoff = new CoordinatorHandoff({
+    timeoutMs: 1000,
+    setTimeout,
+    clearTimeout,
+    now: Date.now,
+    telemetry: { record() {}, flush() {} },
+    onChange() {},
+  });
+  handoff.start(1);
+  await vi.advanceTimersByTimeAsync(1000);
+  handoff.cancel();
+  handoff.start(2);
+  expect(handoff.readState).toEqual({ ownerEpoch: 2, state: 'waiting' });
+  await vi.advanceTimersByTimeAsync(999);
+  handoff.start(3);
+  expect(handoff.readState?.state).toBe('waiting');
+  await vi.advanceTimersByTimeAsync(1);
+  expect(handoff.readState).toEqual({ ownerEpoch: 3, state: 'blocked' });
+  handoff.start(4);
+  expect(handoff.readState).toEqual({ ownerEpoch: 4, state: 'blocked' });
+});

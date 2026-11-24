@@ -45,6 +45,7 @@ export class CoordinatorHandoff {
   }
 
   start(ownerEpoch: number, visible = true): void {
+    const fresh = this.active === undefined;
     if (!this.active) {
       this.active = {
         ownerEpoch,
@@ -70,8 +71,9 @@ export class CoordinatorHandoff {
       this.update(ownerEpoch, 'waiting');
       return;
     }
-    // Changes of candidate must not reset an exhausted foreground budget.
-    if (this.current?.state === 'blocked') {
+    // Changes of candidate must not reset an exhausted foreground budget. A
+    // transition that was canceled took its budget along.
+    if (!fresh && this.current?.state === 'blocked') {
       this.update(ownerEpoch, 'blocked');
       return;
     }
