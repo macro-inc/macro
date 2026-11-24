@@ -390,3 +390,43 @@ it('never holds hydration hints behind a streamed sync run that stays in flight'
   ]);
   expect(reply(0)).toHaveLength(1);
 });
+
+it('flushes a held hint when the last read replies while a sync run stays in flight', () => {
+  const { push, reply } = resume([
+    {
+      id: 1,
+      kind: 'sync-start',
+      args: {
+        url: 'https://api.example.test/stream',
+        headers: {},
+        pass: 'first',
+        queries: {},
+      },
+    },
+    { id: 2, kind: 'read', query: 'query Viewer { user { id } }' },
+    { id: 3, kind: 'read', query: 'query Viewer { user { id } }' },
+  ]);
+  // Two reads remain, so the page's hint waits for them.
+  expect(
+    push({ kind: 'cache-hydrated', revision: parseCacheRevision('1') })
+  ).toEqual([]);
+  expect(reply(1)).toEqual([
+    {
+      kind: 'deliver-response',
+      tabId: 'a',
+      response: { id: 2, ok: true, result: null },
+    },
+  ]);
+  // The run's own request never counts as work still to reply.
+  expect(reply(2)).toEqual([
+    {
+      kind: 'broadcast-push',
+      push: { kind: 'cache-hydrated', revision: '1' },
+    },
+    {
+      kind: 'deliver-response',
+      tabId: 'a',
+      response: { id: 3, ok: true, result: null },
+    },
+  ]);
+});
