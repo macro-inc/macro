@@ -1727,7 +1727,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   function trackActiveOperation(opKey: number): void {
     activeOpKeys.add(opKey);
-    if (state === 'suspended' || readAvailability.error)
+    if (outage || state === 'suspended' || readAvailability.error)
       lostRegisteredOpKeys.add(opKey);
     else if (recoveryInProgress) replacementReadOpKeys.add(opKey);
   }

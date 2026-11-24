@@ -2092,6 +2092,27 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('reads again what was asked while an engine that ends an outage was still opening', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    const affected = vi.fn();
+    host.onOpsAffected(affected);
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.unavailable('recovery fails', 'recovery-failed');
+    adapter.ignoredKinds.add('init');
+    adapter.replace(2);
+    await vi.waitFor(() => expect(adapter.requests.at(-1)?.kind).toBe('init'));
+
+    // Served by the network: the cache is still off for it.
+    await host
+      .readQuery({ opKey: 7, query: 'query Seven { seven }' })
+      .catch(() => undefined);
+    adapter.respond(adapter.requests.at(-1)?.id ?? -1, null);
+
+    await vi.waitFor(() => expect(affected).toHaveBeenCalledWith([7]));
+    host.dispose();
+  });
+
   it('holds the outcome of a mutation through an outage', async () => {
     configureAdapter = (fake) => fake.ignoredKinds.add('init');
     const host = createWorkerCacheHost({ scope: 'scope-1' });
