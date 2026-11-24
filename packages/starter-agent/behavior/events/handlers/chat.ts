@@ -6,9 +6,12 @@ import type { Incoming } from '../../capabilities/chat/entry.ts';
 import { judge, screenAttributes } from '../../capabilities/chat/listen.ts';
 import { replyPrompt, threadOf } from '../../capabilities/chat/prompt.ts';
 import type { chatSources } from '../sources/chat.ts';
+import { millisecondsSince, recordOutcome } from './outcome.ts';
 
 const listenLog = 'listen';
 const screenSpan = 'chat.screen';
+/** A reply run: from its start to its end, in the trace of the screen that queued it. */
+const turnSpan = 'chat.turn';
 const replyLog = 'replies';
 const handledLog = 'handled';
 const screenHistory = 6;
@@ -37,7 +40,10 @@ export const listen = async (
   // A replayed or caught-up message the agent already judged.
   if (await history.recorded(channelId, entry.id)) return;
   // One span per message: how long the screen took and what it decided.
+  // The screen's span: a message it queues is answered in this trace.
+  let screened: string | undefined;
   const verdict = await trace(screenSpan, async (span) => {
+    screened = span.traceparent();
     span.set('chat.channel_id', channelId);
     span.set('chat.message_id', entry.id);
     const recent = await history.recent(channelId, screenHistory);
@@ -79,6 +85,7 @@ export const listen = async (
     ...entry,
     mentioned: verdict.mentioned,
     p: { ...verdict.p },
+    ...(screened === undefined ? {} : { traceparent: screened }),
   };
   // Already waiting when a restart restored it from the queue.
   const queued = await history.wait(message);
@@ -110,8 +117,16 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
       (sources) => sources.conversations,
       async (conversation, context) => {
         const { channelId, messages } = conversation;
-        const { typing, history, waiting, answered, unanswered, log, clock } =
-          context;
+        const {
+          typing,
+          history,
+          waiting,
+          answered,
+          unanswered,
+          log,
+          clock,
+          trace,
+        } = context;
         const last = messages.at(-1);
         if (last === undefined) return waiting.release(channelId);
         const started = clock.now();
@@ -121,17 +136,43 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
           conversation,
           await history.recent(channelId, promptHistory)
         );
-        void context
-          .wake(request)
-          .catch(
-            (error: unknown): Woke => ({
-              kind: 'failed',
-              error: String(error),
-            })
-          )
-          .then(async (woke) => {
+        // One span from the reply run's start to its end, in the trace of
+        // the screen that queued the conversation's last message; the wake
+        // (and every script and Macro call it makes) is its child.
+        void trace(
+          turnSpan,
+          async (span) => {
+            span.set('chat.channel_id', channelId);
+            span.set('chat.message_id', last.id);
+            span.set('chat.turn.dm', last.dm);
+            span.set('chat.turn.in_thread', last.thread !== null);
+            span.set('chat.turn.messages', messages.length);
+            const queued = millisecondsSince(messages[0]?.at, started);
+            if (queued !== undefined) span.set('chat.turn.queued_ms', queued);
+            const woke = await context.wake(request).catch(
+              (error: unknown): Woke => ({
+                kind: 'failed',
+                error: String(error),
+              })
+            );
+            recordOutcome(span, 'chat.turn', woke);
             await typing.stop(channelId);
             const first = answered.get(channelId);
+            span.set('chat.turn.answered', first !== undefined);
+            // Whether anything reached the conversation: what a person sees.
+            span.set(
+              'chat.turn.result',
+              first === undefined ? 'not_posted' : 'posted'
+            );
+            span.set(
+              'chat.turn.duration_ms',
+              Math.round(clock.now().since(started).total('milliseconds'))
+            );
+            if (first !== undefined)
+              span.set(
+                'chat.turn.first_reply_ms',
+                Math.round(first.since(started).total('milliseconds'))
+              );
             await log.event(replyLog, {
               channel: conversation.channel,
               messages: messages.length,
@@ -154,7 +195,8 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
               channelId,
               messages.map(({ id }) => id)
             );
-          })
-          .finally(() => waiting.release(channelId));
+          },
+          last.traceparent
+        ).finally(() => waiting.release(channelId));
       }
     );

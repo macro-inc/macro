@@ -120,8 +120,27 @@ child per step, in the computer's setup trace when the image passes
 `MACRO_SETUP_TRACEPARENT`; wakes stay traces of their own. A wake is an
 `agent.wake` span (event, wake id, outcome, cost, turns); each script is an
 `agent.capability_script` span whose context reaches the script's process.
-Each message the listener screens is a `chat.screen` span (verdict and each
-probability by question, never the text), and each drop of the events
+A message the screen queues keeps the screen span's `traceparent`, and its
+reply run is a `chat.turn` span in that trace (last message and channel
+ids, DM or thread, messages, how long they waited, `posted` or
+`not_posted`, how soon it answered, its duration, the wake's outcome and
+error category), with the wake as its child. A task handed over with `doLater` is
+an `agent.task.queue` span (task id, channel id) whose `traceparent` the
+task's schedule keeps; the run that does it is an `agent.task` span in that
+trace (task id, lateness, outcome); any other schedule that wakes the agent
+is an `agent.scheduled_wake`. The agent's Macro SDK clients send the active
+trace context (`traceContext`), through the relay too, so each service's
+`http.request` span joins the trace. That context is the agent's claim;
+who the request really was is the service's own finding, on the same span:
+`auth.credential` (`user_api_key` for an agent) and `auth.principal_id`, the
+SHA-256 of the verified account (the agent's `macro.agent.id` is its first
+16 digits). Nothing is sampled: every agent span is exported. Its
+environment is agent.env's `OTEL_DEPLOYMENT_ENVIRONMENT`, set by the
+authentication service beside the intake (`dev`, `prod`, `local`).
+Each message the listener screens is a `chat.screen` span (message and
+channel ids, verdict and its reason category (`own`, `bot`, `no_sender`,
+`dm`, `mention`, `screen`, `screen_failed`), and each probability by
+question, never the text), and each drop of the events
 stream a `chat.events.reconnect` span from the drop until the stream reopens
 (at most a minute, `chat.events.reopened` false if it is still down), with the
 process's running count.

@@ -10,6 +10,7 @@ import { module } from '@macro-inc/muppet/core/capability';
 import type { Schedules } from '@macro-inc/muppet/utilities/schedules';
 import type { Clock } from '@macro-inc/muppet/utilities/time';
 import { isoText } from '@macro-inc/muppet/utilities/time';
+import { passthrough, type Trace } from '../../agent/claude.ts';
 import type { Work, WorkRequest } from '../../contracts.ts';
 
 /** What every task's schedule is named with, so they can be told from other schedules. */
@@ -24,7 +25,12 @@ type Needs = {
   readonly clock: Clock;
   /** A name no task has had before. */
   readonly id: () => string;
+  /** Spans: a task's hand-over, whose trace the run that does it joins. */
+  readonly trace?: Trace;
 };
+
+/** The span of a task's hand-over; the run that does it is `agent.task`, its child. */
+export const queueSpan = 'agent.task.queue';
 
 /** What the agent is asked when a task's turn comes. It must stand alone: the run that handed it over is gone. */
 export const request = ({ task, channelId, root }: WorkRequest): string =>
@@ -37,17 +43,33 @@ export const request = ({ task, channelId, root }: WorkRequest): string =>
   ].join('\n\n');
 
 /** Tasks as one-off schedules that wake the agent. */
-export const later = ({ schedules, clock, id }: Needs): Work => ({
-  start: async (asked) => {
-    const name = `${prefix}${id()}`;
-    const set = await schedules.set(name, {
-      at: isoText(clock.now()),
-      why: asked.label,
-      data: { wake: request(asked) },
-    });
-    if (set.kind === 'invalid') throw new Error(set.error);
-    return { id: name };
-  },
+export const later = ({
+  schedules,
+  clock,
+  id,
+  trace = passthrough,
+}: Needs): Work => ({
+  // In the trace of whatever handed it over (a reply run's script, a call),
+  // which the run that does it joins through the schedule's traceparent.
+  start: (asked) =>
+    trace(queueSpan, async (span) => {
+      const name = `${prefix}${id()}`;
+      span.set('agent.task_id', name);
+      span.set('agent.task.reports_back', asked.channelId !== undefined);
+      if (asked.channelId !== undefined)
+        span.set('chat.channel_id', asked.channelId);
+      const traceparent = span.traceparent();
+      const set = await schedules.set(name, {
+        at: isoText(clock.now()),
+        why: asked.label,
+        data: {
+          wake: request(asked),
+          ...(traceparent === undefined ? {} : { traceparent }),
+        },
+      });
+      if (set.kind === 'invalid') throw new Error(set.error);
+      return { id: name };
+    }),
   inFlight: async () => {
     const waiting = (await schedules.list()).filter(({ name }) =>
       name.startsWith(prefix)

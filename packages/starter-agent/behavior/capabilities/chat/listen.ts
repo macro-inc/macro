@@ -45,8 +45,11 @@ export const inThread = (
       (entry.thread === thread || entry.root === thread || entry.id === thread)
   );
 
+/** Why a message is never judged: the agent's own post, a bot's, or one with no sender. */
+export type IgnoredBecause = 'own' | 'bot' | 'no_sender';
+
 export type Verdict =
-  | { readonly kind: 'ignored' }
+  | { readonly kind: 'ignored'; readonly because: IgnoredBecause }
   | {
       readonly kind: 'irrelevant';
       readonly p: Probabilities;
@@ -71,10 +74,25 @@ const screenQuestion = /^[a-z0-9_]{1,32}$/;
  * mention, `fallback` when the screen failed), at most
  * {@link screenQuestions} well-formed ones. Never the message.
  */
+/**
+ * Why the verdict is what it is, as a category: `own`, `bot` or `no_sender`
+ * (ignored); `dm` or `mention` (addressed, no screen asked); `screen` (the
+ * screen judged it); `screen_failed` (the screen failed, so a reply in a
+ * thread the agent is in counts as for it and anything else doesn't).
+ */
+export const verdictReason = (verdict: Verdict): string => {
+  if (verdict.kind === 'ignored') return verdict.because;
+  if ('addressed' in verdict.p)
+    return verdict.kind === 'relevant' && verdict.mentioned ? 'mention' : 'dm';
+  if ('fallback' in verdict.p) return 'screen_failed';
+  return 'screen';
+};
+
 export const screenAttributes = (
   verdict: Verdict
 ): Readonly<Record<string, string | number | boolean>> => ({
   'chat.screen.verdict': verdict.kind,
+  'chat.screen.reason': verdictReason(verdict),
   ...(verdict.kind === 'relevant'
     ? { 'chat.screen.mentioned': verdict.mentioned }
     : {}),
@@ -124,8 +142,9 @@ export const judge = async (
   }
 ): Promise<Verdict> => {
   const sender = entry.sender_id;
-  if (sender === '' || sender === me || sender.startsWith('bot|'))
-    return { kind: 'ignored' };
+  if (sender === '') return { kind: 'ignored', because: 'no_sender' };
+  if (sender === me) return { kind: 'ignored', because: 'own' };
+  if (sender.startsWith('bot|')) return { kind: 'ignored', because: 'bot' };
 
   const mentioned = mentions.includes(me) || textMentions(entry.text, [me]);
   if (mentioned || entry.dm)

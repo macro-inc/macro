@@ -95,6 +95,8 @@ export const startTelemetry = async ({
   readonly agent: string;
 }): Promise<void> => {
   const url = tracesUrl(environment);
+  // No sampling: no class is configured, so every span the agent makes (a
+  // wake, a reply run, a task, a script, its Macro calls) is exported.
   await Telemetry.init({
     serviceName,
     environment: environment.OTEL_DEPLOYMENT_ENVIRONMENT ?? 'unset',
@@ -112,13 +114,18 @@ export const startTelemetry = async ({
 };
 
 /** The agent's `Trace` port over the facade. */
-export const trace: Trace = (name, run) =>
-  Telemetry.span(name, (span) =>
-    run({
-      set: (key, value) => span.setAttr(key, value),
-      traceparent: () => span.traceparent(),
-    })
-  );
+export const trace: Trace = (name, run, parent) => {
+  const start = () =>
+    Telemetry.span(name, (span) =>
+      run({
+        set: (key, value) => span.setAttr(key, value),
+        traceparent: () => span.traceparent(),
+      })
+    );
+  return parent === undefined || parent === ''
+    ? start()
+    : Telemetry.remoteContext(parent).run(start);
+};
 
 /** Where the image puts the computer's setup trace, so the agent's start joins it. */
 export const setupTraceparentVariable = 'MACRO_SETUP_TRACEPARENT';

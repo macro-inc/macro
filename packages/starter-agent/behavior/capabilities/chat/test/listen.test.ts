@@ -159,17 +159,34 @@ test('the screen span records the verdict and each probability by question, neve
     })
   ).toEqual({
     'chat.screen.verdict': 'relevant',
+    'chat.screen.reason': 'screen',
     'chat.screen.mentioned': false,
     'chat.screen.p.asks_agent': 0.92,
     'chat.screen.p.about_agent': 0.1,
   });
   expect(screenAttributes({ kind: 'irrelevant', p: { fallback: 1 } })).toEqual({
     'chat.screen.verdict': 'irrelevant',
+    'chat.screen.reason': 'screen_failed',
     'chat.screen.p.fallback': 1,
   });
-  expect(screenAttributes({ kind: 'ignored' })).toEqual({
+  expect(screenAttributes({ kind: 'ignored', because: 'bot' })).toEqual({
     'chat.screen.verdict': 'ignored',
+    'chat.screen.reason': 'bot',
   });
+  expect(
+    screenAttributes({
+      kind: 'relevant',
+      mentioned: true,
+      p: { addressed: 1 },
+    })['chat.screen.reason']
+  ).toBe('mention');
+  expect(
+    screenAttributes({
+      kind: 'relevant',
+      mentioned: false,
+      p: { addressed: 1 },
+    })['chat.screen.reason']
+  ).toBe('dm');
 });
 
 test('the screen span records at most eight well-formed question keys', () => {

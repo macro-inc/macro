@@ -102,3 +102,22 @@ test('a message restored from the queue is recorded, so its redelivery is not an
   await listen(dm, context);
   expect(pushed).toEqual([]);
 });
+
+test("a queued message carries its screen span's trace context, so its reply joins that trace", async () => {
+  const { context, pushed } = listening();
+  const traceparent = `00-${'1'.repeat(32)}-${'2'.repeat(16)}-01`;
+
+  await listen(dm, {
+    ...context,
+    trace: (_name, run) =>
+      run({ set: () => undefined, traceparent: () => traceparent }),
+  });
+
+  expect(pushed.map((message) => message.traceparent)).toEqual([traceparent]);
+});
+
+test('without telemetry a queued message carries no trace context', async () => {
+  const { context, pushed } = listening();
+  await listen(dm, context);
+  expect(pushed[0]).not.toHaveProperty('traceparent');
+});

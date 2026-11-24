@@ -9,7 +9,7 @@ import {
   scheduler,
 } from '@macro-inc/muppet/utilities/schedules';
 import { budgeted, fileLedger, recordSpend } from '../../../agent/budget.ts';
-import { passthrough } from '../../../agent/claude.ts';
+import { passthrough, type Trace } from '../../../agent/claude.ts';
 import { config as makeConfig } from '../../../context/config.ts';
 import { memoryCredentials } from '../../../context/credentials.ts';
 import type { Base } from '../../../context/index.ts';
@@ -29,7 +29,7 @@ const ok = (stdout = ''): Ran => ({ code: 0, stdout, stderr: '' });
 const no: Ran = { code: 1, stdout: '', stderr: '' };
 
 /** The agent with a stand-in for itself, for Macro, for git, and firings pushed by hand. */
-const setup = () => {
+const setup = (trace: Trace = passthrough) => {
   const disk = memoryDisk();
   const clock = fixedClock('2026-11-09T15:00:00Z');
   const config = makeConfig({
@@ -88,7 +88,7 @@ const setup = () => {
       throw new Error('no relay');
     },
     relayed: async () => ({}),
-    trace: passthrough,
+    trace,
     sandbox: [],
     browserEndpoint: 'http://127.0.0.1:9223',
   };
@@ -352,5 +352,69 @@ test('schedules that say what they do: a line to the owner, a wake, a watch; oth
   box.wakes[0]?.end({ kind: 'done', reply: '' });
   await box.settle();
   expect(box.commits().at(-1)).toBe('standing: ok');
+  await box.stop();
+});
+
+/** A trace that records each span: its name, the parent it was given, and what was set on it. */
+const recordingTrace = () => {
+  const spans: {
+    name: string;
+    parent: string | undefined;
+    attributes: Record<string, string | number | boolean>;
+  }[] = [];
+  const trace: Trace = async (name, run, parent) => {
+    const span = { name, parent, attributes: {} };
+    spans.push(span);
+    return run({
+      set: (key, value) => {
+        span.attributes = { ...span.attributes, [key]: value };
+      },
+      traceparent: () =>
+        `00-${'1'.repeat(32)}-${String(spans.indexOf(span) + 1).padStart(16, '0')}-01`,
+    });
+  };
+  return { trace, spans };
+};
+
+test("a task's run is one span in the trace of its hand-over, with its id and how it ended", async () => {
+  const recording = recordingTrace();
+  const box = setup(recording.trace);
+  const handedOver = `00-${'a'.repeat(32)}-${'b'.repeat(16)}-01`;
+  await box.schedules.set('later-1', { at: '2026-11-09T15:00:00Z' });
+
+  await box.fire('later-1', { wake: 'do the task', traceparent: handedOver });
+  await box.settle();
+  expect(box.wakes.map(({ request }) => request)).toEqual(['do the task']);
+  box.wakes[0]?.end({ kind: 'failed', error: 'timed out after 60000ms' });
+  await box.settle();
+
+  const [task] = recording.spans.filter(({ name }) => name === 'agent.task');
+  expect(task?.parent).toBe(handedOver);
+  expect(task?.attributes).toEqual({
+    'agent.task_id': 'later-1',
+    'agent.schedule.late_ms': 0,
+    'agent.schedule.outcome': 'failed',
+    'agent.schedule.error_category': 'timed_out',
+  });
+  await box.stop();
+});
+
+test('a wake whose schedule names no trace, or a malformed one, still runs, in a trace of its own', async () => {
+  const recording = recordingTrace();
+  const box = setup(recording.trace);
+  await box.schedules.set('standing', { every: '10m' });
+
+  await box.fire('standing', { wake: 'check', traceparent: 'not-a-trace' });
+  await box.settle();
+  expect(box.wakes.map(({ request }) => request)).toEqual(['check']);
+  box.wakes[0]?.end({ kind: 'done', reply: '' });
+  await box.settle();
+
+  const [wake] = recording.spans.filter(
+    ({ name }) => name === 'agent.scheduled_wake'
+  );
+  expect(wake?.parent).toBeUndefined();
+  expect(wake?.attributes['agent.task_id']).toBeUndefined();
+  expect(wake?.attributes['agent.schedule.outcome']).toBe('done');
   await box.stop();
 });

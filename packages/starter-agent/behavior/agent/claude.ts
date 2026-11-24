@@ -28,10 +28,15 @@ export type TraceSpan = {
   readonly traceparent: () => string | undefined;
 };
 
-/** Runs `run` inside a span named `name` (the Telemetry facade, injected). */
+/**
+ * Runs `run` inside a span named `name` (the Telemetry facade, injected): a
+ * child of the active span, or of `parent` (a W3C `traceparent` another run
+ * or process recorded) when one is given.
+ */
 export type Trace = <Value>(
   name: string,
-  run: (span: TraceSpan) => Promise<Value>
+  run: (span: TraceSpan) => Promise<Value>,
+  parent?: string
 ) => Promise<Value>;
 
 /** A trace that records nothing. */

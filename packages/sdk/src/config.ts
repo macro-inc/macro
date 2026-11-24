@@ -136,4 +136,12 @@ export interface MacroOpts {
    * every request. Bot auth only. Set via `macro.requestedAs(user)` rather
    * than directly. */
   requestedAs?: string;
+  /**
+   * Send the active OpenTelemetry trace context (`traceparent`, `tracestate`)
+   * with every request, through the propagator the process registered, so
+   * Macro's spans for the call join the caller's trace. Off by default: a
+   * browser would need the headers allowed cross-origin. A process with no
+   * propagator or no active span sends nothing.
+   */
+  traceContext?: boolean;
 }

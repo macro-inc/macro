@@ -1,3 +1,4 @@
+import { context, propagation } from '@opentelemetry/api';
 import { match, P } from 'ts-pattern';
 import { Sdk as AgentHarnessSdk } from '../../generated/agent-harness/sdk.gen';
 import { Sdk as AuthSdk } from '../../generated/auth/sdk.gen';
@@ -142,6 +143,8 @@ export class MacroClient {
 
   private readonly requestedAs?: string;
 
+  private readonly traceContext: boolean;
+
   private selfBotRecord?: Promise<Bot>;
 
   private selfPrincipal?: Promise<string>;
@@ -161,6 +164,7 @@ export class MacroClient {
       WEB_APP_URLS[env];
     this.authConfig = resolveAuth(opts);
     this.requestedAs = opts.requestedAs;
+    this.traceContext = opts.traceContext === true;
     if (this.requestedAs && this.authConfig.type !== 'bot') {
       throw new Error(
         'requestedAs() requires bot auth — a user token always acts as its own user',
@@ -299,10 +303,18 @@ export class MacroClient {
       for (const [name, value] of headers) {
         request.headers.set(name, value);
       }
+      if (this.traceContext) injectTraceContext(request.headers);
       return request;
     });
     return c;
   }
+}
+
+/** Writes the active trace context into `headers`; nothing without a propagator or span. */
+export function injectTraceContext(headers: Headers): void {
+  propagation.inject(context.active(), headers, {
+    set: (carrier, key, value) => carrier.set(key, value),
+  });
 }
 
 /**

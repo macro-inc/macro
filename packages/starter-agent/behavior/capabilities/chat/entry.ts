@@ -40,6 +40,8 @@ export const Queued = Entry.extend({
   mentioned: z.boolean(),
   /** The relevance screen's probabilities. */
   p: z.record(z.string(), z.number()),
+  /** The screen span that queued it (W3C `traceparent`): its reply joins that trace. */
+  traceparent: z.string().optional(),
 });
 export type Queued = z.infer<typeof Queued>;
 
