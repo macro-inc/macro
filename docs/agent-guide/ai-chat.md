@@ -666,11 +666,18 @@ the shimmer.
   names (for example, **Sonnet 5.5**) and provider or model icons aligned with the
   agent icons. The in-memory catalog leads with **Auto**, where Jev sorts each
   turn's prompt: hard prompts run on **Opus 5.5**, simple ones on **Gemini 3.8
-  Flash**, and the rest on **GPT-6.1 Sol**. It then offers the closed Anthropic and OpenAI chat
+  Flash**, and the rest on **GPT-6.2 Sol**. It then offers the closed Anthropic and OpenAI chat
   models; Kimi, DeepSeek, Muse, GLM, Qwen, MiniMax, GPT OSS, and Nemotron
   open-weight models; and Google's **Gemini 3.8 Flash**. The Anthropic models
-  are **Sonnet 5.5**, **Opus 5.5**, and **Haiku 4.5**; older Claude versions
-  (Sonnet 5, Opus 5, Fable 5.1) are not offered.
+  are **Sonnet 5.5**, **Opus 5.5**, and **Haiku 5.5**, and the OpenAI ones **GPT-6
+  Astra**, **GPT-6.2 Sol**, and **GPT-6 Luna**; older Claude versions (Sonnet 5,
+  Opus 5, Fable 5.1, Haiku 4.5) and GPT versions (GPT-6.1 Sol, GPT-5.6, GPT-5.6
+  mini, GPT-5.5, GPT-5 mini) are not offered. A retired model saved anywhere (an
+  agent, a routine step, a remembered choice, a draft, a chat, or a session
+  resumed after the change) runs on its replacement: Haiku 4.5 on Haiku 5.5,
+  GPT-6.1 Sol, GPT-5.6 and GPT-5.5 on GPT-6.2 Sol, and the minis on GPT-6 Luna
+  (`chat::domain::models::RETIRED_MODELS`, mirrored by the web's
+  `RETIRED_MODELS`).
   Selecting a model here selects
   the default runtime and applies that model to the next send, hiding the repository controls while keeping the mode bar visible.
   A model chosen from that catalog is remembered in local storage as the
@@ -1655,7 +1662,7 @@ existing text sizing.
 
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
 - Model picker button showing the current model (e.g. `Gemini 3.8 Flash`). Paid plans list
-  `Sonnet 5.5`, `Opus 5.5`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`,
+  `Sonnet 5.5`, `Opus 5.5`, `Haiku 5.5`, `GPT-6 Astra`, `GPT-6.2 Sol`, `GPT-6 Luna`,
   and `Gemini 3.8 Flash`;
   in dev, heavy models carry a `2.5× usage` / `5× usage` hint.
   On the free plan everything but `Gemini 3.8 Flash` is
@@ -2524,7 +2531,7 @@ model triggers use a transparent round pill with a background only on hover,
 matching the production chat composer's proportions.
 
 Soup and recent-chat icons recognize the provider in the saved model ID even
-when that model is no longer selectable. For example, `openai/gpt-5.5` retains
+when that model is no longer selectable. For example, `openai/gpt-4o` retains
 the OpenAI logo; an unknown provider shows the standard chat icon instead of
 defaulting to Claude. A recognized per-chat selection takes precedence over the
 server model. New sends record that selection before navigation or a background

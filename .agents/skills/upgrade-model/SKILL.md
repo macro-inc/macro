@@ -40,10 +40,14 @@ component contains it. Keep the frontend catalog aligned with the backend.
 Check the pricing setup under `crates/ai_billing` and MacroDB pricing migrations;
 a new provider ID needs the corresponding pricing configuration.
 
-When retiring a model, migrate saved selections as well. Routines
-(`scheduled_action.task->>'model'`) and in-memory agents
-(`agent_configs.default_model`) persist their model. Follow
-`crates/macro_db_client/migrations/20261019221542_upgrade_retired_claude_models.sql`,
+When retiring a model, map it to its replacement in `RETIRED_MODELS`
+(`model_access.rs`) and in the web's `RETIRED_MODELS` (`model.ts`). The backend
+upgrades retired ids when a session opens or resumes and when a chat message
+arrives; the web upgrades saved chats, drafts and the remembered agent model.
+Migrate saved selections as well: routines (`scheduled_action.task`, both a
+legacy task's `model` and each agent step's `model` under `steps`) and
+in-memory agents (`agent_configs.default_model`) persist their model. Follow
+`crates/macro_db_client/migrations/20261123181251_upgrade_retired_chat_models.sql`,
 keep the Macro-runtime scope, and bump the routine's `configuration_revision`.
 Create migrations through the `sqlx-migration` skill.
 
