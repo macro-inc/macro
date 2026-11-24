@@ -2884,7 +2884,7 @@ jobs:
                   echo "Desktop release already promoted."
                   exit 0
                 fi
-                # A rerun of an optional build that failed (the Intel Mac app) adds its
+                # A rerun of an optional build that failed (the Intel Mac or Windows app) adds its
                 # platform to the feed this version already published. Allow only that:
                 # every platform already listed, and everything else, must be unchanged.
                 if ! jq -en --slurpfile new release-artifacts/latest.json --slurpfile old "$work_dir/latest.json" '

@@ -707,8 +707,9 @@ checks the `macro://` handler. WebView2 cannot start there (the runner runs jobs
 elevated in session 0), so a GitHub-hosted `windows-2025` job installs it again,
 launches it, checks its page over the WebView2 DevTools protocol and uninstalls
 it; only an installer that passed reaches the release. A Windows failure leaves
-the macOS and Linux release alone; Windows users stay on their version. The
-release does wait for the Windows jobs to end, so keep the
+the macOS and Linux release alone; Windows users stay on their version, and
+rerunning the failed Windows jobs adds `windows-x86_64` to that version's feed,
+as for Intel below. The release does wait for the Windows jobs to end, so keep the
 `desktop-windows-signing` environment free of required reviewers and wait
 timers.
 
