@@ -485,6 +485,12 @@ export interface NormalizedCacheExchangeOptions {
   /** Called when cache work fails; the operation may degrade or emit uncertainty. */
   onCacheError?: (error: unknown, op: Operation) => void;
   /**
+   * Subscribes a function that asks the network again for every mounted query,
+   * to call after updates pushed to this client were missed: they are in
+   * neither the cache nor what the queries show.
+   */
+  onUpdatesMissed?: (refetch: () => void) => () => void;
+  /**
    * Extracts the session identity (e.g. viewer id, `data.user.id`) from a
    * response. The extracted value is passed to the cache as an opaque tag;
    * a write tagged with a different identity than the one bound to the
@@ -1925,13 +1931,13 @@ export function normalizedCacheExchange(
             subscriptionGenerations.set(op.key, {});
           }
           if (op.kind === 'teardown') {
+            mutationQueue.abandon(op.key);
             hydrationRequests.delete(op.key);
             subscriptionGenerations.delete(op.key);
             activeOps.delete(op.key);
             liveQueries.delete(op.key);
             documentReader.forget(op.key);
             queryStates.delete(op.key);
-            mutationQueue.abandon(op.key);
             affectedRereads.forget(op.key);
             host.teardown(op.key).catch(() => undefined);
           }
@@ -1953,6 +1959,8 @@ export function normalizedCacheExchange(
         stopSettlements,
         mutationQueue.dispose,
       ];
+      const stopRefetching = options.onUpdatesMissed?.(refetchActiveQueries);
+      if (stopRefetching) cleanups.push(stopRefetching);
       if (!host.disabled) {
         cleanups.push(
           cacheSessionGeneration.onChanged(() => {

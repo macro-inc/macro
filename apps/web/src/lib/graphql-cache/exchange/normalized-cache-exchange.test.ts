@@ -2994,6 +2994,47 @@ describe('normalizedCacheExchange', () => {
     }
   );
 
+  it('asks the network again for every mounted query when updates were missed', async () => {
+    host.readQuery = async () => ({ kind: 'hit', data: { from: 'cache' } });
+    let refetch = () => {};
+    const unbound = vi.fn();
+    const lifetime = new AbortController();
+    const { ops, network, forwarded, results } = controlledQueryHarness(host, {
+      signal: lifetime.signal,
+      onUpdatesMissed: (listener) => {
+        refetch = listener;
+        return unbound;
+      },
+    });
+    const cacheOnly = makeOp(46);
+    ops.next(makeOp(44));
+    ops.next(makeOp(45));
+    ops.next(
+      makeOperation('query', cacheOnly, {
+        ...cacheOnly.context,
+        requestPolicy: 'cache-only',
+      })
+    );
+    ops.next(makeHydrationOp(47));
+    ops.next(teardownOf(makeOp(45)));
+    await tick();
+    const before = forwarded.length;
+
+    refetch();
+    await tick();
+    const asked = forwarded.slice(before);
+    expect(asked.map((op) => [op.key, op.context.requestPolicy])).toEqual([
+      [44, 'network-only'],
+    ]);
+    network.next(queryResult(asked[0]!, { from: 'after' }));
+    await tick();
+    expect(results.at(-1)?.data).toEqual({ from: 'after' });
+    expect(host.writes.at(-1)?.data).toEqual({ from: 'after' });
+
+    lifetime.abort();
+    expect(unbound).toHaveBeenCalledOnce();
+  });
+
   it('lets its queue owner go when a sent request was given up by its caller', async () => {
     const letGo = vi.fn();
     const mutationQueueLocks = {

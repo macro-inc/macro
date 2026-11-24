@@ -516,9 +516,12 @@ A page's host is **paused** through an outage: `disabled` and `paused` are both
 true, `getGraphqlSoupCacheHost()` returns nothing (reactively), and reads and
 writes fail at once so callers use the network. The client, its socket, its queue
 and its subscribers stay. A handshake with a later engine ends it: the host
-serves again, subscriptions start over and their listeners refetch as after a
-socket reconnect, and recovery proves the queue readable
-at once, also while the page is offline or hidden. A pause loses a live query's
+serves again, subscriptions start over, and every mounted query asks the network
+again, since neither the cache nor the view has what was pushed meanwhile (once
+online, if the page is offline). Recovery proves the queue readable at once, also
+while the page is offline or hidden, and stream listeners then refetch as after a
+socket reconnect. A logout or login that meets a paused host starts no other for
+its storage: the logout rotates the scope, the login's repair fails. A pause loses a live query's
 registration like an owner change does, and keeps the CRM authority's
 generation.
 

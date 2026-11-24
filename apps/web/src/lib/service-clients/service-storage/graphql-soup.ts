@@ -1037,10 +1037,22 @@ export function getGraphqlSoupClient(): Client {
       subscriptionsLifecycle.replace(cachedClient, target);
       return !target.disabled;
     };
+    let refetchQueries = () => {};
+    /** Offline, they are fetched once there is a network to ask. */
+    const refetchMissed = () => {
+      if (navigator.onLine === false)
+        addEventListener('online', refetchMissed, {
+          once: true,
+          signal: lifetime.signal,
+        });
+      else refetchQueries();
+    };
     const resume = async (target: CacheHost): Promise<void> => {
       if (!(await startSubscriptions(target))) return;
-      // Soup updates were off meanwhile, as while a socket is down.
+      // Soup updates were off meanwhile, as while a socket is down, and a
+      // query mounted before that shows, and holds cached, what came before.
       subscriptionsLifecycle.connected();
+      refetchMissed();
       try {
         await cacheRecovery.available();
       } finally {
@@ -1197,6 +1209,12 @@ export function getGraphqlSoupClient(): Client {
             delegateRevalidation: delegateChannelNotificationRefresh,
             externalWriteTypes: resolveCrmExternalWriteTypes,
             isUncachedSubscription: isActivityUpdatesSubscription,
+            onUpdatesMissed: (refetch) => {
+              refetchQueries = refetch;
+              return () => {
+                refetchQueries = () => {};
+              };
+            },
           }),
           notificationReceiptExchange(publishNotificationPatch),
           channelMembershipReceiptExchange(),

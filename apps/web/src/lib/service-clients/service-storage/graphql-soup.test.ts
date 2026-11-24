@@ -2376,6 +2376,13 @@ describe('GraphQL Soup browser cache session gate', () => {
       mocks.subscriptionsConnected.mockImplementation(() => {
         order.push('subscribed');
       });
+      const refetch = vi.fn(() => {
+        order.push('refetched');
+      });
+      const unbind =
+        mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.onUpdatesMissed?.(
+          refetch
+        );
       const reconnected = vi.fn(() => {
         order.push(`reconnected, cache: ${soup.hasGraphqlCacheHost()}`);
       });
@@ -2390,6 +2397,7 @@ describe('GraphQL Soup browser cache session gate', () => {
       pause(true);
       await vi.advanceTimersByTimeAsync(0);
       expect(reconnected).not.toHaveBeenCalled();
+      expect(refetch).not.toHaveBeenCalled();
       expect(mocks.subscriptionsConnected).not.toHaveBeenCalled();
 
       pause(false);
@@ -2399,12 +2407,32 @@ describe('GraphQL Soup browser cache session gate', () => {
       // What arrived meanwhile was missed, as while a socket is down.
       expect(mocks.subscriptionsConnected).toHaveBeenCalledOnce();
       expect(throwing).toHaveBeenCalledOnce();
-      expect(order).toEqual(['subscribed', 'reconnected, cache: true']);
+      expect(order).toEqual([
+        'subscribed',
+        'refetched',
+        'reconnected, cache: true',
+      ]);
       expect(soup.graphqlCacheRecoveryState()).toBe('ready');
       expect(soup.graphqlCacheEnabled()).toBe(true);
       expect(visible()).toBe(host);
       expect(soup.getGraphqlSoupClient()).toBe(client);
       expect(mocks.createWorkerCacheHost).toHaveBeenCalledOnce();
+
+      // Offline, what was missed is asked for once there is a network.
+      const online = vi.spyOn(navigator, 'onLine', 'get');
+      online.mockReturnValue(false);
+      pause(true);
+      mocks.unavailable(new Error('owner lock is held by another context'));
+      pause(false);
+      mocks.available();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(refetch).toHaveBeenCalledOnce();
+      online.mockRestore();
+      window.dispatchEvent(new Event('online'));
+      expect(refetch).toHaveBeenCalledTimes(2);
+      window.dispatchEvent(new Event('online'));
+      expect(refetch).toHaveBeenCalledTimes(2);
+      unbind?.();
     } finally {
       pause(false);
       mocks.subscriptionsConnected.mockReset();
