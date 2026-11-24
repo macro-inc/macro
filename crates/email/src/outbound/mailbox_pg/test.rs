@@ -14,6 +14,7 @@ mod notified_reads;
 mod outlook_import;
 mod outlook_subscriptions;
 mod projection_retries;
+mod reauthorization;
 mod retries;
 mod unstorable_values;
 

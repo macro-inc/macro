@@ -511,7 +511,11 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                 self.repo.commit_catalog(lease, &folders).await
             }
             Err(MailboxError::Provider(error)) => {
-                let delay = retry_seconds(&error);
+                let delay = if error == EmailApiError::AuthRequired {
+                    REAUTHORIZATION_PROBE_SECONDS
+                } else {
+                    retry_seconds(&error)
+                };
                 let error = MailboxError::from(error);
                 self.repo
                     .release_catalog(lease, delay)
@@ -985,6 +989,12 @@ pub(crate) fn import_round_lead_seconds(role: FolderRole) -> u32 {
         _ => 0,
     }
 }
+
+/// How long discovery waits to ask for a token again for a mailbox whose
+/// token is refused. It is the only sync work claimed while the mailbox needs
+/// reconnecting, and the sign-in service asks Microsoft again at the same
+/// pace, so a refusal that clears on its own resumes sync within the hour.
+const REAUTHORIZATION_PROBE_SECONDS: u32 = 60 * 60;
 
 /// How soon discovery looks again for a mailbox it found missing, and the
 /// longest it waits: the 12 h a working subscription waits for renewal.

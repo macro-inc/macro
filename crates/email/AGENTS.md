@@ -776,8 +776,12 @@ tools — hexagonal, heavily feature-gated.
   which held each import's end for about 90 s. So every live enqueue clears
   `is_import` on a row it merges into (`ON CONFLICT ... is_import = false`, or
   `AND EXCLUDED.is_import` for folder pages); keep that in a new one.
-- Outlook sync claims (catalog, folder streams, messages, contacts) skip a
-  link with `needs_reauth`; clearing the flag resumes them.
+- Outlook sync claims (folder streams, messages, contacts) skip a link with
+  `needs_reauth`; clearing the flag resumes them. Discovery still claims it, as
+  the probe that asks for a token again, and waits an hour after a refusal
+  (`REAUTHORIZATION_PROBE_SECONDS`); the token that works clears the flag
+  (`credentials.rs`), so a refusal that clears at Microsoft resumes sync
+  without a reconnect.
 - A folder discovery that Graph answers 404 at the Inbox
   (`MailFolderCatalog::NoMailbox`: the account has no mailbox Graph serves)
   marks the link `mailbox_unavailable_at` (`defer_reason=no_mailbox`, the
