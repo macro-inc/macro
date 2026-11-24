@@ -32,6 +32,7 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 chrono-tz = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }
+csv = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 feature_flags = { path = "../feature_flags", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }

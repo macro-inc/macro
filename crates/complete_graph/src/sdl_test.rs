@@ -1038,6 +1038,7 @@ fn time_tracking_hangs_off_documents_and_the_authenticated_user() {
         "startTimer(input: StartTimerInput!): StartTimerPayload!",
         "stopTimer(input: StopTimerInput!): StopTimerPayload!",
         "discardTimer(timerId: ID!): DiscardTimerPayload!",
+        "timeSummary(input: TimeSummaryInput!): GraphqlTimeSummary!",
     ] {
         assert_sdl_line(&sdl, expected);
     }
@@ -1061,6 +1062,9 @@ fn time_tracking_hangs_off_documents_and_the_authenticated_user() {
     }
     // A page is embedded in its task, per its arguments; it has no identity.
     assert!(!object("GraphqlTimeEntryPage").fields.contains_key("id"));
+    // A summary is embedded in the viewer, per its input; it has no identity.
+    assert!(!object("GraphqlTimeSummary").fields.contains_key("id"));
+    assert!(object("GraphqlUser").fields.contains_key("timeSummary"));
     // Entries belong to documents, not to every Soup entity.
     assert!(
         object("GraphqlSoupDocument")

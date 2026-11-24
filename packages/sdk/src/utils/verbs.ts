@@ -100,13 +100,16 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       'updateScheduledAction detachScheduledAction rewriteSuggestion setScheduledActionAppearance',
     enabled: 'setScheduledActionEnabled activateScheduledActionTemplate',
     ran: 'executeScheduledActionNow',
+    stopped: 'stopScheduledActionRun',
     unshared: 'unshareScheduledActionTemplate',
     shared: 'shareScheduledActionTemplate',
     archived: 'retireSuggestion retireRoutineSuggestion',
     linked: 'attachSuggestionDraft',
+    submitted: 'reportSuggestionRun',
     approved: 'acceptSuggestion',
     rejected: 'dismissSuggestion',
     restored: 'restoreSuggestion',
+    cancelled: 'stopSuggestionRun',
   },
   unfurl: { read: 'getUnfurl getUnfurlBulk' },
   auth: {
@@ -247,7 +250,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       exportDocument streamEvents
       passwordsAgentDisclose passwordsAgentMyRequest passwordsAgentTotpCode
       exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
-      getTaskTemplate getTimer
+      getTaskTemplate getTimer getTimeSummary exportTime
     `,
     listed: `
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences

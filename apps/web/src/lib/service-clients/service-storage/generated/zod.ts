@@ -90165,6 +90165,223 @@ export const updateTimeEntryResponse = zod
   );
 
 /**
+ * @summary A scope's entries over a period as CSV text, oldest day first: one row
+per entry with its day, person (as an email), task, minutes, hours, note
+and source. Capped at 10,000 entries and 16 MiB; `complete` is false when
+entries were left out. May miss writes from the last few seconds.
+ */
+export const exportTimeQueryParams = zod.object({
+  scope: zod.enum(['project', 'mine', 'team']).describe('Whose time to read.'),
+  projectId: zod
+    .uuid()
+    .optional()
+    .describe('The project, with `scope=project` only.'),
+  from: zod.iso.date().describe('The first day, `YYYY-MM-DD`.'),
+  to: zod.iso
+    .date()
+    .describe('The last day, `YYYY-MM-DD`, at most 365 days after `from`.'),
+});
+
+export const exportTimeResponseRowsMin = 0;
+
+export const exportTimeResponse = zod
+  .object({
+    complete: zod
+      .boolean()
+      .describe(
+        'False when entries were left out: past 10,000 entries or 16 MiB, or\npast the first 5,000 tasks of the scope.'
+      ),
+    csv: zod.string().describe('The CSV: one row per entry, oldest day first.'),
+    rows: zod
+      .number()
+      .min(exportTimeResponseRowsMin)
+      .describe('Entries written.'),
+  })
+  .describe("A scope's entries over a period as CSV text.");
+
+/**
+ * @summary A scope's time over a period: the total, totals by the first grouping,
+each split by the second, and the second grouping's totals. Only tasks
+the caller can see count, out of the Trash; a scope past 5,000 tasks is
+read to the first 5,000 and answers `complete: false`.
+ */
+export const getTimeSummaryQueryParams = zod.object({
+  scope: zod.enum(['project', 'mine', 'team']).describe('Whose time to read.'),
+  projectId: zod
+    .uuid()
+    .optional()
+    .describe('The project, with `scope=project` only.'),
+  from: zod.iso.date().describe('The first day, `YYYY-MM-DD`.'),
+  to: zod.iso
+    .date()
+    .describe('The last day, `YYYY-MM-DD`, at most 365 days after `from`.'),
+  groupBy: zod
+    .enum(['person', 'task', 'day'])
+    .describe('What the totals are grouped by.'),
+  thenBy: zod
+    .enum(['person', 'task', 'day'])
+    .optional()
+    .describe('What each group is split by; another grouping than `groupBy`.'),
+});
+
+export const getTimeSummaryResponseGroupsItemMinutesMin = 0;
+
+export const getTimeSummaryResponseGroupsItemRowsItemMinutesMin = 0;
+
+export const getTimeSummaryResponseGroupsItemTaskCountMin = 0;
+
+export const getTimeSummaryResponseScopeTaskCountMin = 0;
+
+export const getTimeSummaryResponseTaskCountMin = 0;
+
+export const getTimeSummaryResponseThenTotalsItemMinutesMin = 0;
+
+export const getTimeSummaryResponseTotalMinutesMin = 0;
+
+export const getTimeSummaryResponse = zod
+  .object({
+    complete: zod
+      .boolean()
+      .describe(
+        'False when the scope held more than 5,000 tasks and only the first\n5,000 were read.'
+      ),
+    from: zod.iso.date().describe('The first day of the period.'),
+    groups: zod
+      .array(
+        zod
+          .object({
+            key: zod
+              .union([
+                zod
+                  .object({
+                    by: zod.enum(['person']),
+                    userId: zod.string().describe('The person.'),
+                  })
+                  .describe("One person's time."),
+                zod
+                  .object({
+                    by: zod.enum(['task']),
+                    taskId: zod.string().describe('The task document.'),
+                  })
+                  .describe('The time on one task.'),
+                zod
+                  .object({
+                    by: zod.enum(['day']),
+                    date: zod.iso.date().describe("The loggers' calendar day."),
+                  })
+                  .describe('The time logged for one day.'),
+              ])
+              .describe('What one total is for.'),
+            minutes: zod
+              .number()
+              .min(getTimeSummaryResponseGroupsItemMinutesMin)
+              .describe('Minutes logged in the group.'),
+            rows: zod
+              .array(
+                zod
+                  .object({
+                    key: zod
+                      .union([
+                        zod
+                          .object({
+                            by: zod.enum(['person']),
+                            userId: zod.string().describe('The person.'),
+                          })
+                          .describe("One person's time."),
+                        zod
+                          .object({
+                            by: zod.enum(['task']),
+                            taskId: zod.string().describe('The task document.'),
+                          })
+                          .describe('The time on one task.'),
+                        zod
+                          .object({
+                            by: zod.enum(['day']),
+                            date: zod.iso
+                              .date()
+                              .describe("The loggers' calendar day."),
+                          })
+                          .describe('The time logged for one day.'),
+                      ])
+                      .describe('What one total is for.'),
+                    minutes: zod
+                      .number()
+                      .min(getTimeSummaryResponseGroupsItemRowsItemMinutesMin)
+                      .describe('Minutes logged.'),
+                  })
+                  .describe('A total of minutes.')
+              )
+              .describe(
+                "The group's totals by the second grouping, in report order; empty\nwithout one."
+              ),
+            taskCount: zod
+              .number()
+              .min(getTimeSummaryResponseGroupsItemTaskCountMin)
+              .describe('Tasks with time in the group.'),
+          })
+          .describe(
+            'The total of one group, and its split by the second grouping.'
+          )
+      )
+      .describe(
+        "Totals by the first grouping, in report order: days in calendar order,\npeople and tasks with the most time first. For the caller's own and\ntheir team's time grouped by person, every current member has a group,\nwith or without time."
+      ),
+    scopeTaskCount: zod
+      .number()
+      .min(getTimeSummaryResponseScopeTaskCountMin)
+      .nullish()
+      .describe(
+        'For a project, its tasks the caller can see that are out of the\nTrash, with time or not; absent for other scopes.'
+      ),
+    taskCount: zod
+      .number()
+      .min(getTimeSummaryResponseTaskCountMin)
+      .describe('Tasks with time in the period.'),
+    thenTotals: zod
+      .array(
+        zod
+          .object({
+            key: zod
+              .union([
+                zod
+                  .object({
+                    by: zod.enum(['person']),
+                    userId: zod.string().describe('The person.'),
+                  })
+                  .describe("One person's time."),
+                zod
+                  .object({
+                    by: zod.enum(['task']),
+                    taskId: zod.string().describe('The task document.'),
+                  })
+                  .describe('The time on one task.'),
+                zod
+                  .object({
+                    by: zod.enum(['day']),
+                    date: zod.iso.date().describe("The loggers' calendar day."),
+                  })
+                  .describe('The time logged for one day.'),
+              ])
+              .describe('What one total is for.'),
+            minutes: zod
+              .number()
+              .min(getTimeSummaryResponseThenTotalsItemMinutesMin)
+              .describe('Minutes logged.'),
+          })
+          .describe('A total of minutes.')
+      )
+      .describe(
+        'Totals by the second grouping across all groups, in report order;\nempty without one.'
+      ),
+    to: zod.iso.date().describe('The last day of the period.'),
+    totalMinutes: zod
+      .number()
+      .min(getTimeSummaryResponseTotalMinutesMin)
+      .describe('Minutes logged in the period.'),
+  })
+  .describe('The time a scope logged over a period.');
+
+/**
  * @summary List a task's time entries, newest day first, with its Time logged.
  */
 export const listTimeEntriesParams = zod.object({

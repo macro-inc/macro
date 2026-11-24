@@ -47,19 +47,6 @@ export type AppEvents = {
     reason: AccountDeletionReason | 'not_provided';
     feedback?: string;
   };
-  login_from_onboarding: Record<string, unknown>;
-  mobile_web_welcome_viewed: Record<string, unknown>;
-  mobile_web_signup_sent_viewed: Record<string, unknown>;
-
-  // --- Interactive tutorial (optional; decoupled from acquisition) ---------
-  tutorial_started: { isFirstTime: boolean };
-  tutorial_step: {
-    id: string;
-    index: number;
-    state: 'viewed' | 'completed' | 'skipped';
-  };
-  tutorial_completed: { isFirstTime: boolean };
-  tutorial_skipped: Record<string, unknown>;
 
   // --- Onboarding v4 (the full-screen /onboarding stepper) -----------------
   /** A GTM invite welcome page resolved its link (`/invite?token=`). */
@@ -151,6 +138,14 @@ export type AppEvents = {
   };
   /** A @macro.com account used the staff Bypass button; `step` is where. */
   onboarding_v4_bypassed: { step: string };
+  /**
+   * A phone-browser user reached the last screen, "Macro is better on
+   * desktop", and chose how to go on: `viewed`, then `download_app` (store
+   * link) or `continue_in_browser`.
+   */
+  onboarding_v4_desktop_handoff: {
+    action: 'viewed' | 'download_app' | 'continue_in_browser';
+  };
 
   subscription_start: Record<string, unknown>;
   subscription_cancel: Record<string, unknown>;
@@ -162,7 +157,7 @@ export type AppEvents = {
    * the same event with `source: 'marketing'`.
    */
   desktop_download_clicked: {
-    platform: 'macos' | 'linux';
+    platform: 'macos' | 'macos-intel' | 'linux';
     source: 'app_settings';
   };
   notifications_toggled: Record<string, unknown>;

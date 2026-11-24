@@ -135,8 +135,10 @@ compatible with the service code currently deployed, not just the code in its PR
    container; never fall through to the shared localhost:5432 database.
 
 5. **Refresh the workspace SQLx cache** when non-test queries or schema
-   change, or when required metadata is missing. Snapshot the cache first;
-   even a failed preparation can truncate it:
+   change, or when required metadata is missing. Before any preparation, copy
+   `.sqlx` to a separate snapshot outside the checkout, whether using the default
+   database or a dedicated test database. Even a failed preparation can truncate
+   the cache. From the repository root:
 
    ```bash
    sqlx_cache_snapshot="$(mktemp -d)"
@@ -145,14 +147,17 @@ compatible with the service code currently deployed, not just the code in its PR
    ```
 
    Inspect the dry-run's resolved host and port before running it. Root Just
-   DB recipes use their own `DATABASE_URL` variable and ignore an environment
-   override, so pass `--set` on the actual command too:
+   DB recipes use their own `DATABASE_URL` variable, defaulting to localhost:5432,
+   and ignore an environment override. For a dedicated database, verify the
+   container and port with `docker ps`, then pass `--set` on the actual command too:
 
    ```bash
    nix develop --command just --set DATABASE_URL "$TASK_DATABASE_URL" prepare_db
    ```
 
-   If preparation fails, stop and inspect its error, then restore the snapshot:
+   If preparation fails, stop and inspect its error, then restore only `.sqlx`
+   from the snapshot made before that preparation. Check the resolved target
+   again before retrying; this recovers the cache, not the database:
 
    ```bash
    mkdir -p .sqlx

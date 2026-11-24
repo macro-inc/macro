@@ -124,6 +124,8 @@ vi.mock('./rail/hooks/useChannelCalls', () => ({
 vi.mock('./rail/hooks/useChannelRailActivity', () => ({
   useChannelRailActivity: () => ({
     unreadChannelIds: () => mocks.unreadChannelIds,
+    unreadOrMentionedChannelIds: () =>
+      new Set([...mocks.unreadChannelIds, ...mocks.mentionCounts.keys()]),
     callStatuses: () => new Map(),
     incomingCallIds: () => mocks.incomingCallIds,
     mentionCount: (channelId: string) =>
@@ -443,6 +445,23 @@ describe('mobile channel pins', () => {
         expect.objectContaining({ referredFrom: 'channels' })
       )
     );
+  });
+
+  it('keeps a conversation whose only unread is a thread mention under Unread only', () => {
+    mocks.mentionCounts = new Map([['two', 1]]);
+    mocks.unreadChannelIds = new Set();
+    render(() => (
+      <ChannelsMobileView
+        source={both}
+        pinned={[]}
+        searchQuery=""
+        onClearSearch={() => {}}
+        preferences={{ unreadOnly: true }}
+      />
+    ));
+
+    expect(screen.queryByTestId('row-one')).toBeNull();
+    expect(screen.getByTestId('row-two')).toBeTruthy();
   });
 
   it('counts unread mentions on list rows and pins, capped at the edge limit', () => {

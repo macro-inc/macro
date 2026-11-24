@@ -73,6 +73,8 @@ export type CrmContext = {
   accessState: Accessor<'pending' | 'allowed' | 'denied' | 'error'>;
   retryAccess(): Promise<unknown>;
   createEmailPolicy(): EmailPolicySource;
+  /** Opens the app's add-inbox flow; never changes CRM email consent. */
+  connectMailbox(): void;
   /** Owner-scoped email reference, available independently of CRM viewing access. */
   EmailThreadMention: Component<{
     threadId: string;

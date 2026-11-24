@@ -34,6 +34,7 @@ use tracing::{Instrument, Span, field::Empty};
 use usage::{SseUsage, TokenUsage};
 
 pub(crate) mod brain;
+mod screen_notices;
 mod usage;
 
 #[cfg(test)]
@@ -146,6 +147,8 @@ pub(super) struct GatewayState<Sessions, Computers> {
     brains: Option<Arc<dyn brain::BrainAuthenticator>>,
     /// Whether agent teammates are on for the calling agent.
     brain_rollout: brain::BrainRollout,
+    /// Screen take-over notices for agents' next brain request.
+    screens: Option<Arc<crate::computers::screen::Screens>>,
 }
 
 impl<Sessions, Computers> GatewayState<Sessions, Computers> {
@@ -177,6 +180,7 @@ impl<Sessions, Computers> GatewayState<Sessions, Computers> {
             api_key,
             brains: None,
             brain_rollout: brain::BrainRollout::default(),
+            screens: None,
         })
     }
 
@@ -189,6 +193,16 @@ impl<Sessions, Computers> GatewayState<Sessions, Computers> {
     ) -> Self {
         self.brains = Some(brains);
         self.brain_rollout = rollout;
+        self
+    }
+
+    /// Deliver screen take-over and hand-back notices with agents' brain
+    /// messages.
+    pub(super) fn with_screen_notices(
+        mut self,
+        screens: Arc<crate::computers::screen::Screens>,
+    ) -> Self {
+        self.screens = Some(screens);
         self
     }
 }
@@ -294,6 +308,7 @@ async fn unsupported() -> Response {
         status: StatusCode::NOT_FOUND,
         kind: "not_found_error",
         outcome: "unsupported_endpoint",
+        retry_after_seconds: None,
         message: "Macro's Anthropic gateway serves only /v1/messages and /v1/messages/count_tokens"
             .into(),
     }
@@ -338,6 +353,7 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
     span: &Span,
 ) -> Result<Response, Rejection> {
     let (parts, body) = request.into_parts();
+    let mut brain_agent = None;
     let (owner, entity) = if parts.extensions.get::<BrainRoute>().is_some() {
         let brain = authenticate_brain(state.brains.as_deref(), &parts.headers).await?;
         span.record(
@@ -348,6 +364,7 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
         if !state.brain_rollout.enabled(&brain.user_id).await {
             return Err(Rejection::AGENT_TEAMMATES_OFF);
         }
+        brain_agent = Some(brain.user_id.clone());
         (brain.user_id, None)
     } else {
         let session = authenticate(state.sessions.as_ref(), &parts.headers).await?;
@@ -394,6 +411,14 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
         span.record("anthropic_gateway.admission", "accepted");
     }
 
+    // Claimed last, so nothing between here and the answer returns early
+    // with them.
+    let (body, carried_notices) = match (&brain_agent, &state.screens) {
+        (Some(agent), Some(screens)) if endpoint == Endpoint::Messages => {
+            screen_notices::deliver(body, &parts.headers, screens, agent).await
+        }
+        _ => (body, Vec::new()),
+    };
     let upstream = state
         .client
         .post(format!("{}{}", state.upstream_url, endpoint.path()))
@@ -401,8 +426,31 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
         .body(body)
         .send()
         .await
-        .inspect_err(|error| tracing::warn!(error = ?error, "anthropic request failed"))
-        .map_err(|_| Rejection::UPSTREAM_UNREACHABLE)?;
+        .inspect_err(|error| tracing::warn!(error = ?error, "anthropic request failed"));
+
+    // The notices count as delivered only once a finished answer was handed
+    // whole to the caller's connection (not necessarily read by the agent):
+    // a refused or failed request, a stream that broke or ended in an
+    // `error` event after its 200, a body that broke, or a caller that hung
+    // up first gives them to the next request.
+    let notices = state
+        .screens
+        .as_ref()
+        .filter(|_| !carried_notices.is_empty())
+        .map(|screens| CarriedNotices {
+            screens: Arc::clone(screens),
+            claims: carried_notices,
+        });
+    let accepted = upstream
+        .as_ref()
+        .is_ok_and(|upstream| upstream.status().is_success());
+    let notices = if accepted {
+        notices
+    } else {
+        settle(notices, false).await;
+        None
+    };
+    let upstream = upstream.map_err(|_| Rejection::UPSTREAM_UNREACHABLE)?;
 
     let status = upstream.status();
     span.record("http.response.status_code", i64::from(status.as_u16()));
@@ -434,19 +482,36 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
 
     let body = if streaming {
         let (caller, chunks) = tokio::sync::mpsc::channel(STREAM_BUFFER_CHUNKS);
-        let metering = meter.map(|meter| (meter, SseUsage::default()));
+        let chunks = tokio_stream::wrappers::ReceiverStream::new(chunks);
+        let (watch, body) = match notices.map(NoticeWatch::new) {
+            Some((watch, tail)) => (Some(watch), Body::from_stream(chunks.chain(tail))),
+            None => (None, Body::from_stream(chunks)),
+        };
         tokio::spawn(
-            pump(Box::pin(upstream.bytes_stream()), metering, caller).instrument(span.clone()),
+            pump(Box::pin(upstream.bytes_stream()), meter, watch, caller).instrument(span.clone()),
         );
-        Body::from_stream(tokio_stream::wrappers::ReceiverStream::new(chunks))
+        body
     } else {
-        let bytes = read_limited(upstream).await?;
+        let bytes = match read_limited(upstream).await {
+            Ok(bytes) => bytes,
+            Err(rejection) => {
+                settle(notices, false).await;
+                return Err(rejection);
+            }
+        };
         if let Some(mut meter) = meter
             && let Some(usage) = usage::from_json_body(&bytes)
         {
             meter.usage = usage;
         }
-        Body::from(bytes)
+        match notices.map(NoticeWatch::new) {
+            Some((watch, tail)) => {
+                tokio::spawn(watch.settle(true).instrument(span.clone()));
+                let whole = futures::stream::once(std::future::ready(Ok(bytes)));
+                Body::from_stream(whole.chain(tail))
+            }
+            None => Body::from(bytes),
+        }
     };
 
     let mut response = Response::new(body);
@@ -466,9 +531,12 @@ async fn authenticate_brain(
     brains
         .authenticate(bearer.token())
         .await
-        .map_err(|error| {
-            tracing::error!(error = ?error, "could not authenticate a brain");
-            Rejection::UPSTREAM_UNREACHABLE
+        .map_err(|error| match error {
+            brain::BrainLookupError::Held { retry_after } => Rejection::agent_held(retry_after),
+            brain::BrainLookupError::Failed(report) => {
+                tracing::error!(error = ?report, "could not authenticate a brain");
+                Rejection::UPSTREAM_UNREACHABLE
+            }
         })?
         .ok_or(Rejection::BRAIN_UNAUTHENTICATED)
 }
@@ -476,24 +544,101 @@ async fn authenticate_brain(
 type UpstreamChunks =
     Pin<Box<dyn futures::Stream<Item = reqwest::Result<axum::body::Bytes>> + Send>>;
 
+/// Screen notices a request carried, settled once its answer finished.
+struct CarriedNotices {
+    screens: Arc<crate::computers::screen::Screens>,
+    claims: Vec<computer_screen::domain::models::NoticeClaim>,
+}
+
+/// Delete the notices when the model's answer `finished`, or give them to
+/// the next request.
+async fn settle(notices: Option<CarriedNotices>, finished: bool) {
+    let Some(CarriedNotices { screens, claims }) = notices else {
+        return;
+    };
+    let settled = if finished {
+        screens.notices_delivered(&claims).await
+    } else {
+        screens.notices_returned(&claims).await
+    };
+    if let Err(error) = settled {
+        tracing::warn!(error = ?error, finished, "could not settle screen notices");
+    }
+}
+
+/// The end of an answer that carried notices: the body's last part, which
+/// resolves only once the caller's connection took everything before it.
+type NoticeTail = Pin<
+    Box<dyn futures::Stream<Item = Result<axum::body::Bytes, std::io::Error>> + Send + 'static>,
+>;
+
+/// Carried notices waiting for the caller's connection to take the whole
+/// answer.
+struct NoticeWatch {
+    notices: CarriedNotices,
+    /// Sent by the body's tail once the connection took everything before it,
+    /// with a way to hold the body's end until the notices are settled;
+    /// dropped unsent when the caller hung up first.
+    read: tokio::sync::oneshot::Receiver<tokio::sync::oneshot::Sender<()>>,
+}
+
+impl NoticeWatch {
+    /// The watch, and the tail to put last in the answer's body.
+    fn new(notices: CarriedNotices) -> (Self, NoticeTail) {
+        let (read_to_end, read) = tokio::sync::oneshot::channel();
+        let tail = futures::stream::once(async move {
+            let (settled, settling) = tokio::sync::oneshot::channel();
+            if read_to_end.send(settled).is_ok() {
+                // The body ends once the notices are settled.
+                let _ = settling.await;
+            }
+        })
+        .filter_map(|()| std::future::ready(None::<Result<axum::body::Bytes, std::io::Error>>));
+        (Self { notices, read }, Box::pin(tail))
+    }
+
+    /// Settle once the connection took the whole answer: delivered when the
+    /// answer `finished`, given back when it didn't or the caller hung up.
+    async fn settle(self, finished: bool) {
+        let Self { notices, read } = self;
+        match read.await {
+            Ok(settled) => {
+                settle(Some(notices), finished).await;
+                let _ = settled.send(());
+            }
+            Err(_) => settle(Some(notices), false).await,
+        }
+    }
+}
+
 /// Streams `upstream` to the caller while metering it. When the caller hangs
-/// up, keeps reading (for at most [`DRAIN_TIMEOUT`]) so the final usage is
-/// still recorded: an abort must not skip output billing.
+/// up, its notices go back at once (it never had the answer), and the rest
+/// is still read (for at most [`DRAIN_TIMEOUT`]) so the final usage is
+/// recorded: an abort must not skip output billing. Otherwise the notices
+/// settle once the connection took the whole stream: delivered only when
+/// the message stopped and no chunk broke.
 async fn pump(
     mut upstream: UpstreamChunks,
-    mut metering: Option<(UsageMeter, SseUsage)>,
+    mut meter: Option<UsageMeter>,
+    notices: Option<NoticeWatch>,
     caller: tokio::sync::mpsc::Sender<Result<axum::body::Bytes, std::io::Error>>,
 ) {
+    let mut parser = SseUsage::default();
+    let mut broke = false;
     while let Some(chunk) = upstream.next().await {
-        observe(&mut metering, &chunk);
+        broke |= chunk.is_err();
+        observe(&mut meter, &mut parser, &chunk);
         if caller
             .send(chunk.map_err(std::io::Error::other))
             .await
             .is_err()
         {
+            if let Some(NoticeWatch { notices, .. }) = notices {
+                settle(Some(notices), false).await;
+            }
             let drain = async {
                 while let Some(chunk) = upstream.next().await {
-                    observe(&mut metering, &chunk);
+                    observe(&mut meter, &mut parser, &chunk);
                 }
             };
             if tokio::time::timeout(DRAIN_TIMEOUT, drain).await.is_err() {
@@ -502,26 +647,32 @@ async fn pump(
             return;
         }
     }
+    // The caller's stream ends here; its tail waits for the notices.
+    drop(caller);
+    if let Some(notices) = notices {
+        notices.settle(parser.stopped() && !broke).await;
+    }
 }
 
 fn observe(
-    metering: &mut Option<(UsageMeter, SseUsage)>,
+    meter: &mut Option<UsageMeter>,
+    parser: &mut SseUsage,
     chunk: &reqwest::Result<axum::body::Bytes>,
 ) {
-    let Some((meter, parser)) = metering.as_mut() else {
-        return;
-    };
     match chunk {
         Ok(bytes) => {
             parser.observe(bytes);
-            meter.usage = parser.usage();
+            if let Some(meter) = meter.as_mut() {
+                meter.usage = parser.usage();
+            }
         }
         Err(error) => {
-            tracing::warn!(parent: &meter.span, error = ?error, "anthropic stream broke");
-            meter
-                .span
-                .record("anthropic_gateway.outcome", "stream_error");
-            meter.span.record("otel.status_code", "ERROR");
+            let span = meter
+                .as_ref()
+                .map_or_else(Span::current, |meter| meter.span.clone());
+            tracing::warn!(parent: &span, error = ?error, "anthropic stream broke");
+            span.record("anthropic_gateway.outcome", "stream_error");
+            span.record("otel.status_code", "ERROR");
         }
     }
 }
@@ -628,6 +779,8 @@ struct Rejection {
     /// Low-cardinality span outcome.
     outcome: &'static str,
     message: std::borrow::Cow<'static, str>,
+    /// Sent as `Retry-After`, so the client backs off and retries.
+    retry_after_seconds: Option<u64>,
 }
 
 impl Rejection {
@@ -635,6 +788,7 @@ impl Rejection {
         status: StatusCode::UNAUTHORIZED,
         kind: "authentication_error",
         outcome: "unauthenticated",
+        retry_after_seconds: None,
         message: std::borrow::Cow::Borrowed(
             "send the agent teammate's Macro API key as `Authorization: Bearer`",
         ),
@@ -644,6 +798,7 @@ impl Rejection {
         status: StatusCode::UNAUTHORIZED,
         kind: "authentication_error",
         outcome: "unauthenticated",
+        retry_after_seconds: None,
         message: std::borrow::Cow::Borrowed(
             "send the agent session's Macro token as `Authorization: Bearer`",
         ),
@@ -655,6 +810,7 @@ impl Rejection {
         status: StatusCode::FORBIDDEN,
         kind: "permission_error",
         outcome: "agent_teammates_off",
+        retry_after_seconds: None,
         message: std::borrow::Cow::Borrowed("agent teammates are not enabled for this agent"),
     };
 
@@ -664,6 +820,7 @@ impl Rejection {
         status: StatusCode::FORBIDDEN,
         kind: "permission_error",
         outcome: "not_on_a_computer",
+        retry_after_seconds: None,
         message: std::borrow::Cow::Borrowed(
             "Macro's Anthropic gateway serves only sessions on a Macro computer",
         ),
@@ -673,6 +830,7 @@ impl Rejection {
         status: StatusCode::SERVICE_UNAVAILABLE,
         kind: "api_error",
         outcome: "not_configured",
+        retry_after_seconds: None,
         message: std::borrow::Cow::Borrowed("Macro's Anthropic gateway has no API key configured"),
     };
 
@@ -680,14 +838,29 @@ impl Rejection {
         status: StatusCode::SERVICE_UNAVAILABLE,
         kind: "api_error",
         outcome: "upstream_unreachable",
+        retry_after_seconds: None,
         message: std::borrow::Cow::Borrowed("Anthropic could not be reached"),
     };
+
+    /// A person still drives the agent's computer: back off and retry.
+    fn agent_held(retry_after: Duration) -> Self {
+        Self {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            kind: "overloaded_error",
+            outcome: "agent_held",
+            message: std::borrow::Cow::Borrowed(
+                "a person is driving this agent's computer; retry after they hand it back",
+            ),
+            retry_after_seconds: Some(retry_after.as_secs()),
+        }
+    }
 
     fn invalid_request(message: &'static str) -> Self {
         Self {
             status: StatusCode::BAD_REQUEST,
             kind: "invalid_request_error",
             outcome: "invalid_request",
+            retry_after_seconds: None,
             message: message.into(),
         }
     }
@@ -701,6 +874,7 @@ impl Rejection {
             status: StatusCode::BAD_REQUEST,
             kind: "invalid_request_error",
             outcome: "model_not_allowed",
+            retry_after_seconds: None,
             message: format!(
                 "model `{model}` is not available on Macro credits; use one of: {}",
                 allowed.join(", ")
@@ -714,6 +888,7 @@ impl Rejection {
             status: StatusCode::FORBIDDEN,
             kind: "permission_error",
             outcome: "forbidden",
+            retry_after_seconds: None,
             message: message.into(),
         }
     }
@@ -724,12 +899,14 @@ impl Rejection {
                 status: StatusCode::FORBIDDEN,
                 kind: "permission_error",
                 outcome: "admission_denied",
+                retry_after_seconds: None,
                 message: error.to_string().into(),
             },
             AiAdmissionError::Unavailable => Self {
                 status: StatusCode::SERVICE_UNAVAILABLE,
                 kind: "api_error",
                 outcome: "admission_unavailable",
+                retry_after_seconds: None,
                 message: error.to_string().into(),
             },
         }
@@ -738,13 +915,19 @@ impl Rejection {
 
 impl IntoResponse for Rejection {
     fn into_response(self) -> Response {
-        (
+        let mut response = (
             self.status,
             Json(serde_json::json!({
                 "type": "error",
                 "error": { "type": self.kind, "message": self.message },
             })),
         )
-            .into_response()
+            .into_response();
+        if let Some(seconds) = self.retry_after_seconds {
+            response
+                .headers_mut()
+                .insert(header::RETRY_AFTER, HeaderValue::from(seconds));
+        }
+        response
     }
 }

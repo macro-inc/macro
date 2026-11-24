@@ -90,6 +90,9 @@ export default {
   setOwner: 'Set owner',
   setRevenue: 'Set revenue',
   openPropertyEditor: 'Open property editor',
+  propertyValuesLoading: 'Loading {{values}}…',
+  propertyValuesUnavailable: "Couldn't load this item's {{values}}",
+  propertyLinks: 'links',
 
   // Command menu wording that differs from the menu labels.
   markAsNotDone: 'Mark as not done',

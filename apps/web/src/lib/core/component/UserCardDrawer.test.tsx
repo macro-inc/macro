@@ -66,6 +66,10 @@ vi.mock('@app/features/settings/bot-settings-user-action', () => ({
   createBotSettingsUserCardAction: () => () => undefined,
 }));
 
+vi.mock('@app/features/agent-screen/screen-user-action', () => ({
+  createScreenUserCardAction: () => () => undefined,
+}));
+
 vi.mock('./UserIcon', () => ({
   UserIcon: () => <div data-testid="user-icon" />,
 }));

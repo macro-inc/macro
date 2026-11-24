@@ -146,7 +146,7 @@ export function EmailList(props: EmailListProps) {
     openThread,
     selectedThread,
     filterByTag,
-    searchOpen,
+    searchHasText,
     parsedSearch,
   } = useEmailView();
   // Query loading can replace the empty state without ending the connect flow.
@@ -611,7 +611,7 @@ export function EmailList(props: EmailListProps) {
 
   const hasEmailRows = () => rows().some((row) => row.kind === 'entity');
   // The tutorial introduces the inbox; search results are not the inbox.
-  const showsTutorial = () => state.tab === 'important' && !searchOpen();
+  const showsTutorial = () => state.tab === 'important' && !searchHasText();
 
   function showsEmptyViewport() {
     return (

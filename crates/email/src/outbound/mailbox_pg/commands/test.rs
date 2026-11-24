@@ -457,7 +457,9 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
         .await
         .unwrap();
     assert!(
-        repo.labels_by_message_ids(&[message]).await.unwrap()[&message]
+        repo.labels_by_message_ids(&[message], Some(&owner()))
+            .await
+            .unwrap()[&message]
             .iter()
             .any(|label| label.provider_label_id == "Projects")
     );
@@ -469,7 +471,9 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
     .await
     .unwrap();
     assert!(
-        repo.labels_by_message_ids(&[message]).await.unwrap()[&message]
+        repo.labels_by_message_ids(&[message], Some(&owner()))
+            .await
+            .unwrap()[&message]
             .iter()
             .any(|label| label.provider_label_id == "Projects")
     );
@@ -497,7 +501,7 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
         .unwrap();
     assert!(
         !repo
-            .labels_by_message_ids(&[message])
+            .labels_by_message_ids(&[message], Some(&owner()))
             .await
             .unwrap()
             .get(&message)
@@ -530,7 +534,9 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
             .is_empty()
     );
     assert!(
-        repo.labels_by_message_ids(&[message]).await.unwrap()[&message]
+        repo.labels_by_message_ids(&[message], Some(&owner()))
+            .await
+            .unwrap()[&message]
             .iter()
             .any(|label| label.provider_label_id == "Projects")
     );
@@ -541,7 +547,7 @@ async fn category_projection_keeps_latest_intent_across_sync_failure_and_deletio
     sync.delete_label(&owner(), link, label).await.unwrap();
     assert!(
         !repo
-            .labels_by_message_ids(&[message])
+            .labels_by_message_ids(&[message], Some(&owner()))
             .await
             .unwrap()
             .get(&message)

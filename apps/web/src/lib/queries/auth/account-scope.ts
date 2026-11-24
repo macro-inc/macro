@@ -20,6 +20,7 @@ const ACCOUNT_SOURCE_PREFIXES = [
   emailKeys.inboxSuggestion._def,
   authKeys.emailConnectionProviders._def,
   emailKeys.linksHealthProbe._def,
+  emailKeys.userLabels._def,
   authKeys.userNameSelf._def,
   scheduledActionKeys.draftJobs.queryKey,
 ];

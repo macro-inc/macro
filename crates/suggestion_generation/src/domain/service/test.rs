@@ -410,6 +410,24 @@ impl SuggestionApi for FakeSuggestions {
         unused()
     }
 
+    async fn report_run(
+        &self,
+        _: &CreationPrincipal,
+        _: Option<Uuid>,
+        _: suggestions::domain::model::RunReport,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
+        unused()
+    }
+
+    async fn stop_run(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: SuggestionCaller,
+        _: Uuid,
+    ) -> Result<(), SuggestionError> {
+        unused()
+    }
+
     fn brief(&self, trigger: GenerationTrigger, _: Tz) -> String {
         format!("suggestions {}", trigger.as_ref())
     }

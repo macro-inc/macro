@@ -12,6 +12,7 @@ export const emailKeys = createQueryKeys('email', {
     userId: string | undefined,
     session: number | undefined
   ) => ({ queryKey: [userId, session] }),
+  userLabels: (userId: string | undefined) => ({ queryKey: [userId] }),
   linksHealthProbe: (userId: string | undefined) => ({ queryKey: [userId] }),
   threads: null,
   thread: (threadId: string) => ({

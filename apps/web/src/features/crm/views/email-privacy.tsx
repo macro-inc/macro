@@ -283,8 +283,29 @@ function ThreadExclusions(props: {
   );
 }
 
+/**
+ * Opens the app's add-inbox flow. Connecting a mailbox never opts it in; the
+ * member shares it separately afterwards.
+ */
+function ConnectEmailButton(props: { onConnectEmail?: () => void }) {
+  const { connectMailbox } = useCrmContext();
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={() => {
+        props.onConnectEmail?.();
+        connectMailbox();
+      }}
+    >
+      {t('crm.privacyConnectEmail')}
+    </Button>
+  );
+}
+
 function LegacyEmailPrivacySettings(props: {
   onOptIn?: () => void;
+  onConnectEmail?: () => void;
   onOpenThread?: () => void;
   source: PrivacySource;
   policyUnavailable?: boolean;
@@ -323,9 +344,16 @@ function LegacyEmailPrivacySettings(props: {
                 : t('crm.privacyNotShared')
             }
           >
-            <span class="text-sm text-ink-muted">
-              {settings()?.enabled ? t('crm.privacyOn') : t('crm.privacyOff')}
-            </span>
+            <Show
+              when={settings()?.enabled || settings()?.mailboxLinkId}
+              fallback={
+                <ConnectEmailButton onConnectEmail={props.onConnectEmail} />
+              }
+            >
+              <span class="text-sm text-ink-muted">
+                {settings()?.enabled ? t('crm.privacyOn') : t('crm.privacyOff')}
+              </span>
+            </Show>
           </SettingsRow>
         </SettingsCard>
         <p class="text-sm text-ink-muted">
@@ -366,6 +394,8 @@ function LegacyEmailPrivacySettings(props: {
 
 type PrivacySettingsProps = {
   onOptIn?: () => void;
+  /** Called before the add-inbox flow opens, so a host dialog can step aside. */
+  onConnectEmail?: () => void;
   onOpenThread?: () => void;
   renderOverview?: (content: JSX.Element) => JSX.Element;
 };
@@ -389,6 +419,9 @@ function SelectiveEmailPrivacy(
     () => !settings.state.historyLoaded && !settings.state.historyError
   );
   const policy = settings.policy;
+  const mailbox = () => policy()?.mailbox_email;
+  // Opt-in keys on the linked mailbox, so Connect email does too.
+  const needsMailbox = () => !policy()?.enabled && !policy()?.link_id;
   const go = (next: EmailPolicyPage) => {
     if (settings.state.busy) return;
     if (next === 'editor' || next === 'preview' || next === 'all')
@@ -417,7 +450,7 @@ function SelectiveEmailPrivacy(
       <SettingsSection title={t('crm.privacyContributionTitle')}>
         <SettingsCard>
           <SettingsRow
-            label={policy()?.mailbox_email ?? t('crm.privacyConnect')}
+            label={mailbox() ?? t('crm.privacyConnect')}
             description={
               !policy()?.enabled
                 ? t('crm.policyOff')
@@ -426,16 +459,21 @@ function SelectiveEmailPrivacy(
                   : t('crm.policyAll')
             }
           >
-            <Show when={settings.canAuthor()}>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={settings.state.busy}
-                onClick={() => go('mode')}
-              >
-                {t('crm.policyChange')}
-              </Button>
-            </Show>
+            <div class="flex flex-wrap justify-end gap-2">
+              <Show when={needsMailbox()}>
+                <ConnectEmailButton onConnectEmail={props.onConnectEmail} />
+              </Show>
+              <Show when={settings.canAuthor()}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={settings.state.busy}
+                  onClick={() => go('mode')}
+                >
+                  {t('crm.policyChange')}
+                </Button>
+              </Show>
+            </div>
           </SettingsRow>
         </SettingsCard>
         <p class="text-sm text-ink-muted leading-relaxed">
@@ -708,6 +746,7 @@ export function CrmEmailPrivacyDialog(props: {
         <Panel.Body scroll class="p-4 flex flex-col gap-4">
           <CrmEmailPrivacySettings
             onOptIn={() => props.onOpenChange(false)}
+            onConnectEmail={() => props.onOpenChange(false)}
             onOpenThread={() => props.onOpenChange(false)}
           />
         </Panel.Body>

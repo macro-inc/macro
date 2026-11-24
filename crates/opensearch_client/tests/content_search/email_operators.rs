@@ -1,6 +1,7 @@
-//! Email search words, and the conditions typed Mail search operators
-//! become, against a real OpenSearch: each runs inside the unified request,
-//! with its sort and highlighter, and keeps exactly the messages it names.
+//! Email search words, the conditions typed Mail search operators become,
+//! and the inboxes a search reaches, against a real OpenSearch: each runs
+//! inside the unified request, with its sort and highlighter, and keeps
+//! exactly the messages it names.
 
 use std::{collections::BTreeSet, sync::LazyLock};
 
@@ -12,6 +13,7 @@ use opensearch_client::{
     date_format::EpochMillis,
     search::{
         emails::{EmailLabelCondition, EmailTextCondition, EmailTextFields},
+        model::SearchGotoContent,
         unified::{UnifiedEmailSearchArgs, UnifiedSearchArgs},
     },
     upsert::{email::UpsertEmailArgs, properties::IndexedProperty},
@@ -22,6 +24,11 @@ use crate::{OTHER, SEARCH_INDICES, VIEWER, count_documents, refresh, test_client
 
 const EMAILS: &str = "emails";
 const LINK: &str = "5ea4c400-0000-4000-8000-00000000e000";
+/// The inbox of the other person's mail, which can reach the viewer only as a
+/// thread shared with them.
+const OTHER_LINK: &str = "5ea4c400-0000-4000-8000-00000000e001";
+/// The other person's second inbox, which they delegated to the viewer.
+const DELEGATED_LINK: &str = "5ea4c400-0000-4000-8000-00000000e002";
 const TAG_DEFINITION: &str = "5ea4c400-0000-4000-8000-00000000e0de";
 const TAG_OPTION: &str = "5ea4c400-0000-4000-8000-00000000e0e0";
 
@@ -35,9 +42,30 @@ fn thread(n: u128) -> Uuid {
     Uuid::from_u128(0x5ea4_c400_0000_4000_8000_0000_0000_e100 + n)
 }
 
+/// An inbox the index files mail under: its link and the owner of the link.
+#[derive(Clone, Copy)]
+struct Inbox {
+    link: &'static str,
+    owner: &'static str,
+}
+
+const VIEWER_INBOX: Inbox = Inbox {
+    link: LINK,
+    owner: VIEWER,
+};
+/// Two inboxes of one other person, the second delegated to the viewer.
+const OTHER_INBOX: Inbox = Inbox {
+    link: OTHER_LINK,
+    owner: OTHER,
+};
+const DELEGATED_INBOX: Inbox = Inbox {
+    link: DELEGATED_LINK,
+    owner: OTHER,
+};
+
 struct Message {
     thread: Uuid,
-    owner: &'static str,
+    inbox: Inbox,
     subject: &'static str,
     content: &'static str,
     sender: (&'static str, &'static str),
@@ -58,7 +86,7 @@ fn messages() -> Vec<Message> {
     vec![
         Message {
             thread: thread(1),
-            owner: VIEWER,
+            inbox: VIEWER_INBOX,
             subject: "Team lunch on Friday",
             content: "menu attached",
             sender: ANA,
@@ -71,7 +99,7 @@ fn messages() -> Vec<Message> {
         },
         Message {
             thread: thread(2),
-            owner: VIEWER,
+            inbox: VIEWER_INBOX,
             subject: "Quarterly numbers",
             content: "the lunch was great",
             sender: BO,
@@ -84,7 +112,7 @@ fn messages() -> Vec<Message> {
         },
         Message {
             thread: thread(3),
-            owner: VIEWER,
+            inbox: VIEWER_INBOX,
             subject: "lunch menu",
             content: "weekly",
             sender: CY,
@@ -97,7 +125,7 @@ fn messages() -> Vec<Message> {
         },
         Message {
             thread: thread(4),
-            owner: VIEWER,
+            inbox: VIEWER_INBOX,
             subject: "Hiring plan",
             content: "team plans later",
             sender: DI,
@@ -110,7 +138,7 @@ fn messages() -> Vec<Message> {
         },
         Message {
             thread: thread(5),
-            owner: OTHER,
+            inbox: OTHER_INBOX,
             subject: "lunch",
             content: "lunch",
             sender: ANA,
@@ -120,6 +148,19 @@ fn messages() -> Vec<Message> {
             labels: vec!["travel"],
             sent_at_millis: Some(MARCH_2025),
             tagged: true,
+        },
+        Message {
+            thread: thread(6),
+            inbox: DELEGATED_INBOX,
+            subject: "lunch rota",
+            content: "who brings lunch",
+            sender: DI,
+            recipients: vec![BO],
+            cc: Vec::new(),
+            bcc: Vec::new(),
+            labels: vec!["INBOX"],
+            sent_at_millis: Some(MARCH_2025),
+            tagged: false,
         },
     ]
 }
@@ -140,8 +181,8 @@ fn upsert_args(message: &Message) -> anyhow::Result<UpsertEmailArgs> {
         bcc: addresses(&message.bcc),
         bcc_names: names(&message.bcc),
         labels: message.labels.iter().map(|l| l.to_string()).collect(),
-        link_id: LINK.to_string(),
-        user_id: message.owner.to_string(),
+        link_id: message.inbox.link.to_string(),
+        user_id: message.inbox.owner.to_string(),
         updated_at_millis: EpochMillis::new(message.sent_at_millis.unwrap_or(JUNE_2024))?,
         subject: Some(message.subject.to_string()),
         sent_at_millis: message.sent_at_millis.map(EpochMillis::new).transpose()?,
@@ -184,6 +225,9 @@ struct Case {
     args: UnifiedEmailSearchArgs,
     match_type: &'static str,
     expected: &'static [u128],
+    /// The labels each named hit must come back with, when the case checks
+    /// them.
+    labels: &'static [(u128, &'static [&'static str])],
 }
 
 fn case(name: &str, terms: &[&str], expected: &'static [u128]) -> Case {
@@ -191,11 +235,13 @@ fn case(name: &str, terms: &[&str], expected: &'static [u128]) -> Case {
         name: name.to_string(),
         args: UnifiedEmailSearchArgs {
             terms: terms.iter().map(|t| t.to_string()).collect(),
-            user_ids: vec![VIEWER.to_string()],
+            inbox_link_ids: vec![LINK.to_string()],
+            label_link_ids: vec![LINK.to_string()],
             ..Default::default()
         },
         match_type: "partial",
         expected,
+        labels: &[],
     }
 }
 
@@ -251,6 +297,102 @@ fn cases() -> Vec<Case> {
             args.label_conditions = vec![label(&["newsletters"], false, true)];
         },
     );
+    // Thread 5 is the other person's, shared with the viewer. It carries a
+    // label of the same name in its owner's inbox, which is not the viewer's.
+    let shared = || vec![thread(5).to_string()];
+    with(
+        case("a shared thread is searched", &["lunch"], &[1, 2, 3, 5]),
+        &|args| {
+            args.thread_ids = shared();
+        },
+    );
+    with(
+        case(
+            "label:travel leaves out a shared thread's own label",
+            &[],
+            &[1],
+        ),
+        &|args| {
+            args.thread_ids = shared();
+            args.label_conditions = vec![label(&["travel"], false, false)];
+        },
+    );
+    with(
+        case(
+            "lunch -label:travel keeps a shared thread",
+            &["lunch"],
+            &[2, 3, 5],
+        ),
+        &|args| {
+            args.thread_ids = shared();
+            args.label_conditions = vec![label(&["travel"], false, true)];
+        },
+    );
+    with(
+        case(
+            "a tag still finds a shared thread beside a label",
+            &[],
+            &[1, 4, 5],
+        ),
+        &|args| {
+            args.thread_ids = shared();
+            args.label_conditions = vec![label(&["travel"], true, false)];
+        },
+    );
+    with(
+        case("a label of an inbox the viewer manages", &[], &[1, 5]),
+        &|args| {
+            args.thread_ids = shared();
+            args.label_link_ids = vec![LINK.to_string(), OTHER_LINK.to_string()];
+            args.label_conditions = vec![label(&["travel"], false, false)];
+        },
+    );
+    with(
+        case(
+            "no inbox whose labels the viewer reads",
+            &["lunch"],
+            &[1, 2, 3],
+        ),
+        &|args| {
+            args.label_link_ids = Vec::new();
+            args.label_conditions = vec![label(&["newsletters"], false, true)];
+        },
+    );
+    with(
+        case(
+            "include_labels leaves out a shared thread's own label",
+            &[],
+            &[1],
+        ),
+        &|args| {
+            args.thread_ids = shared();
+            args.include_labels = vec!["travel".to_string()];
+        },
+    );
+    with(
+        case(
+            "exclude_labels keeps a shared thread",
+            &["lunch"],
+            &[2, 3, 5],
+        ),
+        &|args| {
+            args.thread_ids = shared();
+            args.exclude_labels = vec!["travel".to_string()];
+        },
+    );
+    with(
+        Case {
+            labels: &[(1, &["INBOX", "travel"]), (5, &[])],
+            ..case(
+                "a shared thread's hit carries no labels",
+                &["lunch"],
+                &[1, 2, 3, 5],
+            )
+        },
+        &|args| {
+            args.thread_ids = shared();
+        },
+    );
     with(
         case("lunch without a thread", &["lunch"], &[2, 3]),
         &|args| {
@@ -268,6 +410,72 @@ fn cases() -> Vec<Case> {
     cases
 }
 
+/// Thread 5 is in the other person's own inbox and thread 6 in the inbox they
+/// delegated to the viewer. Both are filed under that person, so only the
+/// inbox tells them apart.
+fn inbox_cases() -> Vec<Case> {
+    let mut cases = Vec::new();
+    let mut with = |mut case: Case, set: &dyn Fn(&mut UnifiedEmailSearchArgs)| {
+        set(&mut case.args);
+        cases.push(case);
+    };
+    with(
+        case(
+            "lunch in the viewer's and a delegated inbox",
+            &["lunch"],
+            &[1, 2, 3, 6],
+        ),
+        &|args| {
+            args.inbox_link_ids = vec![LINK.to_string(), DELEGATED_LINK.to_string()];
+        },
+    );
+    with(
+        case(
+            "lunch with a thread shared from another inbox",
+            &["lunch"],
+            &[1, 2, 3, 5],
+        ),
+        &|args| {
+            args.thread_ids = vec![thread(5).to_string()];
+        },
+    );
+    with(
+        case("lunch in shared threads alone", &["lunch"], &[5]),
+        &|args| {
+            args.inbox_link_ids = Vec::new();
+            args.thread_ids = vec![thread(5).to_string()];
+        },
+    );
+    with(
+        case(
+            "lunch in an inbox the viewer does not read",
+            &["lunch"],
+            &[],
+        ),
+        &|args| {
+            args.inbox_link_ids = vec![LINK.to_string(), DELEGATED_LINK.to_string()];
+            args.link_ids = vec![OTHER_LINK.to_string()];
+        },
+    );
+    with(
+        case(
+            "lunch shared from an inbox the search names",
+            &["lunch"],
+            &[5],
+        ),
+        &|args| {
+            args.thread_ids = vec![thread(5).to_string()];
+            args.link_ids = vec![OTHER_LINK.to_string()];
+        },
+    );
+    cases
+}
+
+#[tokio::test]
+async fn a_search_reaches_mail_by_its_inbox_not_its_owner() -> anyhow::Result<()> {
+    search_seeded(messages(), inbox_cases()).await
+}
+
 #[tokio::test]
 async fn typed_email_conditions_keep_exactly_the_messages_they_name() -> anyhow::Result<()> {
     search_seeded(messages(), cases()).await
@@ -280,7 +488,7 @@ const MARY_JANE: (&str, &str) = ("Mary-Jane Watts", "mj@probe.example");
 fn hyphenated_messages() -> Vec<Message> {
     let message = |n, subject, content, sender| Message {
         thread: thread(n),
-        owner: VIEWER,
+        inbox: VIEWER_INBOX,
         subject,
         content,
         sender,
@@ -345,7 +553,7 @@ async fn a_hyphenated_word_finds_the_mail_that_holds_it() -> anyhow::Result<()> 
 fn punctuated_messages() -> Vec<Message> {
     let message = |n, subject, content, sender| Message {
         thread: thread(n),
-        owner: VIEWER,
+        inbox: VIEWER_INBOX,
         subject,
         content,
         sender,
@@ -412,11 +620,139 @@ async fn a_term_matches_by_its_words_whatever_punctuation_it_carries() -> anyhow
     search_seeded(punctuated_messages(), punctuated_cases()).await
 }
 
+/// Mail that holds an address in its address fields and words in its text.
+fn address_and_text_messages() -> Vec<Message> {
+    let message = |n, subject, content, sender, recipient| Message {
+        thread: thread(n),
+        inbox: VIEWER_INBOX,
+        subject,
+        content,
+        sender,
+        recipients: vec![recipient],
+        cc: Vec::new(),
+        bcc: Vec::new(),
+        labels: vec!["INBOX"],
+        sent_at_millis: Some(MARCH_2025),
+        tagged: false,
+    };
+    vec![
+        message(51, "Quarterly numbers", "two figures", ANA, BO),
+        message(52, "Quarterly plan", "one figure", BO, CY),
+        message(53, "Hiring plan", "attached", ANA, BO),
+        message(54, "Quarterly numbers", "one figure", CY, DI),
+        message(55, "A follow-up", "half a cup", BO, DI),
+    ]
+}
+
+/// An address matches apart from the words, which match together.
+fn address_and_text_cases() -> Vec<Case> {
+    let words = || {
+        [
+            case("an address", &["ana@probe.example"], &[51, 53]),
+            case("a word", &["numbers"], &[51, 54]),
+            case(
+                "an address and a word",
+                &["ana@probe.example", "numbers"],
+                &[51],
+            ),
+            case(
+                "a word and an address",
+                &["numbers", "ana@probe.example"],
+                &[51],
+            ),
+            case(
+                "an address and a phrase",
+                &["ana@probe.example", "quarterly numbers"],
+                &[51],
+            ),
+            case(
+                "an address and a hyphenated word it does not hold",
+                &["ana@probe.example", "follow-up"],
+                &[],
+            ),
+            case("a domain and a word", &["probe.example", "hiring"], &[53]),
+            case(
+                "a sender and a recipient and a word",
+                &["ana@probe.example", "bo@probe.example", "plan"],
+                &[53],
+            ),
+            case(
+                "a name in an address and a word",
+                &["bo", "plan"],
+                &[52, 53],
+            ),
+            case(
+                "a word and one the analyzer drops",
+                &["plan", "½"],
+                &[52, 53],
+            ),
+            case(
+                "words around one the analyzer drops",
+                &["quarterly", "½", "plan"],
+                &[52],
+            ),
+            case(
+                "an address and a word the analyzer drops",
+                &["ana@probe.example", "½"],
+                &[51, 53],
+            ),
+            case(
+                "an address, a word and one the analyzer drops",
+                &["ana@probe.example", "½", "numbers"],
+                &[51],
+            ),
+            case(
+                "an address, a hyphenated word and one the analyzer drops",
+                &["bo@probe.example", "½", "follow-up"],
+                &[55],
+            ),
+            case(
+                "a domain typed with a comma and a word",
+                &["probe.example,", "hiring"],
+                &[53],
+            ),
+            case(
+                "a domain typed with a full stop and a word",
+                &["probe.example。", "hiring"],
+                &[53],
+            ),
+            case("a handle and a word", &["@ana", "hiring"], &[53]),
+            case(
+                "a word of every address and a word of the text",
+                &["probe", "plan"],
+                &[],
+            ),
+            case("two words in the text", &["quarterly", "plan"], &[52]),
+            case(
+                "a word and an address no mail holds",
+                &["plan", "zed@probe.example"],
+                &[],
+            ),
+        ]
+    };
+    let mut cases = Vec::new();
+    for match_type in ["partial", "exact"] {
+        cases.extend(words().map(|case| Case { match_type, ..case }));
+    }
+    let mut left_out = case("a word and an address, left out", &["plan"], &[52]);
+    left_out.args.text_conditions = vec![text(EmailTextFields::Any, "ana@probe.example", true)];
+    cases.push(left_out);
+    let mut from = case("a word and from:", &["numbers"], &[51]);
+    from.args.text_conditions = vec![text(EmailTextFields::From, "ana@probe.example", false)];
+    cases.push(from);
+    cases
+}
+
+#[tokio::test]
+async fn an_address_beside_a_word_finds_the_mail_that_holds_both() -> anyhow::Result<()> {
+    search_seeded(address_and_text_messages(), address_and_text_cases()).await
+}
+
 /// A message whose subject, body and every name field hold `text`.
 fn message_holding(n: u128, text: &'static str) -> Message {
     Message {
         thread: thread(n),
-        owner: VIEWER,
+        inbox: VIEWER_INBOX,
         subject: text,
         content: text,
         sender: (text, BO.1),
@@ -540,7 +876,7 @@ static HOLDS_EVERY_TERM: LazyLock<String> = LazyLock::new(|| {
 const TERM_COUNTS: [usize; 4] = [14, 30, 45, TERM_CAP];
 
 /// Every shape at each of [`TERM_COUNTS`], with every filter a search can
-/// carry beside the terms, and as that many left-out words.
+/// carry beside the terms, beside an address, and as that many left-out words.
 fn cap_cases() -> Vec<Case> {
     let mut cases = Vec::new();
     for (shape, terms) in TERMS_AT_THE_CAP.iter() {
@@ -573,6 +909,21 @@ fn cap_cases() -> Vec<Case> {
                 cases.push(Case {
                     match_type,
                     ..found
+                });
+
+                // An emoji is left out beside an address.
+                let holds_the_rest: &[u128] = match *shape {
+                    "forty emoji" => &[31, 32, 33],
+                    _ => &[31],
+                };
+                let beside_an_address = [&[BO.1], &terms[1..]].concat();
+                cases.push(Case {
+                    match_type,
+                    ..case(
+                        &format!("an address and {name}"),
+                        &beside_an_address,
+                        holds_the_rest,
+                    )
                 });
 
                 let left_out: &[u128] = if holds_word_1 { &[33] } else { &[32, 33] };
@@ -657,6 +1008,22 @@ async fn seed_and_search(
             ..Default::default()
         };
         let (hits, _) = client.search_unified(args).await?;
+        for (n, expected) in case.labels {
+            let carried: Vec<Vec<String>> = hits
+                .iter()
+                .filter(|hit| hit.entity_id == thread(*n))
+                .filter_map(|hit| match &hit.goto {
+                    Some(SearchGotoContent::Emails(goto)) => Some(goto.labels.clone()),
+                    _ => None,
+                })
+                .collect();
+            if carried.is_empty() || carried.iter().any(|labels| labels != expected) {
+                failures.push(format!(
+                    "{} ({}): thread {n} expected labels {expected:?}, found {carried:?}",
+                    case.name, case.match_type
+                ));
+            }
+        }
         let found: BTreeSet<Uuid> = hits.iter().map(|hit| hit.entity_id).collect();
         let expected: BTreeSet<Uuid> = case.expected.iter().map(|n| thread(*n)).collect();
         if found != expected {
