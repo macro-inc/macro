@@ -221,8 +221,14 @@ function ScrollSheetFrame(
       requestAnimationFrame(() => {
         const current = metrics();
         if (phase() !== 'opening' || !current) return;
-        scrollTo(sheetOffset(current, sheet.activeSnapPoint()), true);
-        if (reducedMotion()) settle();
+        const target = sheetOffset(current, sheet.activeSnapPoint());
+        // Already there (reopened mid-close): no scroll will settle it.
+        if (reducedMotion() || Math.abs(offset() - target) <= 1) {
+          scrollTo(target, false);
+          settle();
+          return;
+        }
+        scrollTo(target, true);
       });
     });
   };
@@ -348,8 +354,10 @@ function ScrollSheetFrame(
         },
         { passive: true, signal }
       );
-    // A tap above the sheet (on the scrim) closes it; a drag that starts
-    // there moves the sheet like any other swipe.
+    // A tap above the sheet (on the scrim) closes it when it lifts, whatever
+    // `closeOnOutsidePointerStrategy` says: a drag that starts there moves
+    // the sheet like any other swipe. The strategy still applies to pointers
+    // outside the sheet's container, such as a menu it opened.
     element.addEventListener(
       'pointerdown',
       (event) => {
