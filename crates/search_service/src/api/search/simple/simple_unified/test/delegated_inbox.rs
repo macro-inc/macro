@@ -100,28 +100,29 @@ async fn insert_thread(
     .await?;
 
     let now = EpochMillis::new(chrono::Utc::now().timestamp_millis())?;
+    let document = UpsertEmailArgs {
+        thread_id: thread_id.to_string(),
+        message_id: message_id.to_string(),
+        sender,
+        sender_name: None,
+        reply_to: None,
+        recipients: Vec::new(),
+        recipient_names: Vec::new(),
+        cc: Vec::new(),
+        cc_names: Vec::new(),
+        bcc: Vec::new(),
+        bcc_names: Vec::new(),
+        labels: Vec::new(),
+        link_id: link_id.to_string(),
+        user_id: owner.to_string(),
+        updated_at_millis: now,
+        subject: Some(subject.to_string()),
+        sent_at_millis: Some(now),
+        content: format!("{subject} {WORD}"),
+        properties: Vec::new(),
+    };
     index
-        .upsert_email_message(&UpsertEmailArgs {
-            thread_id: thread_id.to_string(),
-            message_id: message_id.to_string(),
-            sender,
-            sender_name: None,
-            reply_to: None,
-            recipients: Vec::new(),
-            recipient_names: Vec::new(),
-            cc: Vec::new(),
-            cc_names: Vec::new(),
-            bcc: Vec::new(),
-            bcc_names: Vec::new(),
-            labels: Vec::new(),
-            link_id: link_id.to_string(),
-            user_id: owner.to_string(),
-            updated_at_millis: now,
-            subject: Some(subject.to_string()),
-            sent_at_millis: Some(now),
-            content: format!("{subject} {WORD}"),
-            properties: Vec::new(),
-        })
+        .write_email_documents(1, &[document], &[], None)
         .await?;
     Ok(thread_id)
 }
