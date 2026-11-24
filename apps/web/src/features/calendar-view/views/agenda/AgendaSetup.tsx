@@ -2,6 +2,7 @@ import { useCalendarView } from '@app/features/calendar/components/CalendarViewC
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
+import { isMobile } from '@core/mobile/isMobile';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { SetupStatus } from '../../components/SetupStatus';
 
@@ -23,7 +24,7 @@ export function AgendaSetup() {
   return (
     <>
       <RangeUnavailableBanner />
-      <SetupStatus data={data} allowBlocking={false} />
+      <SetupStatus data={data} includeBanner fullWidth={isMobile()} />
     </>
   );
 }

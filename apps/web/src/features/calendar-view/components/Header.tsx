@@ -277,8 +277,9 @@ export function Header(props: {
           content: 'Go to today',
           hotkey: TOKENS.calendar.period.today,
         }}
-        variant="secondary"
-        size={mobile ? 'icon-md' : 'md'}
+        variant={mobile ? 'ghost' : 'secondary'}
+        size={mobile ? 'icon-lg' : 'md'}
+        class={mobile ? 'rounded-full' : undefined}
         onClick={navigation.navigateToToday}
       >
         <Show when={mobile} fallback="Today">
