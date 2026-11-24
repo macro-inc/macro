@@ -39,15 +39,6 @@ impl Reached {
 }
 
 impl TeamAgentService for Reached {
-    async fn set_avatar(
-        &self,
-        _: EntityAccessReceipt<AdminTeamRole>,
-        _: &MacroUserIdStr<'_>,
-        _: AgentAvatar,
-    ) -> Result<(), TeamAgentError> {
-        self.reached()
-    }
-
     async fn create(
         &self,
         _: EntityAccessReceipt<AdminTeamRole>,
@@ -323,50 +314,6 @@ async fn a_person_creates_a_team_agent() {
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     assert_eq!(service.0.load(Ordering::SeqCst), 1);
-}
-
-#[tokio::test]
-async fn an_admin_can_reach_the_agent_avatar_edit_service() {
-    let service = Arc::new(Reached::default());
-    let response = router(service.clone())
-        .oneshot(
-            Request::put("/macro%7Cagent%40example.com/avatar")
-                .header(header::AUTHORIZATION, "Bearer valid")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    r#"{"face":{"v":1,"seed":"avatar","pins":{"hair":2}},"url":null}"#,
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    assert_eq!(service.0.load(Ordering::SeqCst), 1);
-}
-
-#[tokio::test]
-async fn avatar_edits_refuse_members_before_the_service() {
-    let service = Arc::new(Reached::default());
-    let app = team_agents_router(TeamAgentsRouterState {
-        service: service.clone(),
-        entity_access_service: Arc::new(FakeEntityAccessService::with_membership(
-            USER_ID,
-            TeamRole::Member,
-        )),
-        authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuthorization)),
-    });
-    let response = app
-        .oneshot(
-            Request::put("/macro%7Cagent%40example.com/avatar")
-                .header(header::AUTHORIZATION, "Bearer valid")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(r#"{"face":null,"url":null}"#))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(service.0.load(Ordering::SeqCst), 0);
 }
 
 async fn error_body(error: TeamAgentError) -> (StatusCode, serde_json::Value) {

@@ -18,7 +18,7 @@ pub struct GetProfilePicturesRequestBody {
     pub user_id_list: Vec<String>,
 }
 
-/// Retrieves profile picture URLs and saved face recipes for a list of users.
+/// Retrieves profile picture URLs for a list of users
 #[utoipa::path(
         post,
         path = "/user/profile_pictures",
@@ -29,7 +29,7 @@ pub struct GetProfilePicturesRequestBody {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip_all, fields(count = req.user_id_list.len()), err(Debug))]
+#[tracing::instrument(skip(ctx, _authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     _authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,

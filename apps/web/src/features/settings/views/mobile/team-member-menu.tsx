@@ -2,7 +2,6 @@ import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import CheckIcon from '@icon/system/regular/check.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
-import ImageIcon from '@icon/system/regular/image.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import WaveformIcon from '@icon/system/regular/waveform.svg';
 import { Button, ToggleSwitch } from '@ui';
@@ -25,7 +24,6 @@ function Sheet(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: JSX.Element;
-  triggerRef?: (element: HTMLButtonElement) => void;
 }) {
   return (
     <MobileDrawer
@@ -34,7 +32,6 @@ function Sheet(props: {
       onOpenChange={props.onOpenChange}
     >
       <MobileDrawer.Trigger
-        ref={props.triggerRef}
         as={Button}
         variant="ghost"
         size="icon-md"
@@ -252,7 +249,7 @@ export function TeamMemberMenu(props: TeamMemberMenuProps) {
   );
 }
 
-/** An agent teammate's Change picture, Change voice and Remove in a sheet. */
+/** An agent teammate's Change voice and Remove in a sheet. */
 export function TeamAgentMenu(props: TeamAgentMenuProps) {
   const [open, setOpen] = createSignal(false);
   const choose = (action: () => void) => {
@@ -260,29 +257,10 @@ export function TeamAgentMenu(props: TeamAgentMenuProps) {
     action();
   };
 
-  let trigger: HTMLButtonElement | undefined;
-
   return (
-    <Show when={props.onChangePicture || props.onChangeVoice || props.onRemove}>
-      <Sheet
-        name={props.name}
-        open={open()}
-        onOpenChange={setOpen}
-        triggerRef={(element) => {
-          trigger = element;
-        }}
-      >
+    <Show when={props.onChangeVoice || props.onRemove}>
+      <Sheet name={props.name} open={open()} onOpenChange={setOpen}>
         <MobileDrawer.Section>
-          <Show when={props.onChangePicture}>
-            {(changePicture) => (
-              <MobileDrawer.Item
-                onClick={() => choose(() => changePicture()(trigger))}
-              >
-                <ImageIcon class="size-4 shrink-0" />
-                {t('agentFaces.changePicture')}
-              </MobileDrawer.Item>
-            )}
-          </Show>
           <Show when={props.onChangeVoice}>
             {(changeVoice) => (
               <MobileDrawer.Item onClick={() => choose(changeVoice())}>

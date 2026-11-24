@@ -1,4 +1,3 @@
-import { parseAgentFace, renderFace } from '@macro-inc/agent-faces';
 import {
   expect,
   type Locator,
@@ -151,8 +150,6 @@ async function scriptAuthService(
     scheduledSeatPlans?: Record<string, 'premium' | 'max'>;
   } = {}
 ) {
-  const pictures: Record<string, { url: string | null; avatar_face: unknown }> =
-    {};
   const backend = {
     agents: [...(options.agents ?? [])],
     created: [] as unknown[],
@@ -259,15 +256,6 @@ async function scriptAuthService(
         body: JSON.stringify(body),
       });
 
-    if (path.endsWith('/user/profile_pictures')) {
-      const body: { user_id_list: string[] } = request.postDataJSON();
-      return json(200, {
-        pictures: body.user_id_list.flatMap((id) =>
-          pictures[id] ? [{ id, ...pictures[id] }] : []
-        ),
-      });
-    }
-
     if (path.endsWith('/team_agents') && request.method() === 'GET') {
       backend.reads += 1;
       // The computer comes up, then the agent reports itself online two
@@ -310,12 +298,6 @@ async function scriptAuthService(
         computerId: `computer-${body.name.toLowerCase()}`,
         status: 'provisioning',
         createdAt: '2026-11-11T09:00:00Z',
-      };
-      const avatarUrl: unknown = body.avatarUrl;
-      const avatarFace: unknown = body.avatarFace;
-      pictures[agent.userId] = {
-        url: typeof avatarUrl === 'string' ? avatarUrl : null,
-        avatar_face: avatarFace ?? null,
       };
       backend.agents.push(agent);
       return json(201, agent);
@@ -596,7 +578,17 @@ test('adding an agent waits in the dialog until it is online, then closes into i
   await expect(nameField).toBeFocused();
   await screenshot(page, testInfo, 'add-agent-asked');
   expect(backend.created).toEqual([]);
+  // The picture is the name's initial, redrawn as it is renamed.
+  const picture = dialog.locator('[data-slot="avatar"]');
+  await expect(picture).toHaveText('?');
+  await nameField.fill('émile');
+  await expect(picture).toHaveText('É');
+  await nameField.fill('小明');
+  await expect(picture).toHaveText('小');
+  await nameField.fill('Ada Lovelace');
+  await expect(picture).toHaveText('A');
   await nameField.fill('Ada');
+  await expect(picture).toHaveText('A');
   await expect(nameField).not.toHaveAttribute('aria-invalid', 'true');
 
   // Standard is preselected; XL is sold out. The price is the computer's.
@@ -624,7 +616,6 @@ test('adding an agent waits in the dialog until it is online, then closes into i
       personality: '',
       size: 'large',
       avatarUrl: null,
-      avatarFace: { v: 1, seed: expect.any(String), pins: {} },
       purchaseKey: expect.any(String),
     },
   ]);
@@ -632,14 +623,9 @@ test('adding an agent waits in the dialog until it is online, then closes into i
   const agentRow = page.locator('[data-member-kind="agent"]');
   await expect(agentRow).toHaveCount(1);
   await expect(agentRow.getByRole('status')).toHaveText('Running');
-  const created = backend.created[0];
-  if (!created || typeof created !== 'object' || !('avatarFace' in created))
-    throw new Error('The invite did not save its face');
-  const savedFace = parseAgentFace(created.avatarFace);
-  if (!savedFace) throw new Error('The invite saved an invalid face');
-  await expect(agentRow.locator('img')).toHaveAttribute(
-    'src',
-    `data:image/svg+xml;charset=utf-8,${encodeURIComponent(renderFace(savedFace, { size: 40 }))}`
+  // Its picture is its initial, as in the form.
+  await expect(agentRow.locator('[data-slot="avatar"]').first()).toHaveText(
+    'A'
   );
   await expect(agentRow.locator('[data-agent-setup-step]')).toHaveCount(0);
   await screenshot(page, testInfo, 'members-online');
@@ -670,6 +656,18 @@ test('adding an agent waits in the dialog until it is online, then closes into i
   await confirm.getByRole('button', { name: 'Remove', exact: true }).click();
   await expect(agentRow).toHaveCount(0);
   expect(backend.removed).toEqual([ADA]);
+});
+
+test("an agent's row draws one letter however many words its name has", async ({
+  page,
+}) => {
+  await scriptAuthService(page, 2, {
+    agents: [{ ...ada('running'), name: 'Ada Lovelace' }],
+  });
+  await page.goto('/');
+  const row = page.locator('[data-member-kind="agent"]');
+  await expect(row).toContainText('Ada Lovelace');
+  await expect(row.locator('[data-slot="avatar"]').first()).toHaveText('A');
 });
 
 test('an agent still starting after five seconds closes the dialog, and its row shows the setup step', async ({
@@ -1212,159 +1210,6 @@ test('a DM with an agent teammate that is not running says so', async ({
   await expect(banner).toHaveCount(0);
   await expect(dm.locator('[data-agent-dm-chip]')).toHaveCount(0);
 });
-
-for (const dark of [false, true]) {
-  test(`face editor picks a suggested face, keeps it through New faces and restores it after a photo (${dark ? 'dark' : 'light'})`, async ({
-    page,
-  }, testInfo) => {
-    await scriptAuthService(page);
-    await page.goto(dark ? '/?dark' : '/');
-    const dialog = await openInviteAgent(page);
-    await dialog.getByRole('textbox', { name: 'Name it' }).fill('Ada');
-    await dialog
-      .getByRole('button', { name: 'Edit picture', exact: true })
-      .click();
-    const editor = page.locator('[data-face-editor]');
-    const preview = page.locator('[data-face-slot] img').first();
-    const suggestions = editor.locator('[data-face-suggestions]');
-    await expect(
-      suggestions.getByRole('button', { name: /^Face \d$/ })
-    ).toHaveCount(8);
-    // Picking a suggestion chooses that face.
-    const third = suggestions.getByRole('button', {
-      name: 'Face 3',
-      exact: true,
-    });
-    await third.click();
-    await expect(third).toHaveAttribute('aria-pressed', 'true');
-    const chosen = await preview.getAttribute('src');
-    // New faces replaces the eight; the chosen face stays chosen.
-    await suggestions
-      .getByRole('button', { name: 'New faces', exact: true })
-      .click();
-    await expect(preview).toHaveAttribute('src', chosen ?? '');
-    await expect(
-      suggestions.getByRole('button', { name: /^Face \d$/ })
-    ).toHaveCount(8);
-    const shape = editor.locator('[data-face-part="head"]');
-    await shape.getByRole('button', { name: 'Shape 2', exact: true }).click();
-    await expect(
-      shape.getByRole('button', { name: 'Shape 2', exact: true })
-    ).toHaveAttribute('aria-pressed', 'true');
-    await page.screenshot({
-      path: testInfo.outputPath(`face-editor-${dark ? 'dark' : 'light'}.png`),
-    });
-    await shape.getByRole('button', { name: 'Any Shape', exact: true }).click();
-    await expect(
-      shape.getByRole('button', { name: 'Any Shape', exact: true })
-    ).toHaveAttribute('aria-pressed', 'true');
-    const faceBeforePhoto = await preview.getAttribute('src');
-    await editor.locator('[data-face-photo-input]').setInputFiles({
-      name: 'photo.png',
-      mimeType: 'image/png',
-      buffer: Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=',
-        'base64'
-      ),
-    });
-    await expect(
-      editor.getByRole('button', { name: 'Replace photo', exact: true })
-    ).toBeVisible();
-    await expect(
-      page.locator('[data-face-slot] button[aria-label="Shuffle face"]')
-    ).toHaveCount(0);
-    await editor
-      .getByRole('button', { name: 'Use a generated face', exact: true })
-      .click();
-    await expect(preview).toHaveAttribute('src', faceBeforePhoto ?? '');
-    if (testInfo.project.name === 'phone') {
-      await page.getByRole('button', { name: 'Done', exact: true }).click();
-    } else {
-      await page.keyboard.press('Escape');
-    }
-    await expect(
-      dialog.getByRole('button', { name: 'Shuffle face', exact: true })
-    ).toBeVisible();
-  });
-}
-
-for (const dark of [false, true]) {
-  test(`editing an agent photo keeps it on cancel and retries a failed save without replacing it (${dark ? 'dark' : 'light'})`, async ({
-    page,
-  }) => {
-    await scriptAuthService(page, 50, { agents: [ada('running')] });
-    const photo =
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=';
-    const allowPicture = Promise.withResolvers<void>();
-    let pictureReads = 0;
-    await page.route('**/user/profile_pictures', async (route) => {
-      pictureReads += 1;
-      if (pictureReads === 1) {
-        await allowPicture.promise;
-        return route.fulfill({ status: 502 });
-      }
-      return route.fulfill({
-        json: { pictures: [{ id: ADA, url: photo, avatar_face: null }] },
-      });
-    });
-    const saves: unknown[] = [];
-    await page.route('**/team_agents/*/avatar', (route) => {
-      saves.push(route.request().postDataJSON());
-      return route.fulfill({ status: saves.length === 1 ? 502 : 204 });
-    });
-    await page.goto(dark ? '/?dark' : '/');
-    const row = page.locator('[data-member-kind="agent"]');
-    await expect(
-      row.getByRole('button', { name: 'Settings for Ada' })
-    ).toBeVisible();
-    await row.getByRole('button', { name: 'Settings for Ada' }).click();
-    await page
-      .getByRole('menuitem', { name: 'Change picture' })
-      .or(page.getByRole('button', { name: 'Change picture', exact: true }))
-      .click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog.getByRole('status')).toHaveText('Loading picture…');
-    await expect(
-      dialog.getByRole('button', { name: 'Save', exact: true })
-    ).toBeDisabled();
-    allowPicture.resolve();
-    await expect(dialog.getByRole('alert')).toHaveText(
-      "Couldn't load the picture. Try again."
-    );
-    await dialog.getByRole('button', { name: 'Retry', exact: true }).click();
-    await expect(
-      dialog.getByRole('button', { name: 'Replace photo', exact: true })
-    ).toBeVisible();
-    await dialog
-      .getByRole('button', { name: 'Use a generated face', exact: true })
-      .click();
-    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
-    expect(saves).toEqual([]);
-    await expect(dialog).toBeHidden();
-    await expect(
-      row.getByRole('button', { name: 'Settings for Ada' })
-    ).toBeFocused();
-    await row.getByRole('button', { name: 'Settings for Ada' }).click();
-    await page
-      .getByRole('menuitem', { name: 'Change picture' })
-      .or(page.getByRole('button', { name: 'Change picture', exact: true }))
-      .click();
-    await expect(
-      dialog.getByRole('button', { name: 'Replace photo', exact: true })
-    ).toBeVisible();
-    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(
-      page.getByText("Couldn't save the picture. Try again.")
-    ).toBeVisible();
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(dialog).toBeHidden();
-    expect(saves).toEqual([
-      { face: null, url: photo },
-      { face: null, url: photo },
-    ]);
-  });
-}
 
 const CRM_ACCESS = { name: /^CRM access for/ };
 

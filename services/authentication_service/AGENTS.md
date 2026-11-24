@@ -152,11 +152,8 @@ due and its date is absent when the provider supplies no payment/due date.
   means removed (both `None`). A publish failure logs a warn and never fails
   the request. The 20/hour upload reservation limit is separate.
 - `POST /user/profile_pictures` accepts API keys (`UserOrInternal`) and
-  returns each picture's nullable `url` and optional `avatar_face`, including
-  face-only rows; the SDK derives the file id from `<static>/file/<id>`.
-  Both photo-save routes clear `avatar_face`. The team-agent avatar route
-  saves the recipe and PNG together and publishes picture changes through
-  `outbound/agent_picture_changes.rs`.
+  returns each picture's `url`; the SDK derives the file id from
+  `<static>/file/<id>`.
 
 ## Subscription checkout
 

@@ -24,18 +24,6 @@ export type AgentApiKey = {
 export type AgentApiKeyProvider = 'anthropic' | 'openai';
 
 /**
- * Replace an agent's face and its PNG, or save a photo and clear the face.
- * A missing URL clears the old PNG, so a failed render never leaves stale art.
- */
-export type AgentAvatar = {
-    face?: null | AvatarFace;
-    /**
-     * Uploaded PNG or photo URL; `None` when the upload failed or to remove it.
-     */
-    url?: string | null;
-};
-
-/**
  * What an agent needs to start using the SDK.
  */
 export type AgentSetupResponse = {
@@ -135,27 +123,6 @@ export type AutoReloadSnapshot = {
      * Reload the balance back up to this, in customer cents.
      */
     target_balance_cents: number;
-};
-
-/**
- * A versioned recipe rendered by `@macro-inc/agent-faces`. The server validates
- * its envelope; the renderer owns the available parts and option counts.
- */
-export type AvatarFace = {
-    /**
-     * Pinned parts and their zero-based option indexes.
-     */
-    pins: {
-        [key: string]: number;
-    };
-    /**
-     * Stable seed, between 1 and 64 characters.
-     */
-    seed: string;
-    /**
-     * Renderer version. Only version 1 can currently be saved.
-     */
-    v: number;
 };
 
 /**
@@ -560,7 +527,6 @@ export type CreateProfilePictureUploadRequest = {
  * Input for inviting an agent teammate and buying its computer.
  */
 export type CreateTeamAgent = {
-    avatarFace?: null | AvatarFace;
     /**
      * Profile picture URL (a static file the caller uploaded).
      */
@@ -2933,10 +2899,9 @@ export type UserOrganizationResponse = {
 };
 
 export type UserProfilePicture = {
-    avatar_face?: null | AvatarFace;
     checksum?: string | null;
     id: string;
-    url?: string | null;
+    url: string;
 };
 
 /**
@@ -5443,34 +5408,6 @@ export type DeleteTeamAgentResponses = {
 };
 
 export type DeleteTeamAgentResponse = DeleteTeamAgentResponses[keyof DeleteTeamAgentResponses];
-
-export type SetTeamAgentAvatarData = {
-    body: AgentAvatar;
-    path: {
-        /**
-         * The agent's Macro user id.
-         */
-        agent_user_id: string;
-    };
-    query?: never;
-    url: '/team_agents/{agent_user_id}/avatar';
-};
-
-export type SetTeamAgentAvatarErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type SetTeamAgentAvatarError = SetTeamAgentAvatarErrors[keyof SetTeamAgentAvatarErrors];
-
-export type SetTeamAgentAvatarResponses = {
-    204: void;
-};
-
-export type SetTeamAgentAvatarResponse = SetTeamAgentAvatarResponses[keyof SetTeamAgentAvatarResponses];
 
 export type GetTeamAgentVoiceData = {
     body?: never;

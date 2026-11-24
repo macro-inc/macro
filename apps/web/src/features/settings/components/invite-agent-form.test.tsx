@@ -1,9 +1,6 @@
-import type { CreateTeamAgent } from '@service-auth/team-agents';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { AddAgentState } from '../core/team-agent-add';
-import { AGENT_COMPUTER_CHOICE, InviteAgentForm } from './invite-agent-form';
+import { InviteAgentForm } from './invite-agent-form';
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -20,8 +17,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('does not invite an agent after its picture finishes uploading to a disposed form', async () => {
-  const upload = Promise.withResolvers<Partial<CreateTeamAgent>>();
+it('shows the first letter of the name as the picture, and adds the agent with that name and size', () => {
   const onSubmit = vi.fn();
   const noop = () => {};
   const view = render(() => (
@@ -51,26 +47,90 @@ it('does not invite an agent after its picture finishes uploading to a disposed 
       onRetryStart={noop}
       onEdit={noop}
       onBilling={noop}
-      prepareAvatar={() => upload.promise}
     />
   ));
-  fireEvent.input(screen.getByRole('textbox', { name: 'Name it' }), {
-    target: { value: 'Ada' },
-  });
+  const name = screen.getByRole('textbox', { name: 'Name it' });
+  const picture = () =>
+    view.container.querySelector('[data-slot="avatar"]')?.textContent;
+  expect(picture()).toBe('?');
+
+  fireEvent.input(name, { target: { value: 'ada' } });
+  expect(picture()).toBe('A');
+  // One letter, however many words the name has.
+  fireEvent.input(name, { target: { value: 'Ada Lovelace' } });
+  expect(picture()).toBe('A');
+  // Renaming redraws it.
+  fireEvent.input(name, { target: { value: '  Émile' } });
+  expect(picture()).toBe('É');
+  // A letter outside the BMP stays whole.
+  fireEvent.input(name, { target: { value: '𝓩ed' } });
+  expect(picture()).toBe('𝓩');
+  fireEvent.input(name, { target: { value: '👩‍💻 Dev' } });
+  expect(picture()).toBe('👩‍💻');
+  fireEvent.input(name, { target: { value: '小明' } });
+  expect(picture()).toBe('小');
+
   fireEvent.click(
-    screen.getByRole('button', { name: 'Add Ada · $40.00/month' })
+    screen.getByRole('button', { name: 'Add 小明 · $40.00/month' })
   );
-  view.unmount();
-  upload.resolve({ avatarUrl: null });
-  await upload.promise;
+  expect(onSubmit).toHaveBeenCalledWith(
+    {
+      name: '小明',
+      jobDescription: '',
+      personality: '',
+      size: 'standard',
+      avatarUrl: null,
+      purchaseKey: 'example',
+    },
+    'standard'
+  );
+});
+
+it('marks the name instead of adding when it is empty', () => {
+  const onSubmit = vi.fn();
+  const noop = () => {};
+  render(() => (
+    <InviteAgentForm
+      offers={[
+        {
+          size: 'standard',
+          vcpus: 4,
+          memoryGb: 8,
+          diskGb: 100,
+          soldOut: false,
+          quote: {
+            size: 'standard',
+            amount: 4000,
+            currency: 'usd',
+            interval: 'month',
+            priceId: 'price_standard',
+          },
+        },
+      ]}
+      offersFailed={false}
+      onRetryOffers={noop}
+      state={{ kind: 'editing' }}
+      purchaseKey="example"
+      onCancel={noop}
+      onSubmit={onSubmit}
+      onRetryStart={noop}
+      onEdit={noop}
+      onBilling={noop}
+    />
+  ));
+  const name = screen.getByRole('textbox', { name: 'Name it' });
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Add Agent · $40.00/month' })
+  );
   expect(onSubmit).not.toHaveBeenCalled();
+  expect(name.getAttribute('aria-invalid')).toBe('true');
+  expect(document.activeElement).toBe(name);
 });
 
 it('says every size is sold out when Add is pressed with none for sale', () => {
   const scrolled = vi.fn();
   Element.prototype.scrollIntoView = scrolled;
   const onSubmit = vi.fn();
-  const prepareAvatar = vi.fn();
   const noop = () => {};
   render(() => (
     <InviteAgentForm
@@ -99,7 +159,6 @@ it('says every size is sold out when Add is pressed with none for sale', () => {
       onRetryStart={noop}
       onEdit={noop}
       onBilling={noop}
-      prepareAvatar={prepareAvatar}
     />
   ));
   fireEvent.input(screen.getByRole('textbox', { name: 'Name it' }), {
@@ -118,118 +177,5 @@ it('says every size is sold out when Add is pressed with none for sale', () => {
   ).toBeTruthy();
   expect(scrolled).toHaveBeenCalled();
   expect(onSubmit).not.toHaveBeenCalled();
-  expect(prepareAvatar).not.toHaveBeenCalled();
   Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
-});
-
-it('offers your computers in the same choice as the sizes, and adds on one without buying', () => {
-  const onSubmit = vi.fn();
-  const onSubmitHost = vi.fn();
-  const noop = () => {};
-  render(() => (
-    <InviteAgentForm
-      offers={[
-        {
-          size: 'standard',
-          vcpus: 4,
-          memoryGb: 8,
-          diskGb: 100,
-          soldOut: false,
-          quote: {
-            size: 'standard',
-            amount: 4000,
-            currency: 'usd',
-            interval: 'month',
-            priceId: 'price_standard',
-          },
-        },
-      ]}
-      offersFailed={false}
-      onRetryOffers={noop}
-      state={{ kind: 'editing' }}
-      purchaseKey="example"
-      onCancel={noop}
-      onSubmit={onSubmit}
-      onSubmitHost={onSubmitHost}
-      onRetryStart={noop}
-      onEdit={noop}
-      onBilling={noop}
-      hosts={(choice) => (
-        <label>
-          <input
-            type="radio"
-            name={AGENT_COMPUTER_CHOICE}
-            checked={choice.selected() === 'harness-1'}
-            onChange={() =>
-              choice.onSelect({ harnessId: 'harness-1', name: 'my-laptop' })
-            }
-          />
-          my-laptop
-        </label>
-      )}
-      hostNotice={(host) => <p>Runs on {host.name}</p>}
-    />
-  ));
-  fireEvent.input(screen.getByRole('textbox', { name: 'Name it' }), {
-    target: { value: 'Ada' },
-  });
-  expect(screen.getByText('Buy a computer')).toBeTruthy();
-  expect(screen.getByText('Your computers')).toBeTruthy();
-  const standard = screen.getByRole('radio', { name: 'Standard' });
-  const laptop = screen.getByRole('radio', { name: 'my-laptop' });
-  expect((standard as HTMLInputElement).checked).toBe(true);
-  expect(standard.getAttribute('name')).toBe(laptop.getAttribute('name'));
-
-  fireEvent.click(laptop);
-  expect((standard as HTMLInputElement).checked).toBe(false);
-  expect(screen.getByText('Runs on my-laptop')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Add Ada on my-laptop' }));
-  expect(onSubmit).not.toHaveBeenCalled();
-  expect(onSubmitHost).toHaveBeenCalledWith({
-    name: 'Ada',
-    jobDescription: '',
-    personality: '',
-    avatarUrl: null,
-    purchaseKey: 'example',
-    harnessId: 'harness-1',
-  });
-
-  // Picking a size again leaves the computer, and Add buys that size.
-  fireEvent.click(standard);
-  expect(screen.queryByText('Runs on my-laptop')).toBeNull();
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Add Ada · $40.00/month' })
-  );
-  expect(onSubmit).toHaveBeenCalledTimes(1);
-});
-
-it('shows more options under the computer list, held while adding', () => {
-  const noop = () => {};
-  const [state, setState] = createSignal<AddAgentState>({ kind: 'editing' });
-  render(() => (
-    <InviteAgentForm
-      offers={[]}
-      offersFailed={false}
-      onRetryOffers={noop}
-      state={state()}
-      purchaseKey="example"
-      onCancel={noop}
-      onSubmit={noop}
-      onRetryStart={noop}
-      onEdit={noop}
-      onBilling={noop}
-      options={
-        <label>
-          <input type="checkbox" />
-          Give it an email address
-        </label>
-      }
-    />
-  ));
-  const option = screen.getByRole('checkbox', {
-    name: 'Give it an email address',
-  });
-  expect(option.matches(':disabled')).toBe(false);
-  setState({ kind: 'adding' });
-  expect(option.matches(':disabled')).toBe(true);
 });

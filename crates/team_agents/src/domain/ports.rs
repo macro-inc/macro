@@ -11,7 +11,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::admission::AgentAccountFacts;
-use super::avatar::AgentAvatar;
 use super::models::{
     AgentApiKey, AgentReady, AgentRepo, ComputerDetails, ComputerId, ComputerPurchase,
     ComputerState, CreateTeamAgent, CreatedAccount, NewAgentAccount, PersonaSeed, TeamAgent,
@@ -67,22 +66,6 @@ pub trait TeamAgentRepository: Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Atomically replace both avatar columns for an agent still on this team.
-    /// Returns false when it was removed or moved before the write.
-    fn set_avatar(
-        &self,
-        team_id: Uuid,
-        agent: &MacroUserIdStr<'_>,
-        avatar: &AgentAvatar,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
-}
-
-/// Best-effort publication of saved avatar changes to connected clients.
-pub trait AgentPictureChanges: Send + Sync + 'static {
-    /// Publish after persistence succeeds. Failures are logged by the adapter
-    /// and never turn a successful save into a failed request.
-    fn picture_changed(&self, agent: &MacroUserIdStr<'_>, url: Option<&str>);
 }
 
 /// What an agent's own account says about it, for admission.
@@ -253,14 +236,6 @@ pub trait EnrollmentEnvironment: Send + Sync + 'static {
 
 /// Agent teammates.
 pub trait TeamAgentService: Send + Sync + 'static {
-    /// Replace an agent's face and PNG, or save a photo and clear the face.
-    fn set_avatar(
-        &self,
-        receipt: EntityAccessReceipt<AdminTeamRole>,
-        agent: &MacroUserIdStr<'_>,
-        avatar: AgentAvatar,
-    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
-
     /// Invite an agent teammate: its account, team membership, workspace
     /// repository and computer. Undoes everything before the purchase if a
     /// step fails.

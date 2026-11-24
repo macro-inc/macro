@@ -789,13 +789,6 @@ async fn run_server() -> anyhow::Result<()> {
             team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
         ),
         crate::outbound::agent_addresses::AgentAddresses,
-        crate::outbound::agent_picture_changes::BrokerAgentPictureChanges::new(
-            macro_event_broker.clone(),
-        ),
-        // The base browsers upload agent pictures to and load them from.
-        team_agents::domain::avatar::PictureBase::new(
-            macro_service_urls::StaticFilePublicUrl::new()?.to_string(),
-        ),
     ));
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(

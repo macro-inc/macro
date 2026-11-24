@@ -10,7 +10,6 @@ import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let testQueryClient: QueryClient;
-const ADMIN_ID = 'macro|admin@example.com';
 
 vi.mock('../client', () => ({
   get queryClient() {
@@ -22,12 +21,7 @@ vi.mock('@service-auth/team-agents', () => ({
   teamAgentsClient: { list: vi.fn(), create: vi.fn(), remove: vi.fn() },
 }));
 
-vi.mock('../auth/use-query-account', () => ({
-  useQueryAccount: () => () => ({ userId: ADMIN_ID, session: 0 }),
-}));
-
 import { teamAgentsClient } from '@service-auth/team-agents';
-import { authKeys } from '../auth/keys';
 import { teamAgentKeys } from './keys';
 import {
   teamAgentsPollInterval,
@@ -76,11 +70,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   testQueryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  // The signed-in admin, whom mutations check they still belong to.
-  testQueryClient.setQueryData(authKeys.userInfo.queryKey, {
-    id: ADMIN_ID,
-    authenticated: true,
   });
 });
 

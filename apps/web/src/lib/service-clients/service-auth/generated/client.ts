@@ -6,7 +6,6 @@
  */
 import type {
   AgentApiKey,
-  AgentAvatar,
   AgentSetupResponse,
   AgentVoice,
   AiBillingErrorBody,
@@ -6981,83 +6980,6 @@ export const deleteTeamAgent = async (
 };
 
 /**
- * @summary Replace an agent's avatar. Requires an owner or admin of its team.
- */
-export type setTeamAgentAvatarResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type setTeamAgentAvatarResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type setTeamAgentAvatarResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type setTeamAgentAvatarResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type setTeamAgentAvatarResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type setTeamAgentAvatarResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type setTeamAgentAvatarResponseSuccess =
-  setTeamAgentAvatarResponse204 & {
-    headers: Headers;
-  };
-export type setTeamAgentAvatarResponseError = (
-  | setTeamAgentAvatarResponse400
-  | setTeamAgentAvatarResponse401
-  | setTeamAgentAvatarResponse403
-  | setTeamAgentAvatarResponse404
-  | setTeamAgentAvatarResponse500
-) & {
-  headers: Headers;
-};
-
-export type setTeamAgentAvatarResponse =
-  | setTeamAgentAvatarResponseSuccess
-  | setTeamAgentAvatarResponseError;
-
-export const getSetTeamAgentAvatarUrl = (agentUserId: string) => {
-  return `/team_agents/${agentUserId}/avatar`;
-};
-
-export const setTeamAgentAvatar = async (
-  agentUserId: string,
-  agentAvatar: AgentAvatar,
-  options?: RequestInit
-): Promise<setTeamAgentAvatarResponse> => {
-  const res = await fetch(getSetTeamAgentAvatarUrl(agentUserId), {
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(agentAvatar),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: setTeamAgentAvatarResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as setTeamAgentAvatarResponse;
-};
-
-/**
  * @summary The agent's call voice, as committed in its workspace repository.
 Requires a team admin or owner.
  */
@@ -8329,7 +8251,7 @@ export const createProfilePictureUpload = async (
 };
 
 /**
- * @summary Retrieves profile picture URLs and saved face recipes for a list of users.
+ * @summary Retrieves profile picture URLs for a list of users
  */
 export type postProfilePicturesResponse200 = {
   data: ProfilePictures;

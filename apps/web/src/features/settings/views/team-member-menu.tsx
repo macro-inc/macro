@@ -1,7 +1,6 @@
 import { t } from '@app/lib/i18n';
 import CheckIcon from '@icon/system/regular/check.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
-import ImageIcon from '@icon/system/regular/image.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import WaveformIcon from '@icon/system/regular/waveform.svg';
 import { Dropdown } from '@ui';
@@ -17,13 +16,9 @@ import {
   type TeamMemberMenuProps,
 } from './shared/team-member-menu';
 
-function MenuTrigger(props: {
-  name: string;
-  ref?: (element: HTMLButtonElement) => void;
-}) {
+function MenuTrigger(props: { name: string }) {
   return (
     <Dropdown.Trigger
-      ref={props.ref}
       variant="ghost"
       size="icon-md"
       class="shrink-0"
@@ -190,51 +185,13 @@ export function TeamMemberMenu(props: TeamMemberMenuProps) {
   );
 }
 
-/** An agent teammate's Change picture, Change voice and Remove, behind its ⋯. */
+/** An agent teammate's Change voice and Remove, behind its ⋯. */
 export function TeamAgentMenu(props: TeamAgentMenuProps): JSX.Element {
-  let trigger: HTMLButtonElement | undefined;
-  // Change picture opens its dialog only once the menu has closed and given
-  // the page its pointer layer back.
-  let pendingPicture:
-    | ((opener: HTMLButtonElement | undefined) => void)
-    | undefined;
-  const finishClose = (event: Event) => {
-    const open = pendingPicture;
-    pendingPicture = undefined;
-    if (!open) return;
-    event.preventDefault();
-    queueMicrotask(() => {
-      trigger?.focus({ preventScroll: true });
-      open(trigger);
-    });
-  };
   return (
-    <Show when={props.onChangePicture || props.onChangeVoice || props.onRemove}>
+    <Show when={props.onChangeVoice || props.onRemove}>
       <Dropdown placement="bottom-end">
-        <MenuTrigger
-          name={props.name}
-          ref={(element) => {
-            trigger = element;
-          }}
-        />
-        <Dropdown.Content
-          class="min-w-48 max-w-80"
-          onCloseAutoFocus={finishClose}
-        >
-          <Show when={props.onChangePicture}>
-            {(changePicture) => (
-              <Dropdown.Group>
-                <Dropdown.Item
-                  onSelect={() => {
-                    pendingPicture = changePicture();
-                  }}
-                >
-                  <ImageIcon class="size-4" />
-                  {t('agentFaces.changePicture')}
-                </Dropdown.Item>
-              </Dropdown.Group>
-            )}
-          </Show>
+        <MenuTrigger name={props.name} />
+        <Dropdown.Content class="min-w-48 max-w-80">
           <Show when={props.onChangeVoice}>
             {(changeVoice) => (
               <Dropdown.Group>

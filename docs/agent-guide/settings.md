@@ -256,37 +256,17 @@ see only the people invite. Each entry opens its own form: **Invite Human** and
 **Invite your team** the people invite, **Invite Agent** and **Invite agents**
 the agent form, and neither has a People/Agent switch. **Invite an agent**
 asks only for a name and the agent's computer size, with no explanatory text
-around them: a 64px picture at the top left, beside the field headed
-**Name it**, then **Give it a computer** (layout A,
-`components/agent-invite-layout-a.tsx`; the form hands it named parts so
-another layout can replace it). Voice and role come later, and the agent asks
-what to take on once it is online. With `ENABLE_AGENT_FACES`, each opening
-starts with a random face in that picture. **Shuffle face** changes its seed
-and keeps pinned parts. **Edit picture** opens eight suggested faces at the
-top: tapping one chooses it, and **New faces** replaces the eight while the
-chosen face stays chosen. Below them, tabs for Head, Hair, Face, Extras and
-Outfit; choosing a part pins it, **Any** unpins just that part,
-and **Reset** clears all pins. Desktop uses a popover; phones stack a picture
-sheet over the invite. **Upload photo** replaces the preview and hides **Shuffle face**;
-**Use a generated face** brings back the same draft face. Add saves the face
-recipe and uploads a PNG for other clients; a failed PNG upload still saves
-the recipe. A failed photo upload still adds the agent and reports the failure.
-With the flag off, the picture shows the name's first letter.
-
-Owners and admins can use an agent row's **Change picture** menu item while
-faces are enabled. It opens a dialog (a drawer on phones) with the saved face
-or photo. The editor waits for that picture to load; a failed read offers local
-**Retry** before any picture can be saved. **Save** calls `PUT /team_agents/{agent}/avatar`; a failed save keeps
-the draft open for retry. Cancel leaves the saved picture unchanged. Agents
-without a saved picture get a stable generated face derived from their user id;
-saving that face unchanged preserves its appearance. Saved photos take priority
-over this derived face. Faces render through `UserIcon` across the app, while
-other clients use the uploaded PNG.
+around them: the field headed **Name it**, with the agent's picture beside it,
+then **Give it a computer**. The picture is the name's initials as the app's
+avatars draw them (`getInitialsFromName`: the first letter of a one-word name,
+redrawn as it is typed), which is what the agent's avatar shows once it is
+added; agents have no picture editor. Voice and role come later, and the agent
+asks what to take on once it is online.
 
 Sizes come from the same catalog and prices as Buy a computer
 (sold-out sizes are disabled and marked **Sold out**; Add with every size sold
 out says so under the sizes and sends nothing). The agent's seat is
-included, so the button reads **Add <name> · $X/month** (or **Add agent ·
+included, so the button reads **Add <name> · $X/month** (or **Add Agent ·
 $X/month** before a name). Add is always enabled: with no name (or one too
 long) it marks the name field invalid and moves the caret there, and sends
 nothing. Adding calls

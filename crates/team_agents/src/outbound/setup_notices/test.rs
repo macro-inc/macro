@@ -93,15 +93,6 @@ struct Unused;
 impl TeamAgentRepository for Agents {
     type Err = Unused;
 
-    async fn set_avatar(
-        &self,
-        _: Uuid,
-        _: &MacroUserIdStr<'_>,
-        _: &crate::domain::avatar::AgentAvatar,
-    ) -> Result<bool, Unused> {
-        Err(Unused)
-    }
-
     async fn create_account(&self, _: &NewAgentAccount) -> Result<CreatedAccount, Unused> {
         Err(Unused)
     }

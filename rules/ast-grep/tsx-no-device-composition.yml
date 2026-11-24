@@ -23,7 +23,6 @@ ignores:
   # A mobile view may branch on isMobile() / mobile: for phone versus tablet.
   - apps/web/src/**/views/mobile/**
   # Entries: the one device switch of each split view.
-  - apps/web/src/features/agent-faces/face-slot.tsx
   - apps/web/src/features/agents-view/model-selector.tsx
   - apps/web/src/features/block-agent/component/Block.tsx
   - apps/web/src/features/block-ai/ai-block.tsx

@@ -2,7 +2,6 @@
 
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_user::AvatarFace;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -106,9 +105,6 @@ pub struct CreateTeamAgent {
     pub size: ComputerSize,
     /// Profile picture URL (a static file the caller uploaded).
     pub avatar_url: Option<String>,
-    /// Saved recipe; kept even when uploading its PNG failed.
-    #[serde(default)]
-    pub avatar_face: Option<AvatarFace>,
     /// The call voice picked in the invite; `None` keeps the starter
     /// agent's default.
     #[serde(default)]
@@ -155,10 +151,8 @@ pub struct TeamAgentInvite {
     pub personality: String,
     /// The computer to buy.
     pub size: ComputerSize,
-    /// Profile picture URL, a Macro static file.
+    /// Profile picture URL, `https://`.
     pub avatar_url: Option<String>,
-    /// Face recipe the picture was drawn from, if it is a face.
-    pub avatar_face: Option<AvatarFace>,
     /// The call voice picked in the invite.
     pub voice: Option<VoiceModel>,
 }
@@ -195,8 +189,6 @@ pub struct NewAgentAccount {
     pub name: AgentName,
     /// Profile picture URL.
     pub avatar_url: Option<String>,
-    /// Saved face recipe, alongside its optional PNG URL.
-    pub avatar_face: Option<AvatarFace>,
     /// Workspace seed.
     pub persona_seed: PersonaSeed,
     /// The invite's purchase key: one agent per key per team.
@@ -354,11 +346,6 @@ pub enum TeamAgentError {
     /// The avatar is not an HTTPS URL.
     #[error("the avatar must be an https URL")]
     InvalidAvatar,
-    /// The recipe has an unsupported version or exceeds its size limits.
-    #[error(
-        "the avatar face must be version 1, have a seed of 1 to 64 characters, and fit in 1 KiB"
-    )]
-    InvalidAvatarFace,
     /// The path is not a Macro user id.
     #[error("that is not a user id")]
     InvalidAgentId,

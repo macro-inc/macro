@@ -94,7 +94,6 @@
         "@livekit/krisp-noise-filter": "^0.4.1",
         "@livekit/track-processors": "^0.8.2",
         "@lukemorales/query-key-factory": "^1.3.4",
-        "@macro-inc/agent-faces": "workspace:*",
         "@macro-inc/collaboration": "workspace:*",
         "@macro-inc/email-renderer": "workspace:*",
         "@macro-inc/entity-icons": "workspace:*",
@@ -236,10 +235,6 @@
         "vitest": "5.1.0",
         "webdriverio": "9.29.1",
       },
-    },
-    "packages/agent-faces": {
-      "name": "@macro-inc/agent-faces",
-      "version": "0.1.0",
     },
     "packages/code-mode-sdk": {
       "name": "@macro-inc/code-mode-sdk",
@@ -1539,8 +1534,6 @@
     "@lukeed/ms": ["@lukeed/ms@2.0.2", "", {}, "sha512-9I2Zn6+NJLfaGoz9jN3lpwDgAYvfGeNYdbAIjJOqzs4Tpc+VU3Jqq4IofSUBKajiDS8k9fZIg18/z13mpk1bsA=="],
 
     "@lukemorales/query-key-factory": ["@lukemorales/query-key-factory@1.3.4", "", { "peerDependencies": { "@tanstack/query-core": ">= 4.0.0", "@tanstack/react-query": ">= 4.0.0" } }, "sha512-A3frRDdkmaNNQi6mxIshsDk4chRXWoXa05US8fBo4kci/H+lVmujS6QrwQLLGIkNIRFGjMqp2uKjC4XsLdydRw=="],
-
-    "@macro-inc/agent-faces": ["@macro-inc/agent-faces@workspace:packages/agent-faces"],
 
     "@macro-inc/code-mode-sdk": ["@macro-inc/code-mode-sdk@workspace:packages/code-mode-sdk"],
 

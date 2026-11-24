@@ -45,12 +45,6 @@ export type DialogProps = {
    * Only for a dialog whose dismissal records a choice the user didn't make.
    */
   keepOpenOnNavigation?: boolean;
-  /**
-   * On a phone, paint the sheet with the opaque menu fill instead of glass.
-   * Use for a sheet stacked over another sheet, whose controls would show
-   * through.
-   */
-  opaqueSheet?: boolean;
 };
 
 export function Dialog(props: DialogProps) {
@@ -94,7 +88,6 @@ function DialogDrawer(props: DialogProps) {
           <MobileDrawer.Content
             ref={props.contentRef}
             maxHeight={100}
-            opaque={props.opaqueSheet}
             class={cn('mx-auto max-w-[calc(100vw-16px)]', props.class)}
           >
             <MobileDrawer.Handle aria-hidden="true" />

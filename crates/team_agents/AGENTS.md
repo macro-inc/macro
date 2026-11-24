@@ -53,14 +53,6 @@ flag) read and commit it through agent_git; the agent's next call uses it.
 admins behind the same flag; agent_harness_service implements its
 `VoiceProvider` and mounts it at `/voices`.
 
-The invite accepts `avatarFace` and `avatarUrl`. Owners and admins can replace
-them with `PUT /team_agents/{agent_user_id}/avatar` (`{face, url}`, 204), behind
-the same flag. Saving a face writes its recipe and PNG URL together; a missing
-URL clears the old PNG. A URL must be a Macro static file,
-`<StaticFilePublicUrl>/file/<uuid>` (`PictureBase`), on invite and edit, so
-clients never load a host an admin chose. Saving a photo clears the recipe. Picture changes
-publish through the `AgentPictureChanges` port after persistence.
-
 `domain::admission::AgentAdmission::admit(agent, team)` answers whether an
 account is an agent the vault may admit, from current facts each call: its
 `team_agents` row is for that team, `"User"."isAgent"` is set, it is still a

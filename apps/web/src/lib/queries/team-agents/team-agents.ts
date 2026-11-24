@@ -6,20 +6,9 @@ import {
   type TeamAgents,
   teamAgentsClient,
 } from '@service-auth/team-agents';
-import {
-  type MutationFunctionContext,
-  queryOptions,
-  useMutation,
-  useQuery,
-} from '@tanstack/solid-query';
-import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { invalidateAiBillingSummary } from '../auth';
-import {
-  assertQueryAccount,
-  isCurrentQueryAccount,
-  mutationQueryAccount,
-} from '../auth/account-scope';
-import { useQueryAccount } from '../auth/use-query-account';
 import { queryClient } from '../client';
 import { computerKeys } from '../computers/keys';
 import { invalidateTeam } from '../team/teams';
@@ -131,33 +120,19 @@ function forgetAgent(teamId: string, userId: string) {
   );
 }
 
-async function createTeamAgent(
-  vars: CreateTeamAgentArgs,
-  context: MutationFunctionContext
-) {
-  assertQueryAccount(mutationQueryAccount(context));
-  const signal =
-    context.meta?.requestSignal instanceof AbortSignal
-      ? context.meta.requestSignal
-      : undefined;
-  const invite = (span: Span) => inviteTeamAgent(vars, span, signal);
+async function createTeamAgent(vars: CreateTeamAgentArgs) {
+  const invite = (span: Span) => inviteTeamAgent(vars, span);
   if (vars.parentSpan)
     return await vars.parentSpan.span('team-agent.invite', invite);
   return await Telemetry.span('team-agent.invite', invite);
 }
 
-async function inviteTeamAgent(
-  vars: CreateTeamAgentArgs,
-  span: Span,
-  signal?: AbortSignal
-) {
+async function inviteTeamAgent(vars: CreateTeamAgentArgs, span: Span) {
   span.setAttr('team.id', vars.teamId);
   span.setAttr('computer.size', vars.request.size);
   if (vars.request.voice) span.setAttr('voice.model', vars.request.voice);
   try {
-    const agent = await throwOnErr(() =>
-      teamAgentsClient.create(vars.request, signal)
-    );
+    const agent = await throwOnErr(() => teamAgentsClient.create(vars.request));
     span.setAttr('agent.user_id', agent.userId);
     return agent;
   } catch (error) {
@@ -167,37 +142,17 @@ async function inviteTeamAgent(
 }
 
 export function useCreateTeamAgentMutation() {
-  const account = useQueryAccount();
-  const requestSignal = createMemo(() => {
-    account();
-    const controller = new AbortController();
-    onCleanup(() => controller.abort());
-    return controller.signal;
-  });
   return useMutation(() => ({
     gcTime: 0,
     retry: false,
-    meta: { queryAccount: account(), requestSignal: requestSignal() },
     mutationFn: createTeamAgent,
-    onSuccess: (
-      agent: TeamAgent,
-      vars: CreateTeamAgentArgs,
-      _result,
-      context
-    ) => {
-      if (!isCurrentQueryAccount(mutationQueryAccount(context))) return;
-      storeCreatedAgent(vars.teamId, agent);
-    },
+    onSuccess: (agent: TeamAgent, vars: CreateTeamAgentArgs) =>
+      storeCreatedAgent(vars.teamId, agent),
     onSettled: (
       _agent: TeamAgent | undefined,
       _error: Error | null,
-      vars: CreateTeamAgentArgs,
-      _result,
-      context
-    ) => {
-      if (!isCurrentQueryAccount(mutationQueryAccount(context))) return;
-      return invalidateAfterAgentChange(vars.teamId);
-    },
+      vars: CreateTeamAgentArgs
+    ) => invalidateAfterAgentChange(vars.teamId),
   }));
 }
 

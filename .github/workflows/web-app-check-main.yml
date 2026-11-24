@@ -58,7 +58,6 @@ jobs:
               - 'services/mcp-chatgpt-worker/**'
               - 'packages/code-mode-sdk/**'
               - 'packages/muppet/**'
-              - 'packages/agent-faces/**'
               - 'packages/starter-agent/**'
               - 'tooling/scripts/starter-agent-lock.sh'
               - 'crates/agent_code_mode/SKILL.md'
@@ -411,7 +410,6 @@ jobs:
           check 'Check SDK MCP Tools' 'packages/sdk-mcp' 'bun run type-check && bun run test'
           check 'Check MCP ChatGPT Worker' 'services/mcp-chatgpt-worker' 'bun run type-check && bun run test'
           check 'Check Agent Runtime' 'packages/muppet' 'bun run typecheck && bun run test'
-          check 'Check Agent Faces Package' 'packages/agent-faces' 'bun run type-check && bun run test'
           check 'Check Starter Agent' 'packages/starter-agent' 'bun run check && ../../tooling/scripts/starter-agent-lock.sh --check'
           failed=0
           for index in "${!names[@]}"; do

@@ -11,7 +11,7 @@ use axum::{
     extract::{FromRef, Path, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
-    routing::{delete, get, post, put},
+    routing::{delete, get, post},
 };
 use entity_access::{
     domain::{
@@ -32,7 +32,6 @@ use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::domain::avatar::AgentAvatar;
 use crate::domain::models::{
     ComputerId, ComputerSize, CreateTeamAgent, TeamAgent, TeamAgentError, TeamAgents,
 };
@@ -77,7 +76,6 @@ impl IntoResponse for TeamAgentError {
             Self::InvalidName
             | Self::InvalidProfile
             | Self::InvalidAvatar
-            | Self::InvalidAvatarFace
             | Self::InvalidPurchaseKey
             | Self::InvalidAgentId => StatusCode::BAD_REQUEST,
             Self::UnknownVoice => StatusCode::BAD_REQUEST,
@@ -164,10 +162,6 @@ where
                 .get(list_team_agents_handler::<S, Eas, Auth>),
         )
         .route("/me/online", post(agent_online_handler::<S, Eas, Auth>))
-        .route(
-            "/{agent_user_id}/avatar",
-            put(set_team_agent_avatar_handler::<S, Eas, Auth>),
-        )
         .route(
             "/{agent_user_id}",
             delete(delete_team_agent_handler::<S, Eas, Auth>),
@@ -297,45 +291,6 @@ where
 pub struct AgentPath {
     /// The agent's Macro user id.
     pub agent_user_id: String,
-}
-
-/// Replace an agent's avatar. Requires an owner or admin of its team.
-#[utoipa::path(
-    put,
-    tag = "team-agents",
-    operation_id = "set_team_agent_avatar",
-    path = "/team_agents/{agent_user_id}/avatar",
-    params(AgentPath),
-    request_body = AgentAvatar,
-    responses(
-        (status = 204),
-        (status = 400, body = ErrorResponse),
-        (status = 401, body = ErrorResponse),
-        (status = 403, body = ErrorResponse),
-        (status = 404, body = ErrorResponse),
-        (status = 500, body = ErrorResponse),
-    )
-)]
-#[tracing::instrument(err, skip_all)]
-pub async fn set_team_agent_avatar_handler<S, Eas, Auth>(
-    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
-    State(state): State<TeamAgentsRouterState<S, Eas, Auth>>,
-    Path(path): Path<AgentPath>,
-    Json(avatar): Json<AgentAvatar>,
-) -> Result<StatusCode, TeamAgentError>
-where
-    S: TeamAgentService,
-    Eas: EntityAccessService,
-    Auth: MacroAuthorizationService,
-{
-    let agent = MacroUserIdStr::parse_from_str(&path.agent_user_id)
-        .map(MacroUserIdStr::into_owned)
-        .map_err(|_| TeamAgentError::InvalidAgentId)?;
-    state
-        .service
-        .set_avatar(access.entity_access_receipt, &agent, avatar)
-        .await?;
-    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Remove an agent teammate: release its computer, take it off the team and

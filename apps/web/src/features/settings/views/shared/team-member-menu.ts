@@ -39,11 +39,6 @@ export type TeamMemberMenuProps = {
 /** An agent teammate's ⋯; each action is left out for viewers who can't take it. */
 export type TeamAgentMenuProps = {
   name: string;
-  /**
-   * Opens Change picture, once the menu has closed; `opener` is the ⋯, for
-   * focus to come back to.
-   */
-  onChangePicture?: (opener: HTMLButtonElement | undefined) => void;
   onChangeVoice?: () => void;
   onRemove?: () => void;
 };

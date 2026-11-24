@@ -14,15 +14,14 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use super::avatar::{AgentAvatar, PictureBase};
 use super::models::{
     AGENT_EMAIL_DOMAIN, AgentName, AgentReady, ComputerId, ComputerPurchase, CreateTeamAgent,
     CreatedAccount, MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, PurchaseKey, TeamAgent,
     TeamAgentError, TeamAgentInvite, TeamAgentRecord, TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
-    AgentApiKeys, AgentPictureChanges, AgentReadyNotices, AgentRepos, Computers,
-    EnrollmentEnvironment, TeamAgentRepository, TeamAgentService, TeamMembership,
+    AgentApiKeys, AgentReadyNotices, AgentRepos, Computers, EnrollmentEnvironment,
+    TeamAgentRepository, TeamAgentService, TeamMembership,
 };
 use super::voice::AgentVoice;
 
@@ -77,9 +76,6 @@ pub struct TeamAgentServiceImpl<
     /// Tells an agent's inviter when the agent first comes online.
     notices: Notices,
     environment: Box<dyn EnrollmentEnvironment>,
-    picture_changes: Box<dyn AgentPictureChanges>,
-    /// Where an agent's picture must have been uploaded.
-    pictures: PictureBase,
 }
 
 impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
@@ -100,8 +96,6 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
         flags: Option<Flags>,
         notices: Notices,
         environment: impl EnrollmentEnvironment,
-        picture_changes: impl AgentPictureChanges,
-        pictures: PictureBase,
     ) -> Self {
         Self {
             repository,
@@ -113,8 +107,6 @@ impl<Repository, Membership, ApiKeys, Repos, Computer, Creators, Flags, Notices>
             flags,
             notices,
             environment: Box::new(environment),
-            picture_changes: Box::new(picture_changes),
-            pictures,
         }
     }
 }
@@ -141,15 +133,7 @@ fn slug(name: &str) -> String {
     }
 }
 
-fn validate(
-    request: CreateTeamAgent,
-    pictures: &PictureBase,
-) -> Result<TeamAgentInvite, TeamAgentError> {
-    AgentAvatar {
-        face: request.avatar_face.clone(),
-        url: request.avatar_url.clone(),
-    }
-    .validate(pictures)?;
+fn validate(request: CreateTeamAgent) -> Result<TeamAgentInvite, TeamAgentError> {
     let name = AgentName::try_new(&request.name)?;
     let purchase_key = PurchaseKey::try_new(request.purchase_key)
         .map_err(|_| TeamAgentError::InvalidPurchaseKey)?;
@@ -161,6 +145,11 @@ fn validate(
             return Err(TeamAgentError::InvalidProfile);
         }
     }
+    if let Some(avatar) = &request.avatar_url
+        && !avatar.starts_with("https://")
+    {
+        return Err(TeamAgentError::InvalidAvatar);
+    }
     Ok(TeamAgentInvite {
         purchase_key,
         name,
@@ -168,7 +157,6 @@ fn validate(
         personality,
         size: request.size,
         avatar_url: request.avatar_url,
-        avatar_face: request.avatar_face,
         voice: request.voice,
     })
 }
@@ -382,7 +370,6 @@ where
                 created_by: created_by.clone(),
                 name: request.name.clone(),
                 avatar_url: request.avatar_url.clone(),
-                avatar_face: request.avatar_face.clone(),
                 persona_seed: seed.clone(),
                 purchase_key: request.purchase_key.clone(),
             })
@@ -483,7 +470,7 @@ where
     ) -> Result<TeamAgent, TeamAgentError> {
         let created_by = acting_user(&receipt)?;
         self.ensure_enabled(&created_by).await?;
-        let request = validate(request, &self.pictures)?;
+        let request = validate(request)?;
         let team_id = team_id(&receipt)?;
         // A buyer the computers rollout doesn't include is refused before an
         // account, seat or repository exists to take back.
@@ -593,34 +580,6 @@ where
             .remove_seat(&record.user_id)
             .await
             .map_err(TeamAgentError::internal)
-    }
-
-    #[tracing::instrument(
-        name = "team_agents.set_avatar",
-        skip_all,
-        fields(team_id = %receipt.entity().entity_id, agent_user_id = %agent_credentials::telemetry_id(agent.as_ref())),
-        err
-    )]
-    async fn set_avatar(
-        &self,
-        receipt: EntityAccessReceipt<AdminTeamRole>,
-        agent: &MacroUserIdStr<'_>,
-        avatar: AgentAvatar,
-    ) -> Result<(), TeamAgentError> {
-        self.ensure_enabled(&acting_user(&receipt)?).await?;
-        let record = self.team_record(&receipt, agent).await?;
-        avatar.validate(&self.pictures)?;
-        let saved = self
-            .repository
-            .set_avatar(record.team_id, &record.user_id, &avatar)
-            .await
-            .map_err(TeamAgentError::internal)?;
-        if !saved {
-            return Err(TeamAgentError::NotFound);
-        }
-        self.picture_changes
-            .picture_changed(&record.user_id, avatar.url.as_deref());
-        Ok(())
     }
 
     #[tracing::instrument(
