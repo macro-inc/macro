@@ -771,6 +771,14 @@ function failureContract(name: string, e: unknown) {
 // readers and callers, mounted, settled, read, and torn down. On NEW the
 // readers share the page's normalized cache, as a new screen does.
 async function fresh(keys: Key[], boundMs: number) {
+  // A cold mount asks the server on both sides: OLD's empty QueryClient holds
+  // no data, and NEW's catalog reads would otherwise answer from the shared
+  // cache inside the head's freshness window. A new screen inside that window
+  // is the `open` operation, compared against main's shared QueryClient.
+  if (cacheHost()) {
+    const readers = await import('@queries/properties/catalog/readers');
+    readers.markCatalogStale(['definitions', 'options', 'tags']);
+  }
   const client = new QueryClient({
     defaultOptions: queryClient.getDefaultOptions(),
   });
