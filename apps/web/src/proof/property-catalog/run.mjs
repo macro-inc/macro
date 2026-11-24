@@ -524,13 +524,13 @@ async function syncIds(pair) {
 }
 
 // --------------------------------------------------------------- results ----
-const OLD_COMMIT = E.OLD_COMMIT ?? 'c8b5760036c';
+const OLD_COMMIT = E.OLD_COMMIT ?? 'fff2890add8';
 const R = {
   config: { ...CONFIG },
   commit: git('rev-parse', 'HEAD'),
   // The code under test is the web PR's head; the harness commit only adds this directory.
-  prHead: E.PR_HEAD ?? '3ffe3a5f86c',
-  identicalToPrHeadOutsideProof: git('diff', '--quiet', E.PR_HEAD ?? '3ffe3a5f86c', 'HEAD', '--', '.', ':(exclude)apps/web/src/proof') !== null,
+  prHead: E.PR_HEAD ?? 'fb1a5bedd54',
+  identicalToPrHeadOutsideProof: git('diff', '--quiet', E.PR_HEAD ?? 'fb1a5bedd54', 'HEAD', '--', '.', ':(exclude)apps/web/src/proof') !== null,
   dssBinaryBuiltAt: (() => {
     try {
       return fs.statSync(path.join(ROOT, 'target/debug/document_storage_service')).mtime.toISOString();

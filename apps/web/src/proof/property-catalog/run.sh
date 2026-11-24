@@ -20,8 +20,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../../../.." && pwd)"
 # Resolved to the full commit, so a branch name that later moves is never
 # mistaken for the same old side.
-OLD_COMMIT="$(git -C "$ROOT" rev-parse --verify "${OLD_COMMIT:-c8b5760036c}^{commit}")"
+OLD_COMMIT="$(git -C "$ROOT" rev-parse --verify "${OLD_COMMIT:-fff2890add8}^{commit}")"
 export OLD_COMMIT
+# The web PR head the results are recorded against.
+PR_HEAD="$(git -C "$ROOT" rev-parse --verify "${PR_HEAD:-synoet/gql-properties}^{commit}")"
+export PR_HEAD
 MODES=("${@:-all}")
 
 # Chromium aborts every request in flight whenever a host network interface
