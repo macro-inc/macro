@@ -536,7 +536,7 @@ export function normalizedCacheExchange(
     /** Operations registered with the host, for push-driven re-execution. */
     const activeOps = new Map<number, Operation>();
     // Asked for while urql still waits for their answer, which drops the ask.
-    const owedRefetches = new Set<number>();
+    const owedRefetches = new Map<number, Operation>();
     const documentReader = createDocumentQueryReader(host);
     // Teardown and generation changes cancel document reads in flight. The
     // read is already stale then, so the cancellation is not a cache failure.
@@ -1660,7 +1660,7 @@ export function normalizedCacheExchange(
       function refetchActiveQueries() {
         for (const operation of activeOps.values()) {
           if (operation.context.requestPolicy !== 'cache-only')
-            owedRefetches.add(operation.key);
+            owedRefetches.set(operation.key, operation);
           refetchActiveQuery(operation);
         }
       }
@@ -1679,11 +1679,13 @@ export function normalizedCacheExchange(
       }
 
       /** Asks again once `result` has reached its subscribers. */
-      function refetchOwed(result: OperationResult) {
-        if (result.operation.kind !== 'query' || result.hasNext) return;
-        const operation = activeOps.get(result.operation.key);
-        if (operation && owedRefetches.has(operation.key))
-          refetchActiveQuery(operation);
+      function refetchOwed({ operation, hasNext, stale }: OperationResult) {
+        // A stale result says that its network answer is still on its way.
+        if (hasNext || stale || !owedRefetches.has(operation.key)) return;
+        queueMicrotask(() => {
+          const owed = owedRefetches.get(operation.key);
+          if (owed) refetchActiveQuery(owed);
+        });
       }
 
       async function writeThrough(

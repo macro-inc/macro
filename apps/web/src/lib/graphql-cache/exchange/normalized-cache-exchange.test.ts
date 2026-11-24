@@ -3035,7 +3035,8 @@ describe('normalizedCacheExchange', () => {
     expect(unbound).toHaveBeenCalledOnce();
   });
 
-  it('asks again for a query whose earlier answer was on its way when updates were missed', async () => {
+  /** A client whose answers the test sends, and which can miss updates. */
+  function clientMissingUpdates() {
     let refetch = () => {};
     const network = makeSubject<OperationResult>();
     const forwarded: Operation[] = [];
@@ -3057,6 +3058,11 @@ describe('normalizedCacheExchange', () => {
         },
       ],
     });
+    return { client, network, forwarded, missUpdates: () => refetch() };
+  }
+
+  it('asks again for a query whose earlier answer was on its way when updates were missed', async () => {
+    const { client, network, forwarded, missUpdates } = clientMissingUpdates();
     const shown: unknown[] = [];
     const { unsubscribe } = pipe(
       client.query(QUERY, { input: { limit: 2 } }),
@@ -3064,7 +3070,7 @@ describe('normalizedCacheExchange', () => {
     );
     await vi.waitFor(() => expect(forwarded).toHaveLength(1));
 
-    refetch();
+    missUpdates();
     await tick();
     expect(forwarded).toHaveLength(1);
     network.next(queryResult(forwarded[0]!, { from: 'before' }));
@@ -3075,6 +3081,64 @@ describe('normalizedCacheExchange', () => {
     expect(shown.at(-1)).toEqual({ from: 'after' });
     expect(forwarded).toHaveLength(2);
     unsubscribe();
+  });
+
+  it('asks again only once the earlier answer is there, not for what the cache shows meanwhile', async () => {
+    const read = deferred<ReadResult>();
+    host.readQuery = vi.fn(() => read.promise);
+    const { client, network, forwarded, missUpdates } = clientMissingUpdates();
+    const { unsubscribe } = pipe(
+      client.query(
+        QUERY,
+        { input: { limit: 2 } },
+        { requestPolicy: 'cache-and-network' }
+      ),
+      subscribe(() => {})
+    );
+    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+
+    missUpdates();
+    await tick();
+    read.resolve({ kind: 'hit', data: { from: 'cache' } });
+    await tick();
+    expect(forwarded).toHaveLength(1);
+    network.next(queryResult(forwarded[0]!, { from: 'before' }));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
+    unsubscribe();
+  });
+
+  it('asks again although the earlier answer starts a cache read of the same query', async () => {
+    const { client, network, forwarded, missUpdates } = clientMissingUpdates();
+    const open: { unsubscribe(): void }[] = [];
+    const readCache = () =>
+      open.push(
+        pipe(
+          client.query(
+            QUERY,
+            { input: { limit: 2 } },
+            { requestPolicy: 'cache-only' }
+          ),
+          subscribe(() => {})
+        )
+      );
+    open.push(
+      pipe(
+        client.query(QUERY, { input: { limit: 2 } }),
+        subscribe((result) => {
+          if (result.data?.from === 'before' && open.length === 1) readCache();
+        })
+      )
+    );
+    await vi.waitFor(() => expect(forwarded).toHaveLength(1));
+
+    missUpdates();
+    await tick();
+    network.next(queryResult(forwarded[0]!, { from: 'before' }));
+    await vi.waitFor(() => expect(forwarded).toHaveLength(2));
+    network.next(queryResult(forwarded[1]!, { from: 'after' }));
+    await tick();
+    expect(forwarded).toHaveLength(2);
+    for (const subscription of open) subscription.unsubscribe();
   });
 
   it('lets its queue owner go when a sent request was given up by its caller', async () => {
