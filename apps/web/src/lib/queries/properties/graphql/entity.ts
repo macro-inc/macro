@@ -380,6 +380,40 @@ export function entityPropertyOptimisticMutationUuid(args: {
   );
 }
 
+/** Adds whose request is still in flight, by the property slot they fill. */
+const pendingAdds = new Map<string, Promise<void>>();
+
+function entityPropertySlot(input: GraphqlEntityPropertyMutationInput): string {
+  return entityPropertyOptimisticMutationUuid({
+    entityType: toGraphqlPropertyTargetEntityType(input.entityType),
+    entityId: input.entityId,
+    propertyDefinitionId:
+      input.kind === 'add'
+        ? input.propertyDefinitionId
+        : getPropertyDefinitionId(input.property),
+  });
+}
+
+/**
+ * Sends an add, which writes an empty value, and holds saves of the same
+ * property until it is answered: one sent meanwhile could reach the server
+ * first and be cleared by the add.
+ */
+async function sendAdd<T>(slot: string, send: () => Promise<T>): Promise<T> {
+  let release = () => {};
+  const answered = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  pendingAdds.set(slot, answered);
+
+  try {
+    return await send();
+  } finally {
+    if (pendingAdds.get(slot) === answered) pendingAdds.delete(slot);
+    release();
+  }
+}
+
 type EntityPropertyExecution = Parameters<
   UrqlMutationExecutor<
     SetEntityPropertyMutation,
@@ -389,10 +423,31 @@ type EntityPropertyExecution = Parameters<
 >[0];
 
 async function executeGraphqlEntityPropertyMutation(
-  { client, mutation, input, context }: EntityPropertyExecution,
+  execution: EntityPropertyExecution,
   onEnqueued?: () => void,
   prepareGrouped?: PrepareGroupedPropertyUpdates,
   authorizationEpoch = cacheSessionGeneration.capture()
+) {
+  const { input } = execution;
+  const send = () =>
+    sendEntityPropertyMutation(
+      execution,
+      onEnqueued,
+      prepareGrouped,
+      authorizationEpoch
+    );
+  if (input.kind === 'add') return sendAdd(entityPropertySlot(input), send);
+
+  const adding = pendingAdds.get(entityPropertySlot(input));
+  if (adding) await adding;
+  return send();
+}
+
+async function sendEntityPropertyMutation(
+  { client, mutation, input, context }: EntityPropertyExecution,
+  onEnqueued: (() => void) | undefined,
+  prepareGrouped: PrepareGroupedPropertyUpdates | undefined,
+  authorizationEpoch: ReturnType<typeof cacheSessionGeneration.capture>
 ) {
   const args = await prepareMutationArgs(input, prepareGrouped);
   const variables: SetEntityPropertyMutationVariables = {

@@ -144,6 +144,19 @@ unless a search typed meanwhile found a match: the first row may be **Clear
 all**, and an Enter pressed meanwhile must not reach it. An item's own copy of a custom property carries no options, so the
 editor takes them from the property's definition.
 
+## Adding a property
+
+Picking a property, or creating one, adds it to the item empty and opens its
+value field straight away: the host starts the add and does not make the
+editor wait for it. The add writes an empty value, so a save of the same
+property that started before the add was answered could reach the server first
+and be cleared by it. `executeGraphqlEntityPropertyMutation` therefore holds
+such a save until the add is answered, whether it succeeded or failed
+(`pendingAdds`, in `lib/queries/properties/graphql/entity.ts`); saves of other
+properties are not held. Until then the row shows its placeholder, "Not set".
+`addEntityProperty` skips a property the item already carries: attaching it
+again would clear its value.
+
 ## Creating a property
 
 `CreatePropertyModal` names the built-in property when the typed name duplicates
