@@ -179,6 +179,21 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
 
+    /// [`Self::list_database_access`] through the user's memberships as they
+    /// are now, never the source ids other checks share for a few seconds.
+    fn list_current_database_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+
+    /// [`Self::get_database_rows_access`] through the user's memberships as
+    /// they are now, never the source ids other checks share for a few seconds.
+    fn get_current_database_rows_access(
+        &self,
+        row_ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
+
     /// Get the highest access level a user has for a form: their grants, plus
     /// View for anyone (signed in or not) while the form's audience is public
     /// and it is not trashed.
@@ -771,6 +786,26 @@ pub trait AccessibleDatabases: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+}
+
+/// Database access read through the user's channel and team memberships as
+/// they are now. Every other check reads memberships through a per-user
+/// cache of a few seconds; a caller that shows what a database holds the
+/// moment someone leaves a team or channel, such as search hits, reads this.
+pub trait CurrentDatabaseAccess: Clone + Send + Sync + 'static {
+    /// The databases the user can reach and their highest access on each,
+    /// ordered by database id. Trashed databases are still listed.
+    fn current_accessible_databases(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+
+    /// Those of `row_ids` whose database the user can view.
+    fn current_viewable_database_rows(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        row_ids: &[Uuid],
+    ) -> impl Future<Output = Result<std::collections::HashSet<Uuid>, AccessError>> + Send;
 }
 
 /// Enumerates the forms a user can reach through grants. Kept apart from

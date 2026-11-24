@@ -549,6 +549,25 @@ impl AccessRepository for MockRepo {
         Ok(*self.database_row_access.lock().await)
     }
 
+    async fn list_current_database_access(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        Ok(self.database_access_list.lock().await.clone())
+    }
+
+    async fn get_current_database_rows_access(
+        &self,
+        row_ids: &[Uuid],
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<HashMap<Uuid, AccessLevel>, AccessError> {
+        let level = *self.database_row_access.lock().await;
+        Ok(row_ids
+            .iter()
+            .filter_map(|id| level.map(|level| (*id, level)))
+            .collect())
+    }
+
     async fn get_database_rows_access(
         &self,
         row_ids: &[Uuid],

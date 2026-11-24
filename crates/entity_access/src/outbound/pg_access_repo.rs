@@ -85,6 +85,19 @@ async fn user_source_ids(
     Ok(source_ids)
 }
 
+/// The user's source ids as their memberships are now, counted like
+/// [`user_source_ids`].
+async fn current_user_source_ids(
+    pool: &PgPool,
+    user_id: &MacroUserId<Lowercase<'_>>,
+) -> Result<SourceIds, AccessError> {
+    let source_ids = queries::get_current_user_source_ids(pool, user_id)
+        .await
+        .map_err(anyhow_access_error)?;
+    record_source_ids(source_ids.0.len());
+    Ok(source_ids)
+}
+
 /// A team-scoped bot's source ids, counted like [`user_source_ids`].
 async fn team_scope_source_ids(
     pool: &PgPool,
@@ -555,6 +568,35 @@ impl AccessRepository for PgAccessRepository {
             return Ok(std::collections::HashMap::new());
         }
         let source_ids = user_source_ids(&self.pool, Some(user_id)).await?;
+        Ok(
+            queries::database_row_access::get_database_rows_access(
+                &self.pool,
+                row_ids,
+                &source_ids,
+            )
+            .await?,
+        )
+    }
+
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
+    async fn list_current_database_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        let source_ids = current_user_source_ids(&self.pool, user_id).await?;
+        Ok(queries::database_access::list_database_access(&self.pool, &source_ids).await?)
+    }
+
+    #[tracing::instrument(err, skip_all, fields(source_id_count = tracing::field::Empty, row_count = span_count(row_ids.len())))]
+    async fn get_current_database_rows_access(
+        &self,
+        row_ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<std::collections::HashMap<Uuid, AccessLevel>, AccessError> {
+        if row_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+        let source_ids = current_user_source_ids(&self.pool, user_id).await?;
         Ok(
             queries::database_row_access::get_database_rows_access(
                 &self.pool,

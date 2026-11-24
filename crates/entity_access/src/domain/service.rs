@@ -11,7 +11,7 @@ use crate::domain::{
     },
     ports::{
         AccessRepository, AccessibleDatabases, AccessibleForms, AccessiblePipelines,
-        EntityAccessService, EntityAudienceLookup, ScheduledActionGrants,
+        CurrentDatabaseAccess, EntityAccessService, EntityAudienceLookup, ScheduledActionGrants,
     },
 };
 use futures::{StreamExt, stream};
@@ -321,6 +321,39 @@ where
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
         self.repo.list_database_access(user_id).await
+    }
+}
+
+impl<R> CurrentDatabaseAccess for EntityAccessServiceImpl<R>
+where
+    R: AccessRepository,
+{
+    #[tracing::instrument(err(level = Level::DEBUG), skip(self, user_id))]
+    async fn current_accessible_databases(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        self.repo.list_current_database_access(user_id).await
+    }
+
+    #[tracing::instrument(err(level = Level::DEBUG), skip_all, fields(row_count = row_ids.len()))]
+    async fn current_viewable_database_rows(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        row_ids: &[Uuid],
+    ) -> Result<std::collections::HashSet<Uuid>, AccessError> {
+        if row_ids.is_empty() {
+            return Ok(std::collections::HashSet::new());
+        }
+        let levels = self
+            .repo
+            .get_current_database_rows_access(row_ids, user_id)
+            .await?;
+        Ok(levels
+            .into_iter()
+            .filter(|(_, level)| *level >= AccessLevel::View)
+            .map(|(row_id, _)| row_id)
+            .collect())
     }
 }
 

@@ -127,6 +127,17 @@ async fn shared_user_source_ids(
     Ok(Box::pin(RUNNING_SOURCE_ID_LOOKUPS.run(key, lookup)).await?)
 }
 
+/// The user's source ids as their memberships are now, bypassing the cache
+/// [`get_user_source_ids`] reads through, for checks that must see a removal
+/// from a team or channel at once.
+#[tracing::instrument(skip_all, err)]
+pub async fn get_current_user_source_ids(
+    pool: &Pool<Postgres>,
+    user_id: &MacroUserId<Lowercase<'_>>,
+) -> anyhow::Result<SourceIds> {
+    Ok(query_user_source_ids(pool, user_id.as_ref()).await?)
+}
+
 async fn query_user_source_ids(pool: &Pool<Postgres>, user_id: &str) -> sqlx::Result<SourceIds> {
     let mut tx = Box::pin(pool.begin()).await?;
     sqlx::query!("SET LOCAL statement_timeout = '15s'")
