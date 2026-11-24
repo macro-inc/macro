@@ -1064,17 +1064,21 @@ export class CacheCoordinatorPageAdapter {
       return;
     }
     this.pagehideRegistered = true;
-    addEventListener(
-      'pagehide',
-      () => {
-        fireAndForget(
-          this.dispose({ graceful: false, preserveDatabase: true }),
-          'graphql-cache-coordinator'
-        );
-      },
-      { once: true }
-    );
+    addEventListener('pagehide', this.onPagehide);
   }
+
+  private unregisterPagehide(): void {
+    if (!this.pagehideRegistered) return;
+    this.pagehideRegistered = false;
+    removeEventListener('pagehide', this.onPagehide);
+  }
+
+  private readonly onPagehide = (): void => {
+    fireAndForget(
+      this.dispose({ graceful: false, preserveDatabase: true }),
+      'graphql-cache-coordinator'
+    );
+  };
 
   private failTerminal(error: Error): void {
     if (this.terminalErrorReported) return;
@@ -1148,6 +1152,7 @@ export class CacheCoordinatorPageAdapter {
   }
 
   private closeCoordinatorPort(): void {
+    this.unregisterPagehide();
     this.coordinatorWatch?.abort();
     this.coordinatorWatch = undefined;
     this.visibility?.removeEventListener(
