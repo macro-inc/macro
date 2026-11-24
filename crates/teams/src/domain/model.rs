@@ -148,8 +148,10 @@ impl std::fmt::Display for TeamRole {
 
 /// The paid plan a seat is billed at. Every member of a paying team has one;
 /// a team may mix them, and its Stripe subscription carries one seat item per
-/// plan in use.
-#[derive(Eq, PartialEq, Debug, Clone, Copy, Hash, serde::Serialize, serde::Deserialize)]
+/// plan in use. Variants are ordered cheapest first, so `<` compares plans.
+#[derive(
+    Eq, PartialEq, PartialOrd, Ord, Debug, Clone, Copy, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
@@ -158,23 +160,40 @@ impl std::fmt::Display for TeamRole {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum SeatPlan {
-    /// The $40/seat/month plan.
+    /// The $40/seat/month plan (shown as Pro), billed monthly only.
     Premium,
-    /// The $200/seat/month plan with a larger AI allowance.
+    /// The $80/seat/month plan billed annually, or $90 month to month, with a
+    /// larger AI allowance and higher routine limits.
+    Business,
+    /// The $200/seat/month plan billed annually, or $220 month to month, with
+    /// the largest AI allowance.
     Max,
 }
 
 impl SeatPlan {
-    /// Every plan.
-    pub const ALL: [SeatPlan; 2] = [SeatPlan::Premium, SeatPlan::Max];
+    /// Every plan, cheapest first.
+    pub const ALL: [SeatPlan; 3] = [SeatPlan::Premium, SeatPlan::Business, SeatPlan::Max];
 
     /// Plans available for a new purchase or plan move.
-    pub const PURCHASABLE: [SeatPlan; 2] = Self::ALL;
+    pub const PURCHASABLE: [SeatPlan; 3] = Self::ALL;
+
+    /// The cheapest plan sold for a subscription billed every `cadence`.
+    /// Premium is sold monthly only, so annual subscriptions start at
+    /// Business.
+    pub fn cheapest_at(cadence: BillingCadence) -> Self {
+        match cadence {
+            BillingCadence::Year => SeatPlan::Business,
+            BillingCadence::Day | BillingCadence::Week | BillingCadence::Month => {
+                SeatPlan::Premium
+            }
+        }
+    }
 
     /// The role tier recorded on a user holding this seat.
     pub fn product_tier(self) -> ProductTier {
         match self {
             SeatPlan::Premium => ProductTier::Opus,
+            SeatPlan::Business => ProductTier::Business,
             SeatPlan::Max => ProductTier::Max,
         }
     }
@@ -194,11 +213,14 @@ impl SeatPlan {
             .collect()
     }
 
-    /// The plan a user's roles say they are on. `sub_max` wins; any other
-    /// (or no) paid role is Premium, the plan every seat starts on.
+    /// The plan a user's roles say they are on. `sub_max` wins over
+    /// `sub_business`; any other (or no) paid role is Premium, the plan every
+    /// seat starts on.
     pub fn from_roles(roles: &HashSet<RoleId>) -> Self {
         if roles.contains(&RoleId::SubMax) {
             SeatPlan::Max
+        } else if roles.contains(&RoleId::SubBusiness) {
+            SeatPlan::Business
         } else {
             SeatPlan::Premium
         }
@@ -209,6 +231,7 @@ impl std::fmt::Display for SeatPlan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SeatPlan::Premium => write!(f, "premium"),
+            SeatPlan::Business => write!(f, "business"),
             SeatPlan::Max => write!(f, "max"),
         }
     }
@@ -230,40 +253,102 @@ pub const LEGACY_PREMIUM_PRICE_IDS: [&str; 10] = [
     "price_1PbnpmJaD7zvQeOBU8VQg0Wa",
 ];
 
+/// A seat moving to a cheaper plan at renewal.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+pub struct SeatDowngrade {
+    /// The plan the seat is billed at until renewal.
+    pub from: SeatPlan,
+    /// The cheaper plan it renews on.
+    pub to: SeatPlan,
+}
+
+/// One plan's Stripe seat prices.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PlanPrices {
+    /// The price sold for monthly billing, if the plan is sold monthly.
+    pub monthly: Option<stripe::PriceId>,
+    /// The price sold for annual billing, if the plan is sold annually.
+    pub yearly: Option<stripe::PriceId>,
+    /// Prices no longer sold that subscribers may still be billed at. They
+    /// keep the plan's entitlements, and a seat added to a subscription that
+    /// already bills the plan at one of them reuses it.
+    pub legacy: Vec<stripe::PriceId>,
+}
+
+impl PlanPrices {
+    /// The price sold at `cadence`, if any.
+    pub fn sold_at(&self, cadence: BillingCadence) -> Option<&stripe::PriceId> {
+        match cadence {
+            BillingCadence::Month => self.monthly.as_ref(),
+            BillingCadence::Year => self.yearly.as_ref(),
+            BillingCadence::Day | BillingCadence::Week => None,
+        }
+    }
+
+    /// Whether `price_id` bills this plan, sold or legacy.
+    pub fn contains(&self, price_id: &str) -> bool {
+        self.monthly
+            .iter()
+            .chain(&self.yearly)
+            .chain(&self.legacy)
+            .any(|price| price.as_str() == price_id)
+    }
+
+    fn all(&self) -> impl Iterator<Item = &stripe::PriceId> {
+        self.monthly.iter().chain(&self.yearly).chain(&self.legacy)
+    }
+}
+
 /// The Stripe price ids behind each plan's per-seat subscription item.
 #[derive(Debug, Clone)]
 pub struct SeatPrices {
-    /// Premium seat price.
-    pub premium: stripe::PriceId,
-    /// Max seat price, when the plan is sold.
-    pub max: Option<stripe::PriceId>,
+    /// Premium seat prices; Premium is always sold monthly.
+    pub premium: PlanPrices,
+    /// Business seat prices, empty until the plan is sold.
+    pub business: PlanPrices,
+    /// Max seat prices, empty until the plan is sold.
+    pub max: PlanPrices,
 }
 
 impl SeatPrices {
-    /// The price a seat on `plan` is billed at.
-    pub fn price_id(&self, plan: SeatPlan) -> Result<&stripe::PriceId, CustomerError> {
+    /// Every plan's prices.
+    pub fn of(&self, plan: SeatPlan) -> &PlanPrices {
         match plan {
-            SeatPlan::Premium => Ok(&self.premium),
-            SeatPlan::Max => self
-                .max
-                .as_ref()
-                .ok_or(CustomerError::PlanUnavailable(plan)),
+            SeatPlan::Premium => &self.premium,
+            SeatPlan::Business => &self.business,
+            SeatPlan::Max => &self.max,
         }
+    }
+
+    /// The price a new seat on `plan` is sold at for a subscription billed
+    /// every `cadence`.
+    pub fn price_id(
+        &self,
+        plan: SeatPlan,
+        cadence: BillingCadence,
+    ) -> Result<&stripe::PriceId, CustomerError> {
+        self.of(plan)
+            .sold_at(cadence)
+            .ok_or(CustomerError::PlanUnavailable(plan))
+    }
+
+    /// Whether `plan` is sold at any billing cadence.
+    pub fn is_sold(&self, plan: SeatPlan) -> bool {
+        let prices = self.of(plan);
+        prices.monthly.is_some() || prices.yearly.is_some()
     }
 
     /// Which plan a subscription item's price belongs to, if any.
     pub fn plan_for_price(&self, price_id: &str) -> Option<SeatPlan> {
-        if price_id == self.premium.as_str() {
-            Some(SeatPlan::Premium)
-        } else if self.max.as_ref().map(stripe::PriceId::as_str) == Some(price_id) {
-            Some(SeatPlan::Max)
-        } else {
-            None
-        }
+        SeatPlan::ALL
+            .into_iter()
+            .find(|plan| self.of(*plan).contains(price_id))
     }
 
     /// The plan whose entitlements a personal subscriber on `price_id`
-    /// holds: a sold seat price's plan, or Premium for a
+    /// holds: a seat price's plan, or Premium for a
     /// [`LEGACY_PREMIUM_PRICE_IDS`] price. Only roles use it; seat billing,
     /// plan changes and AI plans keep [`Self::plan_for_price`].
     pub fn entitlement_plan(&self, price_id: &str) -> Option<SeatPlan> {
@@ -276,8 +361,9 @@ impl SeatPrices {
 
     /// Every price that carries a seat item.
     pub fn all(&self) -> Vec<stripe::PriceId> {
-        std::iter::once(self.premium.clone())
-            .chain(self.max.clone())
+        SeatPlan::ALL
+            .into_iter()
+            .flat_map(|plan| self.of(plan).all().cloned())
             .collect()
     }
 }

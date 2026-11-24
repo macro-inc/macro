@@ -57,7 +57,7 @@ use super::*;
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        AcceptedTeamInvite, CustomerError, DueInviteReminder, ItemQuantityChange,
+        AcceptedTeamInvite, CustomerError, SeatDowngrade, DueInviteReminder, ItemQuantityChange,
         JoinTeamDirectlyError, PatchTeamRequest, PatchTeamUserRole, RemoveTeamInviteError,
         RemoveUserFromAllTeamsError, RemoveUserFromTeamError, SeatPlan, SetTeamMemberPlanError,
         Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken,
@@ -1082,7 +1082,9 @@ struct MockCustomerRepository {
     decrement_calls: Arc<Mutex<Vec<(String, u64)>>>,
     seat_plan_calls: Arc<Mutex<Vec<(String, SeatPlan, u64)>>>,
     move_seat_calls: Arc<Mutex<Vec<(String, SeatPlan, SeatPlan)>>>,
-    schedule_calls: Arc<Mutex<Vec<(String, String, Option<SeatPlan>)>>>,
+    schedule_calls: Arc<Mutex<Vec<(String, String, Option<SeatDowngrade>)>>>,
+    /// How often the mocked subscription bills.
+    interval: crate::domain::model::BillingCadence,
     pending_plan: Option<SeatPlan>,
     pending_plans: HashMap<String, crate::domain::model::ScheduledSeatPlan>,
     pending_plans_calls: Arc<Mutex<Vec<String>>>,
@@ -1112,6 +1114,7 @@ impl Default for MockCustomerRepository {
             seat_plan_calls: Arc::new(Mutex::new(Vec::new())),
             move_seat_calls: Arc::new(Mutex::new(Vec::new())),
             schedule_calls: Arc::new(Mutex::new(Vec::new())),
+            interval: crate::domain::model::BillingCadence::Month,
             pending_plan: None,
             pending_plans: HashMap::new(),
             pending_plans_calls: Arc::new(Mutex::new(Vec::new())),
@@ -1162,7 +1165,7 @@ impl CustomerRepository for MockCustomerRepository {
             .iter()
             .rev()
             .find(|(_, member, _)| member == user.as_ref())
-            .map(|(_, _, plan)| *plan)
+            .map(|(_, _, downgrade)| downgrade.map(|downgrade| downgrade.to))
             .unwrap_or(self.pending_plan);
         Ok(pending.map(|plan| crate::domain::model::ScheduledSeatPlan {
             plan,
@@ -1190,12 +1193,12 @@ impl CustomerRepository for MockCustomerRepository {
         &self,
         sub: &stripe::SubscriptionId,
         user: &MacroUserIdStr<'_>,
-        plan: Option<SeatPlan>,
+        downgrade: Option<SeatDowngrade>,
     ) -> Result<(), CustomerError> {
         self.schedule_calls
             .lock()
             .unwrap()
-            .push((sub.to_string(), user.to_string(), plan));
+            .push((sub.to_string(), user.to_string(), downgrade));
         Ok(())
     }
     async fn upgrade_personal_plan(
@@ -1421,7 +1424,12 @@ impl CustomerRepository for MockCustomerRepository {
         &self,
         _: &stripe::SubscriptionId,
     ) -> Result<crate::domain::model::SubscriptionTerms, CustomerError> {
-        unimplemented!("not exercised by team service tests")
+        Ok(crate::domain::model::SubscriptionTerms {
+            current_period_end: chrono::Utc::now() + chrono::Duration::days(10),
+            interval: self.interval,
+            currency: "usd".to_string(),
+            trialing: false,
+        })
     }
 
     async fn payment_terms(
@@ -2589,7 +2597,7 @@ async fn team_payment_revoke_removes_exact_premium_roles_from_members() {
         make_team_member(team_id, "macro|member-one@example.com", TeamRole::Member),
         make_team_member(team_id, "macro|member-two@example.com", TeamRole::Admin),
     ];
-    let expected_roles = vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubMax];
+    let expected_roles = vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubBusiness, RoleId::SubMax];
     let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
     let team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls)
         .with_team_members(members);
@@ -2877,6 +2885,101 @@ async fn failed_initial_usage_reset_keeps_free_roles_for_webhook_retry() {
 }
 
 #[tokio::test]
+async fn set_team_member_plan_defers_max_to_business_with_its_source_plan() {
+    let team_id = uuid::Uuid::from_u128(5101);
+    let admin_id = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+    let member_id = "macro|member@example.com";
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+    let member = TeamMember {
+        plan: SeatPlan::Max,
+        ..make_team_member(team_id, member_id, TeamRole::Member)
+    };
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls)
+        .with_team_members(vec![member]);
+    team_repo.team_subscription_id = Some("sub_team".parse().unwrap());
+    let plan_calls = team_repo.patch_team_member_plan_calls.clone();
+    let customer_repo = MockCustomerRepository::default();
+    let move_calls = customer_repo.move_seat_calls.clone();
+    let scheduled = customer_repo.schedule_calls.clone();
+    let service = build_member_plan_service(
+        team_repo,
+        customer_repo,
+        MockUserRolesAndPermissionsService::default(),
+    );
+
+    let member = service
+        .set_team_member_plan(
+            test_team_receipt::<AdminTeamRole>(team_id, &admin_id),
+            &MacroUserIdStr::parse_from_str(member_id).unwrap(),
+            SeatPlan::Business,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(member.plan, SeatPlan::Max);
+    assert!(move_calls.lock().unwrap().is_empty());
+    assert!(plan_calls.lock().unwrap().is_empty());
+    assert_eq!(
+        *scheduled.lock().unwrap(),
+        vec![(
+            "sub_team".to_string(),
+            member_id.to_string(),
+            Some(SeatDowngrade {
+                from: SeatPlan::Max,
+                to: SeatPlan::Business,
+            })
+        )]
+    );
+}
+
+#[tokio::test]
+async fn set_team_member_plan_moves_premium_to_business_now() {
+    let team_id = uuid::Uuid::from_u128(5102);
+    let admin_id = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+    let member_id = "macro|member@example.com";
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls)
+        .with_team_members(vec![make_team_member(team_id, member_id, TeamRole::Member)]);
+    team_repo.team_subscription_id = Some("sub_team".parse().unwrap());
+    let plan_calls = team_repo.patch_team_member_plan_calls.clone();
+    let customer_repo = MockCustomerRepository::default();
+    let move_calls = customer_repo.move_seat_calls.clone();
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let upsert_calls = roles_service.upsert_calls.clone();
+    let service = build_member_plan_service(team_repo, customer_repo, roles_service);
+
+    let member = service
+        .set_team_member_plan(
+            test_team_receipt::<AdminTeamRole>(team_id, &admin_id),
+            &MacroUserIdStr::parse_from_str(member_id).unwrap(),
+            SeatPlan::Business,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(member.plan, SeatPlan::Business);
+    assert_eq!(
+        *move_calls.lock().unwrap(),
+        vec![(
+            "sub_team".to_string(),
+            SeatPlan::Premium,
+            SeatPlan::Business
+        )]
+    );
+    assert_eq!(
+        *plan_calls.lock().unwrap(),
+        vec![(team_id, member_id.to_string(), SeatPlan::Business)]
+    );
+    assert_eq!(
+        *upsert_calls.lock().unwrap(),
+        vec![(
+            member_id.to_string(),
+            vec![RoleId::TeamSubscriber, RoleId::SubBusiness]
+        )]
+    );
+}
+
+#[tokio::test]
 async fn set_team_member_plan_defers_max_downgrade_and_keep_max_cancels_it() {
     let team_id = uuid::Uuid::from_u128(5100);
     let admin_id = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
@@ -2917,7 +3020,10 @@ async fn set_team_member_plan_defers_max_downgrade_and_keep_max_cancels_it() {
         vec![(
             "sub_team".to_string(),
             member_id.to_string(),
-            Some(SeatPlan::Premium)
+            Some(SeatDowngrade {
+                from: SeatPlan::Max,
+                to: SeatPlan::Premium,
+            })
         )]
     );
     service
@@ -3024,7 +3130,7 @@ async fn set_team_member_plan_upgrades_premium_seat_to_max_and_swaps_tier_role()
         *remove_calls.lock().unwrap(),
         vec![(
             member_id.to_string(),
-            vec![RoleId::SubHaiku, RoleId::SubSonnet, RoleId::SubOpus]
+            vec![RoleId::SubHaiku, RoleId::SubSonnet, RoleId::SubOpus, RoleId::SubBusiness]
         )]
     );
 }
@@ -3152,7 +3258,7 @@ fn seat_plan_maps_to_tier_roles() {
         SeatPlan::Premium
     );
     assert_eq!(
-        SeatPlan::from_roles(&HashSet::from([RoleId::SubOpus, RoleId::SubMax])),
+        SeatPlan::from_roles(&HashSet::from([RoleId::SubOpus, RoleId::SubBusiness, RoleId::SubMax])),
         SeatPlan::Max
     );
     assert_eq!(SeatPlan::from_roles(&HashSet::new()), SeatPlan::Premium);
@@ -5940,6 +6046,57 @@ async fn test_join_team_increments_customer_seat_count() {
 }
 
 #[tokio::test]
+async fn joining_an_annual_team_bills_and_records_a_business_seat() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let invite_id = uuid::Uuid::from_u128(2);
+    let user_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
+    team_repo.accepted_invite = Some(make_accepted_invite(team_id, invite_id, &user_id));
+    team_repo.team_subscription_id = Some(subscription_id.clone());
+    let plan_calls = team_repo.patch_team_member_plan_calls.clone();
+
+    let customer_repo = MockCustomerRepository {
+        subscription_id: subscription_id.clone(),
+        interval: crate::domain::model::BillingCadence::Year,
+        ..Default::default()
+    };
+    let seat_changes = customer_repo.seat_plan_calls.clone();
+    let roles_service = MockUserRolesAndPermissionsService::default();
+    let upsert_role_calls = roles_service.upsert_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        customer_repo,
+        RecordingChannelService::default(),
+        roles_service,
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    service.join_team(&invite_id, &user_id).await.unwrap();
+
+    assert_eq!(
+        *plan_calls.lock().unwrap(),
+        vec![(team_id, user_id.as_ref().to_string(), SeatPlan::Business)]
+    );
+    assert_eq!(
+        *seat_changes.lock().unwrap(),
+        vec![(subscription_id.to_string(), SeatPlan::Business, 1)]
+    );
+    assert_eq!(
+        *upsert_role_calls.lock().unwrap(),
+        vec![(
+            user_id.as_ref().to_string(),
+            vec![RoleId::TeamSubscriber, RoleId::SubBusiness]
+        )]
+    );
+}
+
+#[tokio::test]
 async fn team_analytics_join_team_emits_joined_event_with_team_id() {
     let team_id = uuid::Uuid::from_u128(321);
     let invite_id = uuid::Uuid::from_u128(322);
@@ -6246,7 +6403,7 @@ async fn remove_user_from_team_releases_open_seat_before_returning() {
         *roles_service.remove_calls.lock().unwrap(),
         vec![(
             member_id.as_ref().to_string(),
-            vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubMax]
+            vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubBusiness, RoleId::SubMax]
         )]
     );
     assert!(roles_service.upsert_calls.lock().unwrap().is_empty());
@@ -6324,7 +6481,7 @@ async fn remove_user_from_team_restores_snapshotted_roles_when_release_fails() {
         *roles_service.remove_calls.lock().unwrap(),
         vec![(
             member_id.as_ref().to_string(),
-            vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubMax]
+            vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubBusiness, RoleId::SubMax]
         )]
     );
     assert_eq!(
@@ -6423,7 +6580,7 @@ async fn remove_user_from_team_does_not_release_seat_when_role_removal_fails() {
         *roles_service.remove_calls.lock().unwrap(),
         vec![(
             member_id.as_ref().to_string(),
-            vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubMax]
+            vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubBusiness, RoleId::SubMax]
         )]
     );
     assert!(open_seat_release.releases().is_empty());
@@ -7516,7 +7673,7 @@ async fn remove_user_from_team_enterprise_bypasses_billing_and_preserves_side_ef
         *roles_service.remove_calls.lock().unwrap(),
         vec![(
             member_id.as_ref().to_string(),
-            vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubMax]
+            vec![RoleId::TeamSubscriber, RoleId::SubOpus, RoleId::SubBusiness, RoleId::SubMax]
         )]
     );
     assert_eq!(

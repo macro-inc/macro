@@ -1,6 +1,8 @@
 use super::*;
+use crate::domain::model::PlanPrices;
 
 mod payment_terms;
+mod plans;
 mod seat_requests;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use serde::{Serialize, de::DeserializeOwned};
@@ -9,6 +11,11 @@ use std::str::FromStr;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
     matchers::{method, path},
+};
+
+pub(super) const MAX_TO_PRO: SeatDowngrade = SeatDowngrade {
+    from: SeatPlan::Max,
+    to: SeatPlan::Premium,
 };
 
 pub(super) fn subscription() -> stripe::Subscription {
@@ -32,11 +39,21 @@ pub(super) fn subscription() -> stripe::Subscription {
     }
 }
 pub(super) fn item(id: &str, price: &str, quantity: u64) -> stripe::SubscriptionItem {
+    let interval = if price.ends_with("_year") {
+        stripe::RecurringInterval::Year
+    } else {
+        stripe::RecurringInterval::Month
+    };
     stripe::SubscriptionItem {
         id: id.parse().unwrap(),
         price: Some(stripe::Price {
             id: price.parse().unwrap(),
             product: Some(stripe::Expandable::Id("prod_test".parse().unwrap())),
+            recurring: Some(stripe::Recurring {
+                interval,
+                interval_count: 1,
+                ..Default::default()
+            }),
             ..Default::default()
         }),
         quantity: Some(quantity),
@@ -79,8 +96,20 @@ pub(super) fn repo(server: &MockServer, pool: sqlx::PgPool) -> CustomerRepositor
     CustomerRepositoryImpl::new(
         stripe::Client::from_url(server.uri().as_str(), "sk_test"),
         SeatPrices {
-            premium: stripe::PriceId::from_str("price_pro").unwrap(),
-            max: Some(stripe::PriceId::from_str("price_max").unwrap()),
+            premium: PlanPrices {
+                monthly: Some(stripe::PriceId::from_str("price_pro").unwrap()),
+                ..Default::default()
+            },
+            business: PlanPrices {
+                monthly: Some(stripe::PriceId::from_str("price_business").unwrap()),
+                yearly: Some(stripe::PriceId::from_str("price_business_year").unwrap()),
+                legacy: vec![],
+            },
+            max: PlanPrices {
+                monthly: Some(stripe::PriceId::from_str("price_max").unwrap()),
+                yearly: Some(stripe::PriceId::from_str("price_max_year").unwrap()),
+                legacy: vec![stripe::PriceId::from_str("price_max_legacy").unwrap()],
+            },
         },
         pool,
     )
@@ -137,7 +166,7 @@ async fn pending_status_reads_only_the_callers_seat_from_an_active_owned_schedul
     .await;
     let repo = repo(&server, pool);
     let user = MacroUserIdStr::try_from("macro|max@example.com").unwrap();
-    repo.schedule_seat_plan(&sub.id, &user, Some(SeatPlan::Premium))
+    repo.schedule_seat_plan(&sub.id, &user, Some(MAX_TO_PRO))
         .await
         .unwrap();
     let requests = server.received_requests().await.unwrap();
@@ -364,7 +393,7 @@ async fn downgrade_preserves_current_prices_and_terms_then_keep_max_releases_sch
     .await;
     let repo = repo(&server, pool.clone());
     let user = MacroUserIdStr::try_from("macro|max@example.com").unwrap();
-    repo.schedule_seat_plan(&sub.id, &user, Some(SeatPlan::Premium))
+    repo.schedule_seat_plan(&sub.id, &user, Some(MAX_TO_PRO))
         .await
         .unwrap();
     let requests = server.received_requests().await.unwrap();
@@ -816,8 +845,8 @@ async fn concurrent_instances_preserve_all_scheduled_members_and_seat_additions(
     let first = MacroUserIdStr::try_from("macro|one@example.com").unwrap();
     let second = MacroUserIdStr::try_from("macro|two@example.com").unwrap();
     let (a, b, c) = tokio::join!(
-        one.schedule_seat_plan(&subscription, &first, Some(SeatPlan::Premium)),
-        two.schedule_seat_plan(&subscription, &second, Some(SeatPlan::Premium)),
+        one.schedule_seat_plan(&subscription, &first, Some(MAX_TO_PRO)),
+        two.schedule_seat_plan(&subscription, &second, Some(MAX_TO_PRO)),
         seats.increment_seat_count(&subscription, SeatPlan::Premium, 1),
     );
     a.unwrap();
@@ -829,11 +858,11 @@ async fn concurrent_instances_preserve_all_scheduled_members_and_seat_additions(
     assert_eq!(pending.members.len(), 2);
     assert_eq!(
         pending.members.get(first.as_ref()),
-        Some(&SeatPlan::Premium)
+        Some(&PendingSeat::Move(MAX_TO_PRO))
     );
     assert_eq!(
         pending.members.get(second.as_ref()),
-        Some(&SeatPlan::Premium)
+        Some(&PendingSeat::Move(MAX_TO_PRO))
     );
     assert_eq!(
         phase_quantities(&phase_parameters(&schedule.phases[0]).unwrap()).unwrap(),

@@ -124,7 +124,10 @@ impl CustomerRepositoryImpl {
         Ok(changes
             .members
             .into_iter()
-            .map(|(user, plan)| (user, ScheduledSeatPlan { plan, effective_at }))
+            .map(|(user, seat)| {
+                let plan = seat.downgrade().to;
+                (user, ScheduledSeatPlan { plan, effective_at })
+            })
             .collect())
     }
 
@@ -157,37 +160,62 @@ impl CustomerRepositoryImpl {
         next["iterations"] = 1.into();
         next["proration_behavior"] = "none".into();
         let mut quantities = phase_quantities(&current)?;
-        let max = self.seat_prices.price_id(SeatPlan::Max)?.to_string();
-        let pro = self.seat_prices.price_id(SeatPlan::Premium)?.to_string();
-        let count = pending.members.len() as u64;
-        let source = quantities.get(&max).copied().unwrap_or(0);
-        if source < count {
-            return Err(CustomerError::StorageLayerError(anyhow::anyhow!(
-                "scheduled downgrades exceed active Max seats"
-            )));
+        let cadence = payment_terms::terms_of(subscription)?.interval;
+        // Count the seats on each move. A BTreeMap keeps the order, and so the
+        // request, the same on every retry of this change.
+        let mut moves: std::collections::BTreeMap<SeatDowngrade, u64> = Default::default();
+        for seat in pending.members.values() {
+            *moves.entry(seat.downgrade()).or_default() += 1;
         }
-        // A new lower-price item retains the seat's item-level tax and billing
-        // settings as well as the phase-wide settings copied above.
-        let source_item = next["items"]
-            .as_array()
-            .and_then(|items| {
-                items
-                    .iter()
-                    .find(|item| item["price"].as_str() == Some(max.as_str()))
-            })
-            .cloned();
-        if let Some(mut item) = source_item
-            && !next["items"]
+        for (downgrade, count) in moves {
+            // The seats leave the item billing their current plan, whatever
+            // price it is at (a legacy price included).
+            let source_price = self
+                .phase_price(&quantities, downgrade.from)
+                .with_context(|| format!("no active {} seats to downgrade", downgrade.from))?;
+            let source = quantities.get(&source_price).copied().unwrap_or(0);
+            if source < count {
+                return Err(CustomerError::StorageLayerError(anyhow::anyhow!(
+                    "scheduled downgrades exceed active {} seats",
+                    downgrade.from
+                )));
+            }
+            // They join the target plan's existing item, else a new one at
+            // the price sold for the subscription's interval.
+            let target_price = match self.phase_price(&quantities, downgrade.to) {
+                Some(price) => price,
+                None => self
+                    .seat_prices
+                    .price_id(downgrade.to, cadence)?
+                    .to_string(),
+            };
+            // A new lower-price item retains the seat's item-level tax and
+            // billing settings as well as the phase-wide settings copied above.
+            let source_item = next["items"]
                 .as_array()
-                .unwrap()
-                .iter()
-                .any(|item| item["price"].as_str() == Some(pro.as_str()))
-        {
-            item["price"] = pro.clone().into();
-            next["items"].as_array_mut().unwrap().push(item);
+                .and_then(|items| {
+                    items
+                        .iter()
+                        .find(|item| item["price"].as_str() == Some(source_price.as_str()))
+                })
+                .cloned();
+            let has_target_item = next["items"]
+                .as_array()
+                .is_some_and(|items| {
+                    items
+                        .iter()
+                        .any(|item| item["price"].as_str() == Some(target_price.as_str()))
+                });
+            if let Some(mut item) = source_item
+                && !has_target_item
+                && let Some(items) = next["items"].as_array_mut()
+            {
+                item["price"] = target_price.clone().into();
+                items.push(item);
+            }
+            quantities.insert(source_price, source - count);
+            *quantities.entry(target_price).or_default() += count;
         }
-        quantities.insert(max, source - count);
-        *quantities.entry(pro).or_default() += count;
         replace_quantities(&mut next, &quantities);
         if next.get("metadata").is_none() {
             next["metadata"] = serde_json::json!({});
@@ -262,11 +290,25 @@ impl CustomerRepositoryImpl {
         }
     }
 
-    /// The active subscription's seat items, keyed by plan.
+    /// The price in a schedule phase's `quantities` that bills `plan`, if any
+    /// of its seats are in the phase.
+    fn phase_price(&self, quantities: &HashMap<String, u64>, plan: SeatPlan) -> Option<String> {
+        let mut prices: Vec<&String> = quantities
+            .iter()
+            .filter(|(price, quantity)| {
+                **quantity > 0 && self.seat_prices.plan_for_price(price) == Some(plan)
+            })
+            .map(|(price, _)| price)
+            .collect();
+        prices.sort();
+        prices.first().map(|price| (*price).clone())
+    }
+
+    /// The active subscription's seat items, keyed by plan, and its interval.
     pub(super) async fn get_seat_items(
         &self,
         subscription_id: &stripe::SubscriptionId,
-    ) -> Result<HashMap<SeatPlan, SeatItem>, CustomerError> {
+    ) -> Result<SeatItems, CustomerError> {
         let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
             .await
             .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
@@ -277,6 +319,7 @@ impl CustomerRepositoryImpl {
             return Err(CustomerError::SubscriptionNotActive);
         }
 
+        let cadence = payment_terms::terms_of(&subscription)?.interval;
         let items: HashMap<SeatPlan, SeatItem> = subscription
             .items
             .data
@@ -298,16 +341,22 @@ impl CustomerRepositoryImpl {
             return Err(CustomerError::NoMatchingLineItem);
         }
 
-        Ok(items)
+        Ok(SeatItems {
+            by_plan: items,
+            cadence,
+        })
     }
 
     /// The item update that leaves `plan` with `quantity` seats: a new item
-    /// when the plan had none, a deletion when it drops to zero.
+    /// when the plan had none, at the price sold for `cadence`; a deletion
+    /// when it drops to zero. An existing item keeps its price, so a seat
+    /// added to a plan billed at a legacy price is billed at it too.
     pub(super) fn seat_item_update(
         &self,
         plan: SeatPlan,
         existing: Option<&SeatItem>,
         quantity: u64,
+        cadence: BillingCadence,
     ) -> Result<UpdateSubscriptionItems, CustomerError> {
         Ok(match existing {
             Some(item) if quantity == 0 => UpdateSubscriptionItems {
@@ -321,7 +370,7 @@ impl CustomerRepositoryImpl {
                 ..Default::default()
             },
             None => UpdateSubscriptionItems {
-                price: Some(self.seat_prices.price_id(plan)?.to_string()),
+                price: Some(self.seat_prices.price_id(plan, cadence)?.to_string()),
                 quantity: Some(quantity),
                 ..Default::default()
             },
@@ -352,7 +401,7 @@ impl CustomerRepositoryImpl {
     ) -> Result<(), CustomerError> {
         let subscription_id = &subscription.id;
         let end_trial = subscription.status == stripe::SubscriptionStatus::Trialing
-            && self.adds_first_max_seat(&subscription, &items)?;
+            && self.adds_first_upgraded_seat(&subscription, &items);
         if let Some(schedule_id) = subscription.schedule.as_ref().map(|s| s.id()) {
             let schedule = traced(
                 stripe_span!("stripe.subscription_schedule.retrieve", subscription_schedule_id = %schedule_id),
@@ -362,8 +411,9 @@ impl CustomerRepositoryImpl {
             .map_err(storage)?;
             require_owned_schedule(&schedule)?;
             let pending = self.pending_changes(&schedule, &subscription).await?;
-            // A Pro trial gaining Max ends now. With no Max seat before, no seat
-            // is waiting to downgrade, so release the schedule and bill directly.
+            // A Pro trial gaining a pricier seat ends now. With no such seat
+            // before, no seat is waiting to downgrade, so release the schedule
+            // and bill directly.
             if !end_trial && pending.at > subscription.current_period_start {
                 let current = current_phase(&schedule, &subscription)?;
                 let mut phase = phase_parameters(current)?;
@@ -429,8 +479,9 @@ impl CustomerRepositoryImpl {
             ..Default::default()
         };
         if end_trial {
-            // A trial has no paid remainder to prorate. Reset the cycle so Max
-            // bills a full period today instead of inheriting the trial end.
+            // A trial has no paid remainder to prorate. Reset the cycle so the
+            // pricier plan bills a full period today instead of inheriting the
+            // trial end.
             update_params.trial_end = Some(stripe::Scheduled::now());
             update_params.billing_cycle_anchor = Some(stripe::SubscriptionBillingCycleAnchor::Now);
         }
@@ -465,37 +516,40 @@ impl CustomerRepositoryImpl {
         Ok(())
     }
 
-    /// Whether the seat update gives a subscription without Max seats its first
-    /// one. A subscription already trialing on Max keeps its trial terms, and
-    /// its scheduled downgrades, through other seat changes.
-    fn adds_first_max_seat(
+    /// Whether the seat update gives a subscription with only Premium seats
+    /// its first seat on a pricier plan (Business or Max). A subscription
+    /// already trialing on one keeps its trial terms, and its scheduled
+    /// downgrades, through other seat changes.
+    fn adds_first_upgraded_seat(
         &self,
         subscription: &stripe::Subscription,
         items: &[UpdateSubscriptionItems],
-    ) -> Result<bool, CustomerError> {
-        let Ok(max) = self.seat_prices.price_id(SeatPlan::Max) else {
-            return Ok(false);
+    ) -> bool {
+        let upgraded = |price: &str| {
+            self.seat_prices
+                .plan_for_price(price)
+                .is_some_and(|plan| plan > SeatPlan::Premium)
         };
-        let max_items: Vec<_> = subscription
+        let upgraded_items: Vec<_> = subscription
             .items
             .data
             .iter()
             .filter(|item| {
                 item.price
                     .as_ref()
-                    .is_some_and(|price| price.id.as_str() == max.as_str())
+                    .is_some_and(|price| upgraded(price.id.as_str()))
             })
             .collect();
-        let mut quantity = max_items
+        let mut quantity = upgraded_items
             .iter()
             .map(|item| item.quantity.unwrap_or(1))
             .sum::<u64>();
         if quantity > 0 {
-            return Ok(false);
+            return false;
         }
         for update in items {
             if let Some(price) = &update.price {
-                if price.as_str() == max.as_str() {
+                if upgraded(price) {
                     quantity = quantity.saturating_add(update.quantity.unwrap_or(1));
                 }
                 continue;
@@ -503,7 +557,7 @@ impl CustomerRepositoryImpl {
             let Some(id) = &update.id else {
                 continue;
             };
-            let Some(existing) = max_items.iter().find(|item| item.id.as_str() == id) else {
+            let Some(existing) = upgraded_items.iter().find(|item| item.id.as_str() == id) else {
                 continue;
             };
             quantity = quantity.saturating_sub(existing.quantity.unwrap_or(1));
@@ -515,6 +569,6 @@ impl CustomerRepositoryImpl {
                 );
             }
         }
-        Ok(quantity > 0)
+        quantity > 0
     }
 }
