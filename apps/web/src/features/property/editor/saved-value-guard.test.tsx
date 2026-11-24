@@ -590,4 +590,53 @@ describe('Enter right after opening a picker', () => {
       values: ['design', 'docs', 'release'],
     });
   });
+
+  const PHASES_ON_TASK: Property = {
+    ...AREAS_ON_TASK,
+    propertyId: 'phases-on-task',
+    propertyDefinitionId: 'phases',
+    displayName: 'Phases',
+  };
+
+  it.each([
+    {
+      name: 'another property',
+      retarget: (state: PropertyEditorState) => ({
+        ...state,
+        targetProperty: PHASES_ON_TASK,
+      }),
+    },
+    {
+      name: 'other items',
+      retarget: (state: PropertyEditorState) => ({
+        ...state,
+        selectedEntities: [{ ...TASK, id: 'other-task' }],
+      }),
+    },
+  ])('starts over when it is reopened on $name', ({ retarget }) => {
+    mocks.savedProperties = () => ({ data: [AREAS_ON_TASK, PHASES_ON_TASK] });
+    const [state, setState] = createSignal<PropertyEditorState>({
+      mode: 'direct',
+      selectedEntities: [TASK],
+      targetProperty: AREAS_ON_TASK,
+    });
+    const onSave = vi.fn();
+    render(() => (
+      <PropertyEditorDialog
+        isOpen
+        state={state()}
+        onModeChange={() => {}}
+        onTargetChange={() => {}}
+        onClose={() => {}}
+        onSave={onSave}
+      />
+    ));
+    const field = screen.getByRole<HTMLInputElement>('textbox');
+
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+    setState(retarget);
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
 });

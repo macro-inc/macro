@@ -270,6 +270,17 @@ export function PropertyEditorDialog(props: {
   let editorRevision = 0;
   onCleanup(() => editorRevision++);
 
+  // An editor belongs to one property on one set of items: reopened on
+  // another while it is open, it starts over instead of keeping a highlight
+  // the person moved to on the previous one.
+  const selectedEntityIds = () =>
+    props.state.selectedEntities.map((entity) => entity.id).join(',');
+  const valueEditorTarget = () => {
+    const property = props.state.targetProperty;
+    return `value:${property ? propertyIdentity(property) : ''}:${selectedEntityIds()}`;
+  };
+  const tagEditorTarget = () => `tags:${selectedEntityIds()}`;
+
   const handlePropertySave = (
     value: PropertyApiValues,
     event?: KeyboardEvent | MouseEvent
@@ -466,29 +477,37 @@ export function PropertyEditorDialog(props: {
               </div>
             </Match>
             <Match when={props.state.mode === 'direct'}>
-              <PropertyValueEditor
-                property={props.state.targetProperty}
-                searchValue={searchValue}
-                setSearchValue={setSearchValue}
-                selectedIndex={selectedIndex}
-                setSelectedIndex={setSelectedIndex}
-                setKeybindings={keybindings}
-                setPlaceholder={setPlaceholder}
-                setInputType={setInputType}
-                onSave={handlePropertySave}
-                selectedEntities={props.state.selectedEntities}
-                properties={props.properties}
-              />
+              <Show when={valueEditorTarget()} keyed>
+                {(_target) => (
+                  <PropertyValueEditor
+                    property={props.state.targetProperty}
+                    searchValue={searchValue}
+                    setSearchValue={setSearchValue}
+                    selectedIndex={selectedIndex}
+                    setSelectedIndex={setSelectedIndex}
+                    setKeybindings={keybindings}
+                    setPlaceholder={setPlaceholder}
+                    setInputType={setInputType}
+                    onSave={handlePropertySave}
+                    selectedEntities={props.state.selectedEntities}
+                    properties={props.properties}
+                  />
+                )}
+              </Show>
             </Match>
             <Match when={props.state.mode === 'tag'}>
-              <TagAssignmentEditor
-                entities={props.state.selectedEntities}
-                searchValue={searchValue}
-                selectedIndex={selectedIndex}
-                setSelectedIndex={setSelectedIndex}
-                setKeybindings={keybindings}
-                setPlaceholder={setPlaceholder}
-              />
+              <Show when={tagEditorTarget()} keyed>
+                {(_target) => (
+                  <TagAssignmentEditor
+                    entities={props.state.selectedEntities}
+                    searchValue={searchValue}
+                    selectedIndex={selectedIndex}
+                    setSelectedIndex={setSelectedIndex}
+                    setKeybindings={keybindings}
+                    setPlaceholder={setPlaceholder}
+                  />
+                )}
+              </Show>
             </Match>
           </Switch>
         </CommandMenuShell.Body>

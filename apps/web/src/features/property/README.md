@@ -148,7 +148,9 @@ the first row, no row is highlighted until the arrow keys or the pointer pick
 one, so an Enter pressed as the editor opens, or as its rows arrive, removes
 nothing; ArrowDown then reaches Clear all, and typing highlights the first
 match. The Link editor holds its highlight the same way whenever nothing is
-typed. All four use `editor/guarded-highlight.ts`.
+typed. All four use `editor/guarded-highlight.ts`. The dialog mounts a fresh
+editor for each property and set of items, so one reopened on another while
+open never carries over a highlight the person moved to.
 
 ## Adding a property
 
