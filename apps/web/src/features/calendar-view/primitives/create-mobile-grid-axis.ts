@@ -1,11 +1,5 @@
 import { timeGridScroller } from '@app/features/calendar/utils/time-grid-scroller';
-import {
-  type Accessor,
-  createEffect,
-  createSignal,
-  on,
-  onCleanup,
-} from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
 type AxisLabel = { text: string; top: number; height: number };
@@ -21,9 +15,9 @@ type AxisState = {
 /** Read the active grid's real slot geometry; only the shared gutter stays outside paging. */
 export function createMobileGridAxis(
   root: Accessor<HTMLElement | undefined>,
-  viewport: Accessor<HTMLElement | undefined>
+  viewport: Accessor<HTMLElement | undefined>,
+  paused: Accessor<boolean> = () => false
 ) {
-  const [scrollElement, setScrollElement] = createSignal<HTMLElement>();
   const [state, setState] = createStore<AxisState>({
     labels: [],
     top: 0,
@@ -56,12 +50,12 @@ export function createMobileGridAxis(
       };
       const measure = () => {
         frame = undefined;
+        if (paused()) return;
         const next = timeGridScroller(element);
         if (!next || next.clientHeight === 0) return;
         if (scroller !== next) {
           detach();
           scroller = next;
-          setScrollElement(next);
           scroller.addEventListener('scroll', scroll, { passive: true });
           scroller.addEventListener('wheel', markInteraction, {
             passive: true,
@@ -90,8 +84,7 @@ export function createMobileGridAxis(
                 height: 14,
               }
             : undefined;
-        // The line is portaled into the observed grid. Preserve its identity on
-        // unchanged measurements so its own DOM cannot trigger a measurement loop.
+        // Keep the displayed clock identity stable when its geometry is unchanged.
         const currentNow = state.now;
         const stableNow =
           now &&
@@ -120,23 +113,15 @@ export function createMobileGridAxis(
         scroll();
       };
       const schedule = () => {
+        if (paused()) return;
         if (frame === undefined) frame = requestAnimationFrame(measure);
       };
-      const mutation = new MutationObserver((records) => {
-        if (
-          records.every((record) => {
-            const target =
-              record.target instanceof Element
-                ? record.target
-                : record.target.parentElement;
-            return target?.closest(
-              '[data-calendar-current-time-line],[data-calendar-card-fade]'
-            );
-          })
-        )
-          return;
-        schedule();
-      });
+      const mutation = new MutationObserver(schedule);
+      createEffect(
+        on(paused, (frozen) => {
+          if (!frozen) schedule();
+        })
+      );
       mutation.observe(element, {
         childList: true,
         subtree: true,
@@ -158,7 +143,6 @@ export function createMobileGridAxis(
   );
   return {
     state,
-    scrollElement,
     currentTimeTop: () =>
       state.now
         ? state.now.top + state.now.height / 2 - state.scrollTop

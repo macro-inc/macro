@@ -8,6 +8,29 @@
     padding-inline: 0 var(--calendar-phone-card-inset);
   }
 
+  /* The pager moves only day columns. Keep FullCalendar's measured label cells
+     just outside its viewport so one fixed gutter can mirror their geometry. */
+  html[data-touch-device="true"] .calendar-view .phone-time-page {
+    width: calc(100% + var(--calendar-phone-axis-width));
+    margin-left: calc(-1 * var(--calendar-phone-axis-width));
+  }
+
+  html[data-touch-device="true"] .calendar-phone-now-line::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 0.625rem;
+    height: 0.75rem;
+    transform: translateY(-50%);
+    background: var(--color-accent);
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc .calendar-now-axis-indicator {
+    visibility: hidden;
+  }
+
   html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-axis,
   html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-slot-label,
   html[data-touch-device="true"] .calendar-view .fc-timegrid colgroup col:first-child {

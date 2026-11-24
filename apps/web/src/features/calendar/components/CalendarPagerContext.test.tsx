@@ -4,7 +4,7 @@ import { Calendar, type DatesSetArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, onCleanup, onMount } from 'solid-js';
+import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMonthWheelPicker } from '../primitives/create-month-wheel-picker';
 import type { CalendarGridPeriodView } from '../types';
@@ -964,4 +964,24 @@ describe('native ownership after controlled navigation', () => {
     expect(pager().navigationDate().getMonth()).toBe(11);
     expect(pager().activeDate().getMonth()).toBe(11);
   });
+});
+
+it('publishes only committed preload windows during a far date jump', () => {
+  const { pager } = mountCalendar('timeGridDay');
+  const seen: number[][] = [];
+  render(() => {
+    createEffect(() => {
+      seen.push(
+        pager()
+          .pager.pages()
+          .map((page) => pager().pageRange(page.key).start.getDate())
+      );
+    });
+    return null;
+  });
+  pager().navigateToDate(new Date(2026, 10, 20));
+  expect(seen).toEqual([
+    [30, 31, 1, 2, 3],
+    [18, 19, 20, 21, 22],
+  ]);
 });

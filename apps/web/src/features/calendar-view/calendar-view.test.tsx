@@ -2,9 +2,17 @@
  * @vitest-environment jsdom
  */
 
+import { Calendar } from '@fullcalendar/core';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
 import { cleanup, render } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSnapPager } from '@ui/components/SnapPager/SnapPager';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { calendarPageRange } from '../calendar/core/page-range';
+import { createCalendarPageMounts } from '../calendar/primitives/create-calendar-page-mounts';
+import { createMobileGridAxis } from './primitives/create-mobile-grid-axis';
+import { MobileCalendarGridAxis } from './views/mobile/calendar-grid-axis';
 
 const mocks = vi.hoisted(() => ({
   markRead: vi.fn(async () => {}),
@@ -102,7 +110,11 @@ beforeEach(() => {
   mocks.searchEventId = '';
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('marking an event read when Calendar lands on it', () => {
   it('marks the event a link opened, keeping the link in the URL', () => {
@@ -167,4 +179,155 @@ describe('marking an event read when Calendar lands on it', () => {
       { type: 'calendar_event', id: 'next-event' }
     );
   });
+});
+
+describe('stationary phone time axis', () => {
+  it('retains measured hour labels while the pager changes its active grid', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const viewport = document.createElement('div');
+    const root = document.createElement('div');
+    root.className = 'snap-pager-page';
+    root.innerHTML =
+      '<div class="fc-timegrid"><div class="fc-scroller-harness-liquid"><div class="fc-scroller"><div class="fc-timegrid-slot-label-cushion">9am</div><div class="fc-timegrid-now-indicator-line"><span class="calendar-now-time">9:30</span></div></div></div></div>';
+    const scroller = root.querySelector<HTMLElement>('.fc-scroller')!;
+    const label = root.querySelector<HTMLElement>(
+      '.fc-timegrid-slot-label-cushion'
+    )!;
+    Object.defineProperty(scroller, 'clientHeight', { value: 200 });
+    scroller.getBoundingClientRect = () => new DOMRect(0, 80, 300, 200);
+    viewport.getBoundingClientRect = () => new DOMRect(0, 0, 350, 400);
+    label.getBoundingClientRect = () => new DOMRect(0, 120, 46, 14);
+    const now = root.querySelector<HTMLElement>(
+      '.fc-timegrid-now-indicator-line'
+    )!;
+    now.getBoundingClientRect = () => new DOMRect(46, 140, 300, 1);
+    Object.defineProperty(now, 'getClientRects', {
+      value: () => [now.getBoundingClientRect()],
+    });
+    const [paused, setPaused] = createSignal(false);
+    let axis!: ReturnType<typeof createMobileGridAxis>;
+    const mountedAxis = render(() => {
+      axis = createMobileGridAxis(
+        () => root,
+        () => viewport,
+        paused
+      );
+      return (
+        <MobileCalendarGridAxis
+          root={() => root}
+          viewport={() => viewport}
+          paused={paused}
+        />
+      );
+    });
+    await vi.advanceTimersByTimeAsync(20);
+    const labels = axis.state.labels;
+    expect(labels[0].text).toBe('9am');
+    const line = mountedAxis.container.querySelector(
+      '[data-calendar-current-time-line]'
+    );
+    expect(line).not.toBeNull();
+    expect(line?.closest('.snap-pager-page')).toBeNull();
+    setPaused(true);
+    label.textContent = '10am';
+    scroller.scrollTop = 300;
+    scroller.dispatchEvent(new Event('scroll'));
+    await vi.advanceTimersByTimeAsync(40);
+    expect(axis.state.labels).toBe(labels);
+    expect(axis.state.labels[0].text).toBe('9am');
+    expect(axis.state.scrollTop).toBe(300);
+    setPaused(false);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(axis.state.labels[0].text).toBe('10am');
+    expect(axis.state.scrollTop).toBe(300);
+  });
+});
+
+describe('bounded calendar preload window', () => {
+  it('keeps the phone month prefetch on its complete Sunday-first grid', () => {
+    const range = calendarPageRange(new Date(2026, 1, 1), 'dayGridMonth', {
+      showWeekends: false,
+      weekStartsOn: 1,
+      phone: true,
+    });
+    expect(range.start).toEqual(new Date(2026, 1, 1));
+    expect(range.end).toEqual(new Date(2026, 2, 8));
+  });
+  it('mounts both neighbor pages without waiting for events and pauses during gestures', async () => {
+    vi.useFakeTimers();
+    const pager = createSnapPager();
+    const viewport = document.createElement('div');
+    Object.defineProperty(viewport, 'clientWidth', { value: 100 });
+    const detach = pager.attachViewport(viewport);
+    let mounted!: ReturnType<typeof createCalendarPageMounts>;
+    render(() => {
+      mounted = createCalendarPageMounts(pager);
+      return null;
+    });
+    expect(mounted()).toEqual([2]);
+    viewport.dispatchEvent(new Event('touchstart'));
+    await vi.advanceTimersByTimeAsync(120);
+    expect(mounted()).toEqual([2]);
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    await vi.advanceTimersByTimeAsync(400);
+    expect([...mounted()].sort()).toEqual([0, 1, 2, 3, 4]);
+    detach();
+  });
+
+  it.each([
+    ['timeGridDay', new Date(2026, 2, 7), false, 0],
+    ['timeGridThreeDay', new Date(2026, 2, 6), false, 0],
+    ['timeGridThreeDay', new Date(2026, 2, 7), false, 0],
+    ['timeGridThreeDay', new Date(2026, 2, 7), true, 1],
+    ['timeGridWeek', new Date(2026, 2, 8), false, 0],
+    ['dayGridMonth', new Date(2024, 1, 1), false, 1],
+    ['dayGridMonth', new Date(2026, 8, 1), true, 0],
+  ] as const)(
+    'preloads the exact %s range before the grid renders',
+    (view, date, showWeekends, weekStartsOn) => {
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          observe() {}
+          disconnect() {}
+        }
+      );
+      const element = document.createElement('div');
+      const grid = new Calendar(element, {
+        plugins: [dayGridPlugin, timeGridPlugin],
+        initialView: view,
+        initialDate: date,
+        weekends: showWeekends,
+        firstDay: weekStartsOn,
+        fixedWeekCount: false,
+        views: {
+          timeGridThreeDay: {
+            type: 'timeGrid',
+            duration: { days: 3 },
+            dateIncrement: { days: 3 },
+            dateAlignment: 'day',
+          },
+        },
+      });
+      try {
+        grid.render();
+        const planned = calendarPageRange(date, view, {
+          showWeekends,
+          weekStartsOn,
+          phone: false,
+        });
+        expect(planned.start.getTime()).toBe(grid.view.activeStart.getTime());
+        expect(planned.end.getTime()).toBe(grid.view.activeEnd.getTime());
+      } finally {
+        grid.destroy();
+      }
+    }
+  );
 });

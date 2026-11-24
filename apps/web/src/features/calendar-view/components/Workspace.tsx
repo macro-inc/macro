@@ -1,6 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
 import {
-  CALENDAR_PAGE_COUNT,
   type CalendarPageId,
   CalendarPagerContextProvider,
   useCalendarPager,
@@ -9,16 +8,25 @@ import { useCalendarView } from '@app/features/calendar/components/CalendarViewC
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import { CALENDAR_GRID_FULL_HEADER_WIDTH } from '@app/features/calendar/primitives/create-calendar-composer-pinning';
+import { createCalendarPageMounts } from '@app/features/calendar/primitives/create-calendar-page-mounts';
+import {
+  clipCalendarDisplayRange,
+  isCalendarRangeSupported,
+} from '@app/features/calendar/utils/calendar-supported-range';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { t } from '@app/lib/i18n';
-import { createRenderQueue } from '@app/lib/utils/create-render-queue';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
+import {
+  createCalendarOccurrenceQueryRange,
+  useCalendarOccurrencesQuery,
+} from '@queries/calendar/occurrences';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Layer } from '@ui';
 import { SnapPager } from '@ui/components/SnapPager/SnapPager';
@@ -58,8 +66,6 @@ import { Page } from './Page';
 import { SetupBanner, SetupStatus } from './SetupStatus';
 import { SyncStatus } from './SyncStatus';
 
-const NEIGHBOR_MOUNT_DEADLINE_MS = 600;
-
 /** One period's grid, starting beside what the active page shows by then. */
 function CalendarPeriodPage(props: {
   id: CalendarPageId;
@@ -80,45 +86,38 @@ function CalendarPeriodPage(props: {
   );
 }
 
+/** Warm the same bounded page keys before FullCalendar's deferred rendering. */
+function CalendarPagePreload(props: { id: CalendarPageId }) {
+  const pager = useCalendarPager();
+  const userId = useUserId();
+  const range = createMemo(() => {
+    const planned = pager.pageRange(props.id);
+    const clipped =
+      isMobile() && pager.periodView() === 'dayGridMonth'
+        ? clipCalendarDisplayRange(planned.start, planned.end)
+        : undefined;
+    return createCalendarOccurrenceQueryRange(
+      clipped?.start ?? planned.start,
+      clipped?.end ?? planned.end
+    );
+  });
+  useCalendarOccurrencesQuery(
+    () => ({ userId: userId(), range: range() }),
+    () => ({
+      enabled: isCalendarRangeSupported(range()),
+      pollWhileSyncing: false,
+      refetchOnWindowFocus: false,
+    })
+  );
+  return null;
+}
+
 function CalendarPages() {
   const calendarView = useCalendarView();
   const calendarPager = useCalendarPager();
-  // Opening the calendar paints the visible period alone. Its neighbors only
-  // matter once someone swipes, so they mount on later tasks.
-  const mountQueue = createRenderQueue();
-  const [mountedPages, setMountedPages] = createSignal<
-    readonly CalendarPageId[]
-  >([calendarPager.activePageId()]);
-
-  const mountNeighbors = () => {
-    const neighbors = Array.from(
-      { length: CALENDAR_PAGE_COUNT },
-      (_, id) => id
-    ).filter((id) => !mountedPages().includes(id));
-
-    for (const id of neighbors) {
-      mountQueue.enqueue(String(id), () =>
-        setMountedPages((pages) => [...pages, id])
-      );
-    }
-  };
-
-  // Neighbors wait for the visible period's events, so mounting them never
-  // holds up what is on screen; a slow load releases them after a moment.
-  createEffect(() => {
-    const visiblePeriodLoaded =
-      calendarPager.activeData()?.isLoading() === false;
-
-    if (!visiblePeriodLoaded) {
-      const deadline = setTimeout(mountNeighbors, NEIGHBOR_MOUNT_DEADLINE_MS);
-      onCleanup(() => clearTimeout(deadline));
-      return;
-    }
-
-    // After the frame that paints those events.
-    const frame = requestAnimationFrame(mountNeighbors);
-    onCleanup(() => cancelAnimationFrame(frame));
-  });
+  const fixedTimeAxis = () =>
+    isMobile() && calendarPager.periodView() !== 'dayGridMonth';
+  const mountedPages = createCalendarPageMounts(calendarPager.pager);
 
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const viewportSize = createElementSize(viewport);
@@ -157,36 +156,44 @@ function CalendarPages() {
         class={isMobile() ? 'order-last' : undefined}
         fullWidth={isMobile()}
       />
-      <SetupBanner
-        data={calendarPager.activeData()}
-        hasOverlayEvents={calendarPager.activeTeamEvents().length > 0}
-        fullWidth={isMobile()}
-      />
+      <SetupBanner data={calendarPager.activeData()} fullWidth={isMobile()} />
       <div
         ref={setViewport}
         class="relative flex min-w-0 min-h-0 flex-1 overflow-hidden"
         role="region"
         aria-label={t('calendar.periods')}
       >
-        <Show
-          when={isMobile() && calendarPager.periodView() !== 'dayGridMonth'}
-        >
+        <Show when={fixedTimeAxis()}>
           <MobileCalendarGridAxis
             root={() => calendarPager.activePage()?.element()}
             viewport={viewport}
+            paused={() => calendarPager.pager.phase() !== 'idle'}
           />
         </Show>
-        <SnapPager.Viewport class="size-full min-w-0 min-h-0">
+        <SnapPager.Viewport
+          class="size-full min-w-0 min-h-0"
+          style={{
+            width: fixedTimeAxis()
+              ? 'calc(100% - var(--calendar-phone-axis-width))'
+              : undefined,
+            'margin-left': fixedTimeAxis()
+              ? 'var(--calendar-phone-axis-width)'
+              : undefined,
+          }}
+        >
           <For each={calendarPager.pager.pages()}>
             {(page) => (
-              <SnapPager.Page page={page}>
-                <Show when={mountedPages().includes(page.key)}>
-                  <CalendarPeriodPage
-                    id={page.key}
-                    useNarrowDayHeaders={useNarrowDayHeaders()}
-                  />
-                </Show>
-              </SnapPager.Page>
+              <>
+                <CalendarPagePreload id={page.key} />
+                <SnapPager.Page page={page}>
+                  <Show when={mountedPages().includes(page.key)}>
+                    <CalendarPeriodPage
+                      id={page.key}
+                      useNarrowDayHeaders={useNarrowDayHeaders()}
+                    />
+                  </Show>
+                </SnapPager.Page>
+              </>
             )}
           </For>
         </SnapPager.Viewport>
@@ -201,10 +208,7 @@ function CalendarPages() {
             />
           )}
         </Show>
-        <SetupStatus
-          data={calendarPager.activeData()}
-          hasOverlayEvents={calendarPager.activeTeamEvents().length > 0}
-        />
+        <SetupStatus data={calendarPager.activeData()} />
       </div>
     </div>
   );

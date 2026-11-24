@@ -1,6 +1,7 @@
 import { createRenderQueue } from '@app/lib/utils/create-render-queue';
 import { beginInteraction } from '@app/observability/flow';
 import { createAssertedContextProvider } from '@core/context/createContext';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { Calendar, DatesSetArg } from '@fullcalendar/core';
 import { createSnapPager } from '@ui/components/SnapPager/SnapPager';
@@ -17,8 +18,10 @@ import {
   on,
   onCleanup,
   type ParentProps,
+  untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { calendarPageRange } from '../core/page-range';
 import type { CalendarOccurrenceData } from '../hooks/use-calendar-occurrence-data';
 import type { CalendarEvent, CalendarGridPeriodView } from '../types';
 import { isSameLocalDate } from '../utils/calendar-date';
@@ -105,6 +108,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   let sharedScrollTop = props.initialScrollTop;
   let scrollViewportSize: { width: number; height: number } | undefined;
 
+  const [preloadRevision, refreshPreloadWindow] = createSignal(0);
   const pager = createSnapPager({
     discrete: () => !isTouchDevice(),
     onWheelNavigate: (direction) => preparePeriodNavigation(direction),
@@ -130,6 +134,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
       const requested = requestedDate();
       if (requested && isSameLocalDate(requested, activeDate()))
         setRequestedDate(undefined);
+      refreshPreloadWindow((revision) => revision + 1);
       synchronizePages();
       if (todayTarget && !pendingAnchor()) queueTodayScroll(todayTarget);
     },
@@ -155,6 +160,23 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   const pageDate = (id: CalendarPageId) =>
     dateAt(pager.position() + (pager.pages()[id]?.offset() ?? 0));
   const signature = (date: Date) => `${periodView()}:${date.getTime()}`;
+  // Publish ranges only after a date anchor commits, never from the ring's
+  // intermediate rotation coordinates during a far jump.
+  const preloadRanges = createMemo(() => {
+    preloadRevision();
+    const view = periodView();
+    const weekStartsOn: 0 | 1 = props.weekStartsOn() === 1 ? 1 : 0;
+    const options = {
+      weekStartsOn,
+      showWeekends: props.showWeekends(),
+      phone: isMobile(),
+    };
+    return untrack(() =>
+      pager
+        .pages()
+        .map((page) => calendarPageRange(pageDate(page.key), view, options))
+    );
+  });
 
   const copyScrollPosition = () => {
     const source = timeGridScroller(activePage()?.element());
@@ -386,6 +408,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     activeDate,
     navigationDate,
     activeTeamEvents: () => activePage()?.teamEvents?.() ?? [],
+    pageRange: (id: CalendarPageId) => preloadRanges()[id],
     visibleRange: () => activeData()?.range(),
     initialDateFor,
     scrollTop: () => sharedScrollTop,

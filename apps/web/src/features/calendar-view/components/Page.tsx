@@ -417,6 +417,7 @@ export function Page(props: {
       class="relative size-full min-w-0 min-h-0"
       classList={{
         'phone-month-page': isMobile() && pager.periodView() === 'dayGridMonth',
+        'phone-time-page': isMobile() && pager.periodView() !== 'dayGridMonth',
       }}
       aria-busy={
         data.isLoading() ||

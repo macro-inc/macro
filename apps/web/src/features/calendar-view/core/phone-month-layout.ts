@@ -1,5 +1,7 @@
 import type { CalendarEvent } from '@app/features/calendar/types';
 
+export { phoneMonthRange } from '@app/features/calendar/core/page-range';
+
 export const PHONE_MONTH_DATE_HEIGHT = 32;
 export const PHONE_MONTH_EVENT_HEIGHT = 24;
 export const PHONE_MONTH_ROW_PITCH = 26;
@@ -12,21 +14,6 @@ export type MonthBar<T extends MonthEvent> = {
   endColumn: number;
   lane: number;
 };
-
-/** The phone face always starts on Sunday and uses five or six complete weeks. */
-export function phoneMonthRange(month: Date) {
-  const first = new Date(month.getFullYear(), month.getMonth(), 1);
-  const last = new Date(month.getFullYear(), month.getMonth() + 1, 0);
-  const dayCount = Math.max(
-    35,
-    Math.ceil((first.getDay() + last.getDate()) / 7) * 7
-  );
-  const start = new Date(first);
-  start.setDate(start.getDate() - first.getDay());
-  const end = new Date(start);
-  end.setDate(end.getDate() + dayCount);
-  return { start, end, dayCount, weekCount: dayCount / 7 };
-}
 
 /** Fit complete rows below the date, including gaps and the shortest week's border. */
 export function phoneMonthBarCapacity(

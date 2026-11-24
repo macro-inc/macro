@@ -1,15 +1,14 @@
 import { MOBILE_EDGE_FADE_FALLOFF, mobileEdgeFade } from '@core/util/edge-fade';
 import { type Accessor, Index, Show } from 'solid-js';
-import { Portal } from 'solid-js/web';
 import { createMobileGridAxis } from '../../primitives/create-mobile-grid-axis';
 
-/** One stationary horizontal gutter follows the active page's vertical scroll. */
+/** One stationary gutter and time marker, outside every horizontally moving page. */
 export function MobileCalendarGridAxis(props: {
   root: Accessor<HTMLElement | undefined>;
   viewport: Accessor<HTMLElement | undefined>;
+  paused: Accessor<boolean>;
 }) {
-  const axis = createMobileGridAxis(props.root, props.viewport);
-  // Preserve the half-label above midnight while keeping other hours out of the date row.
+  const axis = createMobileGridAxis(props.root, props.viewport, props.paused);
   const labelBleed = () => Math.ceil((axis.state.labels[0]?.height ?? 14) / 2);
   return (
     <>
@@ -64,34 +63,33 @@ export function MobileCalendarGridAxis(props: {
           </div>
         </div>
       </div>
-      <Show when={axis.scrollElement()?.parentElement}>
-        {(host) => (
-          <Portal mount={host()}>
-            <Show when={axis.state.now}>
-              <div
-                data-calendar-current-time-line
-                aria-hidden="true"
-                class="pointer-events-none absolute right-0 z-10 h-px bg-accent"
-                style={{
-                  left: 'var(--calendar-phone-axis-width)',
-                  top: `${axis.currentTimeTop()}px`,
-                }}
-              />
-            </Show>
-            <div
-              data-calendar-card-fade
-              aria-hidden="true"
-              class="pointer-events-none absolute right-0 top-0 z-10"
-              style={{
-                left: 'var(--calendar-phone-axis-width)',
-                height: `${MOBILE_EDGE_FADE_FALLOFF}px`,
-                background: mobileEdgeFade('top', 'var(--color-surface-2)'),
-                opacity: axis.faded() ? 1 : 0,
-              }}
-            />
-          </Portal>
-        )}
-      </Show>
+      <div
+        class="pointer-events-none absolute inset-x-0 z-10 overflow-hidden"
+        style={{ top: `${axis.state.top}px`, height: `${axis.state.height}px` }}
+      >
+        <Show when={axis.state.now}>
+          <div
+            data-calendar-current-time-line
+            aria-hidden="true"
+            class="calendar-phone-now-line absolute right-0 h-px bg-accent"
+            style={{
+              left: 'var(--calendar-phone-axis-width)',
+              top: `${axis.currentTimeTop()}px`,
+            }}
+          />
+        </Show>
+        <div
+          data-calendar-card-fade
+          aria-hidden="true"
+          class="absolute right-0 top-0"
+          style={{
+            left: 'var(--calendar-phone-axis-width)',
+            height: `${MOBILE_EDGE_FADE_FALLOFF}px`,
+            background: mobileEdgeFade('top', 'var(--color-surface-2)'),
+            opacity: axis.faded() ? 1 : 0,
+          }}
+        />
+      </div>
     </>
   );
 }
