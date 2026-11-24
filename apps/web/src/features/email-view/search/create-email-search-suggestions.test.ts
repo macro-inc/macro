@@ -13,7 +13,10 @@ const recentListed = (suggestions: EmailSearchSuggestions) =>
   suggestions.listed().map((row) =>
     match(row)
       .with({ kind: 'recent' }, ({ search }) => search)
-      .with({ kind: 'view' }, ({ scope }) => `view:${scope}`)
+      .with(
+        { kind: 'view' },
+        ({ scope, exclude }) => `view:${exclude ? '-' : ''}${scope}`
+      )
       .with({ kind: 'operator' }, { kind: 'value' }, (completion) =>
         emailSearchCompletionText(completion)
       )
@@ -63,7 +66,7 @@ it('lists recent searches only while the field has focus', () => {
   });
 });
 
-it('runs the picked search and keeps the active row inside the list', () => {
+it('runs the picked search, and forgets the active row when typing changes the rows', () => {
   createRoot((dispose) => {
     const { search, setSearch, suggestions } = setup('quarterly budget');
     suggestions.setFocused(true);
@@ -76,10 +79,12 @@ it('runs the picked search and keeps the active row inside the list', () => {
     expect(recentListed(suggestions)).toEqual(['budget', 'quarterly budget']);
 
     suggestions.setActive(1);
+    expect(suggestions.active()).toBe(1);
     setSearch('q');
-    // Typing narrowed the list to one row.
+    // Typing changed the rows, so no row stays picked out.
     expect(recentListed(suggestions)).toEqual(['quarterly budget']);
-    expect(suggestions.active()).toBe(0);
+    expect(suggestions.active()).toBe(-1);
+    expect(suggestions.activeId?.()).toBeUndefined();
 
     suggestions.pick(0);
     expect(search()).toBe('quarterly budget');
@@ -221,6 +226,29 @@ it('remembers a search without an operator still being typed', () => {
     setSearch('');
     suggestions.setFocused(true);
     expect(recentListed(suggestions)).toEqual(['invoice from:ana']);
+    dispose();
+  });
+});
+
+it('lists the views -in: can leave out, and finishes one with its minus', () => {
+  createRoot((dispose) => {
+    const { search, setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+
+    setSearch('invoice -in:');
+    expect(recentListed(suggestions)).toEqual([
+      'view:-inbox',
+      'view:-favorites',
+      'view:-sent',
+      'view:-drafts',
+      'view:-calendar',
+      'view:-shared',
+      'view:-archived',
+    ]);
+    setSearch('invoice -in:s');
+    expect(recentListed(suggestions)).toEqual(['view:-sent', 'view:-shared']);
+    suggestions.pick(0);
+    expect(search()).toBe('invoice -in:sent ');
     dispose();
   });
 });

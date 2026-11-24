@@ -57,6 +57,13 @@ describe('parseEmailSearch', () => {
     expect(parseEmailSearch('invoice is:important')).toEqual({
       query: 'invoice is:important',
     });
+    expect(parseEmailSearch('invoice -in:se')).toEqual({ query: 'invoice' });
+  });
+
+  it('searches a date that can no longer be one as a word, as the service does', () => {
+    expect(parseEmailSearch('invoice after:2026/13/01')).toEqual({
+      query: 'invoice after:2026/13/01',
+    });
   });
 });
 

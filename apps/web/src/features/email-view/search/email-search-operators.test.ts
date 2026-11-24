@@ -43,20 +43,33 @@ describe('isUnfinishedEmailSearchOperator', () => {
       'has:att',
       'after:',
       'after:2026',
+      'after:2026/',
+      'after:2026/0',
       'before:2026/06',
+      'before:2026/06/',
+      'before:2026/12/0',
       'newer_than:3',
+      '-in:',
+      '-in:se',
     ]) {
       expect(isUnfinishedEmailSearchOperator(typed), typed).toBe(true);
     }
   });
 
-  it('lets a finished operator, a wrong value or a word through', () => {
+  it('lets a finished operator, a value that can no longer be one, or a word through', () => {
     for (const typed of [
       'subject:lunch',
       'is:unread',
       'is:important',
       'newer_than:3x',
       'after:2026/06/01',
+      'after:2026/13/01',
+      'after:2026/02/30',
+      'after:2026/13/',
+      'after:2026/0/',
+      'after:2026/01-05',
+      '-in:sent',
+      '-in:berlin',
       'lunch',
       're:',
     ]) {

@@ -4,6 +4,7 @@ import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   completeEmailSearchOperator,
+  EMAIL_SEARCH_VIEWS_LEFT_OUT,
   type EmailSearchOperatorCompletion,
   emailSearchCompletionText,
 } from './email-search-operators';
@@ -25,13 +26,16 @@ export const searchSuggestionOptionId = (index: number) =>
 /** A handful stays above the results without pushing them off screen. */
 const MAX_LISTED = 5;
 
-/** An `in:` being typed at the end of the field: the view's name so far. */
-const TYPED_FILTER = /(?:^|\s)in:(\S*)$/i;
+/**
+ * An `in:` being typed at the end of the field, or a `-in:` that leaves a
+ * view out: the view's name so far.
+ */
+const TYPED_FILTER = /(?:^|\s)(-?)in:(\S*)$/i;
 
 /** A row under the search field. */
 export type EmailSearchSuggestion =
   | { kind: 'recent'; search: string }
-  | { kind: 'view'; scope: EmailSearchScopeId }
+  | { kind: 'view'; scope: EmailSearchScopeId; exclude: boolean }
   | EmailSearchOperatorCompletion;
 
 /** The token typed at the end of the field, with the text before it. */
@@ -75,7 +79,16 @@ export function createEmailSearchSuggestions(options: {
   const recent = createRecentEmailSearches(options.userId);
   const [open, setOpen] = createSignal(false);
   const [focused, setFocusedState] = createSignal(false);
-  const [active, setActive] = createSignal(-1);
+  // The row picked out by the keyboard, for the text it was picked out in:
+  // typing changes the rows, so it no longer points at that row.
+  const [activeRow, setActiveRow] = createSignal({ index: -1, search: '' });
+  const setActive = (index: number) =>
+    setActiveRow({ index, search: options.search() });
+  const active = () => {
+    const row = activeRow();
+    if (row.search !== options.search()) return -1;
+    return Math.min(row.index, listed().length - 1);
+  };
   const [awaitsPickedResults, setAwaitsPickedResults] = createSignal(false);
 
   // The text split at an `in:` being typed at its end.
@@ -86,7 +99,8 @@ export function createEmailSearchSuggestions(options: {
 
     return {
       before: text.slice(0, typed.index),
-      prefix: typed[1] ?? '',
+      exclude: typed[1] === '-',
+      prefix: typed[2] ?? '',
     };
   };
 
@@ -95,9 +109,15 @@ export function createEmailSearchSuggestions(options: {
 
     const typing = typedFilter();
     if (typing) {
-      return emailSearchScopesStartingWith(typing.prefix)
+      const prefix = typing.prefix.toLowerCase();
+      const scopes = typing.exclude
+        ? EMAIL_SEARCH_VIEWS_LEFT_OUT.filter((scope) =>
+            scope.startsWith(prefix)
+          )
+        : emailSearchScopesStartingWith(prefix);
+      return scopes
         .filter(options.scopeAvailable)
-        .map((scope) => ({ kind: 'view', scope }));
+        .map((scope) => ({ kind: 'view', scope, exclude: typing.exclude }));
     }
 
     // Operators whose names or values finish what is typed come first.
@@ -125,12 +145,11 @@ export function createEmailSearchSuggestions(options: {
     },
     listId: SEARCH_SUGGESTIONS_LIST_ID,
     activeId: () => {
-      const index = Math.min(active(), listed().length - 1);
+      const index = active();
       return index < 0 ? undefined : searchSuggestionOptionId(index);
     },
     count: () => listed().length,
-    // Typing can shorten the list under the active row.
-    active: () => Math.min(active(), listed().length - 1),
+    active,
     setActive,
     editsQuery: (index) => {
       const kind = listed()[index]?.kind;
@@ -146,9 +165,12 @@ export function createEmailSearchSuggestions(options: {
           setAwaitsPickedResults(true);
         })
         // The view replaces the `in:` being typed, where it was typed.
-        .with({ kind: 'view' }, ({ scope }) => {
+        .with({ kind: 'view' }, ({ scope, exclude }) => {
           const before = typedFilter()?.before ?? '';
-          options.setSearch(`${before}${before ? ' ' : ''}in:${scope} `);
+          const minus = exclude ? '-' : '';
+          options.setSearch(
+            `${before}${before ? ' ' : ''}${minus}in:${scope} `
+          );
           setActive(-1);
         })
         // An operator replaces the token it finishes.

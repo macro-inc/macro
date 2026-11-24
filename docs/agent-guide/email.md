@@ -107,7 +107,9 @@ inbox: Focus, Signal and Noise), `in:focus`, `in:signal`, `in:noise`,
 before paging (Focus and Favorites by their thread ids); the last one typed
 wins, and any other `in:` (`in:travel`) goes to the search service, which
 reads it as a label or tag name. An operator still being typed (`in:se`,
-`is:un`, `subject:`, `after:2026/06`) is left out of the words. Picking a tab while a search runs narrows it to that
+`-in:se`, `is:un`, `subject:`, `after:2026/06`) is left out of the words; a
+date that can no longer become one (`after:2026/13/01`) is searched as a word,
+as the service reads it. Picking a tab while a search runs narrows it to that
 tab's view and keeps the words (All mail goes back to all mail, the sidebar's
 Inbox gives `in:inbox`); Scheduled, Reminders, Spam and Trash, which the index
 has no view of, end the search, and so does any tab picked before a word is
@@ -138,18 +140,22 @@ reaches the results, `Enter` or a click runs one and moves to its first
 result. A search is remembered when the field is left with words in it, with
 its `in:` filter, at most eight per person, in this browser only and not per
 inbox. Typing `in:` lists the views instead (only those the person has, so
-Focus only with its flag), narrowed as the name is typed; `Enter` or a click
-finishes the `in:` where it was typed, and the keyboard stays in the field.
-Two or more letters of an operator's name list that operator above the recent
-searches (`su` gives `subject:`, `-fr` gives `-from:`), and `is:` and `has:`
-list their values; picking one finishes it the same way. Operators stay
-ordinary text (caret, selection, `Backspace`, paste), and every one the search
-service would read, once complete and valid (`in:sent`, `subject:"team
-lunch"`, `-from:ana`, `newer_than:7d`, `in:travel`), is drawn as an operator
-token: accent ink on a faint accent tint, while one still being typed
-(`in:se`, `is:un`) or invalid (`is:important`, `-in:signal`) stays plain.
-Dates are read in the browser's time zone, which every web search sends. Delete it like any text to search all mail
-again. Recent searches draw their filter the same way. Rows of a search that can reach archived
+Focus only with its flag), narrowed as the name is typed, and `-in:` lists the
+views a search can leave out; `Enter` or a click finishes the `in:` where it
+was typed, and the keyboard stays in the field. Two or more letters of an
+operator's name list that operator above the recent searches (`su` gives
+`subject:`, `-fr` gives `-from:`), and `is:` and `has:` list their values;
+picking one finishes it the same way. Typing changes the rows, so it also
+clears the row the arrow keys picked out. Operators stay ordinary text (caret,
+selection, `Backspace`, paste), and every one the search service would read,
+once complete and valid (`in:sent`, `subject:"team lunch"`, `-from:ana`,
+`newer_than:7d`, `in:travel`), is drawn as an operator token: accent ink on a
+faint accent tint, while one still being typed (`in:se`, `is:un`) or invalid
+(`is:important`, `-in:signal`) stays plain. Delete an `in:` like any text to
+search all mail again. Dates are read in the browser's time zone, which every
+web search sends (a browser that cannot tell its zone sends none, and the
+service reads dates in UTC). Recent searches draw their operators the same
+way. Rows of a search that can reach archived
 mail (no filter, or a view other than the inbox ones and Archived) say
 `Archived` on archived threads; a thread of only sent mail or drafts was never
 in the inbox and gets no label. Check with a slow search

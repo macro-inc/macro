@@ -8,7 +8,7 @@ import { match } from 'ts-pattern';
  */
 
 /** The operators, in the order Mail suggests them. */
-export const EMAIL_SEARCH_OPERATOR_KEYS = [
+const EMAIL_SEARCH_OPERATOR_KEYS = [
   'from',
   'to',
   'subject',
@@ -24,38 +24,50 @@ export const EMAIL_SEARCH_OPERATOR_KEYS = [
   'older_than',
 ] as const;
 
-export type EmailSearchOperatorKey =
-  (typeof EMAIL_SEARCH_OPERATOR_KEYS)[number];
+type EmailSearchOperatorKey = (typeof EMAIL_SEARCH_OPERATOR_KEYS)[number];
 
 /** The operators that take one of a few values, and those values. */
-export const EMAIL_SEARCH_OPERATOR_VALUES = {
+const EMAIL_SEARCH_OPERATOR_VALUES = {
   is: ['unread', 'read', 'starred', 'shared'],
   has: ['attachment'],
 } as const;
 
-export type EmailSearchValueKey = keyof typeof EMAIL_SEARCH_OPERATOR_VALUES;
+type EmailSearchValueKey = keyof typeof EMAIL_SEARCH_OPERATOR_VALUES;
 
-export type EmailSearchOperatorValue =
+type EmailSearchOperatorValue =
   (typeof EMAIL_SEARCH_OPERATOR_VALUES)[EmailSearchValueKey][number];
 
-/** The views the service's `in:` names; anything else names a label. */
+/**
+ * The views the service's `in:` names, in the order Mail lists them; anything
+ * else names a label.
+ */
 const SERVICE_VIEWS = [
   'inbox',
   'signal',
   'noise',
-  'archived',
+  'favorites',
   'sent',
   'drafts',
   'calendar',
   'shared',
-  'favorites',
-];
+  'archived',
+] as const;
 
 /**
  * Leaving one of these out is two conditions the service cannot apply before
  * paging, so `-in:signal` stays a word.
  */
-const VIEWS_NOT_LEFT_OUT = ['signal', 'noise'];
+const VIEWS_NOT_LEFT_OUT = ['signal', 'noise'] as const;
+
+type ViewNotLeftOut = (typeof VIEWS_NOT_LEFT_OUT)[number];
+
+const isLeftOutView = (
+  view: (typeof SERVICE_VIEWS)[number]
+): view is Exclude<(typeof SERVICE_VIEWS)[number], ViewNotLeftOut> =>
+  !(VIEWS_NOT_LEFT_OUT as readonly string[]).includes(view);
+
+/** The views `-in:` can leave out. */
+export const EMAIL_SEARCH_VIEWS_LEFT_OUT = SERVICE_VIEWS.filter(isLeftOutView);
 
 type OperatorToken = {
   exclude: boolean;
@@ -74,11 +86,12 @@ const isValueKey = (key: string): key is EmailSearchValueKey =>
 
 /**
  * A minus, then `name:value`, read as the service reads a term: quotes are
- * dropped first, and a minus counts only before something with a letter or
- * digit that does not start with another minus.
+ * dropped and the spaces around what is left trimmed first, and a minus
+ * counts only before something with a letter or digit that does not start
+ * with another minus.
  */
 function readToken(token: string): OperatorToken | undefined {
-  const term = token.replaceAll('"', '');
+  const term = token.replaceAll('"', '').trim();
   const body = term.slice(1);
   const exclude =
     term.startsWith('-') && !body.startsWith('-') && hasWord(body);
@@ -114,6 +127,24 @@ function isDate(value: string) {
 /** `3d`, `2w`, `1m` or `1y`. */
 const isSpan = (value: string) => /^\d{1,4}[dwmy]$/i.test(value);
 
+/**
+ * The start of a date that typing more can still make one: a year, then a
+ * separator, a month that can still be 1 to 12, the same separator, and the
+ * start of a day.
+ */
+function isDateStart(value: string) {
+  const parts = /^\d{1,4}(?:([/-])(?:(\d{1,2})(?:\1(\d?))?)?)?$/.exec(value);
+  const month = parts?.[2];
+  const day = parts?.[3];
+  if (!parts) return false;
+  if (month === undefined) return true;
+
+  const monthNumber = Number(month);
+  const monthCanBe =
+    month === '0' ? day === undefined : monthNumber >= 1 && monthNumber <= 12;
+  return monthCanBe && (day === undefined || day === '' || day === '0');
+}
+
 /** Whether the service reads `token` as an operator, not a search word. */
 export function readsAsEmailSearchOperator(token: string): boolean {
   const read = readToken(token);
@@ -125,8 +156,11 @@ export function readsAsEmailSearchOperator(token: string): boolean {
   return match(read.key)
     .with('subject', 'from', 'to', 'cc', 'bcc', 'label', () => true)
     .with('in', () => {
-      if (SERVICE_VIEWS.includes(value)) {
-        return !(read.exclude && VIEWS_NOT_LEFT_OUT.includes(value));
+      if ((SERVICE_VIEWS as readonly string[]).includes(value)) {
+        return !(
+          read.exclude &&
+          (VIEWS_NOT_LEFT_OUT as readonly string[]).includes(value)
+        );
       }
       // Focus is a ranked list only the web app reads.
       return value !== 'focus';
@@ -141,25 +175,33 @@ export function readsAsEmailSearchOperator(token: string): boolean {
 
 /**
  * An operator still being typed: a name with no value yet (`subject:`), part
- * of a value from a short list (`is:un`), or part of a date or a span
- * (`after:2026/06`, `newer_than:3`). It searches for nothing yet, so it is
- * left out of the search rather than searched for as a word.
+ * of a value from a short list (`is:un`, `-in:se`), or the start of a date or
+ * a span that can still become one (`after:2026/06`, `newer_than:3`). It
+ * searches for nothing yet, so it is left out of the search rather than
+ * searched for as a word; a date that can no longer be one
+ * (`after:2026/13/01`) is a word, as the service reads it.
  */
 export function isUnfinishedEmailSearchOperator(token: string): boolean {
   const read = readToken(token);
-  if (!read || !isKey(read.key) || readsAsEmailSearchOperator(token)) {
-    return false;
-  }
-  if (!hasWord(read.value)) return true;
+  if (!read || !isKey(read.key)) return false;
 
   const value = read.value.toLowerCase();
+  // `-in:s` would leave out a label named `s` on its way to `-in:sent`.
+  if (read.key === 'in' && read.exclude) {
+    const views: readonly string[] = EMAIL_SEARCH_VIEWS_LEFT_OUT;
+    if (!views.includes(value) && views.some((view) => view.startsWith(value)))
+      return true;
+  }
+  if (readsAsEmailSearchOperator(token)) return false;
+  if (!hasWord(read.value)) return true;
+
   if (isValueKey(read.key)) {
     return EMAIL_SEARCH_OPERATOR_VALUES[read.key].some((full) =>
       full.startsWith(value)
     );
   }
   if (read.key === 'after' || read.key === 'before') {
-    return /^\d{1,4}([/-]\d{0,2}([/-]\d{0,2})?)?$/.test(value);
+    return isDateStart(read.value);
   }
   if (read.key === 'newer_than' || read.key === 'older_than') {
     return /^\d{1,4}$/.test(value);

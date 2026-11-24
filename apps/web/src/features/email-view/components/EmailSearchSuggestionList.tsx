@@ -32,8 +32,16 @@ function RecentSearch(props: { search: string }) {
   );
 }
 
+/** A row's name, saying so when the minus typed leaves its matches out. */
+const leftOutLabel = (label: string, exclude: boolean) =>
+  exclude ? t('emailViews.searchFilterNot', { filter: label }) : label;
+
 /** What an operator's name or value finds, as its row names it. */
 function completionLabel(completion: EmailSearchOperatorCompletion): string {
+  return leftOutLabel(operatorLabel(completion), completion.exclude);
+}
+
+function operatorLabel(completion: EmailSearchOperatorCompletion): string {
   if (completion.kind === 'value') {
     return match(completion.value)
       .with('unread', () => t('emailViews.searchFilterUnread'))
@@ -80,7 +88,11 @@ function OperatorCompletion(props: {
 /** The list's name, from what its first row is. */
 const listLabel = (first: EmailSearchSuggestion | undefined) =>
   match(first?.kind)
-    .with('view', () => t('emailViews.searchViews'))
+    .with('view', () =>
+      first?.kind === 'view' && first.exclude
+        ? t('emailViews.searchViewsLeftOut')
+        : t('emailViews.searchViews')
+    )
     .with('operator', 'value', () => t('emailViews.searchFilters'))
     .with('recent', undefined, () => t('emailViews.recentSearches'))
     .exhaustive();
@@ -124,10 +136,13 @@ export function EmailSearchSuggestionList(props: {
                         class="size-4 shrink-0 text-ink-muted"
                       />
                       <span class="min-w-0 flex-1 truncate">
-                        {emailSearchScopeLabel(view().scope)}
+                        {leftOutLabel(
+                          emailSearchScopeLabel(view().scope),
+                          view().exclude
+                        )}
                       </span>
                       <span class="shrink-0 font-mono text-xs text-ink-extra-muted">
-                        in:{view().scope}
+                        {view().exclude ? '-' : ''}in:{view().scope}
                       </span>
                     </>
                   )}

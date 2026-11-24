@@ -1,11 +1,14 @@
 import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { fetchWithToken } = vi.hoisted(() => ({ fetchWithToken: vi.fn() }));
+const { fetchWithToken, browserZone } = vi.hoisted(() => ({
+  fetchWithToken: vi.fn(),
+  browserZone: { name: 'America/New_York' },
+}));
 
 vi.mock('@core/util/fetchWithToken', () => ({ fetchWithToken }));
 vi.mock('@core/util/cron', () => ({
-  getDefaultTimezone: () => 'America/New_York',
+  getDefaultTimezone: () => browserZone.name,
 }));
 
 const { searchClient } = await import('./client');
@@ -15,6 +18,7 @@ const sentBody = () =>
 
 describe('searchClient.search', () => {
   beforeEach(() => {
+    browserZone.name = 'America/New_York';
     fetchWithToken.mockReset();
     fetchWithToken.mockResolvedValue(ok({ results: [] }));
   });
@@ -42,5 +46,16 @@ describe('searchClient.search', () => {
     });
 
     expect(sentBody().time_zone).toBe('Asia/Tokyo');
+  });
+
+  it('names no zone when the browser cannot tell its own', async () => {
+    browserZone.name = 'Etc/Unknown';
+
+    await searchClient.search({
+      params: {},
+      request: { query: 'after:2026/11/24', match_type: 'partial' },
+    });
+
+    expect(sentBody()).not.toHaveProperty('time_zone');
   });
 });
