@@ -9,15 +9,17 @@ export function HomepageFounderLetter() {
     >
       <div class="homepage-founder-letter-body">
         <p>
-          Most companies run on twenty separate SaaS tools that were never meant
-          to work together. You pay per seat in every app while context stays
-          scattered, and AI agents only see a tiny slice of the business.
+          At our last startup things started breaking right around twenty
+          people. Engineering, sales, and marketing each picked their own tools,
+          so our context ended up scattered across Slack, email, docs, meetings,
+          and a dozen SaaS apps held together with glue. We were paying for all
+          of them separately and nothing worked as one system.
         </p>
         <p>
-          We built Macro to be one open source system for your whole company.
-          Bringing email, chat, docs, tasks, calendar, calls and CRM into one
-          workspace cuts your software bill, keeps your data yours, and gives
-          your team and agents the same shared memory from day one.
+          We built Macro to be one open source system for the whole company.
+          Email, chat, docs, tasks, calendar, calls, and CRM live together in
+          one workspace so your software bill drops, your data stays yours, and
+          your team and agents can actually work off the same shared memory.
         </p>
       </div>
       <footer class="homepage-founder-letter-signature">
