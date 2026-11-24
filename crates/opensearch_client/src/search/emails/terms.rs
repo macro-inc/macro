@@ -182,7 +182,7 @@ fn term_groups<'a>(terms: &'a [String], match_type: &str) -> Vec<Vec<&'a str>> {
 /// words.
 fn names_address(term: &str) -> bool {
     let is_domain = || {
-        let name = term.trim_matches(|c: char| c.is_ascii_punctuation());
+        let name = term.trim_matches(|c: char| !c.is_alphanumeric());
         name.rsplit_once('.').is_some_and(|(name, top_level)| {
             name.ends_with(char::is_alphanumeric)
                 && top_level.chars().count() >= 2

@@ -904,6 +904,10 @@ fn an_address_matches_apart_from_the_words_beside_it() {
                 vec!["example.com,", "lunch"],
                 vec![vec!["example.com,"], vec!["lunch"]],
             ),
+            (
+                vec!["«example.com»", "lunch"],
+                vec![vec!["«example.com»"], vec!["lunch"]],
+            ),
         ] {
             let matched: Vec<serde_json::Value> = groups
                 .iter()

@@ -503,6 +503,11 @@ fn address_and_text_cases() -> Vec<Case> {
                 &["probe.example,", "hiring"],
                 &[53],
             ),
+            case(
+                "a domain typed with a full stop and a word",
+                &["probe.example。", "hiring"],
+                &[53],
+            ),
             case("a handle and a word", &["@ana", "hiring"], &[53]),
             case(
                 "a word of every address and a word of the text",
