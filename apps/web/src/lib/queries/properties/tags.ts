@@ -60,6 +60,7 @@ export function useTagsQuery(): CatalogListResult<TagSetResponse> {
       },
     })
   );
+  const list = catalogListResult(query, stamp, EMPTY_TAG_SETS);
   registerCatalogReader({
     kind: 'tags',
     key: stamp.key,
@@ -74,12 +75,12 @@ export function useTagsQuery(): CatalogListResult<TagSetResponse> {
             ]
           : []
       ),
-    // A list the server refused keeps its last sets on screen; they are not
-    // evidence of a set.
-    sets: () => (stamp.refusal() ? [] : (query.data ?? [])),
+    // A failed list keeps its last sets on screen; they are not evidence of a
+    // set. A read paused offline is not a failure.
+    sets: () => (list.isError ? [] : list.data),
     refresh: () => query.refetch({ requestPolicy: 'network-only' }),
   });
-  return catalogListResult(query, stamp, EMPTY_TAG_SETS);
+  return list;
 }
 
 /** Reload the tag sets on screen from the server. */
