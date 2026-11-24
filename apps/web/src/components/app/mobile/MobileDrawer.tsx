@@ -15,7 +15,6 @@ import {
   type JSX,
   on,
   onCleanup,
-  onMount,
   Show,
   splitProps,
   useContext,
@@ -300,9 +299,15 @@ function ScrollSheetFrame(
     })
   );
 
-  onMount(() => {
-    const element = scroller();
-    if (!element) return;
+  // Set up on the content element itself: without a Portal the frame mounts
+  // before Corvu renders it, and each opening renders a new one.
+  createEffect(
+    on(scroller, (element) => {
+      if (!element) return;
+      setUp(element);
+    })
+  );
+  const setUp = (element: HTMLDivElement) => {
     if (dialog.open()) sheet.setKeepMounted(true);
     const listening = new AbortController();
     onCleanup(() => listening.abort());
@@ -332,10 +337,12 @@ function ScrollSheetFrame(
       },
       { passive: true, signal }
     );
-    for (const type of ['touchend', 'touchcancel'])
+    for (const type of ['touchend', 'touchcancel'] as const)
       element.addEventListener(
         type,
-        () => {
+        (event) => {
+          // Another finger still on the sheet keeps the gesture going.
+          if (event.touches.length > 0) return;
           touching = false;
           settleSoon();
         },
@@ -373,7 +380,7 @@ function ScrollSheetFrame(
     onCleanup(() => resizes.disconnect());
 
     if (phase() === 'opening') slideOpen(false);
-  });
+  };
 
   // An owner that moves the sheet (to full height while the keyboard is up)
   // slides it there, also mid-slide.
@@ -1005,6 +1012,9 @@ function BottomSheetRoot(props: MobileDrawerProps) {
       open,
       (isOpen) => {
         if (isOpen) {
+          // An owner told 0 at the last close learns where the sheet opens.
+          if ((local.activeSnapPoint ?? uncontrolledSnapPoint()) <= 0)
+            sheet.setActiveSnapPoint(local.defaultSnapPoint ?? 1);
           controls?.open();
           return;
         }
@@ -1013,7 +1023,12 @@ function BottomSheetRoot(props: MobileDrawerProps) {
           return;
         }
         controls.close(() => {
-          if (!open()) setKeepMounted(false);
+          if (open()) return;
+          setKeepMounted(false);
+          // A closed sheet reports 0, as Corvu's did, so the owner reopens
+          // it at its opening detent rather than where it was left.
+          if (activeSnapPoint() !== (local.defaultSnapPoint ?? 1))
+            sheet.setActiveSnapPoint(0);
         });
       },
       { defer: true }

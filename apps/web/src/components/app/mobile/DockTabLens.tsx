@@ -84,7 +84,6 @@ export function DockTabLens(props: {
     let startOffset = 0;
     const settle = () => {
       if (touching) return;
-      // A drag whose release was cancelled settles where the snap took it.
       const index = lensIndexAt(centers(), element.scrollLeft);
       if (gesture && moved && index !== props.activeIndex)
         buttons()[index]?.click();
@@ -145,10 +144,13 @@ export function DockTabLens(props: {
       },
       { passive: true, signal }
     );
+    // An interrupted touch chooses nothing; the lens settles and hides.
     element.addEventListener(
       'touchcancel',
       () => {
         touching = false;
+        gesture = false;
+        moved = false;
         settleSoon();
       },
       { passive: true, signal }

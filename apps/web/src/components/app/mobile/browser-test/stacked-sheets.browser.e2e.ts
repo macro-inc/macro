@@ -455,6 +455,13 @@ test('a sheet with detents opens at half height and swipes to full and away', as
 
   await dragDown(page, discussion);
   await expect(discussion).toHaveCount(0);
+
+  // Opened again, it starts back at half height.
+  await tap(page, page.getByRole('button', { name: 'Open discussion' }));
+  await expect(discussion).not.toHaveAttribute('data-opening');
+  await expect(page.getByRole('status', { name: 'Snap point' })).toHaveText(
+    '0.5'
+  );
 });
 
 test('a forced-mounted sheet stays hidden while closed and opens again on screen', async ({
