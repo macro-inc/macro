@@ -3,6 +3,7 @@ import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import { onlineManager } from '@tanstack/solid-query';
 import {
   type AnyVariables,
   CombinedError,
@@ -101,4 +102,18 @@ export async function storeFailure(
   } catch (error) {
     return { error };
   }
+}
+
+/**
+ * Calls `reload` the next time the connection comes back, as a failed query
+ * refetches on reconnect; returns a stop. A load that failed with no
+ * connection has nothing on screen to retry it.
+ */
+export function onReconnect(reload: () => void): () => void {
+  const stop = onlineManager.subscribe((online) => {
+    if (!online) return;
+    stop();
+    reload();
+  });
+  return stop;
 }

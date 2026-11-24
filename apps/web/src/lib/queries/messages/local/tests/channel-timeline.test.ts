@@ -6,6 +6,7 @@ import type {
 } from '@graphql-cache/index';
 import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { CombinedError } from '@urql/core';
+import { onlineManager } from '@tanstack/solid-query';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -705,6 +706,38 @@ describe('createLocalChannelTimeline', () => {
     expect(timeline.isMissingTarget()).toBe(true);
     expect(timeline.loadError()).toBe('NOT_FOUND');
     dispose();
+  });
+
+  it('loads a window that failed with no connection again once it is back', async () => {
+    const rows = messages(2);
+    let connected = false;
+    const fetchPage = vi.fn<FetchChannelServerPage>(async () => {
+      if (!connected) throw new TypeError('Failed to fetch');
+      return {
+        page: {
+          __typename: 'GraphqlChannelTimelinePage',
+          entries: [...rows].reverse(),
+          olderCursor: null,
+          newerCursor: null,
+          seq: '9',
+        } as never,
+        cached: Promise.resolve(),
+      };
+    });
+    onlineManager.setOnline(false);
+    try {
+      const { timeline, dispose } = mount({ rows, held: false, fetchPage });
+      await waitFor(() => timeline.loadError() !== undefined);
+
+      // Nothing on screen to press: the connection coming back loads it.
+      connected = true;
+      onlineManager.setOnline(true);
+      await waitFor(() => timeline.entries().length === 2);
+      expect(timeline.loadError()).toBeUndefined();
+      dispose();
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 
   it('hands an unsupported host back to REST', async () => {

@@ -12,7 +12,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
-import { SESSION_CHANGE_RELOADS } from './channel-network';
+import { onReconnect, SESSION_CHANGE_RELOADS } from './channel-network';
 import {
   type ChannelPage,
   type ChannelPageDeps,
@@ -286,6 +286,8 @@ export function createLocalChannelTimeline(
   let merges = 0;
   let abort: AbortController | undefined;
   let currentLoad: Promise<void> = Promise.resolve();
+  // Loads the window again when the connection returns after a failed load.
+  let stopReconnect = () => {};
 
   const release = deps.runtime.open(channelId);
   onCleanup(() => {
@@ -304,6 +306,7 @@ export function createLocalChannelTimeline(
     release();
     loadToken += 1;
     abort?.abort();
+    stopReconnect();
   });
 
   /**
@@ -346,6 +349,7 @@ export function createLocalChannelTimeline(
     const signal = abort.signal;
     held = false;
     anchorId = around;
+    stopReconnect();
     if (reloads === 0)
       setState({
         phase: 'loading',
@@ -375,8 +379,15 @@ export function createLocalChannelTimeline(
     } catch (error) {
       if (token !== loadToken) return;
       // A reload keeps the window it already shows, and pages from it again.
-      if (reloads === 0) setState({ phase: 'failed', error });
-      else setState({ loadingOlder: false, loadingNewer: false });
+      if (reloads > 0) {
+        setState({ loadingOlder: false, loadingNewer: false });
+        return;
+      }
+      setState({ phase: 'failed', error });
+      // With no connection nothing on screen retries it: its return does.
+      stopReconnect = onReconnect(() =>
+        fireAndForget(load(around), 'channel-local-sync')
+      );
       return;
     }
     if (token !== loadToken) return;
