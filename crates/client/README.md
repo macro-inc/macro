@@ -170,7 +170,8 @@ that states no `__typename` as normalizing typed it: of the object type its
 field declares, read through the fragments that apply to the objects above
 it, failing one of an abstract type. A response that doesn't normalize may
 come from a server on another schema, so there only an object that states its
-type keeps its ID. A binding's own resolution outranks one inferred from
+type keeps its ID, and every fragment is read, since the adopted schema can't
+say which apply. A binding's own resolution outranks one inferred from
 another's reference field.
 Settling a create moves the shadows of the writes queued after it to the key
 the server gave the record while their sources keep the local key, so a tier

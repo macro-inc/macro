@@ -75,23 +75,25 @@ pub fn validate(bindings: &[IdentityBinding]) -> Result<(), String> {
     Ok(())
 }
 
-/// How [`resolve`] types a response object that states no `__typename`.
+/// How [`resolve`] types a response object that states no `__typename`, and
+/// which of its fragments it reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UntypedObject {
     /// As normalizing the response under the schema typed it: of the object
-    /// type its field declares. One of an abstract type fails.
+    /// type its field declares, an abstract one failing, and read through the
+    /// fragments that apply to its type, as normalizing reads them.
     Normalized,
-    /// Not at all, so it fails: for a response that doesn't normalize, which
-    /// a server on another schema may have sent.
+    /// Not at all, so it fails, and every object is read through all its
+    /// fragments: for a response that doesn't normalize, which a server on
+    /// another schema may have sent, so the adopted schema says nothing of it.
     Rejected,
 }
 
 /// Extract bindings only from explicitly declared response objects of the same
 /// type. Each object along a binding's path is of the type it states, else
-/// as `untyped` says, and its fields are read through the fragments that
-/// apply to that type, as normalizing reads them; an object of no known type
-/// is read through all its fragments. `op`'s selections say each key an
-/// object's `__typename` is selected under.
+/// as `untyped` says; an object of no known type is read through all its
+/// fragments. `op`'s selections say each key an object's `__typename` is
+/// selected under.
 pub fn resolve(
     schema: &Schema,
     bindings: &[IdentityBinding],
@@ -152,7 +154,7 @@ fn response_object<'a>(
     for (depth, step) in path.iter().enumerate() {
         let mut fields = Vec::new();
         for selection_set in selections {
-            match typename {
+            match typename.filter(|_| untyped == UntypedObject::Normalized) {
                 Some(typename) => {
                     crate::normalize::collect_fields(schema, selection_set, typename, &mut fields);
                 }
@@ -542,7 +544,8 @@ mod tests {
 
     /// A schema with a field of each kind a binding's response object can sit in.
     const SDL: &str = "type Query { ok: Boolean } \
-        type Mutation { save: SavePayload result: SaveResult } \
+        type Mutation { save: SavePayload result: SaveResult holder: Holder } \
+        interface HasChild { child: Saved } type Holder { child: Saved } \
         type SavePayload { draft: Draft message: Message saved: Result other: Other } \
         union Result = Saved | Other \
         union SaveResult = APayload | BPayload \
@@ -726,6 +729,28 @@ mod tests {
             Ok(IdentityMap::from([(
                 EntityKey::entity("Child", &["local"]),
                 EntityKey::entity("Child", &["4"])
+            )]))
+        );
+    }
+
+    #[test]
+    fn resolve_of_a_response_that_does_not_normalize_reads_every_fragment() {
+        // A fragment on an interface the holder implemented under the
+        // server's schema, but not under the adopted one.
+        let document = "mutation Save { holder { __typename \
+             ... on HasChild { child { kind: __typename id } } } }";
+        let response = json!({ "holder": { "__typename": "Holder",
+            "child": { "kind": "Saved", "id": "9" } } });
+        assert_eq!(
+            resolve_as(
+                document,
+                &[binding("Saved:local", &["holder", "child"])],
+                &response,
+                UntypedObject::Rejected
+            ),
+            Ok(IdentityMap::from([(
+                EntityKey::entity("Saved", &["local"]),
+                EntityKey::entity("Saved", &["9"])
             )]))
         );
     }
