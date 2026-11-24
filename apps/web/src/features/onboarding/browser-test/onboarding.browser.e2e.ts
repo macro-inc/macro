@@ -848,3 +848,58 @@ test('connecting an inbox starts the first suggestions generation once, without 
   await page.waitForTimeout(300);
   expect(await starts()).toBe(1);
 });
+
+test.describe('a phone browser finishing onboarding', () => {
+  test.use({ viewport: { width: 390, height: 664 }, hasTouch: true });
+
+  test('ends on Macro is better on desktop before entering the app', async ({
+    page,
+  }) => {
+    await openFixture(page, '/?view=flow&step=plan&handoff');
+    await page.getByRole('button', { name: 'Start 30 day trial' }).click();
+
+    await expect(heading(page, 'Macro is better on desktop.')).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Download mobile app' })
+    ).toHaveAttribute('href', /apps\.apple\.com/);
+    const continueButton = page.getByRole('button', {
+      name: 'Continue in browser',
+    });
+    await expect(continueButton).toBeInViewport();
+    await continueButton.click();
+
+    await expectLanded(page, 'Entered Macro at /home');
+    expect(
+      (await fakeEvents(page))
+        .filter((e) => e.event === 'onboarding_v4_desktop_handoff')
+        .map((e) => e.data)
+    ).toEqual([{ action: 'viewed' }, { action: 'continue_in_browser' }]);
+  });
+  test('ends there after Continue with Free too', async ({ page }) => {
+    await openFixture(page, '/?view=flow&step=plan&handoff');
+    await page
+      .getByRole('button', { name: 'Continue with Free' })
+      .last()
+      .click();
+    await expect(heading(page, 'Macro is better on desktop.')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue in browser' }).click();
+    await expectLanded(page, 'Entered Macro at /home');
+  });
+
+  test('ends there after the routines step, once the plan is chosen', async ({
+    page,
+  }) => {
+    await openFixture(page, '/?view=flow&step=plan&handoff', {
+      routineSuggestionsEnabled: true,
+      routineSuggestions: { status: 'none', suggestions: [] },
+    });
+    await page.getByRole('button', { name: 'Start 30 day trial' }).click();
+    await expect(
+      heading(page, 'Put your busywork on autopilot.')
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Continue to workspace' }).click();
+    await expect(heading(page, 'Macro is better on desktop.')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue in browser' }).click();
+    await expectLanded(page, 'Entered Macro at /home');
+  });
+});

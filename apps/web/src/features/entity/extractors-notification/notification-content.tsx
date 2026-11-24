@@ -251,7 +251,10 @@ export function NotificationContent(props: NotificationContentProps) {
                   }
                 >
                   {(trimmedContent) => (
+                    // A preview: its links and mentions are inert, so pressing
+                    // them presses the notification's row.
                     <StaticMarkdown
+                      inert
                       markdown={trimmedContent()}
                       theme={unifiedListMarkdownTheme}
                       singleLine={props.singleLine ?? true}

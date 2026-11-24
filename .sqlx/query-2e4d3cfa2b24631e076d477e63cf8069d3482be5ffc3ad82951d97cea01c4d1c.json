@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH page AS MATERIALIZED (\n            SELECT\n                a.message_id,\n                a.mime_type LIKE ANY($3::text[]) AS pdf,\n                a.mime_type LIKE ANY($4::text[]) AS image,\n                a.mime_type LIKE ANY($5::text[]) AS document\n            FROM email_attachments a\n            WHERE a.ctid >= $1::text::tid\n              AND a.ctid < $2::text::tid\n              AND a.mime_type LIKE ANY($6::text[])\n        ), kinds AS MATERIALIZED (\n            SELECT\n                m.thread_id,\n                bool_or(page.pdf) AS has_pdf,\n                bool_or(page.image) AS has_image,\n                bool_or(page.document) AS has_document\n            FROM page\n            JOIN email_messages m ON m.id = page.message_id\n            GROUP BY m.thread_id\n        ), wanted AS MATERIALIZED (\n            SELECT t.id, kinds.has_pdf, kinds.has_image, kinds.has_document\n            FROM kinds\n            JOIN email_threads t ON t.id = kinds.thread_id\n            WHERE (kinds.has_pdf AND NOT t.has_pdf_attachment)\n               OR (kinds.has_image AND NOT t.has_image_attachment)\n               OR (kinds.has_document AND NOT t.has_document_attachment)\n        ), free AS MATERIALIZED (\n            SELECT t.id, wanted.has_pdf, wanted.has_image, wanted.has_document\n            FROM wanted\n            JOIN email_threads t ON t.id = wanted.id\n            FOR NO KEY UPDATE OF t SKIP LOCKED\n        ), flagged AS (\n            UPDATE email_threads t\n            SET has_pdf_attachment = t.has_pdf_attachment OR free.has_pdf,\n                has_image_attachment = t.has_image_attachment OR free.has_image,\n                has_document_attachment = t.has_document_attachment OR free.has_document\n            FROM free\n            WHERE t.id = free.id\n            RETURNING t.id\n        )\n        SELECT\n            (SELECT count(*) FROM wanted) AS \"missing!\",\n            (SELECT count(*) FROM flagged) AS \"flagged!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "missing!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "flagged!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "2e4d3cfa2b24631e076d477e63cf8069d3482be5ffc3ad82951d97cea01c4d1c"
+}
