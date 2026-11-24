@@ -16,6 +16,7 @@
 //! `AGENTS.md` says how to start one; CI starts one for every change to this
 //! crate.
 
+mod database_rows;
 mod email_operators;
 mod fixtures;
 mod oracle;
