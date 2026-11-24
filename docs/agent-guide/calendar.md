@@ -44,6 +44,22 @@ calendar account metadata and other conferencing providers keep their original U
   label remain readable; weekends receive no special fill.
 - Reduced motion removes nonessential transitions without changing destinations.
 
+## Cached saves
+
+With the calendar cache, `Create event` and `Save` close the composer as soon as
+the write is saved locally and queued (as property saves do), before the provider
+answers; the event is already on the grid under a local id. Its details open
+while the reply is on its way and move to the server's id once the create lands;
+only then does the URL name the event. A refused save shows
+`Failed to create event` or `Failed to update event` afterwards, and a refused
+create leaves the grid. An edit that adds a new Macro call still waits for the
+call to be linked. Over REST the composer closes when the provider answers.
+
+If a permission change retires a successful create response, the composer uses
+the preserved server identity. If that identity cannot be read yet, it closes
+and refreshes the calendar without opening the event or offering a duplicate
+creation. The universal input reports **Event created** without an Open action.
+
 ## Month and Agenda
 
 Phone Month uses equal-height week rows above the bottom controls. All-day and
@@ -690,7 +706,7 @@ The meeting-link selector lists `Macro call`, `Google Meet`, then `No meeting li
 for new events, defaulting to `Macro call` when quick calls are enabled. Keeping
 that selection creates the Macro call together with the event in one save, so the
 invitation attendees receive already carries the link; if the call cannot be
-created, nothing is saved and Save retries the whole create. Selecting
+created, nothing is saved and `Failed to create event` shows. Selecting
 `Google Meet` or `No meeting link` skips the Macro call. Out-of-office entries do
 not create calls. There is no separate call toggle or Scheduled Call menu option.
 All-day events get an untimed call link, so setup does not display a misleading midnight time.

@@ -46,6 +46,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
 import type { DateClickArg } from '@fullcalendar/interaction';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
+import { onCalendarEventCreated } from '@queries/calendar/graphql/mutations';
 import {
   isGuestEditRefused,
   useUpdateCalendarEventMutation,
@@ -577,6 +578,11 @@ function CalendarPageHost(props: {
     })
   );
 
+  // A create can land after the page already shows the server's copy.
+  const [landedCreates, setLandedCreates] = createSignal(0);
+  onCleanup(
+    onCalendarEventCreated(() => setLandedCreates((count) => count + 1))
+  );
   createEffect(
     on(
       () =>
@@ -584,6 +590,7 @@ function CalendarPageHost(props: {
           isActive(),
           calendarView.selectedEvent()?.id,
           props.eventsById(),
+          landedCreates(),
         ] as const,
       ([active, selectedEventId, eventsById]) => {
         if (!active || !selectedEventId) return;
@@ -592,7 +599,8 @@ function CalendarPageHost(props: {
         // metadata are ready to render.
         calendarView.refreshSelectedEventFromPage(
           eventsById,
-          props.data.occurrencesQuery.isSuccess && !props.data.isLoading()
+          props.data.occurrencesQuery.isSuccess && !props.data.isLoading(),
+          (id) => props.grid.eventElements.get(id)
         );
       }
     )
