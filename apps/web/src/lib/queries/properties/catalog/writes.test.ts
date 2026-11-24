@@ -24,6 +24,8 @@ const soup = vi.hoisted(() => ({
   settle: (_settlement: MutationSettlement) => {},
   optimistic: vi.fn(),
   reload: undefined as Partial<OperationResult> | undefined,
+  /** The client's answer to a cache-only read; nothing when unset. */
+  cacheOnly: undefined as Partial<OperationResult> | undefined,
   /** The cache store's answers to reads of the tag sets, in order; then a miss. */
   cachedReads: [] as unknown[],
   session: 1,
@@ -44,7 +46,9 @@ vi.mock('@service-storage/graphql-soup', () => ({
       toPromise: async () =>
         context?.requestPolicy === 'network-only'
           ? (soup.reload ?? { data: undefined })
-          : { data: undefined },
+          : context?.requestPolicy === 'cache-only'
+            ? (soup.cacheOnly ?? { data: undefined })
+            : { data: undefined },
     }),
   }),
   getGraphqlSoupCacheHost: () => soup.host,
@@ -95,6 +99,7 @@ beforeEach(() => {
   }));
   soup.optimistic.mockReset();
   soup.reload = undefined;
+  soup.cacheOnly = undefined;
   soup.cachedReads = [];
   soup.session = 1;
   soup.definitionCached = true;
@@ -917,6 +922,15 @@ describe('provisioning while the cache cannot answer', () => {
     try {
       expect(await cachedTagSet('team')).toBe(shown);
       expect(await cachedTagSet('user')).toBeUndefined();
+      // Not for a flow another login took over.
+      expect(await cachedTagSet('team', soup.session - 1)).toBeUndefined();
+      // Nor when the cache answers that the set is not provisioned.
+      soup.cacheOnly = {
+        data: {
+          user: { tagSets: [{ scope: 'TEAM', definition: null, options: [] }] },
+        },
+      };
+      expect(await cachedTagSet('team')).toBeUndefined();
     } finally {
       dispose();
     }

@@ -74,7 +74,9 @@ export function useTagsQuery(): CatalogListResult<TagSetResponse> {
             ]
           : []
       ),
-    sets: () => query.data ?? [],
+    // A list the server refused keeps its last sets on screen; they are not
+    // evidence of a set.
+    sets: () => (stamp.refusal() ? [] : (query.data ?? [])),
     refresh: () => query.refetch({ requestPolicy: 'network-only' }),
   });
   return catalogListResult(query, stamp, EMPTY_TAG_SETS);
@@ -126,7 +128,8 @@ async function provisionTagSet(
   session = queryAccountSession()
 ) {
   return (
-    (await cachedTagSet(scope)) ?? (await ensureTagSet(scope, { session }))
+    (await cachedTagSet(scope, session)) ??
+    (await ensureTagSet(scope, { session }))
   );
 }
 

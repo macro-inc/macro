@@ -820,20 +820,25 @@ export function refreshTagSets(): void {
  * The viewer's provisioned set for a scope as the cache holds it, without a
  * request. Provisioning is idempotent, so a cached definition stays valid and
  * a tag can be created at once, offline included. A cache that cannot answer
- * answers nothing; a tag list on screen still shows the set it last read.
+ * answers nothing; a tag list on screen still shows the set it last read. A
+ * flow that began under `session` finds nothing once another login took over.
  */
 export async function cachedTagSet(
-  scope: TagScope
+  scope: TagScope,
+  session = queryAccountSession()
 ): Promise<TagSetResponse | undefined> {
   if (!usingCache()) return undefined;
   const cached = await getGraphqlSoupClient()
     .query(PropertyCatalogTagSetsDocument, {}, { requestPolicy: 'cache-only' })
     .toPromise();
-  const set = cached.data?.user.tagSets.find(
-    (candidate) => candidate.scope === toGraphqlTagScope(scope)
-  );
-  const mapped = set && toTagSet(set);
-  if (mapped?.definition) return mapped;
+  if (queryAccountSession() !== session) return undefined;
+  if (cached.data) {
+    const set = cached.data.user.tagSets.find(
+      (candidate) => candidate.scope === toGraphqlTagScope(scope)
+    );
+    const mapped = set && toTagSet(set);
+    return mapped?.definition ? mapped : undefined;
+  }
   return catalogReaders()
     .flatMap((reader) => (reader.kind === 'tags' ? reader.sets() : []))
     .find((shown) => shown.scope === scope && shown.definition);
