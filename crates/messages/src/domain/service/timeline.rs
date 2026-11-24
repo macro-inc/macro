@@ -31,10 +31,16 @@ fn merge(
 ) -> MessageTimelinePage {
     let limit = usize::from(query.limit.unwrap_or(50));
     let newer = matches!(query.direction, MessageDirection::Newer);
-    let source_has_more = if newer {
-        messages.previous_cursor.is_some()
+    let (source_has_more, opposite) = if newer {
+        (
+            messages.previous_cursor.is_some(),
+            messages.next_cursor.is_some(),
+        )
     } else {
-        messages.next_cursor.is_some()
+        (
+            messages.next_cursor.is_some(),
+            messages.previous_cursor.is_some(),
+        )
     };
     let mut merged = MessageTimelinePage::from(messages).entries;
     merged.extend(
@@ -48,7 +54,9 @@ fn merge(
     }
     let more = source_has_more || merged.len() > limit;
     merged.truncate(limit);
-    let opposite = query.cursor.is_some();
+    // The message source probed its own side of the cursor; whether activity
+    // or, on a page without messages, a message lies there is settled by
+    // `with_cursor_side`.
     page(
         merged,
         if newer { opposite } else { more },
@@ -105,7 +113,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         mut query: MessageTimelineQuery,
     ) -> Result<MessageTimelinePage, MessageError> {
         let Some(anchor) = query.around.take() else {
-            return self.activity_side(parent, source, query).await;
+            let page = self.activity_side(parent, source, query.clone()).await?;
+            return self.with_cursor_side(parent, source, &query, page).await;
         };
         // The repository resolves replies to their root and validates thread
         // visibility. Keep the anchor even for a one-entry window.
@@ -228,6 +237,87 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             side.previous_cursor = rest.previous_cursor;
         }
         Ok(())
+    }
+
+    /// Offer the side a page's cursor came from only when an entry lies
+    /// there. A cursor can outlive its entry, and a page offered on that side
+    /// would then hold nothing.
+    async fn with_cursor_side(
+        &self,
+        parent: &MessageParent,
+        source: TimelineActivitySource,
+        query: &MessageTimelineQuery,
+        mut page: MessageTimelinePage,
+    ) -> Result<MessageTimelinePage, MessageError> {
+        let newer = matches!(query.direction, MessageDirection::Newer);
+        let offered = if newer {
+            page.next_cursor.is_some()
+        } else {
+            page.previous_cursor.is_some()
+        };
+        // Entries are newest first, so the one nearest the cursor is the
+        // last of a newer page and the first of an older one.
+        let nearest = if newer {
+            page.entries.last()
+        } else {
+            page.entries.first()
+        };
+        let (false, Some(_), Some(nearest)) = (offered, &query.cursor, nearest) else {
+            return Ok(page);
+        };
+        let boundary = nearest.cursor();
+        let activity = self.activity.as_ref().ok_or_else(|| {
+            MessageError::Repository(rootcause::report!(
+                "activity timeline reader is not configured"
+            ))
+        })?;
+        let activity_query = ActivityTimelineQuery {
+            entity_type: source.entity_type,
+            entity_id: parent.entity_id(),
+            selection: source.selection,
+            cursor: Some((boundary.created_at, boundary.id)),
+            newer: !newer,
+            limit: 1,
+        };
+        // The message source answered for itself unless it had no row to
+        // probe from.
+        let holds_message = page
+            .entries
+            .iter()
+            .any(|entry| !matches!(entry, MessageTimelineEntry::Activity { .. }));
+        let (activities, messages) = futures::try_join!(
+            async {
+                activity.read(activity_query).await.map_err(|error| {
+                    MessageError::Repository(rootcause::report!(
+                        "activity timeline read failed: {error}"
+                    ))
+                })
+            },
+            async {
+                if holds_message {
+                    return Ok(false);
+                }
+                let probe = MessageTimelineQuery {
+                    direction: if newer {
+                        MessageDirection::Older
+                    } else {
+                        MessageDirection::Newer
+                    },
+                    cursor: Some(boundary.clone()),
+                    limit: Some(1),
+                    ..query.clone()
+                };
+                Ok(!self.repo.timeline(parent, probe).await?.items.is_empty())
+            }
+        )?;
+        if !activities.is_empty() || messages {
+            if newer {
+                page.next_cursor = Some(boundary);
+            } else {
+                page.previous_cursor = Some(boundary);
+            }
+        }
+        Ok(page)
     }
 
     async fn activity_side(
