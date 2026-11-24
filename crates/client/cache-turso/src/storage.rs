@@ -56,6 +56,10 @@ use turso_opfs::{
     ResetFailure,
 };
 
+#[cfg(target_arch = "wasm32")]
+pub use queue_salvage::read_queue;
+pub use queue_salvage::{QueueImport, QueueRead, SalvageFile, SalvagedQueue};
+
 /// Frozen storage schema version, independent of cache postcard versions.
 pub const STORAGE_SCHEMA_VERSION: u32 = 12;
 
@@ -452,6 +456,12 @@ impl ResetRequiredTursoStorageClosed {
         self.reason
     }
 
+    /// Returns the still-locked owner with the unhealthy main/WAL pair as it
+    /// is, to be wiped once its queue was read.
+    pub fn preserve_for_wipe(self) -> Result<OpfsOwner, OpfsError> {
+        self.closed.preserve()
+    }
+
     /// Physically resets the unhealthy main/WAL pair.
     pub async fn reset(self) -> Result<OpfsOwner, TursoStorageResetFailure> {
         self.closed
@@ -579,10 +589,11 @@ impl TursoStorageOpenFailure {
         self.error
     }
 
-    /// Consumes a non-reset failure, closes Turso, and preserves main and WAL.
+    /// Consumes the failure, closes Turso, and preserves main and WAL.
     ///
-    /// This accessor must only be used when [`Self::error`] does not require a
-    /// physical reset. A close failure poisons the worker-local owner.
+    /// When [`Self::error`] requires a physical reset, the owner must be wiped
+    /// before anything but its queue is read. A close failure poisons the
+    /// worker-local owner.
     pub fn preserve(self) -> Result<OpfsOwner, OpfsError> {
         let closed = self
             .session
@@ -5822,6 +5833,7 @@ mod mutation_retry;
 mod name_search;
 mod page_retention;
 mod people_sql;
+mod queue_salvage;
 mod record_batch;
 mod search;
 
