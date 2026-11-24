@@ -39,7 +39,11 @@ import type {
   PropertyDefinitionDomain,
 } from '../types';
 import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
-import { type SavedValueState, SavedValueStatus } from './saved-value-status';
+import {
+  createUnhighlightedArrival,
+  type SavedValueState,
+  SavedValueStatus,
+} from './saved-value-status';
 
 type EntityPropertyRow =
   | { type: 'clear'; separatorBefore: boolean }
@@ -302,6 +306,11 @@ export function EntityPropertyEditor(props: {
     selectedIndex: props.selectedIndex,
     setSelectedIndex: props.setSelectedIndex,
   });
+  createUnhighlightedArrival(
+    waitsForSavedValue,
+    props.searchValue,
+    props.setSelectedIndex
+  );
 
   props.setKeybindings({
     select: (event) => {

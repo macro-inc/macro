@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type { ListNavActions } from '@core/util/useListKeyBindings';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
@@ -167,7 +168,10 @@ export function LinkPropertyEditor(props: {
             <CommandMenuEmptyState>Type or paste a URL</CommandMenuEmptyState>
           }
         >
-          <SavedValueStatus state={props.savedValueState} valuesLabel="links" />
+          <SavedValueStatus
+            state={props.savedValueState}
+            valuesLabel={t('entityActions.propertyLinks')}
+          />
         </Show>
       }
     >

@@ -134,10 +134,15 @@ menu, the command menu), the editor does not know the value the item already
 holds until its properties are read. A property that holds several values
 (select, entity or Link) lists nothing and changes nothing until then: a save
 sends the whole value, so a pick would drop the values it hasn't read. A
-property that holds one value is replaced either way and stays editable. Tag
-assignment waits too; its saves are additions and removals the server merges,
-but unread tags would all look unapplied. `SavedValueStatus` shows "Loading …"
-or "Couldn't load this item's …" in place of the rows.
+property that holds one value is replaced either way and stays editable.
+`SavedValueStatus` shows "Loading …" or, when the read fails, "Couldn't load
+this item's …" in place of the rows. Tag assignment waits only while the tags
+load, since unread tags would all look unapplied; a failed read still allows
+tagging, as its saves are additions and removals the server merges. Rows that
+arrive after a wait start with none highlighted (`createUnhighlightedArrival`):
+their first row is **Clear all**, and an Enter pressed meanwhile must not
+reach it. An item's own copy of a custom property carries no options, so the
+editor takes them from the property's definition.
 
 ## Creating a property
 

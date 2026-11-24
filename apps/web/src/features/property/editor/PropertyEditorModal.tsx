@@ -79,7 +79,11 @@ import { EntityPropertyEditor } from './entity-property-editor';
 import { useAllProperties } from './hooks/useAllProperties';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
 import { LinkPropertyEditor } from './link-property-editor';
-import { type SavedValueState, SavedValueStatus } from './saved-value-status';
+import {
+  createUnhighlightedArrival,
+  type SavedValueState,
+  SavedValueStatus,
+} from './saved-value-status';
 import {
   closePropertyEditor,
   hasPropertyEditorPropertyAddedHandler,
@@ -763,13 +767,12 @@ function TagAssignmentEditor(props: {
     : undefined;
   // Until the item's properties are read every tag looks unapplied, so a pick
   // could only add: the applied tags would neither show nor be removable.
-  const savedTagsState = (): SavedValueState => {
-    if (!singleDocTagsSource() || !singleEntityProperties) return 'known';
-    // Values already read stay usable through a failed refresh.
-    if (singleEntityProperties.data?.length) return 'known';
-    if (singleEntityProperties.error) return 'failed';
-    return singleEntityProperties.data === undefined ? 'loading' : 'known';
-  };
+  // A failed read still allows tagging: its saves are additions and removals
+  // the server merges, so nothing unread is lost.
+  const waitsForSavedTags = () =>
+    Boolean(singleDocTagsSource()) &&
+    singleEntityProperties?.data === undefined &&
+    !singleEntityProperties?.error;
   const currentEntityTagIds = () => {
     const docTags = singleDocTagsSource();
     if (docTags && singleEntityForDocTags) {
@@ -905,7 +908,7 @@ function TagAssignmentEditor(props: {
 
   const rows = createMemo(() => {
     const nextRows: TagAssignmentRow[] = [];
-    if (savedTagsState() !== 'known') return nextRows;
+    if (waitsForSavedTags()) return nextRows;
 
     if (showClearAllAtTop()) {
       nextRows.push({ type: 'clear', separatorBefore: false });
@@ -942,6 +945,11 @@ function TagAssignmentEditor(props: {
     props.searchValue();
     props.setSelectedIndex(0);
   });
+  createUnhighlightedArrival(
+    waitsForSavedTags,
+    props.searchValue,
+    props.setSelectedIndex
+  );
 
   createEffect(() => {
     const index = props.selectedIndex();
@@ -1231,24 +1239,17 @@ function TagAssignmentEditor(props: {
 
   return (
     <Show
-      when={!tagsQuery.isLoading}
+      when={!tagsQuery.isLoading && !waitsForSavedTags()}
       fallback={<CommandMenuEmptyState>Loading tags...</CommandMenuEmptyState>}
     >
       <Show
         when={rowCount() > 0}
         fallback={
-          <Show
-            when={savedTagsState() !== 'known'}
-            fallback={
-              <CommandMenuEmptyState>
-                {(tagsQuery.data ?? []).length === 0
-                  ? 'No tags available'
-                  : 'No tags match your search'}
-              </CommandMenuEmptyState>
-            }
-          >
-            <SavedValueStatus state={savedTagsState()} valuesLabel="tags" />
-          </Show>
+          <CommandMenuEmptyState>
+            {(tagsQuery.data ?? []).length === 0
+              ? 'No tags available'
+              : 'No tags match your search'}
+          </CommandMenuEmptyState>
         }
       >
         <CommandMenuList
@@ -1705,6 +1706,11 @@ function SelectPropertyEditor(props: {
     selectedIndex: props.selectedIndex,
     setSelectedIndex: props.setSelectedIndex,
   });
+  createUnhighlightedArrival(
+    waitsForSavedValue,
+    props.searchValue,
+    props.setSelectedIndex
+  );
 
   props.setKeybindings({
     select: (event) => {

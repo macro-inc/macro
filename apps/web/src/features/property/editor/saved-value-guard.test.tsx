@@ -279,6 +279,9 @@ describe.each([
     expect(onSave).not.toHaveBeenCalled();
 
     setSavedProperties({ data: [scenario.saved] });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(onSave).not.toHaveBeenCalled();
+
     fireEvent.click(
       screen.getByRole('option', { name: new RegExp(scenario.added) })
     );
@@ -304,7 +307,7 @@ describe.each([
   it('saves nothing when reading the item fails', () => {
     const { onSave, field } = open(
       { targetProperty: scenario.definition },
-      { error: new Error('refused') }
+      { data: [], error: new Error('refused') }
     );
 
     fireEvent.keyDown(field, { key: 'Enter' });
@@ -377,6 +380,9 @@ describe('the tags of an item whose properties have not been read', () => {
     expect(mocks.updateOptions).not.toHaveBeenCalled();
 
     setSavedProperties({ data: [SAVED_TAGS] });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(mocks.updateOptions).not.toHaveBeenCalled();
+
     fireEvent.click(screen.getByRole('option', { name: /later/ }));
 
     expect(mocks.updateOptions).toHaveBeenCalledOnce();
@@ -403,16 +409,7 @@ describe('the tags of an item whose properties have not been read', () => {
     ]);
   });
 
-  it('changes nothing when reading the item fails', () => {
-    const { field } = openTags({ error: new Error('refused') });
-
-    fireEvent.keyDown(field, { key: 'Enter' });
-    for (const row of screen.queryAllByRole('option')) fireEvent.click(row);
-
-    expect(mocks.updateOptions).not.toHaveBeenCalled();
-  });
-
-  it('keeps tags already read usable when a later read fails', () => {
+  it('adds to tags already read when a later read fails', () => {
     openTags({ data: [SAVED_TAGS], error: new Error('offline') });
 
     fireEvent.click(screen.getByRole('option', { name: /later/ }));
@@ -420,6 +417,17 @@ describe('the tags of an item whose properties have not been read', () => {
     expect(mocks.updateOptions).toHaveBeenCalledOnce();
     expect(mocks.updateOptions.mock.calls[0]![0].properties).toMatchObject([
       { nextOptionIds: ['launch', 'urgent', 'later'] },
+    ]);
+  });
+
+  it('can still add a tag when nothing could be read', () => {
+    openTags({ error: new Error('offline') });
+
+    fireEvent.click(screen.getByRole('option', { name: /later/ }));
+
+    expect(mocks.updateOptions).toHaveBeenCalledOnce();
+    expect(mocks.updateOptions.mock.calls[0]![0].properties).toMatchObject([
+      { currentOptionIds: [], nextOptionIds: ['later'] },
     ]);
   });
 });
