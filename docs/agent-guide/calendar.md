@@ -340,8 +340,9 @@ When a booking gets no answer (the connection dropped, or the server failed), th
 shows `Finishing your booking` and resends the original request by itself (after 1, 2, 4, 8, 15
 and 15 seconds); after four unanswered resends it says `Still finishing your booking`, and after
 six it stops and offers `Try again`, which resends the same request. Each resend that reaches the
-server before a booking exists spends the link's public booking budget, hence the cap. Never
-create a replacement booking. Receipt pages poll while the calendar update is
+server before a booking exists spends the link's public booking budget, hence the cap. A refusal
+of an automatic resend also stops there with the request held, since the first send may still be
+reserving; only the visitor's `Try again` settles a refusal. Never create a replacement booking. Receipt pages poll while the calendar update is
 pending: every 2 seconds while `processing`, every 5 while a failed write is being retried. The private
 `/app/booking/:id#token` receipt supports cancellation and rescheduling; preserve
 that private link. Rescheduling defaults to the browser's time zone; `Your time

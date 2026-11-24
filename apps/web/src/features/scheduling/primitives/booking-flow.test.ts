@@ -1,9 +1,6 @@
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  BookingRateLimitedError,
-  BookingRejectedError,
-} from '../core/booking-error';
+import { BookingRejectedError } from '../core/booking-error';
 import type { BookingReceipt } from '../core/types';
 import { type BookingSource, createBookingFlow } from './booking-flow';
 
@@ -156,30 +153,12 @@ describe('a booking without an answer', () => {
     expect(flow.receipt()?.token).toBe('t');
   });
 
-  it('shows the reason when the server refuses the resent request', async () => {
+  it('holds a refused automatic resend until the visitor tries again, which settles it', async () => {
     const book = vi
       .fn()
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(new BookingRejectedError('Time taken'))
       .mockRejectedValueOnce(new BookingRejectedError('Time taken'));
-    const flow = createRoot(() =>
-      createBookingFlow({ slots: vi.fn(), book }, 'profile')
-    );
-    flow.select('2026-10-02T09:00:00Z');
-    const submitted = flow.submit('event', DETAILS);
-    await vi.advanceTimersByTimeAsync(1000);
-    await submitted;
-    expect(flow.finishing()).toBe(false);
-    expect(flow.error()).toBe('Time taken');
-    flow.back();
-    expect(flow.selected()).toBeUndefined();
-  });
-
-  it('keeps a resend that the booking budget refuses held, since the first send may still be reserving', async () => {
-    const book = vi
-      .fn()
-      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
-      .mockRejectedValueOnce(new BookingRateLimitedError('Too many'))
-      .mockResolvedValueOnce({ token: 't' } as BookingReceipt);
     const flow = createRoot(() =>
       createBookingFlow({ slots: vi.fn(), book }, 'profile')
     );
@@ -188,6 +167,7 @@ describe('a booking without an answer', () => {
     const submitted = flow.submit('event', DETAILS);
     await vi.advanceTimersByTimeAsync(1000);
     await submitted;
+    // The first send may still be reserving while its resend is refused.
     expect(flow.finishState()).toBe('paused');
     expect(flow.error()).toBe('');
     flow.back();
@@ -197,20 +177,10 @@ describe('a booking without an answer', () => {
 
     await flow.submit('event', DETAILS);
     expect(book.mock.calls[2]).toEqual(book.mock.calls[0]);
-    expect(flow.receipt()?.token).toBe('t');
-  });
-
-  it('settles a first send that the booking budget refuses', async () => {
-    const book = vi
-      .fn()
-      .mockRejectedValueOnce(new BookingRateLimitedError('Too many'));
-    const flow = createRoot(() =>
-      createBookingFlow({ slots: vi.fn(), book }, 'profile')
-    );
-    flow.select('2026-10-02T09:00:00Z');
-    await flow.submit('event', DETAILS);
     expect(flow.finishing()).toBe(false);
-    expect(flow.error()).toBe('Too many');
+    expect(flow.error()).toBe('Time taken');
+    flow.back();
+    expect(flow.selected()).toBeUndefined();
   });
 
   it('takes no one to a receipt that arrives after the page closed', async () => {

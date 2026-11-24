@@ -1,9 +1,6 @@
 import { sleep } from '@core/util/sleep';
 import { createSignal, onCleanup } from 'solid-js';
-import {
-  BookingRateLimitedError,
-  BookingRejectedError,
-} from '../core/booking-error';
+import { BookingRejectedError } from '../core/booking-error';
 import type { BookingReceipt, BookingRequest } from '../core/types';
 
 export type BookingSource = {
@@ -84,21 +81,22 @@ export function createBookingFlow(source: BookingSource, profileId: string) {
     }
   };
   /**
-   * Send the held request once. `settled` when the server answered it for
-   * good, `held` when a resend was refused while an earlier send may still
-   * be reserving, `unanswered` otherwise.
+   * Send the held request once. `settled` when the answer is final, `held`
+   * when an automatic resend was refused: an earlier send of the request may
+   * still be reserving, so only the visitor's own Try again settles a refusal.
+   * `unanswered` otherwise.
    */
   const send = async (
     held: PendingBooking,
-    resend: boolean
+    automatic: boolean
   ): Promise<'settled' | 'held' | 'unanswered'> => {
     try {
       const answer = await source.book(profileId, held.eventId, held.request);
       // A page already closed takes no visitor anywhere; the booking stands.
       if (!disposed) setReceipt(answer);
     } catch (error) {
-      if (resend && error instanceof BookingRateLimitedError) return 'held';
       if (!(error instanceof BookingRejectedError)) return 'unanswered';
+      if (automatic) return 'held';
       setError(error.message);
     }
     pending = undefined;
@@ -126,13 +124,11 @@ export function createBookingFlow(source: BookingSource, profileId: string) {
     if (finishing() && finishState() !== 'paused') return;
     pending ??= { eventId, request: { ...details, startsAt, requestId } };
     const held = pending;
-    const resend = finishing();
-    if (resend) setFinishState('resending');
+    if (finishing()) setFinishState('resending');
     setSubmitting(true);
     setError('');
-    const answer = await send(held, resend);
+    const answer = await send(held, false);
     setSubmitting(false);
-    if (answer === 'held') setFinishState('paused');
     if (answer === 'unanswered') await finish(held);
   };
   return {
