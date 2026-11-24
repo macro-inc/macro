@@ -26,8 +26,10 @@ vi.mock('@queries/harnesses/harnesses', () => ({
 }));
 vi.mock('@core/user', () => ({
   tryMacroId: (id: string) => id,
-  getDisplayName: (id: string) =>
-    id === 'macro|dee@agents.example' ? 'Dee' : '',
+  getDisplayNameParts: (id: string) =>
+    id === 'macro|dee@agents.example'
+      ? { firstName: 'Dee', lastName: '', fullName: 'Dee' }
+      : { firstName: '', lastName: '', fullName: id },
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: state.openWithSplit }),
