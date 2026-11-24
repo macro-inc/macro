@@ -461,10 +461,15 @@ pub(in crate::domain::service) fn link_existing(
     rows: &mut [PlanRow],
     copies: &[ImportEntity],
 ) -> Result<()> {
+    // Indexed once, keeping the first imported copy of each object.
+    let mut imported: HashMap<&str, &ImportEntity> = HashMap::new();
+    for copy in copies {
+        if copy.status == ImportStatus::Imported {
+            imported.entry(copy.foreign_id.as_str()).or_insert(copy);
+        }
+    }
     for row in rows {
-        let Some(copy) = copies.iter().find(|copy| {
-            copy.foreign_id == row.foreign_id && copy.status == ImportStatus::Imported
-        }) else {
+        let Some(copy) = imported.get(row.foreign_id.as_str()) else {
             continue;
         };
         let (Some(entity_id), Some(entity_type)) = (&copy.entity_id, &copy.entity_type) else {

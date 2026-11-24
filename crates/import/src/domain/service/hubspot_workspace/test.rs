@@ -457,3 +457,29 @@ fn a_link_to_a_company_outside_the_plan_counts_as_an_extra_link() {
         contact.losses
     );
 }
+
+#[test]
+fn a_row_links_to_the_first_imported_copy_of_its_object() {
+    let mut rows = plan::rows(&inventory(), &team(), &Rules::default()).unwrap();
+    let review = Uuid::now_v7();
+    let copy = |status, entity: &str| ImportEntity {
+        entity_id: Some(entity.into()),
+        entity_type: Some("crm_company".into()),
+        ..ledger_row(
+            "7:company:10",
+            ImportKind::HubspotCompany,
+            status,
+            review,
+            meta(&rows[1]),
+        )
+    };
+    let copies = [
+        copy(ImportStatus::Staged, "staged"),
+        copy(ImportStatus::Imported, "first"),
+        copy(ImportStatus::Imported, "second"),
+    ];
+    plan::link_existing(&mut rows, &copies).unwrap();
+    let linked = meta(&rows[1]).plan.already_imported.unwrap();
+    assert_eq!(linked.entity_id, "first");
+    assert!(meta(&rows[0]).plan.already_imported.is_none());
+}
