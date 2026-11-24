@@ -117,6 +117,25 @@ again. The tags say how it was lost:
 
 Recovery: reindex the affected entities by id with the backfill routes (below).
 
+## Database rows sweep
+
+A step of search-processing-service's database rows sweep failed more than once
+in 13 hours (`search.database_rows.sweep_failures`, tag `step`). The sweep
+catches up tables whose `macro.databases` events were lost (`catch_up`, every 15
+minutes), removes documents of rows that are gone (`stale_scan`) and reindexes
+tables whose columns or options changed outside their journal (`reshape_check`),
+both every six hours. Search rebuilds every hit from Postgres, so stale text is
+never shown; while the sweep fails, affected rows can be missed.
+
+- The `database_rows.sweep` span and its step's child span (`catch_up`,
+  `remove_stale`, `reindex_reshaped`) carry the error. `reshape_check` reads
+  every column and option under a 30 s statement timeout; a timeout there means
+  that read outgrew it (its `lookup_ms` shows the trend).
+- `lead` means the round could not take its advisory lock; check MacroDB.
+
+Recovery: `POST /internal/backfill/database-rows` with `{}` reindexes every
+searchable database and removes stale documents (README "Database rows").
+
 ## Failed bulk items
 
 For 30 minutes, OpenSearch has failed items of one entity type's bulk index

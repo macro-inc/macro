@@ -9,8 +9,8 @@
 -- whole.
 --
 -- `column_fingerprint` digests, as the pass that raised the mark read them,
--- the table's columns and the option count and latest option change of each
--- column's definition. Changes outside the table's journal (a definition
+-- the table's columns and the ids and labels of each column definition's
+-- options. Changes outside the table's journal (a definition
 -- deleted with its columns, a tag set relabelled or pruned through the
 -- properties service) change it, and the indexer's sweep reindexes a table
 -- whose current fingerprint differs.

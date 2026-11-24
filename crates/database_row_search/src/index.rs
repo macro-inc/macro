@@ -337,15 +337,18 @@ where
     sqlx::query_scalar!(
         r#"
         WITH option_stats AS MATERIALIZED (
-            SELECT property_definition_id, count(*) AS options, max(updated_at) AS changed_at
+            SELECT property_definition_id, md5(string_agg(
+                id::TEXT || '=' || COALESCE(string_value, '') || '|'
+                    || COALESCE(number_value::TEXT, ''),
+                ',' ORDER BY id
+            )) AS options
             FROM property_options
             GROUP BY property_definition_id
         ),
         current_columns AS (
             SELECT c.table_id, md5(string_agg(
                 c.id::TEXT || ':' || c.property_definition_id::TEXT || ':'
-                    || COALESCE(s.options, 0)::TEXT || ':'
-                    || COALESCE((extract(epoch FROM s.changed_at) * 1000000)::BIGINT::TEXT, ''),
+                    || COALESCE(s.options, ''),
                 ',' ORDER BY c.id
             )) AS fingerprint
             FROM database_columns c
@@ -443,8 +446,9 @@ where
     Ok(())
 }
 
-/// A digest of the table's columns and, for each column's definition, how
-/// many options it has and when one last changed. A pass reads it before
+/// A digest of the table's columns and, for each column's definition, the
+/// ids and labels of its options: it changes with any relabel, removal or
+/// addition, whatever the timestamps of the transactions that made them. A pass reads it before
 /// reading rows; the sweep compares it with [`read_reshaped_tables`].
 ///
 /// The digest is spelled out the same way in both queries; a test checks a
@@ -461,13 +465,16 @@ where
         r#"
         SELECT md5(COALESCE(string_agg(
             c.id::TEXT || ':' || c.property_definition_id::TEXT || ':'
-                || s.options::TEXT || ':'
-                || COALESCE((extract(epoch FROM s.changed_at) * 1000000)::BIGINT::TEXT, ''),
+                || COALESCE(s.options, ''),
             ',' ORDER BY c.id
         ), '')) AS "fingerprint!"
         FROM database_columns c
         CROSS JOIN LATERAL (
-            SELECT count(*) AS options, max(po.updated_at) AS changed_at
+            SELECT md5(string_agg(
+                po.id::TEXT || '=' || COALESCE(po.string_value, '') || '|'
+                    || COALESCE(po.number_value::TEXT, ''),
+                ',' ORDER BY po.id
+            )) AS options
             FROM property_options po
             WHERE po.property_definition_id = c.property_definition_id
         ) s

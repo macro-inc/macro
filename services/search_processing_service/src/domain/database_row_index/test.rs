@@ -307,6 +307,8 @@ impl DatabaseRowSource for FakeSource {
 struct FakeIndex {
     documents: Mutex<BTreeMap<Uuid, DatabaseRowDocument>>,
     fail_next_write: Mutex<bool>,
+    /// How long each write takes.
+    write_takes: Option<std::time::Duration>,
     /// Holds the next scoped delete: says when it started, then waits.
     paused_delete: Mutex<
         Option<(
@@ -355,6 +357,9 @@ impl FakeIndex {
 
 impl DatabaseRowIndex for FakeIndex {
     async fn write(&self, writes: Vec<RowIndexWrite>) -> Result<RowWriteOutcome, Report> {
+        if let Some(takes) = self.write_takes {
+            tokio::time::sleep(takes).await;
+        }
         if std::mem::take(&mut *self.fail_next_write.lock().unwrap()) {
             return Err(Report::new_sendsync(std::io::Error::other("bulk refused")).into_dynamic());
         }
@@ -875,7 +880,7 @@ async fn a_backfill_goes_on_past_a_database_that_fails() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_pass_past_its_deadline_is_stopped_and_releases_its_lock() {
+async fn a_pass_that_stalls_is_stopped_and_releases_its_lock() {
     // OpenSearch stops answering; the pass would hold the lock for good.
     struct HungIndex;
     impl DatabaseRowIndex for HungIndex {
@@ -895,7 +900,7 @@ async fn a_pass_past_its_deadline_is_stopped_and_releases_its_lock() {
     }
     let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
     let service = DatabaseRowIndexService::new(source, HungIndex)
-        .with_pass_deadline(std::time::Duration::from_secs(600));
+        .with_progress_deadline(std::time::Duration::from_secs(600));
 
     let error = service
         .reconcile_table(TABLE, PassKind::Full)
@@ -903,9 +908,9 @@ async fn a_pass_past_its_deadline_is_stopped_and_releases_its_lock() {
         .unwrap_err();
 
     assert!(
-        error.iter_reports().any(|report| report
-            .downcast_current_context::<PassDeadlineExceeded>()
-            .is_some()),
+        error
+            .iter_reports()
+            .any(|report| report.downcast_current_context::<PassStalled>().is_some()),
         "{error:?}"
     );
     // The lock is free again for the retry.
@@ -934,4 +939,38 @@ async fn a_failing_step_does_not_starve_the_rest_of_the_round() {
         service.index.contents(),
         vec![(ROW_A, "A at 6".to_owned(), 6)]
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_long_pass_that_keeps_writing_batches_is_not_stopped() {
+    // Three batches of four minutes each: twelve minutes, past a ten-minute
+    // deadline, but no batch takes more than four.
+    let rows: Vec<(Uuid, String)> = (0..(ROWS_PER_BATCH * 3) as u128)
+        .map(|n| {
+            (
+                Uuid::from_u128(0x6000_0000_0000_7000_8000_0000_0000_0000 + n),
+                format!("Row {n}"),
+            )
+        })
+        .collect();
+    let rows: Vec<(Uuid, &str)> = rows
+        .iter()
+        .map(|(id, title)| (*id, title.as_str()))
+        .collect();
+    let source = FakeSource::new(6, &rows);
+    let index = FakeIndex {
+        write_takes: Some(std::time::Duration::from_secs(4 * 60)),
+        ..FakeIndex::default()
+    };
+    let service = DatabaseRowIndexService::new(source, index)
+        .with_progress_deadline(std::time::Duration::from_secs(10 * 60));
+
+    let outcome = service
+        .reconcile_table(TABLE, PassKind::Full)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome, TableOutcome::Reindexed);
+    assert_eq!(service.index.contents().len(), ROWS_PER_BATCH * 3);
+    assert_eq!(service.source.watermark_of(TABLE), Some(6));
 }

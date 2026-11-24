@@ -298,16 +298,27 @@ const GONE_TABLES_PER_ROUND: usize = 100;
 /// below the lock pool's idle-in-transaction limit.
 const LOCK_KEEPALIVE: std::time::Duration = std::time::Duration::from_secs(60);
 
-/// The longest a pass may hold a database's lock. A pass still running then
-/// is stopped and its lock released, so a pass that hangs cannot hold every
-/// later event for its database; it is retried like any failed pass.
-const PASS_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+/// The longest a pass may hold a database's lock without writing a batch.
+/// A pass that stalls is stopped and its lock released, so a pass that hangs
+/// cannot hold every later event for its database; it is retried like any
+/// failed pass. A pass that keeps writing batches runs as long as it needs.
+const PROGRESS_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
+/// Told by a pass each time it lands a batch, which restarts its
+/// [`PROGRESS_DEADLINE`].
+pub struct Progress(tokio::sync::watch::Sender<()>);
+
+impl Progress {
+    fn made(&self) {
+        self.0.send_replace(());
+    }
+}
 
 pub struct DatabaseRowIndexService<S, I> {
     source: S,
     index: I,
     lock_keepalive: std::time::Duration,
-    pass_deadline: std::time::Duration,
+    progress_deadline: std::time::Duration,
 }
 
 impl<S, I> DatabaseRowIndexService<S, I> {
@@ -316,15 +327,15 @@ impl<S, I> DatabaseRowIndexService<S, I> {
             source,
             index,
             lock_keepalive: LOCK_KEEPALIVE,
-            pass_deadline: PASS_DEADLINE,
+            progress_deadline: PROGRESS_DEADLINE,
         }
     }
 
-    /// Stop a pass that holds its lock longer than `deadline` instead of
-    /// [`PASS_DEADLINE`].
-    pub fn with_pass_deadline(self, deadline: std::time::Duration) -> Self {
+    /// Stop a pass that writes no batch for `deadline` instead of
+    /// [`PROGRESS_DEADLINE`].
+    pub fn with_progress_deadline(self, deadline: std::time::Duration) -> Self {
         Self {
-            pass_deadline: deadline,
+            progress_deadline: deadline,
             ..self
         }
     }
@@ -366,7 +377,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
 
         let Some(tables) = tables.filter(|tables| tables.searchable) else {
             return self
-                .with_database_lock(database_id, async || {
+                .with_database_lock(database_id, async |_progress| {
                     // Restored since the read above: the restore's own pass
                     // reindexes it, after this one.
                     let still_gone = !self
@@ -429,8 +440,9 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
                 TableOutcome::Removed
             }
             Some(state) => {
-                self.with_database_lock(state.database_id, async || {
-                    self.reconcile_table_inner(table_id, kind, &span).await
+                self.with_database_lock(state.database_id, async |progress| {
+                    self.reconcile_table_inner(table_id, kind, &span, progress)
+                        .await
                 })
                 .await?
             }
@@ -445,7 +457,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
     async fn with_database_lock<T>(
         &self,
         database_id: Uuid,
-        pass: impl AsyncFnOnce() -> Result<T, Report>,
+        pass: impl AsyncFnOnce(&Progress) -> Result<T, Report>,
     ) -> Result<T, Report> {
         let waited = Instant::now();
         let mut lock = self.source.lock_database(database_id).await?;
@@ -454,19 +466,30 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         // The lock's own connection runs no statement during the pass (its
         // reads use another pool), so touch it while the pass runs. A failed
         // touch means the lock may be gone: the pass stops there.
-        // The keepalive would also keep a hung pass's lock forever, so the
-        // pass has a deadline; past it the pass is dropped and fails.
-        let pass = tokio::time::timeout(self.pass_deadline, pass());
+        // The keepalive would also keep a hung pass's lock forever, so a pass
+        // that makes no progress (writes no batch) for `progress_deadline` is
+        // dropped and fails. A long pass that keeps writing is never cut off.
+        let (progress, mut progressed) = tokio::sync::watch::channel(());
+        let progress = Progress(progress);
+        let pass = pass(&progress);
         tokio::pin!(pass);
         let mut keepalive = tokio::time::interval_at(
             tokio::time::Instant::now() + self.lock_keepalive,
             self.lock_keepalive,
         );
+        let stalled = tokio::time::sleep(self.progress_deadline);
+        tokio::pin!(stalled);
         let result = loop {
             tokio::select! {
-                result = &mut pass => break result.unwrap_or_else(|_| {
-                    Err(Report::new_sendsync(PassDeadlineExceeded).into_dynamic())
-                }),
+                result = &mut pass => break result,
+                () = &mut stalled => {
+                    break Err(Report::new_sendsync(PassStalled).into_dynamic());
+                }
+                Ok(()) = progressed.changed() => {
+                    stalled
+                        .as_mut()
+                        .reset(tokio::time::Instant::now() + self.progress_deadline);
+                }
                 _ = keepalive.tick() => {
                     if let Err(error) = self.source.keep_lock_alive(&mut lock).await {
                         break Err(error);
@@ -490,6 +513,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         table_id: Uuid,
         kind: PassKind,
         span: &tracing::Span,
+        progress: &Progress,
     ) -> Result<TableOutcome, Report> {
         let Some(state) = self.source.table_state(table_id).await? else {
             self.index.delete(RowIndexScope::Table(table_id)).await?;
@@ -526,16 +550,16 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
                     .await?;
                 if replayable(&changes, watermark, state.version) {
                     for batch in changes.row_ids.chunks(ROWS_PER_BATCH) {
-                        counts += self.rewrite_rows(batch, state.version).await?;
+                        counts += self.rewrite_rows(batch, state.version, progress).await?;
                     }
                     TableOutcome::CaughtUp
                 } else {
-                    counts = self.reindex_table(table_id, state).await?;
+                    counts = self.reindex_table(table_id, state, progress).await?;
                     TableOutcome::Reindexed
                 }
             }
             _ => {
-                counts = self.reindex_table(table_id, state).await?;
+                counts = self.reindex_table(table_id, state, progress).await?;
                 TableOutcome::Reindexed
             }
         };
@@ -592,7 +616,12 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
     /// Rewrite every row of the table, then remove the documents left below
     /// the version read at the start: rows that are gone. A row written
     /// during the pass is at or above that version, so it stays.
-    async fn reindex_table(&self, table_id: Uuid, state: TableState) -> Result<RowCounts, Report> {
+    async fn reindex_table(
+        &self,
+        table_id: Uuid,
+        state: TableState,
+        progress: &Progress,
+    ) -> Result<RowCounts, Report> {
         let mut counts = RowCounts::default();
         let mut after = None;
         loop {
@@ -604,7 +633,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
             let Some(last) = rows.into_iter().last() else {
                 break;
             };
-            counts += self.rewrite_rows(&row_ids, state.version).await?;
+            counts += self.rewrite_rows(&row_ids, state.version, progress).await?;
             after = Some(last);
 
             // A long pass stops writing once its database is trashed or the
@@ -631,7 +660,12 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
     /// the rows were: the row was already gone or is gone since, so no
     /// document can hold it at a later version except one written by a pass
     /// that will also see it go.
-    async fn rewrite_rows(&self, row_ids: &[Uuid], missing_at: i64) -> Result<RowCounts, Report> {
+    async fn rewrite_rows(
+        &self,
+        row_ids: &[Uuid],
+        missing_at: i64,
+        progress: &Progress,
+    ) -> Result<RowCounts, Report> {
         let texts = self.source.row_texts(row_ids).await?;
         let found: HashSet<Uuid> = texts.iter().map(|text| text.row_id).collect();
 
@@ -655,6 +689,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
             return Ok(RowCounts::default());
         }
         let outcome = self.index.write(writes).await?;
+        progress.made();
         Ok(RowCounts {
             written,
             deleted,
@@ -720,7 +755,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
             }
             for (database_id, rows) in stale {
                 removal.removed += self
-                    .with_database_lock(database_id, async || {
+                    .with_database_lock(database_id, async |_progress| {
                         let row_ids: Vec<Uuid> = rows.iter().map(|row| row.row_id).collect();
                         let live: HashSet<Uuid> = self
                             .source
@@ -876,17 +911,26 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
             return Ok(());
         }
 
-        let caught_up = self.catch_up(gate, cancel).await.map(drop);
-        let (removed, reindexed) = if scan_index {
-            (
-                self.remove_stale(Some(gate), cancel).await.map(drop),
-                self.reindex_reshaped(gate, cancel).await.map(drop),
-            )
-        } else {
-            (Ok(()), Ok(()))
-        };
+        let mut failed = Vec::new();
+        if self.catch_up(gate, cancel).await.is_err() {
+            failed.push(SweepStep::CatchUp);
+        }
+        if scan_index {
+            if self.remove_stale(Some(gate), cancel).await.is_err() {
+                failed.push(SweepStep::StaleScan);
+            }
+            if self.reindex_reshaped(gate, cancel).await.is_err() {
+                failed.push(SweepStep::ReshapeCheck);
+            }
+        }
         drop(lease);
-        caught_up.and(removed).and(reindexed)
+
+        // Each step's own span records its error; the round names them all.
+        if failed.is_empty() {
+            Ok(())
+        } else {
+            Err(Report::new_sendsync(SweepFailed { steps: failed }).into_dynamic())
+        }
     }
 
     /// Reindex the requested databases, or every searchable one and then
@@ -971,10 +1015,27 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
     }
 }
 
-/// A pass held its database's lock past the deadline and was stopped.
+/// A step of a sweep round.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum SweepStep {
+    CatchUp,
+    StaleScan,
+    ReshapeCheck,
+}
+
+/// Steps of a sweep round that failed; the others ran.
 #[derive(Debug, thiserror::Error)]
-#[error("database row pass ran past its deadline and was stopped")]
-pub struct PassDeadlineExceeded;
+#[error("database row sweep steps failed: {steps:?}")]
+pub struct SweepFailed {
+    pub steps: Vec<SweepStep>,
+}
+
+/// A pass held its database's lock without writing a batch for longer than
+/// the progress deadline, and was stopped.
+#[derive(Debug, thiserror::Error)]
+#[error("database row pass made no progress before its deadline and was stopped")]
+pub struct PassStalled;
 
 /// Whether the journal covers every version after the watermark, one by
 /// one, and names every row whose text could have changed.

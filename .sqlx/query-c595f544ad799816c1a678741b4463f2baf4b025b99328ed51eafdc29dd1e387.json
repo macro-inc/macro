@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH option_stats AS MATERIALIZED (\n            SELECT property_definition_id, md5(string_agg(\n                id::TEXT || '=' || COALESCE(string_value, '') || '|'\n                    || COALESCE(number_value::TEXT, ''),\n                ',' ORDER BY id\n            )) AS options\n            FROM property_options\n            GROUP BY property_definition_id\n        ),\n        current_columns AS (\n            SELECT c.table_id, md5(string_agg(\n                c.id::TEXT || ':' || c.property_definition_id::TEXT || ':'\n                    || COALESCE(s.options, ''),\n                ',' ORDER BY c.id\n            )) AS fingerprint\n            FROM database_columns c\n            LEFT JOIN option_stats s ON s.property_definition_id = c.property_definition_id\n            GROUP BY c.table_id\n        )\n        SELECT w.table_id\n        FROM database_row_search_watermarks w\n        LEFT JOIN current_columns cur ON cur.table_id = w.table_id\n        WHERE w.column_fingerprint <> COALESCE(cur.fingerprint, md5(''))\n        ORDER BY w.table_id\n        LIMIT $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "table_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c595f544ad799816c1a678741b4463f2baf4b025b99328ed51eafdc29dd1e387"
+}

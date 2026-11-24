@@ -219,9 +219,10 @@ async fn a_change_outside_the_journal_reshapes_the_table(pool: PgPool) {
     raise().await;
     assert_eq!(reshaped().await, Vec::<Uuid>::new());
 
-    // The owner's tag set relabelled through the properties service.
+    // The owner's tag set relabelled through the properties service; the
+    // label alone changes the fingerprint, whatever the option's timestamp.
     sqlx::query(
-        "UPDATE property_options SET string_value = 'critical', updated_at = now() + INTERVAL '1 second' WHERE id = '40000000-0000-7000-8000-000000000003'",
+        "UPDATE property_options SET string_value = 'critical' WHERE id = '40000000-0000-7000-8000-000000000003'",
     )
     .execute(&pool)
     .await
