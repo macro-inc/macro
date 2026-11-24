@@ -104,21 +104,22 @@ it('clears the field without leaving it, and Cancel or Escape leaves the page', 
 
 it('finishes a picked view as text in the field, marked as an operator, and keeps the keyboard up', () => {
   const { field, search } = renderPage();
+  // The operators drawn behind the field, not the rows under it.
+  const drawnInField = () =>
+    field.parentElement?.querySelector('[data-search-operator]');
   field.focus();
   fireEvent.input(field, { target: { value: 'invoice in:se' } });
-  expect(document.querySelector('[data-search-operator]')).toBeNull();
+  expect(drawnInField()).toBeNull();
 
-  fireEvent.click(screen.getByRole('option', { name: /^Sent/ }));
+  fireEvent.click(screen.getByRole('option', { name: 'in:sent' }));
   expect(search()).toBe('invoice in:sent ');
   expect(document.activeElement).toBe(field);
   expect((field as HTMLInputElement).value).toBe('invoice in:sent ');
-  expect(document.querySelector('[data-search-operator]')?.textContent).toBe(
-    'in:sent'
-  );
+  expect(drawnInField()?.textContent).toBe('in:sent');
 
   // Ordinary text: deleting into the operator unmarks it.
   fireEvent.input(field, { target: { value: 'invoice in:sen' } });
-  expect(document.querySelector('[data-search-operator]')).toBeNull();
+  expect(drawnInField()).toBeNull();
 });
 
 it('picks a listed view from a hardware keyboard and keeps the keyboard up', () => {

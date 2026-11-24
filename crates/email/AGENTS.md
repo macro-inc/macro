@@ -412,6 +412,16 @@ tools — hexagonal, heavily feature-gated.
   when it belongs to an inbox in the reader’s Drafts scope. Apply the same
   rule to full and parsed thread reads.
 
+- Labels people make are theirs: a thread opened through a share, a folder, a
+  channel or a CRM Team view shows its reader the made labels of an inbox
+  they own or manage, and none from anyone else's inbox. Every label read
+  (`labels_by_thread_ids`, `labels_by_message_ids`) takes the reader and
+  returns made labels only from the inboxes that person owns or manages, and
+  system labels, which are message state, to everyone; a bot, a signed-out
+  reader and an internal receipt get system labels alone. Give a new read of
+  labels the same condition; `test/label_readers.rs` runs every receipt and row
+  read over two shared threads.
+
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - `domain/scheduled_delivery/{state,identity,deletion}.rs` owns claim
   classification, sent-identity adoption and retained-deletion sequencing.

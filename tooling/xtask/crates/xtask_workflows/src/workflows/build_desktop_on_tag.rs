@@ -1,19 +1,25 @@
-//! `Build Desktop on Tag` — orchestrator workflow that triggers AppImage and DMG
-//! builds in parallel when a release tag is pushed. Also supports manual
-//! dispatch. Generated into `build_desktop_on_tag.yml`.
+//! `Build Desktop on Tag` — orchestrator workflow that triggers the AppImage
+//! and the Apple silicon and Intel DMG builds in parallel when a release tag is
+//! pushed. Also supports manual dispatch. Generated into
+//! `build_desktop_on_tag.yml`.
+//!
+//! The Intel DMG is optional: it runs only once the tag pins its CEF codec
+//! build (`scripts/decide_intel_desktop.sh`), and when it fails or is skipped
+//! the other builds still publish, without `darwin-x86_64` in the feed.
 //!
 //! The reusable job definitions live in [`super::build_appimage_on_tag`] and
 //! [`super::build_dmg_on_tag`]. The macOS release QA job comes from
 //! [`super::desktop_qa_macos`]; promotion to `desktop-stable` waits for it.
 
 use gh_workflow::expr::typed::{
-    Expr, JobHandle, JobOutput, StepHandle, StepOutput, Str, github, input,
+    Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, cancelled, github, input,
 };
 use gh_workflow::{
     Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Workflow, WorkflowDispatch,
     WorkflowInput,
 };
 
+use crate::workflows::build_dmg_on_tag::MacArch;
 use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag, desktop_qa_macos, steps, vars};
 
 #[cfg(test)]
@@ -23,6 +29,8 @@ mod test;
 struct ResolveRefOutputs {
     /// The git ref every build and publish job checks out.
     git_ref: JobOutput<Str>,
+    /// Whether this run builds the Intel Mac app.
+    intel: JobOutput<Flag>,
 }
 
 /// The `resolve-ref` job.
@@ -30,6 +38,7 @@ const RESOLVE_REF: JobHandle<ResolveRefOutputs> = JobHandle::new(
     "resolve-ref",
     ResolveRefOutputs {
         git_ref: JobOutput::new("resolve-ref", "ref"),
+        intel: JobOutput::new("resolve-ref", "intel"),
     },
 );
 
@@ -45,6 +54,25 @@ const RESOLVE: StepHandle<ResolveOutputs> = StepHandle::new(
         git_ref: StepOutput::new("resolve", "ref"),
     },
 );
+
+struct DecideIntelOutputs {
+    /// `true` when this run builds the Intel Mac app.
+    intel: StepOutput<Flag>,
+}
+
+/// The [`decide_intel_step`] step.
+const DECIDE_INTEL: StepHandle<DecideIntelOutputs> = StepHandle::new(
+    "intel",
+    DecideIntelOutputs {
+        intel: StepOutput::new("intel", "intel"),
+    },
+);
+
+/// Room for both notarizations on top of a build that takes about two hours,
+/// while the installers it holds still land before `Desktop Release Watch`
+/// looks for them (`DEADLINE_HOURS`, four). Apple silicon's job, which every
+/// release needs, keeps GitHub's default.
+const INTEL_DMG_TIMEOUT_MINUTES: u32 = 180;
 
 /// The builds' artifacts (`macro-appimage-*`, `macro-dmg-*`). The publish jobs
 /// attach every artifact they download to the release, so they download only
@@ -81,7 +109,17 @@ pub fn build_desktop_on_tag() -> Workflow {
         )
         .add_job(
             build_dmg_on_tag::BUILD_DMG,
-            build_dmg_on_tag::build_dmg_job(resolved_ref()).add_needs(RESOLVE_REF),
+            build_dmg_on_tag::build_dmg_job(resolved_ref(), MacArch::Aarch64)
+                .add_needs(RESOLVE_REF),
+        )
+        .add_job(
+            build_dmg_on_tag::BUILD_DMG_X86_64,
+            build_dmg_on_tag::build_dmg_job(resolved_ref(), MacArch::X86_64)
+                .add_needs(RESOLVE_REF)
+                .cond(RESOLVE_REF.outputs.intel.read().is_set())
+                // The installers wait for this job, so a stuck Intel build
+                // must not hold Apple silicon and Linux for GitHub's six hours.
+                .timeout_minutes(INTEL_DMG_TIMEOUT_MINUTES),
         )
         // The installers users download must reach the release on their own.
         // Updater signing needs Doppler, Apple, and the stable channel; none of
@@ -96,7 +134,15 @@ pub fn build_desktop_on_tag() -> Workflow {
             .name("Publish desktop installers")
             .add_needs(RESOLVE_REF)
             .add_needs(build_appimage_on_tag::BUILD_APPIMAGE)
-            .add_needs(build_dmg_on_tag::BUILD_DMG),
+            .add_needs(build_dmg_on_tag::BUILD_DMG)
+            // Waits for the Intel build so its installer lands too, but
+            // publishes without it when it fails or is skipped.
+            .add_needs(build_dmg_on_tag::BUILD_DMG_X86_64)
+            .cond(all_succeeded([
+                RESOLVE_REF.result(),
+                build_appimage_on_tag::BUILD_APPIMAGE.result(),
+                build_dmg_on_tag::BUILD_DMG.result(),
+            ])),
         )
         // The signed DMG must launch and pass QA before any installed app is
         // offered it. Installers still reach the versioned release without it.
@@ -115,6 +161,16 @@ pub fn build_desktop_on_tag() -> Workflow {
         )
 }
 
+/// `!cancelled()` and every one of these `needs.<job>.result` is `success`.
+/// A job after one that tolerates a failed or skipped need must say so: the
+/// default `success()` skips it whenever any earlier job in the chain did not
+/// succeed.
+fn all_succeeded(results: impl IntoIterator<Item = Expr<Str>>) -> Expr<Bool> {
+    results
+        .into_iter()
+        .fold(!cancelled(), |all, result| all.and(result.eq("success")))
+}
+
 fn publish_desktop_job() -> Job {
     Job::default()
         .name("Sign and publish desktop updates")
@@ -124,7 +180,14 @@ fn publish_desktop_job() -> Job {
         // A wedged signer must not hold the channel lock, and must not sit long
         // enough for the runner to be reaped with its logs still unuploaded.
         .timeout_minutes(20u32)
-        .cond(resolved_ref().starts_with("refs/tags/v"))
+        .cond(
+            // The QA of the Apple silicon DMG gates promotion; Intel has none.
+            all_succeeded([
+                PUBLISH_INSTALLERS.result(),
+                desktop_qa_macos::QA_RELEASE.result(),
+            ])
+            .and(resolved_ref().starts_with("refs/tags/v")),
+        )
         .permissions(Permissions {
             contents: Some(Level::Write),
             ..Default::default()
@@ -199,7 +262,21 @@ fn resolve_ref() -> Job {
             RESOLVE_REF.outputs.git_ref.name(),
             RESOLVE.outputs.git_ref.read(),
         )
+        .add_output(
+            RESOLVE_REF.outputs.intel.name(),
+            DECIDE_INTEL.outputs.intel.read(),
+        )
         .add_step(resolve_ref_step())
+        .add_step(decide_intel_step())
+}
+
+fn decide_intel_step() -> Step<Run> {
+    Step::new("Decide Intel Mac build")
+        .run(include_str!("scripts/decide_intel_desktop.sh"))
+        .id(DECIDE_INTEL.id())
+        .shell("bash")
+        .add_env(("BUILD_REF", RESOLVE.outputs.git_ref.read()))
+        .add_env(("GH_TOKEN", github().token()))
 }
 
 fn resolve_ref_step() -> Step<Run> {

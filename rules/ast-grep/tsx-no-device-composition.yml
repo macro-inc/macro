@@ -23,6 +23,7 @@ ignores:
   # A mobile view may branch on isMobile() / mobile: for phone versus tablet.
   - apps/web/src/**/views/mobile/**
   # Entries: the one device switch of each split view.
+  - apps/web/src/features/agent-screen/route-views.tsx
   - apps/web/src/features/agents-view/model-selector.tsx
   - apps/web/src/features/block-agent/component/Block.tsx
   - apps/web/src/features/block-ai/ai-block.tsx
@@ -235,7 +236,6 @@ ignores:
   - apps/web/src/features/tasks-view/components/TasksSidebar.tsx
   - apps/web/src/features/tasks-view/components/task-list/TaskList.tsx
   - apps/web/src/features/tasks-view/components/task-list/TaskListEntity.tsx
-  - apps/web/src/features/tutorial/InteractiveOnboardingModal.tsx
   - apps/web/src/features/universal-input/views/universal-composer.tsx
   - apps/web/src/features/whatsapp-linked/components/chat-list.tsx
   - apps/web/src/features/whatsapp-linked/views/whatsapp-page.tsx

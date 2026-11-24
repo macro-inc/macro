@@ -258,6 +258,7 @@ pub(super) async fn email_search(
             recipients: filters.recipients.clone(),
             link_ids: filters.link_ids.clone(),
             exclude_link_ids: disconnecting,
+            label_link_ids: links.iter().map(|link| link.id.to_string()).collect(),
             include_labels: filters.include_labels.clone(),
             exclude_labels: filters.exclude_labels.clone(),
             importance: filters.importance,
