@@ -20,6 +20,16 @@ come from the routines list (Quick Access `routine` bucket), not the search
 service, and open the routine in the Agents workspace. They stay out of the
 empty recency list and out of Home, Drive and Tasks searches.
 
+Database rows are found by the search service in a typed `Ctrl+K` **All** or
+**Files** query while `enable-database-row-search` is on (local stacks have it
+on): after a short pause in typing the menu asks for rows only and lists each
+after the other results as its title, its matching passage and `Database /
+Table`. Enter reveals the row in its database (its record panel when no open
+view lists it); Shift+Enter opens it in a new split. A row matches by its title
+and its text, link, select and tag cells, never by the name of a linked row or
+item. The AI search tools list rows the same way. The Search page does not list
+rows yet.
+
 Desktop filter chips use one compact control size for values, match mode, and
 clear actions. Labels and controls stay vertically centered inside a frame that
 grows to fit them, rather than clipping taller segments.
