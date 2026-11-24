@@ -5,9 +5,6 @@ import {
 import type { UnifiedNotification } from '@notifications/types';
 import { match } from 'ts-pattern';
 
-/** Which stacks the gutter lists: everything not done, or only the unread. */
-export type NotificationListView = 'not_done' | 'unread';
-
 /**
  * What a stack is about: new top-level messages, one thread's replies, or a
  * top-level message that mentions the viewer.
@@ -15,9 +12,7 @@ export type NotificationListView = 'not_done' | 'unread';
 export type ChannelStackKind = 'messages' | 'thread' | 'mention';
 
 /**
- * The message a stack's check sits beside: its newest message. A reply names
- * its thread, which also holds a thread stack's check while the reply is not
- * on screen.
+ * The message a stack opens at: its newest message. A reply names its thread.
  */
 export type StackAnchor = { messageId: string; threadId?: string };
 
@@ -42,14 +37,6 @@ export type ChannelStack = {
   anchor: StackAnchor;
   /** The newest notification's creation time. */
   latestAt: string;
-};
-
-/** The stacks whose checks sit on one top-level message or its replies. */
-export type ThreadStacks = {
-  /** Checks beside the top-level message itself. */
-  root: ChannelStack[];
-  /** Checks beside a reply, by reply id. */
-  replies: ReadonlyMap<string, ChannelStack[]>;
 };
 
 /** Where a notification about a channel message points. */
@@ -87,9 +74,9 @@ function distinctSenders(notifications: readonly UnifiedNotification[]) {
 }
 
 /**
- * A thread's check sits beside its newest notified reply. A thread stack can
- * also hold its top-level message (a root send or mention absorbed into the
- * thread), whose check then sits on the top-level message.
+ * A thread stack opens at its newest notified reply. It can also hold its
+ * top-level message (a root send or mention absorbed into the thread), which
+ * it then opens at.
  */
 function threadAnchor(
   threadId: string,
@@ -184,32 +171,68 @@ function sameNotifications(a: ChannelStack, b: ChannelStack) {
   );
 }
 
-/** Index stacks by the top-level message their check sits on or under. */
-export function stacksByThread(
-  stacks: readonly ChannelStack[]
-): ReadonlyMap<string, ThreadStacks> {
-  const byThread = new Map<
-    string,
-    { root: ChannelStack[]; replies: Map<string, ChannelStack[]> }
-  >();
+/**
+ * The notifications the gutter lists, gathered since the channel opened: every
+ * notification unread at its first settled answer, then only thread replies and
+ * mentions that arrive unread. A notification stays once listed, whether or not
+ * it is read later; only marking it done takes it off.
+ */
+export type ListedNotifications = {
+  notifications: readonly UnifiedNotification[];
+  /** The first settled answer has been taken; new top-level messages stay out. */
+  closed: boolean;
+};
 
-  for (const stack of stacks) {
-    const rootId = stack.anchor.threadId ?? stack.anchor.messageId;
-    let entry = byThread.get(rootId);
-    if (!entry) {
-      entry = { root: [], replies: new Map() };
-      byThread.set(rootId, entry);
-    }
+export const NO_LISTED_NOTIFICATIONS: ListedNotifications = {
+  notifications: [],
+  closed: false,
+};
 
-    if (!stack.anchor.threadId) {
-      entry.root.push(stack);
-      continue;
-    }
+/** Notifications that join the list after the channel's first answer. */
+function joinsAfterOpen(notification: UnifiedNotification) {
+  const tag = notification.notification_metadata.tag;
+  return tag === 'channel_message_reply' || tag === 'channel_mention';
+}
 
-    const onReply = entry.replies.get(stack.anchor.messageId);
-    if (onReply) onReply.push(stack);
-    else entry.replies.set(stack.anchor.messageId, [stack]);
+/**
+ * `listed`, with the unread notifications it does not hold yet added. Before
+ * the first settled answer every unread one joins; after it, only replies and
+ * mentions. Returns `listed` itself when nothing changed.
+ */
+export function admitUnread(
+  listed: ListedNotifications,
+  unread: readonly UnifiedNotification[],
+  settled: boolean
+): ListedNotifications {
+  const known = new Set(listed.notifications.map((n) => n.id));
+  const added = unread.filter(
+    (notification) =>
+      notification.state === 'unseen' &&
+      !known.has(notification.id) &&
+      (!listed.closed || joinsAfterOpen(notification))
+  );
+  const closed = listed.closed || settled;
+  if (added.length === 0 && closed === listed.closed) return listed;
+  return { notifications: [...listed.notifications, ...added], closed };
+}
+
+/**
+ * What marking listed stacks done marks: their own notifications, and every
+ * not-done notification in the channel's stacks of the same key, so the whole
+ * inbox stack leaves Home and the inbox rather than only its unread part.
+ */
+export function notificationsToMarkDone(
+  stacks: readonly ChannelStack[],
+  notDone: readonly ChannelStack[]
+): UnifiedNotification[] {
+  const keys = new Set(stacks.map((stack) => stack.key));
+  const byId = new Map<string, UnifiedNotification>();
+  const add = (notification: UnifiedNotification) => {
+    if (notification.state !== 'done') byId.set(notification.id, notification);
+  };
+  for (const stack of stacks) stack.notifications.forEach(add);
+  for (const stack of notDone) {
+    if (keys.has(stack.key)) stack.notifications.forEach(add);
   }
-
-  return byThread;
+  return [...byId.values()];
 }

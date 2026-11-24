@@ -121,6 +121,9 @@ export function createChannelUnreadNavigation(options: {
     notifications,
     /** Whether `notifications` is known, or still loading or failed. */
     notificationsStatus,
+    /** `notifications` came from the server, not only from cache. */
+    notificationsSettled: () =>
+      notificationsStatus() === 'ready' && !channelNotifications.isFetching,
     retryNotifications: () => {
       fireAndForget(
         channelNotifications.refetch(),

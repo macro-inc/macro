@@ -2,9 +2,11 @@ import type { UnifiedNotification } from '@notifications/types';
 import type { NotifEvent } from '@service-notification/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import {
+  admitUnread,
   channelStacks,
   keepUnchangedStacks,
-  stacksByThread,
+  NO_LISTED_NOTIFICATIONS,
+  notificationsToMarkDone,
 } from './channel-stacks';
 
 function notification(
@@ -136,23 +138,6 @@ describe('channelStacks', () => {
   });
 });
 
-describe('stacksByThread', () => {
-  it('puts top-level checks on their message and reply checks under their thread', () => {
-    const index = stacksByThread(
-      channelStacks([
-        reply('teo', 31, 'teo', 'm-root'),
-        mention('jonah', 34, 'jonah'),
-      ])
-    );
-
-    expect(index.get('m-root')?.root).toEqual([]);
-    expect(index.get('m-root')?.replies.get('m-teo')?.[0]?.kind).toBe('thread');
-    expect(index.get('m-jonah')?.root.map((stack) => stack.kind)).toEqual([
-      'mention',
-    ]);
-  });
-});
-
 describe('keepUnchangedStacks', () => {
   it('keeps an unchanged stack and replaces a changed one', () => {
     const before = channelStacks([
@@ -175,5 +160,87 @@ describe('keepUnchangedStacks', () => {
     expect(thread(after)).toBe(thread(before));
     expect(messages(after)).not.toBe(messages(before));
     expect(messages(after)?.notifications).toHaveLength(2);
+  });
+});
+
+const unseen = (record: UnifiedNotification): UnifiedNotification => ({
+  ...record,
+  state: 'unseen',
+});
+const ids = (records: readonly UnifiedNotification[]) =>
+  records.map((record) => record.id);
+
+describe('admitUnread', () => {
+  it('lists everything unread until the first settled answer', () => {
+    const fromCache = admitUnread(
+      NO_LISTED_NOTIFICATIONS,
+      [unseen(send('a', 1, 'ana')), send('read', 2, 'ana')],
+      false
+    );
+    const settled = admitUnread(
+      fromCache,
+      [unseen(send('a', 1, 'ana')), unseen(send('b', 3, 'leo'))],
+      true
+    );
+
+    expect(ids(fromCache.notifications)).toEqual(['a']);
+    expect(ids(settled.notifications)).toEqual(['a', 'b']);
+    expect(settled.closed).toBe(true);
+  });
+
+  it('keeps a listed notification once it is read', () => {
+    const listed = admitUnread(
+      NO_LISTED_NOTIFICATIONS,
+      [unseen(send('a', 1, 'ana'))],
+      true
+    );
+
+    expect(admitUnread(listed, [], true)).toBe(listed);
+  });
+
+  it('adds only replies and mentions that arrive after it settles', () => {
+    const listed = admitUnread(
+      NO_LISTED_NOTIFICATIONS,
+      [unseen(send('a', 1, 'ana'))],
+      true
+    );
+    const later = admitUnread(
+      listed,
+      [
+        unseen(send('a', 1, 'ana')),
+        unseen(send('new-message', 5, 'leo')),
+        unseen(reply('new-reply', 6, 'leo', 'm-a')),
+        unseen(mention('new-mention', 7, 'mara')),
+      ],
+      true
+    );
+
+    expect(ids(later.notifications)).toEqual(['a', 'new-reply', 'new-mention']);
+  });
+});
+
+describe('notificationsToMarkDone', () => {
+  it('marks the listed stack with the rest of its inbox stack, and nothing else', () => {
+    const listed = channelStacks([unseen(reply('b', 2, 'leo', 'm-root'))]);
+    const notDone = channelStacks([
+      reply('older', 1, 'ana', 'm-root'),
+      unseen(reply('b', 2, 'leo', 'm-root')),
+      reply('other-thread', 3, 'mara', 'm-other'),
+      send('message', 4, 'mara'),
+    ]);
+
+    expect(ids(notificationsToMarkDone(listed, notDone)).sort()).toEqual([
+      'b',
+      'older',
+    ]);
+  });
+
+  it('leaves out what is already done', () => {
+    const listed = channelStacks([
+      { ...reply('b', 2, 'leo', 'm-root'), state: 'done' },
+      unseen(reply('c', 3, 'leo', 'm-root')),
+    ]);
+
+    expect(ids(notificationsToMarkDone(listed, []))).toEqual(['c']);
   });
 });
