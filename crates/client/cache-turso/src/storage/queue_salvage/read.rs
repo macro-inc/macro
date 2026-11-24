@@ -284,12 +284,14 @@ fn binding_keys(row: &[Value]) -> Result<Vec<EntityKey<'static>>, TursoStorageEr
         .collect())
 }
 
+type StoredRecord = (RecordKey, Vec<u8>);
+
 /// The identity metadata of the records these keys alias, along each chain,
 /// and whether all of it could be read.
 fn aliases(
     connection: &Db,
     keys: BTreeSet<EntityKey<'static>>,
-) -> Result<(Vec<(RecordKey, Vec<u8>)>, bool), TursoStorageError> {
+) -> Result<(Vec<StoredRecord>, bool), TursoStorageError> {
     let mut seen = BTreeSet::new();
     let mut pending = keys.into_iter().collect::<Vec<_>>();
     let mut records = Vec::new();

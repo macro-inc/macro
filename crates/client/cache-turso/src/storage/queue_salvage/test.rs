@@ -77,7 +77,7 @@ fn projection(key: &str, variant: u8) -> PendingOptimisticProjection {
             profile: Profile::new(token("profile-v1")),
             partition: token("thing"),
         },
-        1 if variant % 2 == 0 => OptimisticProjectionState::Incomplete {
+        1 if variant.is_multiple_of(2) => OptimisticProjectionState::Incomplete {
             record_key,
             profile: Profile::new(token("profile-v1")),
             partition: token("thing"),
