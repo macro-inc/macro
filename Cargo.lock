@@ -18559,6 +18559,7 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "trigger_context",
  "utoipa",
  "workspace-hack",

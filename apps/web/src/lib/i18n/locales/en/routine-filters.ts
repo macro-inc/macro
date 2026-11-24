@@ -1,0 +1,31 @@
+/** A routine's event trigger filters: "+ Filter", each filter's chip, and its editor. */
+export default {
+  inbox: 'Inbox',
+  inboxDescription: 'Only mail into some of your inboxes',
+  condition: 'AI check',
+  conditionDescription: 'Only if it answers a yes/no question with yes',
+  addFilter: 'Add filter',
+  filter: 'Filter',
+  done: 'Done',
+  onlyIf: 'Only if',
+  editCondition: 'Edit condition',
+  editConditionOf: 'Edit condition: {{question}}',
+  removeCondition: 'Remove condition',
+  conditionLabel: 'Only run if AI says yes',
+  conditionHelp: 'AI checks each event with this question. A no skips the run.',
+  only: 'Only',
+  editInboxes: 'Edit inboxes',
+  watchEveryInbox: 'Watch every inbox',
+  inboxes: 'Inboxes',
+  loadingInboxes: 'Loading inboxes',
+  inboxesUnavailable: 'Your inboxes couldn’t be listed.',
+  noInboxes: 'You have no inboxes connected.',
+  sharedWithYou: 'Shared with you',
+  disconnectedInbox: 'A disconnected inbox',
+  someInboxesChecked: 'Runs only for mail into the inboxes checked.',
+  noInboxesChecked:
+    'None checked: runs for mail into every inbox, yours and those shared with you.',
+  inboxCount: { one: '{{count}} inbox', other: '{{count}} inboxes' },
+  /** Where a new-email trigger watches: the person's one inbox, or all of them. */
+  yourInboxes: { one: 'Your inbox', other: 'Your inboxes' },
+};

@@ -54,6 +54,7 @@ mod test;
 pub const MAX_FILTERS: usize = 32;
 pub const MAX_EVENTS_PER_FILTER: usize = 15;
 pub const MAX_IDS_PER_FILTER: usize = 100;
+pub const MAX_INBOXES_PER_FILTER: usize = 25;
 
 /// A routine may run on one trigger or any of several schedules and Macro events.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -141,6 +142,31 @@ impl From<RoutineTriggers> for Vec<RoutineTrigger> {
 }
 
 impl ActionTrigger {
+    /// This trigger for someone other than its owner: inboxes are the
+    /// owner's own, so it watches every inbox of whoever it is for.
+    pub fn without_inboxes(&self) -> Self {
+        match self {
+            Self::Events { filters } => Self::Events {
+                filters: filters.without_inboxes(),
+            },
+            Self::Multiple { triggers } => Self::Multiple {
+                triggers: RoutineTriggers(
+                    triggers
+                        .0
+                        .iter()
+                        .map(|trigger| match trigger {
+                            RoutineTrigger::Events { filters } => RoutineTrigger::Events {
+                                filters: filters.without_inboxes(),
+                            },
+                            other => other.clone(),
+                        })
+                        .collect(),
+                ),
+            },
+            other => other.clone(),
+        }
+    }
+
     pub fn event_filters(&self) -> Option<&EventFilters> {
         match self {
             Self::Events { filters } => Some(filters),
@@ -357,6 +383,10 @@ pub enum FilterValidationError {
     PayloadMatch,
     #[error("a property selector needs task property change events that report its property")]
     PropertyEvents,
+    #[error("an inbox filter is only for email.message_received, alone in its filter")]
+    InboxEvents,
+    #[error("expected at most {max} inboxes per filter", max = MAX_INBOXES_PER_FILTER)]
+    InboxCount,
     #[error(transparent)]
     PropertyValues(#[from] PropertyValuesError),
     #[error(transparent)]
@@ -390,6 +420,11 @@ pub struct EventFilter {
     /// The task property that must have changed, and the values it must gain.
     #[serde(skip_serializing_if = "Option::is_none")]
     property: Option<PropertySelector>,
+    /// The inboxes (email link ids) whose new mail starts the routine. Absent:
+    /// every inbox the owner reads, their own and those delegated to them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Vec<String>>)]
+    inboxes: Option<Vec<Uuid>>,
     /// Yes/no question about the triggering content, e.g. "Is this email an
     /// invoice?". The routine runs only when the answer is yes.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -410,6 +445,8 @@ struct FilterInput {
     #[serde(default)]
     property: Option<PropertySelector>,
     #[serde(default)]
+    inboxes: Option<Vec<Uuid>>,
+    #[serde(default)]
     condition: Option<YesNoQuestion>,
 }
 
@@ -420,6 +457,7 @@ impl TryFrom<FilterInput> for EventFilter {
         Self::new(input.events, input.ids)?
             .with_condition(input.condition)
             .with_property(input.property)?
+            .with_inboxes(input.inboxes)?
             .with_external(input.github, input.payload)
     }
 }
@@ -453,6 +491,7 @@ impl EventFilter {
             github: None,
             payload: None,
             property: None,
+            inboxes: None,
             condition: None,
         })
     }
@@ -480,6 +519,28 @@ impl EventFilter {
             return Err(FilterValidationError::PropertyEvents);
         }
         self.property = Some(property.canonicalized()?);
+        Ok(self)
+    }
+
+    /// Narrow new mail to some of the owner's inboxes. None or empty is every
+    /// inbox. Which inboxes are the owner's is checked when the routine is saved.
+    pub fn with_inboxes(
+        mut self,
+        inboxes: Option<Vec<Uuid>>,
+    ) -> Result<Self, FilterValidationError> {
+        let Some(mut inboxes) = inboxes.filter(|inboxes| !inboxes.is_empty()) else {
+            self.inboxes = None;
+            return Ok(self);
+        };
+        if self.events != [EventName::EmailMessageReceived] {
+            return Err(FilterValidationError::InboxEvents);
+        }
+        if inboxes.len() > MAX_INBOXES_PER_FILTER {
+            return Err(FilterValidationError::InboxCount);
+        }
+        inboxes.sort_unstable();
+        inboxes.dedup();
+        self.inboxes = Some(inboxes);
         Ok(self)
     }
 
@@ -522,6 +583,11 @@ impl EventFilter {
         self.property.as_ref()
     }
 
+    /// `None` watches every inbox the owner reads.
+    pub fn inboxes(&self) -> Option<&[Uuid]> {
+        self.inboxes.as_deref()
+    }
+
     pub fn condition(&self) -> Option<&YesNoQuestion> {
         self.condition.as_ref()
     }
@@ -537,9 +603,16 @@ impl EventFilter {
                 EventSource::Entity {
                     entity_id,
                     property_change,
+                    inbox,
                     ..
                 } => {
+                    // Received mail always carries its inbox at admission. A
+                    // stored run doesn't (`run_event`): admission checked it,
+                    // and a changed filter supersedes the run by revision.
                     self.ids.as_ref().is_none_or(|ids| ids.contains(entity_id))
+                        && self.inboxes.as_ref().is_none_or(|inboxes| {
+                            inbox.is_none_or(|inbox| inboxes.contains(&inbox))
+                        })
                         && self
                             .property
                             .as_ref()
@@ -596,23 +669,54 @@ impl EventFilters {
         event.published_at() >= activated_at && self.0.iter().any(|filter| filter.accepts(event))
     }
 
+    /// Whether only the inboxes these filters pick turn `event` away: the same
+    /// filters watching every inbox would take it.
+    pub fn turn_away_only_for_inbox(
+        &self,
+        event: &EventReference,
+        activated_at: DateTime<Utc>,
+    ) -> bool {
+        self.0.iter().any(|filter| filter.inboxes.is_some())
+            && !self.matches(event, activated_at)
+            && self.without_inboxes().matches(event, activated_at)
+    }
+
     pub fn has_conditions(&self) -> bool {
         self.0.iter().any(|filter| filter.condition.is_some())
     }
 
+    /// The same filters watching every inbox. Two that differed only in their
+    /// inboxes become one.
+    fn without_inboxes(&self) -> Self {
+        let mut filters: Vec<EventFilter> = self
+            .0
+            .iter()
+            .cloned()
+            .map(|mut filter| {
+                filter.inboxes = None;
+                filter
+            })
+            .collect();
+        filters.sort_unstable();
+        filters.dedup();
+        Self(filters)
+    }
+
     /// What a run of this routine keeps of `event`: only routines that test
-    /// property changes keep them.
+    /// property changes keep them, so older replicas can still read every
+    /// other run. No run keeps the inbox, so every replica can read every run.
     pub fn run_event(&self, event: &EventReference) -> EventReference {
         let mut kept = event.clone();
-        let tests_properties = self.0.iter().any(|filter| filter.property.is_some());
-        if let (
-            false,
-            EventSource::Entity {
-                property_change, ..
-            },
-        ) = (tests_properties, &mut kept.source)
+        if let EventSource::Entity {
+            property_change,
+            inbox,
+            ..
+        } = &mut kept.source
         {
-            *property_change = None;
+            if !self.0.iter().any(|filter| filter.property.is_some()) {
+                *property_change = None;
+            }
+            *inbox = None;
         }
         kept
     }
@@ -713,6 +817,9 @@ pub enum EventSource {
         message_id: Option<Uuid>,
         change_source: Option<PropertyChangeSource>,
         property_change: Option<PropertyChange>,
+        /// The inbox (email link) received mail arrived in. Admission only:
+        /// a stored event never keeps it, so a run read back has none.
+        inbox: Option<Uuid>,
     },
     /// A delivery from Macro's GitHub App. Boxed: it carries its payload.
     Github(Box<GithubWebhookReceived>),
@@ -756,6 +863,7 @@ impl TryFrom<EventReferenceInput> for EventReference {
                     message_id,
                     change_source: input.change_source,
                     property_change: input.property_change,
+                    inbox: None,
                 }
             }
             (None, Some(delivery))
@@ -787,11 +895,13 @@ impl From<EventReference> for EventReferenceInput {
             property_change: None,
         };
         match event.source {
+            // The inbox is only for admission: a stored event never keeps it.
             EventSource::Entity {
                 entity_id,
                 message_id,
                 change_source,
                 property_change,
+                inbox: _,
             } => {
                 input.entity_id = Some(entity_id);
                 input.message_id = Some(message_id);
@@ -971,6 +1081,7 @@ impl IncomingEvent {
         let event_id = EventId::try_from(self.event_id)?;
         let mut change_source = None;
         let mut property_change = None;
+        let mut inbox = None;
         let (event_name, entity_id, message_id) = match &self.payload {
             EventPayload::Document(event) => {
                 let (name, id) = match event {
@@ -1073,6 +1184,7 @@ impl IncomingEvent {
                 if data.is_spam_or_trash {
                     return Err(EventRejection::UnsupportedEvent);
                 }
+                inbox = Some(data.link_id);
                 (
                     EventName::EmailMessageReceived,
                     data.thread_id,
@@ -1114,6 +1226,7 @@ impl IncomingEvent {
                 message_id,
                 change_source,
                 property_change,
+                inbox,
             },
         })
     }

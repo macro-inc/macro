@@ -4,6 +4,7 @@ import type {
   RoutineKnob,
   ScheduledActionResponse,
 } from '../generated/scheduled-action/types.gen';
+import { Link } from '../src/entities/email/link';
 import type { RoutineKnobOptions } from '../src/entities/routines/routine';
 import { Macro } from '../src/macro';
 import { MacroApiError } from '../src/utils';
@@ -154,6 +155,51 @@ test('routine creation sends code and Ask AI steps that write as the user', asyn
     },
   ]);
 });
+
+test('an email trigger sends and reads the inboxes it watches as handles', async () => {
+  const bodies: ScheduledActionResponse[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      const body = (await request.json()) as ScheduledActionResponse;
+      bodies.push(body);
+      return Response.json(
+        { ...record, trigger: body.trigger },
+        { status: 201 },
+      );
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const inbox = macro.email.link('inbox-1');
+  const routine = await macro.routines.create({
+    name: 'Helpdesk',
+    trigger: {
+      type: 'events',
+      filters: [{ events: ['email.message_received'], inboxes: [inbox] }],
+    },
+    prompt: 'Triage',
+    userPrompt: 'Triage helpdesk mail',
+  });
+  expect(bodies).toMatchObject([
+    {
+      trigger: {
+        type: 'events',
+        filters: [{ events: ['email.message_received'], inboxes: ['inbox-1'] }],
+      },
+    },
+  ]);
+  // Read back, a picked inbox is a handle again, not its id.
+  const trigger = await routine.trigger();
+  if (trigger.type !== 'events') throw new Error(`read ${trigger.type}`);
+  const [read] = trigger.filters[0]?.inboxes ?? [];
+  expect(read).toBeInstanceOf(Link);
+  expect(read?.id).toBe('inbox-1');
+});
+
 test('an entity knob takes the handle of the item it names, a task included, and sends its id', async () => {
   const bodies: unknown[] = [];
   globalThis.fetch = Object.assign(

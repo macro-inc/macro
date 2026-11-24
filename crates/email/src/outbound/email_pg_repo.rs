@@ -319,6 +319,14 @@ impl EmailRepo for EmailPgRepo {
         link::inboxes_for_macro_id(&self.pool, macro_id).await
     }
 
+    async fn inbox_ids_among(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        ids: &[Uuid],
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        link::inbox_ids_among(&self.pool, macro_id, ids).await
+    }
+
     async fn thread_by_id(&self, thread_id: Uuid) -> Result<Option<ThreadRow>, Self::Err> {
         thread::thread_by_id(&self.pool, thread_id).await
     }

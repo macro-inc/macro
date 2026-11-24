@@ -58,8 +58,9 @@ use scheduled_action::{
         event_run_worker::run_event_worker,
     },
     outbound::{
-        inprocess_executor::InProcessExecutor, pg_event_run_repo::PgEventRunRepo,
-        pg_inbox_delegates::PgInboxDelegates, pg_scheduled_action_repo::PgScheduledActionRepo,
+        email_owner_inboxes::EmailOwnerInboxes, inprocess_executor::InProcessExecutor,
+        pg_event_run_repo::PgEventRunRepo, pg_inbox_delegates::PgInboxDelegates,
+        pg_scheduled_action_repo::PgScheduledActionRepo,
     },
 };
 use serde_json::{Value, json};
@@ -289,7 +290,10 @@ impl Harness {
         )));
         let service =
             ScheduledActionServiceImpl::new(actions.clone(), executor.clone(), tx, access.clone())
-                .with_event_routines(Everyone);
+                .with_event_routines(Everyone)
+                .with_owner_inboxes(Arc::new(EmailOwnerInboxes(
+                    email::outbound::EmailPgRepo::new(pool.clone()),
+                )));
         let app = scheduled_action_router(ScheduledActionRouterState {
             service: Arc::new(service),
             access_service: access,
@@ -896,6 +900,65 @@ async fn mail_into_an_inbox_delegated_to_the_owner_runs_their_email_routine(pool
     .await;
     // The team inbox account's other inbox isn't delegated, so its mail stays that account's.
     h.ingest(&received(TEAM_INBOX, private), 0).await;
+    assert_eq!(h.count().await, 1);
+    let calls = h.runner.calls.lock().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(
+        calls[0].1.as_ref().map(EventReference::event_id),
+        Some(EventId::try_from(mail.event_id).unwrap())
+    );
+}
+
+/// `USER`'s own inbox.
+async fn own_inbox(pool: &PgPool) -> Uuid {
+    let link = generate_uuid_v7();
+    sqlx::query!(
+        "INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+         VALUES ($1, $2, $2, 'user@macro.com', 'GMAIL')",
+        link,
+        USER,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    link
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_email_routine_filtered_to_one_inbox_runs_only_for_mail_into_it(pool: PgPool) {
+    let h = Harness::new(pool, FakeRunner::default()).await;
+    let (shared, private) = delegated_team_inbox(&h.pool).await;
+    let own = own_inbox(&h.pool).await;
+    let routine = |inboxes: Vec<Uuid>| {
+        json!({"name":"team inbox only", "kind":"Agent",
+            "trigger":{"type":"events", "filters":[
+                {"events":["email.message_received"], "inboxes": inboxes}]},
+            "task":{"model":"model", "prompt":"instructions", "user_prompt":"task"}, "enabled":true})
+    };
+
+    // An inbox that isn't the owner's, nor shared with them, can't be picked.
+    let (status, refused) = request(
+        &h.app,
+        "POST",
+        "/scheduled-actions",
+        routine(vec![shared, private]),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{refused}");
+    let routine = h.create(routine(vec![shared])).await;
+    assert_eq!(routine["trigger"]["filters"][0]["inboxes"], json!([shared]));
+
+    // Mail into the owner's own inbox doesn't start it; mail into the team inbox does.
+    h.ingest(&received(USER, own), 0).await;
+    let mail = received(TEAM_INBOX, shared);
+    h.ingest(&mail, 1).await;
+    h.dispatch_head().await;
+    h.assert_terminal(
+        key(action_id(&routine), &mail),
+        EventRunOutcome::Succeeded,
+        true,
+    )
+    .await;
     assert_eq!(h.count().await, 1);
     let calls = h.runner.calls.lock().unwrap();
     assert_eq!(calls.len(), 1);

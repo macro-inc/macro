@@ -145,7 +145,7 @@ async fn test_inboxes_for_macro_id_includes_own_and_delegated(
     );
 
     let detailed_emails = repo
-        .user_inbox_details(macro_id)
+        .user_inbox_details(macro_id.clone())
         .await?
         .into_iter()
         .map(|inbox| inbox.email_address.0.as_ref().to_owned())
@@ -155,6 +155,24 @@ async fn test_inboxes_for_macro_id_includes_own_and_delegated(
         emails.into_iter().map(str::to_owned).collect(),
         "enriched inbox details must preserve owned and delegated scoping"
     );
+
+    // Asked about some ids, it keeps those in the same set, without listing it.
+    let own = Uuid::parse_str("a1000000-0000-0000-0000-000000000001")?;
+    let delegated = Uuid::parse_str("5e000000-0000-0000-0000-000000000003")?;
+    let asked = [
+        own,
+        delegated,
+        Uuid::parse_str("5f000000-0000-0000-0000-000000000005")?, // the child's, not delegated
+        Uuid::parse_str("b0000000-0000-0000-0000-000000000004")?, // unrelated
+        Uuid::parse_str("d0000000-0000-0000-0000-00000000000d")?, // no such inbox
+    ];
+    let among: std::collections::HashSet<Uuid> = repo
+        .inbox_ids_among(macro_id.clone(), &asked)
+        .await?
+        .into_iter()
+        .collect();
+    assert_eq!(among, [own, delegated].into_iter().collect());
+    assert!(repo.inbox_ids_among(macro_id, &[]).await?.is_empty());
 
     Ok(())
 }
