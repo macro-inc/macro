@@ -10,7 +10,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { SQL } from 'bun';
 
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
-import { type Persona, type Variant, ownerEmail, recentMessages, scenario, scenarioName, windowMessages } from './personas';
+import { type Persona, type Variant, ownerEmail, recentMessages, scenario, scenarioName, sentMessages, windowMessages } from './personas';
 import { clearInbox, writeInbox } from './stub';
 import type { WorkList } from './finding';
 
@@ -250,22 +250,53 @@ export function unescapeMarkdown(text: string): string {
 }
 
 /**
+ * `text` with the links a Markdown round trip makes of a bare address,
+ * domain or URL undone: `[x](mailto:x)` and `[x](x)` read as `x`, and so
+ * does a link element (`<m-link>{"url":…,"text":"x"}</m-link>`) whose
+ * target is `x` spelled as a link (`x`, `https://x`, `mailto:x`). A link
+ * whose text isn't its target was written as one and stays, an element as
+ * the Markdown link it was written as. A quote the round trip unescaped
+ * leaves the list no longer JSON, which reads as the list's error.
+ */
+export function unlinkMarkdown(text: string): string {
+  return text
+    .replace(/<m-link>(\{[^<>]*?\})<\/m-link>/g, (element, body: string) => {
+      try {
+        const link = JSON.parse(body) as { url?: unknown; text?: unknown };
+        if (typeof link.text !== 'string' || typeof link.url !== 'string') return element;
+        // A text with a scheme of its own is a URL, linked as written; any other is an address or a
+        // host (`mill.example:8443/po` has a port, not a scheme), given a slash only where it is bare:
+        // no path, query or fragment.
+        const t = link.text;
+        const hosts = /[/?#]/.test(t) ? [t] : [t, `${t}/`];
+        const spelled = /^([a-z][a-z0-9+.-]*:\/\/|(mailto|tel):)/i.test(t) ? [t] : [t, ...hosts.flatMap((host) => [`https://${host}`, `http://${host}`]), `mailto:${t}`];
+        return spelled.includes(link.url) ? t : `[${t}](${link.url})`;
+      } catch {
+        return element;
+      }
+    })
+    .replace(/\[([^[\]\n]+)\]\((?:mailto:)?([^)\s]+)\)/g, (link, label: string, target: string) => (label === target ? label : link));
+}
+
+/**
  * The work list one brief carried, if it carried one. The brief starts a
  * line with `WORK_LIST_MARK`, outside any `<untrusted>` block, and the list's
  * block follows that line. The mark inside a block is mail (a subject, say),
  * and inside a line it is quoted (a dismissed routine's name): neither is the
- * list.
+ * list. The block holds the list in a fenced `json` block, which the
+ * harness's Markdown round trip leaves as written, or (in briefs before the
+ * fence) bare, with the round trip's escapes to undo.
  */
 function listIn(row: TranscriptRow): WorkList | undefined {
   for (const text of strings(row.content?.params)) {
     const spans = untrustedSpans(text);
     const at = [...text.matchAll(LINE_MARK)].map((m) => m.index + m[1].length).find((start) => !spans.some(([from, to]) => start > from && start < to));
     if (at === undefined) continue;
-    const block = /^[^\n]*\n<untrusted>\n([\s\S]*?)\n<\/untrusted>/.exec(text.slice(at));
+    const block = /^[^\n]*\n<untrusted>\n(?:\n```json\n([\s\S]*?)\n```\n\n|([\s\S]*?)\n)<\/untrusted>/.exec(text.slice(at));
     if (!block) throw new Error(`a brief says it carries a work list but has no <untrusted> block after it`);
     let list: unknown;
     try {
-      list = JSON.parse(unescapeMarkdown(block[1]));
+      list = JSON.parse(block[1] ?? unlinkMarkdown(unescapeMarkdown(block[2])));
     } catch (error) {
       throw new Error(`a brief's work list isn't JSON: ${String(error).slice(0, 200)}`);
     }
@@ -482,7 +513,7 @@ export async function generate(
   const transcript = new Map<string, unknown>();
   let asked: number | undefined;
   try {
-    writeInbox(at.instance, email, recentMessages(persona, variant, now), windowMessages(persona, variant, now));
+    writeInbox(at.instance, email, recentMessages(persona, variant, now), windowMessages(persona, variant, now), sentMessages(persona, variant, now));
     const token = await login(at, email);
     const route = trigger === 'onboarding' ? 'generate' : 'regenerate';
     asked = Date.now();

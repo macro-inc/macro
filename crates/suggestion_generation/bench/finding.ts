@@ -10,7 +10,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Stack } from '../../scheduled_action/bench/stack';
-import { type MailStream, type Persona, WINDOW_DAYS, asWritten, truthAt, windowMessages } from './personas';
+import { type MailStream, type Persona, SENT_TEXTS, WINDOW_DAYS, asWritten, sentMessages, truthAt, windowMessages } from './personas';
 import { author, obj, str, strs, write } from './heldout';
 import { CACHE, type Cost, costOf, userId } from './run';
 import { MIN_HELDOUT_PEOPLE, quantile } from './score';
@@ -22,6 +22,9 @@ export const FIND_PROMPT = join(import.meta.dir, 'find.md');
 
 const int = { type: 'integer' };
 
+/** What a person does with a stream, as the finding call answers it (`work.rs` `Does`); any other word reads as unknown. */
+const DOES_WORDS = ['answers', 'forwards', 'files', 'leaves', 'sends', 'unknown'];
+
 /** What the finding step answers. */
 export type FoundStream = {
   name: string;
@@ -30,6 +33,10 @@ export type FoundStream = {
   cadence: string;
   what: string;
   action: string;
+  /** What the person does with it (`work.rs` `Does`); lists found before sent mail was read have none. */
+  does?: string;
+  to?: string[];
+  sent?: number;
   handled_by: string;
   labels: string[];
   keeps: string;
@@ -48,6 +55,9 @@ export const WORK_LIST = obj({
       cadence: str,
       what: str,
       action: str,
+      does: { type: 'string', enum: DOES_WORDS },
+      to: strs,
+      sent: int,
       handled_by: str,
       labels: strs,
       keeps: str,
@@ -82,6 +92,9 @@ export function boundedList(list: WorkList): WorkList {
         cadence: cut(stream.cadence, 120),
         what: cut(stream.what, 400),
         action: cut(stream.action, 400),
+        ...(stream.does === undefined
+          ? {}
+          : { does: DOES_WORDS.includes(stream.does) ? stream.does : 'unknown', to: (stream.to ?? []).slice(0, 5).map((to) => cut(to, 120)), sent: stream.sent ?? 0 }),
         handled_by: cut(stream.handled_by, 120),
         labels: items(stream.labels),
         keeps: cut(stream.keeps, 400),
@@ -103,12 +116,20 @@ function cut(text: string, max: number): string {
     .join('');
 }
 
-/** The month's mail as the finding call reads it (`suggestions/work.rs` `line`): one line per message, newest first, the text of the newest under its line. */
-export function mailText(persona: Persona, now: number): string {
-  const lines = windowMessages(persona, 'full', now).messages.map((message) => {
+/**
+ * The month's mail as the finding call reads it (`suggestions/work.rs`
+ * `line`): one line per message, newest first, the text of the newest under
+ * its line. With `sent`, what the person sent, each line naming whom it went
+ * to.
+ */
+export function mailText(persona: Persona, now: number, sent = false): string {
+  const messages = sent ? sentMessages(persona, 'full', now).messages : windowMessages(persona, 'full', now).messages;
+  const lines = messages.map((message) => {
     const labels = message.labels.filter((label) => !HIDDEN_LABELS.has(label)).slice(0, 5).map((label) => cut(label, 120));
-    const from = trimAsRust(message.from.name) ? `${message.from.name} <${message.from.email}>` : message.from.email;
-    const head = `${message.received_at.slice(0, 16).replace('T', ' ')} · ${cut(from, 120)} · ${cut(message.subject, 200)}${labels.length ? ` · ${labels.join(', ')}` : ''}`;
+    const from = sent
+      ? `to ${message.to.slice(0, 3).map((to) => cut(to, 120)).join(', ')}`
+      : cut(trimAsRust(message.from.name) ? `${message.from.name} <${message.from.email}>` : message.from.email, 120);
+    const head = `${message.received_at.slice(0, 16).replace('T', ' ')} · ${from} · ${cut(message.subject, 200)}${labels.length ? ` · ${labels.join(', ')}` : ''}`;
     const text = message.snippet ? trimAsRust(message.snippet) : undefined;
     return text ? `${head}\n    ${cut(text, 500)}` : head;
   });
@@ -117,10 +138,16 @@ export function mailText(persona: Persona, now: number): string {
 
 export function findPrompt(instructions: string, persona: Persona, now: number): string {
   return `${instructions}
-It is now ${new Date(now).toISOString().slice(0, 16).replace('T', ' ')} UTC. Their mail of the last ${WINDOW_DAYS} days, newest first: a line per message (when, from, subject and labels), and the text of the newest 100 under its line.
+It is now ${new Date(now).toISOString().slice(0, 16).replace('T', ' ')} UTC. The mail that reached them in the last ${WINDOW_DAYS} days, newest first: a line per message (when, from, subject and labels), and the text of the newest 100 under its line.
 
 <untrusted>
 ${mailText(persona, now)}
+</untrusted>
+
+What they sent in those days, newest first: a line per message (when, to whom, subject), and the text of the newest ${SENT_TEXTS} under its line.
+
+<untrusted>
+${mailText(persona, now, true) || '(nothing)'}
 </untrusted>`;
 }
 

@@ -132,8 +132,9 @@ scheduling runtime.
   Run the section a change touches before and after changing a brief, a
   prompt or a session's tools; `find` scores the routines work list alone.
 - `bun test crates/suggestion_generation/bench` after changing the bench's
-  persona loading, month sets and window reads, scoring, held-out output, or
-  the order and state it judges attempts in (`judging.ts`).
+  persona loading, month sets and window reads, scoring, held-out output and
+  fixed keys, the checks two sides must pass (`sides.ts`), or the order and
+  state it judges attempts in (`judging.ts`).
 
 ## Gotchas
 
