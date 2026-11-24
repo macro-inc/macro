@@ -1,3 +1,6 @@
+use super::terms::{
+    build_address_query_string, build_segment_query_string, build_text_query_string,
+};
 use super::*;
 use opensearch_query_builder::ToOpenSearchJson;
 use serde_json::json;
@@ -5,18 +8,22 @@ use serde_json::json;
 #[test]
 fn addresses_match_a_word_by_local_part_or_segment() {
     for (terms, addresses, segments) in [
-        (vec!["hello"], "hello@*", "(hello)"),
+        (vec!["hello"], "(hello | hello@*)", "(hello)"),
         (
             vec!["hello", "test"],
-            "hello@* + test@*",
+            "(hello | hello@*) + (test | test@*)",
             "(hello) + (test)",
         ),
-        (vec!["Teo"], "teo@*", "(Teo)"),
-        (vec!["mary-jane"], r"mary\-jane@*", r"(mary\-jane)"),
+        (vec!["Teo"], "(Teo | teo@*)", "(Teo)"),
+        (
+            vec!["mary-jane"],
+            r"(mary\-jane | mary\-jane@*)",
+            r"(mary\-jane)",
+        ),
     ] {
         let terms: Vec<String> = terms.into_iter().map(str::to_string).collect();
 
-        assert_eq!(build_address_query_string(&terms), addresses);
+        assert_eq!(build_address_query_string(&terms, false), addresses);
         assert_eq!(build_segment_query_string(&terms, false), segments);
     }
 }
@@ -34,8 +41,8 @@ fn addresses_match_a_phrase_or_a_dotted_term_as_one_run_of_segments() {
         let terms = [term.to_string(), "review".to_string()];
 
         assert_eq!(
-            build_address_query_string(&terms),
-            format!("{quoted} + review@*")
+            build_address_query_string(&terms, false),
+            format!("{quoted} + (review | review@*)")
         );
         assert_eq!(
             build_segment_query_string(&terms, false),
@@ -185,7 +192,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         should[0],
         json!({
             "simple_query_string": {
-                "query": "hello@* + test@*",
+                "query": "(hello | hello@*) + (test | test@*)",
                 "fields": ["sender", "reply_to", "recipients", "cc", "bcc"],
                 "default_operator": "AND"
             }
@@ -321,7 +328,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                                 "simple_query_string": {
                                     "default_operator": "AND",
                                     "fields": ["sender", "reply_to", "recipients", "cc", "bcc"],
-                                    "query": "test@*"
+                                    "query": "(test | test@*)"
                                 }
                             },
                             {
@@ -713,7 +720,7 @@ fn a_from_condition_matches_the_sender_by_name_or_address() -> anyhow::Result<()
                 "should": [
                     {
                         "simple_query_string": {
-                            "query": "ana@*",
+                            "query": "(ana | ana@*)",
                             "fields": ["sender"],
                             "default_operator": "AND"
                         }
@@ -920,10 +927,6 @@ fn a_term_of_one_word_or_an_exact_short_or_quoted_one_stays_in_the_query_string(
         (vec!["Re:"], "partial", "(Re)"),
         (vec!["c++"], "partial", "(c)"),
         (vec!["नमस्ते"], "partial", "नमस्ते*"),
-        // One token each: a Thai run, and the words of `CO₂` and `10½`.
-        (vec!["สวัสดี"], "partial", "สวัสดี*"),
-        (vec!["CO₂"], "partial", "\"CO₂\""),
-        (vec!["10½"], "partial", "\"10½\""),
     ] {
         let terms: Vec<String> = terms.into_iter().map(str::to_string).collect();
 
@@ -938,7 +941,7 @@ fn a_term_of_one_word_or_an_exact_short_or_quoted_one_stays_in_the_query_string(
 
 #[test]
 fn a_run_unicode_splits_into_words_matches_as_a_phrase_prefix() {
-    for term in ["東京都", "AT&T", "x²y", "ไทย-ลาว"] {
+    for term in ["東京都", "AT&T", "x²y", "ไทย-ลาว", "ไทย2"] {
         let terms = vec![term.to_string()];
 
         let json = terms_query(&terms, "partial", &[], &["subject"], false).to_json();
@@ -954,16 +957,14 @@ fn a_run_unicode_splits_into_words_matches_as_a_phrase_prefix() {
 #[test]
 fn a_terms_punctuation_is_never_read_as_query_syntax() {
     for (term, address, segments, text) in [
-        ("-lunch", "lunch@*", "(lunch)", "lunch*"),
-        ("--force", "force@*", "(force)", "force*"),
-        ("(Lunch", "lunch@*", "(Lunch)", "Lunch*"),
-        ("-नमस्ते", "नमस्ते@*", "(नमस्ते)", "नमस्ते*"),
-        ("-สวัสดี", "สวัสดี@*", "(สวัสดี)", "สวัสดี*"),
-        ("-", r"\-@*", r"(\-)", r"(\-)"),
-        ("a+", "a@*", "(a)", "(a)"),
-        ("lunch*", "lunch@*", "(lunch)", "lunch*"),
-        ("C♯", "c♯@*", "(C♯)", "(C♯)"),
-        ("-lunch🎉", r"\-lunch🎉@*", r"(\-lunch🎉)", r#""\-lunch🎉""#),
+        ("-lunch", "(lunch | lunch@*)", "(lunch)", "lunch*"),
+        ("--force", "(force | force@*)", "(force)", "force*"),
+        ("(Lunch", "(Lunch | lunch@*)", "(Lunch)", "Lunch*"),
+        ("-नमस्ते", "(नमस्ते | नमस्ते@*)", "(नमस्ते)", "नमस्ते*"),
+        ("-", r"(\- | \-@*)", r"(\-)", r"(\-)"),
+        ("a+", "(a | a@*)", "(a)", "(a)"),
+        ("lunch*", "(lunch | lunch@*)", "(lunch)", "lunch*"),
+        ("C♯", "(C♯ | c♯@*)", "(C♯)", "(C♯)"),
         (
             r#"-team "lunch"#,
             r#""\-team \"lunch""#,
@@ -985,7 +986,7 @@ fn a_terms_punctuation_is_never_read_as_query_syntax() {
     ] {
         let terms = [term.to_string()];
 
-        assert_eq!(build_address_query_string(&terms), address);
+        assert_eq!(build_address_query_string(&terms, false), address);
         assert_eq!(build_segment_query_string(&terms, false), segments);
         assert_eq!(build_text_query_string(&terms, "partial", false), text);
     }
@@ -998,7 +999,10 @@ fn a_terms_punctuation_is_never_read_as_query_syntax() {
     ] {
         let terms = [term.to_string()];
 
-        assert_eq!(build_address_query_string(&terms), format!("{literal}@*"));
+        assert_eq!(
+            build_address_query_string(&terms, false),
+            format!("({literal} | {literal}@*)")
+        );
         assert_eq!(
             build_segment_query_string(&terms, false),
             format!("({literal})")
@@ -1068,9 +1072,11 @@ fn a_search_of_too_many_clauses_matches_every_term_in_one_clause_per_field() -> 
         query.unwrap_or_default().to_string()
     };
 
-    // 27 cost a clause per token in the address segments and text fields each,
-    // under the limit with the two words.
-    let full = term_clauses(hyphenated(27), "partial")?;
+    // Two words cost 21 each and a hyphenated one 32, so 28 of those fit.
+    let full = term_clauses(hyphenated(28), "partial")?;
+    assert!(
+        query(&full[0]).starts_with(r"(menu | menu@*) + (ab | ab@*) + (word0\-up | word0\-up@*)")
+    );
     assert!(query(&full[1]).starts_with(r"(menu) + (ab) + (word0\-up) + "));
     assert_eq!(query(&full[2]["bool"]["must"][0]), "menu* + (ab)");
     assert_eq!(
@@ -1078,19 +1084,19 @@ fn a_search_of_too_many_clauses_matches_every_term_in_one_clause_per_field() -> 
         phrase_prefix("subject", "word0-up")
     );
 
-    let compact = term_clauses(hyphenated(34), "partial")?;
+    let compact = term_clauses(hyphenated(29), "partial")?;
     assert!(query(&compact[0]).starts_with(r"menu@* + ab@* + word0\-up@* + "));
     assert!(query(&compact[1]).starts_with(r#""menu" + "ab" + "word0\-up" + "#));
     assert!(query(&compact[2]).starts_with(r#"menu* + "ab" + "word0\-up" + "#));
 
-    let exact = term_clauses(hyphenated(34), "exact")?;
+    let exact = term_clauses(hyphenated(29), "exact")?;
     assert!(query(&exact[2]).starts_with(r#""menu" + "ab" + "word0\-up" + "#));
     Ok(())
 }
 
 #[test]
 fn text_conditions_count_toward_the_clauses_of_a_search() -> anyhow::Result<()> {
-    let subject_query = |count: usize| -> anyhow::Result<serde_json::Value> {
+    let text_clause = |count: usize| -> anyhow::Result<serde_json::Value> {
         let conditions = (0..count).map(|i| EmailTextCondition {
             fields: EmailTextFields::Any,
             text: format!("word{i}-up"),
@@ -1107,11 +1113,11 @@ fn text_conditions_count_toward_the_clauses_of_a_search() -> anyhow::Result<()> 
     };
 
     assert_eq!(
-        subject_query(1)?["bool"]["must"][0]["bool"]["should"][0],
+        text_clause(1)?["bool"]["must"][0]["bool"]["should"][0],
         phrase_prefix("subject", "follow-up")
     );
     assert_eq!(
-        subject_query(40)?["simple_query_string"]["query"],
+        text_clause(40)?["simple_query_string"]["query"],
         r#""follow\-up""#
     );
     Ok(())
@@ -1120,21 +1126,52 @@ fn text_conditions_count_toward_the_clauses_of_a_search() -> anyhow::Result<()> 
 #[test]
 fn a_term_costs_a_clause_per_token_where_it_is_not_quoted() {
     for (term, cost) in [
-        ("lunch", 16),
-        ("-lunch", 16),
-        ("สวัสดี", 16),
+        ("lunch", 10 + 5 + 6),
+        ("-lunch", 10 + 5 + 6),
         ("team lunch", 16),
         ("team\nlunch", 16),
         ("ana@probe.example", 16),
-        ("follow-up", 5 + 5 * 2 + 6 * 2),
-        ("2025-03-01", 5 + 5 * 3 + 6 * 3),
-        ("東京", 5 + 5 * 2 + 6 * 2),
-        ("🎉😀word-l", 5 + 5 * 4 + 6 * 4),
+        ("follow-up", 10 + 5 * 2 + 6 * 2),
+        ("2025-03-01", 10 + 5 * 3 + 6 * 3),
+        ("東京", 10 + 5 * 2 + 6 * 2),
+        ("🎉😀word-l", 10 + 5 * 4 + 6 * 4),
         ("probe.example/a-b", 5 + 5 + 6 * 3),
+        // A run of a script written without spaces is one token, and its
+        // digits another.
+        ("กานกก", 10 + 5 + 6),
+        ("กาน๒๕", 10 + 5 * 2 + 6 * 2),
     ] {
         assert_eq!(
             clauses(term, EMAIL_KEYWORD_FIELDS, EMAIL_TEXT_FIELDS),
             cost,
+            "{term}"
+        );
+    }
+}
+
+#[test]
+fn a_term_that_may_be_one_token_is_read_by_the_analyzer() {
+    for term in [
+        "CO₂",
+        "10½",
+        "②note",
+        "สวัสดี",
+        "ปี๒๕๖๗",
+        "฿500",
+        "500៛",
+        "第１２",
+        "٢٠٢٤-٠٣",
+        "lunch🎉",
+        "🎉🎉🎉",
+        "---",
+    ] {
+        let terms = vec![term.to_string()];
+
+        let json = terms_query(&terms, "partial", &[], &["subject"], false).to_json();
+
+        assert_eq!(
+            json["bool"]["should"][0]["bool"]["must"][0]["bool"]["should"][0],
+            json!({"match_bool_prefix": {"subject": {"query": term, "operator": "and"}}}),
             "{term}"
         );
     }

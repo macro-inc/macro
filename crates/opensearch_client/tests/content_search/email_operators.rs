@@ -180,15 +180,15 @@ fn label(labels: &[&str], tagged: bool, exclude: bool) -> EmailLabelCondition {
 }
 
 struct Case {
-    name: &'static str,
+    name: String,
     args: UnifiedEmailSearchArgs,
     match_type: &'static str,
     expected: &'static [u128],
 }
 
-fn case(name: &'static str, terms: &[&str], expected: &'static [u128]) -> Case {
+fn case(name: &str, terms: &[&str], expected: &'static [u128]) -> Case {
     Case {
-        name,
+        name: name.to_string(),
         args: UnifiedEmailSearchArgs {
             terms: terms.iter().map(|t| t.to_string()).collect(),
             user_ids: vec![VIEWER.to_string()],
@@ -439,25 +439,29 @@ static SHARED_PREFIXES: LazyLock<String> = LazyLock::new(|| {
     format!("{words} pa²")
 });
 
-fn one_token_cases() -> Vec<Case> {
-    vec![
-        case("a word and a superscript", &["pa²"], &[41]),
-        case("the same, left out", &[], &[42, 43]),
-        case("a Thai run still being typed", &["กาน"], &[41, 43]),
-    ]
-}
-
-/// A term the app reads as several words and the tokenizer as one. A phrase
-/// prefix of it costs a clause for each word that shares its prefix.
+/// A term the app reads as several words, or as a word and a symbol, and the
+/// tokenizer as one token. A phrase prefix of one token costs a clause for each
+/// word that shares its prefix.
 #[tokio::test]
 async fn a_term_of_one_token_finds_its_mail_whatever_shares_its_prefix() -> anyhow::Result<()> {
     let messages = vec![
         message_holding(41, SHARED_PREFIXES.as_str()),
         message_holding(42, "pa1 and pa2"),
-        message_holding(43, "กานกก"),
+        message_holding(43, "กานกก๒๕๖๗"),
+        message_holding(44, "第１２３回 lunch🎉"),
     ];
-    let mut cases = one_token_cases();
-    cases[1].args.text_conditions = vec![text(EmailTextFields::Any, "pa²", true)];
+    let mut cases = vec![
+        case("a word and a superscript", &["pa²"], &[41]),
+        case("a word before a currency sign", &["pa៛"], &[41]),
+        case("a word after a currency sign", &["฿pa"], &[41, 42]),
+        case("a Thai run still being typed", &["กาน"], &[41, 43]),
+        case("a Thai run and digits", &["กานกก๒๕"], &[43]),
+        case("an ideograph and full-width digits", &["第１２"], &[44]),
+        case("a word and an emoji", &["lunch🎉"], &[44]),
+    ];
+    let mut left_out = case("a word and a superscript, left out", &[], &[42, 43, 44]);
+    left_out.args.text_conditions = vec![text(EmailTextFields::Any, "pa²", true)];
+    cases.push(left_out);
     search_seeded(messages, cases).await
 }
 
@@ -471,14 +475,13 @@ static TERMS_AT_THE_CAP: LazyLock<Vec<(&'static str, Vec<String>)>> = LazyLock::
     let ideograph = |n: usize| ('一'..='龥').nth(n).unwrap_or('一');
     let emoji = |n: usize| ('😀'..='🙏').cycle().nth(n).unwrap_or('😀');
     let consonant = |n: usize| ('ก'..='ฮ').cycle().nth(n).unwrap_or('ก');
-    let shapes: [(&'static str, &dyn Fn(usize) -> String); 17] = [
+    let shapes: [(&'static str, &dyn Fn(usize) -> String); 19] = [
         ("words", &|n| format!("word{n}")),
         ("minus words", &|n| format!("-word{n}")),
         ("hyphenated words", &|n| format!("word{n}-{}", letter(n))),
-        // The most hyphenated words the full form holds beside plain ones.
-        ("words and 9 hyphenated words", &|n| match n {
-            0..41 => format!("word{n}"),
-            _ => format!("word{n}-{}", letter(n)),
+        ("words and hyphenated words", &|n| match n % 4 {
+            3 => format!("word{n}-{}", letter(n)),
+            _ => format!("word{n}"),
         }),
         ("dates", &|n| {
             format!("2025-{:02}-{:02}", n % 12 + 1, n % 28 + 1)
@@ -494,6 +497,10 @@ static TERMS_AT_THE_CAP: LazyLock<Vec<(&'static str, Vec<String>)>> = LazyLock::
             (3 * n..3 * n + 3).map(ideograph).collect()
         }),
         ("Thai runs", &|n| format!("กาน{}", consonant(n))),
+        ("Thai runs and digits", &|n| {
+            format!("กาน{}๒๕", consonant(n))
+        }),
+        ("prices in baht", &|n| format!("฿{n}00")),
         ("words with a superscript", &|n| format!("word{n}²")),
         ("forty emoji", &|n| (n..n + 40).map(emoji).collect()),
         ("a word and an emoji", &|n| format!("word{n}{}", emoji(n))),
@@ -526,51 +533,57 @@ static HOLDS_EVERY_TERM: LazyLock<String> = LazyLock::new(|| {
         .collect()
 });
 
-/// Every shape as [`TERM_CAP`] terms, with every filter a search can carry
-/// beside them, and as [`TERM_CAP`] left-out words.
+/// Term counts up to the cap. How many terms reach OpenSearch's clause limit
+/// depends on their shape, so the form that fits each changes between these.
+const TERM_COUNTS: [usize; 4] = [14, 30, 45, TERM_CAP];
+
+/// Every shape at each of [`TERM_COUNTS`], with every filter a search can
+/// carry beside the terms, and as that many left-out words.
 fn cap_cases() -> Vec<Case> {
     let mut cases = Vec::new();
-    for (name, terms) in TERMS_AT_THE_CAP.iter() {
+    for (shape, terms) in TERMS_AT_THE_CAP.iter() {
         let terms: Vec<&str> = terms.iter().map(String::as_str).collect();
         // Regexp input with no syntax in it runs up to the cap too.
-        let match_types: &[&'static str] = match *name {
-            "words" => &["partial", "exact", "regexp"],
+        let match_types: &[&'static str] = match *shape {
+            "words" | "two ideographs" => &["partial", "exact", "regexp"],
             _ => &["partial", "exact"],
         };
-        for match_type in match_types {
-            let mut found = case(name, &terms, &[31]);
-            found.args.link_ids = vec![LINK.to_string()];
-            found.args.exclude_link_ids = vec![thread(2).to_string()];
-            found.args.exclude_thread_ids = vec![thread(34).to_string()];
-            found.args.include_labels = vec!["INBOX".to_string()];
-            found.args.exclude_labels = vec!["TRASH".to_string(), "SPAM".to_string()];
-            found.args.label_conditions = vec![label(&["travel"], true, true)];
-            found.args.sender = vec![BO.1.to_string()];
-            found.args.recipients = vec![ANA.1.to_string()];
-            found.args.importance = Some(true);
-            found.args.sent_after_millis = Some(JANUARY_2025);
-            found.args.sent_before_millis = Some(NOVEMBER_2025);
-            cases.push(Case {
-                match_type,
-                ..found
-            });
+        let holds_word_1 = matches!(
+            *shape,
+            "words" | "minus words" | "words and hyphenated words" | "words with a superscript"
+        );
+        for count in TERM_COUNTS {
+            let terms = &terms[..count];
+            let name = format!("{count} {shape}");
+            for match_type in match_types {
+                let mut found = case(&name, terms, &[31]);
+                found.args.link_ids = vec![LINK.to_string()];
+                found.args.exclude_link_ids = vec![thread(2).to_string()];
+                found.args.exclude_thread_ids = vec![thread(34).to_string()];
+                found.args.include_labels = vec!["INBOX".to_string()];
+                found.args.exclude_labels = vec!["TRASH".to_string(), "SPAM".to_string()];
+                found.args.label_conditions = vec![label(&["travel"], true, true)];
+                found.args.sender = vec![BO.1.to_string()];
+                found.args.recipients = vec![ANA.1.to_string()];
+                found.args.importance = Some(true);
+                found.args.sent_after_millis = Some(JANUARY_2025);
+                found.args.sent_before_millis = Some(NOVEMBER_2025);
+                cases.push(Case {
+                    match_type,
+                    ..found
+                });
 
-            let left_out: &[u128] = match *name {
-                "words"
-                | "minus words"
-                | "words and 9 hyphenated words"
-                | "words with a superscript" => &[33],
-                _ => &[32, 33],
-            };
-            let mut without = case(name, &[], left_out);
-            without.args.text_conditions = terms
-                .iter()
-                .map(|term| text(EmailTextFields::Any, term, true))
-                .collect();
-            cases.push(Case {
-                match_type,
-                ..without
-            });
+                let left_out: &[u128] = if holds_word_1 { &[33] } else { &[32, 33] };
+                let mut without = case(&name, &[], left_out);
+                without.args.text_conditions = terms
+                    .iter()
+                    .map(|term| text(EmailTextFields::Any, term, true))
+                    .collect();
+                cases.push(Case {
+                    match_type,
+                    ..without
+                });
+            }
         }
     }
     cases
