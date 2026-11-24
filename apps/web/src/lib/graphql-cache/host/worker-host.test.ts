@@ -28,6 +28,7 @@ import {
 import { WorkerRestartedError } from '../worker/effect-worker-transport';
 import {
   CacheBootstrapExhaustedError,
+  COORDINATOR_CONNECT_ATTEMPTS,
   COORDINATOR_CONNECT_TIMEOUT_MS,
 } from '../worker/startup';
 import { CacheNavigationError } from './navigation-error';
@@ -1039,10 +1040,15 @@ describe('createWorkerCacheHost', () => {
   });
 
   it.each(['init', 'current-authority'] as const)(
-    'bounds hung %s before admitting reads or mutations',
+    'connects again when %s goes unanswered, then gives up with the database kept',
     async (kind) => {
       vi.useFakeTimers();
-      configureAdapter = (fake) => fake.ignoredKinds.add(kind);
+      localStorage.setItem('graphql-cache:scope', 'scope-1');
+      const adapters: FakePageAdapter[] = [];
+      configureAdapter = (fake) => {
+        adapters.push(fake);
+        fake.ignoredKinds.add(kind);
+      };
       const onInitializationError = vi.fn();
       const host = createWorkerCacheHost({
         scope: 'scope-1',
@@ -1061,25 +1067,87 @@ describe('createWorkerCacheHost', () => {
         },
         { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
       );
-      const readRejected = expect(read).rejects.toThrow(
-        `cache worker timeout: ${kind}`
-      );
-      const mutationRejected = expect(mutation).rejects.toThrow(
-        `cache worker timeout: ${kind}`
-      );
+      const authority = host.authority?.current();
+      const timedOut = {
+        errorCode: 'request-timeout',
+        message: `cache worker timeout: ${kind}`,
+      };
+      const readRejected = expect(read).rejects.toMatchObject(timedOut);
+      const mutationRejected = expect(mutation).rejects.toMatchObject(timedOut);
+      const authorityRejected =
+        expect(authority).rejects.toMatchObject(timedOut);
 
       await vi.advanceTimersByTimeAsync(11);
       await Promise.all([readRejected, mutationRejected]);
+      expect(onInitializationError).not.toHaveBeenCalled();
 
-      const adapter = requireAdapter();
-      expect(adapter.requests.map(({ id, kind }) => [id, kind])).toEqual([
-        [1, 'init'],
-      ]);
-      expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
-      expect(onInitializationError).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(
+        11 * (COORDINATOR_CONNECT_ATTEMPTS - 1)
+      );
+      await authorityRejected;
+      expect(adapters).toHaveLength(COORDINATOR_CONNECT_ATTEMPTS);
+      for (const each of adapters) {
+        expect(each.requests.map(({ kind }) => kind)).toEqual(['init']);
+        expect(each.dispose).toHaveBeenCalledWith({
+          graceful: false,
+          preserveDatabase: true,
+        });
+      }
+      expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining(timedOut)
+      );
+      expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
       expect(vi.getTimerCount()).toBe(0);
     }
   );
+
+  it.each(['init', 'current-authority'] as const)(
+    'starts on a new connection when %s goes unanswered once',
+    async (kind) => {
+      vi.useFakeTimers();
+      configureAdapter = (fake) => fake.ignoredKinds.add(kind);
+      const onInitializationError = vi.fn();
+      const host = createWorkerCacheHost({
+        scope: 'scope-1',
+        initializationTimeoutMs: 10,
+        onInitializationError,
+      });
+      const authority = host.authority?.current();
+      await vi.advanceTimersByTimeAsync(0);
+      const old = requireAdapter();
+      configureAdapter = () => undefined;
+      await vi.advanceTimersByTimeAsync(11);
+      await expect(authority).resolves.toMatchObject({
+        generation: TEST_AUTHORITY_GENERATION,
+      });
+      expect(requireAdapter()).not.toBe(old);
+      await expect(
+        host.readQuery({ query: 'query Read { user }' })
+      ).resolves.toEqual({ kind: 'miss' });
+      expect(onInitializationError).not.toHaveBeenCalled();
+      host.dispose();
+    }
+  );
+
+  it('asks for the authority again when a ready owner leaves it unanswered', async () => {
+    vi.useFakeTimers();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      initializationTimeoutMs: 10,
+    });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('current-authority');
+    const authority = host.authority?.current();
+    await vi.advanceTimersByTimeAsync(5);
+    adapter.ignoredKinds.delete('current-authority');
+    await vi.advanceTimersByTimeAsync(6);
+    await expect(authority).resolves.toMatchObject({
+      generation: TEST_AUTHORITY_GENERATION,
+    });
+    expect(requireAdapter()).toBe(adapter);
+    host.dispose();
+  });
 
   it.each(['current-revision', 'inspect-mutations'] as const)(
     'times out a hung %s request',

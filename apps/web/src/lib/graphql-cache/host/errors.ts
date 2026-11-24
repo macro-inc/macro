@@ -1,5 +1,7 @@
+import type { CacheRequest } from '../protocol';
+
 /** Why a host refused a request itself; a cache response's code is on the wire. */
-type CacheHostErrorCode = 'host-disposed';
+type CacheHostErrorCode = 'host-disposed' | 'request-timeout';
 
 /**
  * The page dropped this host before it answered. The database is kept, so a
@@ -11,5 +13,15 @@ export class CacheHostDisposedError extends Error {
   constructor() {
     super('cache worker host was disposed');
     this.name = 'CacheHostDisposedError';
+  }
+}
+
+/** Nobody answered in time. The database is kept. */
+export class CacheRequestTimeoutError extends Error {
+  readonly errorCode: CacheHostErrorCode = 'request-timeout';
+
+  constructor(request: CacheRequest['kind'] | 'registration') {
+    super(`cache worker timeout: ${request}`);
+    this.name = 'CacheRequestTimeoutError';
   }
 }

@@ -86,7 +86,7 @@ import {
   STARTUP_RESPONSE_GRACE_MS,
 } from '../worker/startup';
 import { unsupportedBrowserReason } from './browser-support';
-import { CacheHostDisposedError } from './errors';
+import { CacheHostDisposedError, CacheRequestTimeoutError } from './errors';
 import { CacheNavigationError } from './navigation-error';
 import { createNoopCacheHost } from './noop-host';
 import {
@@ -299,7 +299,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let initializationAttempt = 0;
   let transportGeneration = 0;
   let transportInterruption: Error | undefined;
-  let coordinatorRestarts = 0;
+  let reconnects = 0;
   let suspension: Promise<void> | undefined;
   let initializationError: Error | undefined;
   let replacementError: CacheResponseError | undefined;
@@ -720,7 +720,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
             new Promise<never>((_resolve, reject) => {
               cancelRegistration = reject;
               timer = setTimeout(
-                () => reject(new Error('cache worker timeout: registration')),
+                () => reject(new CacheRequestTimeoutError('registration')),
                 options.initializationTimeoutMs ??
                   COORDINATOR_CONNECT_TIMEOUT_MS
               );
@@ -862,7 +862,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   function failInitialization(
     error: Error,
-    stop: { preserveDatabase?: boolean } = {}
+    stop: { uncertain?: boolean; preserveDatabase?: boolean } = {}
   ): void {
     if (
       state === 'failed' ||
@@ -1136,10 +1136,31 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }
     // Bound restarts during startup just like registration retries. A completed
     // handshake resets this budget; separate later restarts can recover again.
-    if (++coordinatorRestarts >= COORDINATOR_CONNECT_ATTEMPTS) {
+    if (++reconnects >= COORDINATOR_CONNECT_ATTEMPTS) {
       stopStorageHealthSampling();
       stopForSession(error, { uncertain: true, preserveDatabase: true });
       reportFailure(error);
+      return;
+    }
+    suspendTransport(error);
+    fireAndForget(resumeTransport(), 'graphql-cache-host');
+  }
+
+  /**
+   * Nobody answered the handshake: a lost connection or message, not a fault in
+   * the database. Connects again, as often as a restarted coordinator may.
+   */
+  function reconnectUnanswered(error: CacheRequestTimeoutError): void {
+    if (state !== 'initializing') return;
+    telemetry.record({
+      name: 'graphql_cache.owner',
+      operationCategory: 'lifecycle',
+      outcome: 'error',
+      ownerEvent: 'startup-unanswered',
+      errorCode: 'timeout',
+    });
+    if (++reconnects >= COORDINATOR_CONNECT_ATTEMPTS) {
+      failInitialization(error, { uncertain: true, preserveDatabase: true });
       return;
     }
     suspendTransport(error);
@@ -1209,9 +1230,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     if (entry.timer !== undefined) clearTimeout(entry.timer);
     entry.timer = setTimeout(() => {
       if (pending.delete(id)) {
-        const error = new Error(`cache worker timeout: ${entry.kind}`);
+        const error = new CacheRequestTimeoutError(entry.kind);
         recordRequestOutcome(entry, 'error', error);
         entry.reject(error);
+        if (isInitializationRequest(entry.kind)) reconnectUnanswered(error);
         finishGracefulDisposeIfDrained();
       }
     }, timeoutMs);
@@ -1412,7 +1434,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           return;
         state = 'ready';
         initialization = undefined;
-        coordinatorRestarts = 0;
+        reconnects = 0;
         if (suspended) {
           // A surviving coordinator need not send engine-replaced to a late
           // joiner. Resets while frozen are unknowable, so conservatively
@@ -1452,7 +1474,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           failInitialization(restarted, { preserveDatabase: true });
           throw restarted;
         }
-        failInitialization(initializationFailure);
+        failInitialization(initializationFailure, {
+          preserveDatabase:
+            initializationFailure instanceof CacheRequestTimeoutError,
+        });
         throw initializationFailure;
       }
     );
@@ -1542,7 +1567,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
   /**
    * Answers once there is an owner to ask, however many are lost or however
-   * often the page is suspended meanwhile: a page waits on it to start.
+   * often the page is suspended or an owner does not answer: a page waits on it
+   * to start, and its host says if that ends.
    */
   async function currentAuthority(): Promise<CacheAuthority> {
     for (;;) {
@@ -1550,7 +1576,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         return await askAuthority();
       } catch (error) {
         const interrupted =
-          isOwnerEpochLoss(error) || error instanceof CacheNavigationError;
+          isOwnerEpochLoss(error) ||
+          error instanceof CacheNavigationError ||
+          error instanceof CacheRequestTimeoutError;
         if (!interrupted || !isServing()) throw error;
         await transportReady();
       }

@@ -430,6 +430,12 @@ and scope and which page recovery retries like an untouched bootstrap, without
 the "Local cache unavailable" toast. The `graphql_cache.owner` event records
 `ownerEvent: coordinator-restarted`.
 
+A handshake nobody answers in its startup phase's time is treated like a lost
+connection: the same host connects again, within the same budget, and then ends
+with `request-timeout` and the database kept. `graphql_cache.owner` records each
+as `ownerEvent: startup-unanswered`. An authority read a ready owner leaves
+unanswered is asked again.
+
 Protocol v6 separates startup into asset loading, taking the database owner
 lock, and database opening. The engine loads/compiles WASM without touching OPFS
 and reports `engine-assets-ready`. It then takes the owner lock only if it is

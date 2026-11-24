@@ -110,7 +110,7 @@ describe('handover checker, on broken code', { timeout: 120_000 }, () => {
       vi.spyOn(CoordinatorCore.prototype, 'engineResponse').mockReturnValue([]);
     });
     expect(await newViolations(['hide'])).toContain(
-      'S2:host retired on Error:untyped:cache worker timeout: init [no fault]'
+      'S2:host retired on CacheRequestTimeoutError:request-timeout [no fault]'
     );
   });
 });

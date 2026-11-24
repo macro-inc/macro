@@ -23,9 +23,6 @@ const LOCK_TIMEOUT =
   'A coordinator that cannot get the database lock within its retries turns the cache off in its tabs until reload.';
 const FILES_BUSY =
   "A coordinator whose database files another context keeps open past the engine's wait turns the cache off in its tabs.";
-const STARTUP_TIMEOUT =
-  'A startup request that outlives its timer drops a host that could still start, and recovery calls the timeout unrecoverable and stops until reload.';
-const UNCODED_TIMEOUT = 'A request that times out is refused without a code.';
 const DRAIN_UNBOUNDED =
   'A frozen owner never finishes its drain, and nothing bounds how long the handover waits for it.';
 const OPEN_ATTEMPTS =
@@ -50,16 +47,12 @@ const STOPPED =
   'L1:cache not back (recovery-required, stopped unrecoverable, probe read not made)';
 const UNSERVED = 'L2:no active engine (waiting-for-tab)';
 const UNSTARTED = 'L2:no active engine (no coordinator)';
-const PARKED = 'L2:no active engine (parked)';
 const OPEN_FAILED =
   'Error:untyped:cache recovery failed after 5 attempts: storage error: unable to open database file';
 
 const HOLDER_KEPT_RETIRED =
   'S2:host retired on CacheUnavailableError:owner-lock-unavailable:holder-kept';
 const UNAVAILABLE = 'L1:cache not back (unavailable, probe read not made)';
-const timeout = (request: string): string =>
-  `Error:untyped:cache worker timeout: ${request}`;
-
 /** Faults that make a tab ask for the database a tab of another build has. */
 const CONTENDING: InjectedFault[] = [
   'open-newer',
@@ -101,30 +94,6 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
         'S2:host retired on CacheUnavailableError:owner-lock-unavailable:owner-lock-timeout',
       ]
     )
-  ),
-  ...known(
-    STARTUP_TIMEOUT,
-    ['late-message'],
-    [
-      `S2:host retired on ${timeout('current-authority')}`,
-      `S2:host retired on ${timeout('init')}`,
-      STOPPED,
-      UNSERVED,
-    ]
-  ),
-  ...(['hide', 'hide owner'] as const).flatMap((fault) =>
-    known(STARTUP_TIMEOUT, [fault, 'late-message'], [PARKED], { deep: true })
-  ),
-  ...known(
-    UNCODED_TIMEOUT,
-    ['late-message'],
-    [
-      `S5:read refused without a code: ${timeout('read')}`,
-      ...(['read', 'draft'] as const).flatMap((kind) => [
-        `S5:${kind} refused without a code: ${timeout('init')}`,
-        `S5:${kind} refused without a code: ${timeout('current-authority')}`,
-      ]),
-    ]
   ),
   ...known(
     DRAIN_UNBOUNDED,
