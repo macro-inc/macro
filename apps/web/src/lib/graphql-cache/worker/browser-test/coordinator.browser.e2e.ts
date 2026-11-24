@@ -256,6 +256,65 @@ test('a suspended owner resumes without replacement or cache loss', async ({
   ).toEqual(before);
 });
 
+test('an owner page that dies mid-write leaves every accepted write queued', async ({
+  context,
+  page,
+}, testInfo) => {
+  const path = `${harnessPath(testInfo.project.name, 'cache-lifecycle.html')}?treatment=true&scope=${crypto.randomUUID()}`;
+  const open = async (target: typeof page): Promise<typeof page> => {
+    // The development server reloads a page whose dependencies it just bundled.
+    await expect(async () => {
+      await target.goto(path);
+      await target.evaluate(() => window.cacheLifecycleHarness.startSingle());
+    }).toPass();
+    return target;
+  };
+  const crash = async (target: typeof page): Promise<void> => {
+    const devtools = await context.newCDPSession(target);
+    // A crashed page never answers the command, so only the event is awaited.
+    const crashed = target.waitForEvent('crash');
+    devtools.send('Page.crash').catch(() => undefined);
+    await crashed;
+  };
+  let owner = await open(page);
+  for (const [round, killAfterMs] of [0, 0, 20, 60, 150].entries()) {
+    const writer = await open(await context.newPage());
+    const generation = await writer.evaluate(() =>
+      window.cacheLifecycleHarness.storageGeneration()
+    );
+    const refusals = writer.evaluate(() =>
+      window.cacheLifecycleHarness.queueWrites()
+    );
+    const accepted = () =>
+      writer.evaluate(() => window.cacheLifecycleHarness.acceptedWriteCount());
+    await expect.poll(accepted).toBeGreaterThan(3);
+    await writer.waitForTimeout(killAfterMs);
+    // The first page's process also runs the coordinator, which outlives it
+    // only when it closes. Playwright crashes pages in Chromium alone.
+    if (round === 0 || testInfo.project.name.includes('firefox'))
+      await owner.close();
+    else await crash(owner);
+    const before = await accepted();
+    await expect
+      .poll(accepted, { timeout: 20_000 })
+      .toBeGreaterThan(before + 3);
+    await writer.evaluate(() => window.cacheLifecycleHarness.stopQueueing());
+
+    // At most the one in flight, whose outcome only the dead engine knew.
+    expect([[], ['admitted-enqueue-uncertain']]).toContainEqual(await refusals);
+    const kept = await writer.evaluate(() =>
+      window.cacheLifecycleHarness.keptWrites()
+    );
+    expect(kept.lost).toEqual([]);
+    expect(
+      await writer.evaluate(() =>
+        window.cacheLifecycleHarness.storageGeneration()
+      )
+    ).toBe(generation);
+    owner = writer;
+  }
+});
+
 test('a silently terminated engine still recovers after releasing its owner lock', async ({
   page,
 }, testInfo) => {
