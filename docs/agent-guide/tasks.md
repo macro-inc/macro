@@ -462,11 +462,16 @@ above the phone dock (`timer` float region; the name opens the task, the square
 stops it), on every screen, and its count shows beside the task on its row,
 board card and pill. Stopping saves an entry and toasts "Logged 42m on …" with
 Edit; starting on another task stops and saves the first and toasts what it
-saved with Undo (discard the new timer, delete the saved entry, restart the
-first from its original start). A timer past eight hours is refused on stop:
+saved with Undo (discard the new timer, restart the first from its original
+start, then delete the entry it saved; if that delete fails, the restarted
+timer is discarded so the entry stays the one record). A timer past eight
+hours is refused on stop:
 the dialog sets when you stopped, logs all of it (up to 24 hours) or discards
-it. Timer changes are refused offline. Other sessions of the same person
-re-read on the gateway's `time_tracking_changed`.
+it. Timer changes are refused offline, and one that gets no answer (the
+request failed, so it may still have landed) re-reads the running timer before
+the next press; the change is never resent. Other sessions of the same person
+re-read on the gateway's `time_tracking_changed`, and every session re-reads
+when its live connection comes back.
 
 To test the over-limit dialog, start a timer through the API with `startedAt`
 nine hours back (the start accepts any time in the last 24 hours), then stop it

@@ -125,7 +125,14 @@ export function createRunningTimer(dependencies: RunningTimerDependencies) {
     if (busy()) return err(BUSY);
     setBusy(true);
     try {
-      return await run(ops);
+      const result = await run(ops);
+      // A write that got no answer may still have landed, and its push may be
+      // lost with it: read what the server holds before the next press, never
+      // resend the write, since a second start would stop and save the first.
+      if (result.isErr() && result.error.kind === 'failed') {
+        await query.refetch();
+      }
+      return result;
     } finally {
       setBusy(false);
     }
