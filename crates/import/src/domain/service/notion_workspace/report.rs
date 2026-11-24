@@ -343,8 +343,9 @@ pub(in crate::domain::service) fn report(
     report.already_imported_by = importers;
     report.details = details.map(details::Details::finish);
     // A settled run can still carry the completion summary from an older writer.
-    if report.status == Some(RunStatus::Completed)
-        && let Some(error) = report.error.as_deref()
+    if run.is_some_and(|run| {
+        run.source != ImportSource::Hubspot && run.status == RunStatus::Completed
+    }) && let Some(error) = report.error.as_deref()
         && let Some((count, summary)) = error.split_once(' ')
         && let Ok(count) = count.parse::<usize>()
         && (error == partial_write_error(count)
@@ -359,6 +360,8 @@ pub(in crate::domain::service) fn report(
             .is_empty()
             .then(|| partial_write_error(count));
     }
+    report.hubspot =
+        super::super::hubspot_workspace::report(review_id, current.iter().map(|(row, _)| *row));
     Ok(report)
 }
 

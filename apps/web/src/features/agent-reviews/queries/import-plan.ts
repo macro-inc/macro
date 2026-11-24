@@ -55,7 +55,7 @@ export function decodePlanEntries(
   );
   return entities.flatMap((entity): ImportPlanEntry[] => {
     if (
-      !['notion', 'linear', 'jira'].includes(entity.source) ||
+      !['notion', 'linear', 'jira', 'hubspot'].includes(entity.source) ||
       entity.review_id !== reviewId
     )
       return [];
@@ -83,6 +83,10 @@ export function decodePlanEntries(
             'jira_epic',
             () => 'project' as const
           )
+          .with('hubspot_pipeline', () => 'pipeline' as const)
+          .with('hubspot_company', () => 'company' as const)
+          .with('hubspot_contact', () => 'contact' as const)
+          .with('hubspot_deal', () => 'deal' as const)
           .otherwise(() => 'page' as const),
         title: metadata.data.title,
         decision: plan.decision ?? null,
@@ -145,5 +149,14 @@ export function decodeImportProgress(
       title: item.title,
       reason: item.reason ?? '',
     })),
+    hubspot: report.hubspot
+      ? {
+          owners: report.hubspot.owners,
+          ownersMatched: report.hubspot.ownersMatched,
+          created: report.hubspot.created ?? 0,
+          linked: report.hubspot.linked ?? 0,
+          losses: report.hubspot.losses,
+        }
+      : null,
   };
 }

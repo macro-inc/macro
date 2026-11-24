@@ -1,4 +1,5 @@
 import { isMobile } from '@core/mobile/isMobile';
+import IconHubSpot from '@icon/import/hubspot.svg';
 import IconJira from '@icon/import/jira.svg';
 import IconNotion from '@icon/import/notion.svg';
 import IconLinear from '@icon/mcp-linear.svg';
@@ -55,11 +56,15 @@ function failedItemSentence(count: number) {
 }
 
 function PhaseStatus(props: {
+  source: ImportDraft['source'];
   phase: ImportReviewPhase;
   progress: ImportProgress | undefined;
 }) {
   const imported = () => props.progress?.imported ?? 0;
   const outcome = () => {
+    if (props.source === 'hubspot') {
+      return `Imported ${plural(imported(), 'object')}`;
+    }
     const confirmed = props.progress?.confirmed;
     const failures =
       props.progress?.failureCount ?? props.progress?.failures.length ?? 0;
@@ -141,7 +146,11 @@ function PhaseStatus(props: {
         ))
         .with('stopped', () => (
           <p role="status" class="text-sm text-ink">
-            Import stopped — {plural(imported(), 'imported item')}{' '}
+            Import stopped —{' '}
+            {plural(
+              imported(),
+              props.source === 'hubspot' ? 'imported object' : 'imported item'
+            )}{' '}
             {imported() === 1 ? 'stays' : 'stay'}
           </p>
         ))
@@ -321,6 +330,7 @@ function PlanContents(
             .with('notion', () => <IconNotion class="size-4" />)
             .with('linear', () => <IconLinear class="size-4" />)
             .with('jira', () => <IconJira class="size-4" />)
+            .with('hubspot', () => <IconHubSpot class="size-4" />)
             .exhaustive()}
         </span>
         <Show
@@ -385,7 +395,13 @@ function PlanContents(
       </Show>
       <Show
         when={planning()}
-        fallback={<PhaseStatus phase={props.phase} progress={props.progress} />}
+        fallback={
+          <PhaseStatus
+            source={props.source ?? 'notion'}
+            phase={props.phase}
+            progress={props.progress}
+          />
+        }
       >
         <p role="status" class="text-xs text-ink-muted">
           {props.planningStatus}
@@ -484,9 +500,11 @@ function PlanContents(
       <Show when={!details() && failures().length > 0}>
         <section aria-label="Failures" class="flex flex-col gap-1">
           <h4 class="text-xs font-medium text-ink-muted">
-            {failedItemSentence(
-              props.progress?.failureCount ?? failures().length
-            )}
+            {props.source === 'hubspot'
+              ? `${plural(failures().length, 'object')} couldn't be imported`
+              : failedItemSentence(
+                  props.progress?.failureCount ?? failures().length
+                )}
           </h4>
           <ul class="flex flex-col gap-0.5">
             <For each={failures()}>

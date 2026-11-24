@@ -18,6 +18,7 @@ mod transfer;
 mod undo;
 mod views;
 
+use models_databases::MAX_OPTION_LABEL_LEN;
 use std::collections::{HashMap, HashSet};
 
 use activity::Actor;
@@ -58,8 +59,6 @@ const FIRST_TABLE_NAME: &str = "Table 1";
 const FIRST_TABLE_TITLE_COLUMN: &str = "Name";
 /// Longest accepted database/table/column name.
 const MAX_NAME_LEN: usize = 200;
-/// Longest accepted select-option label.
-const MAX_OPTION_LABEL_LEN: usize = 200;
 /// Most rows a schema operation converts in one go.
 const MAX_CONVERTED_ROWS: usize = 200_000;
 

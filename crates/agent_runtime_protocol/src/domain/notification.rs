@@ -155,6 +155,8 @@ pub enum ImportWorkspace {
     Linear,
     /// Jira projects, epics and issues.
     Jira,
+    /// HubSpot deal pipelines, companies, contacts and deals.
+    Hubspot,
 }
 
 /// How an approved import's write ended.

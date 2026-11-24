@@ -735,6 +735,7 @@ dependencies = [
  "http-body-util",
  "image_generation",
  "import",
+ "import_hubspot",
  "import_jira",
  "import_linear",
  "import_notion",
@@ -1294,6 +1295,7 @@ dependencies = [
  "hosted_runtimes",
  "image_generation",
  "import",
+ "import_hubspot",
  "import_jira",
  "import_linear",
  "import_notion",
@@ -11498,6 +11500,7 @@ dependencies = [
  "connectors",
  "dateparser",
  "futures",
+ "import_hubspot",
  "import_notion",
  "import_tracker",
  "macro_authorization",
@@ -11524,6 +11527,26 @@ dependencies = [
  "tracing-subscriber",
  "utoipa",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "import_hubspot"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "connectors",
+ "http 1.4.0",
+ "import_tracker",
+ "macro_user_id",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
  "workspace-hack",
 ]
 
@@ -18538,6 +18561,7 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
+ "tracing-subscriber",
  "trigger_context",
  "utoipa",
  "workspace-hack",

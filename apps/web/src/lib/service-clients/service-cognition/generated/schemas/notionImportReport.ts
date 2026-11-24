@@ -8,6 +8,7 @@ import type { NotionImporter } from './notionImporter';
 import type { NotionImportReportConfirmed } from './notionImportReportConfirmed';
 import type { NotionImportReportDetails } from './notionImportReportDetails';
 import type { NotionImportReportError } from './notionImportReportError';
+import type { NotionImportReportHubspot } from './notionImportReportHubspot';
 import type { NotionImportReportReviewId } from './notionImportReportReviewId';
 import type { NotionImportReportScanned } from './notionImportReportScanned';
 import type { NotionImportReportStatus } from './notionImportReportStatus';
@@ -74,6 +75,7 @@ planning is still `running`.
   hand: number;
   /** Objects that need handling by hand, with reasons. */
   handItems?: NotionReportItem[];
+  hubspot?: NotionImportReportHubspot;
   /**
    * Plan objects finished so far, or confirmed new copies once completed.
    * @minimum 0

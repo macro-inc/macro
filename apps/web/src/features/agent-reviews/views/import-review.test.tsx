@@ -810,6 +810,7 @@ describe('import review', () => {
       reviewId: 'review',
       handItems: [],
       failures: [],
+      hubspot: null,
     };
     setup({ item: { status: 'completed' } });
     expect(
@@ -1044,6 +1045,70 @@ describe('import review', () => {
       screen.getByRole<HTMLButtonElement>('button', { name: 'Import 1 page' })
         .disabled
     ).toBe(false);
+  });
+
+  it("shows HubSpot owners only from this review's own plan", () => {
+    imports.entities = [entity('wiki', null, 'Wiki', { decision: 'copy' })];
+    const ready: NotionImportReport = {
+      status: 'ready',
+      reviewId: 'review',
+      onTeam: true,
+      pages: 1,
+      dataSources: 0,
+      copy: 1,
+      tasks: 0,
+      skip: 0,
+      hand: 0,
+      documents: 0,
+      databases: 0,
+      databaseRows: 0,
+      taskRows: 0,
+      imported: 0,
+      waiting: 0,
+      writing: 0,
+      hubspot: {
+        pipelines: 1,
+        companies: 1,
+        contacts: 0,
+        deals: 0,
+        owners: 2,
+        ownersMatched: 1,
+        alreadyImported: 0,
+        created: 0,
+        linked: 0,
+        losses: [],
+        customProperties: [],
+      },
+    };
+    imports.report = ready;
+    setup();
+    expect(screen.getByText('1 of 2')).toBeTruthy();
+    cleanup();
+
+    // A newer plan replaced this review's run: its owners are not this one's.
+    imports.report = { ...ready, reviewId: 'newer' };
+    setup();
+    expect(screen.queryByText('1 of 2')).toBeNull();
+  });
+
+  it('keeps the existing HubSpot outcome and retry guidance', () => {
+    const error = '1 objects could not be imported. Plan again to retry them.';
+    imports.report = {
+      ...completedReport(),
+      confirmed: undefined,
+      details: undefined,
+      imported: 1,
+      error,
+      failureCount: 1,
+      failures: [
+        { importId: 'contact', kind: 'hubspot_contact', title: 'Contact' },
+      ],
+    };
+    setup({ item: { status: 'completed', draft: { source: 'hubspot' } } });
+
+    expect(screen.getByRole('status').textContent).toBe(
+      `Imported 1 object — ${error}`
+    );
   });
 
   it("says nothing is shared when the owner isn't on a team", () => {

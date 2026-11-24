@@ -46,6 +46,7 @@ it('keeps a newly discovered external dependency excluded while refreshing its s
     waiting: 0,
     writing: 0,
     failures: [],
+    hubspot: null,
   };
   const [entries, setEntries] = createSignal<ImportPlanEntry[]>([]);
   const actions = {

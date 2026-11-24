@@ -463,6 +463,28 @@ pub struct SuggestionOrigin {
     pub surface: Option<&'static str>,
 }
 
+/// The inboxes (email link ids) an owner receives mail in: their own and those
+/// delegated to them. Object-safe, so the scheduled action service need not
+/// know the email store's type.
+#[async_trait::async_trait]
+pub trait OwnerInboxes: Send + Sync + 'static {
+    /// Which of `inboxes` `owner` receives mail in. Only those are read, so
+    /// the cost follows a routine's picks, not how many inboxes the owner has.
+    async fn among(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        inboxes: &[Uuid],
+    ) -> std::result::Result<Vec<Uuid>, OwnerInboxesError>;
+}
+
+/// Why an owner's inboxes couldn't be read. A save that hits it can be retried.
+#[derive(Debug, thiserror::Error)]
+pub enum OwnerInboxesError {
+    /// The email store failed.
+    #[error("the owner's inboxes couldn't be read: {0}")]
+    Internal(Report),
+}
+
 /// Finds what a suggestion was. Object-safe, so the scheduled action service
 /// need not know the suggestion store's type.
 #[async_trait::async_trait]

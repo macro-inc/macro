@@ -157,6 +157,9 @@ pub enum WrittenKind {
     Relation,
     /// A relation column whose rows are all linked, by property name.
     RelationLinked,
+    /// The CRM company, contact, pipeline or pipeline entry a HubSpot object
+    /// became; recorded as soon as CRM returns its id.
+    CrmRecord,
 }
 
 /// One durable identity or planning fact: `kind` for ledger row `import_id` (and, for

@@ -1068,6 +1068,77 @@ export type HttpSendChatMessageRequest = {
 };
 
 /**
+ * Something a HubSpot import cannot carry into Macro CRM, counted on the
+ * review card and in the final report.
+ */
+export type HubspotLoss = 'owner_not_member' | 'deal_without_company' | 'deal_without_pipeline' | 'extra_company_links' | 'domain_rejected' | 'unsupported_currency' | 'additional_domains' | 'company_owner' | 'merged_company' | 'merged_contact' | 'contact_without_company';
+
+/**
+ * How many records lost one thing.
+ */
+export type HubspotLossCount = {
+    /**
+     * Records affected.
+     */
+    count: number;
+    /**
+     * What was lost.
+     */
+    loss: HubspotLoss;
+};
+
+/**
+ * What a HubSpot plan holds, for the review card.
+ */
+export type HubspotReport = {
+    /**
+     * Records already in Macro from an earlier import, left as they are.
+     */
+    alreadyImported: number;
+    /**
+     * Companies.
+     */
+    companies: number;
+    /**
+     * Contacts.
+     */
+    contacts: number;
+    /**
+     * Records this import created in the CRM.
+     */
+    created?: number;
+    /**
+     * Portal-defined property names whose values stay in HubSpot.
+     */
+    customProperties: Array<string>;
+    /**
+     * Deals, each becoming an entry in its pipeline.
+     */
+    deals: number;
+    /**
+     * Records this import matched to ones already in the CRM (same domain,
+     * address or deal) or to a teammate's import, instead of creating them.
+     */
+    linked?: number;
+    /**
+     * What cannot be carried over, by kind.
+     */
+    losses: Array<HubspotLossCount>;
+    /**
+     * HubSpot owners named by the planned records.
+     */
+    owners: number;
+    /**
+     * Of those, owners matched to a team member by email.
+     */
+    ownersMatched: number;
+    /**
+     * Deal pipelines, each becoming a Macro pipeline.
+     */
+    pipelines: number;
+};
+
+/**
  * The caller's ledger rows.
  */
 export type ImportEntitiesResponse = {
@@ -1164,7 +1235,7 @@ export type ImportEntity = {
  * kinds; a Notion database and a Notion page, or a Linear project and a
  * Linear issue, are tracked and deduplicated separately.
  */
-export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel';
+export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel' | 'hubspot_pipeline' | 'hubspot_company' | 'hubspot_contact' | 'hubspot_deal';
 
 /**
  * Body for importing one Notion page.
@@ -1230,7 +1301,7 @@ export type ImportRun = {
 /**
  * External systems items can be imported from.
  */
-export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack';
+export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack' | 'hubspot';
 
 /**
  * The full import aggregate for a user: discovery runs plus visible ledger
@@ -1531,6 +1602,7 @@ export type NotionImportReport = {
      * Objects that need handling by hand, with reasons.
      */
     handItems?: Array<NotionReportItem>;
+    hubspot?: null | HubspotReport;
     /**
      * Plan objects finished so far, or confirmed new copies once completed.
      */

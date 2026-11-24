@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::service::test::{
-    TestService, USER, configuration, service, stored_actions, user,
+    TestService, USER, configuration, inbox_service, service, stored_actions, user,
 };
 use entity_access::domain::models::EntityType;
 use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
@@ -412,4 +412,70 @@ async fn templates_use_the_viewer_and_activating_users_rollout() {
     let stored = stored_actions(&actions);
     assert_eq!(stored.len(), 1);
     assert_eq!(stored[0].id, Some(id));
+}
+
+/// The publisher's inbox, which nobody else receives mail in.
+struct PublisherInbox;
+
+const PUBLISHER_INBOX: &str = "01900000-0000-7000-8000-0000000000b1";
+
+#[async_trait::async_trait]
+impl crate::domain::ports::OwnerInboxes for PublisherInbox {
+    async fn among(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        inboxes: &[Uuid],
+    ) -> std::result::Result<Vec<Uuid>, crate::domain::ports::OwnerInboxesError> {
+        let publisher_inbox: Uuid = PUBLISHER_INBOX.parse().unwrap();
+        Ok(inboxes
+            .iter()
+            .copied()
+            .filter(|inbox| owner.as_ref() == user().as_ref() && *inbox == publisher_inbox)
+            .collect())
+    }
+}
+
+#[tokio::test]
+async fn a_shared_routine_watches_every_inbox_of_whoever_activates_it() {
+    let actions = inbox_service(Arc::new(PublisherInbox));
+    let templates = templates(&actions);
+    let picking = ActionConfiguration {
+        trigger: serde_json::from_value(serde_json::json!({
+            "type": "events",
+            "filters": [{"events": ["email.message_received"], "inboxes": [PUBLISHER_INBOX]}]
+        }))
+        .unwrap(),
+        ..configuration(true)
+    };
+    let id = actions
+        .create_action(&CreationPrincipal::User(user()), picking)
+        .await
+        .unwrap()
+        .id
+        .unwrap();
+
+    let shared = templates
+        .share_template(owner_receipt(user(), id), share_input())
+        .await
+        .unwrap();
+    let every_inbox: ActionTrigger = serde_json::from_value(serde_json::json!({
+        "type": "events",
+        "filters": [{"events": ["email.message_received"]}]
+    }))
+    .unwrap();
+    assert_eq!(shared.trigger, every_inbox);
+
+    let activated = templates
+        .activate_template(
+            &CreationPrincipal::User(other_user()),
+            id,
+            ActionConfiguration {
+                trigger: shared.trigger,
+                ..configuration(true)
+            },
+            Requester::Person,
+        )
+        .await
+        .unwrap();
+    assert_eq!(activated.trigger, every_inbox);
 }

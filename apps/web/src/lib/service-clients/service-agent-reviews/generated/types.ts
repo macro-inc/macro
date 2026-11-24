@@ -238,6 +238,86 @@ export type GuestPolicy = {
 };
 
 /**
+ *  Something a HubSpot import cannot carry into Macro CRM, counted on the
+ *  review card and in the final report.
+ */
+export type HubspotLoss =
+  /**  A record's HubSpot owner is not a member of the team; it stays unassigned. */
+  | 'owner_not_member'
+  /**  A deal with no company; Macro pipelines track companies, so it is not imported. */
+  | 'deal_without_company'
+  /**  A deal in a pipeline that is archived or missing; it is not imported. */
+  | 'deal_without_pipeline'
+  /**  A contact or deal linked to more than one company; only its primary is kept. */
+  | 'extra_company_links'
+  /**
+   *  A company domain Macro does not key companies by (a personal email
+   *  provider, or not a domain); the company is created by name only.
+   */
+  | 'domain_rejected'
+  /**
+   *  A deal currency Macro does not support; the amount is left empty rather
+   *  than shown in another currency.
+   */
+  | 'unsupported_currency'
+  /**  A company's further domains; only its primary domain is kept. */
+  | 'additional_domains'
+  /**  A company's HubSpot owner; Macro companies have no owner. */
+  | 'company_owner'
+  /**
+   *  A company sharing its domain with another planned company; both become
+   *  one CRM company.
+   */
+  | 'merged_company'
+  /**
+   *  A contact sharing its primary address with another planned contact;
+   *  both become one CRM contact.
+   */
+  | 'merged_contact'
+  /**
+   *  A contact whose company was left out of the import; it is created
+   *  without one.
+   */
+  | 'contact_without_company';
+
+/**  How many records lost one thing. */
+export type HubspotLossCount = {
+  /**  What was lost. */
+  loss: HubspotLoss;
+  /**  Records affected. */
+  count: number;
+};
+
+/**  What a HubSpot plan holds, for the review card. */
+export type HubspotReport = {
+  /**  Deal pipelines, each becoming a Macro pipeline. */
+  pipelines: number;
+  /**  Companies. */
+  companies: number;
+  /**  Contacts. */
+  contacts: number;
+  /**  Deals, each becoming an entry in its pipeline. */
+  deals: number;
+  /**  HubSpot owners named by the planned records. */
+  owners: number;
+  /**  Of those, owners matched to a team member by email. */
+  ownersMatched: number;
+  /**  Records already in Macro from an earlier import, left as they are. */
+  alreadyImported: number;
+  /**  Records this import created in the CRM. */
+  created?: number;
+  /**
+   *  Records this import matched to ones already in the CRM (same domain,
+   *  address or deal) or to a teammate's import, instead of creating them.
+   */
+  linked?: number;
+  /**  What cannot be carried over, by kind. */
+  losses: HubspotLossCount[];
+  /**  Portal-defined property names whose values stay in HubSpot. */
+  customProperties: string[];
+};
+
+/**
  *  The one draft an import review carries: which source's staged plan it
  *  presents, the plan rows the user took out of it, and the rows whose
  *  sharing they changed: `shared` to share with their team, `personal` to
@@ -281,7 +361,15 @@ export type ImportKind =
   /**  A Jira epic grouping. */
   | 'jira_epic'
   /**  A Slack channel. */
-  | 'channel';
+  | 'channel'
+  /**  A HubSpot deal pipeline. */
+  | 'hubspot_pipeline'
+  /**  A HubSpot company. */
+  | 'hubspot_company'
+  /**  A HubSpot contact. */
+  | 'hubspot_contact'
+  /**  A HubSpot deal. */
+  | 'hubspot_deal';
 
 /**  Which source's staged plan an import review presents. */
 export type ImportReviewSource =
@@ -290,7 +378,9 @@ export type ImportReviewSource =
   /**  A Linear plan, staged by ImportFromLinear. */
   | 'linear'
   /**  A Jira plan, staged by ImportFromJira. */
-  | 'jira';
+  | 'jira'
+  /**  A HubSpot plan, staged by ImportFromHubspot. */
+  | 'hubspot';
 
 /**  Review item state, shared with notification consumers. */
 export type ItemStatus =
@@ -410,6 +500,8 @@ export type NotionImportReport_Deserialize = {
   failures?: NotionReportItem_Deserialize[];
   /**  Total objects that failed, including those outside the sample. */
   failureCount?: number;
+  /**  A HubSpot plan's counts, owners and losses. */
+  hubspot?: HubspotReport | null;
 };
 
 /**  Where a Notion workspace import stands. */
@@ -492,6 +584,8 @@ export type NotionImportReport_Serialize = {
   failures: NotionReportItem_Serialize[];
   /**  Total objects that failed, including those outside the sample. */
   failureCount: number;
+  /**  A HubSpot plan's counts, owners and losses. */
+  hubspot?: HubspotReport | null;
 };
 
 /**  A teammate who already imported some of a plan's objects. */

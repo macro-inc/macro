@@ -42,6 +42,7 @@ import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
 import {
   ActivityRouteView,
+  AgentScreenRouteView,
   AgentsRouteView,
   BookingLinksRouteView,
   CalendarRouteView,
@@ -97,6 +98,7 @@ import {
   accountManagerRoute,
   activityRoute,
   agentChatsRoute,
+  agentScreenRoute,
   agentSetupDoneRoute,
   agentSetupRoute,
   agentSignupRoute,
@@ -492,6 +494,7 @@ export function appRouteElements(): JSX.Element {
           <Route definition={callsCallRoute} component={CallsCallDetail} />
         </Route>
         <Route definition={callDetailRoute} component={CallDetailRouteView} />
+        <Route definition={agentScreenRoute} component={AgentScreenRouteView} />
         <Route definition={companiesRoute} component={CompaniesRouteView}>
           <Route definition={crmPipelineRoute}>
             <Route definition={crmPipelineItemRoute} />

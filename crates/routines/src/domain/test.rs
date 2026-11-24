@@ -122,6 +122,11 @@ fn routines_with_what_these_tools_cant_state_are_not_editable_here() {
         serde_json::json!({ "events": ["github"], "github": { "events": ["push"] } }),
         serde_json::json!({ "events": ["task.created"], "match": [{ "path": ["x"], "exists": true }] }),
         serde_json::json!({ "events": ["channel.message_attachment_created"] }),
+        // Sent back without its inboxes, it would watch every inbox.
+        serde_json::json!({
+            "events": ["email.message_received"],
+            "inboxes": ["01900000-0000-7000-8000-0000000000a1"]
+        }),
     ] {
         let trigger = serde_json::json!({ "type": "events", "filters": [filter] });
         let error = RoutineConfiguration::from_saved("Watch", &trigger, &task).unwrap_err();
