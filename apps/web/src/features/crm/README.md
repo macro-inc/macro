@@ -17,9 +17,11 @@ detail gate and unmounts its content on denial; standalone record views retain
 their own gate. Close global company/contact creation dialogs on proven denial
 and do not navigate to a late successful creation after access has been lost.
 The retired CRM/activity/pipeline rollout flags never replace this access gate.
-Without a connected mailbox, the privacy controls offer **Connect email**, which
-calls `CrmContext.connectMailbox` (the app's add-inbox flow). Connecting never
-changes consent; the member opts in separately.
+While sharing is off and no mailbox is linked, the privacy controls offer
+**Connect email**, which calls `CrmContext.connectMailbox` (the app's add-inbox
+flow). Connecting never changes consent; the member opts in separately. The
+privacy source rereads settings and policy when the app's primary email link
+changes, so a mailbox linked in place (native OAuth) shows without a reload.
 Keep owner-scoped email privacy controls, excluded-thread lists, and email mentions
 available after CRM viewing access is revoked. The context always supplies the plain
 email mention; privacy settings and the thread header never require CRM record data.
