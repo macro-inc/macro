@@ -76,7 +76,10 @@ async fn a_copy_search_returns_each_document_s_thread_and_message() {
         .unwrap();
 
     let (request_line, _) = server.join().unwrap();
-    assert!(request_line.starts_with("POST /emails/_search "), "{request_line}");
+    assert!(
+        request_line.starts_with("POST /emails/_search "),
+        "{request_line}"
+    );
     assert_eq!(
         found,
         [
@@ -97,7 +100,10 @@ async fn a_copy_search_for_no_message_sends_nothing() {
     let client =
         crate::OpensearchClient::new("http://127.0.0.1:9".into(), "".into(), "".into()).unwrap();
 
-    let found = client.email_message_documents(&[], &[], None).await.unwrap();
+    let found = client
+        .email_message_documents(&[], &[], None)
+        .await
+        .unwrap();
 
     assert!(found.is_empty());
 }

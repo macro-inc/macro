@@ -246,7 +246,10 @@ async fn a_versioned_email_write_fences_every_action_with_its_version() {
         .unwrap();
     let (request_line, body) = server.join().unwrap();
 
-    assert!(request_line.starts_with("POST /emails/_bulk "), "{request_line}");
+    assert!(
+        request_line.starts_with("POST /emails/_bulk "),
+        "{request_line}"
+    );
     let lines: Vec<serde_json::Value> = body
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())

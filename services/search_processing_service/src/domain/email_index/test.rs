@@ -296,7 +296,14 @@ impl EmailSearchIndex for Arc<FakeIndex> {
 
 type Service = EmailIndexService<Arc<FakeSource>, Arc<FakeLeases>, Arc<FakeIndex>>;
 
-fn service(exclusive: bool) -> (Arc<Service>, Arc<FakeSource>, Arc<FakeLeases>, Arc<FakeIndex>) {
+fn service(
+    exclusive: bool,
+) -> (
+    Arc<Service>,
+    Arc<FakeSource>,
+    Arc<FakeLeases>,
+    Arc<FakeIndex>,
+) {
     let source = Arc::new(FakeSource::default());
     let leases = Arc::new(FakeLeases::new(exclusive));
     let index = Arc::new(FakeIndex::default());
@@ -346,10 +353,17 @@ async fn a_live_delete_waits_for_a_reindex_that_read_before_it() {
     source.delete(MESSAGE);
     let delete = tokio::spawn({
         let service = service.clone();
-        async move { service.reconcile_message(delete_event(MESSAGE, THREAD)).await }
+        async move {
+            service
+                .reconcile_message(delete_event(MESSAGE, THREAD))
+                .await
+        }
     });
     leases.requested.notified().await;
-    assert!(!delete.is_finished(), "the delete ran under the reindex's lease");
+    assert!(
+        !delete.is_finished(),
+        "the delete ran under the reindex's lease"
+    );
 
     resume.notify_one();
     let reindexed = reindex.await.unwrap().unwrap();

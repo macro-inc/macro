@@ -78,3 +78,51 @@ async fn overlapping_batches_leased_in_opposite_orders_both_complete(pool: PgPoo
         backward.unwrap().unwrap();
     }
 }
+
+/// The lease's locks are taken in key order only because Postgres plans the
+/// statement as a nested loop over the sorted keys, calling the lock once per
+/// key; no documented rule promises it. This keeps that plan from changing
+/// unnoticed. The statement is the lease's, behind `EXPLAIN`.
+#[sqlx::test(migrations = false)]
+async fn the_lease_statement_locks_one_sorted_key_at_a_time(pool: PgPool) {
+    let threads: Vec<Uuid> = (0..50).map(|_| Uuid::now_v7()).collect();
+
+    let plan = sqlx::query_scalar!(
+        r#"
+        EXPLAIN (COSTS OFF)
+        SELECT max(granted_at) AS "granted_at!"
+        FROM (
+            SELECT clock_timestamp() AS granted_at
+            FROM (
+                SELECT DISTINCT hashtextextended('email-thread-search:' || thread_id::text, 0) AS lock_key
+                FROM unnest($1::uuid[]) AS thread_id
+                ORDER BY lock_key
+            ) AS keys,
+            LATERAL pg_advisory_xact_lock(keys.lock_key)
+        ) AS granted
+        "#,
+        &threads,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    let nodes: Vec<&str> = plan
+        .iter()
+        .flatten()
+        .map(|line| line.trim_start_matches([' ', '-', '>']).trim())
+        .collect();
+    assert_eq!(
+        nodes,
+        [
+            "Aggregate",
+            "Nested Loop",
+            "Unique",
+            "Sort",
+            "Sort Key: (hashtextextended(('email-thread-search:'::text || (thread_id.thread_id)::text), '0'::bigint))",
+            "Function Scan on unnest thread_id",
+            "Function Scan on pg_advisory_xact_lock",
+        ],
+        "{plan:#?}"
+    );
+}

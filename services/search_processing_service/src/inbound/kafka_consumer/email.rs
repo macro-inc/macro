@@ -62,7 +62,9 @@ impl EmailEventDescription {
         match &self.action {
             EmailIndexAction::RemoveMessage { .. } => EmailWriter::Delete,
             EmailIndexAction::ReindexThreads { .. } => EmailWriter::Bulk,
-            EmailIndexAction::ReindexThread { .. } if self.event_type == "email.thread_backfilled" => {
+            EmailIndexAction::ReindexThread { .. }
+                if self.event_type == "email.thread_backfilled" =>
+            {
                 EmailWriter::Bulk
             }
             EmailIndexAction::UpsertMessage { .. }
