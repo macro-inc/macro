@@ -33,7 +33,10 @@ function reply(
   };
 }
 
-function setup(markDone: () => Promise<boolean>) {
+function setup(
+  markDone: () => Promise<boolean>,
+  complete: () => boolean = () => true
+) {
   return createRoot((dispose) => {
     const [notDone, setNotDone] = createSignal<UnifiedNotification[]>([
       reply('older', 'seen'),
@@ -43,7 +46,7 @@ function setup(markDone: () => Promise<boolean>) {
     const stacks = createChannelNotificationStacks({
       notDone,
       settled: () => true,
-      complete: () => true,
+      complete,
       readAt: (n) => n.viewed_at ?? undefined,
       unreadSince: Date.now() - 1_000,
       markDone: (_stacks, notifications) => {
@@ -71,6 +74,19 @@ describe('createChannelNotificationStacks', () => {
 
   it('drops an entry done elsewhere', () => {
     const { stacks, setNotDone, dispose } = setup(async () => true);
+    setNotDone([reply('older', 'seen')]);
+    expect(stacks.listed()).toHaveLength(0);
+    dispose();
+  });
+
+  it('keeps an entry done elsewhere off when a later answer is cut short', () => {
+    const [complete, setComplete] = createSignal(true);
+    const { stacks, setNotDone, dispose } = setup(async () => true, complete);
+    setNotDone([reply('older', 'seen')]);
+    expect(stacks.listed()).toHaveLength(0);
+
+    // A later answer reaches the read's limit.
+    setComplete(false);
     setNotDone([reply('older', 'seen')]);
     expect(stacks.listed()).toHaveLength(0);
     dispose();

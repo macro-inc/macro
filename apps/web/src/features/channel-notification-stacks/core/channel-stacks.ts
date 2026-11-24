@@ -246,6 +246,23 @@ export function admitUnread(
 }
 
 /**
+ * `listed` without the notifications a complete not-done answer no longer
+ * holds, which were done, except those in `keep`. Returns `listed` itself
+ * when nothing left.
+ */
+export function retireDone(
+  listed: ListedNotifications,
+  notDone: readonly UnifiedNotification[],
+  keep: readonly string[]
+): ListedNotifications {
+  const present = new Set([...notDone.map((n) => n.id), ...keep]);
+  const notifications = listed.notifications.filter((n) => present.has(n.id));
+  return notifications.length === listed.notifications.length
+    ? listed
+    : { ...listed, notifications };
+}
+
+/**
  * What marking listed stacks done marks: their own notifications, and every
  * not-done notification in the channel's inbox stacks that share a key or a
  * notification with them, so the whole inbox stack leaves Home and the inbox

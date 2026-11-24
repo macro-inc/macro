@@ -9,6 +9,7 @@ import {
   NO_LISTED_NOTIFICATIONS,
   notificationsToMarkDone,
   type ReadAt,
+  retireDone,
 } from '../core/channel-stacks';
 
 /**
@@ -38,33 +39,33 @@ export function createChannelNotificationStacks(sources: {
     (sources.notDone() ?? []).filter(
       (notification) => notification.state !== 'done'
     );
-  const gathered = createMemo<ListedNotifications>(
-    (previous) =>
-      admitUnread(
-        previous,
-        notDoneRecords(),
-        sources.settled(),
-        sources.unreadSince,
-        sources.readAt
-      ),
-    NO_LISTED_NOTIFICATIONS
-  );
   // Ids taken off the list, put back if marking them fails.
   const [taken, setTaken] = createSignal<readonly string[]>([]);
+  const gathered = createMemo<ListedNotifications>((previous) => {
+    const notDone = notDoneRecords();
+    const admitted = admitUnread(
+      previous,
+      notDone,
+      sources.settled(),
+      sources.unreadSince,
+      sources.readAt
+    );
+    // One missing from a complete answer was done, here or elsewhere, and
+    // leaves for good; one being marked here waits for its mark's outcome.
+    if (!sources.settled() || !sources.complete()) return admitted;
+    return retireDone(admitted, notDone, taken());
+  }, NO_LISTED_NOTIFICATIONS);
 
   const listed = createMemo<ChannelStack[]>((previous) => {
     const takenIds = new Set(taken());
-    // Each entry shows its notifications' current state. One missing from a
-    // complete read was done (here or elsewhere) and leaves; past the read's
-    // limit, its last known state stays.
+    // Each entry shows its notifications' current state; past the read's
+    // limit, its last known state.
     const current = new Map(notDoneRecords().map((n) => [n.id, n]));
-    const complete = sources.settled() && sources.complete();
     const shown = gathered().notifications.flatMap((notification) => {
       if (takenIds.has(notification.id)) return [];
       const now = current.get(notification.id);
       if (now) return [now];
-      if (complete || notification.state === 'done') return [];
-      return [notification];
+      return notification.state === 'done' ? [] : [notification];
     });
     return keepUnchangedStacks(previous, channelStacks(shown));
   }, []);
