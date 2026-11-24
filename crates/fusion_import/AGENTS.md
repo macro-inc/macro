@@ -33,9 +33,11 @@ items by id with `nextCursor`.
 
 ## Boundaries
 
-- Depends on: `connectors::ApiConnectionsService` (behind `ApsTransport`),
-  `feature_flags`, and a `CadDocuments` adapter over `crates/documents`.
-- Used by: `ai_tools` (the toolset) and `agent_harness_service` (wiring).
+- Depends on: `connectors::ApiConnectionsService` (behind `ApsTransport`;
+  the `autodesk` app) and `feature_flags`.
+- Used by: `ai_tools`, which registers the toolset and implements
+  `CadDocuments` over `crates/documents` (`src/tool_context/fusion.rs`);
+  `agent_harness_service` builds it in `cognition/server.rs`.
 
 ## Recipes
 
