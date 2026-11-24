@@ -136,5 +136,6 @@ KSM) and each computer's CPU, memory and disk IO from its VM's cgroup
 (`<unit>/vms/c-<id>`, labelled `computer_id`), and writes them every 30 s to
 Macro's Mimir in the observability cluster (`infra/k8s/observability`), where the **Macro
 computers fleet** dashboard shows capacity, noisy neighbours and overcommit
-in use. Nothing runs in guests. The Datadog agent stays for the agent's
+in use, and **Firecracker hosts: capacity** shows how full each host is and
+its running VMs. Nothing runs in guests. The Datadog agent stays for the agent's
 spans, its `firecracker_host.*` metrics and the monitors.

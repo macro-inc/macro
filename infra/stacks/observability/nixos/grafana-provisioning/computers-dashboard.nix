@@ -38,6 +38,14 @@ let
       "macro"
       "computers"
     ];
+    links = [
+      {
+        title = "Firecracker hosts: capacity";
+        type = "link";
+        url = "/d/macro-firecracker-capacity";
+        tooltip = "Fleet and per-host capacity, running VMs grouped by host";
+      }
+    ];
     timezone = "browser";
     refresh = "1m";
     time = {

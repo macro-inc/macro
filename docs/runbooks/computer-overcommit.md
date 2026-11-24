@@ -80,6 +80,9 @@ UPDATE hosted_runtime_host SET admitting = false WHERE name = 'fc-host-1';
   climbs with few busy computers is short of CPU for another reason: check
   the host's own work and steal time first, and lower the CPU ratio only if
   neither explains it.
+- Grafana, **Firecracker hosts: capacity**: fleet and per-host totals (cores,
+  RAM, storage, vCPUs and memory limits committed, headroom to the default
+  watermark), which hosts stopped reporting, and each host's running VMs.
 - `computer.host.memory.used_ratio` against `…high_watermark_ratio` by `host`:
   how close each host is to refusing. `report_age` above 30 s means the host
   admits nothing.
