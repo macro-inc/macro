@@ -50,6 +50,7 @@ import type {
   SearchCachePage,
   WriteResult,
 } from '../protocol';
+import type { CacheQueueOutcome } from '../telemetry';
 import { workerCacheTelemetry } from '../telemetry-relay';
 import type { CompiledEngineExchange } from './compiled-engine';
 import type { StaleDatabaseRemovalOutcome } from './stale-databases';
@@ -88,9 +89,20 @@ export type CacheQueueDiagnostics =
       oldestCreatedAtMs: null;
     };
 
+/** What became of the mutations a wiped database queued. */
+export type CacheQueueCrossing = {
+  outcome: CacheQueueOutcome;
+  /** Mutations now queued that a wiped database had queued. */
+  kept: number;
+  /** Mutations known to be lost. */
+  dropped: number;
+};
+
 export interface CacheOpenResult {
   engine: CacheEngine;
   outcome: CacheOpenOutcome;
+  /** Optional while older cached WASM artifacts are still in circulation. */
+  queue?: CacheQueueCrossing;
 }
 
 export type CacheEngineHydrationResult = WriteResult &

@@ -3226,7 +3226,10 @@ describe('CacheWorkerCore', () => {
     );
 
     expect(onInitializationOutcome).toHaveBeenCalledOnce();
-    expect(onInitializationOutcome).toHaveBeenCalledWith('reset-corrupt');
+    expect(onInitializationOutcome).toHaveBeenCalledWith(
+      'reset-corrupt',
+      'reset'
+    );
     expect(
       observations.filter((observation) =>
         [
@@ -3243,6 +3246,67 @@ describe('CacheWorkerCore', () => {
       })
     );
   });
+
+  it.each([
+    ['opened-existing', undefined, 'preserved'],
+    ['opened-existing', 'none', 'preserved'],
+    ['opened-existing', 'kept', 'preserved'],
+    ['opened-existing', 'partial', 'reset'],
+    ['opened-existing', 'abandoned', 'reset'],
+    ['opened-new', 'none', 'reset'],
+    ['reset-storage-uncertain', undefined, 'reset'],
+    ['reset-storage-uncertain', 'none', 'reset'],
+    ['reset-storage-uncertain', 'kept', 'preserved'],
+    ['reset-corrupt', 'partial', 'reset'],
+    ['reset-corrupt', 'unreadable', 'reset'],
+    ['reset-incompatible', 'abandoned', 'reset'],
+  ])(
+    'after %s with a queue %s reports the queue %s',
+    async (outcome, crossing, queue) => {
+      const observations: Array<Record<string, unknown>> = [];
+      loadCacheWasmMock.mockResolvedValue({
+        openCacheWithOutcome: vi.fn().mockResolvedValue({
+          engine: {},
+          outcome,
+          ...(crossing === undefined
+            ? {}
+            : { queue: { outcome: crossing, kept: 2, dropped: 1 } }),
+        }),
+      });
+      const onInitializationOutcome = vi.fn();
+      const core = new CacheWorkerCore({
+        onInitializationOutcome,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      await core.handleRequest(
+        { postMessage: vi.fn() },
+        { id: 1, kind: 'init', scope: 'scope-1' }
+      );
+
+      expect(onInitializationOutcome).toHaveBeenCalledExactlyOnceWith(
+        outcome,
+        queue
+      );
+      expect(
+        observations.filter(({ queueOutcome }) => queueOutcome !== undefined)
+      ).toEqual(
+        crossing === undefined || crossing === 'none'
+          ? []
+          : [
+              expect.objectContaining({
+                name: 'graphql_cache.schema_init',
+                openOutcome: outcome,
+                queueOutcome: crossing,
+                queueKept: 2,
+                queueDropped: 1,
+              }),
+            ]
+      );
+    }
+  );
 
   it('leaves recovery-open wipe authority with the coordinator', async () => {
     const observations: Array<Record<string, unknown>> = [];
@@ -3272,7 +3336,8 @@ describe('CacheWorkerCore', () => {
       { id: 1, kind: 'init', scope: 'scope-1' }
     );
     expect(onInitializationOutcome).toHaveBeenCalledWith(
-      'reset-storage-uncertain'
+      'reset-storage-uncertain',
+      'reset'
     );
     expect(
       observations.filter((observation) =>

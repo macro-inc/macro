@@ -17,6 +17,7 @@ import {
   type CoalescedCacheChange,
 } from './cache-change-batch';
 import type {
+  CacheQueueState,
   DatabaseAction,
   DatabaseActionProof,
   EngineOpenOutcome,
@@ -140,6 +141,7 @@ export type CoordinatorAction =
       kind: 'broadcast-engine-replaced';
       ownerEpoch: OwnerEpoch;
       openOutcome: EngineOpenOutcome;
+      queue: CacheQueueState;
     }
   | {
       kind: 'drop-stale-engine-message';
@@ -159,6 +161,7 @@ export type EngineReady = {
   ownerLockHeld: true;
   databaseActionProof: DatabaseActionProof;
   openOutcome: EngineOpenOutcome;
+  queue: CacheQueueState;
 };
 
 const proofFor = (outcome: EngineOpenOutcome): DatabaseActionProof =>
@@ -568,6 +571,7 @@ export class CoordinatorCore {
         kind: 'broadcast-engine-replaced',
         ownerEpoch: state.ownerEpoch,
         openOutcome: ready.openOutcome,
+        queue: ready.queue,
       });
     }
     if (this.supersedePending) {

@@ -78,6 +78,18 @@ export const CACHE_OPEN_OUTCOMES = [
 ] as const;
 export type CacheOpenOutcome = (typeof CACHE_OPEN_OUTCOMES)[number];
 
+/** What became of the mutations a wiped database queued: `none` without any,
+ * `kept` with every one queued under its own ID, `partial` with some lost or
+ * queued under new IDs, and none of them otherwise. */
+export const CACHE_QUEUE_OUTCOMES = [
+  'none',
+  'kept',
+  'partial',
+  'unreadable',
+  'abandoned',
+] as const;
+export type CacheQueueOutcome = (typeof CACHE_QUEUE_OUTCOMES)[number];
+
 export const CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY = [
   'available',
   'unavailable',
@@ -282,6 +294,9 @@ export type CacheTelemetryObservation = {
   unavailableReason?: CacheUnavailableReason;
   persistence?: 'granted' | 'denied' | 'unknown';
   openOutcome?: CacheOpenOutcome;
+  queueOutcome?: CacheQueueOutcome;
+  queueKept?: number;
+  queueDropped?: number;
   queueDiagnosticsAvailability?: CacheQueueDiagnosticsAvailability;
   revisionCategory?: CacheRevisionCategory;
   resetAttempt?: 'wipe-before-open';
@@ -397,6 +412,16 @@ function sanitizeObservation(
     ...(input.openOutcome !== undefined &&
     CACHE_OPEN_OUTCOMES.includes(input.openOutcome)
       ? { openOutcome: input.openOutcome }
+      : {}),
+    ...(input.queueOutcome !== undefined &&
+    CACHE_QUEUE_OUTCOMES.includes(input.queueOutcome)
+      ? { queueOutcome: input.queueOutcome }
+      : {}),
+    ...(boundedNumber(input.queueKept) !== undefined
+      ? { queueKept: boundedNumber(input.queueKept) }
+      : {}),
+    ...(boundedNumber(input.queueDropped) !== undefined
+      ? { queueDropped: boundedNumber(input.queueDropped) }
       : {}),
     ...(input.queueDiagnosticsAvailability !== undefined &&
     CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY.includes(
@@ -874,6 +899,9 @@ export function isCacheTelemetryObservation(
       'unavailableReason',
       'persistence',
       'openOutcome',
+      'queueOutcome',
+      'queueKept',
+      'queueDropped',
       'queueDiagnosticsAvailability',
       'revisionCategory',
       'resetAttempt',

@@ -1119,7 +1119,10 @@ describe('cache engine worker runtime', () => {
         drain: vi.fn(),
         handleRequest: async (port, request) => {
           if (request.kind === 'init') {
-            options.onInitializationOutcome?.('reset-storage-uncertain');
+            options.onInitializationOutcome?.(
+              'reset-storage-uncertain',
+              'reset'
+            );
             port.postMessage({ id: request.id, ok: true, result: null });
           }
         },

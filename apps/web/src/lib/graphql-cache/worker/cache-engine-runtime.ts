@@ -16,6 +16,7 @@ import { workerCacheTelemetry } from '../telemetry-relay';
 import { compiledEngineFromPage } from './compiled-engine';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
+  type CacheQueueState,
   type CleanupToPageEnvelope,
   type CoordinatorToEngineEnvelope,
   type EngineFatalCode,
@@ -226,6 +227,8 @@ async function activate(
     activation.databaseAction === 'wipe-before-open'
       ? 'reset-storage-uncertain'
       : 'opened-existing';
+  let initializationQueue: CacheQueueState =
+    activation.databaseAction === 'wipe-before-open' ? 'reset' : 'preserved';
   let draining = false;
   // Keep every admitted handler and graceful drain in one explicit scope.
   // Abrupt owner loss still relies on DedicatedWorker termination; graceful
@@ -325,8 +328,9 @@ async function activate(
     onStorageBusy: () => {
       storageBusy = true;
     },
-    onInitializationOutcome: (outcome) => {
+    onInitializationOutcome: (outcome, queue) => {
       initializationOpenOutcome = outcome;
+      initializationQueue = queue;
     },
     telemetry,
   });
@@ -503,6 +507,7 @@ async function activate(
           ? 'wiped-before-open'
           : 'opened-existing',
         openOutcome: initializationOpenOutcome,
+        queue: initializationQueue,
       })
     );
     emitEvent({ kind: 'ready', activation });

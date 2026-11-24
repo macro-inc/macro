@@ -133,6 +133,7 @@ const ready = (
     ownerLockHeld: true,
     databaseActionProof: proof,
     openOutcome,
+    queue: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
   });
 };
 

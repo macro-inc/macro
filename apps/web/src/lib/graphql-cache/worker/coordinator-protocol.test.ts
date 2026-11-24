@@ -693,6 +693,7 @@ describe('coordinator runtime protocol', () => {
       kind: 'engine-replaced',
       ownerEpoch: 2,
       openOutcome: 'opened-existing',
+      queue: 'preserved',
     },
     { ...version, kind: 'protocol-error', error: 'bad envelope' },
     { ...version, kind: 'connection-closed', reason: 'tab messageerror' },
@@ -742,11 +743,40 @@ describe('coordinator runtime protocol', () => {
         kind: 'engine-replaced',
         ownerEpoch: 2,
         openOutcome,
+        queue: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
       };
       expect(validateCoordinatorToTabEnvelope(message)).toEqual({
         ok: true,
         value: message,
       });
+    }
+  );
+
+  it.each([undefined, null, true, 'kept'])(
+    'rejects an engine whose queue state is %s',
+    (queue) => {
+      expect(
+        validateCoordinatorToTabEnvelope({
+          ...version,
+          kind: 'engine-replaced',
+          ownerEpoch: 2,
+          openOutcome: 'reset-storage-uncertain',
+          queue,
+        }).ok
+      ).toBe(false);
+      expect(
+        validateEngineToCoordinatorEnvelope({
+          ...version,
+          kind: 'engine-ready',
+          tabId: 'tab',
+          ownerEpoch: 1,
+          ownerLockName: 'owner-lock',
+          ownerLockHeld: true,
+          databaseActionProof: 'wiped-before-open',
+          openOutcome: 'reset-storage-uncertain',
+          queue,
+        }).ok
+      ).toBe(false);
     }
   );
 
@@ -814,6 +844,7 @@ describe('coordinator runtime protocol', () => {
         ownerLockHeld: true,
         databaseActionProof: 'wiped-before-open',
         openOutcome: 'reset-storage-uncertain',
+        queue: 'preserved',
       }).ok
     ).toBe(true);
     expect(
@@ -826,6 +857,7 @@ describe('coordinator runtime protocol', () => {
         ownerLockHeld: false,
         databaseActionProof: 'wiped-before-open',
         openOutcome: 'reset-storage-uncertain',
+        queue: 'preserved',
       }).ok
     ).toBe(false);
     expect(
