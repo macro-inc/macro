@@ -37,13 +37,15 @@ export function Onboarding(props: { next?: string }) {
     setParams({ step: undefined }, { replace: true });
   });
   // Phone browsers end on "Macro is better on desktop" before entering the
-  // app; computers and the native apps go straight in.
+  // app; computers and the native apps go straight in. Decided as onboarding
+  // finishes, so a rotation mid-flow counts. A phone held sideways is wider
+  // than `isMobile()`'s 640px and goes straight in, like a tablet.
   const storePlatform = phoneStorePlatform(navigator.userAgent);
-  const handoffStoreUrl =
-    isMobile() && !isNativeMobilePlatform()
-      ? storeListingUrl(storePlatform)
-      : undefined;
   const [handoffTarget, setHandoffTarget] = createSignal<string>();
+  const finished = (target: string) => {
+    if (isMobile() && !isNativeMobilePlatform()) setHandoffTarget(target);
+    else navigate(target, { replace: true });
+  };
   const flow = () => (
     <OnboardingFlowView
       next={
@@ -53,9 +55,7 @@ export function Onboarding(props: { next?: string }) {
       step={requestedStep}
       checkoutReturn={parseCheckoutReturn(params)}
       onNavigate={(target) => navigate(target, { replace: true })}
-      onFinished={
-        handoffStoreUrl ? (target) => setHandoffTarget(target) : undefined
-      }
+      onFinished={finished}
       onRedirect={(url) => {
         window.location.href = url;
       }}
@@ -72,10 +72,10 @@ export function Onboarding(props: { next?: string }) {
   );
   return (
     <OnboardingProvider value={context}>
-      <Show when={handoffStoreUrl && handoffTarget()} keyed fallback={flow()}>
+      <Show when={handoffTarget()} keyed fallback={flow()}>
         {(target) => (
           <DesktopHandoffView
-            storeUrl={handoffStoreUrl ?? ''}
+            storeUrl={storeListingUrl(storePlatform)}
             platform={storePlatform}
             onContinue={() => navigate(target, { replace: true })}
           />
