@@ -25,7 +25,7 @@ export const BACKFILL_VERSION = 19;
 
 const KEY_PREFIX = 'graphql-soup-backfill';
 
-/** The tab coordinator of every build whose lanes all match `V19_CONTRACTS`. */
+/** The tab coordinator builds from before contracts elect their leader on. */
 const V19_COORDINATOR = `${KEY_PREFIX}:v19:coordinator`;
 
 /**
@@ -137,7 +137,10 @@ export function soupBackfillCheckpointKey(
 /**
  * The tab-leadership name for a set of lanes. Builds with the same lanes share
  * one leader; builds that differ in any lane each lead, as builds with
- * different backfill versions did before contracts.
+ * different backfill versions did before contracts. No build that locks
+ * checkpoints leads the v19 coordinator, even with the v19 lanes: its leader
+ * would hold that coordinator's leadership lock for as long as the tab leads,
+ * and a newer build waits on that lock to run any v19 lane.
  */
 export function soupBackfillCoordinatorKey(
   lanes: readonly SoupBackfillLane[]
@@ -145,12 +148,7 @@ export function soupBackfillCoordinatorKey(
   const contracts = lanes
     .map((lane) => [lane.checkpointId, soupBackfillLaneContract(lane)])
     .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
-  const legacy =
-    contracts.length === Object.keys(V19_CONTRACTS).length &&
-    contracts.every(([id, contract]) => V19_CONTRACTS[id] === contract);
-  return legacy
-    ? V19_COORDINATOR
-    : `${KEY_PREFIX}:c${hashString(stableJson(contracts))}:coordinator`;
+  return `${KEY_PREFIX}:c${hashString(stableJson(contracts))}:coordinator`;
 }
 
 /**
@@ -163,20 +161,17 @@ export function soupBackfillLeadershipLock(coordinator: string): string {
 }
 
 /**
- * The Web Locks a tab holds while it runs `lane` as part of `lanes`, taken in
- * this order. A lane under its v19 key in a build that does not lead the v19
- * coordinator also takes that coordinator's leadership lock first: a tab from
- * before checkpoint locks holds it for as long as it leads, and runs that lane
- * unlocked. A build that leads the v19 coordinator already holds it.
+ * The Web Locks a tab holds while it runs `lane`, taken in this order. A lane
+ * under its v19 key also takes the v19 coordinator's leadership lock first: a
+ * tab from before checkpoint locks holds it for as long as it leads, and runs
+ * that lane unlocked. Later builds hold it only while they run such a lane.
  */
 export function soupBackfillLaneLocks(
   userId: string,
-  lanes: readonly SoupBackfillLane[],
   lane: SoupBackfillLane
 ): string[] {
   const checkpoint = soupBackfillCheckpointKey(userId, lane);
-  return isV19Lane(lane) &&
-    soupBackfillCoordinatorKey(lanes) !== V19_COORDINATOR
+  return isV19Lane(lane)
     ? [soupBackfillLeadershipLock(V19_COORDINATOR), checkpoint]
     : [checkpoint];
 }

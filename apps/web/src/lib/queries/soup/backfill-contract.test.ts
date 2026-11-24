@@ -40,6 +40,29 @@ vi.mock('@service-storage/graphql-soup', () => ({
   hydrateGraphqlSoup: vi.fn(),
 }));
 
+/** What builds from before contracts elect their backfill leader on. */
+const V19_COORDINATOR = 'graphql-soup-backfill:v19:coordinator';
+
+/** Makes `tab` the leader; `leadership` settles once it stops leading. */
+async function lead(tab: Tab): Promise<{ leadership: Promise<unknown> }> {
+  let leads = () => {};
+  const led = new Promise<void>((resolve) => {
+    leads = resolve;
+  });
+  const leadership = tab.waitForLeadership(() => leads());
+  await led;
+  return { leadership };
+}
+
+/** Whether every lock in `names` is free, asked as a lane's first run asks. */
+function free(names: readonly string[]): Promise<boolean> {
+  const [first, ...rest] = names;
+  if (first === undefined) return Promise.resolve(true);
+  return navigator.locks.request(first, { ifAvailable: true }, (lock) =>
+    lock === null ? false : free(rest)
+  );
+}
+
 /** Adds a filter no lane uses, which changes what the lane returns. */
 const withExtraFilter = (lane: SoupBackfillParams): SoupBackfillParams => ({
   ...lane,
@@ -66,14 +89,14 @@ function reverseKeys<T>(value: T): T {
 }
 
 describe('soup backfill lane contracts', () => {
-  it('keeps every default lane and the coordinator on the v19 keys builds before contracts use', () => {
+  it('keeps every default lane on the v19 key builds before contracts use, under a coordinator of its own', () => {
     for (const lane of DEFAULT_SOUP_BACKFILL_LANES) {
       expect(soupBackfillCheckpointKey('user-1', lane)).toBe(
         `graphql-soup-backfill:v19:user-1:${lane.checkpointId}`
       );
     }
-    expect(soupBackfillCoordinatorKey(DEFAULT_SOUP_BACKFILL_LANES)).toBe(
-      'graphql-soup-backfill:v19:coordinator'
+    expect(soupBackfillCoordinatorKey(DEFAULT_SOUP_BACKFILL_LANES)).toMatch(
+      /^graphql-soup-backfill:c[0-9a-z]+:coordinator$/
     );
   });
 
@@ -239,47 +262,54 @@ describe('soup backfill lane contracts', () => {
     );
   });
 
-  it('locks only the checkpoint while the build leads the v19 coordinator', () => {
-    for (const lane of DEFAULT_SOUP_BACKFILL_LANES) {
-      expect(
-        soupBackfillLaneLocks('user-1', DEFAULT_SOUP_BACKFILL_LANES, lane)
-      ).toEqual([soupBackfillCheckpointKey('user-1', lane)]);
-    }
-  });
-
-  it('also takes the v19 leadership lock for v19 lanes once any lane changes', () => {
+  it('takes the v19 leadership lock before the checkpoint of a lane under its v19 key', () => {
     const lanes = DEFAULT_SOUP_BACKFILL_LANES.map((lane) =>
       lane === CORE_SOUP_BACKFILL_LANE ? withExtraFilter(lane) : lane
     );
-    const v19Leadership = soupBackfillLeadershipLock(
-      soupBackfillCoordinatorKey(DEFAULT_SOUP_BACKFILL_LANES)
-    );
+    const v19Leadership = soupBackfillLeadershipLock(V19_COORDINATOR);
     for (const lane of lanes) {
       const checkpoint = soupBackfillCheckpointKey('user-1', lane);
-      expect(soupBackfillLaneLocks('user-1', lanes, lane)).toEqual(
-        lane ===
-          lanes[DEFAULT_SOUP_BACKFILL_LANES.indexOf(CORE_SOUP_BACKFILL_LANE)]
+      expect(soupBackfillLaneLocks('user-1', lane)).toEqual(
+        lane.checkpointId === CORE_SOUP_BACKFILL_LANE.checkpointId
           ? [checkpoint]
           : [v19Leadership, checkpoint]
       );
     }
   });
 
-  it('names the leadership lock as the tab-election release of v19 builds does', async () => {
+  it("holds none of a newer build's lane locks while it leads the default lanes", async () => {
+    const locks = installBrowserLocks();
+    const tab = new Tab(
+      soupBackfillCoordinatorKey(DEFAULT_SOUP_BACKFILL_LANES)
+    );
+    try {
+      const { leadership } = await lead(tab);
+      const newer = DEFAULT_SOUP_BACKFILL_LANES.map((lane) =>
+        lane === CORE_SOUP_BACKFILL_LANE ? withExtraFilter(lane) : lane
+      );
+      for (const lane of newer) {
+        expect(await free(soupBackfillLaneLocks('user-1', lane))).toBe(true);
+      }
+      tab.relinquishLeadership();
+      await leadership;
+    } finally {
+      tab.close();
+      locks.restore();
+    }
+  });
+
+  it('keeps every v19 lane locked while a tab from before checkpoint locks leads', async () => {
     const locks = installBrowserLocks();
     const requested = vi.spyOn(navigator.locks, 'request');
-    const coordinator = soupBackfillCoordinatorKey(DEFAULT_SOUP_BACKFILL_LANES);
-    const tab = new Tab(coordinator);
+    const tab = new Tab(V19_COORDINATOR);
     try {
-      let leads = () => {};
-      const led = new Promise<void>((resolve) => {
-        leads = resolve;
-      });
-      const leadership = tab.waitForLeadership(() => leads());
-      await led;
+      const { leadership } = await lead(tab);
       expect(requested.mock.calls.map(([name]) => name)).toContain(
-        soupBackfillLeadershipLock(coordinator)
+        soupBackfillLeadershipLock(V19_COORDINATOR)
       );
+      for (const lane of DEFAULT_SOUP_BACKFILL_LANES) {
+        expect(await free(soupBackfillLaneLocks('user-1', lane))).toBe(false);
+      }
       tab.relinquishLeadership();
       await leadership;
     } finally {

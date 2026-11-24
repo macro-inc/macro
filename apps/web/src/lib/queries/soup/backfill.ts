@@ -504,8 +504,6 @@ type SoupBackfillRunOptions = {
   revisit?: { saved: string | null };
   /** Asked once the lane's locks are held; the lane runs only if it agrees. */
   claim?: () => boolean;
-  /** The build's lanes, which decide the locks a lane run takes. */
-  lanes?: readonly SoupBackfillParams[];
   /** Kept across the attempts of a lane whose retries can resume. */
   retry?: SoupBackfillRetry;
 };
@@ -833,11 +831,7 @@ export const runSoupBackfill = (
   options: SoupBackfillRunOptions = {}
 ) =>
   withLaneLocks(
-    soupBackfillLaneLocks(
-      userId,
-      options.lanes ?? DEFAULT_SOUP_BACKFILL_LANES,
-      params
-    ),
+    soupBackfillLaneLocks(userId, params),
     runUnlockedSoupBackfill(userId, host, params, options).pipe(
       Effect.tapError(() => options.onFailed?.() ?? Effect.void)
     ),
@@ -849,10 +843,7 @@ const runTrackedSoupBackfill = (
   userId: string,
   host: SoupBackfillCacheHost,
   lane: SoupBackfillParams,
-  attempt: Pick<
-    SoupBackfillRunOptions,
-    'ifAvailable' | 'revisit' | 'claim' | 'lanes'
-  >
+  attempt: Pick<SoupBackfillRunOptions, 'ifAvailable' | 'revisit' | 'claim'>
 ) =>
   Effect.gen(function* () {
     const startedAt = Date.now();
@@ -990,8 +981,7 @@ const runTrackedSoupBackfill = (
 const runFirstFreeLane = (
   userId: string,
   host: SoupBackfillCacheHost,
-  left: readonly { lane: SoupBackfillParams; saved: string | null }[],
-  lanes: readonly SoupBackfillParams[]
+  left: readonly { lane: SoupBackfillParams; saved: string | null }[]
 ) =>
   Effect.gen(function* () {
     let turn: number | null = null;
@@ -999,7 +989,6 @@ const runFirstFreeLane = (
     const exit = yield* Effect.raceAll(
       left.map(({ lane, saved }, index) =>
         runTrackedSoupBackfill(userId, host, lane, {
-          lanes,
           revisit: { saved },
           // A lane granted after another took the turn gives its locks back.
           claim: () => {
@@ -1045,7 +1034,6 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
       const saved = readSoupBackfillCheckpoint(userId, lane).stored;
       return runTrackedSoupBackfill(userId, host, lane, {
         ifAvailable: true,
-        lanes,
       }).pipe(
         Effect.tap((ran) =>
           Effect.sync(() => {
@@ -1058,7 +1046,7 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
   );
   let waiting = left;
   while (waiting.length > 0) {
-    const finished = yield* runFirstFreeLane(userId, host, waiting, lanes);
+    const finished = yield* runFirstFreeLane(userId, host, waiting);
     waiting = waiting.filter((_left, index) => !finished.includes(index));
   }
 });

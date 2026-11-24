@@ -1646,7 +1646,6 @@ describe('soup backfill checkpoint locks', () => {
   it('runs a lane under its v19 key only once no tab from before checkpoint locks leads', async () => {
     const [v19Lock, checkpoint] = soupBackfillLaneLocks(
       'user-1',
-      [{ ...CORE_SOUP_BACKFILL_LANE, contractVersion: 1 }],
       INITIATIVE_SOUP_BACKFILL_LANE
     );
     expect(checkpoint).toBe(key(INITIATIVE_SOUP_BACKFILL_LANE));
@@ -1678,7 +1677,6 @@ describe('soup backfill checkpoint locks', () => {
     const changedCore = { ...CORE_SOUP_BACKFILL_LANE, contractVersion: 1 };
     const [v19Lock] = soupBackfillLaneLocks(
       'user-1',
-      [changedCore],
       INITIATIVE_SOUP_BACKFILL_LANE
     );
     let closeOldTab = () => {};

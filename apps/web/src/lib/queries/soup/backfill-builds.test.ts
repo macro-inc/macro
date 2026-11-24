@@ -47,6 +47,8 @@ type Build = 0 | 1;
 type LaneChange = 'same' | 'filter' | 'operation' | 'version' | 'recency';
 
 const LANE_COUNT = DEFAULT_SOUP_BACKFILL_LANES.length;
+/** What builds from before contracts elect their backfill leader on. */
+const V19_COORDINATOR = 'graphql-soup-backfill:v19:coordinator';
 /** Every model step moves the clock on, so no two events share a time. */
 const TICK_MS = 1000;
 
@@ -397,7 +399,7 @@ function writeError(
  *
  * Every tab holds its build's coordinator leadership lock while it runs, as
  * `tab-election` does for the leader; a shipped-lane tab from before
- * checkpoint locks holds nothing else. The model sees every checkpoint write
+ * checkpoint locks leads the v19 coordinator and holds nothing else. The model sees every checkpoint write
  * and checks it against the write before it under the same key:
  * - it is in the current storage generation;
  * - it starts a pass, restarts the lane for a new generation, or saves the
@@ -769,16 +771,18 @@ async function replay(
   /**
    * Runs `effect` in a tab of `build` while it leads the build's coordinator,
    * as the elected tab does, and interrupts it when the tab closes. Undefined
-   * when the tab closed before it led.
+   * when the tab closed before it led. A tab from before checkpoint locks
+   * leads the v19 coordinator.
    */
   const asLeader = async <A>(
     build: Build,
     close: AbortController,
-    effect: Effect.Effect<A, unknown>
+    effect: Effect.Effect<A, unknown>,
+    preLock = false
   ) => {
     let exit: Exit.Exit<A, unknown> | undefined;
     const leadership = soupBackfillLeadershipLock(
-      soupBackfillCoordinatorKey(builds[build])
+      preLock ? V19_COORDINATOR : soupBackfillCoordinatorKey(builds[build])
     );
     try {
       await navigator.locks.request(
@@ -824,14 +828,18 @@ async function replay(
       host,
       paramsOf(build, laneIndex, tab),
       {
-        lanes,
         onCheckpoint: (checkpoint) => {
           last.saved = checkpoint;
         },
       }
     );
     if (locks) Object.defineProperty(navigator, 'locks', locks);
-    const exit = await asLeader(build, tab.close, effect);
+    const exit = await asLeader(
+      build,
+      tab.close,
+      effect,
+      options.preLock === true
+    );
     if (exit === undefined) return;
     if (Exit.isSuccess(exit)) {
       if (
