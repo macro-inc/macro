@@ -2,6 +2,7 @@ import { until } from '@solid-primitives/promise';
 import {
   type Accessor,
   createSignal,
+  onCleanup,
   runWithOwner,
   type Setter,
 } from 'solid-js';
@@ -56,6 +57,10 @@ export type TimelinePaging = {
 export function createThreadPaginator(paging: TimelinePaging): ThreadPaginator {
   const prependPaginateState = createPaginateDirectionState('prepend');
   const shiftPaginateState = createPaginateDirectionState('shift');
+  // A wait for a load to let go ends with the list too: a timeline disposed
+  // mid-load never lets go.
+  const [disposed, setDisposed] = createSignal(false);
+  onCleanup(() => setDisposed(true));
 
   const paginate = async (state: PaginateDirectionState) => {
     const hasMore = () =>
@@ -81,9 +86,16 @@ export function createThreadPaginator(paging: TimelinePaging): ThreadPaginator {
       // A load this paginator did not start holds the direction (a window
       // read again). Ask once it lets go: the list asks only when it reaches a
       // new edge, so a request dropped here would wait for the next scroll.
+      // Another load can take the direction before this one resumes: wait
+      // again then, or that load would refuse this one.
       if (isFetching()) {
-        // Ownerless: a caller's owner going away would reject the wait.
-        await runWithOwner(null, () => until(() => !isFetching()));
+        while (isFetching()) {
+          // Ownerless: a caller's owner going away would reject the wait.
+          await runWithOwner(null, () =>
+            until(() => !isFetching() || disposed())
+          );
+          if (disposed()) return;
+        }
         state.setMore(hasMore());
         if (!hasMore()) return;
       }

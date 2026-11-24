@@ -6,22 +6,24 @@ import { createThreadPaginator } from '../thread-paginator';
 function paging() {
   const [loadingOlder, setLoadingOlder] = createSignal(false);
   const [hasOlder, setHasOlder] = createSignal(true);
+  // Like the timeline's loadMore, it does nothing while another load runs.
   const loadOlder = vi.fn(async () => {});
-  return {
-    setLoadingOlder,
-    setHasOlder,
-    loadOlder,
-    paginator: createRoot(() =>
-      createThreadPaginator({
-        hasOlder,
-        hasNewer: () => false,
-        isLoadingOlder: loadingOlder,
-        isLoadingNewer: () => false,
-        loadOlder,
-        loadNewer: async () => {},
-      })
-    ),
+  const guardedLoadOlder = async () => {
+    if (!loadingOlder()) await loadOlder();
   };
+  let dispose!: () => void;
+  const paginator = createRoot((disposeRoot) => {
+    dispose = disposeRoot;
+    return createThreadPaginator({
+      hasOlder,
+      hasNewer: () => false,
+      isLoadingOlder: loadingOlder,
+      isLoadingNewer: () => false,
+      loadOlder: guardedLoadOlder,
+      loadNewer: async () => {},
+    });
+  });
+  return { setLoadingOlder, setHasOlder, loadOlder, paginator, dispose };
 }
 
 describe('createThreadPaginator', () => {
@@ -50,5 +52,33 @@ describe('createThreadPaginator', () => {
 
     expect(loadOlder).not.toHaveBeenCalled();
     expect(paginator.hasMoreShifting()).toBe(false);
+  });
+
+  it('waits again when another load takes the direction before it resumes', async () => {
+    const { setLoadingOlder, loadOlder, paginator } = paging();
+    setLoadingOlder(true);
+    const asked = paginator.shiftPaginate();
+    setLoadingOlder(false);
+    setLoadingOlder(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(loadOlder).not.toHaveBeenCalled();
+
+    setLoadingOlder(false);
+    await asked;
+
+    expect(loadOlder).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a waiting request go when the list goes away mid-load', async () => {
+    const { setLoadingOlder, loadOlder, paginator, dispose } = paging();
+    setLoadingOlder(true);
+    const asked = paginator.shiftPaginate();
+
+    dispose();
+    await asked;
+
+    expect(loadOlder).not.toHaveBeenCalled();
+    expect(paginator.isShifting()).toBe(false);
   });
 });
