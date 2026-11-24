@@ -10,10 +10,7 @@ import ClockIcon from '@icon/system/regular/clock.svg';
 import { PillButton } from '@ui';
 import { parseISO } from 'date-fns';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
-import {
-  BreakdownList,
-  OpenTaskRow,
-} from '../../components/time-breakdown';
+import { BreakdownList, OpenTaskRow } from '../../components/time-breakdown';
 import { TimeKeyLabel } from '../../components/time-key-label';
 import { WeekStepper } from '../../components/week-stepper';
 import { formatLength } from '../../core/format-length';

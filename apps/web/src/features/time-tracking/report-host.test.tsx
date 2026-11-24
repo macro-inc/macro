@@ -25,7 +25,13 @@ function shownStatus(): string | null | undefined {
 }
 
 function taskKey(task: TimeSummaryKey['task']): TimeSummaryKey {
-  return { by: 'TASK', userId: null, taskId: task?.id ?? null, date: null, task };
+  return {
+    by: 'TASK',
+    userId: null,
+    taskId: task?.id ?? null,
+    date: null,
+    task,
+  };
 }
 
 function renderRow(task: TimeSummaryKey['task']) {

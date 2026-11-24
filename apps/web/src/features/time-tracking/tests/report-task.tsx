@@ -1,9 +1,9 @@
-import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import {
+  type PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@property/identifiers';
 import type { SoupPropertyFieldsFragment } from '@service-storage/graphql/generated/graphql';
-import type {
-  ReportTask,
-  TaskLabelParts,
-} from '../components/time-key-label';
+import type { ReportTask, TaskLabelParts } from '../components/time-key-label';
 
 type StatusId =
   (typeof PROPERTY_OPTION_IDS.STATUS)[keyof typeof PROPERTY_OPTION_IDS.STATUS];

@@ -12,13 +12,10 @@ import { useDocumentAccessLevelQuery } from '@queries/storage/document-metadata'
 import { mapGraphqlProperties } from '@service-storage/graphql-soup';
 import { cn } from '@ui/utils/classname';
 import { type Accessor, createMemo, type JSX, Suspense } from 'solid-js';
-import type {
-  ReportTask,
-  TaskLabelParts,
-} from './components/time-key-label';
+import type { ReportTask, TaskLabelParts } from './components/time-key-label';
 import { createLocalToday } from './primitives/create-local-today';
-import { TaskTimerCount } from './task-timer-count';
 import type { ProjectTimeClock } from './primitives/create-project-time';
+import { TaskTimerCount } from './task-timer-count';
 import type { PickedTask } from './views/shared/tasks-time-props';
 
 /** A person in a report row: avatar and name, with no card of their own. */
