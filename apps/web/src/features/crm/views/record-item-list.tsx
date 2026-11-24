@@ -2,8 +2,10 @@ import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-h
 import { dateBucket } from '@app/features/soup/collection/date-buckets';
 import { createKeyedProjection } from '@app/lib/queries/soup/create-keyed-projection';
 import { usePending } from '@app/observability/flow';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
+  createEntityDraggable,
   type EntityData,
   EntityRowIcon,
   EntityRowTitle,
@@ -288,7 +290,7 @@ export function RecordItemList(props: {
 /**
  * An item row shaped like a document's References row in its side panel:
  * 12px text in a 32px row that starts at the section's text edge, so the
- * information panel reads as one scale. Opens like the list rows do.
+ * information panel reads as one scale. Opens and drags like the list rows do.
  */
 function PanelItemRow(props: {
   entity: EntityData;
@@ -297,8 +299,13 @@ function PanelItemRow(props: {
   const navigation = useSplitNavigationHandler<HTMLDivElement>((event) =>
     props.onOpen(event)
   );
+  const draggable = createEntityDraggable({
+    entity: props.entity,
+    splitId: useSplitPanel()?.handle?.id,
+  });
   return (
     <div
+      ref={draggable}
       role="button"
       tabIndex={0}
       data-entity-id={props.entity.id}

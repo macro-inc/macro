@@ -40,6 +40,8 @@ export function EntityRowIcon(props: { class?: string }) {
 export function EntityRowTitle(props: { entity: { name: string } }) {
   return <span class="truncate">{props.entity.name}</span>;
 }
+// No drag-and-drop context here, which makes the real helper a no-op too.
+export const createEntityDraggable = () => () => {};
 export {
   formatDateAndTime,
   formatRelativeTimestamp,

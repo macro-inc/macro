@@ -28,6 +28,7 @@ vi.mock('@entity', () => ({
   ListEntityMetadataQueryProvider: (props: ParentProps) => props.children,
   ListLayoutProvider: (props: ParentProps) => props.children,
   EntityRowIcon: () => null,
+  createEntityDraggable: () => () => {},
   EntityRowTitle: (props: { entity: { name: string } }) => (
     <span>{props.entity.name}</span>
   ),
