@@ -419,7 +419,9 @@ procedure. Operators must approve and record each release gate.
    whatever the flags say; see [Settlement](#settlement-enable_ai_usage_billing).
    A host refuses to start without one, so register a newly required pricing
    value (as `AI_USAGE_BUSINESS_INCLUDED_ALLOWANCE_CENTS` was) in every
-   participating config before deploying the release that reads it.
+   participating config, and check its effective value there (each service's
+   Doppler validation binary, such as `authentication_service_doppler_config`),
+   before deploying the release that reads it.
    Before starting the agent harness, MCP, or scheduled action service,
    register `AUTHENTICATION_SERVICE_SECRET_KEY` (the authentication service's
    Secrets Manager name in deployed configs)
