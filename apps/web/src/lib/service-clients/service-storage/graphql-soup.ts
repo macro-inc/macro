@@ -1041,8 +1041,12 @@ export function getGraphqlSoupClient(): Client {
       if (!(await startSubscriptions(target))) return;
       // Soup updates were off meanwhile, as while a socket is down.
       subscriptionsLifecycle.connected();
-      notifyReconnected();
-      await cacheRecovery.available();
+      try {
+        await cacheRecovery.available();
+      } finally {
+        // A listener may ask whether the cache is there: tell it afterwards.
+        if (cachedCacheHost === target && !target.disabled) notifyReconnected();
+      }
     };
     const cleanup = () => {
       unregisterHost();

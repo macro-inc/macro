@@ -2372,7 +2372,13 @@ describe('GraphQL Soup browser cache session gate', () => {
       expect(visible()).toBeUndefined();
       expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
 
-      const reconnected = vi.fn();
+      const order: string[] = [];
+      mocks.subscriptionsConnected.mockImplementation(() => {
+        order.push('subscribed');
+      });
+      const reconnected = vi.fn(() => {
+        order.push(`reconnected, cache: ${soup.hasGraphqlCacheHost()}`);
+      });
       const throwing = vi.fn(() => {
         throw new Error('a listener failed');
       });
@@ -2393,7 +2399,7 @@ describe('GraphQL Soup browser cache session gate', () => {
       // What arrived meanwhile was missed, as while a socket is down.
       expect(mocks.subscriptionsConnected).toHaveBeenCalledOnce();
       expect(throwing).toHaveBeenCalledOnce();
-      expect(reconnected).toHaveBeenCalledOnce();
+      expect(order).toEqual(['subscribed', 'reconnected, cache: true']);
       expect(soup.graphqlCacheRecoveryState()).toBe('ready');
       expect(soup.graphqlCacheEnabled()).toBe(true);
       expect(visible()).toBe(host);
@@ -2401,6 +2407,7 @@ describe('GraphQL Soup browser cache session gate', () => {
       expect(mocks.createWorkerCacheHost).toHaveBeenCalledOnce();
     } finally {
       pause(false);
+      mocks.subscriptionsConnected.mockReset();
       dispose();
       vi.useRealTimers();
     }
