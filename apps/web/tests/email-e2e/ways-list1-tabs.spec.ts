@@ -25,9 +25,10 @@ for (const provider of PROVIDERS) {
     test.beforeEach(({ page }) => loadAppSteadily(page));
 
     // When this fails, one of the desktop's other ways to a tab is dead or
-    // opens the wrong tab: Tab or Shift+Tab between the Inbox tabs, their
-    // number keys, or the sidebar's Inbox item; or Tab still switches tabs
-    // from a control, where it should move focus.
+    // opens the wrong tab: Tab or Shift+Tab between the Inbox tabs, from the
+    // list or after a click on the sidebar's Inbox item, their number keys,
+    // or that item itself; or Tab switches tabs from a sidebar item reached
+    // with the keyboard, where it should move focus.
     test('Tab, the number keys and the sidebar Inbox item each open their tab', async ({
       page,
       mailbox,
@@ -79,9 +80,9 @@ for (const provider of PROVIDERS) {
       await checked('Signal');
       await expectRows(page, [lunch]);
 
-      // From another mailbox, the sidebar's Inbox item reopens the Inbox
-      // tab last open, Signal; on that button, Tab moves focus and leaves
-      // the tab alone.
+      // From another mailbox, the sidebar's Inbox item opens the Inbox on
+      // Signal. The click leaves focus on that button, where Tab and
+      // Shift+Tab still walk the Inbox tabs.
       const sidebar = page.getByRole('navigation', { name: 'Email tabs' });
       await sidebar.getByRole('button', { name: 'Sent' }).click();
       await expect(page).toHaveURL(/mail\.tab=sent/);
@@ -90,9 +91,22 @@ for (const provider of PROVIDERS) {
       did('AL-001');
       await checked('Signal');
       await expectRows(page, [lunch]);
-      await inboxItem.focus();
+      await expect(inboxItem).toBeFocused();
       await page.keyboard.press('Tab');
-      await expect(inboxItem).not.toBeFocused();
+      await checked('Noise');
+      await expectRows(page, [sale]);
+      await page.keyboard.press('Shift+Tab');
+      await checked('Signal');
+      await expectRows(page, [lunch]);
+
+      // Reached with the keyboard, the same button is in focus order: Tab
+      // moves on to the next item and leaves the tab alone.
+      const favorites = sidebar.getByRole('button', { name: 'Favorites' });
+      await favorites.focus();
+      await page.keyboard.press('Shift+Tab');
+      await expect(inboxItem).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(favorites).toBeFocused();
       await checked('Signal');
       await expectRows(page, [lunch]);
     });
