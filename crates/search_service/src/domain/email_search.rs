@@ -319,6 +319,7 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
             requested = if filters.email_thread_ids.is_empty() {
                 favorites.clone()
             } else {
+                let favorites: HashSet<&Uuid> = favorites.iter().collect();
                 requested
                     .into_iter()
                     .filter(|id| favorites.contains(id))

@@ -136,7 +136,6 @@ async fn channels_page(
             ResponseTemplate::new(200).set_body_json(ChannelNameSearchResponse {
                 results,
                 next_cursor: more.then(|| "next".to_owned()),
-                query_filters: None,
             }),
         )
         .expect(1)
@@ -170,6 +169,7 @@ async fn index_page(
                 .set_body_json(UnifiedSearchResponse {
                     results,
                     next_cursor: more.then(|| "next".to_owned()),
+                    query_filters: None,
                 })
                 .set_delay(delay),
         )
