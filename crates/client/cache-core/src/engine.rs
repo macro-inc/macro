@@ -3093,33 +3093,24 @@ impl<S: Storage> Engine<S> {
         let mut bindings = self.optimistic[index].identity_bindings.clone();
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
-        let normalized = normalize(&self.schema, op, variables, data);
-        // A response that doesn't normalize confirms no binding's type, so
-        // only the identities whose type it states are kept from it.
-        let resolve = if normalized.is_ok() {
-            identity::resolve
-        } else {
-            identity::resolve_stated
-        };
         let mut identity_errors = Vec::new();
-        let identities = match resolve(&bindings, &op.selection_set, data) {
+        let identities = match identity::resolve(&self.schema, &bindings, op, data) {
             Ok(identities) => identities,
             Err(_) => {
-                // Salvage valid bindings without guessing targets for failed ones.
-                let mut identities = IdentityMap::new();
+                // Salvage valid bindings without guessing targets for failed
+                // ones, resolving those left together so a binding's own
+                // identity still outranks one another's reference field infers.
                 bindings.retain(|binding| {
-                    match resolve(std::slice::from_ref(binding), &op.selection_set, data) {
-                        Ok(resolved) => {
-                            identities.extend(resolved);
-                            true
-                        }
+                    match identity::resolve(&self.schema, std::slice::from_ref(binding), op, data) {
+                        Ok(_) => true,
                         Err(error) => {
                             identity_errors.push(error);
                             false
                         }
                     }
                 });
-                identities
+                identity::resolve(&self.schema, &bindings, op, data)
+                    .map_err(EngineError::InvalidOptimisticProjection)?
             }
         };
         // The bindings left are those that resolved, an ID the server kept
@@ -3128,7 +3119,7 @@ impl<S: Storage> Engine<S> {
             .iter()
             .any(|binding| !binding.response_path.is_empty());
         let mut unwritable = None;
-        let mut updates = match normalized {
+        let mut updates = match normalize(&self.schema, op, variables, data) {
             Ok(updates) => updates,
             Err(error) if identity_errors.is_empty() || resolved => {
                 // The server accepted the write, but no retry of this response

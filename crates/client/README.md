@@ -164,10 +164,12 @@ A queued write whose server response no longer normalizes, because the schema
 dropped a field it selects, settles without that content, as a stale outcome
 does, instead of retrying at the head of the queue forever: the IDs the server
 gave keep their aliases for the writes queued after it, and the result's
-`unwritable_response` says why. Only an object that states its `__typename`
-keeps its ID, since nothing written from the response confirms the type its
-binding assumes; when none does, the write fails as before. The host applies
-nothing from that response and refetches its active queries.
+`unwritable_response` says why. The host applies nothing from that response
+and refetches its active queries. Identity resolution takes a response object
+that states no `__typename` to be of the object type its field declares, as
+normalizing does, and fails a binding whose object is of an abstract type and
+states none; a binding's own resolution outranks one inferred from another's
+reference field.
 Settling a create moves the shadows of the writes queued after it to the key
 the server gave the record while their sources keep the local key, so a tier
 follows the alias settlement stored from one to the other, and keeps the

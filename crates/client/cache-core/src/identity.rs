@@ -1,6 +1,7 @@
 //! Durable bindings between optimistic entity handles and server identities.
 
-use crate::document::Selection;
+use crate::document::{Operation, OperationKind, Selection};
+use crate::meta::{Schema, TypeKind};
 use crate::normalize::RecordUpdates;
 use crate::value::{CacheValue, EntityKey, Record};
 use serde::{Deserialize, Serialize};
@@ -75,34 +76,18 @@ pub fn validate(bindings: &[IdentityBinding]) -> Result<(), String> {
 }
 
 /// Extract bindings only from explicitly declared response objects of the same
-/// type. `selections` are the operation's, which say each key an object's
-/// `__typename` is selected under. An object that doesn't state its type is
-/// taken to be of its binding's.
+/// type. `op`'s selections say each key an object's `__typename` is selected
+/// under. An object that states no type is taken, as normalizing takes it, to
+/// be of the object type `schema` declares for its field, and an object of an
+/// abstract type must state one.
 pub fn resolve(
+    schema: &Schema,
     bindings: &[IdentityBinding],
-    selections: &[Selection],
+    op: &Operation,
     data: &Value,
 ) -> Result<IdentityMap, String> {
-    resolve_bindings(bindings, selections, data, false)
-}
-
-/// [`resolve`], with each response object required to state its type: what
-/// settlement keeps from a response it can't write, since normalizing it
-/// can't confirm the type a binding assumes.
-pub fn resolve_stated(
-    bindings: &[IdentityBinding],
-    selections: &[Selection],
-    data: &Value,
-) -> Result<IdentityMap, String> {
-    resolve_bindings(bindings, selections, data, true)
-}
-
-fn resolve_bindings(
-    bindings: &[IdentityBinding],
-    selections: &[Selection],
-    data: &Value,
-    stated: bool,
-) -> Result<IdentityMap, String> {
+    // A binding's own resolution, its server keeping the ID included, wins
+    // over one a reference field infers; those that kept it are dropped last.
     let mut result = IdentityMap::new();
     for binding in bindings {
         if binding.response_path.is_empty() {
@@ -118,10 +103,10 @@ fn resolve_bindings(
             .local_key
             .typename()
             .ok_or("invalid local identity")?;
-        let typename = match response_typename(selections, &binding.response_path, object)? {
+        let typename = match response_typename(&op.selection_set, &binding.response_path, object)? {
             Some(typename) => typename,
-            None if stated => return Err("identity response type is not stated".into()),
-            None => local_type,
+            None => declared_object_type(schema, op, &binding.response_path)
+                .ok_or("identity response type is not stated")?,
         };
         let id = object
             .get("id")
@@ -134,13 +119,74 @@ fn resolve_bindings(
         if local_type != typename {
             return Err("identity response changed entity type".into());
         }
-        let target = EntityKey::entity(typename, &[id]);
-        if target != binding.local_key {
-            result.insert(binding.local_key.clone(), target);
-        }
+        result.insert(
+            binding.local_key.clone(),
+            EntityKey::entity(typename, &[id]),
+        );
     }
     expand_reference_identities(bindings, &mut result);
+    result.retain(|local, target| local != target);
     Ok(result)
+}
+
+/// The type `schema` declares for the response object at `path`, when the
+/// operation's selections reach it through fields that all declare one type,
+/// and that type is an object type.
+fn declared_object_type<'a>(
+    schema: &'a Schema,
+    op: &'a Operation,
+    path: &[String],
+) -> Option<&'a str> {
+    let root = match op.kind {
+        OperationKind::Query => schema.query_root(),
+        OperationKind::Mutation => schema.mutation_root()?,
+        OperationKind::Subscription => schema.subscription_root()?,
+    };
+    let mut declared = root;
+    let mut parents = vec![(root, &*op.selection_set)];
+    for step in path {
+        let mut fields = Vec::new();
+        for (parent, selections) in parents {
+            declared_fields(schema, parent, selections, step, &mut fields)?;
+        }
+        let first = fields.first()?.0;
+        if fields.iter().any(|(named, _)| *named != first) {
+            return None;
+        }
+        declared = first;
+        parents = fields;
+    }
+    (schema.type_meta(declared)?.kind == TypeKind::Object).then_some(declared)
+}
+
+/// Pushes the declared type and selections of each field `selections` select
+/// under `key` on a `parent` object, through fragments, or returns `None` when
+/// `schema` doesn't declare one of them.
+fn declared_fields<'a>(
+    schema: &'a Schema,
+    parent: &'a str,
+    selections: &'a [Selection],
+    key: &str,
+    fields: &mut Vec<(&'a str, &'a [Selection])>,
+) -> Option<()> {
+    for selection in selections {
+        match selection {
+            Selection::Fragment {
+                type_condition,
+                selection_set,
+                ..
+            } => {
+                let parent = type_condition.as_deref().unwrap_or(parent);
+                declared_fields(schema, parent, selection_set, key, fields)?;
+            }
+            Selection::Field(field) if field.response_key == key => {
+                let named = schema.field_meta(parent, &field.name)?.ty.name;
+                fields.push((named, &*field.selection_set));
+            }
+            Selection::Field(_) => {}
+        }
+    }
+    Some(())
 }
 
 /// The `__typename` of the response object at `path`, under any key
@@ -203,6 +249,8 @@ impl<'s> ResponseKeys<'s> {
 }
 
 /// Some normalized read models share the identity of the entity they preview.
+/// An identity already in `identities` is kept: a record's own resolution
+/// outranks one a reference field infers.
 pub fn expand_reference_identities(bindings: &[IdentityBinding], identities: &mut IdentityMap) {
     for binding in bindings {
         let Some(target) = identities.get(&binding.local_key).cloned() else {
@@ -211,12 +259,14 @@ pub fn expand_reference_identities(bindings: &[IdentityBinding], identities: &mu
         let (Some(old_id), Some(new_id)) = (binding.local_key.id(), target.id()) else {
             continue;
         };
+        if old_id == new_id {
+            continue;
+        }
         for field in &binding.reference_fields {
             if let Some(typename) = field.strip_suffix(".id") {
-                identities.insert(
-                    EntityKey::entity(typename, &[old_id]),
-                    EntityKey::entity(typename, &[new_id]),
-                );
+                identities
+                    .entry(EntityKey::entity(typename, &[old_id]))
+                    .or_insert_with(|| EntityKey::entity(typename, &[new_id]));
             }
         }
     }
@@ -489,12 +539,31 @@ mod tests {
         );
     }
 
+    /// A schema with a field of each kind a binding's response object can sit in.
+    const SDL: &str = "type Query { ok: Boolean } type Mutation { save: SavePayload } \
+        type SavePayload { draft: Draft message: Message saved: Result other: Other } \
+        union Result = Saved | Other \
+        type Draft { id: ID! } type Message { id: ID! } \
+        type Saved { id: ID! label: String } type Other { id: ID! label: String }";
+    const DRAFT: &str = "mutation Save { save { draft { __typename id } } }";
+
+    /// Resolves `bindings` from `data` as the response to `document`.
+    fn resolve_in(
+        document: &str,
+        bindings: &[IdentityBinding],
+        data: &Value,
+    ) -> Result<IdentityMap, String> {
+        let schema = Schema::from_sdl(SDL).unwrap();
+        let document = crate::document::Document::parse(document).unwrap();
+        resolve(&schema, bindings, document.operation(None).unwrap(), data)
+    }
+
     #[test]
     fn resolve_maps_declared_response_objects() {
         let mut bindings = vec![binding("Draft:local", &["save", "draft"])];
         bindings[0].reference_fields = vec!["Preview.id".into(), "Message.draftId".into()];
         let data = json!({ "save": { "draft": { "__typename": "Draft", "id": "server" } } });
-        let identities = resolve(&bindings, &[], &data).unwrap();
+        let identities = resolve_in(DRAFT, &bindings, &data).unwrap();
         assert_eq!(
             identities,
             IdentityMap::from([
@@ -509,9 +578,9 @@ mod tests {
             ])
         );
         let unchanged = json!({ "save": { "draft": { "id": "local" } } });
-        assert!(resolve(&bindings, &[], &unchanged).unwrap().is_empty());
+        assert!(resolve_in(DRAFT, &bindings, &unchanged).unwrap().is_empty());
         assert!(
-            resolve(&[binding("Draft:local", &[])], &[], &data)
+            resolve_in(DRAFT, &[binding("Draft:local", &[])], &data)
                 .unwrap()
                 .is_empty()
         );
@@ -520,47 +589,32 @@ mod tests {
     #[test]
     fn resolve_rejects_responses_that_cannot_identify_the_entity() {
         let bindings = [binding("Draft:local", &["save", "draft"])];
+        let rejects = |data: Value| resolve_in(DRAFT, &bindings, &data).unwrap_err();
         assert_eq!(
-            resolve(&bindings, &[], &json!({ "save": {} })),
-            Err("missing identity response object".into())
+            rejects(json!({ "save": {} })),
+            "missing identity response object"
         );
         assert_eq!(
-            resolve(
-                &bindings,
-                &[],
-                &json!({ "save": { "draft": { "id": "" } } })
-            ),
-            Err("missing identity response id".into())
+            rejects(json!({ "save": { "draft": { "id": "" } } })),
+            "missing identity response id"
         );
         assert_eq!(
-            resolve(
-                &bindings,
-                &[],
-                &json!({ "save": { "draft": { "id": null } } })
-            ),
-            Err("missing identity response id".into())
+            rejects(json!({ "save": { "draft": { "id": null } } })),
+            "missing identity response id"
         );
         let long_id = "x".repeat(MAX_IDENTITY_BYTES + 1);
         assert_eq!(
-            resolve(
-                &bindings,
-                &[],
-                &json!({ "save": { "draft": { "id": long_id } } })
-            ),
-            Err("identity response id too long".into())
+            rejects(json!({ "save": { "draft": { "id": long_id } } })),
+            "identity response id too long"
         );
         assert_eq!(
-            resolve(
-                &bindings,
-                &[],
-                &json!({ "save": { "draft": { "__typename": "Message", "id": "server" } } })
-            ),
-            Err("identity response changed entity type".into())
+            rejects(json!({ "save": { "draft": { "__typename": "Message", "id": "server" } } })),
+            "identity response changed entity type"
         );
         assert_eq!(
-            resolve(
+            resolve_in(
+                DRAFT,
                 &[binding("local", &["save"])],
-                &[],
                 &json!({ "save": { "id": "server" } })
             ),
             Err("invalid local identity".into())
@@ -568,21 +622,105 @@ mod tests {
     }
 
     #[test]
+    fn resolve_takes_an_untyped_object_as_the_object_type_its_field_declares() {
+        let document = "mutation Save { save { other { id } } }";
+        let response = json!({ "save": { "other": { "id": "9" } } });
+        assert_eq!(
+            resolve_in(
+                document,
+                &[binding("Other:local", &["save", "other"])],
+                &response
+            ),
+            Ok(IdentityMap::from([(
+                EntityKey::entity("Other", &["local"]),
+                EntityKey::entity("Other", &["9"])
+            )]))
+        );
+        // A binding queued under a schema in which the field was a `Saved`.
+        assert_eq!(
+            resolve_in(
+                document,
+                &[binding("Saved:local", &["save", "other"])],
+                &response
+            ),
+            Err("identity response changed entity type".into())
+        );
+    }
+
+    #[test]
+    fn resolve_needs_an_object_of_an_abstract_type_to_state_it() {
+        let bindings = [binding("Saved:local", &["save", "saved"])];
+        let document = "mutation Save { save { saved { ... on Saved { kind: __typename id } \
+             ... on Other { id } } } }";
+        // An `Other`, which selects no type name.
+        assert_eq!(
+            resolve_in(
+                document,
+                &bindings,
+                &json!({ "save": { "saved": { "id": "server" } } })
+            ),
+            Err("identity response type is not stated".into())
+        );
+        assert_eq!(
+            resolve_in(
+                document,
+                &bindings,
+                &json!({ "save": { "saved": { "kind": "Saved", "id": "server" } } })
+            ),
+            Ok(IdentityMap::from([(
+                EntityKey::entity("Saved", &["local"]),
+                EntityKey::entity("Saved", &["server"])
+            )]))
+        );
+    }
+
+    #[test]
+    fn resolve_keeps_a_binding_own_identity_over_an_inferred_one() {
+        let mut draft = binding("Draft:local", &["save", "draft"]);
+        draft.reference_fields = vec!["Message.id".into()];
+        let message = binding("Message:local", &["save", "message"]);
+        let document = "mutation Save { save { draft { id } message { id } } }";
+        let response = |message: &str| json!({ "save": { "draft": { "id": "1" }, "message": { "id": message } } });
+        for bindings in [
+            [draft.clone(), message.clone()],
+            [message.clone(), draft.clone()],
+        ] {
+            assert_eq!(
+                resolve_in(document, &bindings, &response("2")),
+                Ok(IdentityMap::from([
+                    (
+                        EntityKey::entity("Draft", &["local"]),
+                        EntityKey::entity("Draft", &["1"])
+                    ),
+                    (
+                        EntityKey::entity("Message", &["local"]),
+                        EntityKey::entity("Message", &["2"])
+                    ),
+                ]))
+            );
+            // The server kept the message's ID.
+            assert_eq!(
+                resolve_in(document, &bindings, &response("local")),
+                Ok(IdentityMap::from([(
+                    EntityKey::entity("Draft", &["local"]),
+                    EntityKey::entity("Draft", &["1"])
+                )]))
+            );
+        }
+    }
+
+    #[test]
     fn resolve_reads_a_type_selected_under_an_alias() {
         let bindings = [binding("Draft:local", &["save", "draft"])];
-        let document = crate::document::Document::parse(
-            "mutation Save { save { draft { ... on Draft { kind: __typename } id } } }",
-        )
-        .unwrap();
-        let selections = &document.operation(None).unwrap().selection_set;
+        let document = "mutation Save { save { draft { ... on Draft { kind: __typename } id } } }";
         let response =
             |kind: &str| json!({ "save": { "draft": { "kind": kind, "id": "server" } } });
         assert_eq!(
-            resolve(&bindings, selections, &response("Message")),
+            resolve_in(document, &bindings, &response("Message")),
             Err("identity response changed entity type".into())
         );
         assert_eq!(
-            resolve(&bindings, selections, &response("Draft")),
+            resolve_in(document, &bindings, &response("Draft")),
             Ok(IdentityMap::from([(
                 EntityKey::entity("Draft", &["local"]),
                 EntityKey::entity("Draft", &["server"])
@@ -593,63 +731,26 @@ mod tests {
     #[test]
     fn resolve_skips_a_key_another_fragment_selects_another_field_by() {
         let bindings = [binding("Saved:local", &["save", "saved"])];
-        let document = crate::document::Document::parse(
-            "mutation Save { save { saved { ... on Saved { kind: __typename } \
-             ... on Other { kind: label actual: __typename } id } } }",
-        )
-        .unwrap();
-        let selections = &document.operation(None).unwrap().selection_set;
+        let document = "mutation Save { save { saved { ... on Saved { kind: __typename } \
+             ... on Other { kind: label actual: __typename } id } } }";
         let response = json!({
             "save": { "saved": { "kind": "Saved", "actual": "Other", "id": "server" } }
         });
         assert_eq!(
-            resolve(&bindings, selections, &response),
+            resolve_in(document, &bindings, &response),
             Err("identity response changed entity type".into())
-        );
-    }
-
-    #[test]
-    fn resolve_stated_needs_the_response_to_state_the_type() {
-        let bindings = [binding("Saved:local", &["save", "saved"])];
-        let document = crate::document::Document::parse(
-            "mutation Save { save { saved { ... on Saved { kind: __typename id } \
-             ... on Other { id } } } }",
-        )
-        .unwrap();
-        let selections = &document.operation(None).unwrap().selection_set;
-        // An `Other`, which selects no type name.
-        let response = json!({ "save": { "saved": { "id": "server" } } });
-        assert_eq!(
-            resolve(&bindings, selections, &response),
-            Ok(IdentityMap::from([(
-                EntityKey::entity("Saved", &["local"]),
-                EntityKey::entity("Saved", &["server"])
-            )]))
-        );
-        assert_eq!(
-            resolve_stated(&bindings, selections, &response),
-            Err("identity response type is not stated".into())
-        );
-        let stated = json!({ "save": { "saved": { "kind": "Saved", "id": "server" } } });
-        assert_eq!(
-            resolve_stated(&bindings, selections, &stated),
-            resolve(&bindings, selections, &stated)
         );
     }
 
     #[test]
     fn resolve_fails_when_only_an_ambiguous_key_holds_the_type() {
         let bindings = [binding("Saved:local", &["save", "saved"])];
-        let document = crate::document::Document::parse(
-            "mutation Save { save { saved { ... on Saved { kind: __typename } \
-             ... on Other { kind: label } id } } }",
-        )
-        .unwrap();
-        let selections = &document.operation(None).unwrap().selection_set;
+        let document = "mutation Save { save { saved { ... on Saved { kind: __typename } \
+             ... on Other { kind: label } id } } }";
         // An `Other` whose label reads as the local type.
         let response = json!({ "save": { "saved": { "kind": "Saved", "id": "server" } } });
         assert_eq!(
-            resolve(&bindings, selections, &response),
+            resolve_in(document, &bindings, &response),
             Err("identity response type is ambiguous".into())
         );
     }
