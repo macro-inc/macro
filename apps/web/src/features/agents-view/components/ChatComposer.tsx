@@ -107,7 +107,7 @@ export function ChatComposer(props: {
   const [content, setContent] = createSignal<HTMLDivElement>();
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [height, setHeight] = createSignal<number>();
-  const [addMenuOpen, setAddMenuOpen] = createSignal(false);
+  const [addControlsActive, setAddControlsActive] = createSignal(false);
   createResizeObserver(content, (_, element) => {
     // Content held offscreen by a pending Suspense reports 0; pinning that
     // would animate the surface up from nothing once it attaches.
@@ -115,7 +115,7 @@ export function ChatComposer(props: {
     setHeight(element.getBoundingClientRect().height);
   });
   let container: HTMLDivElement | undefined;
-  const controlsOpen = () => Boolean(props.controlsOpen || addMenuOpen());
+  const controlsOpen = () => Boolean(props.controlsOpen || addControlsActive());
   const { focused, hasFocused, collapsed, focus, blur } =
     createComposerExpansion(() => props.collapseOnBlur, controlsOpen);
   const drawerOpen = () => props.drawerOpen && !collapsed();
@@ -375,7 +375,7 @@ export function ChatComposer(props: {
           getEditor={() => editor.lexical.getRootElement()}
           session={!!props.session}
           disabled={disabled()}
-          onOpenChange={setAddMenuOpen}
+          onFocusScopeChange={setAddControlsActive}
         />
       )}
     />

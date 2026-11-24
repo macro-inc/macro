@@ -44,6 +44,8 @@ export type UnifiedModelSelectorState = {
   onSpeed: (value: ModelSpeed) => void;
   onCloseAutoFocus?: (event: Event) => void;
   onOpenChange?: (open: boolean) => void;
+  /** Includes the exit transition and final focus restoration. */
+  onFocusScopeChange?: (active: boolean) => void;
 };
 
 const Context = createContext<UnifiedModelSelectorState>();

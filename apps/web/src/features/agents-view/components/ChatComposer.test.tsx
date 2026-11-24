@@ -975,8 +975,18 @@ it.each(['Send', 'Attach files', 'Model'])(
 
 it.each(['Repository', 'Branch'])(
   'keeps the mobile composer expanded while the portaled %s picker has focus',
-  (control) => {
+  async (control) => {
     vi.mocked(isTouchDevice).mockReturnValue(true);
+    const computedStyle = window.getComputedStyle;
+    vi.stubGlobal('getComputedStyle', (element: Element) => {
+      const style = computedStyle(element);
+      style.transitionDuration ||= '0s';
+      style.animationName ||= 'none';
+      return style;
+    });
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
     const [controlsOpen, setControlsOpen] = createSignal(false);
     const { container } = render(() => (
       <ChatComposer
@@ -989,7 +999,7 @@ it.each(['Repository', 'Branch'])(
         drawerOpen
         drawer={
           <RepositoryPicker
-            onOpenChange={setControlsOpen}
+            onFocusScopeChange={setControlsOpen}
             repoUrl="https://github.com/macro-inc/macro"
             branch="main"
             repositories={[]}
@@ -1011,6 +1021,8 @@ it.each(['Repository', 'Branch'])(
     fireEvent.focusIn(input);
     fireEvent.click(screen.getByRole('button', { name: control }));
     const search = screen.getByRole('combobox');
+    const scrollBody = search.closest<HTMLElement>('[data-drawer-scroll-body]');
+    if (scrollBody) scrollBody.scrollTo = vi.fn();
     expect(container.contains(search)).toBe(false);
     fireEvent.focusOut(input, { relatedTarget: search });
     fireEvent.pointerDown(search);
@@ -1024,7 +1036,8 @@ it.each(['Repository', 'Branch'])(
         ?.getAttribute('data-composer-compact')
     ).toBe('false');
     fireEvent.click(screen.getAllByRole('option')[0]);
-    expect(controlsOpen()).toBe(false);
+    expect(controlsOpen()).toBe(true);
+    await waitFor(() => expect(controlsOpen()).toBe(false));
     expect(screen.getByTestId('editor')).toBe(input);
   }
 );
@@ -1122,6 +1135,7 @@ it('keeps the list composer expanded across model selection and dismisses an orp
     vi.unstubAllGlobals();
   });
   const [open, setOpen] = createSignal(false);
+  const [scopeOpen, setScopeOpen] = createSignal(false);
   const [model, setModel] = createSignal('openai/gpt-5.6');
   const [hidden, setHidden] = createSignal(false);
   const models = [
@@ -1133,7 +1147,7 @@ it('keeps the list composer expanded across model selection and dismisses an orp
       <ChatComposer
         collapseOnBlur
         phoneLayout
-        controlsOpen={open()}
+        controlsOpen={scopeOpen()}
         draft="Keep the list draft"
         onDraftChange={() => {}}
         onSend={() => {}}
@@ -1151,6 +1165,7 @@ it('keeps the list composer expanded across model selection and dismisses an orp
               onEffort: () => {},
               onSpeed: () => {},
               onOpenChange: setOpen,
+              onFocusScopeChange: setScopeOpen,
               onCloseAutoFocus: (event) => event.preventDefault(),
             }}
           >
@@ -1208,7 +1223,10 @@ it('keeps the list composer expanded across model selection and dismisses an orp
   fireEvent.pointerDown(search);
   expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Sonnet 5.5' }));
-  await waitFor(() => expect(open()).toBe(false));
+  expect(open()).toBe(false);
+  expect(scopeOpen()).toBe(true);
+  expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+  await waitFor(() => expect(scopeOpen()).toBe(false));
   expect(model()).toBe('anthropic/claude-sonnet-5-5');
   await waitFor(() => expect(screen.queryByRole('textbox')).toBeNull());
   expect(surface.hasAttribute('data-composer-expanded')).toBe(false);

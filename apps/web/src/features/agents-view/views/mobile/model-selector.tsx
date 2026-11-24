@@ -3,7 +3,7 @@ import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigat
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import * as Popover from '@kobalte/core/popover';
 import { Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { createModelSelectorNavigation } from '../../primitives/model-selector-navigation';
 import { ModelSelectionList } from '../shared/model-selection-list';
@@ -13,7 +13,22 @@ import { UnifiedModelTriggerContent } from '../shared/model-trigger-content';
 export function MobileModelSelector() {
   const state = useUnifiedModelSelector();
   let trigger: HTMLButtonElement | undefined;
-  const nav = createModelSelectorNavigation(state.onOpenChange, () => trigger);
+  const nav = createModelSelectorNavigation(
+    (open) => {
+      if (open) state.onFocusScopeChange?.(true);
+      state.onOpenChange?.(open);
+    },
+    () => trigger
+  );
+  let disposed = false;
+  const releaseFocusScope = () =>
+    queueMicrotask(() => {
+      if (!disposed && !nav.open()) state.onFocusScopeChange?.(false);
+    });
+  onCleanup(() => {
+    disposed = true;
+    state.onFocusScopeChange?.(false);
+  });
   const sheetOpen = () => nav.open() && nav.page() !== 'card';
   const [sheetPresent, setSheetPresent] = createSignal(false);
   const openSheet = (page: 'list' | 'agentModels') => {
@@ -68,8 +83,12 @@ export function MobileModelSelector() {
                 'inset 0 0 0 1px var(--color-edge), var(--shadow-menu)',
             }}
             onCloseAutoFocus={(event) => {
-              if (sheetPresent()) event.preventDefault();
-              else state.onCloseAutoFocus?.(event);
+              if (disposed || sheetPresent() || nav.open())
+                event.preventDefault();
+              else {
+                state.onCloseAutoFocus?.(event);
+                releaseFocusScope();
+              }
             }}
           >
             <Popover.Title class="sr-only">
@@ -112,6 +131,7 @@ export function MobileModelSelector() {
             });
           } else if (state.onCloseAutoFocus) state.onCloseAutoFocus(event);
           else if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+          releaseFocusScope();
         }}
       >
         <MobileDrawer.Portal>

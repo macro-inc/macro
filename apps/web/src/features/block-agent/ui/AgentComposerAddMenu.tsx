@@ -7,6 +7,7 @@ import { ConnectedAppIcon } from '@core/connectors/ConnectedAppIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { isMobile } from '@core/mobile/isMobile';
+import { createControlFocusScopes } from '@core/util/create-control-focus-scopes';
 import { lazy } from '@core/util/lazy';
 import LightningIcon from '@icon/system/regular/lightning.svg';
 import PlugsIcon from '@icon/system/regular/plugs.svg';
@@ -63,17 +64,29 @@ export function AgentComposerAddMenu(props: {
   session?: boolean;
   disabled?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onFocusScopeChange?: (active: boolean) => void;
 }) {
+  const setFocusScope = createControlFocusScopes<'menu' | 'drawer' | 'target'>(
+    (active) => props.onFocusScopeChange?.(active)
+  );
   const connections = useConnectionsModel();
   const settings = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
   const [drawerOpen, updateDrawerOpen] = createSignal(false);
   const [target, updateTarget] = createSignal<Target>();
   const setDrawerOpen = (open: boolean) => {
+    if (open) setFocusScope('drawer', true);
     updateDrawerOpen(open);
     props.onOpenChange?.(open || !!target());
   };
   const setTarget = (next: Target | undefined) => {
+    if (next) {
+      setFocusScope('target', true);
+      // The new dialog takes focus ownership; a superseded drawer can skip
+      // its final-focus callback when another trap opens during its exit.
+      if (!drawerOpen()) setFocusScope('drawer', false);
+      setFocusScope('menu', false);
+    }
     updateTarget(next);
     props.onOpenChange?.(drawerOpen() || !!next);
   };
@@ -192,6 +205,7 @@ export function AgentComposerAddMenu(props: {
         groups={groups()}
         disabled={props.disabled}
         onOpenDrawer={() => setDrawerOpen(true)}
+        onFocusScopeChange={(active) => setFocusScope('menu', active)}
         placement="bottom-start"
         contentClass="w-[min(42rem,calc(100vw-2rem))] max-h-[min(32rem,var(--kb-popper-content-available-height))] overflow-y-auto"
       />
@@ -200,6 +214,9 @@ export function AgentComposerAddMenu(props: {
         getEditor={props.getEditor}
         open={drawerOpen()}
         onOpenChange={setDrawerOpen}
+        onCloseFocus={() => {
+          if (!drawerOpen()) setFocusScope('drawer', false);
+        }}
       />
       <Show when={target()} keyed>
         {(selected) => (
@@ -208,6 +225,11 @@ export function AgentComposerAddMenu(props: {
             onOpenChange={(open) => {
               if (!open) setTarget(undefined);
             }}
+            onCloseAutoFocus={() =>
+              queueMicrotask(() => {
+                if (!target()) setFocusScope('target', false);
+              })
+            }
             position="center"
             visibleScrim
             class="w-[min(46rem,calc(100vw-2rem))] max-h-[85dvh] overflow-y-auto rounded-2xl bg-panel"

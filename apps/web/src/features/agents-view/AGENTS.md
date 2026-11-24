@@ -74,7 +74,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Follow Root-and-parts composition and the [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
 - An agent picked from the new-conversation composer's @ menu (Agents page, Home and the phone composer, which all mount `NewChatPage`) becomes the selected agent through `rosterAgentForMention` and the picker's own `selectAgent`; never add a second selection path.
 - Keep catalog option identities stable across capability updates; isolate optional speed-marker discovery with Suspense so it cannot detach the editor.
-- Keep phone file inputs and overlay owners mounted on blur; let open add-menu, model, and repository controls own keyboard dismissal and count as composer focus, track physical focus separately, and collapse after controls close only when focus remains outside.
+- Keep phone file inputs and overlay owners mounted on blur; let open add-menu, model, and repository controls own keyboard dismissal and count as composer focus, track physical focus separately, and release expansion only after each control's final focus restoration when focus remains outside; aggregate overlapping repository, branch, add-menu, and settings scopes.
 - Keep the phone list composer's unfocused 46px pill vertically centered with no Send control; hide controls without unmounting their file or overlay owners.
 - Keep phone composer layout measurable while collapsed; animate the clipped shape and editor insets together, reveal inert controls during the final part of the 200ms expansion, and disable transitions for reduced motion.
 

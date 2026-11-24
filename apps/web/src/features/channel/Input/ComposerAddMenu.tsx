@@ -4,7 +4,7 @@ import { focusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, cn, Dropdown } from '@ui';
-import { For, type JSX, Show } from 'solid-js';
+import { For, type JSX, onCleanup, Show } from 'solid-js';
 
 export type ComposerAddMenuItem = {
   id: string;
@@ -43,6 +43,7 @@ const nonEmpty = (groups: ComposerAddMenuGroup[]) =>
 export function ComposerAddMenu(props: {
   groups: ComposerAddMenuGroup[];
   onOpenDrawer: () => void;
+  onFocusScopeChange?: (active: boolean) => void;
   class?: string;
   contentClass?: string;
   placement?: 'top-start' | 'bottom-start';
@@ -54,6 +55,7 @@ export function ComposerAddMenu(props: {
       fallback={
         <AddDropdown
           groups={nonEmpty(props.groups)}
+          onFocusScopeChange={props.onFocusScopeChange}
           class={props.class}
           contentClass={props.contentClass}
           placement={props.placement}
@@ -83,6 +85,7 @@ export function ComposerAddMenu(props: {
 
 function AddDropdown(props: {
   groups: ComposerAddMenuGroup[];
+  onFocusScopeChange?: (active: boolean) => void;
   class?: string;
   contentClass?: string;
   placement?: 'top-start' | 'bottom-start';
@@ -92,13 +95,26 @@ function AddDropdown(props: {
   // in place of the menu's return of focus to the +; otherwise that return
   // closes the mention typeahead the item just opened.
   let pending: (() => void) | undefined;
+  let open = false;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+    props.onFocusScopeChange?.(false);
+  });
   const select = (item: ComposerAddMenuItem) => {
     if (item.focusesEditor) pending = item.onSelect;
     else item.onSelect();
   };
 
   return (
-    <Dropdown placement={props.placement ?? 'top-start'} gutter={8}>
+    <Dropdown
+      placement={props.placement ?? 'top-start'}
+      gutter={8}
+      onOpenChange={(next) => {
+        open = next;
+        if (next) props.onFocusScopeChange?.(true);
+      }}
+    >
       <Dropdown.Trigger
         tooltip={t('common.add')}
         data-composer-menu-anchor
@@ -115,9 +131,13 @@ function AddDropdown(props: {
         onCloseAutoFocus={(event: Event) => {
           const run = pending;
           pending = undefined;
-          if (!run) return;
-          event.preventDefault();
-          run();
+          if (run) {
+            event.preventDefault();
+            run();
+          }
+          queueMicrotask(() => {
+            if (!disposed && !open) props.onFocusScopeChange?.(false);
+          });
         }}
       >
         <For each={props.groups}>
@@ -163,9 +183,8 @@ function AddDropdown(props: {
 }
 
 /**
- * The mobile add menu. One per composer, mounted outside its collapsing parts:
- * opening it takes focus from the editor, which collapses the composer and
- * unmounts the + that opened it.
+ * Keep one mobile add menu outside the composer's collapsing parts. Its owner
+ * retains the composer through the sheet's exit and final focus handoff.
  */
 export function ComposerAddDrawer(props: {
   groups: ComposerAddMenuGroup[];
@@ -173,6 +192,7 @@ export function ComposerAddDrawer(props: {
   getEditor: () => HTMLElement | null | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCloseFocus?: () => void;
 }) {
   let selectedAction = false;
   return (
@@ -183,6 +203,9 @@ export function ComposerAddDrawer(props: {
       onFinalFocus={(event) => {
         if (selectedAction) event.preventDefault();
         selectedAction = false;
+        queueMicrotask(() => {
+          if (!props.open) props.onCloseFocus?.();
+        });
       }}
       preventScroll={false}
       preventScrollbarShift={false}

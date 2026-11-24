@@ -193,8 +193,9 @@ export function NewChatPage(props: {
         : undefined
     );
   };
-  const [modelSelectorOpen, setModelSelectorOpen] = createSignal(false);
-  const [repositoryPickerOpen, setRepositoryPickerOpen] = createSignal(false);
+  const [modelSelectorActive, setModelSelectorActive] = createSignal(false);
+  const [repositoryPickerActive, setRepositoryPickerActive] =
+    createSignal(false);
   const preferredRepository = createPreferredRepository(userId());
   // An explicit Auto-detect pick must override a saved repository, too.
   const [repositoryOverride, setRepositoryOverride] = createSignal<{
@@ -697,7 +698,7 @@ export function NewChatPage(props: {
         onCreate: () => props.onOpenRoster(coding() ? 'coder' : 'agent'),
         onEffort: rememberEffort,
         onSpeed: setPreferredSpeed,
-        onOpenChange: setModelSelectorOpen,
+        onFocusScopeChange: setModelSelectorActive,
         onCloseAutoFocus: restoreInputFocus,
       }}
     />
@@ -756,7 +757,7 @@ export function NewChatPage(props: {
   const repositoryPicker = () => (
     <RepositoryPicker
       compactPhone={phoneComposer()}
-      onOpenChange={setRepositoryPickerOpen}
+      onFocusScopeChange={setRepositoryPickerActive}
       repoUrl={repoUrl()}
       branch={repoBranch()}
       branchLocked={localRuntime()}
@@ -781,7 +782,7 @@ export function NewChatPage(props: {
       collapseOnBlur={props.compact}
       phoneLayout={phoneComposer()}
       settingsPlacement={homeLayout() ? 'below' : 'inside'}
-      controlsOpen={repositoryPickerOpen() || modelSelectorOpen()}
+      controlsOpen={repositoryPickerActive() || modelSelectorActive()}
       registerFocus={(focus) => {
         focusInput = focus;
         props.registerFocus?.(focus);

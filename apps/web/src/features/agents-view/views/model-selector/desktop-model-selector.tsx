@@ -2,7 +2,7 @@ import { t } from '@app/lib/i18n';
 import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigation';
 import * as Popover from '@kobalte/core/popover';
 import { Button } from '@ui';
-import { Show, untrack } from 'solid-js';
+import { onCleanup, Show, untrack } from 'solid-js';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { createModelSelectorNavigation } from '../../primitives/model-selector-navigation';
 import { ModelSelectionList } from '../shared/model-selection-list';
@@ -13,7 +13,18 @@ import { UnifiedModelTriggerContent } from '../shared/model-trigger-content';
 export function DesktopModelSelector() {
   const state = useUnifiedModelSelector();
   let trigger: HTMLButtonElement | undefined;
-  const nav = createModelSelectorNavigation(state.onOpenChange, () => trigger);
+  const nav = createModelSelectorNavigation(
+    (open) => {
+      if (open) state.onFocusScopeChange?.(true);
+      state.onOpenChange?.(open);
+    },
+    () => trigger
+  );
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+    state.onFocusScopeChange?.(false);
+  });
   createCloseOnNavigation({
     open: nav.open,
     close: () => nav.changeOpen(false),
@@ -81,7 +92,17 @@ export function DesktopModelSelector() {
                 ?.focus({ preventScroll: true });
             });
           }}
-          onCloseAutoFocus={state.onCloseAutoFocus}
+          onCloseAutoFocus={(event) => {
+            if (disposed || nav.open()) {
+              event.preventDefault();
+              return;
+            }
+            state.onCloseAutoFocus?.(event);
+            // Release the composer only after the library restores focus.
+            queueMicrotask(() => {
+              if (!disposed && !nav.open()) state.onFocusScopeChange?.(false);
+            });
+          }}
           onEscapeKeyDown={(event) => {
             if (nav.page() !== 'card') {
               event.preventDefault();
