@@ -525,7 +525,7 @@ export class CoordinatorCore {
       });
     }
     if (this.supersedePending) {
-      actions.push(...this.completeSupersede());
+      actions.push(...this.drainForNewerBuild(this.stateValue));
       return actions;
     }
     // A hidden engine may have reset storage before it immediately drains.
@@ -727,7 +727,17 @@ export class CoordinatorCore {
       this.supersedePending = true;
       return [];
     }
+    if (state.kind === 'active') return this.drainForNewerBuild(state);
     return this.completeSupersede();
+  }
+
+  private drainForNewerBuild({
+    tabId,
+    ownerEpoch,
+  }: Extract<CoordinatorState, { kind: 'active' }>): CoordinatorAction[] {
+    this.supersedePending = true;
+    this.stateValue = { kind: 'draining', tabId, ownerEpoch };
+    return [{ kind: 'drain-owner', tabId, ownerEpoch, handoff: true }];
   }
 
   private completeSupersede(): CoordinatorAction[] {
