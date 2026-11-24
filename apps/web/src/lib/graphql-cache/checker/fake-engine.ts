@@ -41,8 +41,8 @@ export class DurableStorage {
   readonly openConflicts: string[] = [];
   /** Every mutation that reached a durable queue, with where it went. */
   readonly admitted = new Map<string, string>();
-  /** Settles when the context that has the database files open lets go. */
-  filesFreed: Promise<void> | undefined;
+  /** By scope: settles when the context that has its files open lets go. */
+  readonly filesFreed = new Map<string, Promise<void>>();
   /** How many of the next opens fail with a storage error. */
   failNextOpens = 0;
   /** Each open, in order: which build opened which database. */
@@ -219,7 +219,7 @@ export class FakeEngineCore {
       await this.options.onOwnerLockBusy?.(attempt);
     }
     await this.options.onOwnerLockAcquired?.();
-    await this.filesFree();
+    await this.filesFree(scope);
     if (this.options.recoveryOpen) this.storage.wipe(scope);
     if (this.storage.failNextOpens > 0) {
       this.storage.failNextOpens -= 1;
@@ -235,14 +235,14 @@ export class FakeEngineCore {
 
   /** Like turso-opfs' `retry_busy_entry`: wait a bounded time for files a
    * predecessor still has open, and change nothing when they stay open. */
-  private async filesFree(): Promise<void> {
-    const freed = this.storage.filesFreed;
+  private async filesFree(scope: string): Promise<void> {
+    const freed = this.storage.filesFreed.get(scope);
     if (!freed) return;
     const deadline = new Promise<void>((resolve) => {
       this.sim.setTimeout(resolve, BUSY_FILES_WAIT_MS);
     });
     await Promise.race([freed, deadline]);
-    if (!this.storage.filesFreed) return;
+    if (!this.storage.filesFreed.has(scope)) return;
     this.options.onStorageBusy?.();
     this.releaseLock?.();
     throw new Error('storage error: database file is busy');

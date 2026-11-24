@@ -64,6 +64,8 @@ describe('handover checker', () => {
         if (DEEP && bound.maxFaults + bound.maxDelays === 1) {
           const all = await explore(scenario, { ...bound, prune: false });
           report.push({ unpruned: scenario.name, runs: all.runs });
+          expect(all.truncated, 'the unpruned run was complete').toBe(false);
+          expect(all.cutShort, 'unpruned runs that hit a step cap').toBe(0);
           expect(all.findings.map(violationKey).sort()).toEqual(
             result.findings.map(violationKey).sort()
           );

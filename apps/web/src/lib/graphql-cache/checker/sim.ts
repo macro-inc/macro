@@ -332,15 +332,23 @@ export class SimLockManager {
   }
 
   /** One pipe from the browser to each context, so its answers stay in order. */
-  private answer(context: SimContext, kind: string, run: () => void): void {
-    this.sim.queueTask(context, `lock:${context.id}`, kind, run);
+  private answer(
+    context: SimContext,
+    kind: string,
+    run: () => void,
+    answer?: unknown
+  ): void {
+    this.sim.queueTask(context, `lock:${context.id}`, kind, run, answer);
   }
 
   async query(): Promise<LockManagerSnapshot> {
     const snapshot = this.snapshot();
     return await new Promise((resolve) => {
-      this.answer(this.sim.current() ?? this.sim.rootContext, 'locks', () =>
-        resolve(snapshot)
+      this.answer(
+        this.sim.current() ?? this.sim.rootContext,
+        'locks',
+        () => resolve(snapshot),
+        snapshot
       );
     });
   }
@@ -542,13 +550,14 @@ export class Sim {
     context: SimContext,
     channel: string,
     kind: string,
-    run: () => void
+    run: () => void,
+    answer?: unknown
   ): void {
     this.seq += 1;
     this.deliveries.push({
       channel,
       target: new SimTask(context, run),
-      data: { kind },
+      data: { kind, answer },
       ports: [],
       seq: this.seq,
       sender: undefined,
@@ -663,13 +672,13 @@ export class Sim {
    * Holds a channel's messages back until a timer is due and has had its turn,
    * whether it fires or is cleared first.
    */
-  holdUntil(channel: string, { at, label }: Timer): void {
-    this.seq += 1;
+  holdUntil(channel: string, { at, label, seq }: Timer): void {
     const id = this.timerIds++;
     this.timers.set(id, {
       id,
       at,
-      seq: this.seq,
+      // Right after that timer, before any other due at the same instant.
+      seq: seq + 0.5,
       context: undefined,
       fn: () => this.releaseLate(),
       label: `late:${channel}:${label}`,

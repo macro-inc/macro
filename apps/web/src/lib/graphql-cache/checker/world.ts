@@ -82,7 +82,10 @@ function takeDocument(): () => void {
   const overrides = DOCUMENT_STATE.map(
     (name) => [name, Object.getOwnPropertyDescriptor(document, name)] as const
   );
-  const stored = Object.entries({ ...localStorage });
+  const stored = Array.from({ length: localStorage.length }, (_, index) => {
+    const key = localStorage.key(index) ?? '';
+    return [key, localStorage.getItem(key) ?? ''] as const;
+  });
   return () => {
     for (const [name, descriptor] of overrides) {
       if (descriptor) Object.defineProperty(document, name, descriptor);
@@ -791,7 +794,7 @@ export class World {
         continue;
       }
       if (kind === 'hold-files') {
-        if (!this.storage.filesFreed) faults.push({ kind });
+        if (this.storage.filesFreed.size === 0) faults.push({ kind });
         continue;
       }
       if (kind === 'open-newer') {
@@ -937,13 +940,16 @@ export class World {
 
   private holdFiles(): void {
     const holder = this.sim.context('file-holder', 'holder', undefined, 0);
+    const scope = getOrCreateCacheScope();
+    const { filesFreed } = this.storage;
     this.sim.runIn(holder, () => {
-      this.storage.filesFreed = new Promise<void>((free) => {
+      const freed = new Promise<void>((free) => {
         this.sim.setTimeout(() => {
-          this.storage.filesFreed = undefined;
+          filesFreed.delete(scope);
           free();
         }, 15_000);
       });
+      filesFreed.set(scope, freed);
     });
   }
 
