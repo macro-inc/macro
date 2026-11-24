@@ -1,6 +1,7 @@
 import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { createCacheSessionExchange } from '@graphql-cache/exchange/session-exchange';
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
+import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
 import type { CacheHost } from '@graphql-cache/host/types';
 
 type ChannelTimelineCommitArgs = Parameters<
@@ -17,6 +18,7 @@ import {
 import { afterEach, expect, it, vi } from 'vitest';
 import { createChannelStream } from '../channel-stream';
 import { channelSyncRuntime } from '../channel-sync';
+import { COMMIT_BUDGET_MS } from '../channel-sync-runtime';
 import { CHANNEL_ID, devicePage, graphqlMessage } from './fixtures';
 
 const network = vi.hoisted(() => ({ client: undefined as Client | undefined }));
@@ -96,12 +98,14 @@ function device() {
   return { host, records, commits, seq: () => seq };
 }
 
-function setup() {
+function setup({ retirable = false } = {}) {
   const local = device();
+  const host = retirable ? createRetirableCacheHost(local.host) : local.host;
   const requests: {
     after: string;
     signal: AbortSignal;
     answer: (page: Delta) => void;
+    fail: () => void;
   }[] = [];
   const lifetime = new AbortController();
   let push:
@@ -111,7 +115,7 @@ function setup() {
     url: 'https://example.invalid/graphql',
     exchanges: [
       createCacheSessionExchange(lifetime.signal),
-      normalizedCacheExchange(local.host, { signal: lifetime.signal }),
+      normalizedCacheExchange(host, { signal: lifetime.signal }),
       subscriptionExchange({
         forwardSubscription: () => ({
           subscribe(observer) {
@@ -158,11 +162,23 @@ function setup() {
                 }
               )
             ),
+          fail: () =>
+            resolve(
+              new Response(
+                JSON.stringify({
+                  errors: [{ message: 'temporary service unavailable' }],
+                }),
+                {
+                  status: 503,
+                  headers: { 'content-type': 'application/json' },
+                }
+              )
+            ),
         });
       });
     },
   });
-  const runtime = channelSyncRuntime(local.host);
+  const runtime = channelSyncRuntime(host);
   const changed = vi.fn();
   const release = runtime.open(CHANNEL_ID);
   runtime.onChanged(CHANNEL_ID, changed);
@@ -189,6 +205,8 @@ function setup() {
     stop() {
       stream.dispose();
       runtime.dispose();
+      // A retired host tears down the runtimes on it, as sign-out does.
+      if (retirable) host.dispose();
       lifetime.abort();
     },
   };
@@ -580,6 +598,240 @@ it('leaves a repair when every reread lands under a newer frame', async () => {
       '7',
       '8',
     ]);
+  } finally {
+    test.stop();
+  }
+});
+
+const cursors = (test: ReturnType<typeof setup>) =>
+  test.requests.map(({ after }) => after);
+const recordKey = (n: number) =>
+  `GraphqlChannelMessage:${graphqlMessage(n).id}`;
+
+/** Stores the first commit but holds its answer until `ack` resolves. */
+function delayCommit(test: ReturnType<typeof setup>) {
+  const commit = test.host.channelTimelineCommit;
+  const ack = Promise.withResolvers<void>();
+  const state = { waiting: false };
+  const spy = vi
+    .spyOn(test.host, 'channelTimelineCommit')
+    .mockImplementation(async (args: ChannelTimelineCommitArgs) => {
+      const written = await commit(args);
+      if (!state.waiting) {
+        state.waiting = true;
+        await ack.promise;
+      }
+      return written;
+    });
+  return { ack, state, spy };
+}
+
+it('replays an overwritten edit when a reconnect ends its reread', async () => {
+  vi.useFakeTimers();
+  const test = setup();
+  const older = graphqlMessage(6, { content: 'older edit' });
+  const newer = graphqlMessage(6, { content: 'newer edit' });
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.push('7', newer);
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[0].answer(delta('6', { messages: [older] }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(cursors(test)).toEqual(['5', '6']);
+    expect(test.records.get(recordKey(6))).toBe('older edit');
+
+    test.reconnect();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.requests[1].signal.aborted).toBe(true);
+    // The reconnect repairs from the overtaken page, which reads the edit.
+    const replay = test.requests[2];
+    expect(replay.after).toBe('6');
+    replay.answer(delta('7', { messages: [newer] }));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.seq()).toBe('7');
+    await expect(test.runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe(
+      'current'
+    );
+    expect(test.records.get(recordKey(6))).toBe('newer edit');
+  } finally {
+    test.stop();
+  }
+});
+
+it('replays an overwritten edit when a drop lands during the page commit', async () => {
+  vi.useFakeTimers();
+  const test = setup();
+  const older = graphqlMessage(6, { content: 'older edit' });
+  const newer = graphqlMessage(6, { content: 'newer edit' });
+  const delayed = delayCommit(test);
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.push('7', newer);
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[0].answer(delta('6', { messages: [older] }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(delayed.state.waiting).toBe(true);
+
+    test.reconnect();
+    await vi.advanceTimersByTimeAsync(20);
+    delayed.ack.resolve();
+    await vi.advanceTimersByTimeAsync(600);
+    for (const replay of test.requests.slice(1)) {
+      replay.answer(
+        delta('7', { messages: replay.after === '7' ? [] : [newer] })
+      );
+      await vi.advanceTimersByTimeAsync(600);
+    }
+    expect(test.seq()).toBe('7');
+    await expect(test.runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe(
+      'current'
+    );
+    expect(test.records.get(recordKey(6))).toBe('newer edit');
+  } finally {
+    delayed.ack.resolve();
+    test.stop();
+  }
+});
+
+it('leaves a failed repair to the next open instead of retrying at once', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+  const test = setup();
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.requests[0].answer(delta('6', { messages: [graphqlMessage(6)] }));
+    await vi.advanceTimersByTimeAsync(20);
+    // A frame at or below the sequence held asks for a repair.
+    test.push('6', graphqlMessage(6));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(cursors(test)).toEqual(['5', '5']);
+    test.requests[1].fail();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(test.requests).toHaveLength(2);
+
+    const open = test.runtime.ensureCurrent(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(cursors(test)).toEqual(['5', '5', '5']);
+    test.requests[2].answer(delta('6', { messages: [graphqlMessage(6)] }));
+    await expect(open).resolves.toBe('applied');
+  } finally {
+    test.stop();
+  }
+});
+
+it('reads the device again once a page commit goes unanswered', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+  const test = setup();
+  const delayed = delayCommit(test);
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.requests[0].answer(delta('6', { messages: [graphqlMessage(6)] }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(delayed.state.waiting).toBe(true);
+
+    test.reconnect();
+    test.push('7', graphqlMessage(7));
+    const open = test.runtime.ensureCurrent(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(COMMIT_BUDGET_MS + 1_000);
+    // Past the budget the channel is free again and catches up from what the
+    // device holds.
+    expect(test.requests.length).toBeGreaterThan(1);
+    const changedBefore = test.changed.mock.calls.length;
+    delayed.ack.resolve();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.changed.mock.calls.length).toBeGreaterThan(changedBefore);
+    for (const request of test.requests.slice(1)) {
+      if (request.signal.aborted) continue;
+      request.answer(delta('7', { messages: [graphqlMessage(7)] }));
+      await vi.advanceTimersByTimeAsync(50);
+    }
+    await open;
+    expect(test.seq()).toBe('7');
+  } finally {
+    delayed.ack.resolve();
+    test.stop();
+  }
+});
+
+it('starts no held-frame commit once disposed during a page commit', async () => {
+  vi.useFakeTimers();
+  const test = setup();
+  const delayed = delayCommit(test);
+  try {
+    await vi.advanceTimersByTimeAsync(20);
+    test.push('7', graphqlMessage(7));
+    await vi.advanceTimersByTimeAsync(600);
+    test.requests[0].answer(delta('6', { messages: [graphqlMessage(6)] }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(delayed.state.waiting).toBe(true);
+    test.runtime.dispose();
+    delayed.ack.resolve();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(delayed.spy.mock.calls.map(([args]) => args.seq)).toEqual([
+      { kind: 'advance', from: '5', to: '6' },
+    ]);
+  } finally {
+    delayed.ack.resolve();
+    test.stop();
+  }
+});
+
+it('dispose ends an open catch-up request before it commits', async () => {
+  vi.useFakeTimers();
+  const test = setup();
+  try {
+    const outcome = test.runtime.ensureCurrent(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.requests).toHaveLength(1);
+    test.runtime.dispose();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.requests[0].signal.aborted).toBe(true);
+    await expect(outcome).resolves.toBe('skipped');
+    expect(test.commits).toHaveLength(0);
+  } finally {
+    test.stop();
+  }
+});
+
+it('a reconnect ends an open catch-up stuck on a reread', async () => {
+  vi.useFakeTimers();
+  const test = setup();
+  try {
+    const open = test.runtime.ensureCurrent(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(20);
+    test.push('7', graphqlMessage(6, { content: 'newer edit' }));
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[0].answer(
+      delta('6', { messages: [graphqlMessage(6, { content: 'older edit' })] })
+    );
+    await vi.advanceTimersByTimeAsync(20);
+    const reread = test.requests[1];
+    expect(reread.after).toBe('6');
+
+    test.reconnect();
+    test.push('8', graphqlMessage(8));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(reread.signal.aborted).toBe(true);
+    await expect(open).resolves.toBe('skipped');
+    expect(test.requests.length).toBeGreaterThan(2);
+  } finally {
+    test.stop();
+  }
+});
+
+it('retiring the host ends an open catch-up request', async () => {
+  vi.useFakeTimers();
+  const test = setup({ retirable: true });
+  try {
+    const outcome = test.runtime.ensureCurrent(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.requests).toHaveLength(1);
+    test.stop();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.requests[0].signal.aborted).toBe(true);
+    await expect(outcome).resolves.toBe('skipped');
+    expect(test.commits).toHaveLength(0);
   } finally {
     test.stop();
   }

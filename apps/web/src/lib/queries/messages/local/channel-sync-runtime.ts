@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/index';
 import {
   type Span,
@@ -43,6 +44,12 @@ const MAX_HELD_FRAMES = 50;
  * while the page was out; past that, the next catch-up repairs from there.
  */
 const MAX_PAGE_REREADS = 2;
+/**
+ * How long a catch-up or a frame waits for the device to take a commit.
+ * It cannot be cancelled once sent, and it holds the channel: past this the
+ * runtime reads the sequence from the device again.
+ */
+export const COMMIT_BUDGET_MS = 20_000;
 
 export type ChannelSyncHost = Pick<
   CacheHost,
@@ -117,6 +124,8 @@ type ChannelState = {
    */
   covered: Set<bigint>;
   debounce?: Fiber.Fiber<unknown, unknown>;
+  /** Catch-ups `ensureCurrent` runs, which a drop ends too. */
+  opens: Set<Fiber.Fiber<unknown, unknown>>;
 };
 
 export interface ChannelSyncRuntime {
@@ -221,6 +230,7 @@ export function createChannelSyncRuntime(
         forgets: 0,
         pagesOut: new Set(),
         covered: new Set(),
+        opens: new Set(),
       };
       channels.set(channelId, state);
     }
@@ -291,9 +301,33 @@ export function createChannelSyncRuntime(
     >,
     generation: string
   ) =>
-    Effect.tryPromise(() =>
-      deps.host.channelTimelineCommit({ channelId, ...args }, generation)
-    );
+    Effect.suspend(() => {
+      // A commit runs uninterruptibly; one that would start after dispose
+      // ends its fiber instead.
+      if (disposed) return Effect.interrupt;
+      const pending = deps.host.channelTimelineCommit(
+        { channelId, ...args },
+        generation
+      );
+      return Effect.tryPromise(() => pending).pipe(
+        Effect.timeoutOption(COMMIT_BUDGET_MS),
+        Effect.flatMap((answer) => {
+          if (answer._tag === 'Some') return Effect.succeed(answer.value);
+          // Unanswered: what the device holds is unknown until it is read
+          // again, and the views read again once the device answers.
+          const state = stateOf(channelId);
+          state.seq = undefined;
+          state.current = false;
+          fireAndForget(notifyWhenSettled(pending, channelId), 'channel-sync');
+          return Effect.fail(new Error('channel commit went unanswered'));
+        })
+      );
+    });
+
+  const notifyWhenSettled = async (pending: Promise<unknown>, id: string) => {
+    await Promise.allSettled([pending]);
+    if (!disposed) notifyChanged(id);
+  };
 
   /**
    * A frame stored records for a channel the device does not hold: an empty
@@ -364,8 +398,10 @@ export function createChannelSyncRuntime(
 
   /**
    * A catch-up ended: the views reread what it changed, an interrupted one's
-   * commits included, and a repair it left behind (its pages kept landing
-   * under newer frames) runs once things settle.
+   * commits included, and a repair a finished one left behind (its pages
+   * kept landing under newer frames) runs once things settle. One that
+   * failed leaves its repair to the next open, frame or reconnect, so a
+   * server that keeps failing is not asked at the debounce's pace.
    */
   const settled = (
     channelId: string,
@@ -376,7 +412,12 @@ export function createChannelSyncRuntime(
     const outcome = Exit.isSuccess(exit) ? exit.value : undefined;
     if (progress.committed || (outcome && outcome !== 'current'))
       notifyChanged(channelId);
-    if (isConnected && state.repairFrom !== undefined && !state.current)
+    if (
+      outcome &&
+      isConnected &&
+      state.repairFrom !== undefined &&
+      !state.current
+    )
       scheduleCatchUp(channelId, 'gap');
   };
 
@@ -443,6 +484,8 @@ export function createChannelSyncRuntime(
     // Frames past an overtaken page: the page read again after them covers
     // those it commits through.
     const covering: bigint[] = [];
+    // The lowest repair this catch-up left for an overtaken page.
+    let overtaken: bigint | undefined;
     for (let page = 0; page < MAX_CHANGE_PAGES + rereads; page += 1) {
       const out: PageOut = { newestFrame: undefined, frames: [] };
       state.pagesOut.add(out);
@@ -494,13 +537,23 @@ export function createChannelSyncRuntime(
       // read again by the next one.
       const overwritten =
         !delta.hasMore && out.newestFrame !== undefined && out.newestFrame > to;
+      // Left as a repair until a page read again holds, so a drop or a
+      // failure before then repairs from here.
+      if (
+        overwritten &&
+        (state.repairFrom === undefined || to < state.repairFrom)
+      ) {
+        state.repairFrom = to;
+        if (overtaken === undefined || to < overtaken) overtaken = to;
+      }
       if (overwritten && rereads < MAX_PAGE_REREADS) {
         covering.push(...out.frames.filter((seq) => seq > to));
         rereads += 1;
         continue;
       }
       if (!delta.hasMore) {
-        if (state.repairFrom === repair) state.repairFrom = undefined;
+        if (state.repairFrom === repair || state.repairFrom === overtaken)
+          state.repairFrom = undefined;
         for (const seq of covering) if (seq <= to) state.covered.add(seq);
         // Still overwritten: the next catch-up repairs from the page.
         if (
@@ -702,6 +755,7 @@ export function createChannelSyncRuntime(
         // next connection and write older records over it: end it, and the
         // reconnect, or the next open, reads from the stored sequence.
         if (state.debounce) Effect.runFork(Fiber.interrupt(state.debounce));
+        for (const open of state.opens) Effect.runFork(Fiber.interrupt(open));
         state.covered.clear();
       }
     },
@@ -754,7 +808,24 @@ export function createChannelSyncRuntime(
     ensureCurrent(channelId) {
       if (disposed) return Promise.resolve('skipped');
       // Taken before any await: the catch-up's span is a child of the open.
-      return run(lockedCatchUp(channelId, 'open', Telemetry.captureContext()));
+      const trace = Telemetry.captureContext();
+      const state = stateOf(channelId);
+      // In the runtime's scope, so a drop or dispose ends its request too;
+      // an ended one reports `skipped`, and the reconnect catches up.
+      const open = Effect.runSync(
+        lockedCatchUp(channelId, 'open', trace).pipe(Effect.forkIn(scope))
+      );
+      state.opens.add(open);
+      return run(
+        Fiber.await(open).pipe(
+          Effect.flatMap((exit) => {
+            state.opens.delete(open);
+            if (Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause))
+              return Effect.succeed('skipped' as const);
+            return exit;
+          })
+        )
+      );
     },
     onChanged(channelId, listener) {
       let set = listeners.get(channelId);
