@@ -150,7 +150,9 @@ const WORK_TABLES = `SELECT DISTINCT c.conrelid::regclass::text AS name
   FROM pg_constraint c
   JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
  WHERE c.contype = 'f' AND c.confrelid = '"User"'::regclass AND a.attname = 'user_id'
-   AND c.conrelid::regclass::text ~ '^(routine_)?suggestion'`;
+   AND c.conrelid::regclass::text ~ '^(routine_)?suggestion'
+ -- A suggestion before the topic it names.
+ ORDER BY name`;
 
 /** The email drafts of a person's mailboxes: personas seed none, so any is a session's. */
 const DRAFTS = `FROM email_messages WHERE is_draft AND link_id IN (SELECT id FROM email_links WHERE macro_id = $1)`;
