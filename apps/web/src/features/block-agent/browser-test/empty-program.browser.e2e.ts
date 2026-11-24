@@ -11,7 +11,7 @@ test('a program that failed before naming a step shows no row or count', async (
   });
   // Alone in its run: no group, no row, no count.
   await expect(alone.getByRole('button', { name: /Used/ })).toHaveCount(0);
-  await expect(alone.getByTestId('tool-card')).toHaveCount(0);
+  await expect(alone.locator('[data-tool-status]')).toHaveCount(0);
   await expect(alone).not.toContainText(
     /Workspace activity|A step failed|tool/
   );

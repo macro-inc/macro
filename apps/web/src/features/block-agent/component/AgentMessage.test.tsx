@@ -836,7 +836,23 @@ describe('Message tool runs', () => {
         inFlight={false}
       />
     ));
-    expect(view.getByTestId('group').dataset.count).toBe('1');
+    // A program that finished without naming a step still counts, as before.
+    expect(view.getByTestId('group').dataset.count).toBe('2');
+  });
+
+  it("opens no group for a settled run whose program's placeholder is stale", () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [program('stale', 'running'), text('Something went wrong.')],
+          { kind: 'end_turn' },
+          [row('stale', 'Working on it', 'running')]
+        )}
+        inFlight={false}
+      />
+    ));
+    expect(view.queryByTestId('group')).toBeNull();
+    expect(view.container.textContent).not.toMatch(/Working on it|1 tool/);
   });
 
   it('counts a running program before it names a step', () => {

@@ -81,7 +81,7 @@ describe('CodeExecutionToolCall', () => {
       />
     ));
 
-    expect(view.queryByTestId('tool-card')).toBeNull();
+    expect(view.container.querySelector('[data-tool-status]')).toBeNull();
     expect(view.container.textContent).toBe('');
     // The failure stays in the record and telemetry, not the transcript.
     expect(
@@ -89,35 +89,44 @@ describe('CodeExecutionToolCall', () => {
     ).not.toBeNull();
   });
 
-  it('still says when its results are loading or unavailable', () => {
-    const view = render(() => (
-      <CodeExecutionToolCall
-        common={{
-          id: 'execute-code',
-          label: 'ExecuteCode',
-          status: 'failed',
-          unsuccessful: true,
-          stopped: false,
-          trailing: undefined,
-        }}
-        context={{
-          sessionId: 'session',
-          messageId: 'session:turn-1',
-          partIndex: 0,
-          inFlight: false,
-          followedBy: () => false,
-        }}
-        loading
-        unavailable
-      />
-    ));
+  it.each([
+    { loading: true, unavailable: false, notice: 'Loading tool results…' },
+    {
+      loading: false,
+      unavailable: true,
+      notice: 'Tool results are unavailable.',
+    },
+  ])(
+    'still says "$notice" for a program with no row',
+    ({ loading, unavailable, notice }) => {
+      const view = render(() => (
+        <CodeExecutionToolCall
+          common={{
+            id: 'execute-code',
+            label: 'ExecuteCode',
+            status: 'failed',
+            unsuccessful: true,
+            stopped: false,
+            trailing: undefined,
+          }}
+          context={{
+            sessionId: 'session',
+            messageId: 'session:turn-1',
+            partIndex: 0,
+            inFlight: false,
+            followedBy: () => false,
+          }}
+          loading={loading}
+          unavailable={unavailable}
+        />
+      ));
 
-    expect(view.queryByTestId('tool-card')).toBeNull();
-    expect(view.getAllByRole('status').map((row) => row.textContent)).toEqual([
-      'Loading tool results…',
-      'Tool results are unavailable.',
-    ]);
-  });
+      expect(view.container.querySelector('[data-tool-status]')).toBeNull();
+      expect(view.getAllByRole('status').map((row) => row.textContent)).toEqual(
+        [notice]
+      );
+    }
+  );
 
   it('keeps a step failure on its own row when other steps ran', () => {
     const view = render(() => (

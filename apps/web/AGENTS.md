@@ -1324,8 +1324,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   names; completed step snapshots come from the shared fold of the tool receipt.
   Session `ExecuteCode` calls join their segment's tool group as their SDK
   operation rows only; never show the program or code-mode wording. A program
-  that settles without naming a step shows no row and adds nothing to its
-  group's count, in the session and in channel/DM replies alike. A live
+  that fails or is cut off without naming a step shows no row and adds nothing
+  to its group's count, in the session and in channel/DM replies alike; a run
+  that is no longer live never counts a program's working placeholder. A live
   tool group's header is the shared `ActivityLine` (`block-agent/ui`), the one
   a channel reply's open run uses; never add a second working line or a
   scrolling peek window beside it. `activity.browser.e2e.ts` in
