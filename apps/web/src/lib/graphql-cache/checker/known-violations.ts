@@ -14,9 +14,7 @@ export type KnownViolation = ViolationKey & {
 };
 
 const WIPE =
-  'The open after an owner died without closing storage wipes the database, queued writes included.';
-const DEPARTURE_RACE =
-  "A closing owner's liveness lock can be handed on before its departure message arrives, so it counts as crashed and its database is wiped.";
+  'The open after an engine died in a live page wipes the database, queued writes included.';
 const STARTUP_LOSS =
   "An owner lost while a tab's startup handshake is pending fails the handshake. The page drops a host that was waiting for the next owner, and recovery calls the error unrecoverable and stops until reload.";
 const DISPOSE_QUARANTINE =
@@ -35,8 +33,6 @@ const FILES_BUSY =
   "A coordinator whose database files another context keeps open past the engine's wait turns the cache off in its tabs.";
 const STARTUP_TIMEOUT =
   'A startup request that outlives its timer drops a host that could still start, and recovery calls the timeout unrecoverable and stops until reload.';
-const TIMEOUT_WIPE =
-  "An owner whose startup request times out is disposed like a crashed one, so the next open wipes the other tabs' queued writes.";
 const UNCODED_TIMEOUT = 'A request that times out is refused without a code.';
 const DRAIN_UNBOUNDED =
   'A frozen owner never finishes its drain, and nothing bounds how long the handover waits for it.';
@@ -98,8 +94,6 @@ const CONTENDING: InjectedFault[] = [
 
 export const KNOWN_VIOLATIONS: KnownViolation[] = [
   ...known(WIPE, ['crash-engine owner'], [WIPED]),
-  ...known(WIPE, ['kill owner'], [WIPED]),
-  ...known(DEPARTURE_RACE, ['close owner'], [WIPED], { reordered: true }),
   ...OWNER_LOST.flatMap((fault) => [
     ...known(STARTUP_LOSS, [fault], [EPOCH_LOST, STOPPED, UNSERVED]),
     ...known(STARTUP_LOSS, [fault], [READ_DISPOSED, UNSTARTED]),
@@ -166,10 +160,6 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
       UNSERVED,
     ]
   ),
-  ...known(DEPARTURE_RACE, ['bfcache owner'], [WIPED], {
-    reordered: true,
-    deep: true,
-  }),
   ...known(STARTUP_LOSS, ['expire-session owner'], [READ_DISPOSED], {
     reordered: true,
     deep: true,
@@ -183,7 +173,6 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
     [ABANDONED, ABANDONED_OPEN],
     { deep: true }
   ),
-  ...known(TIMEOUT_WIPE, ['late-message'], [WIPED]),
   ...known(
     UNCODED_TIMEOUT,
     ['late-message'],

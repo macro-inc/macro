@@ -253,14 +253,17 @@ drain waits for that set to empty before closing the core, runner, and worker.
 The cache's validated envelopes, request ids, Web Locks, owner epochs,
 heartbeats, and replay policy remain application-owned. A normal `pagehide`
 uses a fenced navigation-departure message: the page terminates its dedicated
-worker, but the next owner opens the existing OPFS database. Only an
-unannounced liveness, transport, or engine failure **after the database
-open grant** selects `wipe-before-open`. A missed heartbeat alone is not owner
-loss: background tabs and their dedicated workers may be suspended while the
+worker, but the next owner opens the existing OPFS database. A page that leaves
+without saying so (a killed tab, a departure message that arrives after its
+liveness lock is released) or disposes its cache stops its worker the same way
+and is treated the same; a wipe already due stays due. Only an engine failure
+reported by a page or seen by the coordinator **after the database open grant**
+selects `wipe-before-open`. A missed heartbeat alone is not owner loss: background tabs and their dedicated workers may be suspended while the
 SharedWorker still runs. The coordinator probes the physical owner Web Lock
 without waiting or stealing it; a held lock (or a failed probe) retries the
 heartbeat without changing epochs or touching storage. A released lock confirms
-silent worker termination and triggers the usual fenced recovery. Read deadlines
+silent worker termination and triggers the usual fenced recovery, unless the
+page's liveness lock is released too, which means the page left. Read deadlines
 still bound callers waiting on an unresponsive engine outside a visibility handoff.
 
 Protocol v10 reports tab visibility and epoch-fenced read states: `ready`,

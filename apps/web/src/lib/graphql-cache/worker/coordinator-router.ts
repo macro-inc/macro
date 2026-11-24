@@ -5,6 +5,7 @@ import { match } from 'ts-pattern';
 import type { CacheResponse } from '../protocol';
 import {
   type CacheResetReason,
+  type CacheTelemetryObservation,
   type CacheTelemetryRecorderLike,
   classifyCacheError,
   describeCacheError,
@@ -1444,33 +1445,10 @@ export class CoordinatorRouter {
       return;
     }
 
-    this.activationStarted.delete(ownerEpoch);
-    const interruptedResetReason =
-      state.kind === 'activating' && state.databaseAction === 'wipe-before-open'
-        ? this.pendingRecoveryResetEpochs.get(ownerEpoch)
-        : undefined;
-    if (interruptedResetReason !== undefined) {
-      this.pendingRecoveryResetEpochs.delete(ownerEpoch);
-      this.nextRecoveryResetReason = interruptedResetReason;
-    }
-    this.telemetry.record({
-      name: 'graphql_cache.owner',
-      operationCategory: 'lifecycle',
+    this.recordOwnerLeft(ownerEpoch, {
       outcome: 'graceful',
       ownerEvent: 'navigation-departure',
     });
-    for (const [routeId, timing] of this.routeStarted) {
-      if (timing.ownerEpoch !== ownerEpoch) continue;
-      this.routeStarted.delete(routeId);
-      this.telemetry.record({
-        name: 'graphql_cache.coordinator_request',
-        operationCategory: timing.category,
-        outcome: 'error',
-        errorCode: 'owner-lost',
-        durationMs: this.now() - timing.startedAt,
-      });
-    }
-    this.clearEngineWatchdogs();
     this.applyActions(actions);
   }
 
@@ -1485,46 +1463,51 @@ export class CoordinatorRouter {
       state.kind !== 'failed' &&
       state.tabId === tabId
     ) {
-      this.handoff.cancel();
-      this.activationStarted.delete(state.ownerEpoch);
-      if (
-        state.kind !== 'activating' ||
-        startupPhaseMayTouchStorage(state.phase) ||
-        state.databaseAction === 'wipe-before-open'
-      ) {
-        const pendingReason = this.recordPendingResetFailure(
-          state.ownerEpoch,
-          reason
-        );
-        const resetReason = pendingReason ?? 'abrupt-owner-loss';
-        this.nextRecoveryResetReason = resetReason;
-        if (pendingReason === undefined)
-          this.recordStorageResetRequired(state.ownerEpoch, resetReason);
-      }
-      this.telemetry.record({
-        name: 'graphql_cache.owner',
-        operationCategory: 'lifecycle',
+      this.recordOwnerLeft(state.ownerEpoch, {
         outcome: 'abrupt',
         ownerEvent: 'abrupt-loss',
         ...describeCacheError(reason),
       });
-      for (const [routeId, timing] of this.routeStarted) {
-        if (timing.ownerEpoch !== state.ownerEpoch) continue;
-        this.routeStarted.delete(routeId);
-        this.telemetry.record({
-          name: 'graphql_cache.coordinator_request',
-          operationCategory: timing.category,
-          outcome: 'error',
-          errorCode: 'owner-lost',
-          durationMs: this.now() - timing.startedAt,
-        });
-      }
       // The page may still be alive after a liveness or MessagePort failure.
       // Tell it to kill the orphanable DedicatedWorker before dropping its port.
       this.postTerminateEngine(tabId, state.ownerEpoch, reason);
-      this.clearEngineWatchdogs();
     }
     this.applyActions(core.tabLost(tabId, reason));
+  }
+
+  /** The owner's page left with its engine: close what was timed for it, and
+   * keep the reason for a wipe it did not finish for the next owner. */
+  private recordOwnerLeft(
+    ownerEpoch: number,
+    event: Pick<
+      CacheTelemetryObservation,
+      'outcome' | 'ownerEvent' | 'errorCode' | 'errorName' | 'errorDetail'
+    >
+  ): void {
+    this.activationStarted.delete(ownerEpoch);
+    const interruptedResetReason =
+      this.pendingRecoveryResetEpochs.get(ownerEpoch);
+    if (interruptedResetReason !== undefined) {
+      this.pendingRecoveryResetEpochs.delete(ownerEpoch);
+      this.nextRecoveryResetReason = interruptedResetReason;
+    }
+    this.telemetry.record({
+      name: 'graphql_cache.owner',
+      operationCategory: 'lifecycle',
+      ...event,
+    });
+    for (const [routeId, timing] of this.routeStarted) {
+      if (timing.ownerEpoch !== ownerEpoch) continue;
+      this.routeStarted.delete(routeId);
+      this.telemetry.record({
+        name: 'graphql_cache.coordinator_request',
+        operationCategory: timing.category,
+        outcome: 'error',
+        errorCode: 'owner-lost',
+        durationMs: this.now() - timing.startedAt,
+      });
+    }
+    this.clearEngineWatchdogs();
   }
 
   private recordStorageResetRequired(
@@ -1732,10 +1715,18 @@ export class CoordinatorRouter {
     // recovery while the page is still suspended. Only a released physical
     // owner lock confirms silent worker death (terminate() emits no error).
     let lockHeld: boolean;
+    let pageGone = false;
     try {
       lockHeld = await this.verifyOwnerLockHeld(
         databaseOwnerLockName(core.scope)
       );
+      // A page that is gone took its worker along, and the news of it may
+      // not have arrived yet. That is a page leaving, not an engine failing.
+      pageGone =
+        !lockHeld &&
+        !(await this.verifyTabLockHeld(
+          tabLivenessLockName(core.scope, route.tabId)
+        ));
     } catch {
       // A failed probe is not proof of owner loss either. Retry later.
       lockHeld = true;
@@ -1747,6 +1738,10 @@ export class CoordinatorRouter {
       this.pendingHeartbeat?.ownerEpoch !== route.ownerEpoch ||
       this.pendingHeartbeat.heartbeatId !== heartbeatId
     ) {
+      return;
+    }
+    if (pageGone) {
+      this.loseTab(route.tabId, 'tab liveness lock was released');
       return;
     }
     if (!lockHeld) {

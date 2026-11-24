@@ -702,11 +702,60 @@ export class CoordinatorCore {
       );
     }
 
+    return this.ownerLeft(
+      state,
+      `owner epoch ${ownerEpoch} departed for navigation: ${reason}`
+    );
+  }
+
+  /**
+   * A page that is gone, or that disposed its cache, stopped its engine worker
+   * the way a navigating page does. That interrupts the engine at a point the
+   * database recovers from, so it never calls for a wipe.
+   */
+  tabLost(
+    tabId: string,
+    reason = 'tab liveness lock was released'
+  ): CoordinatorAction[] {
+    if (!this.tabs.includes(tabId)) return [];
+    const state = this.stateValue;
+    if (
+      (state.kind === 'active' ||
+        state.kind === 'activating' ||
+        state.kind === 'draining') &&
+      state.tabId === tabId
+    ) {
+      return this.ownerLeft(
+        state,
+        `owner epoch ${state.ownerEpoch} was lost: ${reason}`
+      );
+    }
+
+    const actions: CoordinatorAction[] = [{ kind: 'drop-tab', tabId }];
+    this.removeTabRecord(tabId);
+    this.retiringTabs.delete(tabId);
+    if (this.inFlight.size === 0) {
+      actions.push(...this.broadcastCacheChanges(this.cacheChanges.flush()));
+    }
+    this.assertInvariants();
+    return actions;
+  }
+
+  /** The owner's page left with its engine. The next owner opens the same
+   * database, unless a wipe was already due. */
+  private ownerLeft(
+    state: Extract<
+      CoordinatorState,
+      { kind: 'activating' | 'active' | 'draining' }
+    >,
+    error: string
+  ): CoordinatorAction[] {
+    const { tabId, ownerEpoch } = state;
     const nextDatabaseAction: DatabaseAction =
       state.kind === 'activating' ? state.databaseAction : 'open-existing';
     const actions = this.rejectEpochRequests(
       ownerEpoch,
-      `owner epoch ${ownerEpoch} departed for navigation: ${reason}`,
+      error,
       OWNER_EPOCH_LOST_ERROR_CODE
     );
     this.removeTabRecord(tabId);
@@ -715,38 +764,12 @@ export class CoordinatorCore {
       { kind: 'close-engine-route', tabId, ownerEpoch },
       { kind: 'drop-tab', tabId }
     );
-    this.stateValue = {
-      kind: 'waiting-for-tab',
-      nextDatabaseAction,
-    };
-    actions.push(...this.activateNext(nextDatabaseAction));
-    this.assertInvariants();
-    return actions;
-  }
-
-  tabLost(
-    tabId: string,
-    reason = 'tab liveness lock was released'
-  ): CoordinatorAction[] {
-    if (!this.tabs.includes(tabId)) return [];
-    const state = this.stateValue;
-    const wasOwner =
-      (state.kind === 'active' ||
-        state.kind === 'activating' ||
-        state.kind === 'draining') &&
-      state.tabId === tabId;
-
-    const actions: CoordinatorAction[] = [{ kind: 'drop-tab', tabId }];
-    if (wasOwner) {
-      actions.push(
-        ...this.transitionToAbruptLoss(tabId, state.ownerEpoch, reason)
-      );
-    }
-    this.removeTabRecord(tabId);
-    this.retiringTabs.delete(tabId);
-    if (this.inFlight.size === 0) {
-      actions.push(...this.broadcastCacheChanges(this.cacheChanges.flush()));
-    }
+    this.stateValue = { kind: 'waiting-for-tab', nextDatabaseAction };
+    actions.push(
+      ...(this.supersedePending
+        ? this.completeSupersede()
+        : this.activateNext(nextDatabaseAction))
+    );
     this.assertInvariants();
     return actions;
   }

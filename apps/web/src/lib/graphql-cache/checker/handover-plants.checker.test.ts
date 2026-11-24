@@ -71,8 +71,8 @@ describe('handover checker, on broken code', { timeout: 120_000 }, () => {
       vi.spyOn(
         CoordinatorCore.prototype,
         'departForNavigation'
-      ).mockImplementation(function (this: CoordinatorCore, tabId) {
-        return this.tabLost(tabId);
+      ).mockImplementation(function (this: CoordinatorCore, tabId, epoch) {
+        return this.ownerLost(tabId, epoch, 'owner crashed');
       });
     });
     expect(await newViolations(['close'])).toContain(
@@ -86,7 +86,7 @@ describe('handover checker, on broken code', { timeout: 120_000 }, () => {
         []
       );
     });
-    expect(await newViolations(['kill'])).toContainEqual(
+    expect(await newViolations(['crash-engine'])).toContainEqual(
       expect.stringMatching(/^L2:no active engine \(resetting-after-loss\)/)
     );
   });

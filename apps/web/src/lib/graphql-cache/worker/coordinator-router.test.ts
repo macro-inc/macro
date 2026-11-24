@@ -2140,6 +2140,36 @@ describe('CoordinatorRouter', () => {
     expect(router.snapshot()?.ownerEpoch).toBe(3);
   });
 
+  it('keeps the database when the released owner lock is that of a page that left', async () => {
+    vi.useFakeTimers();
+    let pageAlive = true;
+    const router = new CoordinatorRouter({
+      heartbeatIntervalMs: 5,
+      heartbeatTimeoutMs: 7,
+      verifyTabLockHeld: async () => pageAlive,
+      verifyOwnerLockHeld: async () => pageAlive,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const engine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, engine);
+    ready(engine, 'tab-a', 1, 'opened-existing');
+
+    pageAlive = false;
+    await vi.advanceTimersByTimeAsync(14);
+
+    expect(messagesOfKind(tabB, 'become-owner')).toEqual([
+      expect.objectContaining({
+        ownerEpoch: 2,
+        databaseAction: 'open-existing',
+      }),
+    ]);
+    expect(router.snapshot()?.tabIds).toEqual(['tab-b']);
+  });
+
   it('fails its owner without arming a watchdog when heartbeat send fails', async () => {
     vi.useFakeTimers();
     const router = new CoordinatorRouter({
@@ -2239,7 +2269,7 @@ describe('CoordinatorRouter', () => {
     expect(router.snapshot()?.state).toMatchObject({
       kind: 'activating',
       ownerEpoch: 2,
-      databaseAction: 'wipe-before-open',
+      databaseAction: 'open-existing',
     });
     expect(cancels).toEqual(
       expect.arrayContaining([
@@ -2280,7 +2310,7 @@ describe('CoordinatorRouter', () => {
       kind: 'activating',
       tabId: 'tab-b',
       ownerEpoch: 2,
-      databaseAction: 'wipe-before-open',
+      databaseAction: 'open-existing',
     });
   });
 
@@ -2324,7 +2354,7 @@ describe('CoordinatorRouter', () => {
     expect(router.snapshot()?.state).toMatchObject({
       kind: 'activating',
       ownerEpoch: 2,
-      databaseAction: 'wipe-before-open',
+      databaseAction: 'open-existing',
     });
   });
 

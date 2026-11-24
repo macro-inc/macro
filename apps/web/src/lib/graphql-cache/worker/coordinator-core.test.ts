@@ -182,7 +182,7 @@ describe('CoordinatorCore', () => {
     core.registerTab('tab-a');
     core.registerTab('tab-b');
     ready(core, 'tab-a', 1, 'opened-existing');
-    core.tabLost('tab-a');
+    core.ownerLost('tab-a', 1, 'engine failed');
     expect(action(core.resumeAfterLoss(), 'elect-owner')).toMatchObject({
       tabId: 'tab-b',
       databaseAction: 'wipe-before-open',
@@ -357,7 +357,7 @@ describe('CoordinatorCore', () => {
     grantStorage(core, 'tab-a', 1);
     expect(core.supersede()).toEqual([]);
 
-    core.tabLost('tab-a');
+    core.ownerLost('tab-a', 1, 'engine failed');
     expect(core.state.kind).toBe('resetting-after-loss');
 
     expect(core.resumeAfterLoss()).toEqual([
@@ -383,7 +383,7 @@ describe('CoordinatorCore', () => {
     core.registerTab('tab-a');
     core.registerTab('tab-b');
     ready(core, 'tab-a', 1, 'opened-existing');
-    core.tabLost('tab-a');
+    core.ownerLost('tab-a', 1, 'engine failed');
     expect(action(core.resumeAfterLoss(), 'elect-owner')).toMatchObject({
       tabId: 'tab-b',
       databaseAction: 'wipe-before-open',
@@ -426,7 +426,6 @@ describe('CoordinatorCore', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');
     core.tabLost('tab-a');
-    core.resumeAfterLoss();
     expect(core.state).toEqual({
       kind: 'waiting-for-tab',
       nextDatabaseAction: 'open-existing',
@@ -910,7 +909,7 @@ describe('CoordinatorCore', () => {
     ]);
   });
 
-  it('uses standby liveness loss without failover and owner liveness loss with wipe', () => {
+  it('keeps the database when the owner page is lost, and the owner when a standby is', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');
     core.registerTab('tab-b');
@@ -925,15 +924,83 @@ describe('CoordinatorCore', () => {
       tabId: 'tab-a',
       ownerEpoch: 1,
     });
-    expect(core.tabLost('tab-a')).toContainEqual({
-      kind: 'schedule-reset-activation',
-    });
-    expect(action(core.resumeAfterLoss(), 'elect-owner')).toMatchObject({
+    const actions = core.tabLost('tab-a');
+    expect(actions).toContainEqual({ kind: 'drop-tab', tabId: 'tab-a' });
+    expect(action(actions, 'elect-owner')).toMatchObject({
       tabId: 'tab-b',
       ownerEpoch: 2,
+      databaseAction: 'open-existing',
+    });
+  });
+
+  it('keeps a pending recovery wipe when the page running it is lost', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    ready(core, 'tab-a', 1, 'opened-existing');
+    core.ownerLost('tab-a', 1, 'engine failed');
+    core.resumeAfterLoss();
+    grantStorage(core, 'tab-b', 2);
+
+    expect(action(core.tabLost('tab-b'), 'elect-owner')).toMatchObject({
+      tabId: 'tab-a',
+      ownerEpoch: 3,
       databaseAction: 'wipe-before-open',
     });
   });
+
+  it('opens an interrupted open again when its page is lost', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    grantStorage(core, 'tab-a', 1);
+
+    expect(action(core.tabLost('tab-a'), 'elect-owner')).toMatchObject({
+      tabId: 'tab-b',
+      ownerEpoch: 2,
+      databaseAction: 'open-existing',
+    });
+  });
+
+  it('hands over at once when the page running a promised engine is lost', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    grantStorage(core, 'tab-a', 1);
+    expect(core.supersede()).toEqual([]);
+
+    const actions = core.tabLost('tab-a');
+
+    expect(actions).toContainEqual({
+      kind: 'broadcast-cache-superseded',
+      reason: expect.stringContaining('newer version of the app'),
+    });
+    expect(core.superseded).toBe(true);
+    expect(core.state).toEqual({
+      kind: 'waiting-for-tab',
+      nextDatabaseAction: 'open-existing',
+    });
+  });
+
+  it.each(['active', 'draining'] as const)(
+    'refuses what a lost page left with its %s engine',
+    (phase) => {
+      const core = new CoordinatorCore('scope');
+      core.registerTab('tab-a');
+      core.registerTab('tab-b');
+      ready(core, 'tab-a', 1, 'opened-existing');
+      core.request('tab-b', init(7));
+      if (phase === 'draining') core.beginGracefulDeparture('tab-a', 1);
+
+      expect(core.tabLost('tab-a')).toContainEqual({
+        kind: 'reject-request',
+        tabId: 'tab-b',
+        requestId: 7,
+        error: 'owner epoch 1 was lost: tab liveness lock was released',
+        errorCode: 'owner-epoch-lost',
+      });
+    }
+  );
 
   it('rejects wrong physical-lock and reset proofs without activating', () => {
     const core = new CoordinatorCore('scope');
@@ -974,6 +1041,8 @@ describe('CoordinatorCore', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');
     ready(core, 'tab-a', 1, 'opened-existing');
+    core.ownerLost('tab-a', 1, 'engine failed');
+    core.setTabVisibility('tab-a', false);
     core.tabLost('tab-a');
     expect(core.resumeAfterLoss()).toEqual([]);
     expect(core.state).toEqual({
