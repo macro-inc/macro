@@ -92,6 +92,16 @@ pub struct AddressedChannelTimelineUpdate {
     pub update: ChannelTimelineUpdate,
 }
 
+impl AddressedChannelTimelineUpdate {
+    /// This update's [hint](ChannelTimelineUpdate::hint), to the same users.
+    pub fn hint(&self) -> Self {
+        Self {
+            recipients: self.recipients.clone(),
+            update: self.update.hint(),
+        }
+    }
+}
+
 /// Why a live timeline update was not published.
 #[derive(Debug, thiserror::Error)]
 pub enum ChannelTimelineError {

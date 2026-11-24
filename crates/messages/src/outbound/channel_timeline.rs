@@ -72,7 +72,8 @@ impl MacroEvent for ChannelTimelineMacroEvent {
 /// 1,000,000 bytes by default, which leaves room for [`MAX_AUDIENCE_BYTES`]
 /// and the envelope.
 const MAX_UPDATE_BYTES: usize = 512 * 1024;
-/// Most encoded recipients a record carries.
+/// Most encoded recipients a record carries. A topic limited below this refuses
+/// a full audience even its hint.
 const MAX_AUDIENCE_BYTES: usize = 256 * 1024;
 /// Quotes and comma around an encoded recipient.
 const RECIPIENT_OVERHEAD_BYTES: usize = 3;
@@ -95,38 +96,32 @@ impl<Broker> BrokerChannelTimelinePublisher<Broker> {
 }
 
 impl<Broker: MacroEventBroker + Clone> BrokerChannelTimelinePublisher<Broker> {
-    /// Schedule one record. One the broker refuses, such as for a topic set to
-    /// smaller records than assumed here, is replaced by its hint; the broker
-    /// logs every failed publish under the channel it is keyed by.
+    /// Schedule one record. One over the broker's size limit, such as for a
+    /// topic set to smaller records than assumed here, is replaced by its hint;
+    /// the broker logs every failed publish under the channel it is keyed by.
     fn send(&self, record: AddressedChannelTimelineUpdate) -> Result<(), EventBrokerError> {
+        // Made here, where the request's attribution still applies to it.
+        let hint =
+            (!record.update.truncated).then(|| ChannelTimelineMacroEvent::updated(record.hint()));
         let delivery = self
             .broker
-            .send_event(&ChannelTimelineMacroEvent::updated(record.clone()))?;
+            .send_event(&ChannelTimelineMacroEvent::updated(record))?;
+        let Some(hint) = hint else {
+            return Ok(());
+        };
         let broker = self.broker.clone();
         tokio::spawn(
             async move {
-                let Ok(Err(EventBrokerError::Publish(_))) = delivery.await else {
+                let Ok(Err(EventBrokerError::TooLarge(_))) = delivery.await else {
                     return;
                 };
-                let update = &record.update;
-                if update.truncated {
-                    return;
-                }
                 tracing::warn!(
-                    channel_id = %update.channel_id,
-                    seq = update.seq,
-                    recipients = record.recipients.len(),
-                    "channel timeline record was refused; its recipients catch up instead"
+                    channel_id = hint.key(),
+                    "channel timeline record is too large; its recipients catch up instead"
                 );
-                let hint = AddressedChannelTimelineUpdate {
-                    update: update.hint(),
-                    recipients: record.recipients,
-                };
-                let _ = broker
-                    .send_event(&ChannelTimelineMacroEvent::updated(hint))
-                    .inspect_err(|error| {
-                        tracing::error!(error = ?error, "failed to send channel timeline hint");
-                    });
+                let _ = broker.send_event(&hint).inspect_err(|error| {
+                    tracing::error!(error = ?error, "failed to send channel timeline hint");
+                });
             }
             .in_current_span(),
         );
@@ -138,15 +133,11 @@ impl<Broker: MacroEventBroker + Clone> BrokerChannelTimelinePublisher<Broker> {
 fn audiences<'a>(
     recipients: &'a [MacroUserIdStr<'static>],
 ) -> impl Iterator<Item = &'a [MacroUserIdStr<'static>]> {
-    let mut bytes = 0;
+    let size = |id: &MacroUserIdStr| id.as_ref().len() + RECIPIENT_OVERHEAD_BYTES;
+    let mut bytes = recipients.first().map_or(0, size);
     recipients.chunk_by(move |_, next| {
-        // A run counts its first recipient only from its second; the room left
-        // beside a record's update and audience is far larger than one id.
-        bytes += next.as_ref().len() + RECIPIENT_OVERHEAD_BYTES;
-        let fits = bytes <= MAX_AUDIENCE_BYTES;
-        if !fits {
-            bytes = 0;
-        }
+        let fits = bytes + size(next) <= MAX_AUDIENCE_BYTES;
+        bytes = size(next) + if fits { bytes } else { 0 };
         fits
     })
 }

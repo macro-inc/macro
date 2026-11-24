@@ -49,6 +49,8 @@ Macro's event topics.
   `agent_correlation::context` (omitted from the wire when absent). Build
   events inside the request's task, or `agent_correlation::context::capture`
   the work you spawn; otherwise a routine's own writes can re-trigger it.
+- `EventBrokerError::TooLarge` is a record over Kafka's size limit, which no retry
+  can deliver; every other failed delivery is `Publish` or `PublishTimeout`.
 - `NoopMacroEventBroker` exists for tests/local configs without Kafka — don't
   reach for a hand-rolled in-memory broker instead.
 - Default feature is `outbound`; building without it (e.g. `schema`-only

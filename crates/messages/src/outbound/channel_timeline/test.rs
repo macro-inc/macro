@@ -122,7 +122,7 @@ impl MacroEventBroker for LimitedBroker {
         Ok(tokio::spawn(async move {
             attempted.send(fits).unwrap();
             fits.then_some(())
-                .ok_or_else(|| EventBrokerError::Publish("MessageSizeTooLarge".to_owned()))
+                .ok_or_else(|| EventBrokerError::TooLarge("MessageSizeTooLarge".to_owned()))
         }))
     }
 }
@@ -190,6 +190,31 @@ async fn a_refused_record_is_replaced_by_a_hint_to_catch_up() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn the_hint_for_a_refused_record_keeps_the_agent_that_caused_it() {
+    let agent = Uuid::from_u128(9);
+    let accepted =
+        agent_correlation::context::scope(Some(agent), accepted(10_000, update_of(20_000), 1))
+            .await;
+    assert_eq!(accepted[0]["agent_correlation_id"], agent.to_string());
+}
+
+#[test]
+fn a_run_of_recipients_counts_every_one_of_them() {
+    let recipients: Vec<_> = (0..6)
+        .map(|index| {
+            let id = format!(
+                "macro|{index}{}@example.com",
+                "x".repeat(MAX_AUDIENCE_BYTES / 3)
+            );
+            MacroUserIdStr::parse_from_str(&id).unwrap().into_owned()
+        })
+        .collect();
+    for run in audiences(&recipients) {
+        assert!(serde_json::to_vec(run).unwrap().len() <= MAX_AUDIENCE_BYTES);
+    }
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_large_audience_is_split_across_records_that_each_fit() {
     let recipients: Vec<_> = (0..30_000)
         .map(|index| {
@@ -234,4 +259,31 @@ async fn a_record_written_before_truncation_decodes_as_complete() {
         serde_json::to_value(decoded.update).unwrap()["truncated"],
         false
     );
+}
+
+/// Fails every publish the way an unreachable broker does.
+#[derive(Clone)]
+struct UnreachableBroker(tokio::sync::mpsc::UnboundedSender<()>);
+
+impl MacroEventBroker for UnreachableBroker {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        _: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        self.0.send(()).unwrap();
+        Ok(tokio::spawn(async {
+            Err(EventBrokerError::Publish("AllBrokersDown".to_owned()))
+        }))
+    }
+}
+
+#[tokio::test]
+async fn a_record_an_unreachable_broker_lost_is_not_sent_again() {
+    let (attempted, mut attempts) = tokio::sync::mpsc::unbounded_channel();
+    BrokerChannelTimelinePublisher::new(UnreachableBroker(attempted))
+        .publish(&update())
+        .unwrap();
+    attempts.recv().await.expect("the update is sent");
+    // The publisher is done with the broker once every clone of it is dropped.
+    assert_eq!(attempts.recv().await, None);
 }
