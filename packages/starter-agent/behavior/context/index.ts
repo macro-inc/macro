@@ -412,12 +412,17 @@ export const base = (
       given === undefined
         ? Promise.all([addresses(), credentials.get(macroKey)]).then(
             ([{ hosts }, apiKey]) =>
-              new Macro({ auth: { type: 'user', apiKey }, hosts })
+              new Macro({
+                auth: { type: 'user', apiKey },
+                hosts,
+                traceContext: true,
+              })
           )
         : Promise.resolve(
             new Macro({
               auth: { type: 'user', apiKey: given.token },
               hosts: relayHosts(given.url),
+              traceContext: true,
             })
           );
     return macro;
