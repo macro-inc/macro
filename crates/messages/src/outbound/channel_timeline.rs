@@ -80,9 +80,9 @@ const RECIPIENT_OVERHEAD_BYTES: usize = 3;
 
 /// Publishes live channel timeline updates through the event broker.
 ///
-/// No update is dropped for its size: a change too large for a record is
-/// published as the hint that it happened, and an audience too large for one
-/// is split across several.
+/// Records are sized for Kafka's default limit: a change too large for one is
+/// published as the hint that it happened, and an audience too large for one is
+/// split across several.
 #[derive(Clone)]
 pub struct BrokerChannelTimelinePublisher<Broker> {
     broker: Broker,
@@ -100,6 +100,7 @@ impl<Broker: MacroEventBroker + Clone> BrokerChannelTimelinePublisher<Broker> {
     /// topic set to smaller records than assumed here, is replaced by its hint;
     /// the broker logs every failed publish under the channel it is keyed by.
     fn send(&self, record: AddressedChannelTimelineUpdate) -> Result<(), EventBrokerError> {
+        let seq = record.update.seq;
         // Made here, where the request's attribution still applies to it.
         let hint =
             (!record.update.truncated).then(|| ChannelTimelineMacroEvent::updated(record.hint()));
@@ -117,10 +118,11 @@ impl<Broker: MacroEventBroker + Clone> BrokerChannelTimelinePublisher<Broker> {
                 };
                 tracing::warn!(
                     channel_id = hint.key(),
+                    seq,
                     "channel timeline record is too large; its recipients catch up instead"
                 );
                 let _ = broker.send_event(&hint).inspect_err(|error| {
-                    tracing::error!(error = ?error, "failed to send channel timeline hint");
+                    tracing::error!(error = ?error, seq, "failed to send channel timeline hint");
                 });
             }
             .in_current_span(),
