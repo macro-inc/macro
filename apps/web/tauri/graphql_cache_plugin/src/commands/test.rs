@@ -387,7 +387,7 @@ fn an_older_builds_cache_upgrades_against_its_schema_file_and_the_file_goes() {
     pollster::block_on(async {
         let dir = tempfile::tempdir().unwrap();
         let written = labelled("String");
-        let (storage, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        let (storage, _, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
         let handle = crate::engine::EngineHandle::with_schema(storage, None, written.clone());
         write_label(&handle).await;
         handle.shutdown().unwrap();
@@ -403,7 +403,7 @@ fn an_older_builds_cache_upgrades_against_its_schema_file_and_the_file_goes() {
         // The bundle an OTA rollback returns to lacks the label; the file
         // says the records hold one, so they stay and keep answering.
         let bundled = cache_core::meta::bundled_schema();
-        let (storage, adoption) = super::open_cache(dir.path(), "scope", &bundled).unwrap();
+        let (storage, adoption, _) = super::open_cache(dir.path(), "scope", &bundled).unwrap();
         assert_eq!(storage.upgraded_from_storage_version(), Some(12));
         assert_eq!(
             adoption.change,
@@ -424,7 +424,7 @@ fn an_unreadable_schema_file_drops_the_records_it_described() {
     pollster::block_on(async {
         let dir = tempfile::tempdir().unwrap();
         let written = labelled("String");
-        let (storage, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        let (storage, _, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
         let handle = crate::engine::EngineHandle::with_schema(storage, None, written.clone());
         write_label(&handle).await;
         handle.shutdown().unwrap();
@@ -434,7 +434,7 @@ fn an_unreadable_schema_file_drops_the_records_it_described() {
         storage.try_close().unwrap();
         std::fs::write(dir.path().join("schema.json"), b"{").unwrap();
 
-        let (storage, adoption) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        let (storage, adoption, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
         assert_eq!(
             adoption.change,
             Some(cache_core::schema_change::Tier::Reset(
@@ -455,14 +455,14 @@ fn a_build_that_retypes_a_field_opens_without_that_types_records() {
     pollster::block_on(async {
         let dir = tempfile::tempdir().unwrap();
         let written = labelled("String");
-        let (storage, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        let (storage, _, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
         let handle = crate::engine::EngineHandle::with_schema(storage, None, written);
         write_label(&handle).await;
         assert!(label_hits(&handle).await);
         handle.shutdown().unwrap();
 
         let retyped = labelled("[String]");
-        let (storage, adoption) = super::open_cache(dir.path(), "scope", &retyped).unwrap();
+        let (storage, adoption, _) = super::open_cache(dir.path(), "scope", &retyped).unwrap();
         let Some(cache_core::schema_change::Tier::Types { changed, .. }) = &adoption.change else {
             panic!("{:?}", adoption.change);
         };
@@ -471,6 +471,54 @@ fn a_build_that_retypes_a_field_opens_without_that_types_records() {
         let handle = crate::engine::EngineHandle::with_schema(storage, None, adoption.schema);
         assert!(!label_hits(&handle).await);
         handle.install_schema(&retyped).await.unwrap();
+        handle.shutdown().unwrap();
+    });
+}
+
+#[test]
+fn a_native_open_reports_what_it_did_to_the_cache() {
+    pollster::block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let written = labelled("String");
+        let (storage, _, fresh) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        assert_eq!(fresh.change, "unchanged");
+        assert!(!fresh.physical_reset);
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, written);
+        write_label(&handle).await;
+        handle.shutdown().unwrap();
+
+        let retyped = labelled("[String]");
+        let (storage, _, report) = super::open_cache(dir.path(), "scope", &retyped).unwrap();
+        assert_eq!(report.change, "types");
+        assert!(report.changed_types > 0);
+        assert!(report.dropped_records > 0);
+        assert!(!report.physical_reset);
+        // The webview reads it as the worker's `schemaChange`.
+        let wire = serde_json::to_value(&report).unwrap();
+        assert_eq!(wire["change"], "types");
+        assert_eq!(wire["physicalReset"], false);
+        assert!(wire["changedTypes"].as_u64().unwrap() > 0);
+        assert!(wire.get("resetReason").is_none());
+        storage.try_close().unwrap();
+    });
+}
+
+#[test]
+fn a_cache_that_cannot_adopt_the_schema_in_place_reports_its_replacement() {
+    pollster::block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let written = labelled("String");
+        let (storage, _, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, written.clone());
+        write_label(&handle).await;
+        handle.shutdown().unwrap();
+        cache_turso::migration_test_hooks::corrupt_next_adoption();
+
+        let (storage, adoption, report) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        assert!(report.physical_reset);
+        assert_eq!(report.change, "unchanged");
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, adoption.schema);
+        assert!(!label_hits(&handle).await);
         handle.shutdown().unwrap();
     });
 }

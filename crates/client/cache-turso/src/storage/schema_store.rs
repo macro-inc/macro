@@ -253,6 +253,12 @@ pub(super) fn adopt(
     inputs: &ProjectionInputs,
     unrecorded: &Unrecorded,
 ) -> Result<SchemaAdoption, TursoStorageError> {
+    #[cfg(any(test, feature = "migration-test-hooks"))]
+    if super::migration::test_hooks::take_corrupt_adoption() {
+        return Err(TursoStorageError::reset(
+            crate::PhysicalResetReason::Corruption,
+        ));
+    }
     if let Some(row) = load(connection)? {
         if row.hash == incoming.hash() {
             return Ok(SchemaAdoption::unchanged(Arc::clone(incoming)));

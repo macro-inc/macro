@@ -790,7 +790,7 @@ fn native_runtime_schema_persists_across_ota_and_rejects_conflicts_without_data_
         let dir = tempfile::tempdir().unwrap();
         let bundled = cache_core::meta::bundled_schema();
         let open = |schema: &Arc<cache_core::meta::Schema>| {
-            let (storage, adoption) =
+            let (storage, adoption, _) =
                 crate::commands::open_cache(dir.path(), "scope-1", schema).unwrap();
             assert!(
                 matches!(

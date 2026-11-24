@@ -118,11 +118,15 @@ pub async fn graphql_cache_init<R: Runtime>(
     // schema the cache stores keeps the definitions its records and queued
     // work need instead of reverting to only the metadata in the binary.
     let schema_sdl = cache_core::meta::BUNDLED_SCHEMA_SDL.to_owned();
-    graphql_cache_init_with_schema(app, state, scope, hot_capacity, schema_sdl, None).await
+    graphql_cache_init_with_schema(app, state, scope, hot_capacity, schema_sdl, None)
+        .await
+        .map(drop)
 }
 
 /// Parses bundle SDL while retaining native cache execution and native Turso storage.
 /// The dedicated command prevents old binaries from silently ignoring the schema payload.
+/// Resolves with what opening the cache did to it ([`SchemaInit`]), or null
+/// when an earlier call opened it.
 /// The span logs no error: one can quote the bundle's SDL. The webview records
 /// the returned error, and the storage open logs its own.
 #[tracing::instrument(
@@ -138,14 +142,14 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
     hot_capacity: Option<u32>,
     schema_sdl: String,
     traceparent: Option<String>,
-) -> Result<(), String> {
+) -> Result<Option<SchemaInit>, String> {
     let incoming = Schema::from_sdl(&schema_sdl).map_err(|e| e.to_string())?;
     let dir = app
         .path()
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join("graphql-cache");
-    let handle = {
+    let (handle, report) = {
         let mut guard = state
             .0
             .lock()
@@ -154,10 +158,10 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
             if existing.scope != scope {
                 return Err("graphql cache scope mismatch".into());
             }
-            existing.handle.clone()
+            (existing.handle.clone(), None)
         } else {
             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-            let (storage, adoption) = open_cache(&dir, &scope, &incoming)?;
+            let (storage, adoption, report) = open_cache(&dir, &scope, &incoming)?;
             let events = app.clone();
             let handle = EngineHandle::with_schema(storage, hot_capacity, adoption.schema)
                 .with_authority_listener(scope.clone(), move |authority| {
@@ -171,10 +175,40 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
                 scope,
                 handle: handle.clone(),
             });
-            handle
+            (handle, Some(report))
         }
     };
-    handle.install_schema(&incoming).await
+    handle.install_schema(&incoming).await?;
+    Ok(report)
+}
+
+/// What opening the cache did to its records, for the webview: it records
+/// `graphql_cache.schema_init` as the browser worker does, since spans of
+/// this process stay on the device. Mirrors the worker's `schemaChange`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SchemaInit {
+    /// `unchanged`, or the tier's name.
+    pub change: &'static str,
+    /// Why every record went, for a reset.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reset_reason: Option<&'static str>,
+    /// The types whose records went, for the types tier.
+    pub changed_types: usize,
+    /// Records the change dropped.
+    pub dropped_records: u64,
+    /// Index documents the change left incomplete.
+    pub incomplete_documents: u64,
+    /// Queued writes whose overlays no longer fit.
+    pub retired_overlays: u64,
+    /// How long adopting the schema took.
+    pub adopt_ms: u64,
+    /// The file was replaced because the schema could not be adopted in it.
+    pub physical_reset: bool,
+    /// The storage version an older build left the file at, when it was
+    /// upgraded in place.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub storage_upgraded_from: Option<u32>,
 }
 
 /// Where native builds before storage 13 kept, beside the cache file, the
@@ -183,7 +217,7 @@ const LEGACY_SCHEMA_FILE: &str = "schema.json";
 
 /// Opens the cache in `dir` for `scope` and brings its records and queued
 /// writes to `incoming`, this webview's schema, returning the schema the
-/// engine runs with. A tier that fails or runs out of space resets the
+/// engine runs with and what the open did. A tier that fails or runs out of space resets the
 /// cache; a corrupt file, an uncertain write, or a cache that cannot even
 /// reset is replaced and opened empty. An older build's schema
 /// file names what wrote a cache that stores no schema yet, and goes once the
@@ -193,7 +227,7 @@ pub(crate) fn open_cache(
     dir: &Path,
     scope: &str,
     incoming: &Arc<Schema>,
-) -> Result<(TursoStorage, SchemaAdoption), String> {
+) -> Result<(TursoStorage, SchemaAdoption, SchemaInit), String> {
     let legacy = dir.join(LEGACY_SCHEMA_FILE);
     let unrecorded = match std::fs::read_to_string(&legacy) {
         Ok(json) => Schema::from_json(&json).map_or(Unrecorded::Unreadable, Unrecorded::Known),
@@ -202,15 +236,34 @@ pub(crate) fn open_cache(
     };
     let database = TursoFileDatabase::new(dir.join("cache.turso")).map_err(|e| e.to_string())?;
     let storage = open_storage(&database, scope)?;
+    let upgraded_from = storage.upgraded_from_storage_version();
     let opened = match adopt_schema(&storage, incoming, unrecorded) {
-        Ok(adoption) => (storage, adoption),
+        Ok((adoption, report)) => (
+            storage,
+            adoption,
+            SchemaInit {
+                storage_upgraded_from: upgraded_from,
+                ..report
+            },
+        ),
         Err(error) if error.requires_physical_reset() => {
+            tracing::warn!(
+                graphql_cache.physical_reset_reason = ?error.physical_reset_reason(),
+                "graphql cache replaced its file: the schema could not be adopted in it"
+            );
             storage.try_close().map_err(|e| e.to_string())?;
             database.physical_reset().map_err(|e| e.to_string())?;
             let storage = open_storage(&database, scope)?;
-            let adoption =
+            let (adoption, report) =
                 adopt_schema(&storage, incoming, Unrecorded::Guess).map_err(|e| e.to_string())?;
-            (storage, adoption)
+            (
+                storage,
+                adoption,
+                SchemaInit {
+                    physical_reset: true,
+                    ..report
+                },
+            )
         }
         Err(error) => return Err(error.to_string()),
     };
@@ -250,10 +303,11 @@ fn open_storage(database: &TursoFileDatabase, scope: &str) -> Result<TursoStorag
     Ok(storage)
 }
 
-/// Brings an opened cache to `incoming` (`TursoStorage::adopt_schema`). The
-/// span records the tier and what it dropped; a change also logs an event
-/// with its duration, since the native subscriber prints events, not span
-/// fields recorded late.
+/// Brings an opened cache to `incoming` (`TursoStorage::adopt_schema`),
+/// returning the adoption and its report for the webview. The span records
+/// the tier and what it dropped; a change also logs an event with its
+/// duration, since the native subscriber prints events, not span fields
+/// recorded late.
 #[tracing::instrument(
     name = "graphql_cache.native.adopt_schema",
     skip_all,
@@ -271,7 +325,7 @@ fn adopt_schema(
     storage: &TursoStorage,
     incoming: &Arc<Schema>,
     unrecorded: Unrecorded,
-) -> Result<SchemaAdoption, TursoStorageError> {
+) -> Result<(SchemaAdoption, SchemaInit), TursoStorageError> {
     let started = std::time::Instant::now();
     let adoption = storage.adopt_schema(
         incoming,
@@ -301,6 +355,7 @@ fn adopt_schema(
         "graphql_cache.schema.retired_overlays",
         adoption.retired_overlays,
     );
+    let adopt_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
     if adoption.change.is_some() {
         tracing::info!(
             graphql_cache.schema.change = adoption.outcome(),
@@ -309,12 +364,22 @@ fn adopt_schema(
             graphql_cache.schema.dropped_records = adoption.dropped_records,
             graphql_cache.schema.incomplete_documents = adoption.incomplete_documents,
             graphql_cache.schema.retired_overlays = adoption.retired_overlays,
-            graphql_cache.schema.adopt_ms =
-                u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            graphql_cache.schema.adopt_ms = adopt_ms,
             "graphql cache brought to a new GraphQL schema"
         );
     }
-    Ok(adoption)
+    let report = SchemaInit {
+        change: adoption.outcome(),
+        reset_reason,
+        changed_types,
+        dropped_records: adoption.dropped_records,
+        incomplete_documents: adoption.incomplete_documents,
+        retired_overlays: adoption.retired_overlays,
+        adopt_ms,
+        physical_reset: false,
+        storage_upgraded_from: None,
+    };
+    Ok((adoption, report))
 }
 
 /// Returns the current in-memory cache revision as a decimal string.

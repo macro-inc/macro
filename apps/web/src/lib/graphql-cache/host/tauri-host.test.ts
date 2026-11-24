@@ -94,6 +94,64 @@ describe('createTauriCacheHost', () => {
     host.dispose();
   });
 
+  it('records what the native open did to the cache as graphql_cache.schema_init', async () => {
+    const attributes = new Map<string, unknown>();
+    const end = vi.fn();
+    const anonymousSpan = vi
+      .spyOn(Telemetry, 'anonymousSpan')
+      .mockImplementation(
+        () =>
+          ({
+            setAttr: (key: string, value: unknown) => {
+              attributes.set(key, value);
+            },
+            end,
+          }) as unknown as ReturnType<typeof Telemetry.anonymousSpan>
+      );
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_init_with_schema'
+        ? {
+            change: 'reset',
+            resetReason: 'invalid',
+            changedTypes: 0,
+            droppedRecords: 12,
+            incompleteDocuments: 3,
+            retiredOverlays: 1,
+            adoptMs: 7,
+            physicalReset: true,
+            storageUpgradedFrom: 12,
+          }
+        : null
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await host.readQuery({ query: '{ x }' });
+    expect(anonymousSpan).toHaveBeenCalledWith('graphql_cache.schema_init');
+    expect(Object.fromEntries(attributes)).toEqual({
+      'cache.backend': 'turso-native',
+      'cache.operation_category': 'initialization',
+      'cache.outcome': 'success',
+      'cache.schema.change': 'reset',
+      'cache.schema.reset_reason': 'invalid',
+      'cache.schema.changed_types': 0,
+      'cache.schema.dropped_records': 12,
+      'cache.schema.incomplete_documents': 3,
+      'cache.schema.retired_overlays': 1,
+      'cache.schema.adopt_ms': 7,
+      'cache.schema.physical_reset': true,
+      'cache.storage.upgraded_from': 12,
+    });
+    expect(end).toHaveBeenCalledOnce();
+    host.dispose();
+  });
+
+  it('records no schema_init when the native cache was already open', async () => {
+    const anonymousSpan = vi.spyOn(Telemetry, 'anonymousSpan');
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await host.readQuery({ query: '{ x }' });
+    expect(anonymousSpan).not.toHaveBeenCalledWith('graphql_cache.schema_init');
+    host.dispose();
+  });
+
   it('coalesces identical pending reads, but preserves operation registration and write barriers', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     await host.readQuery({ query: '{ warm }' });

@@ -57,6 +57,7 @@ import {
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
 } from '../protocol';
+import { emitNativeSchemaInit, type NativeSchemaInit } from '../telemetry-otel';
 import type {
   AffectedOperationsListener,
   CacheChangeListener,
@@ -524,18 +525,25 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     // An app from before runtime SDL loading has no such command. Its own
     // `graphql_cache_init` would run its compiled-in schema, which can lack
     // fields this bundle reads, so the bundle stays uncached instead.
+    let opened: NativeSchemaInit | null | undefined;
     try {
-      await request<void>(INIT_COMMAND, {
-        scope: options.scope,
-        hotCapacity: options.hotCapacity,
-        schemaSdl,
-      });
+      opened = await request<NativeSchemaInit | null | undefined>(
+        INIT_COMMAND,
+        {
+          scope: options.scope,
+          hotCapacity: options.hotCapacity,
+          schemaSdl,
+        }
+      );
     } catch (error) {
       if (isMissingCommand(error, INIT_COMMAND)) {
         throw new NativeCacheUpgradeRequiredError(CACHE_NEEDS_UPDATE);
       }
       throw error;
     }
+    // Null when another webview opened the cache first; binaries from
+    // before the report resolve with nothing.
+    if (opened) emitNativeSchemaInit(opened);
     // Probe before any enqueue/claim. Older binaries silently ignore new
     // metadata arguments, so waiting until a draft fails would lose correlation.
     try {
