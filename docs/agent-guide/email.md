@@ -54,6 +54,17 @@ mailbox tab. On All, selected tag names appear in the header and breadcrumb.
 A narrow pane keeps its short `Email` or `Inbox` breadcrumb label. A tag filter
 on any other tab keeps that tab's title.
 
+Gmail labels and Outlook categories that people made show read-only, after a
+row's tags under the same limit of three, with a label icon where a tag has its
+color dot. A nested Gmail label shows its own name on the row and its whole
+name (`Customers / Larkspur`) on hover. Gmail's system labels and labels it hides
+from the message list never show, and phone rows show neither tags nor labels.
+An open thread shows them as one pill after its tags (`3 Labels`, or a sole
+label's name) listing their whole names, and in a Labels section of the side
+panel, which the phone's Info sheet shares. Someone a thread is shared with sees
+none of the owner's labels: the server leaves out labels of inboxes the reader
+doesn't own or manage. Nothing here writes labels back to Gmail or Outlook.
+
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
 item, with pill tabs beside the Inbox title in the content header; with the Focus
 flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
