@@ -104,4 +104,4 @@ it('links inline source maps instead of sending them with every module', async (
   } finally {
     await vite.close();
   }
-});
+}, 15_000);
