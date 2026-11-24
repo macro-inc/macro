@@ -239,6 +239,7 @@ async fn an_older_state_never_overwrites_a_newer_one() {
                 table_id: TABLE,
                 version: 9,
             },
+            &|| (),
         )
         .await?;
         assert_eq!(kept, 0);
@@ -249,6 +250,7 @@ async fn an_older_state_never_overwrites_a_newer_one() {
                 table_id: TABLE,
                 version: 10,
             },
+            &|| (),
         )
         .await?;
         assert_eq!(removed, 1);

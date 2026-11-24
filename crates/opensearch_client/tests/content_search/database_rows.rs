@@ -60,7 +60,7 @@ async fn an_older_write_landing_after_a_newer_one_changes_nothing() -> anyhow::R
     // Versions above any earlier run's, whose deletes leave tombstones.
     let newer = version_above_earlier_runs();
     client
-        .delete_database_rows(DatabaseRowScope::Database(ORDERED.database))
+        .delete_database_rows(DatabaseRowScope::Database(ORDERED.database), &|| ())
         .await?;
 
     let written = client
@@ -100,7 +100,7 @@ async fn an_older_write_landing_after_a_newer_one_changes_nothing() -> anyhow::R
     );
 
     client
-        .delete_database_rows(DatabaseRowScope::Database(ORDERED.database))
+        .delete_database_rows(DatabaseRowScope::Database(ORDERED.database), &|| ())
         .await?;
     Ok(())
 }
@@ -114,7 +114,7 @@ async fn a_database_restored_right_after_its_trash_is_indexed_again() -> anyhow:
         .await?;
 
     let removed = client
-        .delete_database_rows(DatabaseRowScope::Database(RESTORED.database))
+        .delete_database_rows(DatabaseRowScope::Database(RESTORED.database), &|| ())
         .await?;
     assert_eq!(removed, 1);
     assert_eq!(indexed(&client, &raw, &RESTORED).await?, Vec::new());
@@ -141,7 +141,7 @@ async fn a_database_restored_right_after_its_trash_is_indexed_again() -> anyhow:
     );
 
     client
-        .delete_database_rows(DatabaseRowScope::Database(RESTORED.database))
+        .delete_database_rows(DatabaseRowScope::Database(RESTORED.database), &|| ())
         .await?;
     Ok(())
 }

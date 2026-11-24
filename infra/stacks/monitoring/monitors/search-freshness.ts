@@ -72,7 +72,8 @@
 //   services/search_processing_service/src/inbound/database_row_sweep.rs,
 //   tagged `step`: `catch_up` (every 15 minutes), `stale_scan` and
 //   `reshape_check` (every six hours), or `lead` when a round could not ask
-//   to lead. The sweep is the only repair for lost database events and for
+//   to lead; and one per table a step skipped after its pass failed,
+//   `catch_up_table` or `reshape_table`. The sweep is the only repair for lost database events and for
 //   column or option changes outside a table's journal.
 //
 // All are exported every 60 s, and percentiles are not enabled on the
@@ -458,8 +459,9 @@ prodMonitor('search-dropped-events', {
   recoveryDetail: '{{value}} events',
 });
 
-// Two failures in 13 hours: the six-hourly steps fail twice in a row, or the
-// 15-minute catch-up fails twice. One failure retries on its own next round.
+// Two failures in 13 hours: the six-hourly steps fail twice in a row, the
+// 15-minute catch-up fails twice, or two tables' passes fail. One failure
+// retries on its own next round.
 prodMonitor('search-database-rows-sweep-failing', {
   title: TITLES.databaseRowsSweep,
   service: SERVICE,

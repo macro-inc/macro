@@ -248,7 +248,11 @@ impl DatabaseRowIndex for OpenSearchDatabaseRows {
         })
     }
 
-    async fn delete(&self, scope: RowIndexScope) -> Result<u64, Report> {
+    async fn delete(
+        &self,
+        scope: RowIndexScope,
+        on_page: &(dyn Fn() + Sync),
+    ) -> Result<u64, Report> {
         let scope = match scope {
             RowIndexScope::Database(database_id) => DatabaseRowScope::Database(database_id),
             RowIndexScope::Table(table_id) => DatabaseRowScope::Table(table_id),
@@ -256,7 +260,7 @@ impl DatabaseRowIndex for OpenSearchDatabaseRows {
                 DatabaseRowScope::TableOlderThan { table_id, version }
             }
         };
-        Ok(self.0.delete_database_rows(scope).await?)
+        Ok(self.0.delete_database_rows(scope, on_page).await?)
     }
 
     async fn page(&self, after: Option<Uuid>, size: usize) -> Result<Vec<IndexedRow>, Report> {

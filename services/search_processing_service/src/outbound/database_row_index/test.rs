@@ -66,7 +66,7 @@ async fn indexes_relabels_and_removes_a_database(pool: PgPool) {
         OpensearchClient::new("http://localhost:9200".into(), "".into(), "".into()).unwrap(),
     );
     client
-        .delete_database_rows(DatabaseRowScope::Database(DATABASE))
+        .delete_database_rows(DatabaseRowScope::Database(DATABASE), &|| ())
         .await
         .unwrap();
     // Versions only grow, and a rerun's deletes leave tombstones at the last
@@ -169,7 +169,7 @@ async fn indexes_relabels_and_removes_a_database(pool: PgPool) {
     );
 
     client
-        .delete_database_rows(DatabaseRowScope::Database(DATABASE))
+        .delete_database_rows(DatabaseRowScope::Database(DATABASE), &|| ())
         .await
         .unwrap();
 }
@@ -194,6 +194,7 @@ impl crate::domain::database_row_index::DatabaseRowIndex for SlowIndex {
     async fn delete(
         &self,
         _scope: crate::domain::database_row_index::RowIndexScope,
+        _on_page: &(dyn Fn() + Sync),
     ) -> Result<u64, rootcause::Report> {
         Ok(0)
     }

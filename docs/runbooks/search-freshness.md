@@ -132,6 +132,9 @@ never shown; while the sweep fails, affected rows can be missed.
   every column and option under a 30 s statement timeout; a timeout there means
   that read outgrew it (its `lookup_ms` shows the trend).
 - `lead` means the round could not take its advisory lock; check MacroDB.
+- `catch_up_table` and `reshape_table` count tables whose own pass failed while
+  the step went on; their `reconcile_table` spans carry the error and the
+  table id.
 
 Recovery: `POST /internal/backfill/database-rows` with `{}` reindexes every
 searchable database and removes stale documents (README "Database rows").

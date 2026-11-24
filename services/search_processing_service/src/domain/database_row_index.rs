@@ -216,8 +216,13 @@ pub trait DatabaseRowIndex: Send + Sync + 'static {
         writes: Vec<RowIndexWrite>,
     ) -> impl Future<Output = Result<RowWriteOutcome, Report>> + Send;
 
-    /// Remove what `scope` names, returning how many documents went.
-    fn delete(&self, scope: RowIndexScope) -> impl Future<Output = Result<u64, Report>> + Send;
+    /// Remove what `scope` names, returning how many documents went;
+    /// `on_page` runs after each page of deletes lands.
+    fn delete(
+        &self,
+        scope: RowIndexScope,
+        on_page: &(dyn Fn() + Sync),
+    ) -> impl Future<Output = Result<u64, Report>> + Send;
 
     /// One page of indexed rows in row id order.
     fn page(
@@ -380,7 +385,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
 
         let Some(tables) = tables.filter(|tables| tables.searchable) else {
             return self
-                .with_database_lock(database_id, async |_progress| {
+                .with_database_lock(database_id, async |progress| {
                     // Restored since the read above: the restore's own pass
                     // reindexes it, after this one.
                     let still_gone = !self
@@ -389,7 +394,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
                         .await?
                         .is_some_and(|tables| tables.searchable);
                     if still_gone {
-                        self.remove_database(database_id).await?;
+                        self.remove_database(database_id, progress).await?;
                     }
                     Ok(())
                 })
@@ -438,7 +443,9 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         let outcome = match self.source.table_state(table_id).await? {
             // A table that is gone never comes back, so no lock is needed.
             None => {
-                self.index.delete(RowIndexScope::Table(table_id)).await?;
+                self.index
+                    .delete(RowIndexScope::Table(table_id), &|| ())
+                    .await?;
                 self.source.forget_table(table_id).await?;
                 TableOutcome::Removed
             }
@@ -519,7 +526,9 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         progress: &Progress,
     ) -> Result<TableOutcome, Report> {
         let Some(state) = self.source.table_state(table_id).await? else {
-            self.index.delete(RowIndexScope::Table(table_id)).await?;
+            self.index
+                .delete(RowIndexScope::Table(table_id), &|| progress.made())
+                .await?;
             self.source.forget_table(table_id).await?;
             return Ok(TableOutcome::Removed);
         };
@@ -527,7 +536,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         span.record("table_version", state.version);
 
         if !state.searchable {
-            self.remove_database(state.database_id).await?;
+            self.remove_database(state.database_id, progress).await?;
             return Ok(TableOutcome::Removed);
         }
 
@@ -581,7 +590,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         // Read the table again: if it went, remove what this pass wrote and
         // leave the watermark forgotten.
         if !self.still_searchable(table_id).await? {
-            self.remove_table(table_id).await?;
+            self.remove_table(table_id, progress).await?;
             return Ok(TableOutcome::Removed);
         }
         self.source
@@ -606,11 +615,13 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
 
     /// Remove the documents of a table that is gone or no longer searchable,
     /// with its database's when the database itself went.
-    async fn remove_table(&self, table_id: Uuid) -> Result<(), Report> {
+    async fn remove_table(&self, table_id: Uuid, progress: &Progress) -> Result<(), Report> {
         match self.source.table_state(table_id).await? {
-            Some(state) => self.remove_database(state.database_id).await,
+            Some(state) => self.remove_database(state.database_id, progress).await,
             None => {
-                self.index.delete(RowIndexScope::Table(table_id)).await?;
+                self.index
+                    .delete(RowIndexScope::Table(table_id), &|| progress.made())
+                    .await?;
                 self.source.forget_table(table_id).await
             }
         }
@@ -648,10 +659,13 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
 
         let swept = self
             .index
-            .delete(RowIndexScope::TableOlderThan {
-                table_id,
-                version: state.version,
-            })
+            .delete(
+                RowIndexScope::TableOlderThan {
+                    table_id,
+                    version: state.version,
+                },
+                &|| progress.made(),
+            )
             .await?;
         counts.deleted += usize::try_from(swept).unwrap_or(usize::MAX);
         Ok(counts)
@@ -702,9 +716,11 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
 
     /// Remove every document of the database and forget its watermarks, in
     /// that order, so a failure leaves the marks for the retry to redo.
-    async fn remove_database(&self, database_id: Uuid) -> Result<(), Report> {
+    async fn remove_database(&self, database_id: Uuid, progress: &Progress) -> Result<(), Report> {
+        // Each page of deletes counts as progress: a large database's
+        // removal is long but not stalled.
         self.index
-            .delete(RowIndexScope::Database(database_id))
+            .delete(RowIndexScope::Database(database_id), &|| progress.made())
             .await?;
         self.source.forget_database(database_id).await
     }
@@ -792,7 +808,9 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
                 if let Some(gate) = gate {
                     let _permit = gate.admit().await;
                 }
-                self.index.delete(RowIndexScope::Table(table_id)).await?;
+                self.index
+                    .delete(RowIndexScope::Table(table_id), &|| ())
+                    .await?;
                 self.source.forget_table(table_id).await?;
                 removal.gone_tables += 1;
             }
@@ -898,42 +916,41 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
     /// [`Self::remove_stale`] and [`Self::reindex_reshaped`], which read
     /// whole tables. Each step runs whether or not an earlier one failed, so
     /// one that outgrows its timeout cannot starve the others; the round
-    /// reports the first failure.
+    /// reports the failed steps and tables. It fails only when it could not
+    /// ask to lead.
     #[tracing::instrument(err, skip_all, fields(led, scan_index))]
     pub async fn sweep_once(
         &self,
         scan_index: bool,
         gate: &BackfillGate,
         cancel: &CancellationToken,
-    ) -> Result<(), Report> {
+    ) -> Result<SweepRound, Report> {
         let span = tracing::Span::current();
         span.record("scan_index", scan_index);
         let lease = self.source.lead_stale_sweep().await?;
         span.record("led", lease.is_some());
         if lease.is_none() {
-            return Ok(());
+            return Ok(SweepRound::default());
         }
 
-        let mut failed = Vec::new();
-        if self.catch_up(gate, cancel).await.is_err() {
-            failed.push(SweepStep::CatchUp);
+        let mut round = SweepRound::default();
+        match self.catch_up(gate, cancel).await {
+            Ok(caught_up) => round.failed_catch_up_tables = caught_up.failed,
+            Err(_) => round.failed_steps.push(SweepStep::CatchUp),
         }
         if scan_index {
             if self.remove_stale(Some(gate), cancel).await.is_err() {
-                failed.push(SweepStep::StaleScan);
+                round.failed_steps.push(SweepStep::StaleScan);
             }
-            if self.reindex_reshaped(gate, cancel).await.is_err() {
-                failed.push(SweepStep::ReshapeCheck);
+            match self.reindex_reshaped(gate, cancel).await {
+                Ok(reindexed) => round.failed_reshape_tables = reindexed.failed,
+                Err(_) => round.failed_steps.push(SweepStep::ReshapeCheck),
             }
         }
         drop(lease);
 
-        // Each step's own span records its error; the round names them all.
-        if failed.is_empty() {
-            Ok(())
-        } else {
-            Err(Report::new_sendsync(SweepFailed { steps: failed }).into_dynamic())
-        }
+        // Each step's own span records its error; the round reports them.
+        Ok(round)
     }
 
     /// Reindex the requested databases, or every searchable one and then
@@ -1027,11 +1044,13 @@ pub enum SweepStep {
     ReshapeCheck,
 }
 
-/// Steps of a sweep round that failed; the others ran.
-#[derive(Debug, thiserror::Error)]
-#[error("database row sweep steps failed: {steps:?}")]
-pub struct SweepFailed {
-    pub steps: Vec<SweepStep>,
+/// What went wrong in a sweep round. A failed step did not finish; a failed
+/// table was skipped by a step that went on, and the next round retries it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SweepRound {
+    pub failed_steps: Vec<SweepStep>,
+    pub failed_catch_up_tables: usize,
+    pub failed_reshape_tables: usize,
 }
 
 /// A pass held its database's lock without writing a batch for longer than

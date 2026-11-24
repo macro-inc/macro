@@ -82,9 +82,15 @@ impl OpensearchClient {
 
     /// Remove every document `scope` names, returning how many went. A
     /// document written at a newer version while the delete runs stays.
-    #[tracing::instrument(skip(self), err)]
-    pub async fn delete_database_rows(&self, scope: DatabaseRowScope) -> Result<u64> {
-        resend_on_lost_connection(|| delete_rows(&self.inner, INDEX.as_ref(), scope)).await
+    /// `on_page` runs after each page of deletes lands, so a caller can tell
+    /// a long delete that is making progress from one that is stuck.
+    #[tracing::instrument(skip(self, on_page), err)]
+    pub async fn delete_database_rows(
+        &self,
+        scope: DatabaseRowScope,
+        on_page: &(dyn Fn() + Sync),
+    ) -> Result<u64> {
+        resend_on_lost_connection(|| delete_rows(&self.inner, INDEX.as_ref(), scope, on_page)).await
     }
 
     /// One page of indexed rows in row id order, after `after_row_id`.
@@ -275,6 +281,7 @@ pub(crate) async fn delete_rows(
     client: &opensearch::OpenSearch,
     index: &str,
     scope: DatabaseRowScope,
+    on_page: &(dyn Fn() + Sync),
 ) -> Result<u64> {
     let operation = OpensearchOperation::DeleteDatabaseRowScope;
     let refreshed = client
@@ -310,6 +317,7 @@ pub(crate) async fn delete_rows(
             })
             .collect();
         deleted += write_rows(client, index, &deletes).await?.applied;
+        on_page();
     }
     Ok(u64::try_from(deleted).unwrap_or(u64::MAX))
 }

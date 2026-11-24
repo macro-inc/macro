@@ -15,11 +15,10 @@ use opentelemetry::KeyValue;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
-use crate::domain::database_row_index::SweepFailed;
-
-/// Counter of sweep steps that failed, tagged `step` (`catch_up`,
-/// `stale_scan`, `reshape_check`, or `lead` when the round could not even
-/// ask to lead). The Datadog monitor `search-database-rows-sweep-failing` in
+/// Counter of sweep failures, tagged `step`: a step that failed
+/// (`catch_up`, `stale_scan`, `reshape_check`, or `lead` when the round could
+/// not even ask to lead), or one table a step skipped (`catch_up_table`,
+/// `reshape_table`). The Datadog monitor `search-database-rows-sweep-failing` in
 /// infra/stacks/monitoring/monitors/search-freshness.ts reads it by this
 /// name and tag; rename them together.
 pub(crate) const SWEEP_FAILURES: &str = "search.database_rows.sweep_failures";
@@ -57,25 +56,32 @@ pub(crate) async fn run_sweeps(
 
         // One span per round, so each round is its own finished trace.
         let span = tracing::info_span!("database_rows.sweep");
-        // The error is recorded on the round's span and counted per step;
-        // the next round retries.
-        let Err(error) = indexer
+        // Errors are recorded on their steps' spans and counted here; the next
+        // round retries.
+        let outcome = indexer
             .sweep_once(scan_index, &gate, &cancel)
             .instrument(span)
-            .await
-        else {
-            continue;
-        };
-        let failed = error
-            .iter_reports()
-            .find_map(|report| report.downcast_current_context::<SweepFailed>());
-        match failed {
-            Some(failed) => {
-                for step in &failed.steps {
-                    failures.add(1, &[KeyValue::new(STEP, <&'static str>::from(*step))]);
-                }
+            .await;
+        let outcome = match outcome {
+            Ok(outcome) => outcome,
+            Err(_) => {
+                failures.add(1, &[KeyValue::new(STEP, "lead")]);
+                continue;
             }
-            None => failures.add(1, &[KeyValue::new(STEP, "lead")]),
+        };
+        for step in &outcome.failed_steps {
+            failures.add(1, &[KeyValue::new(STEP, <&'static str>::from(*step))]);
+        }
+        for (step, tables) in [
+            ("catch_up_table", outcome.failed_catch_up_tables),
+            ("reshape_table", outcome.failed_reshape_tables),
+        ] {
+            if tables > 0 {
+                failures.add(
+                    u64::try_from(tables).unwrap_or(u64::MAX),
+                    &[KeyValue::new(STEP, step)],
+                );
+            }
         }
     }
 }

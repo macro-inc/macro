@@ -309,6 +309,8 @@ struct FakeIndex {
     fail_next_write: Mutex<bool>,
     /// How long each write takes.
     write_takes: Option<std::time::Duration>,
+    /// A scoped delete as this many pages, each taking this long.
+    delete_pages: Option<(usize, std::time::Duration)>,
     /// Holds the next scoped delete: says when it started, then waits.
     paused_delete: Mutex<
         Option<(
@@ -393,7 +395,18 @@ impl DatabaseRowIndex for FakeIndex {
         Ok(outcome)
     }
 
-    async fn delete(&self, scope: RowIndexScope) -> Result<u64, Report> {
+    async fn delete(
+        &self,
+        scope: RowIndexScope,
+        on_page: &(dyn Fn() + Sync),
+    ) -> Result<u64, Report> {
+        if let Some((pages, takes)) = self.delete_pages {
+            for _ in 0..pages {
+                tokio::time::sleep(takes).await;
+                on_page();
+            }
+        }
+        on_page();
         let paused = self.paused_delete.lock().unwrap().take();
         if let Some((started, resume)) = paused {
             let _ = started.send(());
@@ -887,7 +900,11 @@ async fn a_pass_that_stalls_is_stopped_and_releases_its_lock() {
         async fn write(&self, _writes: Vec<RowIndexWrite>) -> Result<RowWriteOutcome, Report> {
             std::future::pending().await
         }
-        async fn delete(&self, _scope: RowIndexScope) -> Result<u64, Report> {
+        async fn delete(
+            &self,
+            _scope: RowIndexScope,
+            _on_page: &(dyn Fn() + Sync),
+        ) -> Result<u64, Report> {
             std::future::pending().await
         }
         async fn page(
@@ -934,7 +951,7 @@ async fn a_failing_step_does_not_starve_the_rest_of_the_round() {
 
     // The reshape lookup failed and the round says so, but the index scan
     // still removed the gone row.
-    assert!(round.is_err());
+    assert_eq!(round.unwrap().failed_steps, vec![SweepStep::ReshapeCheck]);
     assert_eq!(
         service.index.contents(),
         vec![(ROW_A, "A at 6".to_owned(), 6)]
@@ -973,4 +990,25 @@ async fn a_long_pass_that_keeps_writing_batches_is_not_stopped() {
     assert_eq!(outcome, TableOutcome::Reindexed);
     assert_eq!(service.index.contents().len(), ROWS_PER_BATCH * 3);
     assert_eq!(service.source.watermark_of(TABLE), Some(6));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_long_database_removal_that_keeps_deleting_pages_is_not_stopped() {
+    // A trashed database whose documents take three pages of four minutes
+    // each to delete: twelve minutes, past a ten-minute deadline.
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    source.edit(|state| state.database_searchable = Some(false));
+    let index = FakeIndex {
+        delete_pages: Some((3, std::time::Duration::from_secs(4 * 60))),
+        ..FakeIndex::holding(&[(ROW_A, "A at 6", 6)])
+    };
+    let service = DatabaseRowIndexService::new(source, index)
+        .with_progress_deadline(std::time::Duration::from_secs(10 * 60));
+
+    service
+        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp, None)
+        .await
+        .unwrap();
+
+    assert_eq!(service.index.contents(), Vec::new());
 }
