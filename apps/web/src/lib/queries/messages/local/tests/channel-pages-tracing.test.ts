@@ -1,3 +1,4 @@
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import type { CacheRevision } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
 import { StackContextManager } from '@macro-inc/observability/web';
@@ -7,15 +8,30 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
+import { createRoot } from 'solid-js';
 import { beforeAll, expect, it, vi } from 'vitest';
-import { type FetchChannelServerPage, loadChannelPage } from '../channel-pages';
+import {
+  createChannelTouches,
+  type FetchChannelServerPage,
+  loadChannelPage,
+} from '../channel-pages';
 import { loadPrewarmChannelIds } from '../channel-prewarm';
 import { createChannelSyncRuntime } from '../channel-sync-runtime';
 import {
   type FetchChannelThreadPage,
   loadChannelThread,
 } from '../channel-thread';
-import { CHANNEL_ID, devicePage, fakeHost, graphqlMessage } from './fixtures';
+import {
+  type ChannelTimelineRuntime,
+  createLocalChannelTimeline,
+} from '../channel-timeline';
+import {
+  CHANNEL_ID,
+  devicePage,
+  fakeHost,
+  graphqlMessage,
+  keyOf,
+} from './fixtures';
 import { send, setup, written } from './write-fixtures';
 
 context.setGlobalContextManager(new StackContextManager().enable());
@@ -196,5 +212,68 @@ it('lists the channels to prewarm in the pass span', async () => {
   expect(requestSpans).toEqual([
     pass?.spanContext().spanId,
     pass?.spanContext().spanId,
+  ]);
+});
+
+it('keeps a page read again after a session change in the scroll trace', async () => {
+  const newest = graphqlMessage(2);
+  // The window is held; the page before it is not.
+  const host = fakeHost(
+    (args) =>
+      args.before === undefined
+        ? devicePage([keyOf(newest)], { olderCursor: newest.sortKey })
+        : devicePage([], { covered: false }),
+    { records: [newest] }
+  );
+  const requestTraces: (string | undefined)[] = [];
+  let reads = 0;
+  const fetchPage = vi.fn<FetchChannelServerPage>(async () => {
+    requestTraces.push(trace.getActiveSpan()?.spanContext().traceId);
+    reads += 1;
+    const first = reads === 1;
+    return {
+      page: {
+        entries: [graphqlMessage(1)],
+        olderCursor: null,
+        newerCursor: null,
+        seq: '9',
+      },
+      cached: (async () => {
+        if (first) throw new StaleCacheAuthorityError();
+      })(),
+    };
+  });
+  const runtime: ChannelTimelineRuntime = {
+    open: vi.fn(() => () => {}),
+    onChanged: vi.fn(() => () => {}),
+    noteStoredSeq: vi.fn(),
+    noteServerRead: vi.fn(),
+    ensureCurrent: vi.fn(async () => 'current' as const),
+    epoch: () => 3,
+  };
+  let dispose = () => {};
+  const timeline = createRoot((disposeRoot) => {
+    dispose = disposeRoot;
+    return createLocalChannelTimeline(
+      { host, runtime, touches: createChannelTouches(), fetchPage },
+      CHANNEL_ID,
+      () => undefined,
+      vi.fn()
+    );
+  });
+  try {
+    await vi.waitFor(() => expect(timeline.hasOlder()).toBe(true));
+    await Telemetry.span('channel.scroll', () => timeline.loadOlder());
+  } finally {
+    dispose();
+  }
+
+  const scroll = exporter
+    .getFinishedSpans()
+    .find((span) => span.name === 'channel.scroll');
+  expect(fetchPage).toHaveBeenCalledTimes(2);
+  expect(requestTraces).toEqual([
+    scroll?.spanContext().traceId,
+    scroll?.spanContext().traceId,
   ]);
 });

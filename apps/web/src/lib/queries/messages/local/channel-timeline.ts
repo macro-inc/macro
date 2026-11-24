@@ -2,7 +2,7 @@ import type { EntityLoadError } from '@core/component/EntityLoadGate';
 import { untilAborted } from '@core/util/abort-signal';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { sleep } from '@core/util/sleep';
-import { Telemetry } from '@macro-inc/observability';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import type { MessageTimelineEntry } from '@service-storage/messages';
 import { CombinedError } from '@urql/core';
 import {
@@ -681,14 +681,18 @@ export function createLocalChannelTimeline(
     token: number,
     signal: AbortSignal,
     merged: () => void,
-    first: 'session-changed' | 'yielded'
+    first: 'session-changed' | 'yielded',
+    trace: TraceContext
   ): Promise<'held' | 'unheld' | 'unstored' | 'stale'> => {
     let settled: Awaited<ReturnType<typeof fetchMore>> = first;
     for (let reloads = 0; reloads < SESSION_CHANGE_RELOADS; reloads += 1) {
       if (settled === 'yielded' && !(await afterDeletes(signal)))
         return 'stale';
       if (token !== loadToken) return 'stale';
-      settled = await fetchMore(direction, cursor, token, signal, merged);
+      // After an await: the read again joins the scroll's trace.
+      settled = await trace.run(() =>
+        fetchMore(direction, cursor, token, signal, merged)
+      );
       if (settled !== 'yielded' && settled !== 'session-changed')
         return settled;
     }
@@ -720,6 +724,8 @@ export function createLocalChannelTimeline(
     signal: AbortSignal,
     merged: () => void
   ): Promise<PageOutcome | 'stale'> => {
+    // Taken before any await: a read again joins the scroll's trace.
+    const trace = Telemetry.captureContext();
     let settled: Awaited<ReturnType<typeof fetchMoreAgain>>;
     if (again) {
       settled = await fetchMoreAgain(
@@ -728,7 +734,8 @@ export function createLocalChannelTimeline(
         token,
         signal,
         merged,
-        'session-changed'
+        'session-changed',
+        trace
       );
     } else {
       const first = await fetchMore(direction, cursor, token, signal, merged);
@@ -747,7 +754,8 @@ export function createLocalChannelTimeline(
         token,
         signal,
         merged,
-        first
+        first,
+        trace
       );
       if (settled === 'unstored') return 'unstored';
     }
