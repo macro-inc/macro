@@ -36,6 +36,7 @@ const previewImports = [
   '@entity/owner/owner-display',
   '../utils/calendar-description',
   '../../calendar/hooks/create-calendar-rsvp-controller',
+  '../hooks/create-calendar-rsvp-controller',
 ];
 
 /**

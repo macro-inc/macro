@@ -45,6 +45,10 @@ export default defineDoc({
   exports: ['SnapPager', 'createSnapPager'],
   import: "import { SnapPager, createSnapPager } from './SnapPager';",
   propTypes: ['SnapPagerOptions', 'SnapPagerController'],
+  guidelines: {
+    do: ['Keep page keys stable and load data after settlement.'],
+    dont: ['Recycle pages during a native gesture.'],
+  },
   demos: [
     {
       id: 'periods',

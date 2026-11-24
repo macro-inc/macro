@@ -1,5 +1,13 @@
 import { cleanup, render } from '@solidjs/testing-library';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import {
   coverageRows,
   DOC_ENTRIES,
@@ -17,11 +25,28 @@ class ResizeObserverStub {
   disconnect() {}
 }
 
+const scrollToDescriptor = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  'scrollTo'
+);
 beforeAll(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+  Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+    configurable: true,
+    value: vi.fn(),
+  });
 });
 
 afterEach(cleanup);
+afterAll(() => {
+  if (scrollToDescriptor)
+    Object.defineProperty(
+      HTMLElement.prototype,
+      'scrollTo',
+      scrollToDescriptor
+    );
+  else Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
+});
 
 describe('doc registry', () => {
   it('discovers pages from the co-located .docs.tsx files', () => {
