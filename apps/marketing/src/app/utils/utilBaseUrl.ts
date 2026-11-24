@@ -8,30 +8,6 @@ export const GOOGLE_SSO_URL =
   import.meta.env.VITE_GOOGLE_SSO_URL ||
   'https://gateway.macro.com/auth/login/sso?idp_name=google_gmail';
 
-// Auth-service base URL, used for the unauthenticated endpoints the site calls
-// directly (mobile email capture). Derived from the SSO URL so a stack that
-// points VITE_GOOGLE_SSO_URL at a gateway /auth route also talks to the same
-// /auth route here; VITE_AUTH_SERVICE_URL overrides it.
-const resolveAuthServiceBaseUrl = (): string => {
-  const override = import.meta.env.VITE_AUTH_SERVICE_URL;
-  if (override) return override.replace(/\/$/, '');
-  try {
-    const url = new URL(GOOGLE_SSO_URL);
-    const authBasePath = url.pathname
-      .replace(/\/login\/sso\/?$/, '')
-      .replace(/\/$/, '');
-    return `${url.origin}${authBasePath}`;
-  } catch {
-    return 'https://gateway.macro.com/auth';
-  }
-};
-
-export const AUTH_SERVICE_BASE_URL = resolveAuthServiceBaseUrl();
-
-/** Auth-service endpoint URL (e.g. `/mobile-welcome-email`). */
-export const buildAuthServiceUrl = (path: string): string =>
-  `${AUTH_SERVICE_BASE_URL}${path}`;
-
 // Ad-attribution params forwarded into the app, where rootPreload cookies them
 // and PostHog picks them up as campaign properties.
 const ATTRIBUTION_PARAMS = [
@@ -73,20 +49,6 @@ const captureAttributionParams = (): URLSearchParams => {
 };
 
 let attributionParams = captureAttributionParams();
-
-/**
- * Ad parameters captured from the landing URL, including ones stored before a
- * client-side navigation dropped the query string. Sent with the mobile
- * email capture so the desktop link can carry them.
- */
-export const capturedAttribution = (): Record<string, string> => {
-  attributionParams = captureAttributionParams();
-  const result: Record<string, string> = {};
-  for (const [key, value] of attributionParams) {
-    if (value) result[key] = value;
-  }
-  return result;
-};
 
 /** App URL (e.g. `/app/welcome`) with any captured attribution params appended. */
 export const buildAppUrl = (path: string): string => {

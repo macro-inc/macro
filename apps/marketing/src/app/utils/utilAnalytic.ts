@@ -1,11 +1,6 @@
 import { isServer } from 'solid-js/web';
 import { isProductionMetaHost } from './metaHost';
 import { createDeferredPosthog } from './utilDeferredPosthog';
-import {
-  mobileCaptureDevice,
-  mobileCaptureSetOnce,
-  normalizeAnalyticsEmail,
-} from './utilMobileCaptureIdentity';
 
 declare const gtag: (
   command: 'config' | 'event' | 'js',
@@ -240,32 +235,6 @@ const createAnalytics = () => {
     }, '[Analytics] Failed to send Google Ads conversion:');
   };
 
-  /**
-   * Attaches the captured email to the current visitor before the submit
-   * event. PostHog's distinct id is the normalized email, so the event is
-   * captured on an identified person. Also feeds Meta's advanced matching
-   * (`em`) before the confirmation page fires Lead.
-   */
-  const identifyMobileCapture = (email: string) => {
-    if (disabled) {
-      return;
-    }
-    const distinctId = normalizeAnalyticsEmail(email);
-    if (!distinctId) return;
-    tryCatch(() => {
-      gtag('config', GA_ID, { user_id: distinctId, email: distinctId });
-      if (metaEnabled()) fbq('init', META_PIXEL_ID, { em: distinctId });
-    }, '[Analytics] Failed to identify visitor:');
-    posthog?.identify(
-      distinctId,
-      mobileCaptureSetOnce({
-        capturedAt: new Date().toISOString(),
-        device: mobileCaptureDevice(navigator.userAgent),
-        search: window.location.search,
-      })
-    );
-  };
-
   const trackPosthog = (event: string, data?: Record<string, unknown>) => {
     sendEvent('posthog', event, data);
   };
@@ -276,7 +245,6 @@ const createAnalytics = () => {
     trackPosthog,
     trackMeta,
     trackGoogleConversion,
-    identifyMobileCapture,
   };
 };
 
