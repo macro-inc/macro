@@ -171,6 +171,8 @@ const warmChannel = (
       // connection ended is asked once more: a reconnect catches up only the
       // channels on screen. Ended twice, the next pass warms it.
       for (let ask = 0; ask < 2; ask += 1) {
+        // A replaced or stopped pass asks nothing more.
+        if (signal.aborted) return 'failed' as const;
         const caughtUp = await parent.run(() =>
           deps.runtime.ensureCurrent(channelId)
         );

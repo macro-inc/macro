@@ -130,7 +130,14 @@ type ChannelState = {
    * they are now, so they need no repair.
    */
   covered: Set<bigint>;
-  debounce?: Fiber.Fiber<unknown, unknown>;
+  /**
+   * The scheduled catch-up that has not taken the channel yet, and while it
+   * waits out its delay, when (`Date.now()`) it starts.
+   */
+  pending?: Fiber.Fiber<unknown, unknown>;
+  pendingAt?: number;
+  /** Every scheduled catch-up still out, pending or running; a drop ends them. */
+  scheduled: Set<Fiber.Fiber<unknown, unknown>>;
   /** Catch-ups `ensureCurrent` runs, which a new connection ends too. */
   opens: Set<Fiber.Fiber<unknown, unknown>>;
   /** Catch-ups that failed in a row, which set the wait before the next. */
@@ -166,7 +173,7 @@ export interface ChannelSyncRuntime {
     epoch: number,
     readSeq: string | null
   ): void;
-  /** The socket epoch, which changes on every disconnect. */
+  /** The socket epoch, which changes on every disconnect and connect. */
   epoch(): number;
   /** Catches the channel up unless it is current; resolves when done. */
   ensureCurrent(channelId: string): Promise<ChannelCatchUpOutcome>;
@@ -240,6 +247,7 @@ export function createChannelSyncRuntime(
         pagesOut: new Set(),
         covered: new Set(),
         opens: new Set(),
+        scheduled: new Set(),
         failures: 0,
       };
       channels.set(channelId, state);
@@ -423,23 +431,24 @@ export function createChannelSyncRuntime(
    * kept landing under newer frames) runs once things settle. One that
    * failed is tried again after a wait that doubles with each failure in a
    * row, so a server that keeps failing is not asked at the debounce's pace;
-   * one that was ended (replaced, a new connection, dispose) is not, nor one
-   * another catch-up is already scheduled after (`fiber` runs this one).
+   * one that was ended (a new connection, dispose) is not, nor one another
+   * catch-up is already scheduled after.
    */
   const settled = (
     channelId: string,
     exit: Exit.Exit<ChannelCatchUpOutcome, unknown>,
-    progress: { committed: boolean },
-    fiber: Fiber.Fiber<unknown, unknown>
+    progress: { committed: boolean }
   ) => {
     const state = stateOf(channelId);
     const outcome = Exit.isSuccess(exit) ? exit.value : undefined;
     if (progress.committed || (outcome && outcome !== 'current'))
       notifyChanged(channelId);
-    if (!isConnected || state.current) return;
-    if (state.debounce !== undefined && state.debounce !== fiber) return;
+    if (outcome) state.failures = 0;
+    // Nothing held, nothing to repair.
+    if (outcome === 'not-held' || outcome === 'reset')
+      state.repairFrom = undefined;
+    if (!isConnected || state.current || state.pending !== undefined) return;
     if (outcome) {
-      state.failures = 0;
       if (state.repairFrom !== undefined) scheduleCatchUp(channelId, 'gap');
       return;
     }
@@ -475,9 +484,7 @@ export function createChannelSyncRuntime(
           const progress = { committed: false };
           return catchUpIn(span, channelId, reason, restore, progress).pipe(
             Effect.onExit((exit) =>
-              Effect.withFiber((fiber) =>
-                Effect.sync(() => settled(channelId, exit, progress, fiber))
-              )
+              Effect.sync(() => settled(channelId, exit, progress))
             )
           );
         }),
@@ -505,6 +512,7 @@ export function createChannelSyncRuntime(
     span.setAttr('channel.id', channelId);
     span.setAttr('catch_up.reason', reason);
     const epoch = socketEpoch;
+    const forgets = state.forgets;
     const generation = deps.generation();
     const from = yield* learnSeq(channelId, state);
     if (from === null) return 'not-held' as const;
@@ -554,9 +562,11 @@ export function createChannelSyncRuntime(
         ).pipe(
           // Failed or unanswered, the commit may still have moved the device
           // to the page, whose records a newer frame's may lie under: the
-          // next catch-up repairs from it.
+          // next catch-up repairs from it, unless the channel was forgotten
+          // meanwhile and is read again from scratch.
           Effect.tapError(() =>
             Effect.sync(() => {
+              if (state.forgets !== forgets) return;
               if (out.newestFrame === undefined || out.newestFrame <= to)
                 return;
               if (state.repairFrom === undefined || to < state.repairFrom)
@@ -652,21 +662,29 @@ export function createChannelSyncRuntime(
   const lockedCatchUp = (
     channelId: string,
     reason: 'gap' | 'reconnect' | 'open',
-    trace?: TraceContext
+    trace?: TraceContext,
+    started?: () => void
   ) => {
     const state = stateOf(channelId);
     return state.lock
       .withPermits(1)(
-        Effect.suspend(() =>
-          state.current && isConnected
+        Effect.suspend(() => {
+          started?.();
+          return state.current && isConnected
             ? Effect.succeed('current' as ChannelCatchUpOutcome)
-            : catchUp(channelId, reason, trace)
-        )
+            : catchUp(channelId, reason, trace);
+        })
       )
       .pipe(Effect.withSpan('channel.sync.locked_catch_up'));
   };
 
-  /** Catches up a channel on screen once things settle, or after `delay`. */
+  /**
+   * Catches up a channel on screen once things settle, or after `delay`. One
+   * catch-up is pending at a time: a later ask leaves it in place unless it
+   * would start sooner, so a busy channel's frames cannot keep postponing it,
+   * and a catch-up already running finishes (its pages are read again when a
+   * frame stores records under them) with the pending one after it.
+   */
   const scheduleCatchUp = (
     channelId: string,
     reason: 'gap' | 'reconnect',
@@ -674,19 +692,36 @@ export function createChannelSyncRuntime(
   ) => {
     const state = stateOf(channelId);
     if (state.views === 0 || disposed) return;
-    if (state.debounce) Effect.runFork(Fiber.interrupt(state.debounce));
     const wait = delay + random() * CATCH_UP_JITTER_MS;
+    const at = Date.now() + wait;
+    if (state.pending) {
+      // Waiting for the channel, or due sooner: it reads all this one would.
+      if (state.pendingAt === undefined || state.pendingAt <= at) return;
+      Effect.runFork(Fiber.interrupt(state.pending));
+    }
     const fiber = fork(
       Effect.sleep(wait).pipe(
-        Effect.andThen(() => lockedCatchUp(channelId, reason)),
+        Effect.andThen(() => {
+          if (state.pending === fiber) state.pendingAt = undefined;
+          // Closed meanwhile: the next open catches up.
+          if (state.views === 0) return Effect.void;
+          return lockedCatchUp(channelId, reason, undefined, () => {
+            if (state.pending === fiber) state.pending = undefined;
+          });
+        }),
         Effect.ensuring(
           Effect.sync(() => {
-            if (state.debounce === fiber) state.debounce = undefined;
+            state.scheduled.delete(fiber);
+            if (state.pending !== fiber) return;
+            state.pending = undefined;
+            state.pendingAt = undefined;
           })
         )
       )
     );
-    state.debounce = fiber;
+    state.scheduled.add(fiber);
+    state.pending = fiber;
+    state.pendingAt = at;
   };
 
   const handleFrame = Effect.fn('channel.sync.frame')(function* (
@@ -805,13 +840,19 @@ export function createChannelSyncRuntime(
         // A changes page read before the drop can land after a frame of the
         // next connection and write older records over it: end it, and the
         // reconnect, or the next open, reads from the stored sequence.
-        if (state.debounce) Effect.runFork(Fiber.interrupt(state.debounce));
+        for (const fiber of state.scheduled)
+          Effect.runFork(Fiber.interrupt(fiber));
+        state.pending = undefined;
+        state.pendingAt = undefined;
         state.covered.clear();
       }
     },
     onConnected() {
       if (disposed) return;
       isConnected = true;
+      // A catch-up or read begun while the socket was down missed frames
+      // this connection did not send: none of them marks the channel current.
+      socketEpoch += 1;
       for (const [channelId, state] of channels) {
         // A channel opened while the socket was down still catches up over
         // HTTP; a request it has out now could land after the new

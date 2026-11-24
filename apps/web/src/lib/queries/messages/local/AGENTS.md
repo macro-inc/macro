@@ -19,22 +19,26 @@ TanStack path in `../` runs untouched.
 - Follow: one runtime per host (`channel-sync-runtime.ts`) tracks the sequence
   the device holds per channel, applies subscription frames
   (`channel-stream.ts`), catches up open channels on reconnect, and tells open
-  timelines and threads to reread (`onChanged`). A drop ends a scheduled
-  catch-up still out, and a newer one replaces it: a changes page read before
-  can land after a frame of the next connection and write older records over
-  it. On one connection, a last page out while a newer frame stored records is
+  timelines and threads to reread (`onChanged`). A drop ends every scheduled
+  catch-up still out: a changes page read before can land after a frame of the
+  next connection and write older records over it. On one connection one
+  catch-up waits at a time: a later ask leaves it in place unless it would
+  start sooner, so a busy channel's frames cannot postpone it, and one already
+  running finishes with the waiting one after it. A catch-up or read begun
+  under an earlier connection never marks a channel current (`epoch`, which
+  moves on every drop and connect). A last page out while a newer frame stored records is
   read again (`MAX_PAGE_REREADS`); the repair is left in place until a reread
   holds, so a drop or a failure on the way repairs from it. Only the request
   can be interrupted: a commit the device takes always records its sequence
   and tells the views, and one it leaves unanswered past `COMMIT_BUDGET_MS`,
   a reset's included, frees the channel and makes the runtime read the
   sequence from the device again; a page commit that fails after a newer
-  frame stored records leaves a repair from the page. A failed catch-up of a
+  frame stored records leaves a repair from the page (none once the channel is forgotten). A failed catch-up of a
   channel on screen is tried again after a wait that doubles from
-  `CATCH_UP_RETRY_MS` to `CATCH_UP_RETRY_MAX_MS`, unless another is already
-  scheduled. `ensureCurrent`'s catch-up runs in the runtime's scope and goes
+  `CATCH_UP_RETRY_MS` to `CATCH_UP_RETRY_MAX_MS` (reset by any success), unless another is already
+  scheduled or the channel closed meanwhile. `ensureCurrent`'s catch-up runs in the runtime's scope and goes
   on over HTTP while the socket is down; the next connection or dispose ends
-  its request (`skipped`), and prewarm then asks once more, since a reconnect
+  its request (`skipped`), and prewarm then asks once more, unless its pass was replaced, since a reconnect
   catches up only the channels on screen. A window or a thread that
   failed to load, and an older or newer page that failed, load again when the
   connection comes back (`watchReconnect`, started before each request, so a

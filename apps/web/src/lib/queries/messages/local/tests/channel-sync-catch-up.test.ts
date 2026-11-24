@@ -18,7 +18,7 @@ import {
 import * as Effect from 'effect/Effect';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createChannelTouches } from '../channel-pages';
-import { prewarmChannels } from '../channel-prewarm';
+import { createChannelPrewarm, prewarmChannels } from '../channel-prewarm';
 import { createChannelStream } from '../channel-stream';
 import { channelSyncRuntime } from '../channel-sync';
 import { CATCH_UP_RETRY_MS, COMMIT_BUDGET_MS } from '../channel-sync-runtime';
@@ -272,7 +272,7 @@ it('reconnect cancels the old HTTP page and replays from the committed page', as
   }
 });
 
-it('a newly scheduled gap catch-up replaces an active request without a reconnect', async () => {
+it('a gap scheduled while a catch-up runs waits for it, without ending its request', async () => {
   vi.useFakeTimers();
   const errors = vi.spyOn(Telemetry, 'error');
   const test = setup();
@@ -287,10 +287,12 @@ it('a newly scheduled gap catch-up replaces an active request without a reconnec
 
     test.runtime.noteServerRead(CHANNEL_ID, '5', test.runtime.epoch(), '5');
     await vi.advanceTimersByTimeAsync(600);
-    expect(test.requests[0].signal.aborted).toBe(true);
-    expect(test.requests.map(({ after }) => after)).toEqual(['5', '5']);
-    test.requests[1].answer(delta('8', { removedIds: [graphqlMessage(6).id] }));
-    await vi.advanceTimersByTimeAsync(20);
+    expect(test.requests[0].signal.aborted).toBe(false);
+    expect(test.requests).toHaveLength(1);
+    test.requests[0].answer(delta('8', { removedIds: [graphqlMessage(6).id] }));
+    await vi.advanceTimersByTimeAsync(600);
+    // The gap it waited behind finds the channel current.
+    expect(test.requests).toHaveLength(1);
     expect(test.seq()).toBe('8');
     expect(
       test.records.has(`GraphqlChannelMessage:${graphqlMessage(6).id}`)
@@ -1039,6 +1041,196 @@ it('ends a forgotten channel open catch-up when the socket connects again', asyn
     await expect(open).resolves.toBe('skipped');
     expect(errors).not.toHaveBeenCalled();
   } finally {
+    test.stop();
+  }
+});
+
+const quiet = () => vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+const delayFirstCommit = (test: ReturnType<typeof setup>) => {
+  const ack = Promise.withResolvers<void>();
+  const commit = test.host.channelTimelineCommit;
+  vi.spyOn(test.host, 'channelTimelineCommit').mockImplementationOnce(
+    async (args) => {
+      const result = await commit(args);
+      await ack.promise;
+      return result;
+    }
+  );
+  return { ack, commit };
+};
+
+it('catches up again after a reconnect a catch-up begun offline commits across', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  const { ack } = delayFirstCommit(test);
+  try {
+    test.disconnect();
+    const open = test.runtime.ensureCurrent(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[0].answer(delta('6', { messages: [graphqlMessage(6)] }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.seq()).toBe('6');
+
+    // An edit at 7 came after the HTTP read and before the socket returned.
+    test.runtime.onConnected();
+    await vi.advanceTimersByTimeAsync(20);
+    ack.resolve();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(cursors(test)).toEqual(['5', '6']);
+    await expect(open).resolves.toBe('skipped');
+  } finally {
+    ack.resolve();
+    test.stop();
+  }
+});
+
+it('starts no queued retry once the last view closes', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.requests[0].fail();
+    await vi.advanceTimersByTimeAsync(20);
+    test.release();
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(cursors(test)).toEqual(['5']);
+  } finally {
+    test.stop();
+  }
+});
+
+it('backs off from the first wait again after a catch-up succeeds', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.requests[0].fail();
+    await vi.advanceTimersByTimeAsync(3_000);
+    test.requests[1].fail();
+    await vi.advanceTimersByTimeAsync(20);
+
+    // An open lands while a retry waits.
+    const open = test.runtime.ensureCurrent(CHANNEL_ID);
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[2].answer(delta('6', { messages: [graphqlMessage(6)] }));
+    await expect(open).resolves.toBe('applied');
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(cursors(test)).toEqual(['5', '5', '5']);
+
+    // A late frame makes the channel stale again; its first failure waits
+    // the first delay, not the one the earlier failures had reached.
+    test.push('5', graphqlMessage(6));
+    await vi.advanceTimersByTimeAsync(600);
+    test.requests[3].fail();
+    await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MS + 600);
+    expect(cursors(test)).toEqual(['5', '5', '5', '4', '4']);
+  } finally {
+    test.stop();
+  }
+});
+
+it.each(['frame', 'reconnect'])(
+  'lets a %s bring a backed-off retry forward',
+  async (signal) => {
+    vi.useFakeTimers();
+    quiet();
+    const test = setup();
+    try {
+      await vi.advanceTimersByTimeAsync(600);
+      test.requests[0].fail();
+      await vi.advanceTimersByTimeAsync(20);
+      if (signal === 'frame') test.push('7', graphqlMessage(7));
+      else test.reconnect();
+      await vi.advanceTimersByTimeAsync(600);
+      expect(cursors(test)).toEqual(['5', '5']);
+    } finally {
+      test.stop();
+    }
+  }
+);
+
+it('repairs a gap while frames keep arriving after a failed catch-up', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.requests[0].answer(delta('5'));
+    await vi.advanceTimersByTimeAsync(20);
+    test.push('7', graphqlMessage(7));
+    await vi.advanceTimersByTimeAsync(600);
+    test.requests[1].fail();
+    await vi.advanceTimersByTimeAsync(20);
+
+    // 6 is missing, and a later frame comes every 200 ms.
+    for (let seq = 8; seq < 58; seq += 1) {
+      test.push(String(seq), graphqlMessage(seq));
+      await vi.advanceTimersByTimeAsync(200);
+    }
+    expect(cursors(test)).toEqual(['5', '5', '5']);
+  } finally {
+    test.stop();
+  }
+});
+
+it('leaves no repair for a channel a storage reset forgot', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  const { ack, commit } = delayFirstCommit(test);
+  try {
+    await vi.advanceTimersByTimeAsync(600);
+    test.push('7', graphqlMessage(6, { content: 'newer edit' }));
+    await vi.advanceTimersByTimeAsync(20);
+    test.requests[0].answer(delta('6', { messages: [graphqlMessage(6)] }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(test.seq()).toBe('6');
+
+    // The page landed; a reset clears it while its answer is still out.
+    await commit({ channelId: CHANNEL_ID, reset: true });
+    test.runtime.forgetAll();
+    expect(test.seq()).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(COMMIT_BUDGET_MS + 4_000);
+    const notices = test.changed.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(test.changed.mock.calls.length).toBe(notices);
+    expect(cursors(test)).toEqual(['5']);
+  } finally {
+    ack.resolve();
+    test.stop();
+  }
+});
+
+it('asks nothing more from a prewarm pass that was replaced', async () => {
+  vi.useFakeTimers();
+  quiet();
+  const test = setup();
+  test.release();
+  const ensureCurrent = vi.spyOn(test.runtime, 'ensureCurrent');
+  const prewarm = createChannelPrewarm({
+    host: test.host,
+    runtime: test.runtime,
+    touches: createChannelTouches(),
+    listChannels: async () => [CHANNEL_ID],
+    idle: Effect.void,
+    online: () => true,
+  });
+  try {
+    prewarm.run();
+    await vi.advanceTimersByTimeAsync(40);
+    expect(cursors(test)).toEqual(['5']);
+    prewarm.run(5_000);
+    await vi.advanceTimersByTimeAsync(20);
+    test.reconnect();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(cursors(test)).toEqual(['5']);
+    expect(ensureCurrent).toHaveBeenCalledTimes(1);
+  } finally {
+    prewarm.dispose();
     test.stop();
   }
 });
