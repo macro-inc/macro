@@ -1,0 +1,26 @@
+docs/agent-guide/ui-conventions.md
+  s_d8bff9850808d1::t_a9b7cd0ad76208 62-63
+apps/web/src/features/tasks-view/components/TasksHeader.tsx
+  s_d8bff9850808d1::t_79f1cff05c6de5 15,17,29-31,114-120,136,146-149
+docs/agent-guide/tasks.md
+  s_d8bff9850808d1::t_a9b7cd0ad76208 14-16
+apps/web/src/features/tasks-view/components/TasksControls.tsx
+  s_d8bff9850808d1::t_1b774b7a6e2c34 130-131,134-135,137,139-160,165-178,181-184
+  s_d8bff9850808d1::t_79f1cff05c6de5 14,25-34,40-43,48-50,126-128,161-164,186-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "bad67b86f6a7cfa77dab0703211011e78b4045a6",
+  "prompts": {},
+  "sessions": {
+    "s_d8bff9850808d1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "24fac3d5-13ce-4b91-9f8c-e91f07d21f6d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
