@@ -221,6 +221,11 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   withSplitPanelOwner: (_slot: string, create: () => unknown) => create(),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+// Mail search's from:/label: suggestions read contacts and labels; these tests
+// are about tab navigation, so they suggest nothing.
+vi.mock('./queries/use-email-search-values', () => ({
+  useEmailSearchValues: () => ({ people: () => [], labels: () => [] }),
+}));
 vi.mock('@property/tags/tag-sets-context', () => ({
   useTagSets: () => () => [],
   useTagSetsReady: () => () => true,
