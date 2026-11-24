@@ -1,7 +1,11 @@
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Dropdown } from './Dropdown';
+import { Menu } from './Menu';
+import { Popover } from './Popover';
+import { Slider } from './Slider';
 
 afterEach(cleanup);
 
@@ -96,4 +100,118 @@ it('does not call disabled copy items', () => {
   ));
   fireEvent.click(screen.getByRole('menuitem', { name: 'Copy link' }));
   expect(copy).not.toHaveBeenCalled();
+});
+
+it('shares menu surfaces and row styles with form popovers', () => {
+  const select = vi.fn();
+  render(() => (
+    <Popover open>
+      <Popover.Trigger variant="ghost" size="xs">
+        Models
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content>
+          <Popover.Title class="sr-only">Choose a model</Popover.Title>
+          <Menu.Group aria-label="Model choices">
+            <Menu.Label>Models</Menu.Label>
+            <Menu.Item onClick={select}>Available</Menu.Item>
+            <Menu.Item disabled onClick={select}>
+              Unavailable
+            </Menu.Item>
+          </Menu.Group>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover>
+  ));
+  const surface = screen.getByRole('dialog');
+  expect(surface.classList.contains('menu-surface')).toBe(true);
+  expect(surface.style.boxShadow).toBe('');
+  expect(surface.style.border).toBe('');
+  const item = screen.getByRole('button', { name: 'Available' });
+  expect(item.classList.contains('rounded-lg')).toBe(true);
+  expect(item.classList.contains('p-1.5')).toBe(true);
+  item.focus();
+  expect(item.hasAttribute('data-highlighted')).toBe(true);
+  fireEvent.click(item);
+  fireEvent.click(screen.getByRole('button', { name: 'Unavailable' }));
+  expect(select).toHaveBeenCalledOnce();
+});
+
+it('keeps native and managed menu rows and groups visually identical', () => {
+  render(() => (
+    <>
+      <Menu.Group aria-label="Native group">
+        <Menu.Label>Native label</Menu.Label>
+        <Menu.Item>Native row</Menu.Item>
+      </Menu.Group>
+      <Dropdown open>
+        <Dropdown.Trigger>Open</Dropdown.Trigger>
+        <Dropdown.Content>
+          <Dropdown.Group aria-label="Managed group">
+            <Dropdown.GroupLabel>Managed label</Dropdown.GroupLabel>
+            <Dropdown.Item>Managed row</Dropdown.Item>
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+    </>
+  ));
+  expect(screen.getByText('Native row').className).toBe(
+    screen.getByText('Managed row').className
+  );
+  expect(
+    screen.getByText('Native label').closest('[role="group"]')?.className
+  ).toBe(
+    screen.getByText('Managed label').closest('[role="group"]')?.className
+  );
+  expect(screen.getByText('Native label').className).toBe(
+    screen.getByText('Managed label').className
+  );
+});
+
+it('preserves polymorphic menu items when sharing their styles', () => {
+  render(() => (
+    <Dropdown open>
+      <Dropdown.Trigger>Actions</Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Group>
+          <Dropdown.Item as="a" href="/app/agents" closeOnSelect={false}>
+            Agents
+          </Dropdown.Item>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  ));
+  const link = screen.getByRole('menuitem', { name: 'Agents' });
+  expect(link.tagName).toBe('A');
+  expect(link.getAttribute('href')).toBe('/app/agents');
+  expect(link.classList.contains('p-1.5')).toBe(true);
+});
+
+it('uses neutral slider tokens without changing its value or keyboard behavior', () => {
+  const [value, setValue] = createSignal([1]);
+  render(() => (
+    <Slider
+      tone="neutral"
+      value={value()}
+      onChange={setValue}
+      minValue={0}
+      maxValue={3}
+      step={1}
+    >
+      <Slider.Track>
+        <Slider.Fill />
+        <Slider.Thumb aria-label="Thinking">
+          <Slider.Input />
+        </Slider.Thumb>
+      </Slider.Track>
+    </Slider>
+  ));
+  const slider = screen.getByRole('slider', { name: 'Thinking' });
+  const track = slider.closest('.bg-active');
+  expect(track).not.toBeNull();
+  expect(track?.querySelector('.bg-ink-muted')).not.toBeNull();
+  expect(track?.querySelector('.bg-accent')).toBeNull();
+  slider.focus();
+  fireEvent.keyDown(slider, { key: 'ArrowRight' });
+  expect(value()).toEqual([2]);
 });

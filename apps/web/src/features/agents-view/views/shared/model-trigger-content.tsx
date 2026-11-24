@@ -46,7 +46,7 @@ export function UnifiedModelTriggerContent() {
             iconClass="size-3.5"
           />
         </Show>
-        <span class="min-w-0 truncate text-ink-muted">{label()}</span>
+        <span class="min-w-0 truncate">{label()}</span>
       </span>
       <Show when={showModel()}>
         <span class="flex shrink-0 items-center gap-1 text-ink-extra-muted">
@@ -77,7 +77,7 @@ export function UnifiedModelTriggerContent() {
           </Show>
         </span>
       </Show>
-      <CaretDown class="size-3.5 shrink-0 text-ink-extra-muted" />
+      <CaretDown class="size-4 shrink-0" />
     </span>
   );
 }

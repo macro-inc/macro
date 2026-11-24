@@ -5,24 +5,19 @@ import { AgentAvatar } from '../../components/AgentGlyph';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { MACRO_PERSONA_ID } from '../../core/roster';
 
-export function ModelSelectorIdentity(props: { mobile?: boolean }) {
+export function ModelSelectorIdentity() {
   const state = useUnifiedModelSelector();
   const custom = () => state.agent && state.agent.id !== MACRO_PERSONA_ID;
   return (
-    <span class="flex min-w-0 items-center gap-1">
+    <span class="flex min-w-0 items-center gap-2">
       <Show
         when={custom()}
-        fallback={
-          <ModelIcon
-            model={state.model}
-            class={props.mobile ? 'size-[18px] shrink-0' : 'size-4 shrink-0'}
-          />
-        }
+        fallback={<ModelIcon model={state.model} class="size-4 shrink-0" />}
       >
         <AgentAvatar
           agent={state.agent!}
           coder={false}
-          class="size-[18px]"
+          class="size-4"
           iconClass="size-4"
         />
       </Show>

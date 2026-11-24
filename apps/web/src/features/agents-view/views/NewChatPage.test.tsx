@@ -564,14 +564,17 @@ describe('agent-led new conversation', () => {
       screen.queryByRole('textbox', { name: 'Search agents and models' })
     ).toBeNull();
     const card = screen.getByRole('dialog');
-    expect(card.classList.contains('p-0')).toBe(true);
+    expect(card.classList.contains('menu-surface')).toBe(true);
+    expect(card.classList.contains('rounded-xl')).toBe(true);
     const name = within(card).getAllByRole('button')[0];
     const content = name.parentElement?.parentElement;
     expect(content?.parentElement).toBe(card);
     expect(content?.className).not.toMatch(/m-2|bg-ink\/8|rounded-/);
-    expect(content?.classList.contains('p-3')).toBe(true);
+    expect(content?.classList.contains('p-1.5')).toBe(true);
     expect(content?.classList.contains('gap-2')).toBe(true);
-    expect(name.classList.contains('rounded-full')).toBe(true);
+    expect(name.getAttribute('data-variant')).toBe('ghost');
+    expect(name.getAttribute('data-size')).toBe('xs');
+    expect(name.getAttribute('data-appearance')).toBe('default');
     fireEvent.click(name);
     expect(
       await screen.findByRole('textbox', { name: 'Search agents and models' })
@@ -1703,9 +1706,7 @@ describe('agent-led new conversation', () => {
       else await waitFor(() => expect(document.activeElement).toBe(search));
       fireEvent.input(search, { target: { value: 'no-such-choice' } });
       const selectionPage = search.closest<HTMLElement>('.min-h-0.flex-col')!;
-      expect(selectionPage.classList.contains(touch ? 'gap-4' : 'gap-6')).toBe(
-        true
-      );
+      expect(selectionPage.classList.contains('gap-2')).toBe(true);
       const menu = within(search.closest('[role="dialog"]')!);
       expect(menu.getByRole('status').textContent).toBe(
         'No matches for “no-such-choice”'
@@ -1717,6 +1718,90 @@ describe('agent-led new conversation', () => {
       await waitFor(() => expect((search as HTMLInputElement).value).toBe(''));
       await waitFor(() => expect(document.activeElement).toBe(search));
       expect(menu.queryByRole('status')).toBeNull();
+    }
+  );
+
+  it.each([false, true])(
+    'uses shared Button and menu surfaces for every card control (touch: %s)',
+    async (touch) => {
+      mocks.touch = touch;
+      const agent = buildAgentRoster({
+        agents: [],
+        runtimes: [],
+        cursorConnected: true,
+        cursorNeedsConnection: false,
+        cursorDefaultModel: 'cursor-default',
+      }).find((entry) => entry.id === CURSOR_BOT_ID);
+      if (!agent) throw new Error('missing fixture agent');
+      const effort = vi.fn();
+      render(() => (
+        <UnifiedModelSelector
+          state={{
+            agent,
+            model: 'cursor-default',
+            models: [
+              { id: 'cursor-default', label: 'Agent model' },
+              { id: 'second', label: 'Second model' },
+            ],
+            suggestedModels: [],
+            effort: {
+              id: 'reasoning',
+              name: 'Thinking',
+              description: 'Reasoning level',
+              category: 'thought_level',
+              type: 'select',
+              currentValue: 'low',
+              options: [
+                { value: 'low', name: 'Low', description: null, group: null },
+                { value: 'high', name: 'High', description: null, group: null },
+              ],
+            },
+            speeds: ['standard', 'priority'],
+            speedValue: 'standard',
+            onModel: () => {},
+            onEffort: effort,
+            onSpeed: () => {},
+          }}
+        />
+      ));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Choose an agent or model' })
+      );
+      const card = await screen.findByRole('dialog');
+      expect(card.classList.contains('menu-surface')).toBe(true);
+      expect(card.style.boxShadow).toBe('');
+      for (const name of ['Cursor', 'Agent model', 'Thinking: Low', 'Speed']) {
+        const control = within(card).getByRole('button', { name });
+        expect(control.getAttribute('data-variant')).toBe('ghost');
+        expect(control.getAttribute('data-size')).toBe('xs');
+        expect(control.getAttribute('data-appearance')).toBe('default');
+        expect(control.className).not.toMatch(
+          /(?:hover|active):bg-(?:hover|active|selected)\b/
+        );
+      }
+      fireEvent.click(
+        within(card).getByRole('button', { name: 'Thinking: Low' })
+      );
+      const slider = screen.getByRole('slider', { name: 'Thinking' });
+      expect(document.activeElement).toBe(slider);
+      fireEvent.keyDown(slider, { key: 'ArrowRight' });
+      fireEvent.keyUp(slider, { key: 'ArrowRight' });
+      expect(effort).toHaveBeenCalledWith({
+        configId: 'reasoning',
+        name: 'High',
+        value: 'high',
+      });
+      await userEvent
+        .setup()
+        .click(within(card).getByRole('button', { name: 'Speed' }));
+      const menu = await screen.findByRole('menu');
+      expect(menu.classList.contains('menu-surface')).toBe(true);
+      expect(menu.style.boxShadow).toBe('');
+      expect(
+        menu
+          .querySelector('[role="menuitemradio"]')
+          ?.classList.contains('p-1.5')
+      ).toBe(true);
     }
   );
 
@@ -1922,7 +2007,9 @@ describe('agent-led new conversation', () => {
           true
         );
         for (const slider of screen.getAllByRole('slider')) {
-          expect(slider.closest('[style*="padding-inline"]')).not.toBeNull();
+          const track = slider.closest('.bg-active');
+          expect(track).not.toBeNull();
+          expect(track?.querySelector('.bg-ink-muted')).not.toBeNull();
         }
       }
       fireEvent.click(await screen.findByRole('button', { name: 'GPT-5.6' }));
@@ -1937,44 +2024,35 @@ describe('agent-led new conversation', () => {
       );
       expect(choices.getAllByRole('button', { name: 'Auto' })).toHaveLength(1);
       expect(
-        choices.getByRole('button', { name: 'Auto' }).closest('[role="group"]')
+        choices
+          .getByRole('button', { name: 'Auto' })
+          .closest('[role="group"]')
+          ?.getAttribute('aria-label')
       ).toBeNull();
       expect(choices.queryByRole('group', { name: 'Automatic' })).toBeNull();
       const autoSection = choices
         .getByRole('button', { name: 'Auto' })
-        .closest('section')!;
+        .closest<HTMLElement>('[role="group"]')!;
       expect(autoSection).not.toBeNull();
       expect(within(autoSection).getAllByRole('button')).toHaveLength(1);
-      expect(autoSection.parentElement!.classList.contains('gap-4')).toBe(true);
       if (target === 'list') {
         const agentsSection = choices.getByRole('group', { name: 'Agents' });
         expect(
           within(agentsSection).getByRole('button', { name: 'Cursor' })
         ).toBeTruthy();
-        expect(agentsSection.parentElement).toBe(
-          autoSection.parentElement!.parentElement
-        );
-        expect(agentsSection.parentElement!.classList.contains('gap-6')).toBe(
-          true
-        );
-        expect(
-          choices.getByRole('group', { name: 'Recent' }).parentElement
-        ).toBe(autoSection.parentElement);
-        expect(
-          choices.getByRole('group', { name: 'Suggested' }).parentElement
-        ).toBe(autoSection.parentElement);
+        expect(choices.getByRole('group', { name: 'Recent' })).toBeTruthy();
+        expect(choices.getByRole('group', { name: 'Suggested' })).toBeTruthy();
       }
-      for (const element of autoSection
-        .closest('.overflow-y-auto')!
-        .querySelectorAll('*')) {
-        expect(
-          [...element.classList].filter((name) => /^-?m[trblxyse]?-/.test(name))
-        ).toEqual([]);
-      }
+      expect(autoSection.classList.contains(touch ? 'mx-3' : 'p-1.5')).toBe(
+        true
+      );
       fireEvent.input(search, { target: { value: 'Automatic' } });
       expect(choices.queryByRole('status')).toBeNull();
       expect(
-        choices.getByRole('button', { name: 'Auto' }).closest('[role="group"]')
+        choices
+          .getByRole('button', { name: 'Auto' })
+          .closest('[role="group"]')
+          ?.getAttribute('aria-label')
       ).toBeNull();
       expect(choices.queryByRole('button', { name: 'GPT-5.6' })).toBeNull();
       fireEvent.input(search, { target: { value: 'openai' } });
@@ -1982,7 +2060,9 @@ describe('agent-led new conversation', () => {
       expect(choices.getByRole('button', { name: 'GPT-5.6' })).toBeTruthy();
       if (target !== 'list') {
         const provider = choices.getByRole('group', { name: 'OpenAI' });
-        expect(provider.tagName).toBe('SECTION');
+        expect(provider.classList.contains(touch ? 'mx-3' : 'p-1.5')).toBe(
+          true
+        );
         expect(
           within(provider).getByRole('button', { name: 'GPT-5.6' })
         ).toBeTruthy();
@@ -2055,8 +2135,8 @@ describe('agent-led new conversation', () => {
     expect(
       models
         .getByRole('button', { name: /Cursor Default/ })
-        .querySelector('.text-accent')
-    ).toBeTruthy();
+        .getAttribute('aria-pressed')
+    ).toBe('true');
     fireEvent.click(models.getByRole('button', { name: 'GPT-5' }));
     expect(
       screen.getByRole('button', { name: 'Choose an agent or model' })
@@ -2066,8 +2146,8 @@ describe('agent-led new conversation', () => {
     expect(
       within(screen.getByRole('dialog'))
         .getByRole('button', { name: 'GPT-5' })
-        .querySelector('.text-accent')
-    ).toBeTruthy();
+        .getAttribute('aria-pressed')
+    ).toBe('true');
     fireEvent.click(
       screen.getByRole('button', { name: 'Choose an agent or model' })
     );
@@ -2091,10 +2171,12 @@ describe('agent-led new conversation', () => {
       if (touch) fireEvent.click(trigger);
       const modelLabel = await screen.findByText('Model');
       const modelRow = modelLabel.parentElement?.parentElement;
-      expect(modelRow?.classList.contains(touch ? 'pl-2.5' : 'pl-1.5')).toBe(
-        true
-      );
-      expect(modelRow?.className).not.toMatch(/\b(?:px|pr)-/);
+      expect(modelRow?.className).not.toMatch(/\b(?:px|pr|pl)-/);
+      const modelButton = within(modelRow!).getByRole('button', {
+        name: 'GPT-5',
+      });
+      expect(modelButton.getAttribute('data-variant')).toBe('ghost');
+      expect(modelButton.getAttribute('data-size')).toBe('xs');
       fireEvent.click(
         await screen.findByRole('button', { name: 'Keep GPT-5 for Cursor' })
       );

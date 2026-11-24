@@ -152,6 +152,7 @@ export { InvertUtil } from './components/InvertUtil';
 export { Item, type ItemProps } from './components/Item';
 export { Layer } from './components/Layer';
 export { LogoProgress } from './components/LogoProgress';
+export { Menu } from './components/Menu';
 export type { NavRowProps } from './components/NavRow';
 export { NavRow } from './components/NavRow';
 export {
@@ -169,6 +170,7 @@ export { NumberUnitInput } from './components/NumberUnitInput';
 export { Panel } from './components/Panel';
 export type { PillButtonProps, PillButtonTone } from './components/PillButton';
 export { PillButton } from './components/PillButton';
+export { Popover, type PopoverContentProps } from './components/Popover';
 export type {
   ProgressPillProps,
   ProgressRingProps,

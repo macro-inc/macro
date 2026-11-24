@@ -83,6 +83,31 @@ function VerticalDemo() {
 }
 // #endregion
 
+// #region demo:neutral
+function NeutralDemo() {
+  const [value, setValue] = createSignal([2]);
+  return (
+    <Slider
+      tone="neutral"
+      value={value()}
+      onChange={setValue}
+      minValue={0}
+      maxValue={4}
+      step={1}
+    >
+      <Slider.Label>Thinking</Slider.Label>
+      <Slider.Track>
+        <Slider.Fill />
+        <Slider.Thumb aria-label="Thinking">
+          <Slider.Input />
+        </Slider.Thumb>
+      </Slider.Track>
+    </Slider>
+  );
+}
+
+// #endregion
+
 export default defineDoc({
   name: 'Slider',
   category: 'Inputs',
@@ -98,6 +123,13 @@ export default defineDoc({
   ],
   import: "import { Slider } from '@ui';",
   demos: [
+    {
+      id: 'neutral',
+      title: 'Neutral control',
+      description:
+        'Use tone="neutral" for the app\'s neutral track and fill, retaining standard keyboard, pointer, and disabled behavior.',
+      render: NeutralDemo,
+    },
     { id: 'single', title: 'Single value', render: SingleDemo },
     { id: 'range', title: 'Multiple thumbs', render: RangeDemo },
     { id: 'vertical', title: 'Vertical volume', render: VerticalDemo },

@@ -1,7 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigation';
-import * as Popover from '@kobalte/core/popover';
-import { Button } from '@ui';
+import { Popover } from '@ui';
 import { onCleanup, Show, untrack } from 'solid-js';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { createModelSelectorNavigation } from '../../primitives/model-selector-navigation';
@@ -59,12 +58,11 @@ export function DesktopModelSelector() {
       <UnifiedModelTrigger menuOpen={nav.open()}>
         <Popover.Trigger
           ref={trigger}
-          as={Button}
           variant="ghost"
-          size="md"
+          size="xs"
           disabled={state.disabled}
           aria-label={t('agentControls.modelSelector')}
-          class="min-w-0 max-w-[min(18rem,100%)]"
+          class="min-w-0 max-w-full"
         >
           <UnifiedModelTriggerContent />
         </Popover.Trigger>
@@ -72,15 +70,7 @@ export function DesktopModelSelector() {
       <Popover.Portal>
         <Popover.Content
           ref={content}
-          class="portal-scope menu-surface z-modal flex max-h-[min(40rem,var(--kb-popper-content-available-height,80dvh))] max-w-[calc(100vw-1rem)] flex-col rounded-2xl p-0 overflow-hidden outline-none"
-          classList={{
-            'w-[360px]': nav.page() === 'card',
-            'w-[400px]': nav.page() !== 'card',
-          }}
-          style={{
-            'box-shadow':
-              'inset 0 0 0 1px var(--color-edge-muted), var(--shadow-menu)',
-          }}
+          class="flex min-w-64 max-w-[calc(100vw-2rem)] flex-col overflow-hidden"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             // Kobalte calls this inside its focus-scope effect. A page read
