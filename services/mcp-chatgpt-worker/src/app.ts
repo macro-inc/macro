@@ -65,6 +65,9 @@ export const EVENTS_METHODS = [
 
 type EventsMethod = (typeof EVENTS_METHODS)[number];
 
+/** How every Macro event type is named, such as `message.mentioned`. */
+const EVENT_NAME_SHAPE = /^[a-z][a-z_]*(\.[a-z][a-z_]*)+$/;
+
 /**
  * The events methods are forwarded under this prefix
  * (`com.macro/chatgpt/events/subscribe`), which tells the public MCP server
@@ -408,8 +411,13 @@ export function createHandler(config: Config) {
   ): Promise<Record<string, unknown>> {
     return Telemetry.span('mcp_chatgpt.events', async (span) => {
       span.setAttr('mcp.method', method);
+      // Only a name shaped like an event type: a caller's text (which can
+      // hold an email) never reaches the span.
       if (typeof params?.name === 'string')
-        span.setAttr('mcp.event.name', params.name);
+        span.setAttr(
+          'mcp.event.name',
+          EVENT_NAME_SHAPE.test(params.name) ? params.name : 'unknown'
+        );
       const people = personTokens(token);
       // ChatGPT's own `_meta` is for this server; the public MCP server gets
       // the 2026-07-28 request metadata in its place.
