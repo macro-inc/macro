@@ -74,8 +74,12 @@ source and its phase: `Scanning 120 pages` (Linear and Jira: `Reading N
 issues`, Slack: `Finding channels`), `Deciding on N items`, `Waiting for your
 approval`, `Importing 31 of 124` with a percentage, then `Imported`, `Import
 failed` (or a short reason from the run's failure kind, such as `Failed:
-Notion access lost`) or `Import cancelled`. **Open the <Source> import** opens the agent
-session presenting the review, once one does; Slack rows have no session.
+Notion access lost`) or `Import cancelled`. **Open the <Source> import chat** (tooltip `Open import
+chat`) opens the agent chat that ran the import, once there is one, closes
+the list and moves focus into the chat (not on touch, where that would raise
+the keyboard); Slack rows have no session. When that chat is already the
+active split, the button is described and tooltipped `You’re in this chat`
+and still focuses it.
 A failed row offers **Reconnect <Source>** when the connection was revoked,
 expired or unusable, and **View details** (its review) otherwise; a partly
 failed import reads `Imported with some failures`. A finished or cancelled
@@ -86,7 +90,8 @@ Dismissals are kept per user on the device, and dismissing a failed review in
 the thread dismisses its run's entry too. Touch layouts have no rail: tablets
 keep the older pill in the bottom-right corner, above the touch layout's bottom
 buttons (`Show imports` / `Hide
-imports`, mounted in `ToastRegion`), and phones never show imports. A newly
+imports`, mounted in `ToastRegion`), which collapses when a row opens its
+chat, and phones never show imports. A newly
 failed run is announced politely (`Notion import failed`). It reads `/import/state` (polling only while something
 is running, otherwise on `import_updated` pushes) and each listed workspace
 run's `/import/workspaces/{source}` report. `src/features/import-jobs/browser-test/`
