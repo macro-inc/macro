@@ -334,7 +334,9 @@ export function ChannelInput(props: ChannelInputProps) {
     attachmentTracker.setAttachments(snapshot.attachments);
     // The mentions are those of the text: a draft read back from storage
     // carries none, and the editor finds them as it reads the text.
-    mentionsTracker.setMentions(lexicalEditor().read($readItemMentions));
+    mentionsTracker.setMentions(
+      lexicalEditor().read(() => $readItemMentions(['database', 'form']))
+    );
     if (options?.focus !== false) focusEditorNow();
     queueMicrotask(() => {
       acceptTyping = true;

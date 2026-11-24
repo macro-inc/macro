@@ -194,18 +194,27 @@ function $isMentionNode(
   );
 }
 
-/** The mentions the editor's document holds, in document order. */
-export function $readItemMentions(): ItemMention[] {
+/** Cards that reference their entity the way a mention does. */
+export type ReferenceCard = 'database' | 'form';
+
+/**
+ * The mentions the editor's document holds, in document order, with its
+ * cards of the `cards` kinds. A composer reads form cards too: inserting one
+ * reported it as a reference, which grants the channel View on the form.
+ */
+export function $readItemMentions(
+  cards: readonly ReferenceCard[] = ['database']
+): ItemMention[] {
   const mentions: ItemMention[] = [];
   $traverseNodes($getRoot(), (node) => {
     if ($isMentionNode(node) && !$isUntrackedPullRequestMention(node)) {
       mentions.push($mentionItemFromNode(node));
     } else if (
       node instanceof DocumentCardNode &&
-      node.getBlockName() === 'database'
+      cards.some((card) => card === node.getBlockName())
     ) {
       mentions.push({
-        itemType: 'database',
+        itemType: blockItemType(node.getBlockName()),
         itemId: node.getDocumentId(),
         documentName: node.getDocumentName(),
       });
@@ -454,7 +463,7 @@ function registerMentionsPlugin(
 
   function updateMentionsSignal() {
     if (props.setMentions === undefined) return;
-    props.setMentions(editor.read($readItemMentions));
+    props.setMentions(editor.read(() => $readItemMentions()));
   }
 
   // Expansion/collapse replaces the node but preserves its tracked reference UUID.
