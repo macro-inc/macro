@@ -428,6 +428,28 @@ impl SoupService for CountingSoupService {
     }
 }
 
+type SubscriptionSchema<R, A> = SoupSchema<
+    CountingSoupService,
+    R,
+    NoopWebSocketNotificationSubscriptionService,
+    A,
+    NoOpEmailService,
+    NoOpEntityAccessService,
+    SchemaOnlyAuthorizationService,
+    SchemaOnlyState,
+    NoOpEntityPropertyWriter,
+    UnavailableEntityMutationService,
+    NoOpFavoriteMutationService,
+    NoOpChannelActivityMutationService,
+    NoOpNotificationMutationService,
+    NoOpSoupNotificationEdgeReader,
+    NoOpEntityPropertyReader,
+    NoOpSoupEmailContentEdgeReader,
+    NoOpEntityFavoriteEdgeReader,
+    NoOpEntityPermissionEdgeReader,
+    NoOpActivityReader,
+>;
+type LabelMutationCall = (MacroUserIdStr<'static>, Uuid, Uuid, bool);
 /// Email service whose inbox lookups are counted, so tests can assert when
 /// the lazy extraction actually runs.
 #[derive(Clone, Default)]
@@ -443,7 +465,7 @@ struct CountingEmailService {
     user_catalog_identities: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     seen_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>>,
     unread_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>>,
-    label_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, Uuid, bool)>>>,
+    label_mutation_calls: Arc<Mutex<Vec<LabelMutationCall>>>,
     thread_preview_receipts: Arc<Mutex<Vec<Vec<Uuid>>>>,
 }
 
@@ -987,10 +1009,11 @@ impl graphql_email::SoupEmailContentEdgeReader for RecordingEmailContentReader {
     }
 }
 
+type ActivityFeedCall = (String, Option<(chrono::DateTime<chrono::Utc>, Uuid)>, u32);
 #[derive(Clone, Default)]
 struct RecordingActivityReader {
     edge_calls: Arc<Mutex<Vec<Vec<graphql_activity::ActivityEdgeKey>>>>,
-    feed_calls: Arc<Mutex<Vec<(String, Option<(chrono::DateTime<chrono::Utc>, Uuid)>, u32)>>>,
+    feed_calls: Arc<Mutex<Vec<ActivityFeedCall>>>,
     overview_calls: Arc<Mutex<Vec<(String, activity::ActivityWindow)>>>,
     records: Arc<Mutex<Vec<activity::ActivityRecord>>>,
 }
@@ -1720,26 +1743,9 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         Arc::new(NoOpEmailService),
         NoOpEntityAccessService,
     );
-    let schema: SoupSchema<
-        CountingSoupService,
+    let schema: SubscriptionSchema<
         TestRealtimeSubscriptionService,
-        NoopWebSocketNotificationSubscriptionService,
         graphql_activity::NoOpActivitySubscriptionService,
-        NoOpEmailService,
-        NoOpEntityAccessService,
-        SchemaOnlyAuthorizationService,
-        SchemaOnlyState,
-        NoOpEntityPropertyWriter,
-        UnavailableEntityMutationService,
-        NoOpFavoriteMutationService,
-        NoOpChannelActivityMutationService,
-        NoOpNotificationMutationService,
-        NoOpSoupNotificationEdgeReader,
-        NoOpEntityPropertyReader,
-        NoOpSoupEmailContentEdgeReader,
-        NoOpEntityFavoriteEdgeReader,
-        NoOpEntityPermissionEdgeReader,
-        NoOpActivityReader,
     > = build_schema_with_services(
         soup_service,
         realtime,
@@ -2257,26 +2263,9 @@ async fn activity_updates_subscribes_as_the_authenticated_user() {
         ))),
     };
 
-    let schema: SoupSchema<
-        CountingSoupService,
+    let schema: SubscriptionSchema<
         NoOpSoupRealtimeSubscriptionService,
-        NoopWebSocketNotificationSubscriptionService,
         TestActivitySubscriptionService,
-        NoOpEmailService,
-        NoOpEntityAccessService,
-        SchemaOnlyAuthorizationService,
-        SchemaOnlyState,
-        NoOpEntityPropertyWriter,
-        UnavailableEntityMutationService,
-        NoOpFavoriteMutationService,
-        NoOpChannelActivityMutationService,
-        NoOpNotificationMutationService,
-        NoOpSoupNotificationEdgeReader,
-        NoOpEntityPropertyReader,
-        NoOpSoupEmailContentEdgeReader,
-        NoOpEntityFavoriteEdgeReader,
-        NoOpEntityPermissionEdgeReader,
-        NoOpActivityReader,
     > = build_schema_with_services(
         CountingSoupService::default(),
         NoOpSoupRealtimeSubscriptionService,
