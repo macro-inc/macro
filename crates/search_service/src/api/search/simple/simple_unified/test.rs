@@ -572,6 +572,7 @@ fn channel_name_cursor_round_trips_through_the_unified_cursor() {
             updated_at: ts(1000),
         })),
         document_term_matching: None,
+        query_time_millis: None,
     };
 
     let decoded = SearchCursor::decode(&cursor.encode().expect("encode")).expect("decode");
@@ -621,6 +622,7 @@ fn the_unified_search_span_carries_the_mode_and_not_the_request() {
         calendar_event_scope: Default::default(),
         term_matching: Default::default(),
         collapse: None,
+        time_zone: None,
     };
     req.filters.chat_filters.chat_ids = vec![chat_id.to_string()];
     let query_params = SearchPaginationParams {
@@ -696,6 +698,7 @@ fn the_unified_search_span_defaults_the_page_size() {
         calendar_event_scope: Default::default(),
         term_matching: Default::default(),
         collapse: None,
+        time_zone: None,
     };
     let query_params = SearchPaginationParams {
         page: None,
@@ -975,6 +978,7 @@ fn search_request(query: &str) -> UnifiedSearchRequest {
         calendar_event_scope: Default::default(),
         term_matching: Default::default(),
         collapse: None,
+        time_zone: None,
     }
 }
 
@@ -1523,4 +1527,64 @@ fn a_limited_search_is_answered_too_many_requests_with_its_retry_after() {
     });
     assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(response.headers()[axum::http::header::RETRY_AFTER], "3");
+}
+
+fn clock() -> QueryClock {
+    QueryClock {
+        now: chrono::DateTime::UNIX_EPOCH,
+        zone: chrono_tz::Tz::UTC,
+    }
+}
+
+fn every_kind() -> SearchEntityFilters {
+    SearchEntityFilters::from(item_filters::EntityFilters::default())
+}
+
+#[test]
+fn a_long_label_name_is_matched_whole_while_words_are_cut() {
+    let name = "n".repeat(MAX_TERM_CHARS + 15);
+    let word = "w".repeat(MAX_TERM_CHARS + 15);
+    let subject = "s".repeat(MAX_TERM_CHARS + 15);
+    let left_out = "x".repeat(MAX_TERM_CHARS + 15);
+    let mut filters = every_kind();
+
+    let (terms, email_query) = limited_terms(
+        &mut filters,
+        false,
+        vec![
+            format!("label:{name}"),
+            word,
+            format!("subject:{subject}"),
+            format!("-{left_out}"),
+        ],
+        MatchType::Partial,
+        clock(),
+    )
+    .expect("three terms are under the count cap");
+
+    assert_eq!(filters.email_filters.label_names[0].name, name);
+    assert_eq!(terms[0].chars().count(), MAX_TERM_CHARS);
+    assert_eq!(filters.email_filters.text_matches.len(), 2);
+    assert!(
+        filters
+            .email_filters
+            .text_matches
+            .iter()
+            .all(|text_match| text_match.text.chars().count() == MAX_TERM_CHARS)
+    );
+    let reported = reported_filters(&email_query.expect("the search typed operators"));
+    assert_eq!(reported.label_names, filters.email_filters.label_names);
+    assert_eq!(reported.text_matches, filters.email_filters.text_matches);
+}
+
+#[test]
+fn operators_count_toward_the_term_cap() {
+    let terms: Vec<String> = (0..=MAX_SEARCH_TERMS)
+        .map(|i| format!("subject:t{i}"))
+        .collect();
+
+    assert!(matches!(
+        limited_terms(&mut every_kind(), false, terms, MatchType::Partial, clock()),
+        Err(SearchError::TooManyTerms)
+    ));
 }

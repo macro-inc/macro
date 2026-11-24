@@ -130,6 +130,11 @@ fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Re
         subject_only: false,
         tag_option_ids: vec![],
         match_all_tags: false,
+        text_conditions: vec![],
+        label_conditions: vec![],
+        exclude_thread_ids: vec![],
+        sent_after_millis: None,
+        sent_before_millis: None,
     }
     .into();
 
@@ -171,6 +176,11 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         subject_only: false,
         tag_option_ids: vec![],
         match_all_tags: false,
+        text_conditions: vec![],
+        label_conditions: vec![],
+        exclude_thread_ids: vec![],
+        sent_after_millis: None,
+        sent_before_millis: None,
     }
     .into();
 
@@ -625,6 +635,205 @@ fn test_required_thread_ids_narrow_on_top_of_access() -> anyhow::Result<()> {
     assert!(
         filters.contains(&json!({ "terms": { "entity_id": ["thread-a", "thread-b"] } })),
         "expected a required thread filter, got {filters:?}"
+    );
+    Ok(())
+}
+
+fn subject_condition(text: &str, exclude: bool) -> EmailTextCondition {
+    EmailTextCondition {
+        fields: EmailTextFields::Subject,
+        text: text.to_string(),
+        exclude,
+    }
+}
+
+#[test]
+fn a_subject_condition_matches_the_subject_alone() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .text_conditions(vec![subject_condition("lunch", false)]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let must = json["bool"]["must"].as_array().unwrap();
+
+    assert_eq!(must.len(), 2);
+    assert_eq!(
+        must[1],
+        json!({
+            "bool": {
+                "should": [{
+                    "simple_query_string": {
+                        "query": "lunch*",
+                        "fields": ["subject"],
+                        "default_operator": "AND"
+                    }
+                }],
+                "minimum_should_match": 1
+            }
+        })
+    );
+    Ok(())
+}
+
+#[test]
+fn an_excluded_condition_leaves_its_messages_out() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .text_conditions(vec![subject_condition("team lunch", true)]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    assert_eq!(json["bool"]["must"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        json["bool"]["must_not"][0]["bool"]["should"][0]["simple_query_string"]["query"],
+        "\"team lunch\""
+    );
+    Ok(())
+}
+
+#[test]
+fn a_from_condition_matches_the_sender_by_name_or_address() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(Vec::new())
+        .match_type("partial")
+        .user_id("user123")
+        .text_conditions(vec![EmailTextCondition {
+            fields: EmailTextFields::From,
+            text: "ana".to_string(),
+            exclude: false,
+        }]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    assert_eq!(
+        json["bool"]["must"],
+        json!([{
+            "bool": {
+                "should": [
+                    {
+                        "simple_query_string": {
+                            "query": "(ana | ana@*)",
+                            "fields": ["sender", "sender.parts"],
+                            "default_operator": "AND"
+                        }
+                    },
+                    {
+                        "simple_query_string": {
+                            "query": "ana*",
+                            "fields": ["sender_name"],
+                            "default_operator": "AND"
+                        }
+                    }
+                ],
+                "minimum_should_match": 1
+            }
+        }])
+    );
+    Ok(())
+}
+
+#[test]
+fn a_search_of_conditions_alone_keeps_the_access_filter() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(Vec::new())
+        .match_type("partial")
+        .user_id("user123")
+        .sent_between(Some(1_000), Some(2_000));
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    assert!(json["bool"]["must"].is_null());
+    assert_eq!(
+        access_filter(&json),
+        &json!({ "term": { "user_id": "user123" } })
+    );
+    let filters = json["bool"]["filter"].as_array().unwrap();
+    assert!(filters.contains(&json!({
+        "script": {
+            "script": {
+                "source": "doc['sent_at_millis'].size() > 0 \
+                    && doc['sent_at_millis'].value.toInstant().toEpochMilli() >= params.after \
+                    && doc['sent_at_millis'].value.toInstant().toEpochMilli() < params.before",
+                "lang": "painless",
+                "params": { "after": 1_000, "before": 2_000 }
+            }
+        }
+    })));
+    Ok(())
+}
+
+#[test]
+fn one_sent_bound_checks_only_that_bound() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .sent_between(None, Some(2_000));
+
+    let json = builder.build_bool_query()?.build().to_json();
+    let script = json["bool"]["filter"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|filter| filter.get("script"))
+        .expect("the sent bound is a script filter");
+
+    assert_eq!(script["script"]["params"], json!({ "before": 2_000 }));
+    assert!(
+        !script["script"]["source"]
+            .as_str()
+            .unwrap()
+            .contains("params.after")
+    );
+    Ok(())
+}
+
+#[test]
+fn a_label_condition_matches_a_label_or_a_tag() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["menu".to_string()])
+        .match_type("partial")
+        .user_id("user123")
+        .label_conditions(vec![
+            EmailLabelCondition {
+                labels: vec!["Fundraising".to_string()],
+                tag_option_ids: vec!["opt-1".to_string()],
+                exclude: false,
+            },
+            EmailLabelCondition {
+                labels: vec!["Updates".to_string()],
+                tag_option_ids: Vec::new(),
+                exclude: true,
+            },
+            EmailLabelCondition {
+                labels: Vec::new(),
+                tag_option_ids: Vec::new(),
+                exclude: true,
+            },
+        ])
+        .exclude_thread_ids(vec!["thread-1".to_string()]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    let carries = json["bool"]["filter"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|filter| filter["bool"]["minimum_should_match"] == 1)
+        .expect("the label condition is a filter");
+    let should = carries["bool"]["should"].as_array().unwrap();
+    assert_eq!(should[0], json!({ "terms": { "labels": ["Fundraising"] } }));
+    assert!(should[1]["nested"].is_object());
+
+    assert_eq!(
+        json["bool"]["must_not"],
+        json!([
+            {
+                "bool": {
+                    "should": [{ "terms": { "labels": ["Updates"] } }],
+                    "minimum_should_match": 1
+                }
+            },
+            { "terms": { "entity_id": ["thread-1"] } }
+        ])
     );
     Ok(())
 }
