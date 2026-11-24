@@ -26,6 +26,8 @@ const soup = vi.hoisted(() => ({
   reload: undefined as Partial<OperationResult> | undefined,
   /** The client's answer to a cache-only read; nothing when unset. */
   cacheOnly: undefined as Partial<OperationResult> | undefined,
+  /** Runs while a cache-only read is answered. */
+  duringCacheOnly: undefined as (() => void) | undefined,
   /** The cache store's answers to reads of the tag sets, in order; then a miss. */
   cachedReads: [] as unknown[],
   session: 1,
@@ -43,12 +45,13 @@ vi.mock('@service-storage/graphql-soup', () => ({
       _variables: unknown,
       context?: { requestPolicy?: string }
     ) => ({
-      toPromise: async () =>
-        context?.requestPolicy === 'network-only'
-          ? (soup.reload ?? { data: undefined })
-          : context?.requestPolicy === 'cache-only'
-            ? (soup.cacheOnly ?? { data: undefined })
-            : { data: undefined },
+      toPromise: async () => {
+        if (context?.requestPolicy === 'network-only')
+          return soup.reload ?? { data: undefined };
+        if (context?.requestPolicy !== 'cache-only') return { data: undefined };
+        soup.duringCacheOnly?.();
+        return soup.cacheOnly ?? { data: undefined };
+      },
     }),
   }),
   getGraphqlSoupCacheHost: () => soup.host,
@@ -100,6 +103,7 @@ beforeEach(() => {
   soup.optimistic.mockReset();
   soup.reload = undefined;
   soup.cacheOnly = undefined;
+  soup.duringCacheOnly = undefined;
   soup.cachedReads = [];
   soup.session = 1;
   soup.definitionCached = true;
@@ -909,17 +913,26 @@ describe('provisioning while the cache cannot answer', () => {
       definition: { id: 'def-team' },
       options: [],
     } as unknown as Awaited<ReturnType<typeof ensureTagSet>>;
+    let failed = false;
     const dispose = createRoot((dispose) => {
       registerCatalogReader({
         kind: 'tags',
         key: () => 7,
         definitions: () => [{ scope: 'TEAM', definitionId: 'def-team' }],
-        sets: () => [shown],
+        sets: () => (failed ? [] : [shown]),
         refresh: async () => {},
       });
       return dispose;
     });
     try {
+      // Not from a failed list, even when the cache read's miss reaches the
+      // list and clears its error.
+      failed = true;
+      soup.duringCacheOnly = () => {
+        failed = false;
+      };
+      expect(await cachedTagSet('team')).toBeUndefined();
+      soup.duringCacheOnly = undefined;
       expect(await cachedTagSet('team')).toBe(shown);
       expect(await cachedTagSet('user')).toBeUndefined();
       // Not for a flow another login took over.
