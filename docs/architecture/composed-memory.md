@@ -50,10 +50,19 @@ Shutdown cancels and drains the tracked task. The CLI awaits one user's generati
 and can be used locally with the existing provider and service configuration.
 
 Each claim targets the first unprocessed UTC day that ended at least an hour ago,
-so activity still arriving from Kafka is counted. Before any model
+so activity still arriving from Kafka is counted. A scheduled claim first asks
+the activity crate whether the user has used Macro in the last 14 days
+(`UserActivity::is_active`: a signed-in client open, or a change they made
+themselves; agent, bot and code-mode work for them does not count). For a user
+who has not, the day commits with no new model work (pieces an earlier failed
+attempt already passed review are kept, as when attempts run out), so days pass
+while they are away and are not caught up when they return; generation resumes
+with the first day claimed after they are back. A failed read counts as active.
+The one-user CLI does not ask. Then, before any model
 call, the activity log (`activity_events`, views and appearance changes excluded)
 is checked for that day; a day without activity commits with no report and no
-new profile. Each piece (daily, weekly, monthly, summary, profile) is stored in
+new profile. Work done for the user counts here: for a user who is around, a
+day on which only their agents worked is still reported. Each piece (daily, weekly, monthly, summary, profile) is stored in
 `memory_refresh_piece` as soon as it passes review, and later attempts at the
 same day reuse it instead of regenerating it; the day's commit deletes them. An unenriched user's
 first date is the UTC day before enrollment, preserved across failed first runs.
