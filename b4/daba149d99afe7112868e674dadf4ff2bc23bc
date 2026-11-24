@@ -1,0 +1,46 @@
+apps/web/src/features/notifications/tests/routine-run-notification.test.ts
+  s_51c0af71ac0431::t_e4abea64c6a99e 10,22-24
+  s_51c0af71ac0431::t_33234881e5a99c 7-9
+  s_51c0af71ac0431::t_2d79eb9625dea4 11-13,19-21
+  s_51c0af71ac0431::t_c96435425566e1 25-26
+apps/web/src/features/notifications/notification-metadata.ts
+  s_51c0af71ac0431::t_cfbe7a539988e2 39-55,325
+crates/graphql_notification/src/subscriptions/test.rs
+  s_51c0af71ac0431::t_cdc5e8b7c8f66f 182
+crates/model_notifications/src/metadata.rs
+  s_51c0af71ac0431::t_fb1322a9722b0f 2140-2156,2180-2186
+crates/model_notifications/src/metadata/test.rs
+  s_51c0af71ac0431::t_a0153c5b7c9f8d 1513,1536-1572
+crates/scheduled_action/AGENTS.md
+  s_51c0af71ac0431::t_88d77700d5a026 474-476
+crates/scheduled_action/src/domain/execution.rs
+  s_51c0af71ac0431::t_e0ddc9a78ef24f 6,318-319,339-353,363
+crates/scheduled_action/src/domain/execution/test.rs
+  s_51c0af71ac0431::t_f35214ccbdaaac 317-318,340-342,1022-1060
+crates/scheduled_action/src/domain/ports.rs
+  s_51c0af71ac0431::t_b302dddee79efa 1318-1320
+services/agent_harness_service/AGENTS.md
+  s_51c0af71ac0431::t_cf5f770d55b7e5 372-373
+services/agent_harness_service/src/scheduling/routine_analytics/test.rs
+  s_51c0af71ac0431::t_b9a1b0bbb887aa 16
+services/agent_harness_service/src/scheduling/routine_run_notifications.rs
+  s_51c0af71ac0431::t_ce22206099b66b 3-4,64
+services/agent_harness_service/src/scheduling/routine_run_notifications/test.rs
+  s_51c0af71ac0431::t_a1b92a897583b6 44-52,66,123-139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b4daba149d99afe7112868e674dadf4ff2bc23bc",
+  "prompts": {},
+  "sessions": {
+    "s_51c0af71ac0431": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "54636b73-cf47-4c6a-ae6f-19350718fb13",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
