@@ -904,6 +904,13 @@ html[data-touch-device='true'] {
   -webkit-tap-highlight-color: initial;
 }
 
+/* Dark touch buttons share the floating chrome's raised glass. */
+html[data-touch-device='true'][data-theme-light='false'] {
+  --button-secondary-bg: var(--color-chrome-glass);
+  --button-secondary-hover: var(--color-chrome-glass);
+  --button-secondary-pressed: color-mix(in oklch, var(--color-chrome-glass), var(--color-content-0) 8%);
+}
+
 html:not([data-touch-device="true"]),
 html:not([data-touch-device="true"]) [data-invert] {
   --color-menu-glass: var(--color-menu);
