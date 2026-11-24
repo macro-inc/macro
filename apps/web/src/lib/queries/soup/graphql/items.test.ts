@@ -72,7 +72,11 @@ import {
   disposeChannelNotificationRefresh,
 } from '../../channel/notification-refresh';
 import { registerChannelNotificationRefresh } from '../../channel/register-notification-refresh';
-import { getActiveGraphqlSoupRevalidations } from './active-queries';
+import {
+  getActiveGraphqlSoupRevalidations,
+  getUnmaintainedGraphqlSoupRevalidations,
+  refreshActiveGraphqlSoupQueries,
+} from './active-queries';
 import { createSoupLiveQuery } from './create-soup-live-query';
 import { createGraphqlSoupAstItemsQuery } from './items';
 import {
@@ -2620,6 +2624,48 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       vi.useRealTimers();
     }
   });
+
+  it.each([
+    ['a refresh after a write', () => refreshActiveGraphqlSoupQueries()],
+    [
+      'a write revalidating the unmaintained lists',
+      () => getUnmaintainedGraphqlSoupRevalidations(),
+    ],
+  ])(
+    'reads a list from the network again after %s, within its staleTime',
+    async (_write, write) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      makeGraphqlSoupInputMock.mockReturnValue({
+        initial: { limit: 50, sortMethod: 'UPDATED_AT' },
+      });
+      const mount = () =>
+        createRoot((dispose) => {
+          createGraphqlSoupAstItemsQuery(
+            () => ({ params: {}, body: {} }),
+            () => ({ enabled: true, staleTime: 60_000 })
+          );
+          return dispose;
+        });
+      const policies = () =>
+        fake.executions.map((execution) => execution.context.requestPolicy);
+      try {
+        const first = mount();
+        fake.executions[0].next(
+          graphqlSoupPage({ items: [], next_cursor: null })
+        );
+        first();
+        // Unmounted, so the write reaches no reader of this list.
+        await write();
+        mount()();
+        expect(policies()).toEqual(['cache-and-network', 'cache-and-network']);
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
 
   it('keeps loaded channel pages registered for retry after a transient refresh failure', async () => {
     vi.useFakeTimers();
