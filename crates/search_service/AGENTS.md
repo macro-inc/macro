@@ -105,10 +105,14 @@ per-entity-type search plus a unified search across them — mounted into
 - Database rows (`include_database_rows` on `/search`, never `/search/simple`)
   are their own source beside CRM, on only while `DATABASE_ROW_SEARCH_FLAG`
   (`enable-database-row-search`) is on for the caller and the search has no
-  tag filter, email operator, or regexp/query matching. The `database_rows`
+  narrowing filter (`models_search::unified::narrows_items`: owner, folder,
+  dates, favorites, properties, tags; leaving kinds out and scoping mail are
+  fine), email operator, or regexp/query matching. The `database_rows`
   index only proposes rows, narrowed to the databases the caller reaches now
-  (at most `MAX_SEARCHED_DATABASES`, a terms filter, the span records when
-  that cap cut the list); the caller's sources are read once per search;
+  (at most `MAX_SEARCHED_DATABASES`, the most recently updated, a terms
+  filter; the span records when that cap cut the list); a failed shard
+  fails the search, and errors keep only OpenSearch's status and error
+  type, never a reason that could quote the query; the caller's sources are read once per search;
   `domain::database_rows` shows a row only after the primary database says,
   uncached, that the caller views its database through their current
   memberships (`CurrentDatabaseAccess`), the database is a live untrashed
