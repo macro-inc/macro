@@ -25,7 +25,7 @@ use super::code_check::{CodeCheckError, checked_task, named_steps, same_task};
 use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades, UpgradeOutcome};
 use super::event_rollout::{EventRoutineRollout, EventRoutinesOff};
 use super::event_runs::ConfigurationRevision;
-use super::event_trigger::ActionTrigger;
+use super::event_trigger::{ActionTrigger, EventFilters};
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionPolicyError, CheckedStepProblems,
     CreatedItem, DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun,
@@ -332,6 +332,25 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             .unwrap_or(false);
         if !enabled {
             return Err(ActionPolicyError::EventManagementDisabled.into());
+        }
+        if trigger
+            .event_filters()
+            .is_some_and(EventFilters::watches_email_labels)
+        {
+            let labels = self
+                .rollout
+                .email_labels_enabled_for(owner)
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        ?error,
+                        "feature flags unavailable; email label triggers stay off"
+                    );
+                })
+                .unwrap_or(false);
+            if !labels {
+                return Err(ActionPolicyError::EmailLabelsDisabled.into());
+            }
         }
         Ok(())
     }

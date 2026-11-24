@@ -7,7 +7,7 @@ use futures::FutureExt;
 use super::condition::{ConditionError, ConditionVerdict, EventConditionCheck, NoConditionCheck};
 use super::*;
 use crate::domain::event_rollout::EventRoutineRollout;
-use crate::domain::event_trigger::ConditionRequirement;
+use crate::domain::event_trigger::{ConditionRequirement, EventName};
 use crate::domain::models::{ConditionResult, MAX_ACTION_TIME};
 
 /// How long after admission a condition that cannot be checked is retried
@@ -140,7 +140,14 @@ impl<
                 .cancel(&pending, CancellationReason::NotUserOwned)
                 .await;
         };
-        match self.rollout.enabled_for(owner).await {
+        let rollout = async {
+            let events = self.rollout.enabled_for(owner).await?;
+            if !events || pending.event.event_name() != EventName::EmailLabeled {
+                return Ok(events);
+            }
+            self.rollout.email_labels_enabled_for(owner).await
+        };
+        match rollout.await {
             Ok(true) => {}
             Ok(false) => return self.cancel(&pending, CancellationReason::NotEnabled).await,
             // An unreadable flag leaves the run pending, like authorization

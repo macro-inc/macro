@@ -5457,6 +5457,7 @@ export const CreateRoutine = z.object({
               z.any().superRefine((x, ctx) => {
                 const schemas = [
                   z.literal('email.message_received'),
+                  z.literal('email.labeled'),
                   z.literal('task.created'),
                   z.literal('task.status_changed'),
                   z.literal('task.priority_changed'),
@@ -5488,6 +5489,7 @@ export const CreateRoutine = z.object({
               })
             ),
             ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+            labels: z.union([z.array(z.string().uuid()), z.null()]).optional(),
             condition: z.union([z.string(), z.null()]).optional(),
             type: z.literal('event'),
           }),
@@ -5545,6 +5547,7 @@ export const RoutineInfo = z.object({
                   z.any().superRefine((x, ctx) => {
                     const schemas = [
                       z.literal('email.message_received'),
+                      z.literal('email.labeled'),
                       z.literal('task.created'),
                       z.literal('task.status_changed'),
                       z.literal('task.priority_changed'),
@@ -5576,6 +5579,9 @@ export const RoutineInfo = z.object({
                   })
                 ),
                 ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+                labels: z
+                  .union([z.array(z.string().uuid()), z.null()])
+                  .optional(),
                 condition: z.union([z.string(), z.null()]).optional(),
                 type: z.literal('event'),
               }),
@@ -14612,6 +14618,7 @@ export const RoutineList = z.object({
                       z.any().superRefine((x, ctx) => {
                         const schemas = [
                           z.literal('email.message_received'),
+                          z.literal('email.labeled'),
                           z.literal('task.created'),
                           z.literal('task.status_changed'),
                           z.literal('task.priority_changed'),
@@ -14643,6 +14650,9 @@ export const RoutineList = z.object({
                       })
                     ),
                     ids: z
+                      .union([z.array(z.string().uuid()), z.null()])
+                      .optional(),
+                    labels: z
                       .union([z.array(z.string().uuid()), z.null()])
                       .optional(),
                     condition: z.union([z.string(), z.null()]).optional(),
@@ -19450,6 +19460,7 @@ export const RoutineDetails = z.object({
                     z.any().superRefine((x, ctx) => {
                       const schemas = [
                         z.literal('email.message_received'),
+                        z.literal('email.labeled'),
                         z.literal('task.created'),
                         z.literal('task.status_changed'),
                         z.literal('task.priority_changed'),
@@ -19481,6 +19492,9 @@ export const RoutineDetails = z.object({
                     })
                   ),
                   ids: z
+                    .union([z.array(z.string().uuid()), z.null()])
+                    .optional(),
+                  labels: z
                     .union([z.array(z.string().uuid()), z.null()])
                     .optional(),
                   condition: z.union([z.string(), z.null()]).optional(),
@@ -21471,6 +21485,7 @@ export const UpdateRoutine = z.object({
                     z.any().superRefine((x, ctx) => {
                       const schemas = [
                         z.literal('email.message_received'),
+                        z.literal('email.labeled'),
                         z.literal('task.created'),
                         z.literal('task.status_changed'),
                         z.literal('task.priority_changed'),
@@ -21502,6 +21517,9 @@ export const UpdateRoutine = z.object({
                     })
                   ),
                   ids: z
+                    .union([z.array(z.string().uuid()), z.null()])
+                    .optional(),
+                  labels: z
                     .union([z.array(z.string().uuid()), z.null()])
                     .optional(),
                   condition: z.union([z.string(), z.null()]).optional(),

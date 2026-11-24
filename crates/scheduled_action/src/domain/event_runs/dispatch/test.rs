@@ -562,3 +562,40 @@ async fn rejected_or_unconfigured_conditions_skip_immediately() {
         assert_eq!(skipped_condition(&repo), json!({"status": "unavailable"}));
     }
 }
+
+#[tokio::test]
+async fn email_label_runs_wait_for_their_own_rollout() {
+    let (repo, access, executor, pending) = setup();
+    let service = EventDispatchService::new(
+        repo.clone(),
+        access.clone(),
+        executor.clone(),
+        EmailLabelsOff,
+    );
+    assert_ne!(
+        dispatch(&service, pending).await.unwrap(),
+        DispatchResult::Cancelled(CancellationReason::NotEnabled)
+    );
+
+    let mut config = configuration();
+    config.filters = serde_json::from_value(json!([{ "events": ["email.labeled"] }])).unwrap();
+    let labeled: EventReference = serde_json::from_value(json!({
+        "event_id": generate_uuid_v7(), "event_name": "email.labeled",
+        "entity_id": generate_uuid_v7(), "message_id": null,
+        "labels_gained": [generate_uuid_v7()],
+    }))
+    .unwrap();
+    let pending = PendingEventRun {
+        action_id: config.action_id,
+        revision: config.revision,
+        event: labeled,
+        admitted_at: Utc::now(),
+        traceparent: None,
+    };
+    repo.0.lock().unwrap().configurations.push(config);
+    repo.0.lock().unwrap().pending.push(pending.clone());
+    assert_eq!(
+        dispatch(&service, pending).await.unwrap(),
+        DispatchResult::Cancelled(CancellationReason::NotEnabled)
+    );
+}

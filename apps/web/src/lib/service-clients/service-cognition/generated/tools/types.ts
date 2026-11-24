@@ -1128,6 +1128,11 @@ export type RoutineTrigger =
        */
       ids?: string[] | null;
       /**
+       * Only for `email.labeled`, alone in its trigger: label ids from
+       * ListLabels, one of which the thread must gain. Omit for any label.
+       */
+      labels?: string[] | null;
+      /**
        * Optional yes/no question the triggering content must answer with
        * yes, e.g. "Is this email from a customer?". Runs where the answer
        * is no are skipped before any step runs.
@@ -1140,6 +1145,7 @@ export type RoutineTrigger =
  */
 export type RoutineEvent =
   | 'email.message_received'
+  | 'email.labeled'
   | 'task.created'
   | 'task.status_changed'
   | 'task.priority_changed'
@@ -8522,7 +8528,7 @@ export interface CreateProjectResponse {
  *
  * A routine is triggers plus steps. Pass `steps` as a JSON array encoded in a string.
  *
- * Triggers: `once` (future RFC3339 time), `cron` (six-field expression and IANA time zone), or `event` (activity such as `email.message_received`, `task.created` or `channel.message_posted`, optionally limited to item `ids` and gated by a yes/no `condition`). Only people's actions trigger routines.
+ * Triggers: `once` (future RFC3339 time), `cron` (six-field expression and IANA time zone), or `event` (activity such as `email.message_received`, `task.created` or `channel.message_posted`, optionally limited to item `ids` and gated by a yes/no `condition`; `email.labeled`, alone in its trigger, runs when a thread gains one of the label ids from ListLabels in `labels`, or any label without them). Only people's actions trigger routines, so labels a routine or an agent adds never start one.
  *
  * Steps run in order and a failed step stops the run:
  * - `code`: TypeScript against Macro's SDK, for anything that acts or decides: labeling or archiving email, setting properties, creating tasks, posting messages, or judging items with `macro.ai.decide`. See Code steps at the end.
@@ -8548,7 +8554,7 @@ export interface CreateProjectResponse {
  *   - `run.at` is when the run counts as happening (ISO 8601) and `run.timezone` the zone to read it in. Use them for "today", "this week" or a cutoff; never `new Date()` or `Date.now()`, so a dry run that replays an earlier trigger gives the same answer.
  *   - `run.lastSucceededAt` (null on the first run) and `run.previous` (`{ at, outcome }`) say when the routine last ran. Work on what is new since then instead of everything each time.
  *   - `trigger` says what started the run: `{ kind: 'schedule', schedule, timezone }`, `{ kind: 'event', event, item }`, or `{ kind: 'manual', by }`. Check `trigger.kind` before reading `item`.
- *   - An event's `item` is JSON. `item.entity_id` is the id of what the event is about (the task, document, channel, email thread or call); there is no `item.id`. A message event adds `item.message_id`, the message's own id. Its other fields depend on the event: `item.item` for a task or document (`name`, `properties`, `content`), `item.channel` (`name`) and `item.message` for a channel event: `text`, `sender` (a person's email, which their handle gives as `email()`, or a bot's name), `is_reply` (true for a reply in a thread, false for a top-level post) and `root_id` (the id of the top-level post that started its thread: its own id on a top-level post), and on a reply `item.thread_parent`, that top-level post, unless it was deleted; `item.email` (`subject`, `from`, `to`, `body`, `labels`) for mail, and `item.call` (`title`, `participants`, `summary`, `transcript`) for a call. Read anything else through the SDK by `entity_id`, such as `macro.tasks.byId(trigger.item.entity_id)`, and answer a message in its own channel, `macro.channels.byId(trigger.item.entity_id)`, never one looked up by name.
+ *   - An event's `item` is JSON. `item.entity_id` is the id of what the event is about (the task, document, channel, email thread or call); there is no `item.id`. A message event adds `item.message_id`, the message's own id. Its other fields depend on the event: `item.item` for a task or document (`name`, `properties`, `content`), `item.channel` (`name`) and `item.message` for a channel event: `text`, `sender` (a person's email, which their handle gives as `email()`, or a bot's name), `is_reply` (true for a reply in a thread, false for a top-level post) and `root_id` (the id of the top-level post that started its thread: its own id on a top-level post), and on a reply `item.thread_parent`, that top-level post, unless it was deleted; `item.email` (`subject`, `from`, `to`, `body`, `labels`) for mail, plus `item.labels_added` (the names of the labels the thread just gained) for `email.labeled`, and `item.call` (`title`, `participants`, `summary`, `transcript`) for a call. Read anything else through the SDK by `entity_id`, such as `macro.tasks.byId(trigger.item.entity_id)`, and answer a message in its own channel, `macro.channels.byId(trigger.item.entity_id)`, never one looked up by name.
  *   - `run.dryRun` is true when writes change nothing; `routine` is `{ id, name }`.
  *   - `steps.<id>` is the output of a code step before this one, typed from that step's code. Changing what a step returns can break the steps that read it; every code step is checked with the others.
  *   - `knobs.<name>` is a knob's value, typed from the knob: a `choice` is the union of its options, and an `entity` the SDK handle of each kind it lists, as `macro.channels.byId`, `documents.byId`, `projects.byId`, `users.byId`, `tasks.byId`, `email.byId`, `chats.byId`, `crm.companyById`, `crm.contactById`, `initiatives.byId` or `databases.byId` gives it. With several kinds it is their union: check its `entityType` (`'channel'`, `'email_thread'`, `'crm_company'`, …; a task's is `'document'`) before calling what only one kind has.

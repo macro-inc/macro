@@ -381,6 +381,9 @@ each run.
   `github` selector and the exact payload `match` GitHub filters take.
 - `src/domain/event_trigger/property_selector.rs`: the `property` selector task
   property change filters take, matched on the values a change adds.
+- `src/domain/event_trigger/label_selector.rs`: the `labels` selector an
+  `email.labeled` filter takes (label row ids, up to 100), matched on the
+  labels the thread gained.
 - `src/domain/event_trigger/describe.rs`: a trigger in words for a routine
   suggestion's card; a schedule it can't word reads as its cron.
 - `src/inbound/axum_router.rs`, `src/inbound/kafka_consumer.rs`,
@@ -429,7 +432,10 @@ each run.
   (`domain/event_rollout.rs`): saving one needs it, and dispatch cancels runs
   (`NotEnabled`) for owners without it. Pausing an event routine never needs
   it. Without PostHog configured, no one has it and the host starts no event
-  intake.
+  intake. An `email.labeled` trigger also needs `enable-email-labeled-trigger`
+  (`EmailLabelsDisabled`, 400, and `NotEnabled` at dispatch); the host treats
+  it as on in dev and local while that key doesn't exist
+  (`FlaggedEventRoutines::with_email_labels_without_flag`).
 - Not here: the target being run (an agent turn, a routine's tool logic) →
   `crates/agent_session`, `ai_tools`; Jev condition evaluation → `crates/jev`.
 
@@ -550,21 +556,33 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   rejects it as `RoutineWrite`, for any routine, so two can't trigger each
   other. Mail received, internal hops and sync-service document edits carry
   no stamp.
-- Received mail is for its inbox's owner and for each account that inbox is
+- `email.labeled` runs when a thread gains a user label (Gmail label or
+  Outlook category): the email domain publishes the gained label ids as
+  `labels_gained` on `email.message_received` (mail that arrives labeled) and
+  `email.thread_labels_updated` (added later); see `crates/email/AGENTS.md`.
+  `EventReference::general_event` lets received mail with gained labels match
+  `email.labeled` filters too, and `EventFilters::run_event` runs it as
+  `email.labeled` when only those matched; a routine watching both runs it
+  once, as received mail. A label event marked `automated` (an agent's or a
+  routine's write) is rejected as `UnsafeAttribution`, like a `routine_id`.
+  Only `email.labeled` runs keep `labels_gained` in `event_context`. Code from
+  before `email.labeled` can't read those runs (see the `EventReference` note
+  below), so turn its flag on only once every replica runs code that knows it.
+- Received and labeled mail is for its inbox's owner and for each account that inbox is
   delegated to (multi-inbox, `macro_user_links`): admission asks the
   `InboxDelegates` port (`PgInboxDelegates`) once per event, and only when a
   candidate's owner isn't the inbox's (`event_runs/admission.rs`, `Audience`).
   Like the other audience rules (`IncomingEvent::is_for_owner`), it is never
   an access grant: each owner's entity access is still checked.
-- A new-email filter can name `inboxes` (email link ids, at most 25; empty is
-  every inbox). Saving checks them against the owner's current own and
+- A new-email or `email.labeled` filter can name `inboxes` (email link ids,
+  at most 25; empty is every inbox). Saving checks them against the owner's current own and
   delegated inboxes on create and on a trigger change, so a later disconnect
   never blocks unrelated edits. `OwnerInboxes` asks the email domain's
   `EmailRepo` which of the picked ids the owner reads (`inbox_ids_among`, the
   same own-plus-delegated set the app lists, one index probe per pick), so the
   check never reads the owner's other inboxes or an inbox's other delegates.
   `routine.admit_event` counts the routines only their inboxes turned away as
-  `outside_inboxes`. No run keeps the received `inbox`, so every replica can
+  `outside_inboxes`. No run keeps the mail's `inbox`, so every replica can
   read every run: admission checks it, and a filter changed since supersedes
   the run by revision. A shared template drops its inboxes: they are the
   publisher's own. Code without inbox filters can't decode a routine that
