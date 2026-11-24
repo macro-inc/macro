@@ -1,4 +1,5 @@
 import { cn, Layer } from '@ui';
+import { endOfDay, startOfDay } from 'date-fns';
 import {
   createMemo,
   createSignal,
@@ -25,6 +26,7 @@ import type { GanttRescheduleEdge } from './gantt-interaction';
 import {
   formatGanttInstant,
   formatGanttTimeRange,
+  type GanttTimedEnd,
   type GanttTimes,
   ganttTimedBarGeometry,
   toGanttInstant,
@@ -61,6 +63,8 @@ export function GanttBar(
      * zoom and by quarter hours at hours zoom.
      */
     timed?: boolean;
+    /** On a timed bar, the end saved without a time, which reads as its day. */
+    wholeDay?: GanttTimedEnd;
     /**
      * Makes a dated bar draggable to a new range, and its edges resizable:
      * inclusive days, or instants for a timed bar. The bar keeps the dragged
@@ -88,6 +92,7 @@ export function GanttBar(
     'end',
     'deadlineWarning',
     'timed',
+    'wholeDay',
     'onReschedule',
     'regroup',
     'tint',
@@ -97,15 +102,23 @@ export function GanttBar(
     'children',
     'title',
   ]);
+  // On a timed bar an end saved without a time covers its whole day.
   const times = (start: GanttDate, end: GanttDate): GanttTimes | undefined => {
-    const first = toGanttInstant(start);
-    const last = toGanttInstant(end);
+    const exactFirst = toGanttInstant(start);
+    const exactLast = toGanttInstant(end);
+    const first =
+      exactFirst && local.wholeDay === 'start'
+        ? startOfDay(exactFirst)
+        : exactFirst;
+    const last =
+      exactLast && local.wholeDay === 'end' ? endOfDay(exactLast) : exactLast;
     return first && last && last >= first
       ? { start: first, end: last }
       : undefined;
   };
   const reschedule = createGanttReschedule({
     gantt,
+    wholeDay: () => local.wholeDay,
     range: () => {
       if (local.timed) {
         const exact = times(local.start, local.end);
@@ -163,7 +176,7 @@ export function GanttBar(
       {(bar) => {
         const dates = () => {
           const exact = timedRange();
-          if (exact) return formatGanttTimeRange(exact);
+          if (exact) return formatGanttTimeRange(exact, local.wholeDay);
           return `${formatGanttDay(bar().start)} → ${bar().end === undefined ? 'No end date' : formatGanttDay(bar().end!)}`;
         };
         const description = () =>
@@ -171,7 +184,7 @@ export function GanttBar(
         const dragged = () => {
           const exact = timedRange();
           if (exact)
-            return `${formatGanttInstant(exact.start)} → ${formatGanttInstant(exact.end)}`;
+            return `${formatGanttInstant(exact.start, local.wholeDay === 'start')} → ${formatGanttInstant(exact.end, local.wholeDay === 'end')}`;
           return `${formatGanttDay(bar().start)} → ${bar().end === undefined ? '' : formatGanttDay(bar().end!)}`;
         };
         const position = () => ({

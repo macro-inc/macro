@@ -93,6 +93,7 @@ import {
   tasksTabSearch,
   tasksTabSearchCodec,
 } from './tasks-tab-search';
+import { useTasksTimeView } from './time-view';
 import type {
   TaskCreateOptions,
   TaskDetailTarget,
@@ -212,6 +213,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     projectId?: string;
     projectsTab?: 'projects';
   }>();
+  const timeView = useTasksTimeView();
   const searchNamespace = props.searchNamespace ?? tasksTabSearch.namespace;
   const syncSearch = !props.scopeKey || !!props.searchNamespace;
   const [tabSearch, setTabSearch] = createSearchParams({
@@ -661,7 +663,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
 
   createEffect(
     on(selectedTask, (task, previous) => {
-      if (props.scopeKey || routeParams.projectId) return;
+      if (props.scopeKey || routeParams.projectId || timeView()) return;
       if (!selectPreview(task ? taskSelection(task.id) : undefined)) {
         if (previous) {
           fireAndForget(

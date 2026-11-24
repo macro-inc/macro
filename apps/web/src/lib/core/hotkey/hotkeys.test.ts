@@ -208,3 +208,34 @@ describe('registering a token that is already registered', () => {
     expect(warn).toHaveBeenCalledOnce();
   });
 });
+
+// WebKitGTK (the Linux desktop app) reports Shift+Tab, the ISO_Left_Tab
+// keysym, with key 'Unidentified' and code 'Tab'.
+describe("shift+tab reported as key 'Unidentified'", () => {
+  test("runs the 'shift+tab' hotkey", () => {
+    const keyDownHandler = vi.fn(() => true);
+    createRoot((dispose) => {
+      disposers.push(dispose);
+      useHotKeyRoot();
+      registerHotkey({
+        scopeId: 'global',
+        hotkey: 'shift+tab',
+        description: 'Previous tab',
+        keyDownHandler,
+      });
+    });
+
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Shift', shiftKey: true })
+    );
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Unidentified',
+        code: 'Tab',
+        shiftKey: true,
+      })
+    );
+
+    expect(keyDownHandler).toHaveBeenCalledTimes(1);
+  });
+});

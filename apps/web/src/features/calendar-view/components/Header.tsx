@@ -29,12 +29,14 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createLabelCollapse } from '@core/signal/create-label-collapse';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import { mergeRefs } from '@solid-primitives/refs';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, ButtonGroup, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -58,6 +60,9 @@ import {
 } from './CalendarCreateItems';
 import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { CalendarSearch } from './CalendarSearch';
+
+/** What the period controls give up, in order, when they would not fit their row. */
+const CONTROLS_COLLAPSE_ORDER = ['todayLabel'] as const;
 
 function createLocalToday() {
   const [today, setToday] = createSignal(new Date());
@@ -110,11 +115,27 @@ export function Header(props: {
     () => ({
       fullHeader: { min: 760 },
       inlineSearch: { min: 1040 },
-      labeledToday: { min: 304 },
     })
   );
+  // A narrow pane (the desktop window has no minimum width) shows Today as
+  // its icon, then wraps Search below the other controls, then wraps those
+  // too, rather than push any control past the pane's edge.
+  const [controls, setControls] = createSignal<HTMLElement>();
+  const collapsed = createLabelCollapse(
+    controls,
+    () => CONTROLS_COLLAPSE_ORDER,
+    { watchContent: true }
+  );
   const isCompactHeader = () => !breakpoints.fullHeader();
-  const searchOverlaysControls = isCompactHeader;
+  const searchOverlaysControls = () => !breakpoints.inlineSearch();
+  // A wrapped search field covers only its own row, not the date controls.
+  const [periodControls, setPeriodControls] = createSignal<HTMLElement>();
+  const controlsSize = createElementSize(controls);
+  const periodControlsSize = createElementSize(periodControls);
+  const searchOnOwnRow = () =>
+    (controlsSize.height ?? 0) > (periodControlsSize.height ?? 0);
+  const searchCoversControls = () =>
+    searchOverlaysControls() && searchExpanded() && !searchOnOwnRow();
   const today = createLocalToday();
   const [searchExpanded, setSearchExpandedInternal] = createSignal(false);
   const [searchPopupReady, setSearchPopupReady] = createSignal(false);
@@ -346,18 +367,18 @@ export function Header(props: {
           class="h-auto min-h-12 flex-wrap items-start gap-x-2 not-touch:gap-y-4 py-2 [--view-search-height:2rem]"
         >
           <div
-            class="relative flex min-w-0 flex-1 items-center gap-2"
+            class="relative flex min-w-0 flex-1 flex-wrap items-center gap-2"
             data-calendar-period-controls=""
-            ref={tourTarget(CALENDAR_TOUR.period)}
+            ref={mergeRefs(setControls, tourTarget(CALENDAR_TOUR.period))}
             onClick={() => setSearchExpanded(false)}
           >
             <ViewNavigationControls size="icon-md" />
             <div
-              class="flex min-w-0 flex-1 items-center gap-2"
+              ref={setPeriodControls}
+              class="flex grow flex-wrap items-center gap-2"
               classList={{
-                invisible: searchOverlaysControls() && searchExpanded(),
-                'pointer-events-none':
-                  searchOverlaysControls() && searchExpanded(),
+                invisible: searchCoversControls(),
+                'pointer-events-none': searchCoversControls(),
               }}
             >
               {props.leading}
@@ -365,7 +386,7 @@ export function Header(props: {
                 {previous(true)}
                 {next(true)}
               </HeaderActionGroup>
-              {todayButton(!breakpoints.labeledToday())}
+              {todayButton(collapsed('todayLabel'))}
               <div class="flex-1" />
               <Show
                 when={!isCompactHeader()}
@@ -381,6 +402,8 @@ export function Header(props: {
                 />
               </Show>
             </div>
+            {/* In a narrow pane this slot wraps onto its own last row; the
+                overlay hangs from the row box's bottom so it stays over it. */}
             <div
               onTransitionEnd={handleSearchTransitionEnd}
               onClick={(event) => event.stopPropagation()}
@@ -394,7 +417,7 @@ export function Header(props: {
                 class={cn(
                   'h-8',
                   searchOverlaysControls() &&
-                    'absolute right-0 top-0 transition-[width] duration-200 ease-out motion-reduce:transition-none'
+                    'absolute bottom-0 right-0 transition-[width] duration-200 ease-out motion-reduce:transition-none'
                 )}
                 style={
                   searchOverlaysControls()

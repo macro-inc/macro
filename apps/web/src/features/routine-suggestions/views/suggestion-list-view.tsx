@@ -248,6 +248,8 @@ export function SuggestionRow(props: {
   actions: SuggestionActions;
   onOpenDiscover(): void;
   onOpenRoutine(routineId: string): void;
+  /** The person has no routines yet, so these are where to start. */
+  empty?: boolean;
 }): JSX.Element {
   const [cardColumns, setCardColumns] = createSignal(ROW_CARD_COLUMNS);
   let grid: HTMLUListElement | undefined;
@@ -269,7 +271,7 @@ export function SuggestionRow(props: {
   return (
     <section
       aria-labelledby="routine-suggestions-row-heading"
-      class="flex min-w-0 flex-col gap-2.5 px-4 pt-3.5 pb-1.5"
+      class="flex min-w-0 flex-col gap-2.5"
     >
       <div class="flex h-[22px] min-w-0 items-center gap-2 px-0.5">
         <SparkleIcon class="size-3 text-violet-ink" aria-hidden="true" />
@@ -277,7 +279,9 @@ export function SuggestionRow(props: {
           id="routine-suggestions-row-heading"
           class="text-[13px] font-medium text-ink-muted"
         >
-          {t('routineSuggestions.suggestedForYou')}
+          {props.empty
+            ? t('routinesList.startWithOne')
+            : t('routineSuggestions.suggestedForYou')}
         </h2>
       </div>
       <ul

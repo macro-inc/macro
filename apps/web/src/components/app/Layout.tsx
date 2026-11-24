@@ -45,7 +45,10 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import { enableWhatsappLinked } from '@core/constant/featureFlags';
+import {
+  enableTimeTracking,
+  enableWhatsappLinked,
+} from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -261,6 +264,10 @@ const MobileCallIsland = lazyNamed(
   () => import('../../features/channel/Call/views/MobileCallIsland'),
   'MobileCallIsland'
 );
+const RunningTimerBanner = lazyNamed(
+  () => import('../../features/time-tracking/running-timer-indicator'),
+  'RunningTimerBanner'
+);
 
 export function AppChrome(props: ParentProps) {
   const isAuthenticated = useIsAuthenticated();
@@ -379,6 +386,11 @@ export function AppChrome(props: ParentProps) {
         <Suspense>
           <MobileCallIsland />
         </Suspense>
+        <ShowFeatureFlag flag={enableTimeTracking}>
+          <Suspense>
+            <RunningTimerBanner />
+          </Suspense>
+        </ShowFeatureFlag>
         <Suspense>
           <UserCardDrawer />
         </Suspense>

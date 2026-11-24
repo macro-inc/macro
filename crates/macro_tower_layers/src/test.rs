@@ -444,7 +444,7 @@ fn current_trace_id_is_the_current_spans_and_none_outside_a_trace() {
 }
 
 #[tokio::test]
-async fn request_span_keeps_credential_path_params_out_of_url_path() {
+async fn request_span_keeps_credential_and_personal_path_params_out_of_url_path() {
     for (route, uri, expected) in [
         (
             "/session/login/{session_code}",
@@ -460,6 +460,11 @@ async fn request_span_keeps_credential_path_params_out_of_url_path() {
             "/meetings/join/{token}/participants",
             "/meetings/join/fake-join-token/participants",
             "/meetings/join/{token}/participants",
+        ),
+        (
+            "/internal/recent_messages/{user_id}",
+            "/internal/recent_messages/macro%7Cfake-user%40example.com?days=30",
+            "/internal/recent_messages/{user_id}",
         ),
         // Other path params stay searchable.
         (

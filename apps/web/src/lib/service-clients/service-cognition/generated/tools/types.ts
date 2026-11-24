@@ -5068,6 +5068,36 @@ export type ToolActivityAction =
     };
 
 /**
+ * Add another web domain an organization uses (a school's .edu and .com, say) to an existing CRM company, so its mail and new contacts are filed under that company instead of a separate one. The company keeps its name and primary domain. Refused for personal email providers, and for a domain another company of the team already tracks: the error names that company. Safe to repeat.
+ */
+export interface AddCompanyDomain {
+  /**
+   * The CRM company id, from ListCompanies or GetCompany.
+   */
+  companyId: string;
+  /**
+   * A bare domain such as "example.org": no scheme, path or email.
+   */
+  domain: string;
+}
+/**
+ * The company after the change.
+ */
+export interface CompanyDomainsResponse {
+  /**
+   * The CRM company id.
+   */
+  companyId: string;
+  /**
+   * The company's display name, which a domain change never alters.
+   */
+  name?: string | null;
+  /**
+   * The company's domains, primary first.
+   */
+  domains: string[];
+}
+/**
  * Add a copy of a calendar event someone shared with one of the user's channels to one of the user's Google calendars, as `Add to calendar` on the event's card does. Use it for a calendar event mention (`blockName` `calendar`) whose meeting is not on the user's calendar; pass the mention's `documentId` as `eventId`.
  *
  * The copy is a snapshot, not an invitation: it keeps the real organizer and lists the user, accepted, as its only guest, while the meeting's other guests and its join link stay out. Nobody is notified, and the copy does not change when the organizer changes the meeting. The user can change only its reminders and availability, or delete it. To be added to the meeting itself, the user asks the person who shared it from the event's card.
@@ -6530,6 +6560,12 @@ export interface EmailSearchResponseItemWithMetadata {
   snippet?: string | null;
   is_read: boolean;
   inbox_visible: boolean;
+  /**
+   * Whether the thread holds mail the user received, not only mail they
+   * sent or drafted. A thread without any was never in the inbox, so it is
+   * not archived when it is out of the inbox.
+   */
+  has_received_mail?: boolean;
   is_draft: boolean;
   is_important: boolean;
   /**
@@ -15158,6 +15194,19 @@ export interface ReadWordDocument {
    * Most blocks to show; omit for as many as fit.
    */
   count?: number | null;
+}
+/**
+ * Remove a web domain from a CRM company, for one added by mistake. Contacts and mail stay; later mail from the domain is filed as it was before the domain was added. The domain the company is named after stays until the company is renamed. Removing a domain from a company whose email sync is off needs a team admin. Safe to repeat.
+ */
+export interface RemoveCompanyDomain {
+  /**
+   * The CRM company id, from ListCompanies or GetCompany.
+   */
+  companyId: string;
+  /**
+   * One of the company's domains, such as "example.org".
+   */
+  domain: string;
 }
 /**
  * Remove deals (entries) from a CRM pipeline, deleting their stage and other pipeline fields. The companies and contacts themselves stay in the CRM and in other pipelines. Address entries by entryId, or by the company or contact id they track (which removes every entry of that record in this pipeline). Only when the user asked to remove them.

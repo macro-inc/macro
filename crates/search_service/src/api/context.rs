@@ -62,6 +62,9 @@ impl SearchHandlerState {
         crate::domain::email_search::EmailSearchService(
             crate::outbound::email_search::EmailSearchPgSource {
                 db: self.db.clone(),
+                favorites: favorites::outbound::pg_favorites_repo::PgFavoritesRepo::new(
+                    (*self.db).clone(),
+                ),
             },
         )
     }

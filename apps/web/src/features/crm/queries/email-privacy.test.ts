@@ -73,10 +73,12 @@ function mount(initial: Partial<CrmEmailPrivacyResponse> = {}) {
     const feedback = { success: vi.fn(), failure: vi.fn() };
     const [team, setTeam] = createSignal<string>();
     const [user, setUser] = createSignal<string>();
+    const [primaryLink, setPrimaryLink] = createSignal<string>();
     const source = createEmailPrivacySource(
       { client, privacy, feedback },
       team,
-      user
+      user,
+      primaryLink
     );
     const createStatus = (threadId: Accessor<string | undefined>) =>
       createThreadExclusionQuery(
@@ -94,6 +96,7 @@ function mount(initial: Partial<CrmEmailPrivacyResponse> = {}) {
       feedback,
       setTeam,
       setUser,
+      setPrimaryLink,
       createStatus,
       createConsent,
     };
@@ -121,6 +124,36 @@ describe('CRM email privacy query adapter', () => {
     await waitFor(() => expect(h.source.query.isSuccess).toBe(true));
     expect(h.source.query.data?.mailboxEmail).toBeNull();
     expect(h.source.query.data?.enabled).toBe(false);
+  });
+
+  it('rereads settings once a newly linked primary mailbox appears, leaving sharing off', async () => {
+    const h = mount({
+      enabled: false,
+      mailbox_email: undefined,
+      mailbox_link_id: undefined,
+    });
+    await signIn(h);
+    expect(h.source.query.data?.mailboxLinkId).toBeNull();
+    const policyKey = crmKeys.emailPolicy('scope').queryKey;
+    h.client.setQueryData(policyKey, { mailbox_email: null });
+    h.privacy.get.mockResolvedValue(
+      ok({
+        ...settings,
+        enabled: false,
+        mailbox_email: 'person@example.com',
+        mailbox_link_id: 'link-1',
+      })
+    );
+
+    h.setPrimaryLink('link-1');
+
+    await waitFor(() =>
+      expect(h.source.query.data?.mailboxLinkId).toBe('link-1')
+    );
+    expect(h.source.query.data?.enabled).toBe(false);
+    expect(h.client.getQueryState(policyKey)?.isInvalidated).toBe(true);
+    expect(h.privacy.get).toHaveBeenCalledTimes(2);
+    expect(h.privacy.update).not.toHaveBeenCalled();
   });
 
   it('refreshes CRM records and email lists after adding an exclusion', async () => {

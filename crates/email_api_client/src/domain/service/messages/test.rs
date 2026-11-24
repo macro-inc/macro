@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
@@ -11,6 +12,7 @@ enum MessageCall {
     Message(Uuid, String),
     MessageLabels(String),
     Messages(u32, Vec<String>),
+    MessagesSince(u32, Vec<String>, i64, Option<String>),
     MessageIdsForThread(String),
     Thread(Uuid, String),
     Threads(u32, Option<String>, Vec<String>),
@@ -23,6 +25,18 @@ struct MessageClient {
     call: Arc<Mutex<Option<MessageCall>>>,
     /// When set, per-message label writes answer from it instead of failing.
     label_writes: Option<LabelWrites>,
+    /// When set, dated lists answer its pages in turn instead of failing.
+    pages: Option<Pages>,
+}
+
+/// What one page call asked for: its `max_results` and page token.
+type Asked = (u32, Option<String>);
+
+/// Pages a dated list answers, and what each call asked for.
+#[derive(Clone, Default)]
+struct Pages {
+    answers: Arc<Mutex<VecDeque<Result<MessageIdPage, EmailApiError>>>>,
+    asked: Arc<Mutex<Vec<Asked>>>,
 }
 
 /// Records per-message label writes in order; listed ids answer with an error.
@@ -75,6 +89,38 @@ impl MailboxMessageClient for MessageClient {
             MessageCall::Messages(
                 limit,
                 label_ids.iter().map(|label| (*label).to_string()).collect(),
+            ),
+        ))
+    }
+
+    async fn list_messages_since(
+        &self,
+        access_token: &AccessToken,
+        max_results: u32,
+        label_ids: &[&str],
+        since: chrono::DateTime<chrono::Utc>,
+        page_token: Option<&str>,
+    ) -> Result<MessageIdPage, EmailApiError> {
+        if let Some(pages) = &self.pages {
+            pages
+                .asked
+                .lock()
+                .unwrap()
+                .push((max_results, page_token.map(str::to_string)));
+            return pages
+                .answers
+                .lock()
+                .unwrap()
+                .pop_front()
+                .unwrap_or_else(|| Ok(MessageIdPage::default()));
+        }
+        Err(self.record(
+            access_token,
+            MessageCall::MessagesSince(
+                max_results,
+                label_ids.iter().map(|label| (*label).to_string()).collect(),
+                since.timestamp(),
+                page_token.map(str::to_string),
             ),
         ))
     }
@@ -232,6 +278,18 @@ async fn message_reads_use_correct_operation_kinds_and_forward_parameters() {
     )
     .await;
     assert_call(
+        ApiOperationKind::ListMessages,
+        |_| MessageCall::MessagesSince(500, vec!["INBOX".into()], 1_700_000_000, None),
+        async |service, link_id| {
+            let since = chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap();
+            service
+                .list_messages_since(link_id, 500, &["INBOX"], since)
+                .await
+                .map(|_| ())
+        },
+    )
+    .await;
+    assert_call(
         ApiOperationKind::GetThread,
         |_| MessageCall::MessageIdsForThread("thread".into()),
         async |service, link_id| {
@@ -301,6 +359,118 @@ async fn label_writes_on_ten_or_more_messages_use_one_batch_request() {
         },
     )
     .await;
+}
+
+fn page(ids: &[&str], next: Option<&str>) -> MessageIdPage {
+    MessageIdPage {
+        ids: ids.iter().map(|id| (*id).to_string()).collect(),
+        next_page_token: next.map(str::to_string),
+    }
+}
+
+/// Lists `limit` ids since a fixed time from `answers`; returns the ids,
+/// what each page asked for, and the gate and token calls.
+async fn list_since(
+    answers: Vec<MessageIdPage>,
+    limit: u32,
+) -> (Vec<String>, Vec<Asked>, Vec<Call>) {
+    let (ids, asked, calls) =
+        list_since_answers(answers.into_iter().map(Ok).collect(), limit).await;
+    (ids.unwrap(), asked, calls)
+}
+
+/// [`list_since`] from pages that may fail.
+async fn list_since_answers(
+    answers: Vec<Result<MessageIdPage, EmailApiError>>,
+    limit: u32,
+) -> (Result<Vec<String>, EmailApiError>, Vec<Asked>, Vec<Call>) {
+    let calls = call_log();
+    let pages = Pages {
+        answers: Arc::new(Mutex::new(answers.into())),
+        ..Default::default()
+    };
+    let service = EmailApiClientServiceImpl::new(
+        MessageClient {
+            pages: Some(pages.clone()),
+            ..Default::default()
+        },
+        FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("token"))),
+        FakeGate::new(calls.clone(), Ok(())),
+    );
+    let since = chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap();
+    let ids = service
+        .list_messages_since(Uuid::nil(), limit, &["INBOX"], since)
+        .await;
+    let asked = pages.asked.lock().unwrap().clone();
+    let calls = calls.lock().unwrap().clone();
+    (ids, asked, calls)
+}
+
+#[tokio::test]
+async fn a_dated_list_admits_each_page_and_asks_for_what_is_left() {
+    let (ids, asked, calls) = list_since(
+        vec![page(&["a", "b"], Some("p2")), page(&["c", "d"], Some("p3"))],
+        3,
+    )
+    .await;
+
+    assert_eq!(ids, vec!["a", "b", "c"]);
+    assert_eq!(asked, vec![(3, None), (1, Some("p2".to_string()))]);
+    let admitted = calls
+        .iter()
+        .filter(|call| matches!(call, Call::Acquire(_, ApiOperationKind::ListMessages)))
+        .count();
+    assert_eq!(admitted, 2);
+}
+
+#[tokio::test]
+async fn a_dated_list_stops_at_an_empty_page_or_a_token_it_has_seen() {
+    let (ids, asked, _) = list_since(
+        vec![
+            page(&["a"], Some("p2")),
+            page(&["b"], Some("p2")),
+            page(&["c"], None),
+        ],
+        10,
+    )
+    .await;
+    assert_eq!(ids, vec!["a", "b"]);
+    assert_eq!(asked.len(), 2);
+
+    let (ids, asked, _) = list_since(vec![page(&[], Some("p2")), page(&["b"], None)], 10).await;
+    assert!(ids.is_empty());
+    assert_eq!(asked.len(), 1);
+}
+
+#[tokio::test]
+async fn a_dated_list_follows_at_most_its_page_cap() {
+    let answers = (0..10)
+        .map(|n| MessageIdPage {
+            ids: vec![format!("m{n}")],
+            next_page_token: Some(format!("p{}", n + 1)),
+        })
+        .collect();
+
+    let (ids, asked, _) = list_since(answers, 500).await;
+
+    assert_eq!(asked.len(), 5);
+    assert_eq!(ids.len(), 5);
+}
+
+#[tokio::test]
+async fn a_dated_list_keeps_what_it_listed_when_a_later_page_fails() {
+    let refused = || EmailApiError::RateLimited {
+        retry_after: None,
+        origin: crate::domain::models::RateLimitOrigin::Local,
+    };
+    let (ids, asked, _) =
+        list_since_answers(vec![Ok(page(&["a", "b"], Some("p2"))), Err(refused())], 10).await;
+    assert_eq!(ids.unwrap(), vec!["a", "b"]);
+    assert_eq!(asked.len(), 2);
+
+    // The first page's failure is the answer, for the caller to wait out.
+    let (ids, _, _) = list_since_answers(vec![Err(refused())], 10).await;
+    assert!(matches!(ids, Err(EmailApiError::RateLimited { .. })));
 }
 
 fn label_write_service(

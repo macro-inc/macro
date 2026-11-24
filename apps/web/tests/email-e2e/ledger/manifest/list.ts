@@ -248,7 +248,7 @@ export const list = {
       fn: ['F-029'],
       action: 'cycle Inbox tabs',
       trigger:
-        'hotkey Tab / Shift+Tab while the keyboard is on the list or nothing has focus (focus order on a control)',
+        'hotkey Tab / Shift+Tab while the keyboard is on the list or nothing has focus, or right after a click on a sidebar folder or account or on Mail in the app rail (otherwise focus order on a control)',
       source: [
         'src/components/view-shell/use-view-tab-hotkeys.ts',
         'src/features/email-view/components/EmailHeader.tsx',

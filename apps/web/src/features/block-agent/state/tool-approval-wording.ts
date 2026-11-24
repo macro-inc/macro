@@ -13,6 +13,7 @@ type Wording = (whose: string) => string;
  * `null` for the tools that use nobody's access and so are never held.
  */
 const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
+  AddCompanyDomain: (whose) => `add a domain to a company in ${whose} CRM`,
   AddSharedCalendarEvent: (whose) => `add a shared event to ${whose} calendar`,
   AddToPipeline: (whose) => `add deals to ${whose} pipelines`,
   BashCodeExecution: (whose) => `run code with ${whose} access`,
@@ -164,6 +165,8 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   ReadSpreadsheet: (whose) => `read ${whose} spreadsheets`,
   ReadThread: (whose) => `read ${whose} email`,
   ReadWordDocument: (whose) => `read ${whose} documents`,
+  RemoveCompanyDomain: (whose) =>
+    `remove a domain from a company in ${whose} CRM`,
   RemoveFromPipeline: (whose) => `remove deals from ${whose} pipelines`,
   RenameChannel: (whose) => `rename ${whose} channels`,
   RenameDocument: (whose) => `rename ${whose} documents`,

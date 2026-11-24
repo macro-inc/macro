@@ -4,28 +4,15 @@ import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/rou
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ArchiveIcon from '@icon/system/regular/archive.svg';
-import BellIcon from '@icon/system/regular/bell-simple.svg';
-import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
-import ClockIcon from '@icon/system/regular/clock.svg';
-import FocusIcon from '@icon/system/regular/crosshair.svg';
-import EnvelopeIcon from '@icon/system/regular/envelope.svg';
-import FileIcon from '@icon/system/regular/file.svg';
-import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
-import SpamIcon from '@icon/system/regular/prohibit.svg';
-import StarIcon from '@icon/system/regular/star.svg';
-import TrashIcon from '@icon/system/regular/trash.svg';
 import TrayIcon from '@icon/system/regular/tray.svg';
-import UsersThreeIcon from '@icon/system/regular/users-three.svg';
-import SignalIcon from '@icon/system/regular/wave-sine.svg';
-import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { pressHandlers } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { type Component, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
 import { EMAIL_TAB_LABELS, EMAIL_TABS, isEmailInboxTab } from '../constants';
 import { useEmailView } from '../email-view-context';
+import { EMAIL_TAB_ICONS } from '../tab-icons';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
 import { useVisibleEmailTab } from '../use-visible-email-tab';
@@ -46,36 +33,20 @@ const LIBRARY_TAB_IDS = [
   'spam',
   'trash',
 ] as const satisfies readonly EmailTab[];
-const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
-  important: SignalIcon,
-  noise: NoiseIcon,
-  favorites: StarIcon,
-  sent: PaperPlaneTiltIcon,
-  scheduled: ClockIcon,
-  reminders: BellIcon,
-  calendar: CalendarBlankIcon,
-  drafts: FileIcon,
-  shared: UsersThreeIcon,
-  archived: ArchiveIcon,
-  all: EnvelopeIcon,
-  focus: FocusIcon,
-  spam: SpamIcon,
-  trash: TrashIcon,
-};
 
 function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
-  const { state, setTab, savedViewActive } = useEmailView();
+  const { shownTab, setTab, savedViewActive } = useEmailView();
 
   return (
     <ViewSidebar.Item
-      active={!savedViewActive() && state.tab === props.id}
+      active={!savedViewActive() && shownTab() === props.id}
       {...pressHandlers(() => {
         setTab(props.id);
         props.onNavigate?.();
       })}
     >
       <ViewSidebar.Icon>
-        <Dynamic component={TAB_ICONS[props.id]} class="size-4" />
+        <Dynamic component={EMAIL_TAB_ICONS[props.id]} class="size-4" />
       </ViewSidebar.Icon>
       <span class="truncate">{props.label ?? EMAIL_TAB_LABELS[props.id]}</span>
     </ViewSidebar.Item>
@@ -83,7 +54,11 @@ function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
 }
 
 export function EmailNavigation(props: { onNavigate?: () => void }) {
-  const { state, setTab, savedViewActive } = useEmailView();
+  const { shownTab, selectInbox, savedViewActive } = useEmailView();
+  const inboxShown = () => {
+    const tab = shownTab();
+    return tab === 'inbox' || (tab !== 'search' && isEmailInboxTab(tab));
+  };
   const isVisible = useVisibleEmailTab();
   return (
     <Show
@@ -125,14 +100,9 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
         <ViewSidebar.Nav aria-label="Email tabs">
           <ViewSidebar.Item
             ref={tourTarget(EMAIL_TOUR.inbox)}
-            active={!savedViewActive() && isEmailInboxTab(state.tab)}
+            active={!savedViewActive() && inboxShown()}
             {...pressHandlers(() => {
-              // Reopen the Inbox view that was last open: Focus, Signal or Noise.
-              setTab(
-                !savedViewActive() && isEmailInboxTab(state.tab)
-                  ? state.tab
-                  : 'important'
-              );
+              selectInbox();
               props.onNavigate?.();
             })}
           >

@@ -112,6 +112,9 @@ vi.mock('@solid-primitives/resize-observer', () => ({
     height: 60,
   }),
 }));
+vi.mock('@core/signal/create-label-collapse', () => ({
+  createLabelCollapse: () => () => false,
+}));
 vi.mock('../views/mobile/month-drawer', () => ({
   MonthDrawer: () => <button>Choose month</button>,
 }));

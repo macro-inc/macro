@@ -741,7 +741,7 @@ export const projectDetailRoute = defineRoute({
   path: 'projects/:projectId/:section',
   params: z.object({
     projectId: z.string().uuid(),
-    section: z.enum(['overview', 'tasks']),
+    section: z.enum(['overview', 'tasks', 'time']),
   }),
   remountKey: ({ projectId }) => projectId,
   claim: ({ projectId }) => ({
@@ -756,6 +756,26 @@ export const tasksProjectsRoute = defineRoute({
   id: 'tasks-projects',
   path: 'projects',
   params: z.object({}).transform(() => ({ projectsTab: 'projects' as const })),
+});
+
+/** Time across projects: the viewer's week, or their team's. */
+export const tasksTimeRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: 'tasks-time',
+  path: 'time/:timeView',
+  params: z.object({ timeView: z.enum(['week', 'team']) }),
+});
+
+/** A task opened from My week or Team, shown in their place. */
+export const tasksTimeTaskRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: 'tasks-time-task',
+  path: 'task/:taskId',
+  params: z.object({ taskId: z.string().min(1) }),
+  remountKey: ({ taskId }) => taskId,
+  claim: ({ taskId }) => ({ namespace: 'block', id: `md:${taskId}` }),
+  toReference: ({ taskId }) => uuidRouteReference(taskId, 'task'),
+  externalSearch: Object.values(MARKDOWN_URL_PARAMS),
 });
 
 export const tasksSplitRoute = defineRoute({

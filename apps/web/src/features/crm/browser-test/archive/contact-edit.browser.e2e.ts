@@ -1,38 +1,63 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 // Production controls and mutations with synthetic transport responses;
 // these checks do not establish hosted persistence.
-test('successful email additions retain keyboard focus in header and Record details', async ({
+/** Whether a row action takes room, as it does only while shown. */
+const shown = (action: Locator) =>
+  action.evaluate(
+    (element) => (element.parentElement?.getBoundingClientRect().width ?? 0) > 0
+  );
+
+/** The header's Email pill, named for its primary address. */
+const emailPill = (page: Page) =>
+  page
+    .locator('[aria-label="Contact details"]')
+    .getByRole('button', { name: /^(Email:|Add email$)/ });
+
+/**
+ * A row action in the email editor or Record details. On desktop a row shows
+ * its actions while the pointer is on it, so the pointer goes there first.
+ */
+async function rowAction(scope: Locator, name: string, isMobile: boolean) {
+  const action = scope.getByRole('button', { name, exact: true });
+  if (!isMobile)
+    await action
+      .locator('xpath=ancestor::*[contains(@class, "group/value")][1]')
+      .hover();
+  return action;
+}
+
+test('email additions keep the editor open for the next address and focus returns to its control', async ({
   page,
   isMobile,
 }) => {
   test.skip(isMobile, 'Desktop keyboard completion');
   for (const details of [false, true]) {
-    for (const submit of ['Enter', 'Save']) {
+    for (const submit of ['Enter', 'Add']) {
       await page.goto('/?empty');
       if (details)
         await page
           .getByRole('button', { name: 'Show details', exact: true })
           .click();
-      const trigger = page.getByRole('button', {
-        name: 'Add email',
-        exact: true,
-      });
-      const origin = details ? trigger.last() : trigger.first();
+      const origin = details
+        ? page.getByRole('button', { name: 'Add email', exact: true }).last()
+        : emailPill(page);
       await origin.focus();
       await page.keyboard.press('Enter');
       const input = page.getByRole('textbox', { name: 'Email', exact: true });
+      await expect(input).toBeFocused();
       await input.fill('focus@example.com');
-      if (submit === 'Save')
-        await page
-          .getByRole('button', { name: 'Save', exact: true })
-          .press('Enter');
+      if (submit === 'Add')
+        await page.getByRole('button', { name: 'Add', exact: true }).click();
       else await input.press('Enter');
+      await expect(page.getByRole('list', { name: 'Email' })).toContainText(
+        'focus@example.com'
+      );
+      await expect(input).toHaveValue('');
+      await expect(input).toBeFocused();
+      await page.keyboard.press('Escape');
       await expect(input).toBeHidden();
-      await expect(
-        page.getByText('focus@example.com', { exact: true }).first()
-      ).toBeVisible();
-      await expect(details ? trigger.last() : trigger.first()).toBeFocused();
+      await expect(origin).toBeFocused();
     }
   }
 });
@@ -40,22 +65,19 @@ test('successful email additions retain keyboard focus in header and Record deta
 test('email add validates, retains a rejected draft and lists the address after commit', async ({
   page,
 }, info) => {
-  const address = `contact@${'gmail.com'}`;
+  const address = 'contact@example.net';
   await page.goto('/?empty');
-  await page
-    .getByRole('button', { name: 'Add email', exact: true })
-    .first()
-    .click();
+  await emailPill(page).click();
   const input = page.getByRole('textbox', { name: 'Email', exact: true });
   await input.fill('invalid');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
   expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
   await input.fill(address);
   await page.evaluate(() => {
     window.archiveFixture.holdNext();
     window.archiveFixture.failNext();
   });
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Saving…', exact: true })
   ).toBeDisabled();
@@ -64,6 +86,9 @@ test('email add validates, retains a rejected draft and lists the address after 
       () => window.archiveFixture.snapshot().contacts[0].email
     )
   ).toBeNull();
+  // The editor stays open while the address saves, so its outcome shows.
+  await page.keyboard.press('Escape');
+  await expect(input).toBeVisible();
   await page.screenshot({
     animations: 'disabled',
     path: info.outputPath('email-pending.png'),
@@ -75,10 +100,14 @@ test('email add validates, retains a rejected draft and lists the address after 
     animations: 'disabled',
     path: info.outputPath('email-rejected.png'),
   });
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(input).toBeHidden();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(input).toHaveValue('');
+  await expect(page.getByRole('list', { name: 'Email' })).toContainText(
+    address
+  );
+  await page.keyboard.press('Escape');
   await expect(
-    page.getByRole('button', { name: `Email options for ${address}` }).first()
+    page.getByRole('button', { name: `Email: ${address}`, exact: true })
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Add company', exact: true }).first()
@@ -95,7 +124,7 @@ test('email add validates, retains a rejected draft and lists the address after 
   });
 });
 
-test('personal company link, switch and separate Go to', async ({
+test('personal company link, switch, and open from the company pill', async ({
   page,
   isMobile,
 }, info) => {
@@ -106,9 +135,6 @@ test('personal company link, switch and separate Go to', async ({
     .click();
   const search = page.getByPlaceholder('Search companies…');
   await expect(search).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'No company', exact: true })
-  ).toHaveCount(0);
   await page.screenshot({
     animations: 'disabled',
     path: info.outputPath('company-picker.png'),
@@ -120,11 +146,13 @@ test('personal company link, switch and separate Go to', async ({
   if (isMobile)
     await page.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(search).toBeHidden();
-  const chip = page
+  await expect(
+    page.getByRole('button', { name: 'Open Example company', exact: true })
+  ).toHaveCount(1);
+  const caret = page
     .getByRole('button', { name: 'Change contact company', exact: true })
     .first();
-  await expect(chip).toContainText('Example company');
-  await chip.click();
+  await caret.click();
   await search.fill('Second');
   await page
     .locator('[data-entity-index]')
@@ -133,7 +161,10 @@ test('personal company link, switch and separate Go to', async ({
   if (isMobile)
     await page.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(search).toBeHidden();
-  await expect(chip).toContainText('Second company');
+  const name = page
+    .getByRole('button', { name: 'Open Second company', exact: true })
+    .first();
+  await expect(name).toContainText('Second company');
   await page.screenshot({
     animations: 'disabled',
     path: info.outputPath('company-replaced.png'),
@@ -142,10 +173,7 @@ test('personal company link, switch and separate Go to', async ({
     await page.evaluate(() => window.archiveFixture.snapshot().contacts[0].id)
   ).toBe('contact-1');
   expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(2);
-  await page
-    .getByRole('button', { name: 'Go to company', exact: true })
-    .first()
-    .click();
+  await name.click();
   await expect(page).toHaveURL(/opened=company-2/);
 });
 
@@ -220,34 +248,66 @@ test('company picker shows page loading, failure, and successful retry', async (
   expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
 });
 
-test('company-email and blank-email contacts stay read-only with company navigation', async ({
+test('a company set by the email domain stays read-only and opens from its name', async ({
   page,
 }, info) => {
   await page.goto('/');
-  await expect(
-    page.getByRole('button', { name: 'Go to company', exact: true }).first()
-  ).toBeVisible();
+  const name = page
+    .getByRole('button', { name: 'Open Example company', exact: true })
+    .first();
+  await expect(name).toBeVisible();
   await expect(
     page.getByRole('button', {
       name: /Change contact company|Add company|Remove company/,
     })
   ).toHaveCount(0);
-  await page
-    .getByRole('button', { name: 'Go to company', exact: true })
-    .first()
-    .click();
-  await expect(page).toHaveURL(/opened=company-1/);
   await page.screenshot({
     animations: 'disabled',
     path: info.outputPath('read-only.png'),
   });
+  // The press leaves focus where it is, as entity links do, so the split
+  // already showing the company stays active once the router hands it over.
+  expect(
+    await name.evaluate(
+      (element) =>
+        !element.dispatchEvent(
+          new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+        )
+    )
+  ).toBe(true);
+  await name.click();
+  await expect(page).toHaveURL(/opened=company-1/);
+  // A blank contact has no company, and can link one.
   await page.goto('/?empty');
+  await expect(emailPill(page)).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Add email', exact: true }).first()
+    page.getByRole('button', { name: 'Add company', exact: true }).first()
   ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Add company', exact: true })
-  ).toHaveCount(0);
+});
+
+test('a company name cut short in Record details shows in full, with why it cannot change', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Tooltips are desktop only');
+  const longName = 'Example company with a much longer registered name';
+  await page.goto(`/?companyName=${encodeURIComponent(longName)}`);
+  await page.getByRole('button', { name: 'Show details', exact: true }).click();
+  const name = page
+    .getByRole('button', { name: `Open ${longName}`, exact: true })
+    .last();
+  await expect(name).toBeVisible();
+  expect(
+    await name
+      .locator('span.ph-no-capture')
+      .evaluate((element) => element.scrollWidth > element.clientWidth)
+  ).toBe(true);
+  await name.hover();
+  const tooltip = page.getByRole('tooltip');
+  await expect(tooltip).toContainText(longName);
+  await expect(tooltip).toContainText(
+    'Linked by an email address on this company’s domain.'
+  );
 });
 
 test('company pending and rejection preserve draft for retry', async ({
@@ -306,10 +366,7 @@ test('keyboard cancel and Record details editing', async ({
   isMobile,
 }, info) => {
   await page.goto('/?empty');
-  await page
-    .getByRole('button', { name: 'Add email', exact: true })
-    .first()
-    .click();
+  await emailPill(page).click();
   const input = page.getByRole('textbox', { name: 'Email', exact: true });
   await expect(input).toBeVisible();
   if (!isMobile) await expect(input).toBeFocused();
@@ -317,23 +374,23 @@ test('keyboard cancel and Record details editing', async ({
   await input.press('Escape');
   await expect(input).toBeHidden();
   expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
-  if (!isMobile)
-    await expect(
-      page.getByRole('button', { name: 'Add email', exact: true }).first()
-    ).toBeFocused();
+  if (!isMobile) await expect(emailPill(page)).toBeFocused();
   await page.getByRole('button', { name: 'Show details', exact: true }).click();
   await expect(page.getByText('Record details', { exact: true })).toBeVisible();
-  const edits = page.getByRole('button', {
-    name: 'Add email',
-    exact: true,
-  });
-  await edits.last().click();
+  await page
+    .getByRole('button', { name: 'Add email', exact: true })
+    .last()
+    .click();
   await expect(input).toHaveValue('');
   await input.fill('details@example.com');
   await input.press('Enter');
+  await expect(input).toHaveValue('');
+  await input.press('Escape');
   await expect(input).toBeHidden();
   await expect(
-    page.getByText('details@example.com', { exact: true }).last()
+    page
+      .getByRole('group', { name: 'Email', exact: true })
+      .getByText('details@example.com', { exact: true })
   ).toBeVisible();
   await page.screenshot({
     animations: 'disabled',
@@ -345,30 +402,23 @@ test('a pending response stays attached to its original contact after navigation
   page,
 }) => {
   await page.goto('/?empty');
-  await page
-    .getByRole('button', { name: 'Add email', exact: true })
-    .first()
-    .click();
+  await emailPill(page).click();
   const input = page.getByRole('textbox', { name: 'Email', exact: true });
   await input.fill('edited@example.com');
   await page.evaluate(() => window.archiveFixture.holdNext());
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Saving…', exact: true })
   ).toBeDisabled();
   await page.evaluate(() => window.archiveFixture.selectContact('contact-2'));
   await expect(input).toBeHidden();
-  const chip = page
-    .getByRole('button', { name: 'Add email', exact: true })
-    .first();
-  await expect(chip).toContainText('Add email');
+  const pill = emailPill(page);
+  await expect(pill).toHaveAccessibleName('Add email');
   await page.evaluate(() => window.archiveFixture.release());
   await page.evaluate(() => window.archiveFixture.selectContact('contact-1'));
-  await expect(
-    page.getByText('edited@example.com', { exact: true }).first()
-  ).toBeVisible();
+  await expect(pill).toHaveAccessibleName('Email: edited@example.com');
   await page.evaluate(() => window.archiveFixture.selectContact('contact-2'));
-  await expect(chip).toContainText('Add email');
+  await expect(pill).toHaveAccessibleName('Add email');
 });
 
 test('company search keyboard selection and mobile header buttons keep their own Enter action', async ({
@@ -376,10 +426,10 @@ test('company search keyboard selection and mobile header buttons keep their own
   isMobile,
 }) => {
   await page.goto('/?personal');
-  const chip = page
+  const caret = page
     .getByRole('button', { name: 'Change contact company', exact: true })
     .first();
-  await chip.click();
+  await caret.click();
   const search = page.getByPlaceholder('Search companies…');
   await search.fill('Second');
   await expect(
@@ -392,7 +442,7 @@ test('company search keyboard selection and mobile header buttons keep their own
     await cancel.press('Enter');
     await expect(search).toBeHidden();
     expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
-    await chip.click();
+    await caret.click();
     await search.fill('Second');
     await expect(
       page.locator('[data-entity-index]').filter({ hasText: 'Example company' })
@@ -403,7 +453,9 @@ test('company search keyboard selection and mobile header buttons keep their own
     await done.press('Enter');
   }
   await expect(search).toBeHidden();
-  await expect(chip).toContainText('Second company');
+  await expect(
+    page.getByRole('button', { name: 'Open Second company', exact: true })
+  ).toHaveCount(1);
   expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(1);
 });
 
@@ -414,71 +466,66 @@ test('property controls keep compact faces and distinct expanded touch targets',
   for (const width of isMobile ? [320, 390, 820] : [1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/?companyName=I&personal');
-    const email = page
-      .getByText(/^person1@/)
-      .first()
-      .locator('..');
-    const company = page
+    const email = emailPill(page);
+    const name = page
+      .getByRole('button', { name: 'Open I', exact: true })
+      .first();
+    const caret = page
       .getByRole('button', { name: 'Change contact company', exact: true })
       .first();
-    const goTo = page
-      .getByRole('button', { name: 'Go to company', exact: true })
-      .first();
-    for (const control of [email, company, goTo]) {
+    for (const control of [email, name, caret]) {
       await expect(control).toBeVisible();
-      expect((await control.boundingBox())?.height).toBe(24);
       await expect(control).toHaveCSS('font-size', '12px');
     }
+    expect((await email.boundingBox())?.height).toBe(24);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth
       )
     ).toBe(true);
-    if (!isMobile) continue;
-    for (const control of [company, goTo]) {
-      expect(
-        await control.evaluate(
-          (element) => getComputedStyle(element, '::before').height
-        )
-      ).toBe('44px');
-      expect(
-        await control.evaluate((element) => {
-          const box = element.getBoundingClientRect();
-          return [box.top - 9, box.bottom + 9].every(
-            (y) =>
-              document
-                .elementFromPoint(box.x + box.width / 2, y)
-                ?.closest('button') === element
-          );
-        })
-      ).toBe(true);
+    const nameBox = (await name.boundingBox())!;
+    const caretBox = (await caret.boundingBox())!;
+    // The caret is the company pill's second segment, right after the name.
+    expect(caretBox.y).toBe(nameBox.y);
+    expect(caretBox.x - (nameBox.x + nameBox.width)).toBeLessThanOrEqual(2);
+    if (!isMobile) {
+      expect(nameBox.height).toBe(24);
+      expect(caretBox.height).toBe(24);
+      continue;
     }
-    for (const control of [company]) {
-      expect((await control.boundingBox())!.width).toBeGreaterThanOrEqual(44);
-      expect(
-        await control.evaluate((element) =>
-          Number.parseFloat(getComputedStyle(element, '::before').width)
-        )
-      ).toBeGreaterThanOrEqual(44);
-    }
+    // The email pill keeps a 24px face with a separate 44px target.
     expect(
-      await goTo.evaluate(
-        (element) => getComputedStyle(element, '::before').width
+      await email.evaluate(
+        (element) => getComputedStyle(element, '::before').height
       )
     ).toBe('44px');
-    const companyBox = (await company.boundingBox())!;
-    const goToBox = (await goTo.boundingBox())!;
-    expect(goToBox.x - 10).toBeGreaterThanOrEqual(
-      companyBox.x + companyBox.width
-    );
+    expect(
+      await email.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return [box.top - 9, box.bottom + 9].every(
+          (y) =>
+            document
+              .elementFromPoint(box.x + box.width / 2, y)
+              ?.closest('button') === element
+        );
+      })
+    ).toBe(true);
+    // A button group clips its segments, so on touch they take its own 36px
+    // height, as a task's Project pill does; a short name still gets 44px.
+    expect(nameBox.height).toBeGreaterThanOrEqual(36);
+    expect(caretBox.height).toBeGreaterThanOrEqual(36);
+    expect(nameBox.width).toBeGreaterThanOrEqual(44);
     await page.touchscreen.tap(
-      companyBox.x + companyBox.width / 2,
-      companyBox.y - 5
+      caretBox.x + caretBox.width / 2,
+      caretBox.y + caretBox.height / 2
     );
     await expect(page.getByPlaceholder('Search companies…')).toBeVisible();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(page.getByPlaceholder('Search companies…')).not.toBeAttached();
-    await page.touchscreen.tap(goToBox.x + goToBox.width / 2, goToBox.y - 5);
+    await page.touchscreen.tap(
+      nameBox.x + nameBox.width / 2,
+      nameBox.y + nameBox.height / 2
+    );
     await expect(page).toHaveURL(/opened=company-1/);
     await expect(
       page.getByRole('textbox', { name: 'Company name' })
@@ -486,73 +533,80 @@ test('property controls keep compact faces and distinct expanded touch targets',
     expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
   }
 });
-
 test('several addresses: make primary, reject a duplicate, add, remove, and keep the company address', async ({
   page,
+  isMobile,
 }, info) => {
-  const personal = `person1@${'gmail.com'}`;
+  const personal = 'person1@example.net';
   await page.goto('/?several');
-  const options = page.getByRole('button', { name: /^Email options for/ });
-  await expect(options).toHaveText([
+  await expect(emailPill(page)).toHaveAccessibleName(
+    'Email: person1@example.com and 2 more'
+  );
+  await emailPill(page).click();
+  const list = page.getByRole('list', { name: 'Email' });
+  const rows = list.getByRole('listitem');
+  const addresses = list.locator('span.ph-no-capture');
+  await expect(addresses).toHaveText([
     'person1@example.com',
     personal,
     'person1.alt@example.org',
   ]);
+  await expect(rows.first()).toContainText('Primary');
   await page.screenshot({
     animations: 'disabled',
     path: info.outputPath('several-addresses.png'),
   });
 
-  await options.nth(1).click();
   await page.evaluate(() => window.archiveFixture.holdNext());
-  await page.getByRole('button', { name: 'Make primary', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: 'Make primary', exact: true })
-  ).toBeDisabled();
+  const makePrimary = await rowAction(
+    list,
+    `Make ${personal} primary`,
+    isMobile
+  );
+  await makePrimary.click();
+  await expect(makePrimary).toBeDisabled();
   expect(
     await page.evaluate(
       () => window.archiveFixture.snapshot().contacts[0].email
     )
   ).toBe('person1@example.com');
   await page.evaluate(() => window.archiveFixture.release());
-  await expect(options).toHaveText([
+  await expect(addresses).toHaveText([
     personal,
     'person1@example.com',
     'person1.alt@example.org',
   ]);
+  await expect(rows.first()).toContainText('Primary');
 
-  // The one address on the company's domain links the contact to it.
-  await options.nth(1).click();
+  // The one address on the company's domain links the contact to it: it has
+  // no Remove, and nothing says so.
   await expect(
-    page.getByText('links the contact to its company')
-  ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Remove', exact: true })
+    list.getByRole('button', { name: 'Remove person1@example.com' })
   ).toHaveCount(0);
+  await expect(page.getByText('links the contact to its company')).toHaveCount(
+    0
+  );
   await page.screenshot({
     animations: 'disabled',
     path: info.outputPath('company-address.png'),
   });
-  await page.keyboard.press('Escape');
-  await expect(page.getByText('links the contact to its company')).toBeHidden();
 
-  const add = page.getByRole('button', { name: 'Add email', exact: true });
-  await add.first().click();
   const input = page.getByRole('textbox', { name: 'Email', exact: true });
   await input.fill('person2@example.com');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText(
     'This email is already associated with another contact in this team.'
   );
   await expect(input).toHaveValue('person2@example.com');
   await input.fill('added@example.org');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(input).toBeHidden();
-  await expect(options).toHaveCount(4);
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(rows).toHaveCount(4);
+  await expect(input).toHaveValue('');
 
-  await options.nth(2).click();
-  await page.getByRole('button', { name: 'Remove', exact: true }).click();
-  await expect(options).toHaveText([
+  await (
+    await rowAction(list, 'Remove person1.alt@example.org', isMobile)
+  ).click();
+  await expect(addresses).toHaveText([
     personal,
     'person1@example.com',
     'added@example.org',
@@ -573,53 +627,193 @@ test('several addresses: make primary, reject a duplicate, add, remove, and keep
   ).toHaveCount(0);
 });
 
-test('Add email ends the last line of addresses in the header and Record details', async ({
+test('Record details shows every address in full beside Primary, actions only where the row can take them, and Add email below', async ({
   page,
+  isMobile,
 }, info) => {
-  await page.goto('/?several&long');
+  await page.goto('/?several&long&independent');
   await page.getByRole('button', { name: 'Show details', exact: true }).click();
   await expect(page.getByText('Record details', { exact: true })).toBeVisible();
-  const fields = page.getByRole('group', { name: 'Email', exact: true });
-  await expect(fields).toHaveCount(2);
-  for (const field of await fields.all()) {
-    const last = field
-      .getByRole('button', { name: /^Email options for/ })
-      .last();
-    const add = field.getByRole('button', { name: 'Add email', exact: true });
-    const lastBox = (await last.boundingBox())!;
-    const addBox = (await add.boundingBox())!;
-    const fieldBox = (await field.boundingBox())!;
-    expect(addBox.width).toBe(24);
-    expect(addBox.height).toBe(24);
-    expect(addBox.y).toBe(lastBox.y);
-    expect(addBox.x).toBeGreaterThan(lastBox.x + lastBox.width);
-    expect(addBox.x + addBox.width).toBeLessThanOrEqual(
-      fieldBox.x + fieldBox.width
-    );
+  const field = page.getByRole('group', { name: 'Email', exact: true });
+  const addresses = field.getByRole('button', { name: /^Email options for/ });
+  await expect(addresses).toHaveText([
+    'person1@example.org',
+    'person1@example.net',
+    'person1.with.a.much.longer.mailbox.name@example.org',
+  ]);
+  const primary = addresses.first();
+  // The primary is short enough to show in full beside its badge.
+  expect(
+    await primary
+      .locator('span')
+      .last()
+      .evaluate((element) => element.scrollWidth <= element.clientWidth)
+  ).toBe(true);
+  const add = field.getByRole('button', { name: 'Add email', exact: true });
+  await expect(add).toBeVisible();
+  // Measured in one frame: on touch Record details is a sheet still moving in.
+  const box = await field.evaluate((group) => {
+    const rect = (element: Element | null | undefined) => {
+      const { x, y, width, height } = element!.getBoundingClientRect();
+      return { x, y, width, height, middle: y + height / 2 };
+    };
+    const addresses = [
+      ...group.querySelectorAll('button[aria-label^="Email options for"]'),
+    ];
+    const labelElement = group.parentElement?.previousElementSibling;
+    const label = rect(labelElement);
+    const inset = Number.parseFloat(getComputedStyle(labelElement!).paddingTop);
+    return {
+      // The label's text, below its top padding.
+      label: { ...label, middle: label.y + inset + (label.height - inset) / 2 },
+      primary: rect(addresses[0]),
+      last: rect(addresses.at(-1)),
+      badge: rect(
+        [...group.querySelectorAll('[data-slot="badge"]')].find(
+          (badge) => badge.textContent === 'Primary'
+        )
+      ),
+      add: rect(group.querySelector('button[aria-label="Add email"]')),
+    };
+  });
+  expect(Math.abs(box.primary.middle - box.badge.middle)).toBeLessThanOrEqual(
+    1
+  );
+  expect(box.badge.x).toBeGreaterThanOrEqual(box.primary.x + box.primary.width);
+
+  // The Email label sits on the first address's line.
+  await expect(field.locator('xpath=../preceding-sibling::span[1]')).toHaveText(
+    'Email'
+  );
+  expect(Math.abs(box.label.middle - box.primary.middle)).toBeLessThanOrEqual(
+    2
+  );
+
+  // Add email is the side panel's add pill, under the last address, on the
+  // addresses' edge.
+  expect(box.add.y).toBeGreaterThan(box.last.y + box.last.height - 1);
+  expect(Math.abs(box.add.x - box.primary.x)).toBeLessThanOrEqual(2);
+  await expect(add).toContainText('Add email');
+
+  // A row shows only the actions it can take: the primary has no Make
+  // primary. On desktop they show while the row is hovered; on touch, always.
+  const remove = field.getByRole('button', {
+    name: 'Remove person1@example.net',
+  });
+  const makePrimary = field.getByRole('button', {
+    name: 'Make person1@example.net primary',
+  });
+  await expect(
+    field.getByRole('button', { name: 'Make person1@example.org primary' })
+  ).toHaveCount(0);
+  if (isMobile) {
+    expect(await shown(remove)).toBe(true);
+    expect(await shown(makePrimary)).toBe(true);
+  } else {
+    expect(await shown(remove)).toBe(false);
+    expect(await shown(makePrimary)).toBe(false);
+    await addresses.nth(1).hover();
+    await expect.poll(() => shown(remove)).toBe(true);
+    expect(await shown(makePrimary)).toBe(true);
+    // The other rows keep theirs out of the way.
+    expect(
+      await shown(
+        field.getByRole('button', { name: 'Remove person1@example.org' })
+      )
+    ).toBe(false);
   }
   await page.screenshot({
     animations: 'disabled',
-    path: info.outputPath('add-email-beside-addresses.png'),
+    path: info.outputPath('record-details-rows.png'),
   });
+
+  // The address that links the company has no Remove at all.
+  await page.goto('/?several');
+  await page.getByRole('button', { name: 'Show details', exact: true }).click();
+  const linked = page.getByRole('group', { name: 'Email', exact: true });
+  await expect(
+    linked.getByRole('button', { name: /^Email options for/ })
+  ).toHaveCount(3);
+  await expect(
+    linked.getByRole('button', { name: 'Remove person1@example.com' })
+  ).toHaveCount(0);
+  await expect(
+    linked.getByRole('button', { name: 'Remove person1@example.net' })
+  ).toHaveCount(1);
 });
 
-test('Tab reaches Add email after the addresses and focus returns to it after Escape and removal', async ({
+test('removing the address the editor opened from keeps the editor in place and focus on Add email', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Desktop popover placement and focus');
+  await page.goto('/?several&long&independent');
+  await page.getByRole('button', { name: 'Show details', exact: true }).click();
+  const field = page.getByRole('group', { name: 'Email', exact: true });
+  // Measured before the editor opens, which hides the page behind it from
+  // the accessibility tree.
+  const fieldBox = (await field.boundingBox())!;
+  await field
+    .getByRole('button', { name: 'Email options for person1@example.net' })
+    .click();
+  const list = page.getByRole('list', { name: 'Email' });
+  await (await rowAction(list, 'Remove person1@example.net', isMobile)).click();
+  await expect(list.locator('span.ph-no-capture')).toHaveCount(2);
+  // The editor stays beside Record details rather than jumping to a corner.
+  const listBox = (await list.boundingBox())!;
+  expect(listBox.x).toBeGreaterThan(fieldBox.x - 400);
+  expect(listBox.y).toBeGreaterThan(fieldBox.y - 100);
+  await page.keyboard.press('Escape');
+  await expect(
+    field.getByRole('button', { name: 'Add email', exact: true })
+  ).toBeFocused();
+});
+
+test('keyboard: Record details row actions, then the editor, return focus where the page left it', async ({
   page,
   isMobile,
 }) => {
   test.skip(isMobile, 'Desktop keyboard focus');
-  const personal = `person1@${'gmail.com'}`;
-  await page.goto('/?several');
-  const field = page.getByRole('group', { name: 'Email', exact: true }).first();
-  const options = field.getByRole('button', { name: /^Email options for/ });
+  await page.goto('/?several&long&independent');
+  await page.getByRole('button', { name: 'Show details', exact: true }).click();
+  const field = page.getByRole('group', { name: 'Email', exact: true });
+  const address = (email: string) =>
+    field.getByRole('button', { name: `Email options for ${email}` });
   const add = field.getByRole('button', { name: 'Add email', exact: true });
 
-  await options.last().focus();
+  // Tab reaches each action, which shows as it takes focus.
+  await address('person1@example.net').focus();
   await page.keyboard.press('Tab');
-  await expect(add).toBeFocused();
+  const remove = field.getByRole('button', {
+    name: 'Remove person1@example.net',
+  });
+  await expect(remove).toBeFocused();
+  expect(await shown(remove)).toBe(true);
+  await page.keyboard.press('Tab');
+  const makePrimary = field.getByRole('button', {
+    name: 'Make person1@example.net primary',
+  });
+  await expect(makePrimary).toBeFocused();
+  expect(await shown(makePrimary)).toBe(true);
   expect(
-    await add.evaluate((element) => getComputedStyle(element).boxShadow)
+    await makePrimary.evaluate((element) => getComputedStyle(element).boxShadow)
   ).toContain('0px 0px 0px 2px');
+
+  // Made primary, the address moves first and keeps focus.
+  await page.keyboard.press('Enter');
+  await expect(
+    field.getByRole('button', { name: /^Email options for/ }).first()
+  ).toHaveText('person1@example.net');
+  await expect(address('person1@example.net')).toBeFocused();
+
+  // Removed, its row leaves and focus goes to Add email.
+  await page.keyboard.press('Tab');
+  await expect(remove).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(address('person1@example.net')).toHaveCount(0);
+  await expect(add).toBeFocused();
+
+  // Add email opens the editor on its field; Escape comes back.
   await page.keyboard.press('Enter');
   const input = page.getByRole('textbox', { name: 'Email', exact: true });
   await expect(input).toBeFocused();
@@ -627,19 +821,12 @@ test('Tab reaches Add email after the addresses and focus returns to it after Es
   await expect(input).toBeHidden();
   await expect(add).toBeFocused();
 
-  await options.nth(1).focus();
+  // An address opens the editor too, and focus returns to the address.
+  await address('person1@example.org').focus();
   await page.keyboard.press('Enter');
-  await expect(
-    page.getByRole('button', { name: 'Make primary', exact: true })
-  ).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(options.first()).toHaveText(personal);
-  await expect(options.first()).toBeFocused();
-
-  await options.last().click();
-  await page.getByRole('button', { name: 'Remove', exact: true }).click();
-  await expect(options).toHaveCount(2);
-  await expect(add).toBeFocused();
+  await expect(input).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(address('person1@example.org')).toBeFocused();
   expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(2);
 });
 
@@ -693,12 +880,12 @@ test('Remove company confirms, keeps a rejected relation and unlinks once the se
     page.getByRole('button', { name: 'Add company', exact: true }).first()
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Go to company', exact: true })
+    page.getByRole('button', { name: 'Open Example company', exact: true })
   ).toHaveCount(0);
   expect(await companyId()).toBeNull();
 });
 
-test('a contact that cannot be linked again is told so before its company is removed', async ({
+test('an independent contact confirms Remove company and can link one again', async ({
   page,
 }, info) => {
   await page.goto('/?independent');
@@ -706,6 +893,7 @@ test('a contact that cannot be linked again is told so before its company is rem
     .getByRole('button', { name: 'Change contact company', exact: true })
     .first()
     .click();
+  // Only a personal address switches companies; this one can only remove it.
   await expect(page.getByPlaceholder('Search companies…')).toHaveCount(0);
   await page
     .getByRole('button', { name: 'Remove company', exact: true })
@@ -713,19 +901,16 @@ test('a contact that cannot be linked again is told so before its company is rem
   const dialog = page.getByRole('dialog').filter({
     hasText: 'Remove company from this contact?',
   });
-  await expect(dialog).toContainText('cannot be linked to a company again');
+  await expect(dialog).toBeVisible();
   await page.screenshot({
     animations: 'disabled',
-    path: info.outputPath('remove-company-permanent.png'),
+    path: info.outputPath('remove-company-independent.png'),
   });
   await dialog.getByRole('button', { name: 'Remove company' }).click();
   await expect(dialog).toBeHidden();
   await expect(
-    page.getByRole('button', {
-      name: /Change contact company|Add company|Remove company/,
-    })
-  ).toHaveCount(0);
-  await expect(page.getByText('No company').first()).toBeVisible();
+    page.getByRole('button', { name: 'Add company', exact: true }).first()
+  ).toBeVisible();
   expect(
     await page.evaluate(
       () => window.archiveFixture.snapshot().contacts[0].companyId
@@ -740,19 +925,21 @@ test('a server without the address list keeps addresses and company read-only', 
   await expect(page.getByText(/^person1@/).first()).toBeVisible();
   await expect(
     page.getByRole('button', {
-      name: /Email options for|Add email|Change contact company|Remove company/,
+      name: /^Email|Add email|Change contact company|Remove company/,
     })
   ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show details', exact: true }).click();
+  const field = page.getByRole('group', { name: 'Email', exact: true });
+  await expect(field).toContainText('person1@example.net');
+  await expect(field.getByRole('button')).toHaveCount(0);
 
-  // A blank contact can still add its first address there.
+  // A blank contact can still add its first address there; the editor then
+  // closes, having nothing more to offer.
   await page.goto('/?legacy&empty');
-  await page
-    .getByRole('button', { name: 'Add email', exact: true })
-    .first()
-    .click();
+  await emailPill(page).click();
   const input = page.getByRole('textbox', { name: 'Email', exact: true });
   await input.fill('first@example.org');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(input).toBeHidden();
   expect(
     await page.evaluate(
@@ -761,6 +948,6 @@ test('a server without the address list keeps addresses and company read-only', 
   ).toBe('first@example.org');
   await expect(page.getByText('first@example.org').first()).toBeVisible();
   await expect(
-    page.getByRole('button', { name: /Email options for|Add email/ })
+    page.getByRole('button', { name: /^Email|Add email/ })
   ).toHaveCount(0);
 });
