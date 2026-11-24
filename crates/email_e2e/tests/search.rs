@@ -862,3 +862,24 @@ async fn gmail_a_renamed_label_finds_its_mail_under_the_new_name() -> Result<(),
     assert_eq!(found(&ada, "label:clients").await?, [""; 0]);
     stack.finish().await
 }
+
+/// Mail sent from Macro is found by the labels Gmail gives it as it files
+/// the message.
+///
+/// When this fails: a search for sent mail leaves out what was sent from
+/// Macro, and one that leaves sent mail out keeps it.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_mail_sent_from_macro_is_found_by_its_sent_label() -> Result<(), Report> {
+    let stack = search_stack().await?;
+    let ada = stack.unique_user("ada").await?;
+    let inbox = ada.link_gmail().await?;
+    inbox
+        .send(&json!({
+            "subject": "Sent from here",
+            "to": [{ "email": "grace@example.com" }],
+            "body_text": "Numbers inside.",
+        }))
+        .await?;
+    wait_for_found(&ada, "label:sent", &["Sent from here"]).await?;
+    stack.finish().await
+}
