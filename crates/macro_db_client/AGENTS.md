@@ -56,6 +56,11 @@ with their `email_links` row; `user_id` and `list_key` on them repeat the link's
 owner and provider on purpose, so reads never join `email_links`. List rows have no
 foreign key: the contacts worker removes them on account deletion.
 
+`agent_response_feedback` (migration `20261122135223`) is an append-only log of
+ratings of agent responses owned by `crates/agent_feedback`: no foreign key to
+the rated session, message, run or suggestion (ratings are eval history), and rows cascade
+only with the rater's `"User"` row.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,

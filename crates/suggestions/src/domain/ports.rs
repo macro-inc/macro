@@ -84,6 +84,14 @@ pub trait SuggestionRepo: Send + Sync + 'static {
         id: Uuid,
     ) -> impl Future<Output = Result<Option<Suggestion>, Self::Err>> + Send;
 
+    /// The agent session that proposed or last changed the person's
+    /// suggestion `id`, or `None` when they have no such suggestion.
+    fn proposing_session(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
     /// The person's suggestion with `dedup_key`.
     fn by_dedup_key(
         &self,

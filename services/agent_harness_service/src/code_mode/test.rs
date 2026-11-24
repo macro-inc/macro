@@ -403,6 +403,17 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "agent-harness.setAgentSessionArchived",
         "agent-harness.unlinkAgentSessionPullRequest",
         "agent-harness.unregisterAgentSessionWork",
+        // Ratings of agent responses send nothing, and the routes refuse
+        // every program run themselves (`is_program_run`): only the person
+        // rates.
+        "agent-harness.agentFeedbackRateMessage",
+        "agent-harness.agentFeedbackRateRun",
+        "agent-harness.agentFeedbackRateSuggestion",
+        "agent-harness.agentFeedbackRateTurn",
+        "agent-harness.agentFeedbackRetractMessage",
+        "agent-harness.agentFeedbackRetractRun",
+        "agent-harness.agentFeedbackRetractSuggestion",
+        "agent-harness.agentFeedbackRetractTurn",
         // The person's own preferences.
         "agent-harness.putAgentAutoArchivePreferences",
         "agent-harness.putAgentCodingPreferences",

@@ -408,6 +408,1063 @@
         ]
       }
     },
+    "/agent-feedback/agent-sessions/{session_id}/mine": {
+      "get": {
+        "tags": ["agent_feedback"],
+        "summary": "The caller's current ratings of a session's replies.",
+        "operationId": "agent_feedback_my_turn_feedback",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyFeedbackResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-feedback/agent-sessions/{session_id}/turns/{turn}": {
+      "put": {
+        "tags": ["agent_feedback"],
+        "summary": "Rate the agent's reply in one turn of a session.",
+        "operationId": "agent_feedback_rate_turn",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "turn",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateFeedbackBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["agent_feedback"],
+        "summary": "Retract the caller's rating of the agent's reply in one turn.",
+        "operationId": "agent_feedback_retract_turn",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "turn",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "description": "A UUIDv7 the client mints per action and sends again on retry.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "surface",
+            "in": "query",
+            "description": "Where the response was seen.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Surface"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-feedback/messages/{parent_type}/{parent_id}/items/{message_id}": {
+      "put": {
+        "tags": ["agent_feedback"],
+        "summary": "Rate an agent's message in a channel, DM, thread or discussion.",
+        "operationId": "agent_feedback_rate_message",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateFeedbackBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Not an agent's message in this parent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["agent_feedback"],
+        "summary": "Retract the caller's rating of an agent's message.",
+        "operationId": "agent_feedback_retract_message",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "description": "A UUIDv7 the client mints per action and sends again on retry.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "surface",
+            "in": "query",
+            "description": "Where the response was seen.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Surface"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Not an agent's message in this parent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-feedback/messages/{parent_type}/{parent_id}/mine": {
+      "get": {
+        "tags": ["agent_feedback"],
+        "summary": "The caller's current ratings of agents' messages on one parent.",
+        "operationId": "agent_feedback_my_message_feedback",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyFeedbackResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-feedback/routines/{id}/mine": {
+      "get": {
+        "tags": ["agent_feedback"],
+        "summary": "The caller's current ratings of a routine's runs.",
+        "operationId": "agent_feedback_my_run_feedback",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyFeedbackResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-feedback/routines/{id}/runs/{run_id}": {
+      "put": {
+        "tags": ["agent_feedback"],
+        "summary": "Rate one run of a routine.",
+        "operationId": "agent_feedback_rate_run",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateFeedbackBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Not a run of this routine",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["agent_feedback"],
+        "summary": "Retract the caller's rating of a routine run.",
+        "operationId": "agent_feedback_retract_run",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "description": "A UUIDv7 the client mints per action and sends again on retry.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "surface",
+            "in": "query",
+            "description": "Where the response was seen.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Surface"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Not a run of this routine",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-feedback/suggestions/mine": {
+      "get": {
+        "tags": ["agent_feedback"],
+        "summary": "The caller's current ratings of some of their suggestions.",
+        "operationId": "agent_feedback_my_suggestion_feedback",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "description": "Comma-separated suggestion ids, at most 100. Ids that aren't the\ncaller's suggestions, or that they haven't rated, are absent from the\nanswer.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyFeedbackResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent-feedback/suggestions/{suggestion_id}": {
+      "put": {
+        "tags": ["agent_feedback"],
+        "summary": "Rate one of the caller's suggestions.",
+        "operationId": "agent_feedback_rate_suggestion",
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateFeedbackBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": "Not the caller's suggestion, or sent by a program",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["agent_feedback"],
+        "summary": "Retract the caller's rating of one of their suggestions.",
+        "operationId": "agent_feedback_retract_suggestion",
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "description": "A UUIDv7 the client mints per action and sends again on retry.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "surface",
+            "in": "query",
+            "description": "Where the response was seen.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Surface"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": "Not the caller's suggestion, or sent by a program",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent feedback is off for the caller"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/agent-mode-choice": {
       "post": {
         "tags": ["agent-mode-choice"],
@@ -4128,6 +5185,84 @@
         }
       }
     },
+    "/internal/agent-feedback/events": {
+      "get": {
+        "tags": ["agent_feedback"],
+        "summary": "Every stored rating, change and retraction in `(createdAt, id)` order, a\npage at a time, for evals. Internal API key only.",
+        "operationId": "agent_feedback_export_events",
+        "parameters": [
+          {
+            "name": "afterCreatedAt",
+            "in": "query",
+            "description": "The previous page's `next.afterCreatedAt`; with `afterId`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "afterId",
+            "in": "query",
+            "description": "The previous page's `next.afterId`; with `afterCreatedAt`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Rows per page, 1 to 1000; 500 when absent.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/universal_input/classify": {
       "post": {
         "tags": ["universal_input::inbound::axum_router"],
@@ -4822,6 +5957,11 @@
             "description": "Empty for ordinary channels and other people's conversations."
           }
         }
+      },
+      "AgentKind": {
+        "type": "string",
+        "description": "What produced the response.",
+        "enum": ["system_bot", "owned_bot", "teammate"]
       },
       "AgentMode": {
         "type": "string",
@@ -6991,6 +8131,48 @@
         "description": "The recorded outcome of a program.",
         "enum": ["running", "succeeded", "failed", "cancelled", "timed_out"]
       },
+      "ExportCursor": {
+        "type": "object",
+        "description": "Where an export page starts: after this row.",
+        "required": ["afterCreatedAt", "afterId"],
+        "properties": {
+          "afterCreatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The last row's `created_at`."
+          },
+          "afterId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The last row's id."
+          }
+        }
+      },
+      "ExportPage": {
+        "type": "object",
+        "description": "One page of the export.",
+        "required": ["items", "next"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeedbackEvent"
+            },
+            "description": "Rows in `(created_at, id)` order."
+          },
+          "next": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExportCursor",
+                "description": "Where the next page starts; absent on the last page."
+              }
+            ]
+          }
+        }
+      },
       "ExternalSessionResponse": {
         "type": "object",
         "description": "The provider-side identity of an externally-served session.",
@@ -7084,6 +8266,167 @@
           }
         ],
         "description": "Validated suggestions for a particular client draft revision."
+      },
+      "FeedbackErrorBody": {
+        "type": "object",
+        "description": "A failed feedback request's body.",
+        "required": ["message"],
+        "properties": {
+          "code": {
+            "type": ["string", "null"],
+            "description": "A stable code for refusals a client handles: `subject_not_in_container`,\n`not_agent_authored`, `id_taken`, `program_run`."
+          },
+          "message": {
+            "type": "string",
+            "description": "What went wrong."
+          }
+        }
+      },
+      "FeedbackEvent": {
+        "type": "object",
+        "description": "One stored row, as the eval export reads it: ratings, changes and\nretractions alike.",
+        "required": [
+          "id",
+          "userId",
+          "subjectKind",
+          "containerId",
+          "subjectId",
+          "turn",
+          "rating",
+          "note",
+          "surface",
+          "messageParentType",
+          "agentSessionId",
+          "agentBotId",
+          "agentUserId",
+          "agentKind",
+          "harness",
+          "model",
+          "traceId",
+          "createdAt"
+        ],
+        "properties": {
+          "agentBotId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The bot that produced it."
+          },
+          "agentKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentKind",
+                "description": "What kind of agent produced it."
+              }
+            ]
+          },
+          "agentSessionId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The session that produced the response."
+          },
+          "agentUserId": {
+            "type": ["string", "null"],
+            "description": "The teammate account that produced it."
+          },
+          "containerId": {
+            "type": "string",
+            "description": "Session, message parent or routine id."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was written."
+          },
+          "harness": {
+            "type": ["string", "null"],
+            "description": "The session's harness at rating time."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The row's id."
+          },
+          "messageParentType": {
+            "type": ["string", "null"],
+            "description": "For a message, its parent's type."
+          },
+          "model": {
+            "type": ["string", "null"],
+            "description": "The session's model at rating time."
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "The note."
+          },
+          "rating": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Rating",
+                "description": "The rating; `None` is a retraction."
+              }
+            ]
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Session, message or run id."
+          },
+          "subjectKind": {
+            "$ref": "#/components/schemas/SubjectKind",
+            "description": "What kind of response."
+          },
+          "surface": {
+            "$ref": "#/components/schemas/Surface",
+            "description": "Where the response was seen."
+          },
+          "traceId": {
+            "type": ["string", "null"],
+            "description": "The rating request's trace."
+          },
+          "turn": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "The turn, for a session reply.",
+            "minimum": 0
+          },
+          "userId": {
+            "type": "string",
+            "description": "Who rated (a Macro user id)."
+          }
+        }
+      },
+      "FeedbackState": {
+        "type": "object",
+        "description": "One person's current feedback on one response.",
+        "required": ["rating", "note", "updatedAt"],
+        "properties": {
+          "note": {
+            "type": ["string", "null"],
+            "description": "The current note."
+          },
+          "rating": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Rating",
+                "description": "The current rating; `None` when there is none or it was retracted."
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the current state was written; `None` when nothing was."
+          }
+        }
       },
       "FileChangeKindDto": {
         "type": "string",
@@ -7550,6 +8893,51 @@
         },
         "additionalProperties": false
       },
+      "MyFeedback": {
+        "type": "object",
+        "description": "One person's current rating of one response in a container.",
+        "required": ["subjectId", "turn", "rating", "note", "updatedAt"],
+        "properties": {
+          "note": {
+            "type": ["string", "null"],
+            "description": "The note."
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating",
+            "description": "The rating."
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The rated session, message or run."
+          },
+          "turn": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "The turn, for a session reply.",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was written."
+          }
+        }
+      },
+      "MyFeedbackResponse": {
+        "type": "object",
+        "description": "The caller's current ratings in one container.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyFeedback"
+            },
+            "description": "One per rated response; retracted ratings are left out."
+          }
+        }
+      },
       "NoteSuggestions": {
         "type": "object",
         "description": "Editable fields for note inference, before submission and identity resolution.",
@@ -7850,6 +9238,35 @@
             "description": "The prompt's raw text, present for prompts only. What an edit\nreplaces."
           }
         }
+      },
+      "RateFeedbackBody": {
+        "type": "object",
+        "description": "A rating, or a change to one.",
+        "required": ["id", "rating", "surface"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A UUIDv7 the client mints per action and sends again on retry."
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "An optional note, at most 4000 characters; empty means none."
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating",
+            "description": "Up or down."
+          },
+          "surface": {
+            "$ref": "#/components/schemas/Surface",
+            "description": "Where the response was seen."
+          }
+        }
+      },
+      "Rating": {
+        "type": "string",
+        "description": "Thumbs up or down.",
+        "enum": ["up", "down"]
       },
       "RecordedCallStatus": {
         "type": "string",
@@ -8692,6 +10109,25 @@
             "description": "Current session id shown in the conversation metadata."
           }
         }
+      },
+      "SubjectKind": {
+        "type": "string",
+        "description": "What kind of response was rated.",
+        "enum": ["agent_session_turn", "message", "routine_run", "suggestion"]
+      },
+      "Surface": {
+        "type": "string",
+        "description": "Where the person saw the response; the only context the client reports.",
+        "enum": [
+          "agents_view",
+          "agent_block",
+          "message_timeline",
+          "message_thread",
+          "routine_run",
+          "suggestion_row",
+          "suggestion_tile",
+          "suggestion_draft"
+        ]
       },
       "TaskSearchSuggestions": {
         "type": "object",

@@ -193,6 +193,17 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 }
 
+/// One run of a routine, looked up by its id.
+pub trait ExecutionRecords: Send + Sync + 'static {
+    /// Run `run_id` of routine `action_id`, or `None` when that routine has no
+    /// such run.
+    fn execution_record(
+        &self,
+        action_id: &Uuid,
+        run_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<ActionExecutionRecord>>> + Send;
+}
+
 /// Sub-routines: the routines a routine's runs created, and the run in
 /// progress a new one would belong to.
 pub trait SubRoutines: Send + Sync + 'static {

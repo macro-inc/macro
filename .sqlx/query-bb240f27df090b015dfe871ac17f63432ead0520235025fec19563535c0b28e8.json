@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_response_feedback (\n                   id, user_id, subject_kind, container_id, subject_id, turn, rating, note,\n                   surface, message_parent_type, agent_session_id, agent_bot_id, agent_user_id,\n                   agent_kind, harness, model, trace_id, created_at)\n               VALUES ($1, $2, $3::text::agent_response_feedback_subject, $4, $5, $6,\n                   $7::text::agent_response_rating, $8, $9::text::agent_response_feedback_surface,\n                   $10, $11, $12, $13, $14::text::agent_response_agent_kind, $15, $16, $17,\n                   clock_timestamp())\n               ON CONFLICT (id) DO NOTHING\n               RETURNING created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Int4",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bb240f27df090b015dfe871ac17f63432ead0520235025fec19563535c0b28e8"
+}

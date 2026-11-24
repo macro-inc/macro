@@ -25,6 +25,20 @@ import type { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 
 export const agentHarnessExcluded = [
+  // Rating agent responses is an internal eval tool behind a rollout flag.
+  'agentFeedbackExportEvents',
+  'agentFeedbackMyMessageFeedback',
+  'agentFeedbackMyRunFeedback',
+  'agentFeedbackMySuggestionFeedback',
+  'agentFeedbackMyTurnFeedback',
+  'agentFeedbackRateMessage',
+  'agentFeedbackRateRun',
+  'agentFeedbackRateSuggestion',
+  'agentFeedbackRateTurn',
+  'agentFeedbackRetractMessage',
+  'agentFeedbackRetractRun',
+  'agentFeedbackRetractSuggestion',
+  'agentFeedbackRetractTurn',
   'classify', // Command K inference is app-internal.
   'extract', // Command K inference is app-internal.
   'loadAgentModelsHandler',

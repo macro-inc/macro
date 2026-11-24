@@ -95,6 +95,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     code_executions: Router,
     activity: Router,
     notifications: Router,
+    agent_feedback: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
 }
 
@@ -153,6 +154,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             code_executions: Router::new(),
             activity: Router::new(),
             notifications: Router::new(),
+            agent_feedback: Router::new(),
             changes,
         }
     }
@@ -299,6 +301,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach the routes answering tool calls held for the owner's approval.
     pub fn with_tool_approvals(mut self, router: Router) -> Self {
         self.tool_approvals = router;
+        self
+    }
+
+    /// Attach the routes rating agent responses and exporting the ratings.
+    pub fn with_agent_feedback(mut self, router: Router) -> Self {
+        self.agent_feedback = router;
         self
     }
 
@@ -469,6 +477,7 @@ where
         .merge(states.voices)
         .merge(states.mode_choice)
         .merge(states.conversations)
+        .merge(states.agent_feedback)
         .nest("/universal_input", states.universal_input)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }

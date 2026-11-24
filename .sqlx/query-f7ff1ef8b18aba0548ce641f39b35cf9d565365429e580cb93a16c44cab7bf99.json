@@ -1,0 +1,126 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, user_id, subject_kind::text AS \"subject_kind!\", container_id,\n                              subject_id, turn, rating::text AS rating, note,\n                              surface::text AS \"surface!\", message_parent_type, agent_session_id,\n                              agent_bot_id, agent_user_id, agent_kind::text AS agent_kind,\n                              harness, model, trace_id, created_at\n                       FROM agent_response_feedback\n                       WHERE (created_at, id) > ($1, $2)\n                       ORDER BY created_at, id\n                       LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "subject_kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "container_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "subject_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "turn",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "rating",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "surface!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "message_parent_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "agent_bot_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "agent_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "agent_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "harness",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "model",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "trace_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false,
+      false,
+      true,
+      null,
+      true,
+      null,
+      true,
+      true,
+      true,
+      true,
+      null,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "f7ff1ef8b18aba0548ce641f39b35cf9d565365429e580cb93a16c44cab7bf99"
+}

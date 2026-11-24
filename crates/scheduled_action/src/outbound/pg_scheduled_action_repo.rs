@@ -212,6 +212,37 @@ impl TryFrom<&ActionTrigger> for TriggerColumns {
     }
 }
 
+impl<B: BotFacts + 'static> crate::domain::ports::ExecutionRecords for PgScheduledActionRepo<B> {
+    async fn execution_record(
+        &self,
+        action_id: &Uuid,
+        run_id: &Uuid,
+    ) -> Result<Option<ActionExecutionRecord>> {
+        let row = sqlx::query!(
+            r#"
+            SELECT id, action_id, resource_id, start_time, end_time, is_success, result, created_at
+            FROM action_execution_record
+            WHERE id = $1 AND action_id = $2
+            "#,
+            *run_id,
+            *action_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|row| ActionExecutionRecord {
+            id: Some(row.id),
+            action_id: row.action_id,
+            resource_id: row.resource_id,
+            start_time: row.start_time,
+            end_time: row.end_time,
+            is_success: row.is_success,
+            result: row.result,
+            created_at: row.created_at,
+        }))
+    }
+}
+
 impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
     async fn create_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
         let id = generate_uuid_v7();

@@ -448,3 +448,39 @@ impl Fixture {
             .then_some(run)
     }
 }
+
+/// A suggestion's proposing session is read for its owner only.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_proposing_session_is_read_for_the_owner_only(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let session = Uuid::now_v7();
+    let card = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO suggestion (id, user_id, kind, dedup_key, title, summary, importance,
+                             categories, state, session_id, created_at, updated_at, state_changed_at)
+           VALUES ($1, $2, 'prompt', 'prompt:rated', 'Rated', 'Rated.', 50,
+                   '{}', 'proposed', $3, now(), now(), now())"#,
+        card,
+        OWNER,
+        session,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgSuggestionRepo::new(pool);
+
+    let owner = repo
+        .proposing_session(&MacroUserIdStr::parse_from_str(OWNER).unwrap(), card)
+        .await
+        .unwrap();
+    let stranger = repo
+        .proposing_session(
+            &MacroUserIdStr::parse_from_str("macro|stranger@macro.com").unwrap(),
+            card,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(owner, Some(session));
+    assert_eq!(stranger, None);
+}

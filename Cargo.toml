@@ -21,6 +21,7 @@ members = [
   "crates/routine_program",
   "crates/shown_text",
   "crates/suggestions",
+  "crates/agent_feedback",
   "crates/suggestions_db_utils",
   "crates/suggestion_generation",
   "crates/activity",
