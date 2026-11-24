@@ -18,6 +18,19 @@ vi.mock('../utils/utilAnalytic', () => ({
   analytics: { trackPosthog: vi.fn() },
 }));
 
+const intel = vi.hoisted(() => ({ published: false }));
+vi.mock(
+  '../../features/marketing/core/desktopDownloads',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('../../features/marketing/core/desktopDownloads')
+    >()),
+    intelMacPublished: () => intel.published,
+  })
+);
+
+const HINT = 'Not sure? Apple menu → About This Mac shows your chip.';
+
 function visitWith(userAgent: string) {
   vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent);
   render(() => (
@@ -54,6 +67,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  intel.published = false;
+  Reflect.deleteProperty(navigator, 'userAgentData');
   vi.clearAllMocks();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -147,5 +162,84 @@ describe('RouteDownload', () => {
       ['Download for iOS', IOS_APP_STORE_URL],
       ['Download for Android', ANDROID_PLAY_STORE_URL],
     ]);
+  });
+
+  describe('Intel Macs', () => {
+    function reportChip(architecture: string) {
+      Object.defineProperty(navigator, 'userAgentData', {
+        value: { getHighEntropyValues: async () => ({ architecture }) },
+        configurable: true,
+      });
+    }
+
+    it('get no Intel installer until the edge links to one', () => {
+      visitWith(MAC);
+      expect(downloadLinks()).toEqual([
+        ['Download for macOS', '/download/mac'],
+      ]);
+      expect(screen.queryByRole('link', { name: /Intel/ })).toBeNull();
+      expect(screen.queryByText(HINT)).toBeNull();
+    });
+
+    it('lead with Apple silicon, Intel as a link, and a hint when the browser cannot tell', async () => {
+      intel.published = true;
+      visitWith(MAC);
+      expect(downloadLinks()).toEqual([
+        ['Download for Apple silicon', '/download/mac'],
+      ]);
+      expect(
+        screen.getByRole('link', { name: 'Download for Intel' })
+      ).toHaveProperty('pathname', '/download/mac-intel');
+      expect(await screen.findByText(HINT)).toBeTruthy();
+    });
+
+    it('lead with Intel when Chromium reports an Intel Mac', async () => {
+      intel.published = true;
+      reportChip('x86');
+      visitWith(MAC);
+      await vi.waitFor(() => {
+        expect(downloadLinks()).toEqual([
+          ['Download for Intel', '/download/mac-intel'],
+        ]);
+      });
+      expect(
+        screen.getByText(
+          'Requires macOS 14 (Sonoma) or later on a Mac with an Intel processor.'
+        )
+      ).toBeTruthy();
+      expect(
+        screen.getByRole('link', { name: 'Download for Apple silicon' })
+      ).toHaveProperty('pathname', '/download/mac');
+      expect(screen.queryByText(HINT)).toBeNull();
+    });
+
+    it('are named as Macs for other computers, without the chip hint', () => {
+      intel.published = true;
+      visitWith(LINUX);
+      expect(
+        screen.getByRole('link', { name: 'Download for Mac (Intel)' })
+      ).toHaveProperty('pathname', '/download/mac-intel');
+      cleanup();
+
+      visitWith('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
+      expect(downloadLinks()).toEqual([
+        ['Download for Mac (Apple silicon)', '/download/mac'],
+        ['Download for Mac (Intel)', '/download/mac-intel'],
+        ['Download for Linux', '/download/linux'],
+      ]);
+      expect(screen.queryByText(HINT)).toBeNull();
+    });
+
+    it('record Intel downloads as macos-intel', () => {
+      intel.published = true;
+      visitWith(MAC);
+      const link = screen.getByRole('link', { name: 'Download for Intel' });
+      link.addEventListener('click', (event) => event.preventDefault());
+      fireEvent.click(link);
+      expect(analytics.trackPosthog).toHaveBeenCalledExactlyOnceWith(
+        'desktop_download_clicked',
+        { platform: 'macos-intel', source: 'marketing' }
+      );
+    });
   });
 });

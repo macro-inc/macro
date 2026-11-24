@@ -282,7 +282,14 @@ tablets (an iPad's Mac user agent is told apart by its touch screen) and
 undetected computers (and the prerendered HTML) get every installer as equal
 secondary buttons and a note pointing to the web app; Windows's note says a
 native Windows app is on the way. Platforms come from `DESKTOP_PLATFORMS` in
-`desktopDownloads.ts`, so a new installer (Intel Mac) is one entry there.
+`desktopDownloads.ts`. The Intel Mac installer is offered only once
+`seo/download-redirects.json` has `/download/mac-intel` (added after the first
+release that publishes it). Then a Mac's button is for the chip Chromium's
+architecture hint (`navigator.userAgentData`) reports, Apple silicon when the
+browser can't say, the other chip is the first “Also available for” link, and a
+browser that can't say adds "Not sure? Apple menu → About This Mac shows your
+chip." Off a Mac both read “Mac (Apple silicon)” and “Mac (Intel)”. Intel clicks
+send `platform: 'macos-intel'`.
 The buttons and links send `desktop_download_clicked` and link to
 `/download/mac` and `/download/linux`, which redirect to the current release's
 installers (`seo/download-redirects.json`), so the page never names a version
