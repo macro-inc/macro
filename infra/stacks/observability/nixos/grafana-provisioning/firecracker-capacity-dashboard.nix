@@ -435,11 +435,13 @@ let
   banner = {
     id = 1;
     title = "";
-    description = "Telemetry coverage of the hosts seen in the last day. A host counts with a node_exporter sample in the last 2 minutes; it is covered when its cAdvisor (the VMs' parent cgroup) is fresh too. Red: nothing reaches Mimir, so panels are empty for lack of telemetry, not because hosts are idle. Orange: fleet totals leave the silent or uncovered hosts out.";
+    description = "Telemetry coverage of the hosts seen in the last day. A host counts with a node_exporter sample in the last 2 minutes; it is covered when its cAdvisor (the VMs' parent cgroup) is fresh too. Green, All hosts reporting: every host seen today reports node_exporter and cAdvisor. Orange, Partial telemetry: a host is silent or reports only node_exporter or only cAdvisor; fleet totals count covered hosts only (see Hosts). Red, No host reporting: no firecracker-host series reach Mimir, so panels are empty for lack of telemetry, not because hosts are idle.";
     inherit datasource;
     type = "stat";
     # One thin line: a solid colour bar whose red and orange states stay
     # conspicuous at this size, while the healthy state takes little room.
+    # The texts are short enough for one line on a phone; the detail is in
+    # the description.
     gridPos = pos 0 0 24 2;
     targets = [
       {
@@ -467,17 +469,17 @@ let
           type = "value";
           options = {
             "0" = {
-              text = "⚠ NO FIRECRACKER HOST IS REPORTING: no firecracker-host series in Mimir; panels below are blank because telemetry is missing";
+              text = "⚠ NO HOST REPORTING";
               color = "red";
               index = 0;
             };
             "1" = {
-              text = "⚠ PARTIAL TELEMETRY: a host is silent or reports only node_exporter or only cAdvisor; fleet totals count covered hosts only (see Hosts)";
+              text = "⚠ PARTIAL TELEMETRY";
               color = "orange";
               index = 1;
             };
             "2" = {
-              text = "✓ Every host seen today reports node_exporter and cAdvisor";
+              text = "✓ All hosts reporting";
               color = "green";
               index = 2;
             };
