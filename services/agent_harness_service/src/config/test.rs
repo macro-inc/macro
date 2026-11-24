@@ -348,21 +348,21 @@ fn agent_repo_storage_limits_and_provider_credentials_are_required() {
 
 #[test]
 fn the_fireworks_key_is_optional() {
-    let mut unkeyed = values();
+    let mut unkeyed = config_values();
     unkeyed.as_object_mut().unwrap().remove("FIREWORK_API_KEY");
     let config: Config = serde_json::from_value(unkeyed).unwrap();
     assert_eq!(config.firework_api_key.value(), None);
 
-    let config: Config = serde_json::from_value(values()).unwrap();
+    let config: Config = serde_json::from_value(config_values()).unwrap();
     assert_eq!(config.firework_api_key.value(), Some("firework-key"));
 }
 
 #[test]
 fn the_capsolver_key_is_optional() {
-    let config: Config = serde_json::from_value(values()).unwrap();
+    let config: Config = serde_json::from_value(config_values()).unwrap();
     assert_eq!(config.capsolver_api_key.value(), None);
 
-    let mut keyed = values();
+    let mut keyed = config_values();
     keyed["CAPSOLVER_API_KEY"] = serde_json::json!("capsolver-key");
     let config: Config = serde_json::from_value(keyed).unwrap();
     assert_eq!(config.capsolver_api_key.value(), Some("capsolver-key"));
