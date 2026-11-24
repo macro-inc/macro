@@ -235,7 +235,7 @@ export const CLOSURES: Closure[] = [
   },
   {
     id: 'T11',
-    match: /^live:[a-z]+:new-rest-deadline$/,
+    match: /^live:[a-z]+:new-rest-deadline$|(^|\s)error:new:rest-deadline$/,
     title: "A list the branch still reads with main's REST reader hit that reader's 12 s deadline under load",
     cause:
       "Home's Signal and Noise lists set emailView 'inbox' (features/home/queries/home-query.ts:175-177) and grouped GraphQL Soup refuses email views (lib/queries/soup/graphql/ast.ts:997-999), so the grouped input is undefined (graphql/grouped-items.ts:105-115) and the facade falls back to main's REST reader (lib/queries/soup/items.ts:434-443): every Home grouped read in the run is REST on both sides (reads.jsonl dims transport 'rest->rest', 443 of 443). Neither items.ts nor request-timeout.ts differs between main and the branch (git diff 6449317189c 328d999a060 on them is empty), and notification-soup.ts only adds the GraphQL re-read. So both sides ran the same REST code; on the branch's tab the refetch after the notification ran past the 12 s deadline (request-timeout.ts:5, T9) and failed with 'TimeoutError: signal timed out', which left in place the rows the notification had stamped and put at the top of the cached REST list (lib/queries/notification/notification-soup.ts:59 updateSoupForNotification, main's code, which the branch keeps; B1). Instance: quiet seed 3701, lane v11 sequence 1 step 0 (notify-burst on a thread; spec2 Home Signal grouped by project): the branch's list shows the three notified rows above the five the fresh read has, its state 'rest error ... TimeoutError: signal timed out'; main's tab answered in time and settled at 94 ms; the reopened list read the fresh five (checks.reopened matchesFresh true).",
@@ -250,6 +250,24 @@ export const CLOSURES: Closure[] = [
       "The probe counts a list as caught up only when it shows the fresh read's rows and is settled: not pending, loading or fetching (probe.ts:108-112). Main's REST notified lists are TanStack infinite queries (lib/queries/soup/items.ts:344) that refetch on every invalidation of an entity they hold (normalized-cache/operations.ts:256 invalidateSoupEntity) and after the probe reopens them on a storage reset. The class says nothing about the branch: its list at the same step is judged by its own classes, and a branch list that never settles is live:<tag>:new-unsettled, which stays open. Instance: quiet seed 3701, lane v22 sequence 0 step 0 (role on a document), the step after the run's only storage reset (resets.jsonl, both sides, 20:51:22): main's three lists showed the fresh rows (28, 4 and 0) and were still fetching (isFetching true, no error) when the 15 s bound ran out while each fresh read took 6.3 s; the branch's settled at 28, 52 and 61 ms. At the next step main's settled at 8, 28 and 32 ms.",
     outcome:
       "Main only, and invisible as rows: main's list already showed the right rows, with a refresh in flight. Nothing the branch shows differs.",
+  },
+  {
+    id: 'W1',
+    match: /^raced$/,
+    title: 'Under load, rows notified while the two sides read: compared again without them',
+    cause:
+      "Not a reader: the load's notifiers write to the viewer a read compares, and main's read and the branch's are two requests, not one instant, so a row notified between them is newer, higher or new on one side only. Under load run.ts takes the database clock before each read and Home case and, after it, every entity the viewer was notified about since (user_notification.created_at, primary and secondary event item; lib/race.ts notifiedSince). The two snapshots are then compared again without those entities (lib/race.ts withoutRaced: a read stopped at its page limit is cut to the shorter side, and a grouped read's groups are not compared once a raced row was in it; Home rows likewise, dropping date headers left empty). Every other difference stays: harness tests 'still sees a fault on any entity no notification moved' plant drop-row, swap-order and alter-field beside a raced row. `raced` counts the reads where this set a class aside; reads.jsonl and dom.jsonl record each window (since, notifications, entities) and the classes it removed. Evidence that the earlier loaded run's differences were this race (chk-load-race.ts on seed 3702, which kept no windows): all 67 recorded notification-time differences are times of two real notifications for that viewer and entity, the newer one written by the load's queue ('notification' sender) during the read, with nothing between them in 57.",
+    outcome:
+      "Invisible: both readers show the newer notification on their next read; the quiet run, where nothing writes during a read, compares the same readers with no set-aside at all. Seen only under load, on the load's target viewers.",
+  },
+  {
+    id: 'T12',
+    match: /(^|\s)error:(old|new):network$/,
+    title: 'A request the browser dropped in transport, on either side',
+    cause:
+      "fetch rejected with a TypeError, which main's REST client turns into 'Network error occurred' (lib/core/util/safeFetch.ts:383-390, not changed by the PR) and urql into '[Network] Failed to fetch' (@urql/core makeErrorMessage): Chromium answered net::ERR_EMPTY_RESPONSE (the local stack closed the connection under load) or net::ERR_INSUFFICIENT_RESOURCES (the tab had too many requests in flight). run.ts retries a read that fails this way twice (readUntilAnswered, NO_ANSWER) and names it only if every try failed. Instances, load seed 3702 sequences: lane v10 sequence 1 step 9, spec2 on the branch ('[Network] Failed to fetch', both sides 24 rows); lane v16 sequence 2 step 16, spec1 on main ('Network error occurred', both 5 rows): each a refetch that failed while the list already held the same rows on both sides.",
+    outcome:
+      "Invisible as rows: the list keeps the rows it holds, the same on both sides in every instance, and the next read answers. Seen once per side, only under load.",
   },
 ];
 

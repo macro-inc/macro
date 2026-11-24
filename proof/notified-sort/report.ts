@@ -6,7 +6,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CLOSURES, closureOf } from './lib/closed.ts';
 import { channelNameRest, homeCheckClosure, type CompactDom } from './lib/dom-held.ts';
-import { authRefreshTimeoutClass } from './lib/compare.ts';
+import { authRefreshTimeoutClass, TRANSPORT_FAILURE } from './lib/compare.ts';
 import { pastLoadedPages, REST_DEADLINE, staleSlotPastPages, type Row } from './lib/project.ts';
 
 type ClassEntry = { n: number; example: unknown };
@@ -237,9 +237,65 @@ function reclassifyLiveSlots(run: string, classes: Record<string, ClassEntry>): 
   return moved;
 }
 
+/**
+ * A run recorded before compare.ts named a transport failure (closure T12)
+ * kept it as a plain `error:old` or `error:new`. Moves each raw or reload
+ * error whose recorded detail (`old=<error> new=<error>`) shows the failing
+ * side's fetch rejected in transport to `<class>:network`, as
+ * compareSnapshots now does live.
+ */
+function reclassifyNetwork(run: string, classes: Record<string, ClassEntry>): { lane: string; step: number; from: string; to: string; detail: string }[] {
+  const path = join(outDir, run, 'steps.jsonl');
+  if (!existsSync(path)) return [];
+  const moved: { lane: string; step: number; from: string; to: string; detail: string }[] = [];
+  const failingMessage = (cls: string, detail: string) => {
+    const m = /^old=(.*) new=(.*)$/s.exec(detail);
+    if (!m) return null;
+    return / error:old$|^error:old$/.test(cls) ? m[1] : m[2];
+  };
+  for (const line of readFileSync(path, 'utf8').split('\n').filter(Boolean)) {
+    const step = JSON.parse(line) as { lane: string; step: number; checks?: Record<string, unknown> };
+    for (const [key, value] of Object.entries(step.checks ?? {})) {
+      let pairs: [string, string][] = [];
+      if (/^raw\d+$/.test(key) && value && typeof value === 'object' && !Array.isArray(value)) {
+        const raw = value as { classes?: string[]; errors?: string[] };
+        const errs = (raw.classes ?? []).filter((c) => /(^|\s)error:(old|new)$/.test(c));
+        pairs = errs.map((c, i) => [c, raw.errors?.[i] ?? '']);
+      } else if (/^reload\d+$/.test(key) && Array.isArray(value)) {
+        const details = (step.checks?.[`${key}errors`] as string[] | undefined) ?? [];
+        const errs = (value as string[]).filter((c) => /(^|\s)error:(old|new)$/.test(c));
+        pairs = errs.map((c, i) => [c, details[i] ?? '']);
+      }
+      for (const [from, detail] of pairs) {
+        const message = failingMessage(from, detail);
+        if (message === null || !TRANSPORT_FAILURE.test(message)) continue;
+        const entry = classes[from];
+        if (!entry) continue;
+        entry.n -= 1;
+        if (entry.n <= 0) delete classes[from];
+        const to = `${from}:network`;
+        classes[to] ??= { n: 0, example: { lane: step.lane, step: step.step, from, detail } };
+        classes[to].n += 1;
+        moved.push({ lane: step.lane, step: step.step, from, to, detail });
+      }
+    }
+  }
+  return moved;
+}
+
 const outDir
 
  = join(import.meta.dirname, 'out');
+/**
+ * Phases of a run that a later run replaces. The loaded run on seed 3702 read
+ * while its notifiers wrote to the same viewers and kept no write window, so
+ * its reads and Home checks cannot tell the race from the readers
+ * (chk-load-race.ts shows the race in every notification-time difference it
+ * recorded); run load-reads (seed 3703) repeats both phases under the same
+ * load, recording each read's window (lib/race.ts). Their classes are listed
+ * as superseded, never as closed.
+ */
+const SUPERSEDED: Record<string, { phases: string[]; by: string }> = { load: { phases: ['reads', 'dom'], by: 'load-reads' } };
 const runs = readdirSync(outDir).filter((name) => existsSync(join(outDir, name, 'summary.json')));
 const report: Record<string, unknown> = {};
 for (const run of runs.sort()) {
@@ -247,14 +303,27 @@ for (const run of runs.sort()) {
   const refByClass: Record<string, RefEntry> = summary.reads?.reference?.byClass ?? {};
   const open: Record<string, ClassEntry & { phase: string }> = {};
   const closedBy: Record<string, number> = {};
+  // A read the probe could not make on a side (the page threw, or its query
+  // never settled) compared nothing: counted as not compared, never closed.
+  const uncompared: Record<string, number> = {};
   const reclassified = summary.sequences?.classes ? reclassifyHeldDom(run, summary.sequences.classes) : [];
   const authTimeouts = summary.sequences?.classes ? reclassifyAuthTimeouts(run, summary.sequences.classes) : [];
   const domNames = summary.dom?.classes ? reclassifyDomNames(run, summary.dom.classes) : [];
   const pastPages = summary.sequences?.classes ? reclassifyPastPages(run, summary.sequences.classes) : [];
   const liveSlots = summary.sequences?.classes ? reclassifyLiveSlots(run, summary.sequences.classes) : [];
+  const network = summary.sequences?.classes ? reclassifyNetwork(run, summary.sequences.classes) : [];
+  const superseded: Record<string, number> = {};
   for (const phase of ['reads', 'dom', 'sequences']) {
     const classes: Record<string, ClassEntry> = summary[phase]?.classes ?? {};
+    if (SUPERSEDED[run]?.phases.includes(phase)) {
+      for (const [cls, entry] of Object.entries(classes)) superseded[`${phase}: ${cls}`] = entry.n;
+      continue;
+    }
     for (const [cls, entry] of Object.entries(classes)) {
+      if (cls.startsWith('probe-error:')) {
+        uncompared[cls] = (uncompared[cls] ?? 0) + entry.n;
+        continue;
+      }
       const closure = closureOf(cls);
       const refused = closure?.needsRefAgreement && (refByClass[cls]?.['ref-disagrees'] ?? 0) > 0;
       if (closure && !refused) closedBy[closure.id] = (closedBy[closure.id] ?? 0) + entry.n;
@@ -276,11 +345,16 @@ for (const run of runs.sort()) {
     domNames,
     pastPages,
     liveSlots,
+    network,
+    supersededBy: SUPERSEDED[run]?.by,
+    supersededPhases: SUPERSEDED[run]?.phases,
+    superseded,
     closedBy,
+    uncompared,
     open,
   };
   const verdict = summary.mutant ? (Object.keys(open).length ? 'CAUGHT' : 'MISSED') : Object.keys(open).length ? 'OPEN DIFFERENCES' : 'clean';
-  console.log(`${run}: ${verdict}; reads ${summary.reads?.compared ?? 0}, dom ${summary.dom?.compared ?? 0}, sequences ${summary.sequences?.sequences ?? 0} x steps ${summary.sequences?.steps ?? 0}; closed ${JSON.stringify(closedBy)}; open ${Object.keys(open).length}${reclassified.length ? `; ${reclassified.length} Home check(s) reclassified by lib/dom-held.ts` : ''}`);
+  console.log(`${run}: ${verdict}; reads ${summary.reads?.compared ?? 0}, dom ${summary.dom?.compared ?? 0}, sequences ${summary.sequences?.sequences ?? 0} x steps ${summary.sequences?.steps ?? 0}; uncompared ${JSON.stringify(uncompared)}; closed ${JSON.stringify(closedBy)}; open ${Object.keys(open).length}${reclassified.length ? `; ${reclassified.length} Home check(s) reclassified by lib/dom-held.ts` : ''}`);
   for (const [cls, entry] of Object.entries(open).slice(0, 12)) console.log(`  open ${entry.n}x ${cls}`);
 }
 writeFileSync(join(outDir, 'report.json'), JSON.stringify({ closures: CLOSURES.map((c) => ({ ...c, match: String(c.match) })), runs: report }, null, 1));

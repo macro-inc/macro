@@ -43,6 +43,7 @@ import { generateReads, type ReadCase } from './lib/gen.ts';
 import { applyMutant, MUTANTS, revertMutant } from './lib/mutants.ts';
 import { queueNotify } from './lib/notify.ts';
 import { discrepancies, instant, pastLoadedPages, project, REST_DEADLINE, rowsDiff, sameRows, staleSlotPastPages, type Paging, type Row } from './lib/project.ts';
+import { dbNow, domWithoutRaced, notifiedSince, withoutRaced } from './lib/race.ts';
 import { Rng } from './lib/rng.ts';
 import { seedWorld, sender } from './lib/setup.ts';
 import { q, sql, stackFromEnv, type User } from './lib/stack.ts';
@@ -62,6 +63,8 @@ const load = env.PROOF_LOAD === '1';
 const phases = new Set((env.PROOF_PHASES ?? 'reads,dom,sequences').split(','));
 const LIVE_BOUND_MS = Number(env.PROOF_LIVE_BOUND_MS ?? 15_000);
 const DOM_EVERY = Number(env.PROOF_DOM_EVERY ?? 5);
+/** Notifications a second to one viewer that count as a storm (closure M1). */
+const STORM_PER_SECOND = 5;
 // Anchors the generated date filters; with the seed it fixes every read case.
 const genNow = Number(env.PROOF_NOW ?? Date.now());
 
@@ -236,7 +239,9 @@ async function readsPhase(pair: Pair, userFor: (key: string) => User) {
           // The third read is main's own GraphQL reader (update-time sort, which
           // main serves over GraphQL): the reference for field mappings.
           const refSpec: ReadSpec = { ...c.spec, params: { ...c.spec.params, sort_method: 'updated_at' } };
+          const since = load ? await dbNow(stack) : null;
           const results = await readUntilAnswered(`read ${c.id}`, [oldLane, newLane], () => Promise.allSettled([probeRead(oldLane, user.macroUserId, c.spec), probeRead(newLane, user.macroUserId, c.spec), probeRead(oldLane, user.macroUserId, refSpec)]));
+          const window = since ? await notifiedSince(stack, user.macroUserId, since) : null;
           if (results[0].status === 'rejected' || results[1].status === 'rejected') {
             failed += 1;
             const reason = results.slice(0, 2).map((r) => (r.status === 'rejected' ? String(r.reason).slice(0, 300) : 'ok'));
@@ -245,7 +250,27 @@ async function readsPhase(pair: Pair, userFor: (key: string) => User) {
             continue;
           }
           const [a, b] = [results[0].value, results[1].value];
-          const diffs = compareSnapshots(a, b, { pageSize: Number(c.spec.params?.limit) }).map(classify);
+          let diffs = compareSnapshots(a, b, { pageSize: Number(c.spec.params?.limit) }).map(classify);
+          // Under load: a difference confined to the entities notified while
+          // the sides read is the race (lib/race.ts, closure W1).
+          let raced: { notifications: number; entities: number; classes: string[] } | undefined;
+          // Every read with notifications in its window is compared without
+          // them, closed classes too: a field closure that needs main's
+          // GraphQL to agree (T1) is judged on entities no write moved.
+          if (window?.entities.size && !a.error && !b.error) {
+            const before = diffs;
+            diffs = compareSnapshots(...withoutRaced(a, b, window.entities), { pageSize: Number(c.spec.params?.limit) }).map(classify);
+            const gone = [...new Set(before.map((d) => d.cls))].filter((cls) => before.filter((d) => d.cls === cls).length > diffs.filter((d) => d.cls === cls).length);
+            if (gone.length) {
+              raced = { notifications: window.notifications, entities: window.entities.size, classes: gone };
+              diffs.push(classify({ signature: 'raced', kind: 'membership', detail: JSON.stringify(raced).slice(0, 300) }));
+            }
+          }
+          // A transport failure while the viewer was being notified many times
+          // a second is named apart from one on a quiet viewer (T12): what a
+          // storm makes each side send is not the same (closure M1).
+          if (window && window.notifications / Math.max(1, (Date.now() - Date.parse(window.since)) / 1000) >= STORM_PER_SECOND)
+            diffs = diffs.map((d) => (d.kind === 'error' && d.cls.endsWith(':network') ? { ...d, cls: `${d.cls}-under-storm` } : d));
           tallyInto(classes, diffs, 'reads');
           const ref = results[2].status === 'fulfilled' ? results[2].value : null;
           refTransports[ref?.transport ?? 'failed'] = (refTransports[ref?.transport ?? 'failed'] ?? 0) + 1;
@@ -268,6 +293,8 @@ async function readsPhase(pair: Pair, userFor: (key: string) => User) {
             new: { n: b.entities.length, pages: b.pages, ms: b.ms, error: b.error },
             classes: [...new Set(diffs.map((d) => d.cls))],
             open: diffs.filter((d) => !closureOf(d.cls)).slice(0, 5),
+            ...(window ? { window: { since: window.since, notifications: window.notifications, entities: window.entities.size } } : {}),
+            ...(raced ? { raced } : {}),
           });
           done += 1;
           if (done % 200 === 0) log(`reads: ${done}/${cases.length}`);
@@ -351,6 +378,7 @@ async function domPhase(pair: Pair, userFor: (key: string) => User) {
     for (let job = jobs.shift(); job; job = jobs.shift()) {
       const user = userFor(job.viewer);
       const attempt = (job as { attempt?: number }).attempt ?? 0;
+      const since = load ? await dbNow(stack) : null;
       const [oldLane, newLane] = await pair(user, { touch: job.touch, facets: job.facets, path: `/app/home?s0.home.tab=${job.tab}` });
       try {
         const settled = await Promise.allSettled([settledDom(oldLane), settledDom(newLane)]);
@@ -363,7 +391,25 @@ async function domPhase(pair: Pair, userFor: (key: string) => User) {
           continue;
         }
         const [a, b] = settled.map((r) => (r as PromiseFulfilledResult<DomRow[]>).value);
-        const diffs = (await compareHomeDom(stack, user, a, b, `home ${job.touch ? 'touch' : 'desktop'} ${job.tab}`)).map(classify);
+        const label = `home ${job.touch ? 'touch' : 'desktop'} ${job.tab}`;
+        let diffs = (await compareHomeDom(stack, user, a, b, label)).map(classify);
+        // Under load, as for reads (lib/race.ts): compare again without the
+        // rows notified while the two Homes loaded. A Home main still shows
+        // empty while the viewer is being notified many times a second is
+        // named on its own (closure M1).
+        const window = since ? await notifiedSince(stack, user.macroUserId, since) : null;
+        let raced: { notifications: number; entities: number; classes: string[] } | undefined;
+        if (window?.entities.size && diffs.some((d) => !closureOf(d.cls))) {
+          const before = diffs;
+          const seconds = (Date.now() - Date.parse(window.since)) / 1000;
+          if (a.length === 0 && b.length > 0 && window.notifications / seconds >= STORM_PER_SECOND) {
+            diffs = [classify({ signature: `${label} dom:old-empty-under-storm`, kind: 'dom', detail: `old 0 rows, new ${b.length}; ${window.notifications} notifications in ${seconds.toFixed(0)} s` })];
+          } else {
+            diffs = (await compareHomeDom(stack, user, domWithoutRaced(a, window.entities), domWithoutRaced(b, window.entities), label)).map(classify);
+            diffs.push(classify({ signature: 'raced', kind: 'dom', detail: `${window.notifications} notifications, ${window.entities.size} entities` }));
+          }
+          raced = { notifications: window.notifications, entities: window.entities.size, classes: [...new Set(before.filter((d) => !closureOf(d.cls)).map((d) => d.cls))] };
+        }
         tallyInto(classes, diffs, 'dom');
         const dims = {
           viewer: world.viewers.find((v) => v.key === job.viewer)?.role === 'size' ? `size:${job.viewer}` : 'lane',
@@ -374,7 +420,7 @@ async function domPhase(pair: Pair, userFor: (key: string) => User) {
           rows: a.length === 0 ? '0' : a.length < 20 ? '1-19' : a.length < 100 ? '20-99' : '100+',
         };
         coverageAdd(coverage, dims);
-        record('dom.jsonl', { job, dims, old: a.length, new: b.length, classes: diffs.map((d) => d.cls), diffs: diffs.slice(0, 4) });
+        record('dom.jsonl', { job, dims, old: a.length, new: b.length, classes: diffs.map((d) => d.cls), diffs: diffs.slice(0, 4), ...(window ? { window: { since: window.since, notifications: window.notifications, entities: window.entities.size } } : {}), ...(raced ? { raced } : {}) });
         if (compared === 0) {
           await oldLane.page.screenshot({ path: join(out, 'dom-first-old.png') });
           await newLane.page.screenshot({ path: join(out, 'dom-first-new.png') });
@@ -620,6 +666,12 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             checks[`reload${i}`] = [...new Set(diffs.map((d) => d.cls))];
             const errors = diffs.filter((d) => d.kind === 'error').map((d) => d.detail.slice(0, 200));
             if (errors.length) checks[`reload${i}errors`] = errors;
+            // What each side's read held, when they part on rows.
+            if (diffs.some((d) => d.kind === 'membership'))
+              checks[`reload${i}reads`] = read.map((r) => {
+                const { transport, error, pages, hasNextPage, entities, ms, resets } = (r as PromiseFulfilledResult<ProbeResult>).value;
+                return { transport, error, pages, hasNextPage, rows: entities.length, ms, resets };
+              });
           }
 
           ms.reload = Date.now() - phaseStart - ms.raw - ms.live;
@@ -780,15 +832,21 @@ async function readUntilAnswered(where: string, lanes: Lane[], attempt: () => Pr
     const results = await attempt();
     const unanswered = results.flatMap((r, i) => {
       const message = r.status === 'rejected' ? String(r.reason) : r.value.error ? String(r.value.error) : '';
-      // Main's own 12 s deadline (closure T9) is no answer either: the read
-      // is tallied as error:old:deadline only if every retry hits it too.
-      const deadline = i === 0 && OLD_DEADLINE.test(message);
-      return NO_ANSWER.test(message) || deadline ? [{ read: i, deadline, message: message.slice(0, 160) }] : [];
+      // The REST reader's own 12 s deadline (closures T9, T11) is no answer
+      // either: the read is tallied as error:<side>:(rest-)deadline only if
+      // every retry hits it too. The ref read (2) is main's too.
+      const deadline = OLD_DEADLINE.test(message);
+      // A storage reset during the read left the probe's reader, which sits
+      // outside the app's tree, with nothing that reads again (R1).
+      const reset = r.status === 'fulfilled' && (r.value.resets?.during ?? 0) > 0;
+      return NO_ANSWER.test(message) || deadline || reset ? [{ read: i, deadline, reset, message: reset ? 'storage reset during the read' : message.slice(0, 160) }] : [];
     });
     if (!unanswered.length || tries > 2) return results;
     const requests: RequestFailure[] = lanes.flatMap((lane, i) => lane.failed.slice(marks[i]));
     const key = unanswered.some((u) => u.deadline)
-      ? 'old:deadline'
+      ? unanswered.filter((u) => u.deadline).map((u) => (u.read === 1 ? 'new:deadline' : 'old:deadline')).join('+')
+      : unanswered.some((u) => u.reset)
+        ? unanswered.filter((u) => u.reset).map((u) => (u.read === 1 ? 'new:storage-reset' : 'old:storage-reset')).join('+')
       : requests.length
         ? [...new Set(requests.map((r) => `${r.side}:${r.error}`))].sort().join('+')
         : `no-failed-request:${unanswered.map((u) => (u.read === 1 ? 'new' : 'old')).join('+')}`;

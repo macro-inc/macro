@@ -86,6 +86,8 @@ export const OLD_DEADLINE = /TimeoutError: signal timed out|AbortError: The user
  * (apps/web/src/lib/core/auth/session-refresh.ts REFRESH_TIMEOUT_MS): the
  * read never reached Soup, so it holds no answer to compare (closure T10). */
 export const AUTH_REFRESH_TIMEOUT = /Authentication refresh timed out/;
+/** fetch rejected with a TypeError: main REST reader (core/util/safeFetch.ts NETWORK_ERROR) or urql. */
+export const TRANSPORT_FAILURE = /^(Network error occurred|\[Network\] Failed to fetch)$/;
 
 /**
  * The class an error difference recorded with `details` (`old=… new=…`)
@@ -132,7 +134,13 @@ export function compareSnapshots(
     // it closes on its own; every other error stays open.
     const deadline = oldSnap.error !== null && oldSnap.transport === 'rest' && OLD_DEADLINE.test(oldSnap.error);
     const authTimeout = AUTH_REFRESH_TIMEOUT.test(oldSnap.error ?? newSnap.error ?? '');
-    const suffix = deadline ? ':deadline' : authTimeout ? ':auth-refresh-timeout' : '';
+    // A request that failed in transport (fetch rejected: a dropped
+    // connection, or the browser out of request slots) is named too.
+    const network = TRANSPORT_FAILURE.test(oldSnap.error ?? newSnap.error ?? '');
+    // The branch reads Home's grouped lists with main's REST reader, under the
+    // same 12 s deadline (closure T11).
+    const newRestDeadline = newSnap.error !== null && newSnap.transport === 'rest' && OLD_DEADLINE.test(newSnap.error);
+    const suffix = deadline ? ':deadline' : authTimeout ? ':auth-refresh-timeout' : newRestDeadline ? ':rest-deadline' : network ? ':network' : '';
     diffs.push({
       signature: `${label}error:${oldSnap.error ? 'old' : 'new'}${suffix}`,
       kind: 'error',

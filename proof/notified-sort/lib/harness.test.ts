@@ -13,6 +13,7 @@ import { compareHomeDom, parseRowId } from './dom.ts';
 import { generateReads } from './gen.ts';
 import { MUTANTS } from './mutants.ts';
 import { discrepancies, instant, pastLoadedPages, project, REST_DEADLINE, sameRows, staleSlotPastPages, type Row } from './project.ts';
+import { domWithoutRaced, withoutRaced } from './race.ts';
 import { Rng } from './rng.ts';
 import { buildWorld } from './world.ts';
 
@@ -126,7 +127,8 @@ describe('comparison', () => {
     const sigs = (a: Snapshot, b: Snapshot) => compareSnapshots(a, b, { label: 'reload spec0' }).map((d) => d.signature);
     expect(sigs(failed('An unknown error occurred: TimeoutError: signal timed out'), snap(base))).toEqual(['reload spec0 error:old:deadline']);
     expect(sigs(failed('An unknown error occurred: AbortError: The user aborted a request.'), snap(base))).toEqual(['reload spec0 error:old:deadline']);
-    expect(sigs(failed('Network error occurred'), snap(base))).toEqual(['reload spec0 error:old']);
+    expect(sigs(failed('Network error occurred'), snap(base))).toEqual(['reload spec0 error:old:network']);
+    expect(sigs(failed('An unknown error occurred: 500'), snap(base))).toEqual(['reload spec0 error:old']);
     // Only main's REST reader has the deadline; the branch erroring stays open.
     expect(sigs(snap(base), failed('TimeoutError: signal timed out', 'graphql'))).toEqual(['reload spec0 error:new']);
     expect(closureOf('reload spec0 error:old:deadline')?.id).toBe('T9');
@@ -449,5 +451,60 @@ describe('fixed closures', () => {
   it('explain nothing once the PR fixed them', () => {
     expect(closureOf('seq home touch signal dom:stale-mail-label')).toBeUndefined();
     expect(closureOf('seq home touch signal dom:stale-time-label')?.id).toBe('L1');
+  });
+});
+
+describe('reads under load', () => {
+  const u = (n: number) => `00000000-0000-7000-8000-${String(n).padStart(12, '0')}`;
+  const rows = (...ids: number[]) => ids.map((n) => doc(u(n), `2026-11-20T10:00:${String(50 - n).padStart(2, '0')}.000Z`));
+  it('compares again without the entities notified while the sides read', () => {
+    // Entity 2 was notified mid-read: main read it before, the branch after.
+    const [a, b] = withoutRaced(snap(rows(1, 3, 4)), snap(rows(2, 1, 3, 4)), new Set([u(2)]));
+    expect(compareSnapshots(a, b)).toEqual([]);
+  });
+  it('still sees a fault on any entity no notification moved', () => {
+    // drop-row on entity 3 beside raced entity 2: the missing row stays open.
+    const [a, b] = withoutRaced(snap(rows(2, 1, 3, 4)), snap(rows(1, 4)), new Set([u(2)]));
+    expect(compareSnapshots(a, b).map((d) => d.signature)).toContain('membership:missing-in-new:document');
+    // swap-order beside a raced row.
+    const [c, d] = withoutRaced(snap(rows(2, 1, 3, 4)), snap(rows(1, 4, 3)), new Set([u(2)]));
+    expect(compareSnapshots(c, d).some((x) => x.kind === 'order')).toBe(true);
+    // alter-field beside a raced row.
+    const altered = rows(1, 3);
+    altered[1] = { ...altered[1], name: 'Altered' };
+    const [e, f] = withoutRaced(snap(rows(2, 1, 3)), snap(altered), new Set([u(2)]));
+    expect(compareSnapshots(e, f).map((x) => x.signature)).toContain('field:document.name');
+  });
+  it('cuts a stopped read to the shorter side only when a raced row was in it', () => {
+    const page = (s: Snapshot) => ({ ...s, hasNextPage: true });
+    const [a, b] = withoutRaced(page(snap(rows(1, 3, 4))), page(snap(rows(2, 1, 3))), new Set([u(2)]));
+    expect(compareSnapshots(a, b)).toEqual([]);
+    // Nothing raced: a shorter side is still a difference.
+    const [c, d] = withoutRaced(page(snap(rows(1, 3, 4))), page(snap(rows(1, 3))), new Set([u(9)]));
+    expect(compareSnapshots(c, d).map((x) => x.signature)).toContain('membership:missing-in-new:document');
+  });
+  it('drops raced Home rows and the date headers they leave empty', () => {
+    const row = (n: number) => ({ kind: 'entity' as const, id: `s8:soup-row|s6:entity|s8:document|s36:${u(n)}|s5:today|u`, text: `Doc ${n}`, unread: false, labels: [] });
+    const header = (label: string) => ({ kind: 'header' as const, label });
+    expect(domWithoutRaced([header('Today'), row(2), header('Yesterday'), row(1), row(3)], new Set([u(2)]))).toEqual([header('Yesterday'), row(1), row(3)]);
+  });
+  it('names transport failures and the branch REST deadline apart', () => {
+    const failed = (error: string, transport = 'rest') => ({ ...snap([]), transport, error });
+    const sigs = (b: Snapshot) => compareSnapshots(snap(rows(1)), b).map((d) => d.signature);
+    expect(sigs(failed('Network error occurred'))).toEqual(['error:new:network']);
+    expect(sigs(failed('[Network] Failed to fetch', 'graphql'))).toEqual(['error:new:network']);
+    expect(sigs(failed('An unknown error occurred: TimeoutError: signal timed out'))).toEqual(['error:new:rest-deadline']);
+    // A GraphQL error, or anything else, stays a plain error.
+    expect(sigs(failed('[GraphQL] boom', 'graphql'))).toEqual(['error:new']);
+  });
+});
+
+describe('load closures', () => {
+  it('close the race, transport failures on a quiet viewer and the branch REST deadline, and nothing near them', () => {
+    expect(closureOf('raced')?.id).toBe('W1');
+    expect(closureOf('raw spec2 error:new:network')?.id).toBe('T12');
+    expect(closureOf('error:old:network')?.id).toBe('T12');
+    expect(closureOf('error:new:rest-deadline')?.id).toBe('T11');
+    for (const open of ['error:new:network-under-storm', 'raced:extra', 'error:new', 'membership:missing-in-new:document']) expect(closureOf(open), open).toBeUndefined();
   });
 });
