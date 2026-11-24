@@ -25,6 +25,8 @@ type PaginateDirectionState = {
   setIs: Setter<boolean>;
   more: Accessor<boolean>;
   setMore: Setter<boolean>;
+  /** The window the queued scroll was asked in. */
+  queuedIn: unknown;
 };
 
 function createPaginateDirectionState(
@@ -41,6 +43,7 @@ function createPaginateDirectionState(
     setIs,
     more,
     setMore,
+    queuedIn: undefined,
   };
 }
 
@@ -54,7 +57,15 @@ export type TimelinePaging = {
   loadNewer: () => Promise<void>;
 };
 
-export function createThreadPaginator(paging: TimelinePaging): ThreadPaginator {
+/**
+ * `windowKey` names the window the list shows (the message it opened
+ * around): a scroll asked in one window never pages another, which a jump to
+ * a target replaces it with while this paginator lives on.
+ */
+export function createThreadPaginator(
+  paging: TimelinePaging,
+  windowKey: Accessor<unknown> = () => undefined
+): ThreadPaginator {
   const prependPaginateState = createPaginateDirectionState('prepend');
   const shiftPaginateState = createPaginateDirectionState('shift');
   // A wait for a load to let go ends with the list too: a timeline disposed
@@ -76,11 +87,13 @@ export function createThreadPaginator(paging: TimelinePaging): ThreadPaginator {
 
     if (!hasMore()) return;
     if (state.is()) {
+      state.queuedIn = windowKey();
       state.setIsPending(true);
       return;
     }
 
     state.setIs(true);
+    let askedIn = windowKey();
 
     try {
       do {
@@ -103,8 +116,11 @@ export function createThreadPaginator(paging: TimelinePaging): ThreadPaginator {
           state.setMore(hasMore());
           if (!hasMore()) return;
         }
+        // The list jumped to another window (a search result) meanwhile.
+        if (!Object.is(windowKey(), askedIn)) return;
         state.setIsPending(false);
         await paginateFn();
+        askedIn = state.queuedIn;
       } while (hasMore() && state.pending());
     } finally {
       state.setIs(false);

@@ -461,7 +461,10 @@ export function Channel(props: ChannelProps) {
     prepareTargetReply(props.targetMessageId);
   }
 
-  const threadPaginator = createThreadPaginator(timeline);
+  const threadPaginator = createThreadPaginator(
+    timeline,
+    targetMessageController.loadAroundMessageId
+  );
   const messageEditor = createMessageEditor({
     parent: () => ({ type: 'channel', id: (() => props.channelId)() }),
 

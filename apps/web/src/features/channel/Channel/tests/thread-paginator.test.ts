@@ -11,19 +11,30 @@ function paging() {
   const guardedLoadOlder = async () => {
     if (!loadingOlder()) await loadOlder();
   };
+  const [target, setTarget] = createSignal<string>();
   let dispose!: () => void;
   const paginator = createRoot((disposeRoot) => {
     dispose = disposeRoot;
-    return createThreadPaginator({
-      hasOlder,
-      hasNewer: () => false,
-      isLoadingOlder: loadingOlder,
-      isLoadingNewer: () => false,
-      loadOlder: guardedLoadOlder,
-      loadNewer: async () => {},
-    });
+    return createThreadPaginator(
+      {
+        hasOlder,
+        hasNewer: () => false,
+        isLoadingOlder: loadingOlder,
+        isLoadingNewer: () => false,
+        loadOlder: guardedLoadOlder,
+        loadNewer: async () => {},
+      },
+      target
+    );
   });
-  return { setLoadingOlder, setHasOlder, loadOlder, paginator, dispose };
+  return {
+    setLoadingOlder,
+    setHasOlder,
+    setTarget,
+    loadOlder,
+    paginator,
+    dispose,
+  };
 }
 
 describe('createThreadPaginator', () => {
@@ -90,6 +101,50 @@ describe('createThreadPaginator', () => {
 
     setLoadingOlder(false);
     await asked;
+    expect(loadOlder).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops a scroll queued in a window the list has left', async () => {
+    const { setTarget, loadOlder, paginator } = paging();
+    let finish!: () => void;
+    loadOlder.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finish = resolve))
+    );
+    const asked = paginator.shiftPaginate();
+    await Promise.resolve();
+    await paginator.shiftPaginate();
+    setTarget('search-hit');
+    finish();
+    await asked;
+
+    expect(loadOlder).toHaveBeenCalledTimes(1);
+    expect(paginator.isShifting()).toBe(false);
+  });
+
+  it('drops a scroll waiting on a load once the list jumps to a target', async () => {
+    const { setLoadingOlder, setTarget, loadOlder, paginator } = paging();
+    setLoadingOlder(true);
+    const asked = paginator.shiftPaginate();
+    setTarget('search-hit');
+    setLoadingOlder(false);
+    await asked;
+
+    expect(loadOlder).not.toHaveBeenCalled();
+  });
+
+  it('pages a scroll queued in the window it jumped to', async () => {
+    const { setTarget, loadOlder, paginator } = paging();
+    let finish!: () => void;
+    loadOlder.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finish = resolve))
+    );
+    const asked = paginator.shiftPaginate();
+    await Promise.resolve();
+    setTarget('search-hit');
+    await paginator.shiftPaginate();
+    finish();
+    await asked;
+
     expect(loadOlder).toHaveBeenCalledTimes(2);
   });
 
