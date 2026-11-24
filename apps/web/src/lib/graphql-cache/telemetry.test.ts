@@ -135,6 +135,34 @@ describe('cache telemetry privacy contract', () => {
     expect(JSON.stringify(events)).not.toContain('Private');
   });
 
+  it('exports why the cache failed closed from a fixed list', () => {
+    const events: CacheTelemetryEnvelope[] = [];
+    const reporter = new CacheTelemetryReporter(
+      browserCacheTelemetryContext('treatment'),
+      { emit: (event) => events.push(event) }
+    );
+    const failedClosed = {
+      name: 'graphql_cache.owner',
+      operationCategory: 'lifecycle',
+      outcome: 'error',
+      ownerEvent: 'owner-lock-unavailable',
+      errorCode: 'lock',
+      unavailableReason: 'holder-kept',
+    } as const;
+    // The coordinator's event crosses the relay to the page.
+    expect(isCacheTelemetryObservation(failedClosed)).toBe(true);
+    reporter.emit(failedClosed);
+    reporter.emit({
+      ...failedClosed,
+      unavailableReason: 'another build keeps the database',
+    } as unknown as CacheTelemetryObservation);
+
+    expect(events).toEqual([
+      expect.objectContaining(failedClosed),
+      expect.not.objectContaining({ unavailableReason: expect.anything() }),
+    ]);
+  });
+
   it('rejects relay payloads with unknown fields or ad-hoc names', () => {
     expect(
       isCacheTelemetryObservation({

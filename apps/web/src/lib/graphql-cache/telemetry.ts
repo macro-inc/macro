@@ -159,6 +159,21 @@ export const CACHE_OWNER_EVENTS = [
 ] as const;
 export type CacheOwnerEvent = (typeof CACHE_OWNER_EVENTS)[number];
 
+/**
+ * Why a cache failed closed, leaving its tabs on the network: the engine gave
+ * up waiting for the owner lock, another build holds the database and could
+ * not be asked to yield (no BroadcastChannel) or declined, the database files
+ * stayed open elsewhere, or a newer build took the database over.
+ */
+export const CACHE_UNAVAILABLE_REASONS = [
+  'owner-lock-timeout',
+  'no-takeover-channel',
+  'holder-kept',
+  'files-busy',
+  'superseded',
+] as const;
+export type CacheUnavailableReason = (typeof CACHE_UNAVAILABLE_REASONS)[number];
+
 export const CACHE_ROLLOUT_COHORTS = [
   'control',
   'treatment',
@@ -261,6 +276,7 @@ export type CacheTelemetryObservation = {
   errorDetail?: CacheErrorDetail;
   resetReason?: CacheResetReason;
   ownerEvent?: CacheOwnerEvent;
+  unavailableReason?: CacheUnavailableReason;
   persistence?: 'granted' | 'denied' | 'unknown';
   openOutcome?: CacheOpenOutcome;
   queueDiagnosticsAvailability?: CacheQueueDiagnosticsAvailability;
@@ -365,6 +381,10 @@ function sanitizeObservation(
     ...(input.ownerEvent !== undefined &&
     CACHE_OWNER_EVENTS.includes(input.ownerEvent)
       ? { ownerEvent: input.ownerEvent }
+      : {}),
+    ...(input.unavailableReason !== undefined &&
+    CACHE_UNAVAILABLE_REASONS.includes(input.unavailableReason)
+      ? { unavailableReason: input.unavailableReason }
       : {}),
     ...(input.persistence === 'granted' ||
     input.persistence === 'denied' ||
@@ -848,6 +868,7 @@ export function isCacheTelemetryObservation(
       'errorDetail',
       'resetReason',
       'ownerEvent',
+      'unavailableReason',
       'persistence',
       'openOutcome',
       'queueDiagnosticsAvailability',

@@ -37,7 +37,10 @@ import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
 import { createRetirableCacheHost } from '@graphql-cache/host/retirable-host';
 import { NativeCacheUpgradeRequiredError } from '@graphql-cache/host/tauri-host';
 import type { CacheHost } from '@graphql-cache/host/types';
-import { CoordinatorRestartedError } from '@graphql-cache/host/worker-host';
+import {
+  CacheUnavailableError,
+  CoordinatorRestartedError,
+} from '@graphql-cache/host/worker-host';
 import {
   createTauriCacheHost,
   createWorkerCacheHost,
@@ -635,6 +638,7 @@ const cacheRecovery = createCacheRecovery(
         // and storage failures can carry text that must not be exported.
         const code = recoveryErrorCode(error);
         span.setAttr('cache.error_code', code);
+        setUnavailableReason(span, error);
         span.error(new Error(`cache recovery failed: ${code}`));
         throw error;
       }
@@ -644,6 +648,12 @@ const cacheRecovery = createCacheRecovery(
     onStopped: recordCacheRecoveryStopped,
   }
 );
+
+/** Records why the cache failed closed, when that is what stopped it. */
+function setUnavailableReason(span: Span, error: unknown): void {
+  const reason = unavailableReasonOf(error);
+  if (reason !== undefined) span.setAttr('cache.unavailable_reason', reason);
+}
 
 /** Classifies a recovery failure for telemetry, naming a superseded build. */
 function recoveryErrorCode(error: unknown): string {
@@ -658,6 +668,7 @@ function recordCacheRecoveryRelapse(relapses: number, error: unknown): void {
   const span = Telemetry.span('graphql.cache_recovery_relapse');
   span.setAttr('cache.recovery_relapses', relapses);
   span.setAttr('cache.error_code', recoveryErrorCode(error));
+  setUnavailableReason(span, error);
   span.end();
 }
 
@@ -671,6 +682,7 @@ function recordCacheRecoveryStopped(
   span.setAttr('cache.recovery_stop_reason', reason);
   span.setAttr('cache.recovery_relapses', relapses);
   span.setAttr('cache.error_code', recoveryErrorCode(error));
+  setUnavailableReason(span, error);
   span.end();
 }
 
@@ -792,6 +804,39 @@ export function assertEmailDraftQueueAvailable(): void {
     throw new Error(
       'Draft sync is unavailable while queued changes are preserved. Retry draft synchronization to resume the queue. If recovery requires an update, update Macro before saving or discarding.'
     );
+  }
+}
+
+/** Fail-closed reasons this page already logged. */
+const loggedUnavailableReasons = new Set<string>();
+
+/** Why the cache failed closed, from the coordinator, or `unknown`. */
+const unavailableReasonOf = (error: unknown): string | undefined =>
+  error instanceof CacheUnavailableError
+    ? (error.unavailableReason ?? 'unknown')
+    : undefined;
+
+/**
+ * Logs once per page and reason that the cache failed closed. The page then
+ * runs on the network, which is quiet by design, so without this a tab that
+ * stays uncached leaves no trace of why. Only the reason's fixed code leaves.
+ */
+function logCacheUnavailable(error: Error, backend: string): void {
+  const reason = unavailableReasonOf(error) ?? 'unknown';
+  if (loggedUnavailableReasons.has(reason)) return;
+  loggedUnavailableReasons.add(reason);
+  try {
+    Telemetry.warn('graphql cache failed closed', {
+      'error.source': 'graphql-cache',
+      'cache.backend': backend,
+      'cache.phase':
+        error instanceof CacheUnavailableError ? error.phase : 'initialization',
+      'cache.error_code':
+        cacheResponseErrorCode(error) ?? classifyCacheError(error),
+      'cache.unavailable_reason': reason,
+    });
+  } catch {
+    // Observability must not prevent the network fallback.
   }
 }
 
@@ -958,6 +1003,7 @@ export function getGraphqlSoupClient(): Client {
       // without stealing the lock or changing the cache scope.
       if (isOwnerLockUnavailableError(error)) {
         fallbackAfterInitializationFailure(error);
+        logCacheUnavailable(error, native ? 'native' : 'turso-wasm-opfs');
         console.info(
           isCacheSupersededError(error)
             ? `[graphql-cache] ${error.message}; using the network until reload`

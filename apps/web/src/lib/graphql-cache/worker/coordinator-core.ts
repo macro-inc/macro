@@ -21,6 +21,13 @@ import type {
   OwnerEpoch,
   RouteId,
 } from './coordinator-protocol';
+import type { CacheUnavailableReason } from '../telemetry';
+
+/** Why an owner lock stayed with another context. */
+export type OwnerLockUnavailableReason = Extract<
+  CacheUnavailableReason,
+  'owner-lock-timeout' | 'no-takeover-channel' | 'holder-kept'
+>;
 
 export type CoordinatorState =
   | { kind: 'waiting-for-tab'; nextDatabaseAction: DatabaseAction }
@@ -102,7 +109,11 @@ export type CoordinatorAction =
   | { kind: 'drop-tab'; tabId: string }
   | { kind: 'retire-tab'; tabId: string; ownerEpoch: OwnerEpoch }
   | { kind: 'schedule-reset-activation' }
-  | { kind: 'broadcast-cache-unavailable'; reason: string }
+  | {
+      kind: 'broadcast-cache-unavailable';
+      reason: string;
+      unavailableReason: CacheUnavailableReason;
+    }
   | { kind: 'broadcast-cache-superseded'; reason: string }
   | {
       kind: 'notify-cache-unavailable';
@@ -359,7 +370,8 @@ export class CoordinatorCore {
    */
   ownerLockUnavailable(
     tabId: string,
-    ownerEpoch: OwnerEpoch
+    ownerEpoch: OwnerEpoch,
+    unavailableReason: OwnerLockUnavailableReason
   ): CoordinatorAction[] {
     const state = this.stateValue;
     if (
@@ -373,7 +385,8 @@ export class CoordinatorCore {
       tabId,
       ownerEpoch,
       state.databaseAction,
-      OWNER_LOCK_UNAVAILABLE_REASON
+      OWNER_LOCK_UNAVAILABLE_REASON,
+      unavailableReason
     );
   }
 
@@ -398,7 +411,8 @@ export class CoordinatorCore {
       tabId,
       ownerEpoch,
       state.databaseAction,
-      STORAGE_BUSY_REASON
+      STORAGE_BUSY_REASON,
+      'files-busy'
     );
   }
 
@@ -979,7 +993,8 @@ export class CoordinatorCore {
     tabId: string,
     ownerEpoch: OwnerEpoch,
     nextDatabaseAction: DatabaseAction,
-    reason: string
+    reason: string,
+    unavailableReason: CacheUnavailableReason
   ): CoordinatorAction[] {
     const actions: CoordinatorAction[] = this.queuedRequests
       .splice(0)
@@ -991,7 +1006,7 @@ export class CoordinatorCore {
     }
     actions.push(
       { kind: 'close-engine-route', tabId, ownerEpoch },
-      { kind: 'broadcast-cache-unavailable', reason }
+      { kind: 'broadcast-cache-unavailable', reason, unavailableReason }
     );
     this.stateValue = { kind: 'waiting-for-tab', nextDatabaseAction };
     this.assertInvariants();

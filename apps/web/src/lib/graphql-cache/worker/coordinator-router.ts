@@ -17,6 +17,7 @@ import {
   type CoordinatorAction,
   CoordinatorCore,
   type CoordinatorSnapshot,
+  type OwnerLockUnavailableReason,
   startupPhaseMayTouchStorage,
 } from './coordinator-core';
 import {
@@ -707,6 +708,7 @@ export class CoordinatorRouter {
         this.closeUnavailable(
           route.tabId,
           route.ownerEpoch,
+          'owner-lock-timeout',
           'the engine stopped retrying'
         );
         break;
@@ -843,8 +845,8 @@ export class CoordinatorRouter {
           this.closeUnavailable(
             route.tabId,
             route.ownerEpoch,
-            message.reason,
-            'storage-busy'
+            'files-busy',
+            message.reason
           );
           break;
         }
@@ -1035,6 +1037,7 @@ export class CoordinatorRouter {
             envelope<CoordinatorToTabEnvelope>({
               kind: 'cache-unavailable',
               reason: action.reason,
+              unavailableReason: action.unavailableReason,
             })
           );
           break;
@@ -1255,26 +1258,27 @@ export class CoordinatorRouter {
   private closeUnavailable(
     tabId: string,
     ownerEpoch: number,
-    detail: string,
-    cause: 'owner-lock' | 'storage-busy' = 'owner-lock'
+    reason: OwnerLockUnavailableReason | 'files-busy',
+    detail: string
   ): void {
     const core = this.coreValue;
     if (!core) return;
     const state = core.state;
-    const actions =
-      cause === 'storage-busy'
-        ? core.storageBusy(tabId, ownerEpoch)
-        : core.ownerLockUnavailable(tabId, ownerEpoch);
+    const filesBusy = reason === 'files-busy';
+    const actions = filesBusy
+      ? core.storageBusy(tabId, ownerEpoch)
+      : core.ownerLockUnavailable(tabId, ownerEpoch, reason);
     if (actions.length === 0) return;
     this.handoff.cancel();
     this.activationStarted.delete(ownerEpoch);
     // Storage was not changed, or a busy wipe removed only part of it, so a
     // pending recovery wipe carries over to the next attempt exactly as after
     // a navigation departure.
-    const interruptedResetReason =
-      state.kind === 'activating' && state.databaseAction === 'wipe-before-open'
-        ? this.pendingRecoveryResetEpochs.get(ownerEpoch)
-        : undefined;
+    const wipePending =
+      state.kind === 'activating' && state.databaseAction === 'wipe-before-open';
+    const interruptedResetReason = wipePending
+      ? this.pendingRecoveryResetEpochs.get(ownerEpoch)
+      : undefined;
     if (interruptedResetReason !== undefined) {
       this.pendingRecoveryResetEpochs.delete(ownerEpoch);
       this.nextRecoveryResetReason = interruptedResetReason;
@@ -1283,14 +1287,15 @@ export class CoordinatorRouter {
       name: 'graphql_cache.owner',
       operationCategory: 'lifecycle',
       outcome: 'error',
-      ownerEvent:
-        cause === 'storage-busy' ? 'storage-busy' : 'owner-lock-unavailable',
-      errorCode: cause === 'storage-busy' ? 'opfs-io' : 'lock',
+      ownerEvent: filesBusy ? 'storage-busy' : 'owner-lock-unavailable',
+      errorCode: filesBusy ? 'opfs-io' : 'lock',
+      unavailableReason: reason,
+      ...(wipePending ? { resetAttempt: 'wipe-before-open' as const } : {}),
     });
     this.postTerminateEngine(
       tabId,
       ownerEpoch,
-      cause === 'storage-busy'
+      filesBusy
         ? `cache database files stayed busy: ${detail}`
         : `cache database owner lock is unavailable: ${detail}`
     );
@@ -1808,6 +1813,7 @@ export class CoordinatorRouter {
       this.closeUnavailable(
         route.tabId,
         route.ownerEpoch,
+        'no-takeover-channel',
         'another build has live tabs'
       );
       return;
@@ -1884,6 +1890,7 @@ export class CoordinatorRouter {
     this.closeUnavailable(
       takeover.tabId,
       takeover.ownerEpoch,
+      'holder-kept',
       'another build keeps the database'
     );
   }

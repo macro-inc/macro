@@ -6,6 +6,7 @@ import {
   type CacheTelemetryEventName,
   type CacheTelemetryObservation,
   type CacheTelemetryRecorderLike,
+  type CacheUnavailableReason,
   describeCacheError,
   isolateCacheTelemetry,
 } from '../telemetry';
@@ -78,7 +79,11 @@ export interface CacheCoordinatorPageAdapterOptions {
   /** Another context holds the database, so the cache stays off until reload. */
   /** `superseded`: a newer build took the database over, so this build never
    * gets it back. */
-  onCacheUnavailable?: (reason: string, superseded: boolean) => void;
+  onCacheUnavailable?: (
+    reason: string,
+    superseded: boolean,
+    unavailableReason: CacheUnavailableReason | undefined
+  ) => void;
   /** A newer app build took the database over; this page should reload. */
   onCacheSuperseded?: (reason: string) => void;
   /** When this page's app build was made, in ms since the epoch. Defaults to
@@ -760,7 +765,8 @@ export class CacheCoordinatorPageAdapter {
       case 'cache-unavailable':
         this.options.onCacheUnavailable?.(
           message.reason,
-          message.superseded === true
+          message.superseded === true,
+          message.unavailableReason
         );
         break;
       case 'cache-superseded':

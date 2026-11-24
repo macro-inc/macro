@@ -8,6 +8,7 @@ import type {
   WriteResult,
 } from '../protocol';
 import { INITIAL_CACHE_REVISION } from '../protocol';
+import type { CacheUnavailableReason } from '../telemetry';
 import type {
   CacheCoordinatorPageAdapter,
   CacheCoordinatorPageAdapterOptions,
@@ -162,8 +163,12 @@ class FakePageAdapter {
     this.options.onTerminalError?.(error);
   }
 
-  unavailable(reason: string, superseded = false): void {
-    this.options.onCacheUnavailable?.(reason, superseded);
+  unavailable(
+    reason: string,
+    superseded = false,
+    unavailableReason?: CacheUnavailableReason
+  ): void {
+    this.options.onCacheUnavailable?.(reason, superseded, unavailableReason);
   }
 
   superseded(reason: string): void {
@@ -1706,11 +1711,21 @@ describe('createWorkerCacheHost', () => {
     );
     const adapter = requireAdapter();
 
-    adapter.unavailable('cache database owner lock is held by another context');
+    adapter.unavailable(
+      'cache database owner lock is held by another context',
+      false,
+      'holder-kept'
+    );
 
     await unavailable;
+    // The coordinator's reason reaches the page, to be logged.
     expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ errorCode: 'owner-lock-unavailable' })
+      expect.objectContaining({
+        name: 'CacheUnavailableError',
+        errorCode: 'owner-lock-unavailable',
+        unavailableReason: 'holder-kept',
+        phase: 'initialization',
+      })
     );
     expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
     // Storage was never touched, so the scope stays reusable next load.
@@ -1744,7 +1759,14 @@ describe('createWorkerCacheHost', () => {
     await expect(read).rejects.toMatchObject({
       errorCode: 'owner-lock-unavailable',
     });
-    expect(onInitializationError).toHaveBeenCalledOnce();
+    // A refused request names no reason; the host had finished starting.
+    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        name: 'CacheUnavailableError',
+        unavailableReason: undefined,
+        phase: 'operation',
+      })
+    );
     expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
     expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
   });
@@ -1767,7 +1789,11 @@ describe('createWorkerCacheHost', () => {
     expect(onSuperseded).toHaveBeenCalledOnce();
     // This build never gets the database back, so recovery must not retry.
     expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ errorCode: 'cache-superseded' })
+      expect.objectContaining({
+        errorCode: 'cache-superseded',
+        unavailableReason: 'superseded',
+        phase: 'operation',
+      })
     );
     // Leaving like a navigating page stops the engine without counting as a
     // lost owner, so the newer build opens the same database.

@@ -918,7 +918,11 @@ describe('CoordinatorRouter', () => {
 
   /** Two tabs of this build queue work while another build's tab is alive
    * and the engine finds the owner lock busy. */
-  const askForAnotherBuildsDatabase = async () => {
+  const askForAnotherBuildsDatabase = async (
+    { takeoverChannel }: { takeoverChannel: boolean } = {
+      takeoverChannel: true,
+    }
+  ) => {
     const observations: Array<{ name: string; ownerEvent?: string }> = [];
     const channel = fakeTakeoverChannel();
     const router = new CoordinatorRouter({
@@ -928,7 +932,7 @@ describe('CoordinatorRouter', () => {
       queryHeldLockNames: heldLocks(() =>
         livenessLocks('tab-a', 'tab-b', 'other-build-tab')
       ),
-      openTakeoverChannel: channel.open,
+      openTakeoverChannel: takeoverChannel ? channel.open : () => undefined,
       telemetry: {
         record: (observation) => observations.push(observation),
         flush: vi.fn(),
@@ -965,7 +969,8 @@ describe('CoordinatorRouter', () => {
   const expectFailedClosed = (
     tabA: FakePort,
     tabB: FakePort,
-    reason: string
+    reason: string,
+    unavailableReason: string
   ): void => {
     expect(messagesOfKind(tabA, 'terminate-engine')).toEqual([
       expect.objectContaining({
@@ -986,7 +991,9 @@ describe('CoordinatorRouter', () => {
           }),
         }),
       ]);
-      expect(messagesOfKind(tab, 'cache-unavailable')).toHaveLength(1);
+      expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([
+        expect.objectContaining({ unavailableReason }),
+      ]);
     }
   };
 
@@ -1027,12 +1034,22 @@ describe('CoordinatorRouter', () => {
       tabId: 'tab-a',
       ownerEpoch: 1,
     });
-    expectFailedClosed(tabA, tabB, 'the engine stopped retrying');
+    expectFailedClosed(
+      tabA,
+      tabB,
+      'the engine stopped retrying',
+      'owner-lock-timeout'
+    );
     expect(
       observations.filter(
         (observation) => observation.ownerEvent === 'owner-lock-unavailable'
       )
-    ).toHaveLength(1);
+    ).toEqual([
+      expect.objectContaining({
+        errorCode: 'lock',
+        unavailableReason: 'owner-lock-timeout',
+      }),
+    ]);
     expect(router.snapshot()?.state.kind).toBe('waiting-for-tab');
 
     // Nothing waits in line for the lock; a new tab starts a fresh attempt.
@@ -1102,7 +1119,33 @@ describe('CoordinatorRouter', () => {
       decision: 'keep',
     });
 
-    expectFailedClosed(tabA, tabB, 'another build keeps the database');
+    expectFailedClosed(
+      tabA,
+      tabB,
+      'another build keeps the database',
+      'holder-kept'
+    );
+  });
+
+  it('fails closed, saying why, when it cannot ask the other build', async () => {
+    vi.useFakeTimers();
+    const { observations, tabA, tabB } = await askForAnotherBuildsDatabase({
+      takeoverChannel: false,
+    });
+
+    expectFailedClosed(
+      tabA,
+      tabB,
+      'another build has live tabs',
+      'no-takeover-channel'
+    );
+    expect(
+      observations.filter(
+        (observation) => observation.ownerEvent === 'owner-lock-unavailable'
+      )
+    ).toEqual([
+      expect.objectContaining({ unavailableReason: 'no-takeover-channel' }),
+    ]);
   });
 
   it('keeps retrying the lock while the holding build hands it over', async () => {
@@ -1548,6 +1591,7 @@ describe('CoordinatorRouter', () => {
       expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([
         expect.objectContaining({
           reason: expect.stringContaining('files are still open'),
+          unavailableReason: 'files-busy',
         }),
       ]);
       expect(messagesOfKind(tab, 'terminal-error')).toEqual([]);
@@ -1556,7 +1600,12 @@ describe('CoordinatorRouter', () => {
       observations.filter(
         (observation) => observation.ownerEvent === 'storage-busy'
       )
-    ).toHaveLength(1);
+    ).toEqual([
+      expect.objectContaining({
+        errorCode: 'opfs-io',
+        unavailableReason: 'files-busy',
+      }),
+    ]);
     expect(
       observations.filter(
         (observation) =>

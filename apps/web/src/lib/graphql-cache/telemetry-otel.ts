@@ -40,6 +40,9 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
         if (event.ownerEvent !== undefined) {
           span.setAttr('cache.owner_event', event.ownerEvent);
         }
+        if (event.unavailableReason !== undefined) {
+          span.setAttr('cache.unavailable_reason', event.unavailableReason);
+        }
         if (event.persistence !== undefined) {
           span.setAttr('cache.persistence', event.persistence);
         }

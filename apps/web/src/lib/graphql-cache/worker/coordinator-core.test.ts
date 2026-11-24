@@ -126,7 +126,7 @@ describe('CoordinatorCore', () => {
     expect(core.request('tab-b', clear(2))).toEqual([]);
     core.beginOwnerLockWait('tab-a', 1);
 
-    const actions = core.ownerLockUnavailable('tab-a', 1);
+    const actions = core.ownerLockUnavailable('tab-a', 1, 'owner-lock-timeout');
 
     const unavailable = {
       kind: 'reject-request',
@@ -140,6 +140,7 @@ describe('CoordinatorCore', () => {
       {
         kind: 'broadcast-cache-unavailable',
         reason: expect.stringContaining('another app version'),
+        unavailableReason: 'owner-lock-timeout',
       },
     ]);
     expect(core.state).toEqual({
@@ -150,7 +151,7 @@ describe('CoordinatorCore', () => {
     expect(core.request('tab-b', init(3))).toEqual([
       { ...unavailable, tabId: 'tab-b', requestId: 3 },
     ]);
-    expect(core.ownerLockUnavailable('tab-a', 1)).toEqual([]);
+    expect(core.ownerLockUnavailable('tab-a', 1, 'owner-lock-timeout')).toEqual([]);
     expect(action(core.registerTab('tab-c'), 'elect-owner')).toEqual({
       kind: 'elect-owner',
       tabId: 'tab-c',
@@ -165,7 +166,7 @@ describe('CoordinatorCore', () => {
     core.registerTab('tab-a');
     grantStorage(core, 'tab-a', 1);
 
-    expect(core.ownerLockUnavailable('tab-a', 1)).toEqual([]);
+    expect(core.ownerLockUnavailable('tab-a', 1, 'owner-lock-timeout')).toEqual([]);
     expect(core.state).toMatchObject({
       kind: 'activating',
       phase: 'opening-database',
@@ -184,7 +185,7 @@ describe('CoordinatorCore', () => {
     });
     core.beginOwnerLockWait('tab-b', 2);
 
-    core.ownerLockUnavailable('tab-b', 2);
+    core.ownerLockUnavailable('tab-b', 2, 'owner-lock-timeout');
 
     expect(action(core.registerTab('tab-c'), 'elect-owner')).toMatchObject({
       tabId: 'tab-c',
@@ -214,6 +215,7 @@ describe('CoordinatorCore', () => {
       {
         kind: 'broadcast-cache-unavailable',
         reason: expect.stringContaining('files are still open'),
+        unavailableReason: 'files-busy',
       },
     ]);
     // The open changed nothing, so no attempt is scheduled to repair it.
@@ -335,7 +337,7 @@ describe('CoordinatorCore', () => {
     const idle = new CoordinatorCore('scope');
     idle.registerTab('tab-a');
     idle.beginOwnerLockWait('tab-a', 1);
-    idle.ownerLockUnavailable('tab-a', 1);
+    idle.ownerLockUnavailable('tab-a', 1, 'owner-lock-timeout');
     expect(idle.supersede()).toEqual([
       {
         kind: 'broadcast-cache-superseded',

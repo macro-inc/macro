@@ -63,6 +63,7 @@ import {
   type CacheRolloutCohort,
   type CacheTelemetryRecorderLike,
   type CacheTelemetrySink,
+  type CacheUnavailableReason,
   classifyCacheError,
   describeCacheError,
   isolateCacheTelemetry,
@@ -204,6 +205,29 @@ export class CoordinatorRestartedError extends CacheResponseError {
       options
     );
     this.name = 'CoordinatorRestartedError';
+  }
+}
+
+/**
+ * The cache failed closed: another context holds the database, or a newer
+ * build took it over. The page stays on the network; `unavailableReason`
+ * says why when the coordinator told it, and `phase` whether the host had
+ * finished starting.
+ */
+export class CacheUnavailableError extends CacheResponseError {
+  constructor(
+    message: string,
+    superseded: boolean,
+    readonly unavailableReason: CacheUnavailableReason | undefined,
+    readonly phase: 'initialization' | 'operation'
+  ) {
+    super(
+      message,
+      superseded
+        ? CACHE_SUPERSEDED_ERROR_CODE
+        : OWNER_LOCK_UNAVAILABLE_ERROR_CODE
+    );
+    this.name = 'CacheUnavailableError';
   }
 }
 
@@ -644,9 +668,12 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         if (error instanceof WorkerRestartedError) reconnectCoordinator(error);
         else failTransport(error);
       },
-      onCacheUnavailable: (reason, supersededBuild) => {
+      onCacheUnavailable: (reason, supersededBuild, unavailableReason) => {
         if (adapter === created)
-          retireUnavailable(reason, { superseded: supersededBuild });
+          retireUnavailable(reason, {
+            superseded: supersededBuild,
+            unavailableReason,
+          });
       },
       onCacheSuperseded: (reason) => {
         if (adapter !== created || superseded) return;
@@ -891,7 +918,12 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     {
       superseded = false,
       leaveForNewerBuild = false,
-    }: { superseded?: boolean; leaveForNewerBuild?: boolean } = {}
+      unavailableReason = superseded ? 'superseded' : undefined,
+    }: {
+      superseded?: boolean;
+      leaveForNewerBuild?: boolean;
+      unavailableReason?: CacheUnavailableReason;
+    } = {}
   ): void {
     if (
       terminalFailureHandled ||
@@ -902,11 +934,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     )
       return;
     terminalFailureHandled = true;
-    const error = new CacheResponseError(
+    const error = new CacheUnavailableError(
       reason,
-      superseded
-        ? CACHE_SUPERSEDED_ERROR_CODE
-        : OWNER_LOCK_UNAVAILABLE_ERROR_CODE
+      superseded,
+      unavailableReason,
+      state === 'initializing' ? 'initialization' : 'operation'
     );
     if (state === 'initializing') {
       telemetry?.record({
@@ -914,6 +946,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         operationCategory: 'initialization',
         outcome: 'error',
         errorCode: superseded ? 'superseded' : 'lock',
+        ...(unavailableReason === undefined ? {} : { unavailableReason }),
         durationMs:
           initializationStartedAt > 0 ? now() - initializationStartedAt : 0,
       });

@@ -369,11 +369,13 @@ describe('CacheCoordinatorPageAdapter', () => {
       ...version,
       kind: 'cache-unavailable',
       reason: 'another app version holds the database',
+      unavailableReason: 'holder-kept',
     });
 
     expect(onCacheUnavailable).toHaveBeenCalledExactlyOnceWith(
       'another app version holds the database',
-      false
+      false,
+      'holder-kept'
     );
   });
 
@@ -390,7 +392,8 @@ describe('CacheCoordinatorPageAdapter', () => {
 
     expect(onCacheUnavailable).toHaveBeenCalledExactlyOnceWith(
       'a newer version of the app took over the local cache',
-      true
+      true,
+      undefined
     );
   });
 

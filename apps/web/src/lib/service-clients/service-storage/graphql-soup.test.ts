@@ -1869,6 +1869,99 @@ describe('GraphQL Soup browser cache session gate', () => {
     }
   });
 
+  it('records why the cache failed closed when a newer build took it over', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    mocks.spans.length = 0;
+    const soup = await import('./graphql-soup');
+    const { CacheUnavailableError } = await import(
+      '@graphql-cache/host/worker-host'
+    );
+    soup.getGraphqlSoupClient();
+
+    mocks.failInitialization(
+      new CacheUnavailableError(
+        'a newer version of the app took over the local cache',
+        true,
+        'superseded',
+        'operation'
+      )
+    );
+
+    expect(soup.graphqlCacheRecoveryState()).toBe('recovery-required');
+    expect(
+      mocks.spans.find(
+        ({ name }) => name === 'graphql.cache_recovery_stopped'
+      )?.attrs
+    ).toMatchObject({
+      'cache.error_code': 'superseded',
+      'cache.unavailable_reason': 'superseded',
+    });
+    expect(mocks.telemetryWarn).toHaveBeenCalledExactlyOnceWith(
+      'graphql cache failed closed',
+      {
+        'error.source': 'graphql-cache',
+        'cache.backend': 'turso-wasm-opfs',
+        'cache.phase': 'operation',
+        'cache.error_code': 'cache-superseded',
+        'cache.unavailable_reason': 'superseded',
+      }
+    );
+  });
+
+  it('logs once per page and reason why the cache failed closed', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const soup = await import('./graphql-soup');
+      const { CacheUnavailableError } = await import(
+        '@graphql-cache/host/worker-host'
+      );
+      const kept = () =>
+        new CacheUnavailableError(
+          'cache database owner lock is held by another context, such as another app version',
+          false,
+          'holder-kept',
+          'initialization'
+        );
+      soup.getGraphqlSoupClient();
+
+      mocks.failInitialization(kept());
+      expect(mocks.telemetryWarn).toHaveBeenCalledExactlyOnceWith(
+        'graphql cache failed closed',
+        {
+          'error.source': 'graphql-cache',
+          'cache.backend': 'turso-wasm-opfs',
+          'cache.phase': 'initialization',
+          'cache.error_code': 'owner-lock-unavailable',
+          'cache.unavailable_reason': 'holder-kept',
+        }
+      );
+      // Recovery retries the lock and meets the same holder: no second log.
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(2);
+      mocks.failInitialization(kept());
+      expect(mocks.telemetryWarn).toHaveBeenCalledOnce();
+      // A different reason is news.
+      await vi.advanceTimersByTimeAsync(5_000);
+      mocks.failInitialization(
+        new CacheUnavailableError(
+          'cache database files are still open in another context, such as a closing tab',
+          false,
+          'files-busy',
+          'initialization'
+        )
+      );
+      expect(mocks.telemetryWarn).toHaveBeenCalledTimes(2);
+      expect(mocks.telemetryWarn).toHaveBeenLastCalledWith(
+        'graphql cache failed closed',
+        expect.objectContaining({ 'cache.unavailable_reason': 'files-busy' })
+      );
+      expect(mocks.telemetryError).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps retrying while another context holds the owner lock', async () => {
     vi.useFakeTimers();
     vi.spyOn(console, 'info').mockImplementation(() => {});

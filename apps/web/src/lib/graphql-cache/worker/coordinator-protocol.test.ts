@@ -219,6 +219,7 @@ describe('coordinator runtime protocol', () => {
     for (const valid of [
       cacheUnavailable,
       { ...cacheUnavailable, superseded: true },
+      { ...cacheUnavailable, unavailableReason: 'files-busy' },
       superseded,
       removeStale,
     ]) {
@@ -227,6 +228,7 @@ describe('coordinator runtime protocol', () => {
     for (const invalid of [
       { ...cacheUnavailable, reason: '' },
       { ...cacheUnavailable, superseded: false },
+      { ...cacheUnavailable, unavailableReason: 'disk on fire' },
       { ...superseded, reason: '' },
       { ...superseded, superseded: true },
       { ...superseded, buildTime: 1 },

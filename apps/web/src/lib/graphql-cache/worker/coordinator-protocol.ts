@@ -32,6 +32,10 @@ import {
   MAX_RECORD_SELECTION_PAGE_SIZE,
   type WorkerMessage,
 } from '../protocol';
+import {
+  CACHE_UNAVAILABLE_REASONS,
+  type CacheUnavailableReason,
+} from '../telemetry';
 
 export { isCachePush, isCacheResponse, isWorkerMessage };
 
@@ -218,6 +222,8 @@ export type CoordinatorToTabEnvelope =
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
       kind: 'cache-unavailable';
       reason: string;
+      /** Why it failed closed; absent when a newer build took it over. */
+      unavailableReason?: CacheUnavailableReason;
       /** A newer build took the database over, so retrying cannot help. */
       superseded?: true;
     }
@@ -1264,9 +1270,14 @@ export function validateCoordinatorToTabEnvelope(
           'coordinatorVersion',
           'kind',
           'reason',
+          'unavailableReason',
           'superseded',
         ]) &&
         isNonEmptyString(value.reason) &&
+        (value.unavailableReason === undefined ||
+          CACHE_UNAVAILABLE_REASONS.includes(
+            value.unavailableReason as CacheUnavailableReason
+          )) &&
         (value.superseded === undefined || value.superseded === true)
       ) {
         return pass(value as CoordinatorToTabEnvelope);
