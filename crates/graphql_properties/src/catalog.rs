@@ -116,7 +116,7 @@ pub trait PropertyCatalogWriter: Send + Sync + 'static {
 
 /// The refusal of a writer built without the properties service.
 fn not_configured() -> PropertiesErr {
-    PropertiesErr::Repo(anyhow::anyhow!("property catalog writer is not configured"))
+    PropertiesErr::Repo(rootcause::report!("property catalog writer is not configured").into())
 }
 
 impl<P, A> PropertiesEntityPropertyWriter<P, A>
@@ -128,7 +128,7 @@ where
     async fn team(&self) -> Result<Option<TeamReceipt>, PropertiesErr> {
         caller_team_receipt(self.entity_access_service.as_ref(), &self.user_id)
             .await
-            .map_err(|err| PropertiesErr::Repo(anyhow::anyhow!("{err}")))
+            .map_err(|err| PropertiesErr::Repo(err.into()))
     }
 
     /// Refuse writes to a team definition another feature manages.
