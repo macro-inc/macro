@@ -370,6 +370,8 @@ export function Header(props: {
               </HeaderActionGroup>
               {headerCreateMenu()}
             </div>
+            {/* In a narrow pane this slot wraps onto its own last row; the
+                overlay hangs from the row box's bottom so it stays over it. */}
             <div
               onTransitionEnd={handleSearchTransitionEnd}
               onClick={(event) => event.stopPropagation()}
@@ -394,7 +396,7 @@ export function Header(props: {
                 class={cn(
                   'h-8',
                   searchOverlaysControls() &&
-                    'absolute right-0 top-0 transition-[width] duration-200 ease-out motion-reduce:transition-none'
+                    'absolute bottom-0 right-0 transition-[width] duration-200 ease-out motion-reduce:transition-none'
                 )}
                 style={
                   searchOverlaysControls()

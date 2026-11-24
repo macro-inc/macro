@@ -366,12 +366,13 @@ try {
     .waitForDisplayed({ timeout: 30_000 });
 
   // Calendar's header wraps its controls onto a second row in a narrow pane;
-  // Search events must stay inside it there too.
+  // Search events must stay inside it there too, and off New when it wraps
+  // onto a row of its own (360px and narrower).
   await browser.$('[data-sidebar-next-item="calendar"]').click();
   await browser
     .$('button[aria-label="Search events"]')
     .waitForDisplayed({ timeout: 30_000 });
-  for (const width of [440, 400]) {
+  for (const width of [440, 400, 360, 320]) {
     await browser.setWindowSize(width, 900);
     await expectHeaderFits(
       browser,
@@ -387,7 +388,7 @@ try {
     'restored-calendar-header',
     'the restored window'
   );
-  console.log('PASS: Calendar header fits 440px and 400px windows');
+  console.log('PASS: Calendar header fits 440px to 320px windows');
 
   assert.equal(await nativeHttpReachable(browser, fixture.origin), true);
   assert(
