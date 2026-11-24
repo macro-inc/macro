@@ -42,7 +42,6 @@ type Report = {
   accepted: number;
   settled: number;
   outcomes: string[];
-  trace: string[];
   violations: string[];
 };
 
@@ -248,14 +247,6 @@ async function ownerLockFree(scope: string): Promise<void> {
   await navigator.locks.request(name, async () => undefined);
 }
 
-const label = ({
-  uuid,
-  transactionId,
-}: {
-  uuid: string;
-  transactionId: string;
-}) => `${uuid.slice(0, 4)}=${transactionId}`;
-
 /** What one schedule knows of the queue it built. */
 class Model {
   /** In the order they were accepted. */
@@ -266,15 +257,6 @@ class Model {
   /** Commits refused though nothing took their lease. */
   readonly refused: string[] = [];
   lease: (Lease & { uuid: string }) | undefined;
-
-  describe(): string {
-    const writes = this.accepted.map(
-      (write) =>
-        `${label(write)}${this.settled.has(write.uuid) ? ' settled' : ''}`
-    );
-    const uncertain = [...this.uncertain].map((uuid) => uuid.slice(0, 4));
-    return `writes: ${writes.join(', ')}; uncertain: ${uncertain.join(' ')}`;
-  }
 
   get unsettled() {
     return this.accepted.filter(({ uuid }) => !this.settled.has(uuid));
@@ -429,12 +411,10 @@ async function run(seed: number, recoveryMs: number): Promise<Report> {
     accepted: 0,
     settled: 0,
     outcomes: [],
-    trace: [],
     violations: [],
   };
   let engine = await Engine.start(scope, false);
   await engine.opened;
-  const note = (what: string) => report.trace.push(what);
   // A page asks for the generation when it looks for a hydration checkpoint.
   if (next() < 0.5)
     await engine.request({ kind: 'current-storage-generation' });
@@ -448,7 +428,6 @@ async function run(seed: number, recoveryMs: number): Promise<Report> {
       await abandonRequest(engine, model, next() < 0.5);
       await pause(next() * 6);
     }
-    note(model.describe());
     engine.kill();
     for (let kills = upTo(3); kills > 0; kills -= 1) {
       const recovering = await Engine.start(scope, true);
@@ -459,16 +438,11 @@ async function run(seed: number, recoveryMs: number): Promise<Report> {
       await pause(next() * (afterCopy ? recoveryMs / 4 : recoveryMs));
       recovering.kill();
       await ownerLockFree(scope);
-      const at = await landing(scope);
-      report.kills.push(at);
-      note(
-        `killed: ${at} ${JSON.stringify([...(await filesOf(scope)).values()])}`
-      );
+      report.kills.push(await landing(scope));
     }
     engine = await Engine.start(scope, true);
     const opened = await engine.opened;
     report.wipes += 1;
-    note(`opened: ${opened.outcome}, ${opened.queue}, ${opened.crossing}`);
     report.outcomes.push(`${opened.outcome}/${opened.queue}`);
     const queue = await engine.queue();
     report.violations.push(...model.violations(queue, `round ${round}`));
@@ -477,7 +451,6 @@ async function run(seed: number, recoveryMs: number): Promise<Report> {
       model.unsettled.some(({ uuid }) => !model.uncertain.has(uuid))
     )
       report.violations.push(`round ${round}: told the queue is gone`);
-    note(`queued: ${queue.map(label).join(' ')}`);
     model.settle(queue);
   }
   // A lease taken before the wipes still settles its write.

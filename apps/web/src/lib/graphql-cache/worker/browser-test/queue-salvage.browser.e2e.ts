@@ -33,7 +33,6 @@ test('engines killed anywhere in a recovery wipe lose no accepted write and brin
     totals.wipes += report.wipes;
     totals.accepted += report.accepted;
     totals.settled += report.settled;
-    if (report.violations.length > 0) console.log(seed, report.trace);
     violations.push(
       ...report.violations.map((violation) => `seed ${seed}: ${violation}`)
     );
@@ -48,6 +47,5 @@ test('engines killed anywhere in a recovery wipe lose no accepted write and brin
       outcomes: Object.fromEntries(outcomes),
     }),
   });
-  console.log(testInfo.annotations.at(-1)?.description);
   expect(violations).toEqual([]);
 });
