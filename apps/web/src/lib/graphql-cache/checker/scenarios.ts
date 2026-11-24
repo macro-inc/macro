@@ -24,6 +24,9 @@ export const EVERY_FAULT: FaultKind[] = [
   'hold-files',
   'open-newer',
   'fail-open',
+  'require-reset',
+  'fail-assets',
+  'stall-assets',
 ];
 
 const HORIZON_MS = 60_000;

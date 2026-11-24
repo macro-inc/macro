@@ -34,4 +34,5 @@ const WIPED = 'S3:queued write lost (database wiped)';
 
 export const KNOWN_VIOLATIONS: KnownViolation[] = [
   ...known(WIPE, ['crash-engine owner'], [WIPED]),
+  ...known(WIPE, ['require-reset owner'], [WIPED]),
 ];

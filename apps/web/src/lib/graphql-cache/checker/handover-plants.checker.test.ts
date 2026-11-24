@@ -8,6 +8,7 @@ import { CoordinatorCore } from '../worker/coordinator-core';
 import { CacheCoordinatorPageAdapter } from '../worker/coordinator-page-adapter';
 import { explains, explore, violationKey } from './explore';
 import { KNOWN_VIOLATIONS } from './known-violations';
+import { Sim } from './sim';
 import { type FaultKind, usePlant } from './world';
 
 vi.mock('../app-build', async () => {
@@ -61,6 +62,18 @@ describe('a known violation', () => {
   });
 });
 
+describe('a state', () => {
+  it('is told from one whose timers have longer to go', () => {
+    const states = [0, 500].map((elapsed) => {
+      const sim = new Sim();
+      sim.setTimeout(() => {}, 1_000);
+      sim.advanceTo(sim.now + elapsed);
+      return sim.timerSummary();
+    });
+    expect(states[0]).not.toBe(states[1]);
+  });
+});
+
 describe('handover checker, on broken code', { timeout: 120_000 }, () => {
   it('reports nothing new when nothing is broken', async () => {
     expect(await newViolations(['hide', 'close', 'crash-engine'])).toEqual([]);
@@ -104,6 +117,30 @@ describe('handover checker, on broken code', { timeout: 120_000 }, () => {
       expect.stringMatching(
         /^L2:no active engine \(.*\) \[expire-session owner\]$/
       )
+    );
+  });
+
+  it('catches a cache that answers reads and refuses drafts', async () => {
+    const request = CoordinatorCore.prototype.request;
+    usePlant(() => {
+      vi.spyOn(CoordinatorCore.prototype, 'request').mockImplementation(
+        function (this: CoordinatorCore, tabId, sent) {
+          if (sent.kind !== 'enqueue-optimistic-mutation')
+            return request.call(this, tabId, sent);
+          return [
+            {
+              kind: 'reject-request',
+              tabId,
+              requestId: sent.id,
+              error: 'refused',
+              errorCode: 'owner-handoff-blocked',
+            },
+          ];
+        }
+      );
+    });
+    expect(await newViolations(['hide'])).toContain(
+      'L1:cache not back (ready, probe draft CacheResponseError:owner-handoff-blocked) [no fault]'
     );
   });
 
