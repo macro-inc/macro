@@ -135,3 +135,33 @@ it('refreshes all deadline gradients and Today at local midnight and on tab resu
   fireEvent(document, new Event('visibilitychange'));
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it('names a timed bar whose start has no time with that start as a day', () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 2, 3, 12));
+  const view = render(() =>
+    createComponent(Gantt.Root, {
+      range: {
+        start: toGanttDay('2026-03-01')!,
+        end: toGanttDay('2026-03-21')!,
+      },
+      defaultScale: 'day',
+      get children() {
+        return createComponent(Gantt.Bar, {
+          start: new Date(2026, 2, 4),
+          end: new Date(2026, 2, 6, 20),
+          timed: true,
+          wholeDay: 'start',
+          title: 'Write the brief',
+        });
+      },
+    })
+  );
+  const bar = view.getByRole('button', { name: /^Write the brief/ });
+  expect(bar.getAttribute('aria-label')).toBe(
+    'Write the brief: Mar 4 → Mar 6, 8 PM'
+  );
+  expect(bar.getAttribute('title')).toBe(
+    'Write the brief: Mar 4 → Mar 6, 8 PM'
+  );
+});

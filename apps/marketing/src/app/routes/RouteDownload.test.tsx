@@ -9,7 +9,6 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ANDROID_PLAY_STORE_URL,
-  FALLBACK_DOWNLOAD_URLS,
   IOS_APP_STORE_URL,
 } from '../../features/marketing/core/desktopDownloads';
 import { analytics } from '../utils/utilAnalytic';
@@ -18,11 +17,6 @@ import { RouteDownload } from './RouteDownload';
 vi.mock('../utils/utilAnalytic', () => ({
   analytics: { trackPosthog: vi.fn() },
 }));
-
-const latest = {
-  macos: 'https://example.com/Macro-latest-aarch64-darwin.dmg',
-  linux: 'https://example.com/Macro-latest-x86_64-linux.AppImage',
-};
 
 function visitWith(userAgent: string) {
   vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent);
@@ -47,24 +41,14 @@ beforeEach(() => {
       disconnect() {}
     }
   );
+  // The phone toggle's sliding indicator measures itself.
   vi.stubGlobal(
-    'fetch',
-    vi.fn(async () =>
-      Response.json([
-        {
-          assets: [
-            {
-              name: 'Macro-latest-aarch64-darwin.dmg',
-              browser_download_url: latest.macos,
-            },
-            {
-              name: 'Macro-latest-x86_64-linux.AppImage',
-              browser_download_url: latest.linux,
-            },
-          ],
-        },
-      ])
-    )
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
   );
 });
 
@@ -75,35 +59,51 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)';
+const LINUX = 'Mozilla/5.0 (X11; Linux x86_64)';
+
 describe('RouteDownload', () => {
-  it('offers the Linux installer first on Linux', async () => {
-    visitWith('Mozilla/5.0 (X11; Linux x86_64)');
+  it('offers only the visitor installer, with the other as a link', () => {
+    visitWith(MAC);
+    expect(downloadLinks()).toEqual([['Download for macOS', '/download/mac']]);
+    expect(
+      screen.getByRole('link', { name: 'Download for Linux' })
+    ).toHaveProperty('pathname', '/download/linux');
+    cleanup();
+
+    visitWith(LINUX);
     expect(downloadLinks()).toEqual([
-      ['Download for Linux', FALLBACK_DOWNLOAD_URLS.linux],
-      ['Download for macOS', FALLBACK_DOWNLOAD_URLS.macos],
+      ['Download for Linux', '/download/linux'],
     ]);
-    await vi.waitFor(() =>
-      expect(downloadLinks()).toEqual([
-        ['Download for Linux', latest.linux],
-        ['Download for macOS', latest.macos],
-      ])
-    );
+    expect(
+      screen.getByRole('link', { name: 'Download for macOS' })
+    ).toHaveProperty('pathname', '/download/mac');
   });
 
-  it('offers the Mac installer first on macOS and other computers', () => {
-    visitWith('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)');
-    expect(downloadLinks().map(([label]) => label)).toEqual([
-      'Download for macOS',
-      'Download for Linux',
-    ]);
-    cleanup();
+  it('offers every installer to computers without one', () => {
     visitWith('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
-    expect(downloadLinks()[0]?.[0]).toBe('Download for macOS');
-    expect(screen.getByText(/Windows is not supported yet/)).toBeTruthy();
+    expect(downloadLinks()).toEqual([
+      ['Download for macOS', '/download/mac'],
+      ['Download for Linux', '/download/linux'],
+    ]);
+    expect(screen.getByText(/A native Windows app is on the way/)).toBeTruthy();
+    cleanup();
+
+    visitWith('Mozilla/5.0 (X11; CrOS x86_64 14541.0.0)');
+    expect(downloadLinks()).toHaveLength(2);
+    expect(screen.getByText(/On another computer/)).toBeTruthy();
+  });
+
+  it('leaves installer clicks to the browser, not the router', () => {
+    visitWith(LINUX);
+    for (const name of ['Download for Linux', 'Download for macOS']) {
+      // The router cancels the clicks it handles; the edge serves these paths.
+      expect(fireEvent.click(screen.getByRole('link', { name }))).toBe(true);
+    }
   });
 
   it('records which installer was clicked', () => {
-    visitWith('Mozilla/5.0 (X11; Linux x86_64)');
+    visitWith(LINUX);
     const link = screen.getByRole('link', { name: 'Download for macOS' });
     // jsdom cannot follow the installer link.
     link.addEventListener('click', (event) => event.preventDefault());
@@ -112,6 +112,27 @@ describe('RouteDownload', () => {
       'desktop_download_clicked',
       { platform: 'macos', source: 'marketing' }
     );
+  });
+
+  it('switches the phone QR code between iPhone and Android', () => {
+    visitWith(LINUX);
+    expect(
+      screen.getByRole('img', { name: 'QR code for App Store' })
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: 'Android' }));
+    expect(
+      screen.getByRole('img', { name: 'QR code for Google Play' })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('link', { name: 'Get Macro on Google Play' })
+    ).toHaveProperty('href', ANDROID_PLAY_STORE_URL);
+  });
+
+  it('starts the QR code on the visitor phone platform', () => {
+    visitWith('Mozilla/5.0 (Linux; Android 14; Pixel Tablet)');
+    expect(
+      screen.getByRole('img', { name: 'QR code for Google Play' })
+    ).toBeTruthy();
   });
 
   it('leads the phone list with the phone platform store', () => {

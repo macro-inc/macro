@@ -99,7 +99,7 @@ export function RouteTasks() {
           cta="tasks_hero_get_started"
           tutorial="tasks"
           product="Tasks"
-          title="Tasks for people and agents."
+          title="Turn conversations into tasks."
           description="Create tasks from email and team chat. Assign people or agents, and keep task status in sync with linked pull requests."
         />
         <FeaturePageSection

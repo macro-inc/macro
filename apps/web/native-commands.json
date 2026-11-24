@@ -1,6 +1,7 @@
 {
   "commands": [
     "ack_bundle_update_reload",
+    "ack_native_crash_reports",
     "allow_screen_capture",
     "check_for_update",
     "clear_shared_files",
@@ -9,6 +10,7 @@
     "get_bundle_debug_info",
     "get_bundle_update_status",
     "get_macos_notification_permission",
+    "get_native_build_time",
     "get_native_update_status",
     "get_pending_share_filenames",
     "grant_bundle_update",
@@ -134,6 +136,7 @@
     "send_macos_notification",
     "set_bundle_reload_hold",
     "stage_desktop_pasteboard_files",
+    "take_native_crash_reports",
     "take_native_update_reports",
     "upload_staged_file_to_presigned_url",
     "whatsapp_passkey_authenticate"

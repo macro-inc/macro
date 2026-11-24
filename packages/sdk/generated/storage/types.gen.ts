@@ -4790,6 +4790,37 @@ export type CompanyContactsPageResponse = {
 };
 
 /**
+ * One of a company's domains. It travels in the body, as a contact's
+ * addresses do.
+ */
+export type CompanyDomainRequest = {
+    /**
+     * A bare domain such as "example.com": no scheme, path or email. An
+     * identical retry is accepted.
+     */
+    domain: string;
+};
+
+/**
+ * The 409 answer when another company of the team already tracks the domain.
+ */
+export type CompanyDomainTakenResponse = {
+    /**
+     * The company that tracks the domain. Absent when the caller cannot see
+     * it: an archived company, for a team member.
+     */
+    companyId?: string | null;
+    /**
+     * That company's display name, when the caller can see it.
+     */
+    companyName?: string | null;
+    /**
+     * What happened, naming the other company when the caller can see it.
+     */
+    message: string;
+};
+
+/**
  * What a companies import did.
  */
 export type CompanyImportResponse = {
@@ -29132,6 +29163,63 @@ export type ListCompanyContactsPageResponses = {
 };
 
 export type ListCompanyContactsPageResponse = ListCompanyContactsPageResponses[keyof ListCompanyContactsPageResponses];
+
+export type RemoveCrmCompanyDomainData = {
+    body: CompanyDomainRequest;
+    path: {
+        /**
+         * The company to update
+         */
+        company_id: string;
+    };
+    query?: never;
+    url: '/crm/companies/{company_id}/domains';
+};
+
+export type RemoveCrmCompanyDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveCrmCompanyDomainError = RemoveCrmCompanyDomainErrors[keyof RemoveCrmCompanyDomainErrors];
+
+export type RemoveCrmCompanyDomainResponses = {
+    200: CrmCompanyResponse;
+};
+
+export type RemoveCrmCompanyDomainResponse = RemoveCrmCompanyDomainResponses[keyof RemoveCrmCompanyDomainResponses];
+
+export type AddCrmCompanyDomainData = {
+    body: CompanyDomainRequest;
+    path: {
+        /**
+         * The company to update
+         */
+        company_id: string;
+    };
+    query?: never;
+    url: '/crm/companies/{company_id}/domains';
+};
+
+export type AddCrmCompanyDomainErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: CompanyDomainTakenResponse;
+    500: ErrorResponse;
+};
+
+export type AddCrmCompanyDomainError = AddCrmCompanyDomainErrors[keyof AddCrmCompanyDomainErrors];
+
+export type AddCrmCompanyDomainResponses = {
+    200: CrmCompanyResponse;
+};
+
+export type AddCrmCompanyDomainResponse = AddCrmCompanyDomainResponses[keyof AddCrmCompanyDomainResponses];
 
 export type SetEmailSyncData = {
     body: SetEmailSyncRequest;

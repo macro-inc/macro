@@ -67,7 +67,9 @@ their shared local order. The unnamed group has no grip or keyboard move control
 Accounts stays pinned at the top and is not a drop target. Section order is per
 account and survives reloads. `Tab`, `Shift+Tab` and `1`–`3` move between the Inbox
 tabs in the header (Focus, Signal, Noise) while the keyboard is on the list or
-nothing has focus, as after `Escape` closes a thread. On any control (a row's
+nothing has focus, as after `Escape` closes a thread, and right after a click on
+a sidebar folder or account (Inbox, after Favorites) or on Mail in the app rail.
+On any control (a row's
 sender name, checkbox or actions, Load more, a header button), in the search
 field, in an open thread, and in another mailbox, whose header has no tabs,
 `Tab` is browser focus order. Leaving the
@@ -91,6 +93,28 @@ Compose via the `Email` button (or `Create` → `Email E`). On a fresh local use
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
 use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` within the surface: it focuses the list header's search field, and when a thread or a new email has replaced the list it is left to the browser's find. Outside a text field, `/` opens the app's Search view from Email in every state, as in every other view. The Email sidebar has no search field.
 
+Email search covers all mail from every tab ("Search all mail"), as the All
+tab lists it, except Spam and Trash, which the search index leaves out (they
+have no search field). The tab you search from does not narrow it: a search
+from the Inbox finds archived and Noise mail too, and Focus, Scheduled and
+Reminders list the search's results while it runs. The Filters menu, the inbox
+picker, an alias and an open saved view's conditions still apply. To narrow a
+search to one view, type `in:<view>` anywhere in it: `in:inbox` (still in the
+inbox: Focus, Signal and Noise), `in:focus`, `in:signal`, `in:noise`,
+`in:favorites`, `in:sent`, `in:drafts`, `in:calendar`, `in:shared` or
+`in:archived`. Each matches what that list shows, applied by the search service
+before paging (Focus and Favorites by their thread ids); the last one typed
+wins, an `in:` still being typed is left out of the words, and any other `in:`
+is searched as a word. Picking a tab while a search runs narrows it to that
+tab's view and keeps the words (All mail goes back to all mail, the sidebar's
+Inbox gives `in:inbox`); Scheduled, Reminders, Spam and Trash, which the index
+has no view of, end the search. While a search runs, the sidebar and the
+header show the view its `in:` filter names (the Inbox tabs only while it is
+in the Inbox); a search with no `in:` selects nothing, and the header says
+Search. Check from Inbox with a
+term that only Noise or archived mail holds, then the same term with each
+`in:`, then pick Sent, Signal and All mail while it runs.
+
 ### Wide search (flagged)
 
 With `enable-email-wide-search` on (on in dev), opening search on desktop
@@ -102,8 +126,18 @@ spinner. Once its own results arrive, a new search starts at the top of the list
 wherever the list was scrolled. With the field focused, up to five recent searches containing the
 typed text are listed above the results: `ArrowDown` walks them before it
 reaches the results, `Enter` or a click runs one and moves to its first
-result. A search is remembered when the field is left with it, at most eight
-per person, in this browser only and not per inbox. Check with a slow search
+result. A search is remembered when the field is left with words in it, with
+its `in:` filter, at most eight per person, in this browser only and not per
+inbox. Typing `in:` lists the views instead (only those the person has, so
+Focus only with its flag), narrowed as the name is typed; `Enter` or a click
+finishes the `in:` where it was typed, and the keyboard stays in the field.
+The filter stays ordinary text (caret, selection, `Backspace`, paste), and a
+complete, valid one is drawn as an operator token: accent ink on a faint accent
+tint, while `in:se` stays plain. Delete it like any text to search all mail
+again. Recent searches draw their filter the same way. Rows of a search that can reach archived
+mail (no filter, or a view other than the inbox ones and Archived) say
+`Archived` on archived threads; a thread of only sent mail or drafts was never
+in the inbox and gets no label. Check with a slow search
 that rows never blank between two queries, that switching tabs never shows
 the previous tab's rows, and that with the flag off the compact field and the
 spinner are unchanged.
@@ -111,7 +145,9 @@ spinner are unchanged.
 On a phone (and any touch device) the same flag adds a search pill to Email's
 pill row, after Show sidebar and before Filters. Tapping it opens Email's search page: the
 field and **Cancel** replace the pills in the header, the keyboard comes up in
-the tap, recent searches are listed while the field has focus, and the list
+the tap, recent searches (or, while `in:` is typed, the views) are listed while
+the field has focus, a picked view becomes the same chip without its switch
+menu and keeps the keyboard up, and the list
 below shows the results as ordinary email rows, updating as you type and
 keeping the previous rows dimmed while a new query loads. The keyboard's Search
 key drops the keyboard to show the results; the field's X clears the text and
@@ -267,12 +303,12 @@ picture opens the message. The backend-free desktop/phone regression is
 from `apps/web`.
 
 `Favorites`, directly below Inbox on desktop, lists starred Macro emails across
-Signal, Noise, and archived mail. It respects the selected inboxes and filters; search
-within the tab is also restricted to favorites. Removing a star removes the row
+Signal, Noise, and archived mail. It respects the selected inboxes and filters;
+`in:favorites` restricts a search to favorites. Removing a star removes the row
 from this view. The tab persists across reloads. The paginated
 GraphQL Soup query uses `favoritesOnly: true`. Starring changes membership without
-changing the list query. Text search still resolves favorite IDs for the search
-service. An empty favorites list shows `No favorite emails`.
+changing the list query. An `in:favorites` search resolves favorite IDs for the
+search service. An empty favorites list shows `No favorite emails`.
 
 With `enable-email-focus` on, a `Focus` tab leads the
 desktop Inbox tabs and the mobile pills. It lists inbox
@@ -365,19 +401,20 @@ moves is not counted.
 `Archived`, between All mail and Shared in the desktop Library section, lists
 your own archived (Mail Done) threads: the
 All mailbox with Done applied, excluding threads teammates shared with you. It
-respects the selected inboxes and filters, and search within the tab finds only
-done threads. Rows offer **Unarchive email**;
+respects the selected inboxes and filters, and `in:archived` finds only done
+threads. Rows offer **Unarchive email**;
 unarchiving removes the row at once. The tab persists across reloads. An empty
 list shows `No archived email`.
 
-Search within a tab or facet finds the threads the list would show: Shared finds
-threads shared with you through a grant to you, a channel or a team, and none of
-your own; Calendar finds only threads with an invitation; Read status and Done
-filter by the thread's read and inbox state, as the list does (Done is not the
-notification's state); Sent finds threads with a message you sent and Drafts
-threads holding a draft; the attachment filters find threads with an attachment
-of any selected kind on any message. Check each with a search term that also
-matches threads the tab leaves out. A draft that never synced to the provider
+A search narrowed with `in:<view>`, or by a facet, finds the threads that list
+would show: `in:shared` finds threads shared with you through a grant to you, a
+channel or a team, and none of your own; `in:calendar` finds only threads with
+an invitation; Read status and Done filter by the thread's read and inbox
+state, as the list does (Done is not the notification's state); `in:sent` finds
+threads with a message you sent and `in:drafts` threads holding a draft; the
+attachment filters find threads with an attachment of any selected kind on any
+message. Check each with a search term that also matches threads the view
+leaves out. A draft that never synced to the provider
 is not in the search index, so Drafts finds it only by its subject among the
 drafts this browser holds.
 
@@ -416,9 +453,10 @@ while selected tag sets are pending. Background refreshes retain the current lis
 
 While the search field has text the list shows only search states: no Watch
 tutorial row, a spinner while the search runs (from the first character), and
-`No results` when nothing matches. `Load More` appears under result
+`No results` when nothing matches, naming the view an `in:` filter narrowed it
+to. `Load More` appears under result
 rows. A page that adds no row (an alias, saved view or client-side filter drops
-its hits, or the service's done check for Archived read its bound of index pages
+its hits, or the service's done check for `in:archived` read its bound of index pages
 without keeping one) is read past by itself, after the first page and after each
 Load More, up to five pages per load (`MAX_PAGES_PER_LOAD`). A load stops at
 a new row, at the end of the results (Load More goes away), on an error, or at
@@ -1550,8 +1588,14 @@ from Drafts and confirm its content and sending inbox; edit it again. Reconnect
 and check that exactly one draft remains and the open editor keeps any new text.
 On a cold app start, reopen a local draft thread before another GraphQL query has
 initialized the cache. Its subscription must observe settlement and adopt the
-server ID. If its identity read fails, it must remain cache-only until a later
-cache event resolves it; never send the unresolved handle to the server.
+server ID. If its identity read fails, or the cache has not answered it within
+a second, the thread is read from the server without storing the answer until a
+later cache event resolves it: a local handle comes back not found, which the
+view ignores for a draft the outbox still holds, and nothing is cached over the
+draft. A positively identified local draft is never sent to the server. To
+check the fallback, hold the tab's cache reads (drop `read` and
+`read-records-by-keys` requests to the cache coordinator) and open a thread from
+a message reference: it must load within a couple of seconds.
 Keep a reopened offline draft open while reconnecting: the composer must remain
 mounted when the local thread handle resolves to its server ID. After syncing,
 reopen the original local thread URL and confirm the composer still loads; then

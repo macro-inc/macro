@@ -15,7 +15,10 @@ import {
 } from 'solid-js';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { useCrmContext } from '../context/crm-context';
-import type { CrmCommentTarget } from '../context/workspace-context';
+import type {
+  CrmCommentTarget,
+  CrmRecordOpenOptions,
+} from '../context/workspace-context';
 import type { CrmContact } from '../core/contact';
 import type {
   CrmRecordRef,
@@ -69,7 +72,11 @@ vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
     Root: (props: ParentProps) => <>{props.children}</>,
     Layout: (props: ParentProps) => <>{props.children}</>,
-    Section: (props: ParentProps) => <>{props.children}</>,
+    Section: (props: ParentProps<{ title: string; order?: number }>) => (
+      <section aria-label={props.title} data-order={props.order}>
+        {props.children}
+      </section>
+    ),
     Toggle: () => null,
   },
 }));
@@ -249,8 +256,17 @@ function renderDetail(record: CrmRecordRef, viewName: string) {
   const [records, setRecords] = createSignal<readonly CrmRecordRef[]>([record]);
   const [section, setSection] = createSignal<CrmRecordSection>();
   const [commentTarget, setCommentTarget] = createSignal<CrmCommentTarget>();
-  const open = (trail: readonly CrmRecordRef[]) =>
+  const opened = vi.fn();
+  const open = (
+    trail: readonly CrmRecordRef[],
+    options?: CrmRecordOpenOptions
+  ) => {
+    opened(
+      trail.map((entry) => entry.id),
+      options
+    );
     setRecords(trail.map((entry) => ({ ...entry })));
+  };
   const close = vi.fn(() => setRecords([]));
   const failed = vi.fn(() => <div>Navigation failed</div>);
   render(() => (
@@ -279,7 +295,7 @@ function renderDetail(record: CrmRecordRef, viewName: string) {
       </Show>
     </ErrorBoundary>
   ));
-  return { close, records, failed, setCommentTarget };
+  return { close, records, failed, setCommentTarget, opened };
 }
 
 const crumbs = () =>
@@ -331,6 +347,29 @@ it('opens a People contact in place and follows its company without duplicating 
   expect(close).toHaveBeenCalledOnce();
 });
 
+it('follows a contact’s company link to a split already showing it, from the trail too', () => {
+  const { opened } = renderDetail(
+    { type: 'contact', id: 'contact-1', name: 'Maya' },
+    'People'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Open contact company' }));
+  expect(opened).toHaveBeenLastCalledWith(['contact-1', 'company-1'], {
+    followLink: true,
+  });
+});
+
+it('follows the company link back along the trail to a split already showing it', () => {
+  const { opened } = renderDetail(
+    { type: 'company', id: 'company-1', name: 'Northstar' },
+    'Pipeline'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Open Maya' }));
+  // The company is already in the trail; the link still follows it.
+  fireEvent.click(screen.getByRole('button', { name: 'Open contact company' }));
+  expect(opened).toHaveBeenLastCalledWith(['company-1'], { followLink: true });
+  expect(crumbs()).toEqual(['Pipeline', 'Northstar']);
+});
+
 it('registers the actual company detail while mounted and clears it on unmount', async () => {
   const { Company } =
     await vi.importActual<typeof import('./company-detail')>(
@@ -343,6 +382,27 @@ it('registers the actual company detail while mounted and clears it on unmount',
   expect(trackedItems()).toEqual([['company', undefined]]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
+});
+
+it('lists Properties before References in both information panels', async () => {
+  const { Company } =
+    await vi.importActual<typeof import('./company-detail')>(
+      './company-detail'
+    );
+  const { Contact } =
+    await vi.importActual<typeof import('./contact-detail')>(
+      './contact-detail'
+    );
+  const order = (title: string) =>
+    Number(screen.getByRole('region', { name: title }).dataset.order);
+  const company = render(() => (
+    <Company companyId="company-1" section="files" />
+  ));
+  expect(order('Properties')).toBeLessThan(order('Email sharing'));
+  expect(order('Email sharing')).toBeLessThan(order('References'));
+  company.unmount();
+  render(() => <Contact contactId="contact-1" section="files" />);
+  expect(order('Properties')).toBeLessThan(order('References'));
 });
 
 it('records an open of a company once it has loaded', async () => {

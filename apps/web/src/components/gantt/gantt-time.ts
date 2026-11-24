@@ -79,6 +79,9 @@ export function ganttTimeSnap(scale: GanttScale): GanttTimeSnap {
 
 export type GanttTimes = { start: Date; end: Date };
 
+/** One end of a timed range. */
+export type GanttTimedEnd = keyof GanttTimes;
+
 /**
  * A timed range after dragging `edge` from position `from` to `to`. Day
  * steps keep each end's time of day; minute steps snap the dragged edge and
@@ -238,22 +241,39 @@ function formatDate(instant: Date): string {
   }).format(instant);
 }
 
-/** `Oct 9, 9 AM → Oct 13, 5 PM`, or `Oct 9, 9 AM – 5 PM` within one day. */
-export function formatGanttTimeRange(times: GanttTimes): string {
-  const start = `${formatDate(times.start)}, ${formatGanttTime(times.start)}`;
-  return toGanttDay(times.start) === toGanttDay(times.end)
-    ? `${start} – ${formatGanttTime(times.end)}`
-    : `${start} → ${formatDate(times.end)}, ${formatGanttTime(times.end)}`;
+/**
+ * `Oct 9, 9 AM → Oct 13, 5 PM`, or `Oct 9, 9 AM – 5 PM` within one day. A
+ * `wholeDay` end, saved without a time, reads as its day alone (`Oct 9 →
+ * Oct 13, 5 PM`), and a whole-day start on the end's day adds nothing.
+ */
+export function formatGanttTimeRange(
+  times: GanttTimes,
+  wholeDay?: GanttTimedEnd
+): string {
+  const at = (end: GanttTimedEnd, instant: Date) =>
+    wholeDay === end
+      ? formatDate(instant)
+      : `${formatDate(instant)}, ${formatGanttTime(instant)}`;
+  if (toGanttDay(times.start) === toGanttDay(times.end)) {
+    if (wholeDay === 'start') return at('end', times.end);
+    if (!wholeDay)
+      return `${at('start', times.start)} – ${formatGanttTime(times.end)}`;
+  }
+  return `${at('start', times.start)} → ${at('end', times.end)}`;
 }
 
-/** `Fri, Oct 9, 9:00 AM`: an end as a drag shows it, to the minute. */
-export function formatGanttInstant(instant: Date): string {
+/**
+ * `Fri, Oct 9, 9:00 AM`: an end as a drag shows it, to the minute, or `Fri,
+ * Oct 9` for an end saved without a time.
+ */
+export function formatGanttInstant(instant: Date, wholeDay = false): string {
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
+    ...(wholeDay
+      ? {}
+      : { hour: 'numeric' as const, minute: '2-digit' as const }),
   }).format(instant);
 }
 

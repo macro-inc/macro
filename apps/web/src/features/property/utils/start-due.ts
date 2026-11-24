@@ -154,6 +154,7 @@ export function formatStartDueCompact(
   if (!due) return `${at('start', start)} →`;
   if (wholeDay === 'start') return at('due', due);
   if (wholeDay === 'due') return `${at('start', start)} → ${day(due)}`;
+  if (start.getTime() === due.getTime()) return at('due', due);
   return `${day(start)}, ${formatCompactCalendarTimeRange(start, due, clock)}`;
 }
 
@@ -213,8 +214,11 @@ export function withoutTimes(dates: StartDue): StartDue {
 /**
  * The dates after a clock time is picked for `field`, as minutes past the
  * midnight of `day`. A new start time moves the due date with it, keeping
- * the length, as a calendar event's end follows its start. A due time before
- * the start moves the start back to it.
+ * the length, as a calendar event's end follows its start. With no length to
+ * keep (no start yet, a start after the due date, or an end saved without a
+ * time), a start time past the due date moves the due date to it, and one
+ * before it leaves the due date as it is. A due time before the start moves
+ * the start back to it.
  */
 export function pickTime(
   dates: StartDue,
@@ -224,16 +228,24 @@ export function pickTime(
 ): { dates: StartDue; changed: DateField[] } {
   const at = atClock(day, minutes);
   if (field === 'start') {
-    if (!dates.due || !dates.start) {
-      return { dates: { ...dates, start: at }, changed: ['start'] };
+    const { start, due } = dates;
+    if (start && due && due >= start && !dates.wholeDay) {
+      return {
+        dates: {
+          ...dates,
+          start: at,
+          due: addMinutes(at, differenceInMinutes(due, start)),
+        },
+        changed: ['start', 'due'],
+      };
     }
-    const length = differenceInMinutes(dates.due, dates.start);
-    if (length < 0)
-      return { dates: { ...dates, start: at }, changed: ['start'] };
-    return {
-      dates: { ...dates, start: at, due: addMinutes(at, length) },
-      changed: ['start', 'due'],
-    };
+    if (due && at > due) {
+      return {
+        dates: { ...dates, start: at, due: at },
+        changed: ['start', 'due'],
+      };
+    }
+    return { dates: { ...dates, start: at }, changed: ['start'] };
   }
   if (dates.start && at < dates.start) {
     return {
@@ -242,6 +254,50 @@ export function pickTime(
     };
   }
   return { dates: { ...dates, due: at }, changed: ['due'] };
+}
+
+/** One end a timeline drag saves: its new moment and whether it keeps a time. */
+export type RescheduledEnd = {
+  field: DateField;
+  value: Date;
+  hasTime: boolean;
+};
+
+/**
+ * The saves a timeline drag makes from the range the bar was dropped at:
+ * each end that changed (by day for whole days, by moment for times), the
+ * due date first when the new start passes the saved due date, as the
+ * server keeps a start on or before it. A bar drawn from the created date,
+ * for a task with no start, gains a start only when its start moved. A timed
+ * bar's `wholeDay` end, saved without a time, stays a whole day.
+ */
+export function rescheduledStartDue(
+  previous: { start: Date; due: Date | null; wholeDay?: DateField },
+  range: { start: Date; end: Date; allDay: boolean }
+): RescheduledEnd[] {
+  const wholeDay = (field: DateField) =>
+    range.allDay || previous.wholeDay === field;
+  const moved = (field: DateField, before: Date | null, after: Date) =>
+    !before ||
+    (wholeDay(field)
+      ? !isSameDay(before, after)
+      : before.getTime() !== after.getTime());
+  const end = (field: DateField, value: Date): RescheduledEnd => ({
+    field,
+    value: wholeDay(field) && !range.allDay ? startOfDay(value) : value,
+    hasTime: !wholeDay(field),
+  });
+  const ends: RescheduledEnd[] = [];
+  if (moved('start', previous.start, range.start)) {
+    ends.push(end('start', range.start));
+  }
+  if (moved('due', previous.due, range.end)) {
+    ends.push(end('due', range.end));
+  }
+  if (ends.length === 2 && previous.due && range.start > previous.due) {
+    ends.reverse();
+  }
+  return ends;
 }
 
 /** The calendar days from `start` to `due`, both counted. */

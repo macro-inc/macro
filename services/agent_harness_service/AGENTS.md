@@ -48,7 +48,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Each call runs in an `internal_mcp.call_tool` span parented from the
   request's `_meta` trace context, which the in-process agent sends
   (`mcp_toolset::TraceContext::Propagate`), so `code_mode.execution` and the
-  sandbox's SDK calls join the session's trace.
+  sandbox's SDK calls join the session's trace. A request whose `_meta`
+  carries `macro.dev/withhold-content` runs inside
+  `genai_telemetry::withhold_content`, and a refusal of its arguments says
+  only what the tool's input wanted (`invalid_arguments`).
 - `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
   and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
   on Macro credits (Claude Code on a Macro computer). Both values come from
@@ -338,7 +341,11 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `src/scheduling.rs`).
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
-  email_service's internal recent-messages route, the person's connected
+  email_service's internal recent-messages route, and at onboarding with
+  `routine-suggestions-find-work` on the last 30 days of it and of the
+  person's sent mail (`folder=sent`)
+  for finding the work in it (`RouterWorkModel`, a structured completion
+  recorded as the first drafting session's non-billable usage), the person's connected
   apps (`routine_sessions::RoutineConnectedApps`, which also checks a
   routine's required apps, compared as `ConnectorId`s so an alias is its app), and whether CRM's company tools would let them add a
   company (a team, and CRM access in it). Generations (`crates/suggestion_generation`) run their

@@ -69,11 +69,24 @@ fn only_cut_short_generations_retry() {
 }
 
 fn result(finished: bool, changed: bool) -> SessionResult {
-    SessionResult { finished, changed }
+    SessionResult {
+        finished,
+        changed,
+        cut_short: false,
+    }
+}
+
+fn cut_short(changed: bool) -> SessionResult {
+    SessionResult {
+        finished: false,
+        changed,
+        cut_short: true,
+    }
 }
 
 /// Ready needs every session finished; a session that changed something
-/// makes a run partial, not failed; stopping before any finished cancels it.
+/// makes a run partial, not failed; stopping before any finished, or cutting
+/// short a session whose work must run again, cancels it.
 #[test]
 fn a_generation_ends_by_what_its_sessions_finished_and_changed() {
     let cases = [
@@ -103,6 +116,16 @@ fn a_generation_ends_by_what_its_sessions_finished_and_changed() {
         (
             vec![result(true, false), result(false, false)],
             true,
+            Event::SomeFinished,
+        ),
+        (
+            vec![result(true, true), cut_short(true)],
+            true,
+            Event::ProcessStopped,
+        ),
+        (
+            vec![result(true, false), cut_short(false)],
+            false,
             Event::SomeFinished,
         ),
         (Vec::new(), false, Event::NoneFinished),
