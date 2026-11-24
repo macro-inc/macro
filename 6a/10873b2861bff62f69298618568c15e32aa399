@@ -1,0 +1,46 @@
+crates/fusion_import/src/outbound/pg_repo.rs
+  s_8c8123a52748fa::t_b07c0f64e2e785 1-379
+crates/fusion_import/src/outbound.rs
+  s_8c8123a52748fa::t_62530e20b6a6ac 5
+crates/fusion_import/src/outbound/pg_repo/test.rs
+  s_8c8123a52748fa::t_c003d6d708222a 1-168,170,172-199,209-213,217-270
+  s_8c8123a52748fa::t_78919c23ed4fb8 169,171,200-208,214-216
+.sqlx/query-04ffc5157f96c0ac73d1080ec7ec08c908b52c05b35f1318c19f407e545e9b6d.json
+  s_8c8123a52748fa::t_fd2b85547a6992 1-41
+.sqlx/query-11934a8b788909e02863e499f49317205203e57bb1b2f7cf9e431b34487eae9e.json
+  s_8c8123a52748fa::t_023bb25a3d13fa 1-15
+.sqlx/query-1212324aca0a01d216c378e56b422a47dd5ad2eca54104df9b68877430121c18.json
+  s_8c8123a52748fa::t_38f5239636e57e 1-17
+.sqlx/query-22143cc6291218d5e177031ee039998a72b7b21fe938c006e78561dbbe801c98.json
+  s_8c8123a52748fa::t_386d57c1e6d4c0 1-15
+.sqlx/query-6bc95cba164e8cfe62e7aad3fe60d2a2bd51403ca19745c9fbf1f8d56a9f87f8.json
+  s_8c8123a52748fa::t_dba60b325c515e 1-47
+.sqlx/query-839acae44cdd83788c5c9bb940688876e77fe989cd6d44683916faf6f241ecd9.json
+  s_8c8123a52748fa::t_0fbec0210bc52a 1-42
+.sqlx/query-93ad8d71e15bcb90dc8a717b2f8ffa1c6588ee21209fbe0c10156e53d48161ad.json
+  s_8c8123a52748fa::t_e71682addf02e0 1-22
+.sqlx/query-b9995e9088c955626d2e415462fb99d7717213fc89ada3f39b52f11732a93f07.json
+  s_8c8123a52748fa::t_feda722aabcfe9 1-16
+.sqlx/query-cc2671b49c33902b49bf44b3a17fb2091bf23976f89e4e3c9677cfe92629fb0e.json
+  s_8c8123a52748fa::t_0d9f79323da917 1-16
+.sqlx/query-f4acca4f26e84773ad0c4b76f569c7f4924825db168f6767374f61b46603d722.json
+  s_8c8123a52748fa::t_b8abceac731c18 1-42
+.sqlx/query-f73abe4f9c4d2f6cf64760d4429ebbe3a5320934ee520e2fce5b6ed0bfeb0b3d.json
+  s_8c8123a52748fa::t_21be2aa23acfd4 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6a10873b2861bff62f69298618568c15e32aa399",
+  "prompts": {},
+  "sessions": {
+    "s_8c8123a52748fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e3ebe64b-e3f3-41de-91c9-1dffbc9d884d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
