@@ -4,7 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
-async-trait = "0.1"
+async-trait = { workspace = true }
 cache-core = { path = "../../../../crates/client/cache-core" }
 cache-turso = { path = "../../../../crates/client/cache-turso" }
 flate2 = "1"
@@ -15,7 +15,7 @@ serde_json = "1"
 tauri = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync", "time"] }
-tokio-util = { version = "0.7", features = ["rt"] }
+tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 uuid = { workspace = true, features = ["serde"] }
 

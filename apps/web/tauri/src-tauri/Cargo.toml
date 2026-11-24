@@ -40,7 +40,7 @@ default = ["auto_apply_update"]
 cef = ["dep:minidump"]
 
 [dependencies]
-async-trait = "0.1"
+async-trait = { workspace = true }
 http = "1"
 log = "0.4"
 logger = { path = "../logger" }
@@ -56,7 +56,7 @@ reqwest = { workspace = true, features = ["cookies", "stream"] }
 serde_qs = "0.15.0"
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
 tauri-plugin-deep-link = "=2.4.5"
-tokio-util = { version = "0.7", features = ["io"] }
+tokio-util = { workspace = true, features = ["io"] }
 # sean/cookie-store-path includes ws-replay-buffer. Keep both plugin revs identical
 # and the TauriMessage/ReplayEnvelope types in
 # packages/collaboration/src/websocket/platform/tauri-websocket.ts in sync when bumping
