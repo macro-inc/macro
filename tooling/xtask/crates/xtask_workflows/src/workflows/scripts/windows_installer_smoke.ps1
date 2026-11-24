@@ -75,18 +75,25 @@ $stderr = Join-Path $env:RUNNER_TEMP 'macro-stderr.log'
 $process = Start-Process -FilePath $app -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 try {
   $page = $null
+  $targets = $null
+  $devtoolsError = 'never polled'
   $deadline = (Get-Date).AddSeconds(120)
   while (-not $page -and (Get-Date) -lt $deadline) {
     if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) before its page loaded" }
     Start-Sleep -Seconds 2
     try {
       $targets = Invoke-RestMethod -Uri "http://127.0.0.1:$port/json/list" -TimeoutSec 5
+      $devtoolsError = $null
       $page = $targets | Where-Object { $_.type -eq 'page' -and $_.url -like 'https://tauri.localhost/*' } | Select-Object -First 1
     } catch {
       # DevTools is not listening until WebView2 has started.
+      $devtoolsError = "$_"
     }
   }
-  if (-not $page) { throw 'No Macro page at https://tauri.localhost within 120 seconds' }
+  if (-not $page) {
+    $seen = if ($devtoolsError) { "DevTools unreachable: $devtoolsError" } else { "targets: $($targets | Select-Object type, url | ConvertTo-Json -Compress)" }
+    throw "No Macro page at https://tauri.localhost within 120 seconds ($seen)"
+  }
 
   # Wait for the app to render text: an origin the protocol handler rejects,
   # or a bundle that fails to start, leaves the document empty. Every socket
@@ -141,6 +148,18 @@ try {
   Start-Sleep -Seconds 5
   if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) after loading" }
 } catch {
+  # Whether WebView2 started, with which switches, and what it listens on.
+  try {
+    $browsers = @(Get-CimInstance Win32_Process -Filter "Name = 'msedgewebview2.exe'")
+    Write-Output "--- $($browsers.Count) msedgewebview2 processes"
+    foreach ($browser in $browsers | Where-Object { $_.CommandLine -notmatch '--type=' }) {
+      Write-Output "browser $($browser.ProcessId): $($browser.CommandLine)"
+      Get-NetTCPConnection -State Listen -OwningProcess $browser.ProcessId -ErrorAction SilentlyContinue |
+        ForEach-Object { Write-Output "  listening on $($_.LocalAddress):$($_.LocalPort)" }
+    }
+  } catch {
+    Write-Output "Could not list WebView2 processes: $_"
+  }
   foreach ($log in @($stdout, $stderr)) {
     if (Test-Path $log) {
       Write-Output "--- $log (last 200 lines)"
