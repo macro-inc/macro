@@ -741,6 +741,13 @@ generate_file_types!(
     (ThreeDs, "3ds", "application/x-3ds", ThreeD),
     (Gltf, "gltf", "model/gltf+json", ThreeD),
     (Glb, "glb", "model/gltf-binary", ThreeD),
+    // Autodesk Fusion designs and archives, and neutral CAD exchange files
+    (F3d, "f3d", "application/octet-stream", ThreeD),
+    (F3z, "f3z", "application/octet-stream", ThreeD),
+    (Step, "step", "model/step", ThreeD),
+    (Stp, "stp", "model/step", ThreeD),
+    (Iges, "iges", "model/iges", ThreeD),
+    (Igs, "igs", "model/iges", ThreeD),
     // Virtual machine and container files
     (Vhd, "vhd", "application/x-virtualbox-vhd", Vm),
     (Vhdx, "vhdx", "application/x-virtualbox-vhdx", Vm),
