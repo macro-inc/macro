@@ -581,6 +581,45 @@ describe('createLocalChannelTimeline', () => {
     mounted.dispose();
   });
 
+  it('tells the runtime of a stored page whose window was replaced, and what it dropped', async () => {
+    const rows = messages(2);
+    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
+      page: {
+        __typename: 'GraphqlChannelTimelinePage',
+        entries: [...rows].reverse(),
+        olderCursor: null,
+        newerCursor: null,
+        seq: '9',
+      } as never,
+      cached: Promise.resolve(),
+    }));
+    const mounted = mount({ rows, held: false, fetchPage });
+    let store!: () => void;
+    const commit = mounted.host.channelTimelineCommit;
+    mounted.host.channelTimelineCommit = async (...args) => {
+      const answer = await commit(...args);
+      // The window is replaced before the device answers the first commit.
+      if (mounted.host.commits.length > 1) return answer;
+      await new Promise<void>((resolve) => {
+        store = resolve;
+      });
+      return droppingCommit(['GraphqlChannelMessage:gone'])(args[0]);
+    };
+    await waitFor(() => mounted.host.commits.length === 1);
+    mounted.setAround(rows[0]!.id);
+    await waitFor(
+      () => vi.mocked(mounted.runtime.noteServerRead).mock.calls.length > 0
+    );
+    store();
+    await waitFor(
+      () => vi.mocked(mounted.runtime.noteServerRead).mock.calls.length > 1
+    );
+    expect(vi.mocked(mounted.runtime.noteServerRead).mock.calls.at(-1)).toEqual(
+      [CHANNEL_ID, '9', 3, '9', true]
+    );
+    mounted.dispose();
+  });
+
   it('reads a page again when the cache session changed before it was stored, keeping it shown', async () => {
     const rows = messages(2);
     let held = false;

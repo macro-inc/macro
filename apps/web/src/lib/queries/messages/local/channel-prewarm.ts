@@ -168,7 +168,7 @@ const warmChannel = (
           seq,
           epoch,
           loaded.readSeq,
-          stored.removed
+          stored.dropped
         );
         return 'fetched' as const;
       }

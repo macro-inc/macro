@@ -83,9 +83,9 @@ export interface ChannelPage {
  * once no delete is pending (`afterDeletes`).
  */
 export type PageStored =
-  // `removed`: the commit dropped records the page proved gone, so only a
-  // catch-up from its sequence replays what it dropped in error.
-  | { kind: 'stored'; seq: string | null; removed?: boolean }
+  // `dropped`: the device deleted records it held where the page lists none,
+  // so what changed after the page is replayed from its sequence.
+  | { kind: 'stored'; seq: string | null; dropped?: boolean }
   | { kind: 'session-changed' }
   | { kind: 'yielded' };
 export type LoadedChannelPage = {
@@ -237,7 +237,7 @@ export function pageEntries(
     if (!entry) return [];
     return [
       {
-        key: `${record.__typename}:${record.id}`,
+        key: entryKey(record),
         sortKey: record.sortKey,
         entry,
       },
@@ -287,14 +287,7 @@ function cacheArgs(request: ChannelPageRequest): ChannelTimelineCacheArgs {
 
 export type DeviceRead =
   | { kind: 'page'; page: ChannelPage; seq: string | null }
-  | {
-      kind: 'miss';
-      seq: string | null;
-      /** Entry keys the device holds for the window, newest first. */
-      keys: readonly string[];
-      /** Whether a pending optimistic mutation shaped those keys. */
-      optimistic: boolean;
-    }
+  | { kind: 'miss'; seq: string | null }
   | { kind: 'unsupported' }
   // The host failed or timed out; says nothing about what the device holds.
   | { kind: 'failed' };
@@ -306,15 +299,9 @@ export async function readDeviceChannelPage(
 ): Promise<DeviceRead> {
   const result = await host.channelTimeline(cacheArgs(request));
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
-  const miss = {
-    kind: 'miss' as const,
-    seq: result.seq,
-    keys: result.keys,
-    optimistic: result.optimistic,
-  };
-  if (!result.covered) return miss;
+  if (!result.covered) return { kind: 'miss', seq: result.seq };
   const records = await readTimelineRecords(host, result.keys);
-  if (!records) return miss;
+  if (!records) return { kind: 'miss', seq: result.seq };
   return {
     kind: 'page',
     page: {
@@ -341,15 +328,23 @@ async function readDeviceOrFail(
   }
 }
 
+/** A fetched stretch with every entry the server listed in it. */
+type ListedCoverage = ChannelCoverageWire & { entryKeys: string[] };
+
+const entryKey = (entry: { __typename?: string; id: string }): string =>
+  `${entry.__typename}:${entry.id}`;
+
 /**
  * The stretch a fetched page proves complete: from its oldest entry (or the
- * start of the channel) to its newest (or the live end). Undefined when the
- * page proves nothing, such as an empty window around a message.
+ * start of the channel) to its newest (or the live end), and the entries in
+ * it, so the device drops others it held there (records stored by a page
+ * whose commit was lost: no catch-up replays their deletes). Undefined when
+ * the page proves nothing, such as an empty window around a message.
  */
 export function serverPageCoverage(
   request: Pick<ChannelPageRequest, 'before' | 'after' | 'aroundMessageId'>,
   page: Pick<ChannelServerPage, 'entries' | 'olderCursor' | 'newerCursor'>
-): ChannelCoverageWire | undefined {
+): ListedCoverage | undefined {
   const newest = page.entries[0]?.sortKey;
   const oldest = page.entries.at(-1)?.sortKey;
   const start =
@@ -361,36 +356,7 @@ export function serverPageCoverage(
     request.before ??
     (latest || page.newerCursor === null ? CHANNEL_TIMELINE_HEAD : newest);
   if (start === undefined || end === undefined) return undefined;
-  return { start, end };
-}
-
-/**
- * Records a latest page proves gone: the device held them in the window with
- * no sequence (stored by a page whose commit never landed, so no catch-up
- * replays their deletes), and the server, read after the device, no longer
- * lists them. Only keys at or above the oldest key both lists hold, or every
- * key when the page reaches the start, lie inside the page's coverage.
- */
-export function staleDeviceKeys(
-  request: Pick<ChannelPageRequest, 'before' | 'after' | 'aroundMessageId'>,
-  held: DeviceRead,
-  page: Pick<ChannelServerPage, 'entries' | 'olderCursor'>
-): string[] {
-  const latest =
-    request.before === undefined &&
-    request.after === undefined &&
-    request.aroundMessageId === undefined;
-  if (!latest || held.kind !== 'miss' || held.seq !== null) return [];
-  // A pending write shaped the device's list: its rows are not the server's yet.
-  if (held.optimistic) return [];
-  const listed = new Set(
-    page.entries.map((record) => `${record.__typename}:${record.id}`)
-  );
-  const end =
-    page.olderCursor === null
-      ? held.keys.length
-      : held.keys.findLastIndex((key) => listed.has(key));
-  return held.keys.slice(0, Math.max(end, 0)).filter((key) => !listed.has(key));
+  return { start, end, entryKeys: page.entries.map(entryKey) };
 }
 
 export interface ChannelPageDeps {
@@ -557,23 +523,23 @@ async function loadPage(
   const { page, cached } = fetched;
   span.setAttr('page.entries', page.entries.length);
   const coverage = serverPageCoverage(request, page);
-  let dropped = false;
-  const commit = async (): Promise<string | null | 'yielded'> => {
+  const commit = async (): Promise<CommittedPage> => {
     try {
       return await commitPage();
     } finally {
       release();
     }
   };
-  const commitPage = async (): Promise<string | null | 'yielded'> => {
+  const unstored = { seq: null, dropped: 0 };
+  const commitPage = async (): Promise<CommittedPage> => {
     await cached;
     // A cold host is asked again once it can answer.
     const held = device === 'not-ready' ? await read : device;
     if (held.kind === 'unsupported') {
       markChannelCacheUnsupported(host as CacheHost);
-      return null;
+      return unstored;
     }
-    if (held.kind === 'failed') return null;
+    if (held.kind === 'failed') return unstored;
     markChannelCacheAnswered(host as CacheHost);
     // A delete in another tab came first, or the hold ran past its limit,
     // which a reset stops waiting for: the records the page stored may be
@@ -581,16 +547,12 @@ async function loadPage(
     // again after it. Nothing awaits from here to the send.
     if (!hold?.current()) return 'yielded';
     // Deleted here meanwhile: the reset or eviction rereads the views itself.
-    if (!unchangedSince(host, request.channelId, resets)) return null;
+    if (!unchangedSince(host, request.channelId, resets)) return unstored;
     const touchedAtMs = deps.touches.due(
       request.channelId,
       (deps.now ?? Date.now)(),
       generation
     );
-    const removedKeys = coverage ? staleDeviceKeys(request, held, page) : [];
-    dropped = removedKeys.length > 0;
-    if (removedKeys.length > 0)
-      span.setAttr('page.stale_removed', removedKeys.length);
     const committed = await commitTouch(
       deps.touches,
       { channelId: request.channelId, touchedAtMs, generation },
@@ -599,18 +561,19 @@ async function loadPage(
           {
             channelId: request.channelId,
             ...(coverage && { coverage: [coverage] }),
-            ...(removedKeys.length > 0 && { removedKeys }),
             seq: { kind: 'lower', seq: page.seq },
             ...(touchedAtMs !== undefined && { touchedAtMs }),
           },
           generation
         )
     );
-    return committed.kind === 'committed' ? committed.channelSeq : held.seq;
+    return committed.kind === 'committed'
+      ? { seq: committed.channelSeq, dropped: committed.changed.length }
+      : { seq: held.seq, dropped: 0 };
   };
   // A child of the page's span: the page answers before the device stores it.
   const store = (child: Span): Promise<PageStored> =>
-    storedOutcome(commit(), child, () => dropped);
+    storedOutcome(commit(), child);
   return {
     page: {
       entries: pageEntries(page.entries),
@@ -623,24 +586,29 @@ async function loadPage(
   };
 }
 
+/** The sequence a commit left and how many records it dropped. */
+type CommittedPage = { seq: string | null; dropped: number } | 'yielded';
+
 /**
  * How a store step ended, as a value: a loader that moved on leaves the
  * promise unawaited, so it must not reject. Failures other than a session
  * change are reported here.
  */
 async function storedOutcome(
-  commit: Promise<string | null | 'yielded'>,
-  span: Span,
-  dropped: () => boolean
+  commit: Promise<CommittedPage>,
+  span: Span
 ): Promise<PageStored> {
   try {
-    const seq = await commit;
-    if (seq === 'yielded') {
+    const committed = await commit;
+    if (committed === 'yielded') {
       span.setAttr('page.stored', 'yielded');
       return { kind: 'yielded' };
     }
+    const { seq, dropped } = committed;
     span.setAttr('page.stored', seq === null ? 'unheld' : 'held');
-    return { kind: 'stored', seq, ...(dropped() && { removed: true }) };
+    if (dropped === 0) return { kind: 'stored', seq };
+    span.setAttr('page.dropped', dropped);
+    return { kind: 'stored', seq, dropped: true };
   } catch (error) {
     if (cacheSessionChanged(error)) {
       span.setAttr('page.stored', 'session-changed');

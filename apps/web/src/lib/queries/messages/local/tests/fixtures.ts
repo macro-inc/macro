@@ -164,6 +164,16 @@ export function fakeHost(
   return host;
 }
 
+/** A commit that dropped records the device held inside its coverage. */
+export const droppingCommit =
+  (changed: string[]) =>
+  (args: ChannelTimelineCommitArgs): ChannelTimelineCommitCacheResult => ({
+    kind: 'committed',
+    revision: '1' as CacheRevision,
+    changed: args.coverage ? changed : [],
+    channelSeq: args.seq?.kind === 'lower' ? args.seq.seq : null,
+  });
+
 export function devicePage(
   keys: string[],
   overrides: Partial<Extract<ChannelTimelineCacheResult, { kind: 'page' }>> = {}

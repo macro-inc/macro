@@ -1946,8 +1946,58 @@ it('replays from the read when it dropped records the device held', async () => 
       '6',
       true
     );
+    expect(test.changed).toHaveBeenCalled();
+    // The message of change 7 was stored, then dropped by the read's commit,
+    // and only now does its frame move the device past it.
+    const seventh = graphqlMessage(7, { content: 'sent at 7' });
+    const key = `GraphqlChannelMessage:${seventh.id}`;
+    test.push('7', seventh);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(test.seq()).toBe('7');
+    test.records.delete(key);
     await vi.advanceTimersByTimeAsync(600);
     expect(test.requests.map(({ after }) => after)).toEqual(['5', '6']);
+
+    test.requests[1].answer(delta('7', { messages: [seventh] }));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.records.get(key)).toBe('sent at 7');
+    expect(await test.runtime.ensureCurrent(CHANNEL_ID)).toBe('current');
+    expect(test.requests).toHaveLength(2);
+  } finally {
+    test.stop();
+  }
+});
+
+it('replays again when a read drops records under a catch-up that replays from it', async () => {
+  vi.useFakeTimers();
+  const { test } = await caughtUpToSix();
+  try {
+    const drop = async () => {
+      const answer = await test.host.channelTimelineCommit({
+        channelId: CHANNEL_ID,
+        seq: { kind: 'lower', seq: '6' },
+      });
+      test.runtime.noteServerRead(
+        CHANNEL_ID,
+        answer.channelSeq,
+        test.runtime.epoch(),
+        '6',
+        true
+      );
+    };
+    await drop();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.requests.map(({ after }) => after)).toEqual(['5', '6']);
+
+    // What this one drops may have been written by the page out.
+    await drop();
+    test.requests[1].answer(delta('7', { messages: [graphqlMessage(7)] }));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(test.requests.map(({ after }) => after)).toEqual(['5', '6', '6']);
+    test.requests[2].answer(delta('7', { messages: [graphqlMessage(7)] }));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(await test.runtime.ensureCurrent(CHANNEL_ID)).toBe('current');
+    expect(test.requests).toHaveLength(3);
   } finally {
     test.stop();
   }

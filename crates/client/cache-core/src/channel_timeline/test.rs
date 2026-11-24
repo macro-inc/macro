@@ -216,14 +216,16 @@ fn commits_validate_spans_keys_and_sequences() {
     assert_eq!(
         commit(|c| c.coverage.push(ChannelCoverage {
             thread_root_id: None,
-            span: span("20", "10")
+            span: span("20", "10"),
+            entry_keys: None,
         })),
         Err(ChannelTimelineError::InvalidSpan)
     );
     assert_eq!(
         commit(|c| c.coverage.push(ChannelCoverage {
             thread_root_id: None,
-            span: span(TIMELINE_START, TIMELINE_HEAD)
+            span: span(TIMELINE_START, TIMELINE_HEAD),
+            entry_keys: None,
         })),
         Ok(())
     );
@@ -232,6 +234,25 @@ fn commits_validate_spans_keys_and_sequences() {
             .removed_keys
             .push(EntityKey::entity("GraphqlSoupChannel", &["x"]))),
         Err(ChannelTimelineError::InvalidKey)
+    );
+    assert_eq!(
+        commit(|c| c.coverage.push(ChannelCoverage {
+            thread_root_id: None,
+            span: span("10", "20"),
+            entry_keys: Some(vec![EntityKey::entity("GraphqlSoupChannel", &["x"])]),
+        })),
+        Err(ChannelTimelineError::InvalidKey)
+    );
+    assert_eq!(
+        commit(|c| c.coverage.push(ChannelCoverage {
+            thread_root_id: None,
+            span: span("10", "20"),
+            entry_keys: Some(vec![
+                EntityKey::entity(MESSAGE_TYPENAME, &["m"]);
+                MAX_CHANNEL_COMMIT_ITEMS
+            ]),
+        })),
+        Err(ChannelTimelineError::TooLarge)
     );
     assert_eq!(
         commit(|c| c.seq = Some(ChannelSeqUpdate::Lower { seq: "-1".into() })),
@@ -495,14 +516,17 @@ fn coverage_groups_by_scope() {
             ChannelCoverage {
                 thread_root_id: None,
                 span: span("10", "20"),
+                entry_keys: None,
             },
             ChannelCoverage {
                 thread_root_id: Some("m1".into()),
                 span: span(TIMELINE_START, TIMELINE_HEAD),
+                entry_keys: None,
             },
             ChannelCoverage {
                 thread_root_id: None,
                 span: span("30", "40"),
+                entry_keys: None,
             },
         ],
         ..ChannelTimelineCommit::default()
@@ -548,4 +572,62 @@ fn commits_and_results_use_the_host_wire_shape() {
         .unwrap(),
         serde_json::json!({"covered": true, "keys": [], "olderCursor": "10", "newerCursor": null, "seq": null, "optimistic": false})
     );
+}
+
+#[test]
+fn stray_rows_are_the_unlisted_ones_inside_a_listed_stretch() {
+    let scope = TimelineScope::Channel("c1".into());
+    let rows = || {
+        ["10", "20", "25", "30", "40", "50"]
+            .map(|position| (key(&format!("m{position}")), position.to_owned()))
+    };
+    let strays = |coverage: Vec<ChannelCoverage>, held: &[TimelineSpan]| {
+        let commit = ChannelTimelineCommit {
+            channel_id: "c1".into(),
+            coverage,
+            ..ChannelTimelineCommit::default()
+        };
+        stray_rows(&commit, &scope, held, rows())
+            .iter()
+            .filter_map(EntityKey::id)
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    let listed = |start: &str, end: &str, ids: &[&str]| ChannelCoverage {
+        thread_root_id: None,
+        span: span(start, end),
+        entry_keys: Some(ids.iter().map(|id| key(id)).collect()),
+    };
+    // The ends belong to the neighbouring stretches.
+    assert_eq!(strays(vec![listed("20", "40", &["m30"])], &[]), ["m25"]);
+    assert_eq!(
+        strays(vec![listed("20", TIMELINE_HEAD, &["m20", "m40"])], &[]),
+        ["m25", "m30", "m50"]
+    );
+    // A stretch held before keeps its rows, its ends included.
+    assert_eq!(
+        strays(
+            vec![listed(TIMELINE_START, TIMELINE_HEAD, &[])],
+            &[span("20", "30")]
+        ),
+        ["m10", "m40", "m50"]
+    );
+    // Listed by another stretch of the commit, or in a stretch without a list.
+    assert_eq!(
+        strays(
+            vec![
+                listed("10", "40", &["m20"]),
+                listed("20", "50", &["m25", "m30"])
+            ],
+            &[]
+        ),
+        ["m40"]
+    );
+    let mut unlisted = listed("10", "50", &[]);
+    unlisted.entry_keys = None;
+    assert!(strays(vec![unlisted], &[]).is_empty());
+    // Another scope's list says nothing about this one.
+    let mut thread = listed(TIMELINE_START, TIMELINE_HEAD, &[]);
+    thread.thread_root_id = Some("m20".into());
+    assert!(strays(vec![thread], &[]).is_empty());
 }

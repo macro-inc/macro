@@ -71,6 +71,7 @@ fn coverage(thread: Option<&str>, start: &str, end: &str) -> ChannelCoverage {
     ChannelCoverage {
         thread_root_id: thread.map(Into::into),
         span: span(start, end),
+        entry_keys: None,
     }
 }
 
@@ -480,5 +481,67 @@ fn invalid_commits_never_open_a_transaction() {
             .unwrap_err();
         assert!(!error.requires_physical_reset());
         assert_eq!(scalar(&storage, SYNC_COUNT), 0);
+    });
+}
+
+fn listing(thread: Option<&str>, start: &str, end: &str, entries: &[&str]) -> ChannelCoverage {
+    ChannelCoverage {
+        entry_keys: Some(entries.iter().map(|id| key(id)).collect()),
+        ..coverage(thread, start, end)
+    }
+}
+
+#[test]
+fn a_fetched_stretch_drops_the_rows_it_does_not_list() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("channel-strays").unwrap();
+        storage.put_batch(seed()).await.unwrap();
+        let mut tombstone = message("c1", "r1", "~-31", Some("m3"));
+        tombstone
+            .1
+            .fields
+            .insert("deletedAt".into(), string("2026-01-01T00:00:00Z"));
+        storage.put_batch(vec![tombstone]).await.unwrap();
+
+        let filled = storage
+            .channel_timeline_commit(&ChannelTimelineCommit {
+                coverage: vec![
+                    listing(None, "20", TIMELINE_HEAD, &["m6", "m5", "m4", "m2"]),
+                    // A hidden row is never shown, so it stays.
+                    listing(Some("m3"), TIMELINE_START, TIMELINE_HEAD, &["r2"]),
+                ],
+                seq: lower("24"),
+                ..commit("c1")
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            (filled.seq, filled.deleted_keys),
+            (Some(24), vec![key("m3")])
+        );
+        let page = storage
+            .query_channel_timeline(&latest("c1", 10))
+            .await
+            .unwrap();
+        assert_eq!(ids(&page.older), ["m6", "m5", "m4", "m2"]);
+        // m1 below the stretch, both replies and the other channel stay.
+        assert_eq!(scalar(&storage, ROW_COUNT), 8);
+        assert_eq!(storage.get_batch(&[key("m3")]).await.unwrap(), [None]);
+
+        // Rows of a stretch held before stay, listed or not.
+        let older = storage
+            .channel_timeline_commit(&ChannelTimelineCommit {
+                coverage: vec![listing(None, TIMELINE_START, TIMELINE_HEAD, &[])],
+                seq: lower("24"),
+                ..commit("c1")
+            })
+            .await
+            .unwrap();
+        assert_eq!(older.deleted_keys, vec![key("m1")]);
+        let page = storage
+            .query_channel_timeline(&latest("c1", 10))
+            .await
+            .unwrap();
+        assert_eq!(ids(&page.older), ["m6", "m5", "m4", "m2"]);
     });
 }

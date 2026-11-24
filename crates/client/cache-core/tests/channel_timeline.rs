@@ -76,6 +76,7 @@ fn coverage(thread: Option<&str>, start: &str, end: &str) -> ChannelCoverage {
             start: start.into(),
             end: end.into(),
         },
+        entry_keys: None,
     }
 }
 
@@ -415,5 +416,59 @@ fn a_pending_delete_leaves_the_page_until_it_rolls_back() {
         let page = engine.channel_timeline(&latest("c1", 3)).await.unwrap();
         assert!(!page.optimistic);
         assert_eq!(ids(&page.keys), ["m6", "m5", "m4"]);
+    });
+}
+
+fn listing(thread: Option<&str>, start: &str, end: &str, entries: &[&str]) -> ChannelCoverage {
+    ChannelCoverage {
+        entry_keys: Some(entries.iter().map(|id| key(id)).collect()),
+        ..coverage(thread, start, end)
+    }
+}
+
+#[test]
+fn a_fetched_stretch_drops_what_it_does_not_list() {
+    block_on(async {
+        // Records stored by a page whose commit was lost: m3 and its reply r1
+        // were deleted on the server before the channel was read again.
+        let mut engine = seeded().await;
+        let filled = engine
+            .channel_timeline_commit(&ChannelTimelineCommit {
+                coverage: vec![
+                    listing(None, "20", TIMELINE_HEAD, &["m6", "m5", "m4", "m2"]),
+                    listing(Some("m3"), TIMELINE_START, TIMELINE_HEAD, &["r2"]),
+                ],
+                seq: lower("24"),
+                ..commit("c1")
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            filled
+                .write
+                .changed
+                .iter()
+                .filter_map(EntityKey::id)
+                .collect::<Vec<_>>(),
+            ["m3", "r1"]
+        );
+        let page = engine.channel_timeline(&latest("c1", 10)).await.unwrap();
+        assert_eq!(ids(&page.keys), ["m6", "m5", "m4", "m2"]);
+        // m1 lies below the stretch, and the other channel is not part of it.
+        assert_eq!(engine.storage().len(), 7);
+
+        // A row inside a stretch held before is kept current by the applied
+        // sequence, so a page that missed it does not drop it.
+        let again = engine
+            .channel_timeline_commit(&ChannelTimelineCommit {
+                coverage: vec![listing(None, "10", TIMELINE_HEAD, &["m6", "m5", "m1"])],
+                seq: lower("24"),
+                ..commit("c1")
+            })
+            .await
+            .unwrap();
+        assert!(again.write.changed.is_empty());
+        let page = engine.channel_timeline(&latest("c1", 10)).await.unwrap();
+        assert_eq!(ids(&page.keys), ["m6", "m5", "m4", "m2", "m1"]);
     });
 }

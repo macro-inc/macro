@@ -316,6 +316,11 @@ pub struct ChannelCoverage {
     /// The fetched stretch.
     #[serde(flatten)]
     pub span: TimelineSpan,
+    /// Keys of every entry the server listed in the stretch. A visible entry
+    /// held inside it, in no stretch held before and not listed, is deleted
+    /// ([`is_stray_row`]). `None` deletes nothing.
+    #[serde(default)]
+    pub entry_keys: Option<Vec<EntityKey<'static>>>,
 }
 
 /// One atomic change to a channel's coverage, cached entries and sync state.
@@ -352,8 +357,16 @@ impl ChannelTimelineCommit {
         if self.channel_id.is_empty() {
             return Err(ChannelTimelineError::InvalidKey);
         }
-        let items =
-            self.coverage.len() + self.removed_keys.len() + self.dropped_thread_root_ids.len();
+        let listed = self
+            .coverage
+            .iter()
+            .filter_map(|coverage| coverage.entry_keys.as_deref())
+            .map(<[_]>::len)
+            .sum::<usize>();
+        let items = self.coverage.len()
+            + listed
+            + self.removed_keys.len()
+            + self.dropped_thread_root_ids.len();
         if items > MAX_CHANNEL_COMMIT_ITEMS {
             return Err(ChannelTimelineError::TooLarge);
         }
@@ -372,9 +385,13 @@ impl ChannelTimelineCommit {
             matches!(key.typename(), Some(MESSAGE_TYPENAME | ACTIVITY_TYPENAME))
                 && key.id().is_some_and(|id| !id.is_empty())
         };
-        if !self.removed_keys.iter().all(is_entry)
-            || self.dropped_thread_root_ids.iter().any(String::is_empty)
-        {
+        let mut keys = self
+            .coverage
+            .iter()
+            .filter_map(|coverage| coverage.entry_keys.as_ref())
+            .flatten()
+            .chain(&self.removed_keys);
+        if !keys.all(is_entry) || self.dropped_thread_root_ids.iter().any(String::is_empty) {
             return Err(ChannelTimelineError::InvalidKey);
         }
         if self.seq.as_ref().is_some_and(|seq| seq.parsed().is_none()) {
@@ -500,6 +517,56 @@ pub fn commit_coverage_by_scope(
                 .collect();
             (scope, spans)
         })
+        .collect()
+}
+
+/// The rows among `rows` that contradict what `commit` fetched in `scope`:
+/// inside one of its stretches with listed entries, listed by none of them,
+/// and in no stretch `held` before. Nothing keeps such a row current (its
+/// channel had no applied sequence when it was stored, or the commit that
+/// would have followed it was lost), so once the stretch counts as held, a row
+/// the server no longer lists would never leave it. The ends of a stretch are
+/// listed entries, cursors of a held stretch, or sentinels, so only rows
+/// strictly inside are considered.
+pub fn stray_rows(
+    commit: &ChannelTimelineCommit,
+    scope: &TimelineScope,
+    held: &[TimelineSpan],
+    rows: impl IntoIterator<Item = (EntityKey<'static>, String)>,
+) -> Vec<EntityKey<'static>> {
+    let listed_spans = listed_spans(commit, scope);
+    let listed = commit
+        .coverage
+        .iter()
+        .filter(|coverage| commit.coverage_scope(coverage) == *scope)
+        .filter_map(|coverage| coverage.entry_keys.as_ref())
+        .flatten()
+        .collect::<BTreeSet<_>>();
+    rows.into_iter()
+        .filter(|(key, position)| {
+            listed_spans
+                .iter()
+                .any(|span| *position > span.start && *position < span.end)
+                && !held
+                    .iter()
+                    .any(|span| *position >= span.start && *position <= span.end)
+                && !listed.contains(key)
+        })
+        .map(|(key, _)| key)
+        .collect()
+}
+
+/// The stretches of `commit` in `scope` whose entries are listed.
+pub fn listed_spans<'a>(
+    commit: &'a ChannelTimelineCommit,
+    scope: &TimelineScope,
+) -> Vec<&'a TimelineSpan> {
+    commit
+        .coverage
+        .iter()
+        .filter(|coverage| coverage.entry_keys.is_some())
+        .filter(|coverage| commit.coverage_scope(coverage) == *scope)
+        .map(|coverage| &coverage.span)
         .collect()
 }
 

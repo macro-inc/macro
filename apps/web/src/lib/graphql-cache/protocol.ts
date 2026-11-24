@@ -386,6 +386,11 @@ export type ChannelCoverageWire = {
   threadRootId?: string;
   start: string;
   end: string;
+  /**
+   * Keys of every entry the server listed in the stretch: others held inside
+   * it, in no stretch held before, are deleted.
+   */
+  entryKeys?: string[];
 };
 
 /** One atomic change to a channel's coverage, cached entries, and sync state. */
@@ -658,10 +663,11 @@ const isChannelSeq = (value: unknown): value is string =>
 
 const isChannelCoverageWire = (value: unknown): boolean =>
   isRecord(value) &&
-  hasOnlyCalendarKeys(value, ['threadRootId', 'start', 'end']) &&
+  hasOnlyCalendarKeys(value, ['threadRootId', 'start', 'end', 'entryKeys']) &&
   (value.threadRootId === undefined || isChannelId(value.threadRootId)) &&
   (value.start === CHANNEL_TIMELINE_START || isChannelSortKey(value.start)) &&
-  (value.end === CHANNEL_TIMELINE_HEAD || isChannelSortKey(value.end));
+  (value.end === CHANNEL_TIMELINE_HEAD || isChannelSortKey(value.end)) &&
+  isOptionalWireArray(value.entryKeys, isValidNormalizedRecordKey);
 
 const isChannelSeqUpdateWire = (value: unknown): boolean =>
   isRecord(value) &&

@@ -176,6 +176,7 @@ async function fetchServerThread(
       readSeq: string;
       sessionChanged: boolean;
       yielded?: boolean;
+      dropped?: boolean;
     }
   | undefined
 > {
@@ -235,6 +236,7 @@ async function fetchServerThread(
     const thread = threadOf(first.page.root, ordered);
     if (!thread) return undefined;
     let committed: string | null = null;
+    let dropped = false;
     try {
       const failed = (await Promise.all(stored)).find(Boolean);
       if (failed) throw failed.error;
@@ -264,13 +266,19 @@ async function fetchServerThread(
               threadRootId: rootId,
               start: CHANNEL_TIMELINE_START,
               end: CHANNEL_TIMELINE_HEAD,
+              // Replies the device held that no page listed are dropped.
+              entryKeys: ordered.map(({ id }) => channelMessageKey(id)),
             },
           ],
           seq: { kind: 'lower', seq },
         },
         generation
       );
-      if (result.kind === 'committed') committed = result.channelSeq;
+      if (result.kind === 'committed') {
+        committed = result.channelSeq;
+        dropped = result.changed.length > 0;
+        if (dropped) span.setAttr('thread.dropped', result.changed.length);
+      }
     } catch (error) {
       // The cache session changed before the device stored the thread; the
       // caller reads it again under the new one.
@@ -279,7 +287,13 @@ async function fetchServerThread(
       // The thread still shows; it is read from the server again next time.
       Telemetry.error(error, { surface: 'channel-thread' });
     }
-    return { thread, seq: committed, readSeq: seq, sessionChanged: false };
+    return {
+      thread,
+      seq: committed,
+      readSeq: seq,
+      sessionChanged: false,
+      dropped,
+    };
   }
 }
 
@@ -297,6 +311,8 @@ export type LoadedChannelThread = {
   yielded?: boolean;
   /** The sequence the server read the thread at; absent for a device read. */
   readSeq?: string;
+  /** The device deleted replies it held that the server did not list. */
+  dropped?: boolean;
 };
 
 /**
@@ -409,6 +425,15 @@ export function createLocalChannelThread(
   const show = (thread: MessageThread) =>
     setState('replies', reconcile(thread.replies, { key: 'id' }));
 
+  const noteServer = (loaded: LoadedChannelThread, epoch: number) =>
+    deps.runtime.noteServerRead(
+      channelId,
+      loaded.seq,
+      epoch,
+      loaded.readSeq ?? null,
+      loaded.dropped
+    );
+
   const load = async (root: string, reloads = 0): Promise<void> => {
     const current = ++token;
     held = false;
@@ -427,7 +452,16 @@ export function createLocalChannelThread(
         signal,
       });
       watch.stop();
-      if (current !== token) return;
+      if (current !== token) {
+        // Stored all the same: it may have lowered the device.
+        if (
+          loaded !== 'unsupported' &&
+          loaded.source === 'server' &&
+          loaded.seq !== null
+        )
+          noteServer(loaded, epoch);
+        return;
+      }
       if (loaded === 'unsupported') {
         onUnsupported();
         return;
@@ -451,12 +485,7 @@ export function createLocalChannelThread(
         if (current === token) await load(root, reloads + 1);
         return;
       }
-      deps.runtime.noteServerRead(
-        channelId,
-        loaded.seq,
-        epoch,
-        loaded.readSeq ?? null
-      );
+      noteServer(loaded, epoch);
       held = loaded.seq !== null;
       // A device that kept an older sequence than the read catches up.
       if (held)

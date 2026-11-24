@@ -391,7 +391,12 @@ describe('coordinator runtime protocol', () => {
         channelId: 'c1',
         coverage: [
           { start: '', end: '\u{10FFFF}' },
-          { threadRootId: 'm1', start: 'k1', end: 'k2' },
+          {
+            threadRootId: 'm1',
+            start: 'k1',
+            end: 'k2',
+            entryKeys: ['GraphqlChannelMessage:m1'],
+          },
         ],
         removedKeys: ['GraphqlChannelMessage:m2'],
         droppedThreadRootIds: ['m3'],
@@ -409,6 +414,12 @@ describe('coordinator runtime protocol', () => {
     ).toBe(false);
     expect(
       commitRequest({ channelId: 'c1', coverage: [{ start: 'a b', end: 'c' }] })
+    ).toBe(false);
+    expect(
+      commitRequest({
+        channelId: 'c1',
+        coverage: [{ start: 'k1', end: 'k2', entryKeys: ['m1'] }],
+      })
     ).toBe(false);
     expect(commitRequest({ channelId: 'c1', removedKeys: ['m2'] })).toBe(false);
 

@@ -409,19 +409,23 @@ export function createLocalChannelTimeline(
     const stored = await loaded.stored;
     if (stored.kind !== 'stored') return stored.kind;
     const seq = stored.seq;
-    if (token !== loadToken) return 'unheld';
+    const replaced = token !== loadToken;
     if (loaded.source === 'device') {
+      if (replaced) return 'unheld';
       deps.runtime.noteStoredSeq(channelId, seq);
       return 'held';
     }
-    deps.runtime.noteServerRead(
-      channelId,
-      seq,
-      epoch,
-      loaded.readSeq,
-      stored.removed
-    );
-    return seq === null ? 'unheld' : 'held';
+    // A replaced window's page is stored all the same, and may have lowered
+    // the device or dropped records from it; one not stored says nothing.
+    if (!replaced || seq !== null)
+      deps.runtime.noteServerRead(
+        channelId,
+        seq,
+        epoch,
+        loaded.readSeq,
+        stored.dropped
+      );
+    return replaced || seq === null ? 'unheld' : 'held';
   };
 
   /**

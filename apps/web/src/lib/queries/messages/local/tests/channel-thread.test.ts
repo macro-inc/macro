@@ -16,7 +16,13 @@ import {
   loadChannelThread,
 } from '../channel-thread';
 import { fakeLocks } from './fake-locks';
-import { CHANNEL_ID, devicePage, fakeHost, graphqlMessage } from './fixtures';
+import {
+  CHANNEL_ID,
+  devicePage,
+  droppingCommit,
+  fakeHost,
+  graphqlMessage,
+} from './fixtures';
 
 const trace = vi.hoisted(() => ({ depth: 0 }));
 
@@ -143,6 +149,10 @@ describe('loadChannelThread', () => {
             threadRootId: ROOT_ID,
             start: CHANNEL_TIMELINE_START,
             end: CHANNEL_TIMELINE_HEAD,
+            entryKeys: [
+              channelMessageKey(first.id),
+              channelMessageKey(second.id),
+            ],
           },
         ],
         seq: { kind: 'lower', seq: '12' },
@@ -292,6 +302,72 @@ describe('loadChannelThread', () => {
 });
 
 describe('createLocalChannelThread', () => {
+  it('tells the runtime when the device dropped replies the server does not list', async () => {
+    const host = fakeHost([devicePage([], { covered: false })], {
+      commit: droppingCommit(['GraphqlChannelMessage:gone']),
+    });
+    const sync = runtime();
+    const thread = createRoot(() =>
+      createLocalChannelThread(
+        { host, runtime: sync, fetchPage: serverThread() },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      )
+    );
+    await vi.waitFor(() => expect(thread.replies()).toHaveLength(2));
+    expect(sync.noteServerRead).toHaveBeenCalledWith(
+      CHANNEL_ID,
+      '12',
+      0,
+      '12',
+      true
+    );
+  });
+
+  it('tells the runtime of a stored thread another thread replaced', async () => {
+    const host = fakeHost(() => devicePage([], { covered: false }));
+    const sync = runtime();
+    const [rootId, setRootId] = createSignal(ROOT_ID);
+    let store!: () => void;
+    const commit = host.channelTimelineCommit;
+    host.channelTimelineCommit = async (...args) => {
+      const answer = await commit(...args);
+      // The other thread opens before the device answers.
+      if (host.commits.length === 1)
+        await new Promise<void>((resolve) => {
+          store = resolve;
+        });
+      return answer;
+    };
+    createRoot(() =>
+      createLocalChannelThread(
+        { host, runtime: sync, fetchPage: serverThread() },
+        CHANNEL_ID,
+        rootId,
+        () => true,
+        () => undefined
+      )
+    );
+    await vi.waitFor(() => expect(host.commits).toHaveLength(1));
+    setRootId(graphqlMessage(8).id);
+    await vi.waitFor(() =>
+      expect(sync.noteServerRead).toHaveBeenCalledTimes(1)
+    );
+    store();
+    await vi.waitFor(() =>
+      expect(sync.noteServerRead).toHaveBeenCalledTimes(2)
+    );
+    expect(vi.mocked(sync.noteServerRead).mock.calls[1]).toEqual([
+      CHANNEL_ID,
+      '12',
+      0,
+      '12',
+      false,
+    ]);
+  });
+
   it('follows changes to a held thread by reading it again from the device', async () => {
     const third = graphqlMessage(4, { threadId: ROOT_ID });
     let keys = [channelMessageKey(second.id), channelMessageKey(first.id)];

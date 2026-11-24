@@ -5,8 +5,8 @@ use cache_core::channel_timeline::{
     ACTIVITY_TYPENAME, CHANNEL_TIMELINE_PROJECTION_VERSION, ChannelCommitOutcome, ChannelEviction,
     ChannelEvictionOutcome, ChannelTimelineCommit, ChannelTimelineRequest, ChannelTimelineRow,
     ChannelTimelineSnapshot, ChannelTimelineStats, ChannelTimelineStorage, MESSAGE_TYPENAME,
-    TimelineScope, TimelineSpan, anchor_root_key, commit_coverage_by_scope, merge_spans, next_seq,
-    plan_window, project_channel_timeline,
+    TimelineScope, TimelineSpan, anchor_root_key, commit_coverage_by_scope, listed_spans,
+    merge_spans, next_seq, plan_window, project_channel_timeline, stray_rows,
 };
 
 pub(super) const CREATE_SCHEMA: [&str; 5] = [
@@ -29,6 +29,9 @@ const ROW_BY_KEY: &str = "SELECT record_key, channel_id, scope, sort_key, hidden
 // channel.
 const ROWS_OLDER: &str = "SELECT record_key, sort_key FROM channel_timeline INDEXED BY channel_timeline_scan_idx WHERE scope = ?1 AND hidden = 0 AND sort_key >= ?2 AND sort_key < ?3 ORDER BY sort_key DESC LIMIT ?4";
 const ROWS_NEWER: &str = "SELECT record_key, sort_key FROM channel_timeline INDEXED BY channel_timeline_scan_idx WHERE scope = ?1 AND hidden = 0 AND sort_key > ?2 AND sort_key <= ?3 ORDER BY sort_key ASC LIMIT ?4";
+// Every visible row of a stretch a page or a thread just fetched: its entries,
+// and what the device held there before.
+const ROWS_WITHIN: &str = "SELECT record_key, sort_key FROM channel_timeline INDEXED BY channel_timeline_scan_idx WHERE scope = ?1 AND hidden = 0 AND sort_key > ?2 AND sort_key < ?3";
 const KEYS_BY_SCOPE: &str =
     "SELECT record_key FROM channel_timeline INDEXED BY channel_timeline_scan_idx WHERE scope = ?1";
 const KEYS_BY_CHANNEL: &str = "SELECT record_key FROM channel_timeline INDEXED BY channel_timeline_channel_idx WHERE channel_id = ?1";
@@ -50,12 +53,13 @@ const META_SELECT: &str = "SELECT value FROM meta WHERE key = ?1";
 const META_UPSERT: &str = "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value";
 const PROJECTION_VERSION_KEY: &str = "channel_timeline_projection_version";
 
-pub(super) const VALIDATED_SQL: [&str; 19] = [
+pub(super) const VALIDATED_SQL: [&str; 20] = [
     ROW_UPSERT,
     ROW_DELETE,
     ROW_BY_KEY,
     ROWS_OLDER,
     ROWS_NEWER,
+    ROWS_WITHIN,
     KEYS_BY_SCOPE,
     KEYS_BY_CHANNEL,
     COVERAGE_SELECT,
@@ -361,6 +365,31 @@ fn record_keys(connection: &Db, sql: &str, value: &str) -> Result<Vec<String>, T
         .collect()
 }
 
+/// The visible rows strictly inside `span`, with their sort keys.
+fn rows_within(
+    connection: &Db,
+    scope: &TimelineScope,
+    span: &TimelineSpan,
+) -> Result<Vec<(EntityKey<'static>, String)>, TursoStorageError> {
+    driver::query(
+        connection,
+        ROWS_WITHIN,
+        vec![
+            text(&scope.storage_key()),
+            text(&span.start),
+            text(&span.end),
+        ],
+    )?
+    .iter()
+    .map(|row| {
+        Ok((
+            parse_entity(required_text(row, 0)?)?,
+            required_text(row, 1)?,
+        ))
+    })
+    .collect()
+}
+
 /// Deletes the named records with their timeline rows and returns the keys
 /// that existed.
 fn delete_records(
@@ -413,6 +442,21 @@ fn apply_commit(
             COVERAGE_DELETE_SCOPE,
             vec![text(channel_id), text(&scope)],
         )?;
+    }
+    for scope in commit_coverage_by_scope(commit)
+        .into_iter()
+        .map(|(scope, _)| scope)
+    {
+        let held = load_coverage(connection, channel_id, &scope)?;
+        let mut rows = Vec::new();
+        for span in listed_spans(commit, &scope) {
+            rows.extend(rows_within(connection, &scope, span)?);
+        }
+        doomed.extend(
+            stray_rows(commit, &scope, &held, rows)
+                .into_iter()
+                .map(|key| key.0.into_owned()),
+        );
     }
     let deleted_keys = delete_records(connection, doomed)?;
 

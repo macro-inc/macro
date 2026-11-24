@@ -30,6 +30,7 @@ import { fakeLocks } from './fake-locks';
 import {
   CHANNEL_ID,
   devicePage,
+  droppingCommit,
   fakeHost,
   graphqlMessage,
   keyOf,
@@ -259,7 +260,11 @@ describe('loadChannelPage', () => {
       {
         channelId: CHANNEL_ID,
         coverage: [
-          { start: CHANNEL_TIMELINE_START, end: CHANNEL_TIMELINE_HEAD },
+          {
+            start: CHANNEL_TIMELINE_START,
+            end: CHANNEL_TIMELINE_HEAD,
+            entryKeys: [keyOf(newer), keyOf(older)],
+          },
         ],
         seq: { kind: 'lower', seq: '9' },
         touchedAtMs: 5,
@@ -267,88 +272,46 @@ describe('loadChannelPage', () => {
     ]);
   });
 
-  it('removes what a latest page proves gone when the device held it without a sequence', async () => {
-    const deleted = graphqlMessage(3);
-    const { host } = countingHost([
-      devicePage([keyOf(deleted), keyOf(newer), keyOf(older)], {
-        covered: false,
-        seq: null,
-      }),
-    ]);
-    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
-      page: serverPage(),
-      cached: Promise.resolve(),
-    }));
-
+  it('says when the device dropped records the page does not list', async () => {
+    const { host } = countingHost([devicePage([], { covered: false })], {
+      commit: droppingCommit(['GraphqlChannelMessage:gone']),
+    });
     const loaded = await loadChannelPage(
-      { host, touches: { due: () => undefined, settled: () => {} }, fetchPage },
-      { channelId: CHANNEL_ID, limit: 50 }
-    );
-    if (loaded === 'unsupported') throw new Error('unexpected');
-    await loaded.stored;
-
-    expect(host.commits).toEqual([
       {
-        channelId: CHANNEL_ID,
-        coverage: [
-          { start: CHANNEL_TIMELINE_START, end: CHANNEL_TIMELINE_HEAD },
-        ],
-        seq: { kind: 'lower', seq: '9' },
-        removedKeys: [keyOf(deleted)],
+        host,
+        touches: { due: () => undefined, settled: () => {} },
+        fetchPage: async () => ({
+          page: serverPage(),
+          cached: Promise.resolve(),
+        }),
       },
-    ]);
-  });
-
-  it.each([
-    [
-      'the device holds a sequence, so a catch-up replays its deletes',
-      { covered: false, seq: '7' },
-    ],
-    [
-      'a pending write shaped the device list',
-      { covered: false, seq: null, optimistic: true },
-    ],
-  ])('removes nothing when %s', async (_, device) => {
-    const deleted = graphqlMessage(3);
-    const { host } = countingHost([
-      devicePage([keyOf(deleted), keyOf(newer), keyOf(older)], device),
-    ]);
-    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
-      page: serverPage(),
-      cached: Promise.resolve(),
-    }));
-
-    const loaded = await loadChannelPage(
-      { host, touches: { due: () => undefined, settled: () => {} }, fetchPage },
       { channelId: CHANNEL_ID, limit: 50 }
     );
     if (loaded === 'unsupported') throw new Error('unexpected');
-    await loaded.stored;
-
-    expect(host.commits[0]).not.toHaveProperty('removedKeys');
+    expect(await loaded.stored).toEqual({
+      kind: 'stored',
+      seq: '9',
+      dropped: true,
+    });
   });
 
-  it('removes only what lies above the oldest entry a partial page shares with the device', async () => {
-    const above = graphqlMessage(3);
-    const { host } = countingHost([
-      devicePage([keyOf(above), keyOf(newer), keyOf(older)], {
-        covered: false,
-        seq: null,
-      }),
-    ]);
-    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
-      page: serverPage({ entries: [newer], olderCursor: 'cursor-2' }),
-      cached: Promise.resolve(),
-    }));
-
+  it('drops nothing when the device refuses the commit', async () => {
+    const { host } = countingHost([devicePage([], { covered: false })], {
+      commit: () => ({ kind: 'unsupported' }),
+    });
     const loaded = await loadChannelPage(
-      { host, touches: { due: () => undefined, settled: () => {} }, fetchPage },
+      {
+        host,
+        touches: { due: () => undefined, settled: () => {} },
+        fetchPage: async () => ({
+          page: serverPage(),
+          cached: Promise.resolve(),
+        }),
+      },
       { channelId: CHANNEL_ID, limit: 50 }
     );
     if (loaded === 'unsupported') throw new Error('unexpected');
-    await loaded.stored;
-
-    expect(host.commits[0]).toMatchObject({ removedKeys: [keyOf(above)] });
+    expect(await loaded.stored).toEqual({ kind: 'stored', seq: '7' });
   });
 
   it.each([
@@ -598,6 +561,7 @@ describe('serverPageCoverage', () => {
     expect(serverPageCoverage({}, serverPage())).toEqual({
       start: CHANNEL_TIMELINE_START,
       end: CHANNEL_TIMELINE_HEAD,
+      entryKeys: [keyOf(newer), keyOf(older)],
     });
   });
 
@@ -607,7 +571,11 @@ describe('serverPageCoverage', () => {
         { before: 'z' },
         serverPage({ olderCursor: older.sortKey })
       )
-    ).toEqual({ start: older.sortKey, end: 'z' });
+    ).toEqual({
+      start: older.sortKey,
+      end: 'z',
+      entryKeys: [keyOf(newer), keyOf(older)],
+    });
   });
 
   it('proves nothing for an empty window around a message', () => {

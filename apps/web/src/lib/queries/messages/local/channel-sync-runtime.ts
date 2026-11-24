@@ -106,6 +106,11 @@ type ChannelState = {
    * can be older than what the device already held.
    */
   repairFrom: bigint | undefined;
+  /**
+   * Counts reads that dropped records. A catch-up one came during wrote its
+   * pages from before it, so it clears no repair.
+   */
+  droppedReads: number;
   /** Views showing the channel; only they are caught up after a gap. */
   views: number;
   /**
@@ -165,15 +170,16 @@ export interface ChannelSyncRuntime {
    * `epoch`: the stored sequence it committed is current if the socket stayed
    * up since, and the device held no older sequence than the read. A device
    * that kept an older one also kept what changed between the two, which only
-   * a catch-up replays; so does a device the read dropped records from
-   * (`removed`: what it dropped may have been a change after the read).
+   * a catch-up replays. One the read dropped records from (`dropped`) is
+   * replayed from the read: what it dropped may be a change after the read
+   * that already moved the sequence past it.
    */
   noteServerRead(
     channelId: string,
     seq: string | null,
     epoch: number,
     readSeq: string | null,
-    removed?: boolean
+    dropped?: boolean
   ): void;
   /** The socket epoch, which changes on every disconnect and connect. */
   epoch(): number;
@@ -253,6 +259,7 @@ export function createChannelSyncRuntime(
         lock: Semaphore.makeUnsafe(1),
         held: new Map(),
         repairFrom: undefined,
+        droppedReads: 0,
         views: 0,
         seenSeq: undefined,
         sweepable: false,
@@ -559,6 +566,9 @@ export function createChannelSyncRuntime(
     // A repair replays from before the frame that may have written old
     // records; the stored sequence only moves forward.
     const repair = state.repairFrom;
+    const droppedReads = state.droppedReads;
+    // Whether the repairs this catch-up read from are still all there are.
+    const mayRelease = () => state.droppedReads === droppedReads;
     let after = repair !== undefined && repair < from ? repair : from;
     let changes = 0;
     let rereads = 0;
@@ -679,7 +689,11 @@ export function createChannelSyncRuntime(
         if (seq > asked && seq <= to) state.covered.add(seq);
       // This page read the changes after the previous one as they are now:
       // the repair that one left holds only past this page.
-      if (pageRepair !== undefined && state.repairFrom === pageRepair) {
+      if (
+        pageRepair !== undefined &&
+        state.repairFrom === pageRepair &&
+        mayRelease()
+      ) {
         if (pageRepairUntil !== undefined && pageRepairUntil > to) {
           state.repairFrom = to;
           pageRepair = to;
@@ -715,12 +729,20 @@ export function createChannelSyncRuntime(
         continue;
       }
       if (!delta.hasMore) {
-        if (state.repairFrom === repair || state.repairFrom === overtaken)
+        if (
+          (state.repairFrom === repair || state.repairFrom === overtaken) &&
+          mayRelease()
+        )
           state.repairFrom = undefined;
         // Still overwritten: the next catch-up repairs from the page.
         if (overwritten) leaveRepair(state, to);
         yield* applyHeld(channelId, state);
-        if (!overwritten && epoch === socketEpoch && isConnected)
+        if (
+          !overwritten &&
+          mayRelease() &&
+          epoch === socketEpoch &&
+          isConnected
+        )
           state.current = true;
         span.setAttr('catch_up.rereads', rereads);
         span.setAttr('catch_up.pages', page + 1);
@@ -1000,12 +1022,20 @@ export function createChannelSyncRuntime(
       state.seq = parseSeq(seq);
       if (state.seq === null) state.current = false;
     },
-    noteServerRead(channelId, seq, epoch, readSeq, removed = false) {
+    noteServerRead(channelId, seq, epoch, readSeq, dropped = false) {
       const state = stateOf(channelId);
       const before = state.seq;
       state.seq = parseSeq(seq);
       const read = parseSeq(readSeq);
-      if (state.seq === null || read === null || read > state.seq || removed) {
+      if (dropped && state.seq !== null && read !== null) {
+        state.droppedReads += 1;
+        leaveRepair(state, read);
+        // Every view of the channel may show what was dropped.
+        notifyChanged(channelId);
+        if (isConnected && !state.pending) scheduleCatchUp(channelId, 'gap');
+        return;
+      }
+      if (state.seq === null || read === null || read > state.seq) {
         // Nothing stored, or the device kept rows the server has since
         // changed or deleted: only a catch-up replays those.
         state.current = false;

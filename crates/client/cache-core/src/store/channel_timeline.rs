@@ -5,7 +5,7 @@ use crate::channel_timeline::{
     ChannelCommitOutcome, ChannelEviction, ChannelEvictionOutcome, ChannelTimelineCommit,
     ChannelTimelineRequest, ChannelTimelineRow, ChannelTimelineSnapshot, ChannelTimelineStats,
     ChannelTimelineStorage, TimelineScope, TimelineSpan, anchor_root_key, commit_coverage_by_scope,
-    merge_spans, next_seq, plan_window,
+    merge_spans, next_seq, plan_window, stray_rows,
 };
 use crate::value::EntityKey;
 use std::collections::{BTreeMap, BTreeSet};
@@ -127,6 +127,15 @@ impl ChannelTimelineStorage for InMemoryStorage {
                     .map(|row| row.record_key.clone()),
             );
             state.coverage.remove(&scope);
+        }
+        for (scope, _) in commit_coverage_by_scope(commit) {
+            let held = state.coverage.get(&scope).map_or(&[][..], Vec::as_slice);
+            let rows = self
+                .channel_rows
+                .values()
+                .filter(|row| !row.hidden && row.scope == scope)
+                .map(|row| (row.record_key.clone(), row.sort_key.clone()));
+            deleted.extend(stray_rows(commit, &scope, held, rows));
         }
         let deleted_keys = self.remove_channel_records(deleted);
         for (scope, spans) in commit_coverage_by_scope(commit) {
