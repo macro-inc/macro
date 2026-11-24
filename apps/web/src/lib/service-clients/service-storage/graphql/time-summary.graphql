@@ -1,15 +1,36 @@
 # Logged time over a period, totalled by person, task or day. The server
 # orders the groups and leaves out tasks the viewer cannot see.
 
+# A task as its row in the Tasks list shows it: status and priority are
+# properties, and the viewer's permission says whether they can change them.
+fragment TimeSummaryTaskFields on GraphqlSoupDocument {
+  __typename
+  id
+  name
+  subType {
+    __typename
+    ... on GraphqlTaskSubType {
+      isCompleted
+    }
+  }
+  properties {
+    ...SoupPropertyFields
+  }
+  viewerPermission {
+    __typename
+    ... on GraphqlAccessLevelPermission {
+      accessLevel
+    }
+  }
+}
+
 fragment TimeGroupKeyFields on GraphqlTimeGroupKey {
   by
   userId
   taskId
   date
   task {
-    __typename
-    id
-    name
+    ...TimeSummaryTaskFields
   }
 }
 
