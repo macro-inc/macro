@@ -856,6 +856,125 @@ fn phrase_prefix(field: &str, term: &str) -> serde_json::Value {
     json!({"match_phrase_prefix": {field: {"query": term, "max_expansions": 256}}})
 }
 
+fn terms_json(terms: &[&str], match_type: &str) -> serde_json::Value {
+    let terms: Vec<String> = terms.iter().map(|term| term.to_string()).collect();
+    terms_query(
+        &terms,
+        match_type,
+        EMAIL_KEYWORD_FIELDS,
+        EMAIL_TEXT_FIELDS,
+        false,
+    )
+    .to_json()
+}
+
+#[test]
+fn an_address_matches_apart_from_the_words_beside_it() {
+    for match_type in ["partial", "exact", "regexp"] {
+        for (terms, groups) in [
+            (
+                vec!["lunch", "ana@example.com", "menu"],
+                vec![vec!["ana@example.com"], vec!["lunch", "menu"]],
+            ),
+            (
+                vec!["example.com", "lunch"],
+                vec![vec!["example.com"], vec!["lunch"]],
+            ),
+            (
+                vec!["@example.com", "the menu"],
+                vec![vec!["@example.com"], vec!["the menu"]],
+            ),
+            (
+                vec!["ana@example.com", "bo@example.com", "lunch"],
+                vec![
+                    vec!["ana@example.com"],
+                    vec!["bo@example.com"],
+                    vec!["lunch"],
+                ],
+            ),
+            (
+                vec!["@ana", "lunch", "ana@", "a@b"],
+                vec![vec!["@ana"], vec!["ana@"], vec!["a@b"], vec!["lunch"]],
+            ),
+            (
+                vec!["lunch", "例え.テスト"],
+                vec![vec!["例え.テスト"], vec!["lunch"]],
+            ),
+            (
+                vec!["example.com,", "lunch"],
+                vec![vec!["example.com,"], vec!["lunch"]],
+            ),
+            (
+                vec!["«example.com»", "lunch"],
+                vec![vec!["«example.com»"], vec!["lunch"]],
+            ),
+        ] {
+            let matched: Vec<serde_json::Value> = groups
+                .iter()
+                .map(|group| terms_json(group, match_type))
+                .collect();
+            assert_eq!(
+                terms_json(&terms, match_type),
+                json!({"bool": {"must": matched}}),
+                "{terms:?} in {match_type} match"
+            );
+        }
+    }
+}
+
+#[test]
+fn words_the_analyzer_drops_are_left_out_beside_an_address() {
+    for (terms, kept) in [
+        (vec!["ana@example.com", "½"], vec!["ana@example.com"]),
+        (
+            vec!["ana@example.com", "½", "follow-up"],
+            vec!["ana@example.com", "follow-up"],
+        ),
+    ] {
+        assert_eq!(
+            terms_json(&terms, "partial"),
+            terms_json(&kept, "partial"),
+            "{terms:?}"
+        );
+    }
+}
+
+#[test]
+fn words_match_together_in_the_address_fields_or_in_the_text_fields() {
+    for (terms, addresses) in [
+        (
+            vec!["example", "lunch"],
+            "(example | example@*) + (lunch | lunch@*)",
+        ),
+        (vec!["3.5", "lunch"], r#""3.5" + (lunch | lunch@*)"#),
+        (vec!["10.50", "lunch"], r#""10.50" + (lunch | lunch@*)"#),
+        (vec!["p.m.", "lunch"], r#""p.m." + (lunch | lunch@*)"#),
+        (vec!["...and", "lunch"], r#""...and" + (lunch | lunch@*)"#),
+        (vec!["a..and", "lunch"], r#""a..and" + (lunch | lunch@*)"#),
+        (vec!["½", "lunch"], "(½ | ½@*) + (lunch | lunch@*)"),
+        (vec!["@", "lunch"], r#""@" + (lunch | lunch@*)"#),
+        (
+            vec!["ana@example.com said", "lunch"],
+            r#""ana@example.com said" + (lunch | lunch@*)"#,
+        ),
+    ] {
+        assert_eq!(
+            terms_json(&terms, "partial")["bool"]["should"][0]["simple_query_string"]["query"],
+            addresses,
+            "{terms:?}"
+        );
+    }
+}
+
+#[test]
+fn regexp_input_that_uses_syntax_stays_whole_beside_an_address() {
+    assert_eq!(
+        terms_json(&["ana@example.com", "lunch|menu"], "regexp")["bool"]["should"][0]["simple_query_string"]
+            ["query"],
+        r#""ana@example.com" + (lunch|menu | lunch|menu@*)"#
+    );
+}
+
 #[test]
 fn a_hyphenated_word_matches_its_words_together_in_one_field() {
     let terms = vec!["menu".to_string(), "follow-up".to_string()];

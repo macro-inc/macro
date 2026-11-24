@@ -125,12 +125,79 @@ fn segment_fields(keyword_fields: &'static [&'static str]) -> Vec<&'static str> 
     parts.copied().collect()
 }
 
-/// Matches `terms`, all of them, against the address fields or the text
-/// fields. In the compact form, for a search whose terms would cost too many
-/// clauses, a term of several tokens matches them adjacent and whole, as one
-/// clause per field.
+/// Matches `terms`: every group of them ([`term_groups`]), each against the
+/// address fields or the text fields. In the compact form, for a search whose
+/// terms would cost too many clauses, a term of several tokens matches them
+/// adjacent and whole, as one clause per field.
 pub(super) fn terms_query<'a>(
     terms: &'a [String],
+    match_type: &str,
+    keyword_fields: &'static [&'static str],
+    text_fields: &'static [&'static str],
+    compact: bool,
+) -> QueryType<'a> {
+    let group_query =
+        |group: &[&'a str]| group_query(group, match_type, keyword_fields, text_fields, compact);
+    let groups = term_groups(terms, match_type);
+    if let [group] = groups.as_slice() {
+        return group_query(group);
+    }
+
+    let mut all = BoolQueryBuilder::new();
+    for group in &groups {
+        all.must(group_query(group));
+    }
+    all.build().into()
+}
+
+/// The groups of `terms` that each match on their own. An address or a domain
+/// is one, as a typed `from:` or `to:` is, so that it stands beside a word of
+/// the text. The words are one together, because a word in many addresses,
+/// such as the name of the searcher's own domain, would otherwise match nearly
+/// every message. A word with no letter or digit (`½`, an emoji) may match
+/// nothing on its own, so beside an address it is left out. Regexp syntax may
+/// span terms, so input that uses it stays whole.
+fn term_groups<'a>(terms: &'a [String], match_type: &str) -> Vec<Vec<&'a str>> {
+    let terms = terms.iter().map(String::as_str);
+    if match_type == "regexp" && terms.clone().any(holds_syntax) {
+        return vec![terms.collect()];
+    }
+
+    let (addresses, mut words): (Vec<&str>, Vec<&str>) =
+        terms.partition(|term| names_address(term));
+    if addresses.is_empty() {
+        return vec![words];
+    }
+    words.retain(|word| fewest_tokens(word) > 0);
+    let mut groups: Vec<Vec<&str>> = addresses.into_iter().map(|term| vec![term]).collect();
+    if !words.is_empty() {
+        groups.push(words);
+    }
+    groups
+}
+
+/// Whether `term` is an address or a domain (`ana@example.com`, `@example.com`,
+/// `example.com`) rather than a word. Any dotted name reads as a domain
+/// (`node.js`). A number (`3.5`), an abbreviation (`p.m.`) and a phrase are
+/// words.
+fn names_address(term: &str) -> bool {
+    let is_domain = || {
+        let name = term.trim_matches(|c: char| !c.is_alphanumeric());
+        name.rsplit_once('.').is_some_and(|(name, top_level)| {
+            name.ends_with(char::is_alphanumeric)
+                && top_level.chars().count() >= 2
+                && top_level.chars().all(char::is_alphabetic)
+        })
+    };
+    !term.chars().any(char::is_whitespace)
+        && fewest_tokens(term) > 0
+        && (term.contains('@') || is_domain())
+}
+
+/// Matches `terms`, all of them, against the address fields or the text
+/// fields.
+fn group_query<'a>(
+    terms: &[&'a str],
     match_type: &str,
     keyword_fields: &'static [&'static str],
     text_fields: &'static [&'static str],
@@ -151,7 +218,7 @@ pub(super) fn terms_query<'a>(
 /// one never matches the other's fields and would cost a clause in each of
 /// them. Regexp syntax runs in all of them.
 fn addresses_query<'a>(
-    terms: &[String],
+    terms: &[&str],
     match_type: &str,
     keyword_fields: &'static [&'static str],
     compact: bool,
@@ -189,16 +256,15 @@ fn addresses_query<'a>(
 /// term, and that one too in the compact form, goes in the simple_query_string
 /// [`build_text_query_string`] builds.
 fn text_terms_query<'a>(
-    terms: &'a [String],
+    terms: &[&'a str],
     match_type: &str,
     text_fields: &'static [&'static str],
     compact: bool,
 ) -> QueryType<'a> {
-    let (analyzed, others): (Vec<&String>, Vec<&String>) = terms
+    let (analyzed, others): (Vec<&str>, Vec<&str>) = terms
         .iter()
         .partition(|term| !compact && is_analyzed_prefix(term, match_type));
     let others = (!others.is_empty()).then(|| {
-        let others: Vec<String> = others.into_iter().cloned().collect();
         QueryType::from(
             SimpleQueryStringQuery::new(
                 build_text_query_string(&others, match_type, compact),
@@ -268,10 +334,11 @@ fn analyzed_prefix<'a>(term: &'a str, field: &'static str) -> QueryType<'a> {
 /// form matches the local part only.
 /// The local part is lowercased because email addresses are case-insensitive.
 /// Terms are ANDed together with `+`.
-pub(super) fn build_address_query_string(terms: &[String], compact: bool) -> String {
+pub(super) fn build_address_query_string(terms: &[impl AsRef<str>], compact: bool) -> String {
     terms
         .iter()
         .map(|term| {
+            let term = term.as_ref();
             if is_address_phrase(term) {
                 return phrase(term);
             }
@@ -298,10 +365,11 @@ pub(super) fn build_address_query_string(terms: &[String], compact: bool) -> Str
 /// in the field, at one clause per segment, so the compact form quotes every
 /// term.
 /// Terms are ANDed together with `+`.
-pub(super) fn build_segment_query_string(terms: &[String], compact: bool) -> String {
+pub(super) fn build_segment_query_string(terms: &[impl AsRef<str>], compact: bool) -> String {
     terms
         .iter()
         .map(|term| {
+            let term = term.as_ref();
             if compact || is_address_phrase(term) {
                 return phrase(term);
             }
@@ -315,7 +383,7 @@ pub(super) fn build_segment_query_string(terms: &[String], compact: bool) -> Str
 /// Builds the simple_query_string that runs regexp input, whose punctuation is
 /// syntax, over every address field: `(term | term@*)`, a segment or a local
 /// part.
-fn build_regexp_address_string(terms: &[String]) -> String {
+fn build_regexp_address_string(terms: &[&str]) -> String {
     terms
         .iter()
         .map(|term| {
@@ -392,10 +460,15 @@ const MIN_PREFIX_LEN: usize = 3;
 /// A term that is one word with punctuation around it (`follow-`, `Re:`,
 /// `-lunch`) matches by that word alone ([`one_word`]), as
 /// [`child_content_query`](crate::search::query::child_content_query) does.
-pub(super) fn build_text_query_string(terms: &[String], match_type: &str, compact: bool) -> String {
+pub(super) fn build_text_query_string(
+    terms: &[impl AsRef<str>],
+    match_type: &str,
+    compact: bool,
+) -> String {
     terms
         .iter()
         .map(|term| {
+            let term = term.as_ref();
             if is_text_phrase(term) {
                 return match match_type {
                     "regexp" => format!("\"{}\"", term),
