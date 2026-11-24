@@ -295,7 +295,7 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         // Containment on values->'value' matches whole-value containment of
         // {"value": [ref]}: null, non-object, and non-array rows are excluded
         // either way. The literal must stay equal to SystemPropertyKey::PROJECT_UUID.
-        let rows = sqlx::query_scalar!(
+        let query = sqlx::query_scalar!(
             r#"
             SELECT entity_id
             FROM entity_properties
@@ -309,9 +309,18 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
             "#,
             project_id.to_string(),
             limit.map(i64::from),
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        );
+        if limit.is_none() {
+            return Ok(query.fetch_all(&self.pool).await?);
+        }
+        // A bounded read serves reports, which answer within their own
+        // statement timeout; this read keeps to the same bound.
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *transaction)
+            .await?;
+        let rows = query.fetch_all(&mut *transaction).await?;
+        transaction.commit().await?;
         Ok(rows)
     }
 

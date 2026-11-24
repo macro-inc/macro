@@ -349,8 +349,15 @@ pub fn assemble_summary(
     }
 
     if breakdown.then_by().is_some() {
+        let mut positions: HashMap<TimeGroupKey, usize> = HashMap::with_capacity(groups.len());
+        for (position, group) in groups.iter().enumerate() {
+            positions.entry(group.key.clone()).or_insert(position);
+        }
         for (group_key, row) in rows {
-            if let Some(group) = groups.iter_mut().find(|group| group.key == group_key) {
+            if let Some(group) = positions
+                .get(&group_key)
+                .and_then(|&position| groups.get_mut(position))
+            {
                 group.rows.push(row);
             }
         }
