@@ -2,11 +2,13 @@ use super::{
     ApplyUpdateResult, BundleSource, ENTRYPOINT_NAME, PENDING_BUNDLE_ROOT_FILE, StartupSelection,
     UpdateStatus,
     tests::{
-        FakeFs, cache_dir, seed_bundle, seed_pending_bundle_root, seed_persisted_bundle_root,
-        service_with_status_fs_and_embedded_build,
+        FakeFs, app_info, bundle_update, cache_dir, seed_bundle, seed_pending_bundle_root,
+        seed_persisted_bundle_root, service_with_status_fs_and_embedded_build,
+        worker_with_fs_and_native_build,
     },
 };
 use crate::domain::{
+    models::BundleAction,
     ports::{AutoUpdateService, FsRepo},
     startup::BundleRejection,
 };
@@ -124,4 +126,47 @@ async fn pending_download_no_newer_than_saved_bundle_is_dropped() {
         service.status().borrow().as_ref().unwrap(),
         UpdateStatus::Idle
     ));
+}
+
+// Startup prefers a pending download to the saved bundle, so a download the
+// server stops offering (a rolled-back deploy) must not be started on later.
+#[tokio::test]
+async fn check_forgets_a_pending_download_the_server_no_longer_offers() {
+    let fs = FakeFs::default();
+    let cache_dir = cache_dir();
+    let staged = seed_bundle(&fs, &cache_dir, "2", 30, 0);
+    seed_pending_bundle_root(&fs, &cache_dir, &staged);
+    let mut worker = worker_with_fs_and_native_build(fs.clone(), None, cache_dir.clone(), 0);
+
+    let status = worker
+        .next_status(UpdateStatus::CheckingForDownload(app_info(0)))
+        .await
+        .unwrap();
+
+    assert!(matches!(status, UpdateStatus::NoUpdateNeeded));
+    assert!(!fs.file_exists(cache_dir.join(PENDING_BUNDLE_ROOT_FILE)));
+}
+
+#[tokio::test]
+async fn check_keeps_a_pending_download_the_server_still_offers() {
+    let fs = FakeFs::default();
+    let cache_dir = cache_dir();
+    let staged = seed_bundle(&fs, &cache_dir, "2", 30, 0);
+    seed_pending_bundle_root(&fs, &cache_dir, &staged);
+    let mut update = bundle_update();
+    update.bundle_build = 30;
+    let mut worker = worker_with_fs_and_native_build(
+        fs.clone(),
+        Some(BundleAction::Update(update)),
+        cache_dir.clone(),
+        0,
+    );
+
+    let status = worker
+        .next_status(UpdateStatus::CheckingForDownload(app_info(0)))
+        .await
+        .unwrap();
+
+    assert!(matches!(status, UpdateStatus::Completed(_)));
+    assert!(fs.file_exists(cache_dir.join(PENDING_BUNDLE_ROOT_FILE)));
 }

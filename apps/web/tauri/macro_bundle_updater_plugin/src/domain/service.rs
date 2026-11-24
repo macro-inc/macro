@@ -194,6 +194,11 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
                     .check_for_update(app_info)
                     .await
                     .context(UpdateError::DownloadErr)?;
+                let offered_bundle_build = match &res {
+                    Some(BundleAction::Update(update)) => Some(update.bundle_build),
+                    _ => None,
+                };
+                self.forget_unoffered_pending(offered_bundle_build).await;
 
                 match res {
                     Some(BundleAction::Update(update)) => {
@@ -392,6 +397,30 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery, S: TaskSpawner> Worker<U, Fs, Q,
                 }))
             }
             UpdateStatus::Completed(x) => Ok(UpdateStatus::Completed(x)),
+        }
+    }
+
+    /// Forget a pending download the server no longer offers. Startup prefers
+    /// a pending download to the saved bundle, so one the server withdrew or
+    /// replaced must not outlive the check that found out.
+    async fn forget_unoffered_pending(&self, offered_bundle_build: Option<u64>) {
+        let Ok(update_dir) = self.system_query.get_update_dir().await else {
+            return;
+        };
+        let marker = update_dir.join(PENDING_BUNDLE_ROOT_FILE);
+        let Ok(contents) = self.fs_repo.read_to_string(&marker).await else {
+            return;
+        };
+        let manifest_path = Path::new(contents.trim()).join("bundle-manifest.json");
+        let pending_bundle_build = BundleManifest::read(&manifest_path, &self.fs_repo)
+            .await
+            .map(|manifest| manifest.bundle_build);
+        if pending_bundle_build.is_some() && pending_bundle_build == offered_bundle_build {
+            return;
+        }
+
+        if let Err(e) = clear_pending_bundle(&self.fs_repo, &update_dir).await {
+            tracing::warn!(error=?e, "[bundle-update] failed to forget an unoffered pending bundle");
         }
     }
 
@@ -1575,7 +1604,7 @@ mod tests {
         }
     }
 
-    fn bundle_update() -> BundleUpdate {
+    pub(super) fn bundle_update() -> BundleUpdate {
         BundleUpdate {
             bundle_build: 1,
             min_native_build: 0,
@@ -1718,7 +1747,7 @@ mod tests {
         }
     }
 
-    fn app_info(native_build: u64) -> AppInfo {
+    pub(super) fn app_info(native_build: u64) -> AppInfo {
         AppInfo {
             current_bundle_build: 0,
             current_git_sha: None,
