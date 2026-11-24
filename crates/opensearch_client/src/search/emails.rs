@@ -173,6 +173,9 @@ pub(crate) struct EmailQueryBuilder {
     bcc: Vec<String>,
     /// The recipients of the email message
     recipients: Vec<String>,
+    /// The inboxes whose labels the caller may read: their own and the ones
+    /// they manage. A label matches a message only in one of these.
+    label_link_ids: Vec<String>,
     /// Labels to include (emails must have at least one)
     include_labels: Vec<String>,
     /// Labels to exclude (emails must not have any)
@@ -210,6 +213,7 @@ impl EmailQueryBuilder {
             cc: Vec::new(),
             bcc: Vec::new(),
             recipients: Vec::new(),
+            label_link_ids: Vec::new(),
             include_labels: Vec::new(),
             exclude_labels: Vec::new(),
             importance: None,
@@ -306,6 +310,21 @@ impl EmailQueryBuilder {
         self
     }
 
+    pub fn label_link_ids(mut self, label_link_ids: Vec<String>) -> Self {
+        self.label_link_ids = label_link_ids;
+        self
+    }
+
+    /// Messages carrying any of `labels` in an inbox whose labels the caller
+    /// may read. Labels people make are theirs, so a thread shared from
+    /// someone else's inbox never carries them for the caller.
+    fn carrying_labels<'a>(&'a self, labels: Vec<String>) -> QueryType<'a> {
+        let mut carrying = BoolQueryBuilder::new();
+        carrying.filter(QueryType::terms("labels", labels));
+        carrying.filter(QueryType::terms("link_id", self.label_link_ids.clone()));
+        QueryType::Bool(carrying.build())
+    }
+
     pub fn label_conditions(mut self, label_conditions: Vec<EmailLabelCondition>) -> Self {
         self.label_conditions = label_conditions;
         self
@@ -397,7 +416,7 @@ impl EmailQueryBuilder {
             let mut carries = BoolQueryBuilder::new();
             carries.minimum_should_match(1);
             if !condition.labels.is_empty() {
-                carries.should(QueryType::terms("labels", condition.labels.clone()));
+                carries.should(self.carrying_labels(condition.labels.clone()));
             }
             if let Some(tags) = build_tag_filter(&condition.tag_option_ids, false) {
                 carries.should(tags);
@@ -463,7 +482,7 @@ impl EmailQueryBuilder {
         }
 
         if !self.include_labels.is_empty() {
-            content_bool_query.filter(QueryType::terms("labels", self.include_labels.clone()));
+            content_bool_query.filter(self.carrying_labels(self.include_labels.clone()));
         }
 
         // Tag filter: nested clause(s) matching the option ids in
@@ -473,8 +492,8 @@ impl EmailQueryBuilder {
             content_bool_query.filter(nested);
         }
 
-        for label in &self.exclude_labels {
-            content_bool_query.must_not(QueryType::term("labels", label.clone()));
+        if !self.exclude_labels.is_empty() {
+            content_bool_query.must_not(self.carrying_labels(self.exclude_labels.clone()));
         }
 
         // Importance filter. Source of truth for the label logic is in
@@ -586,6 +605,7 @@ pub struct EmailSearchArgs {
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
     pub recipients: Vec<String>,
+    pub label_link_ids: Vec<String>,
     pub include_labels: Vec<String>,
     pub exclude_labels: Vec<String>,
     pub importance: Option<bool>,
@@ -620,6 +640,7 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .cc(args.cc)
             .bcc(args.bcc)
             .recipients(args.recipients)
+            .label_link_ids(args.label_link_ids)
             .include_labels(args.include_labels)
             .exclude_labels(args.exclude_labels)
             .importance(args.importance)
