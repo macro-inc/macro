@@ -12,6 +12,8 @@ import {
 } from '@queries/soup/items';
 import { type Accessor, createMemo } from 'solid-js';
 
+const STALE_TIME = 5 * 60 * 1000;
+
 /** Every visible CRM company, recently opened first. */
 export const QUICK_ACCESS_CRM_COMPANIES_ARGS: SoupAstItemsQueryArgs = {
   params: { limit: 500, sort_method: 'viewed_updated' },
@@ -36,7 +38,11 @@ export function useQuickAccessCrmCompaniesQuery(
 ) {
   const query = useSource(
     () => QUICK_ACCESS_CRM_COMPANIES_ARGS,
-    () => ({ ...QUICK_ACCESS_FEED_OPTIONS, enabled: enabled() })
+    () => ({
+      ...QUICK_ACCESS_FEED_OPTIONS,
+      staleTime: STALE_TIME,
+      enabled: enabled(),
+    })
   );
 
   const companies = createMemo<CrmCompanyEntity[]>(() =>

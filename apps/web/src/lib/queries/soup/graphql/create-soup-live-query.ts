@@ -69,6 +69,10 @@ import {
   usePendingGraphqlSoupDeleteKeys,
   withoutPendingSoupEntities,
 } from './optimistic-deletions';
+import {
+  recordSoupNetworkAnswer,
+  soupNetworkAnswerFresh,
+} from './network-freshness';
 import { readSoupPage } from './read-soup-page';
 import {
   materializeReconciledSoup,
@@ -98,6 +102,11 @@ export type SoupLiveQueryOptions = {
   cacheFirstEntities?: readonly SoupEntityRef[];
   /** Include indexed non-email rows while server pages supply email. */
   localReconciliation?: 'without-email';
+  /**
+   * Milliseconds a network answer for this first page stays fresh: a list
+   * mounted within it reads the cached page and does not fetch it again.
+   */
+  staleTime?: number;
 };
 
 const SOUP_DOCUMENTS = {
@@ -182,6 +191,18 @@ export function createSoupLiveQuery(
   const inputKey = createMemo(() =>
     JSON.stringify([options().projection, firstPageInput()])
   );
+  const staleTime = createMemo(() => options().staleTime);
+  // Decided once per list and client: a policy change discards loaded pages.
+  const answeredFresh = createMemo(() => {
+    const key = inputKey();
+    const freshFor = staleTime();
+    const client = getGraphqlSoupClient();
+    return untrack(
+      () =>
+        freshFor !== undefined &&
+        soupNetworkAnswerFresh(client, key, freshFor)
+    );
+  });
   type ServerProjection = {
     pageParams: readonly (string | null)[];
     records: Accessor<GraphqlSoupItem[]>;
@@ -414,10 +435,11 @@ export function createSoupLiveQuery(
     const firstInput = firstPageInput();
     const firstInputKey = inputKey();
     const queryOptions = options();
+    const client = getGraphqlSoupClient();
 
     return {
       query: queryDocument(),
-      client: getGraphqlSoupClient(),
+      client,
       initialPageParam: null,
       context: {
         externalCacheWriteTypes: crmExternalWriteTypes(
@@ -441,7 +463,9 @@ export function createSoupLiveQuery(
         networkInput() !== undefined,
       requestPolicy: queryOptions.networkPaused
         ? 'cache-only'
-        : 'cache-and-network',
+        : answeredFresh()
+          ? 'cache-first'
+          : 'cache-and-network',
       keepPreviousData: queryOptions.keepPreviousData ?? false,
       onResult: (result, page) => {
         const metadata = normalizedCacheResultMetadata(result);
@@ -458,6 +482,8 @@ export function createSoupLiveQuery(
           return;
         }
         if (!result.data) return;
+        if (metadata?.source === 'live-network' && page.pageIndex === 0)
+          recordSoupNetworkAnswer(client, firstInputKey);
         if (metadata?.source !== 'live-network') {
           // An affected/cache result already reflects local state. Its pending
           // network acknowledgement may no longer claim authority over it.

@@ -17,5 +17,7 @@ it('lists library designs without notifications, which it never shows', () => {
     useFigLibrarySource('doc-1');
     dispose();
   });
-  expect(soup.options).toEqual([{ ignoresNotifications: true }]);
+  expect(soup.options).toEqual([
+    { ignoresNotifications: true, staleTime: 60_000 },
+  ]);
 });

@@ -28,6 +28,7 @@ export function useSlashMenuPullRequests(enabled: Accessor<boolean>) {
       enabled: enabled(),
       showSupportedForeignEntities: true,
       ignoresNotifications: true,
+      staleTime: 60_000,
     })
   );
   const pullRequests = createMemo(() =>

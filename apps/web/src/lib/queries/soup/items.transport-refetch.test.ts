@@ -208,6 +208,24 @@ describe('Soup refetch transport selection', () => {
     expect(options.projection).toBe('channel-list');
   });
 
+  it.each([
+    [60_000, 60_000],
+    ['static', Number.POSITIVE_INFINITY],
+    [undefined, undefined],
+  ] as const)('forwards staleTime %s to the flat GraphQL query as %s', (staleTime, expected) => {
+    createRoot((dispose) => {
+      disposeRoot = dispose;
+      useSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true, staleTime })
+      );
+    });
+    const options = vi
+      .mocked(createGraphqlSoupAstItemsQuery)
+      .mock.calls.at(-1)?.[1]();
+    expect(options?.staleTime).toBe(expected);
+  });
+
   it('preserves fetched page coverage when optimistic inserts change cached membership', async () => {
     const item = {
       tag: 'chat',

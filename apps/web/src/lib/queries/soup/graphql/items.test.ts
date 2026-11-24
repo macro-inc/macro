@@ -2575,6 +2575,52 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('reads a list the network answered within its staleTime from the cache', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-24T12:00:00Z'));
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockReturnValue({
+      initial: { limit: 50, sortMethod: 'UPDATED_AT' },
+    });
+    const mount = (staleTime?: number) =>
+      createRoot((dispose) => {
+        createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true, staleTime })
+        );
+        return dispose;
+      });
+    const policies = () =>
+      fake.executions.map((execution) => execution.context.requestPolicy);
+    try {
+      // Nothing answered yet: fetch.
+      mount(60_000)();
+      expect(policies()).toEqual(['cache-and-network']);
+      const first = mount(60_000);
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      first();
+      // Answered a moment ago: the cached page, no fetch.
+      mount(60_000)();
+      // A reader without a staleTime still fetches.
+      mount()();
+      vi.setSystemTime(new Date('2026-11-24T12:01:01Z'));
+      // Older than its staleTime: fetch again.
+      mount(60_000)();
+      expect(policies()).toEqual([
+        'cache-and-network',
+        'cache-and-network',
+        'cache-first',
+        'cache-and-network',
+        'cache-and-network',
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps loaded channel pages registered for retry after a transient refresh failure', async () => {
     vi.useFakeTimers();
     const visibility = vi

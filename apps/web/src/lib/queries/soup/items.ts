@@ -382,6 +382,12 @@ function graphqlProjection(
   return undefined;
 }
 
+/** The GraphQL list takes a fixed window; a per-query function always fetches. */
+function graphqlStaleTime(staleTime: StaleTime | undefined) {
+  if (staleTime === 'static') return Number.POSITIVE_INFINITY;
+  return typeof staleTime === 'number' ? staleTime : undefined;
+}
+
 export function useSoupAstItemsQuery(
   args: Accessor<SoupAstItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
@@ -400,6 +406,7 @@ export function useSoupAstItemsQuery(
       cacheFirstEntities: options?.().graphqlCacheFirstEntities,
       localReconciliation: options?.().graphqlLocalReconciliation,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
+      staleTime: graphqlStaleTime(options?.().staleTime),
     })
   );
   const graphqlGroupedQuery = createGraphqlGroupedSoupAstItemsQuery(

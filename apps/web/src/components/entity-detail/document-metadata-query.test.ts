@@ -20,6 +20,7 @@ describe('documentMetadataOptions', () => {
   it('reads the document from the cache first, without notifications', () => {
     expect(documentMetadataOptions('doc-1')).toEqual({
       ignoresNotifications: true,
+      staleTime: 60_000,
       graphqlCacheFirstEntities: [{ entityType: 'DOCUMENT', entityId: 'doc-1' }],
     });
   });

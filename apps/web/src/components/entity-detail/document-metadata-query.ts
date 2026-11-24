@@ -31,6 +31,7 @@ export function documentMetadataOptions(
 ): SoupItemsQueryOptions {
   return {
     ignoresNotifications: true,
+    staleTime: 60_000,
     graphqlCacheFirstEntities: [{ entityType: 'DOCUMENT', entityId: documentId }],
   };
 }

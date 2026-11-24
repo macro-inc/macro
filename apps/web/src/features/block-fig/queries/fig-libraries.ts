@@ -16,6 +16,8 @@ import {
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
+
+const STALE_TIME = 60 * 1000;
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createMemo } from 'solid-js';
@@ -36,7 +38,7 @@ export const FIG_LIBRARY_DESIGNS_ARGS: SoupAstItemsQueryArgs = {
 export function useFigLibrarySource(documentId: string): FigLibrarySource {
   const query = useSoupAstItemsQuery(
     () => FIG_LIBRARY_DESIGNS_ARGS,
-    () => QUICK_ACCESS_FEED_OPTIONS
+    () => ({ ...QUICK_ACCESS_FEED_OPTIONS, staleTime: STALE_TIME })
   );
   const documents = createMemo<FigLibraryDocument[] | undefined>(() => {
     if (!queryReadyGate(query)) return undefined;

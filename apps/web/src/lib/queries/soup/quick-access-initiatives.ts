@@ -10,6 +10,8 @@ import {
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
+
+const STALE_TIME = 5 * 60 * 1000;
 import { createMemo } from 'solid-js';
 
 /**
@@ -34,7 +36,7 @@ export const QUICK_ACCESS_INITIATIVES_ARGS: SoupAstItemsQueryArgs = {
 export function useQuickAccessInitiativesQuery() {
   const query = useSoupAstItemsQuery(
     () => QUICK_ACCESS_INITIATIVES_ARGS,
-    () => QUICK_ACCESS_FEED_OPTIONS
+    () => ({ ...QUICK_ACCESS_FEED_OPTIONS, staleTime: STALE_TIME })
   );
 
   const initiatives = createMemo<InitiativeEntity[]>(() =>
