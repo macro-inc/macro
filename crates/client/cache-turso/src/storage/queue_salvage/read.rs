@@ -1,23 +1,24 @@
 //! Reads the queue out of a database that is about to be wiped.
 
 use super::{
-    Db, IDENTITY_META_KEY, ImportMarker, QueueRead, RecordKey, STORAGE_GENERATION_META_KEY,
-    SalvagedQueue, Shadow, TursoStorage, driver, identity_of, import_marker, invariant,
-    metadata_record, record, required_i64, required_text, sequence,
+    Db, IDENTITY_COLUMN, IDENTITY_META_KEY, ImportMarker, QueueRead, RecordKey,
+    STORAGE_GENERATION_META_KEY, SalvagedQueue, Shadow, TursoStorage, driver, identity_of,
+    import_marker, invariant, metadata_record, record, required_i64, required_text, sequence,
 };
 use crate::TursoStorageError;
 use crate::storage::{
     OptimisticIndexDocumentState, QUEUE_SELECT, STORAGE_SCHEMA_VERSION, nullable_i64,
-    parse_optimistic_uncertainty, parse_queue_row, projection_incomplete_kind,
+    nullable_text, parse_optimistic_uncertainty, parse_queue_row, projection_incomplete_kind,
 };
 use cache_core::codec::{
     MIGRATABLE_CACHE_FORMAT_VERSIONS, cache_namespace, cache_namespace_at, decode_record,
     encode_record,
 };
+use cache_core::engine::IDENTITY_VALUE_FIELD;
 use cache_core::engine::authority::AUTHORITY_META_KEY;
 use cache_core::identity;
 use cache_core::queue::decode_optimistic_source;
-use cache_core::value::EntityKey;
+use cache_core::value::{CacheValue, EntityKey};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use turso_core::Value;
 use uuid::Uuid;
@@ -40,8 +41,8 @@ const UNCERTAIN_FACTS: usize = 3;
 /// `pending`, a queue salvaged earlier that no database is known to hold yet.
 ///
 /// A database that cannot be read yields what could be: `complete` says
-/// whether that was all of it. The account the writes were made under must be
-/// readable, or none of them are carried.
+/// whether that was all of it. The account any of the writes names must be
+/// there to read, or none of them are carried.
 #[cfg(target_arch = "wasm32")]
 pub fn read_queue(
     session: &turso_opfs::ConnectedOpfsSession,
@@ -137,8 +138,8 @@ enum Held {
 
 struct HeldQueue {
     queue: SalvagedQueue,
-    imported: Option<Uuid>,
     account: Option<Vec<u8>>,
+    imported: Option<Uuid>,
     dropped: u64,
     complete: bool,
 }
@@ -151,12 +152,12 @@ impl HeldQueue {
             || (pending.source.is_some() && pending.source == self.queue.source)
             || self.queue.shares_a_write_with(pending)
     }
-}
 
     /// Whether `pending` may follow this database under one account.
     fn admits(&self, pending: &SalvagedQueue) -> bool {
         self.account.is_none() || self.account.as_deref() == pending.account()
     }
+}
 
 fn read_database(connection: &Db, scope: &str, now_ms: i64) -> Result<Held, TursoStorageError> {
     let tables = driver::query(
@@ -183,14 +184,22 @@ fn read_database(connection: &Db, scope: &str, now_ms: i64) -> Result<Held, Turs
             shadows: Vec::new(),
             records: Vec::new(),
         },
-        imported: marker.map(|marker| marker.id),
         account: metadata_record(connection, IDENTITY_META_KEY)?,
+        imported: marker.map(|marker| marker.id),
         dropped: 0,
         complete: true,
     };
+    let account = held.account.as_deref().map(account_name).transpose()?;
+    let mut strangers = false;
     let mut local_keys = BTreeSet::new();
     let rows = driver::query_each(connection, QUEUE_SELECT, Vec::new(), |row| {
         let row = row.get_values().cloned().collect::<Vec<_>>();
+        match nullable_text(&row, IDENTITY_COLUMN) {
+            // One queued before this database had an account names none.
+            Ok(None) => {}
+            Ok(named) if named == account => {}
+            _ => strangers = true,
+        }
         match binding_keys(&row) {
             Ok(keys) => {
                 local_keys.extend(keys);
@@ -200,6 +209,9 @@ fn read_database(connection: &Db, scope: &str, now_ms: i64) -> Result<Held, Turs
         }
         Ok(())
     });
+    if strangers {
+        return Err(invariant());
+    }
     held.complete = rows.is_ok();
     if held.queue.is_empty() {
         return Ok(Held::Queue(held));
@@ -227,6 +239,18 @@ fn read_database(connection: &Db, scope: &str, now_ms: i64) -> Result<Held, Turs
     // Projections only place a pending write in lists before it settles.
     held.queue.shadows = shadows(connection, &owners).unwrap_or_default();
     Ok(Held::Queue(held))
+}
+
+/// The account an identity record names.
+fn account_name(record: &[u8]) -> Result<String, TursoStorageError> {
+    match decode_record(record)
+        .map_err(|_| invariant())?
+        .fields
+        .get(IDENTITY_VALUE_FIELD)
+    {
+        Some(CacheValue::String(account)) => Ok(account.clone()),
+        _ => Err(invariant()),
+    }
 }
 
 /// Whether this build reads the optimistic layers this database holds.

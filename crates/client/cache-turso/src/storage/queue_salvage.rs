@@ -34,6 +34,7 @@ const IMPORT_MARKER_KEY: &str = "salvaged-queue";
 /// Columns of a `QUEUE_SELECT` row: the queued write's own, then its layer's
 /// data and updates and its retry count.
 const QUEUE_ROW_COLUMNS: usize = 17;
+const IDENTITY_COLUMN: usize = 6;
 const LEASE_OWNER_COLUMN: usize = 9;
 const LEASE_EXPIRY_COLUMN: usize = 11;
 const CREATED_AT_COLUMN: usize = 13;

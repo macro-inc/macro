@@ -367,6 +367,31 @@ fn a_queue_never_enters_another_accounts_database() {
 }
 
 #[test]
+fn a_queue_whose_account_is_missing_is_not_carried() {
+    block_on(async {
+        for (account, carries) in [
+            (None, false),
+            (Some("other"), false),
+            (Some("identity"), true),
+        ] {
+            let mut storage = fresh();
+            enqueue(&mut storage, "Before the account").await;
+            storage
+                .enqueue_mutation_with_shadow(queued("After it"), Vec::new())
+                .await
+                .unwrap();
+            if let Some(account) = account {
+                let account = metadata(IDENTITY_META_KEY, account);
+                storage.put_batch(vec![account]).await.unwrap();
+            }
+            let read = salvage(&storage);
+            assert_eq!(read.queue.map(|queue| queue.len()), carries.then_some(2));
+            assert_eq!(read.complete, carries);
+        }
+    });
+}
+
+#[test]
 fn a_copy_of_another_accounts_queue_goes_with_the_database() {
     block_on(async {
         let mut older = fresh();
