@@ -1,4 +1,5 @@
 import { UnifiedModelSelector } from '@app/features/agents-view/model-selector';
+import { currentModelId } from '@core/component/AI/constant/model';
 import {
   catalogModelLabel,
   modelLabel,
@@ -143,6 +144,15 @@ export function AgentComposer(props: {
   const changingEffort = () => {
     const option = effort();
     return option ? changingConfig(messages(), option.id) : undefined;
+  };
+
+  /** The model the session runs. A Macro session last run on a retired model
+   * moves to its replacement on its next turn, so it shows as that replacement. */
+  const sessionModel = (): string | undefined => {
+    const model = metadata()?.model ?? undefined;
+    return model && isMacroHarness(session()?.harness)
+      ? currentModelId(model)
+      : model;
   };
 
   const catalog = createMemo(() =>
@@ -347,12 +357,12 @@ export function AgentComposer(props: {
           )
         }
         modelName={catalogModelLabel(
-          metadata()?.model ?? undefined,
+          sessionModel(),
           metadata()?.supportedModels ?? []
         )}
         supportsImages={
           metadata()?.supportedModels.find(
-            (model) => model.id === metadata()?.model
+            (model) => model.id === sessionModel()
           )?.supportsImages
         }
         attachments={attachmentTracker.attachments()}
@@ -376,8 +386,7 @@ export function AgentComposer(props: {
             state={{
               model:
                 changingModel(messages(), metadata()?.model ?? null) ??
-                metadata()?.model ??
-                undefined,
+                sessionModel(),
               models: catalog(),
               suggestedModels: catalog(),
               effort: effort(),
@@ -403,7 +412,7 @@ export function AgentComposer(props: {
                   undefined
                 )
                   return;
-                const model = metadata()?.model;
+                const model = sessionModel();
                 if (model)
                   fireAndForget(chooseModel(model, choice), 'agent-composer');
               },
