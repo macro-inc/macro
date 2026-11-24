@@ -523,9 +523,18 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `ActionConfigurationUpdate`, with `trigger` required; the cron-only body with a
   top-level `schedule` is gone. Rejections return serde's message, which names
   the field. Cron schedules have 6 or 7 fields.
+- `POST /scheduled-actions/{id}/stop` (owner only) stops the routine's run in
+  progress, found by its claim (`running_run`); with none running it changes
+  nothing. Any instance can serve it, so the stop goes to every instance
+  through Postgres `NOTIFY` (`outbound/pg_run_stops.rs`, the `StopRelay`
+  port) and `RunStops` (`domain/run_stops.rs`) hands it to the executor,
+  which ends that run as `RunEnd::Stopped`: its runner is cancelled, its
+  claim released and its record kept with `stopped` set and error "Stopped".
+  A stopped event run is `Interrupted`, for good. No notification is sent
+  for it. A stop sent while an instance's listener is reconnecting is lost.
 - The list response carries each routine's `last_run`, its latest finished
   run record (what each step did), so clients can flag failures and say what
-  it did; single reads omit it. Every finished run is
+  it did; single reads omit it. Every finished run but a stopped one is
   reported to the owner by the host's `RoutineRunObserver`
   (`services/agent_harness_service/src/scheduling/routine_run_notifications.rs`)
   as an inbox-only `routine_run_finished` notification.
@@ -544,8 +553,24 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   candidate's owner isn't the inbox's (`event_runs/admission.rs`, `Audience`).
   Like the other audience rules (`IncomingEvent::is_for_owner`), it is never
   an access grant: each owner's entity access is still checked.
+- A new-email filter can name `inboxes` (email link ids, at most 25; empty is
+  every inbox). Saving checks them against the owner's current own and
+  delegated inboxes on create and on a trigger change, so a later disconnect
+  never blocks unrelated edits. `OwnerInboxes` asks the email domain's
+  `EmailRepo` which of the picked ids the owner reads (`inbox_ids_among`, the
+  same own-plus-delegated set the app lists, one index probe per pick), so the
+  check never reads the owner's other inboxes or an inbox's other delegates.
+  `routine.admit_event` counts the routines only their inboxes turned away as
+  `outside_inboxes`. No run keeps the received `inbox`, so every replica can
+  read every run: admission checks it, and a filter changed since supersedes
+  the run by revision. A shared template drops its inboxes: they are the
+  publisher's own. Code without inbox filters can't decode a routine that
+  picks some, and skips it at intake.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
+  Its dispatcher fails a whole page of pending runs on one such row, stopping
+  every routine's event runs, so don't store what only admission needs, as
+  the received inbox.
 
 ## Related
 

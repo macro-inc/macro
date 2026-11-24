@@ -284,6 +284,13 @@ returning to the split you came from, a list keeping `Shift+Up/Down` for its
 selection, and a grid marked `data-owns-arrow-keys` keeping `Shift+Arrow`:
 `bunx playwright test --config src/components/app/split-layout/focus-browser-test/playwright.config.ts`.
 
+A control marked `data-owns-keyboard` takes every key: the hotkey engine runs
+no hotkey for key events from inside it, input-proof hotkeys included, but
+its key-ups still release keys pressed before focus moved in, and focus
+entering it clears the pressed set. The agent screen viewer's keyboard field
+carries it while driving, so typing into a remote desktop never runs app
+hotkeys (`screen-stage.test.tsx`).
+
 One document open in two desktop tabs has a backend-free browser regression over
 the real router, tab manager, split layout, and orchestrator: each tab mounts its
 own instance and keeps its own state, and reopening within a tab reuses it. The
@@ -665,6 +672,8 @@ even for a matching Macro user.
 Only Macro users and groups participate in mobile People pinning.
 Rank scoped mention people by exact full or first name, prefix, literal match,
 then subsequence before recency and mobile pinning; preserve native directory order.
+A personal window ordered by contact list keeps the cache's order, where the list
+group outranks exact over prefix among word-start matches; don't rescore it by name.
 The channel browser suite below also checks project
 ranking and insertion on desktop and phone.
 
@@ -851,6 +860,14 @@ Its `stacks.browser.e2e.ts` runs the same view with a pointer: an open stack's
 row keeps its toggle in place as Hide (beside the Hide under its last
 notification), hovering a row swaps its time for Mark done without moving
 anything, and an open stack leaves the other rows undimmed, on phones too.
+
+Notification preview text is a picture of the message: every `StaticMarkdown`
+that renders it (inbox rows and stack items, `NotificationContent` under list
+rows, and touch Home's `InboxCardLayout` cards) is `inert`, so pressing a link
+or mention in it presses the row and opens nothing. The same suite's
+`preview-links.browser.e2e.ts` clicks, Cmd-clicks, middle-clicks and taps a
+link in a row and in an unfolded stack; the Signal suite's
+(`next-soup/soup-view/views/inbox/browser-test`) taps one in a Home card.
 
 A swipe row folds only what is inside it: draw a row's divider inside its
 `SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line
@@ -1214,7 +1231,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep Quick Access cache availability reactive to `getGraphqlSoupCacheHost()`; the host can appear, change or be disabled after the provider mounts, and email has no legacy source fallback.
 - Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; with `enable-contact-lists` the backfill and exact lookup select `GraphqlContact.lists` (the `…WithLists` operations, never the fetch-only pages) and scan under checkpoint v3, so only clients the flag turns on rehydrate; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. An invalidation naming `changed` contacts also tops up just those ids through the exact lookup (`contacts/top-up.ts`), taking turns on the contact fence with scan pages (`write-turn.ts`); top-ups never delete. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
-- A surface orders its personal people window by contact list through `ContactPeoplePolicy.listPriority` (`QuickAccessListOptions.peopleListPriority`); with `enable-contact-lists` only @mention windows pass one (`useMentionListPriority` in `queries/contacts/lists.ts`, the order itself in `list-priority.ts`). `readContactDirectory` sends list fields only to a host that has answered a search with people policy 7 (5 and 6 refuse them); the first search on a host goes without and is resent once it answers 7. Keep orders within the host's bounds (16 groups, 64 keys, 128-byte keys). The real-engine regression is `people-list-order.browser.e2e.ts` in `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts`.
+- A surface orders its personal people window by contact list through `ContactPeoplePolicy.listPriority` (`QuickAccessListOptions.peopleListPriority`); with `enable-contact-lists` only @mention windows pass one (`useMentionListPriority` in `queries/contacts/lists.ts`, the order itself in `list-priority.ts`). `readContactDirectory` sends list fields only to a host that has answered a search with people policy 7 or later (5 and 6 refuse them); the first search on a host goes without and is resent once it answers. On policy 8, among names that start with the query (exact and word-prefix) the list group decides first, then exact before word-prefix, then recency; contains-only and address matches follow, each by group. Policy 7 hosts (native builds before the release that brings 8) rank by name stage before group, and their windows are kept as they come. Keep orders within the host's bounds (16 groups, 64 keys, 128-byte keys). The real-engine regression is `people-list-order.browser.e2e.ts` in `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts`.
 - Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
 - A tab without a usable local cache lists server contact pages, which the server does not rank. On the first page of a typed search `readServerWindow` (`queries/contacts/directory.ts`) also reads who the text names: the server's named people (`readServerNames`: with `enable-named-contact-search` the whole directory's exact and word-start matches, ranked by list group then exact names, from `GraphqlUser.contactsNamedBy`; without it the exact matches of a scan that stops after 2,000 contacts, which a server older than the field still answers), plus the team roster or a whole typed address looked up by ID, and it classifies them and the page's own rows with the local ranking's exact and word-prefix rules (`namedBy`). One of those extra reads failing never fails the page, and one still unanswered two seconds in never holds it once its own rows have landed (`NAMED_READ_BUDGET_MS`): it lists without the people that read would have added, and still ranks everyone it has. `createContactDirectoryList` orders that page: direct-message partners, then teammates, then everyone else, exact before word-start matches, with the looser matches after them in the same groups; later pages are never reordered. Give every people list `teammates` (`useTeammateIds` in `queries/team/roster`, which observes the roster the app shell keeps loaded and never fetches it), and `directMessages` where the surface has them.
 - Cmd+K and mobile name search show **Searching…** under the listed rows (`isSearchingEntities`, through `createSteadyFlag`) while the cache has not answered the typed query, since contacts, sessions and commands list first; only a slow search says so. A replay of an answered window is not a pending search, and `isLoadingEntities` still means an empty list is loading. A search refused while the cache changes owner (`owner-handoff-blocked`) stays pending and `createProjectedList` replays it when `onCacheGenerationChanged` reports the replacement engine; nothing else would until the next cache write.
@@ -1263,7 +1280,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   first item" command, so a list on `useListInteractions` lands on its first
   row with no code in the view; when that command finds no row (a search with
   no results), the keys stay in the field. `wide` lets the open field take the rest of
-  the header (the view hides its other actions from `onOpenChange`), and
+  the header (the view hides its other actions from `onOpenChange`), `open`
+  lets the view keep the open state and close the field itself, and
   `suggestions` lists rows under the field that the arrows walk before the
   results (a row that `editsQuery`, such as Email's `in:` views, keeps the
   keyboard in the field); `operators` marks search operators (`in:sent`) in

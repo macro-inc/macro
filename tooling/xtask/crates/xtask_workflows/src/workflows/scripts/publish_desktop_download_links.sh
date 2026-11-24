@@ -42,6 +42,16 @@ installers=(
   "Macro-$version-aarch64-darwin.dmg Macro-macos-arm64.dmg"
   "Macro-$version-x86_64-linux.AppImage Macro-linux-x86_64.AppImage"
 )
+# The Intel Mac build is optional. A release without it leaves the previous
+# Intel installer in place: it still installs, then updates itself once a
+# release includes Intel again. The website links to it (/download/mac-intel)
+# only once a release has published it.
+intel="Macro-$version-x86_64-darwin.dmg"
+if [ -f "release-artifacts/$intel" ]; then
+  installers+=("$intel Macro-macos-x86_64.dmg")
+else
+  echo "This release has no Intel Mac installer; leaving Macro-macos-x86_64.dmg unchanged."
+fi
 # Check every installer first, so a missing one changes no link.
 for installer in "${installers[@]}"; do
   read -r source _ <<< "$installer"

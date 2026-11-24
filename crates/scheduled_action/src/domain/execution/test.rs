@@ -1100,3 +1100,61 @@ async fn runs_without_a_transcript_still_announce_start_and_stop_and_keep_their_
         json!(action().configuration_revision)
     );
 }
+
+#[tokio::test]
+async fn a_stopped_run_ends_as_stopped_and_gives_its_claim_back() {
+    let executor = executor(Repo::default(), Runner::default());
+    executor.execute_action(action()).await.unwrap();
+    let token = executor.repo.claim.lock().unwrap().unwrap();
+    // Another run's stop leaves this one running.
+    executor.stops.request(generate_uuid_v7()).await.unwrap();
+    executor.stops.request(token.as_uuid()).await.unwrap();
+    drain(&executor).await;
+    assert!(executor.runner.dropped.is_cancelled());
+    assert_eq!(executor.runner.cancellations.lock().unwrap().len(), 1);
+    assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 1);
+    let records = executor.repo.records.lock().unwrap();
+    let [record] = records.as_slice() else {
+        panic!("one record expected, got {records:?}");
+    };
+    assert!(!record.is_success);
+    let result: ExecutionResult = serde_json::from_value(record.result.clone()).unwrap();
+    assert!(result.stopped);
+    assert_eq!(result.error.as_deref(), Some("Stopped"));
+    // What ran before the stop stays on the record.
+    assert_eq!(result.steps.len(), 1);
+}
+
+#[tokio::test]
+async fn a_stopped_event_run_ends_for_good_and_says_it_was_stopped() {
+    let executor = executor(Repo::default(), Runner::default());
+    let run = event_run();
+    let mut execution = Box::pin(executor.execute(&run, std::future::pending()));
+    assert!(futures::poll!(&mut execution).is_pending());
+    executor.stops.request(run.token.as_uuid()).await.unwrap();
+    let result = execution.await;
+    assert_eq!(result.outcome, EventRunOutcome::Interrupted);
+    assert!(executor.runner.dropped.is_cancelled());
+    let record = result.record.unwrap();
+    let result: ExecutionResult = serde_json::from_value(record.result).unwrap();
+    assert!(result.stopped);
+}
+
+#[tokio::test]
+async fn a_failed_run_is_not_marked_stopped() {
+    let executor = executor(
+        Repo::default(),
+        Runner {
+            fail_run: true,
+            ..Runner::default()
+        },
+    );
+    executor.runner.finish.cancel();
+    executor.execute_action(action()).await.unwrap();
+    drain(&executor).await;
+    let records = executor.repo.records.lock().unwrap();
+    let result: ExecutionResult = serde_json::from_value(records[0].result.clone()).unwrap();
+    assert!(!result.stopped);
+    // An unstopped record leaves the field out, as older records do.
+    assert!(records[0].result.get("stopped").is_none());
+}

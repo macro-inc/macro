@@ -4,6 +4,8 @@ use models_opensearch::SearchEntityType;
 use opensearch_client::search::model::Highlight;
 use sqlx::types::Uuid;
 
+mod delegated_inbox;
+
 /// Helper to create a TaggedSearchHit for testing
 fn make_tagged_hit(
     entity_id: Uuid,

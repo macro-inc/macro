@@ -1,4 +1,4 @@
-import { errAsync } from 'neverthrow';
+import { errAsync, okAsync } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ existing: vi.fn() }));
@@ -39,4 +39,21 @@ it('opens a DM yet to be made when the lookup fails otherwise', async () => {
     { type: 'channel', id: pendingDirectMessageId(PERSON) },
     false
   );
+});
+
+it('opens the DM a settled directory answers, as an existing one', async () => {
+  mocks.existing.mockReturnValue(
+    okAsync({ channelId: 'dm-1', source: 'directory' })
+  );
+  const directory = {
+    channels: () => [],
+    complete: () => true,
+    viewsCurrent: () => true,
+  };
+  const open = vi.fn();
+
+  await openDirectMessage(VIEWER, PERSON, open, directory);
+
+  expect(mocks.existing).toHaveBeenCalledWith(VIEWER, PERSON, directory);
+  expect(open).toHaveBeenCalledWith({ type: 'channel', id: 'dm-1' }, true);
 });

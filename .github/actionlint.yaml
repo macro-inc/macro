@@ -21,6 +21,7 @@ self-hosted-runner:
     - namespace-profile-linux-tiny-no-cache
     - nscloud-cache-size-100gb
     - nscloud-cache-tag-macro-desktop-macos
+    - nscloud-cache-tag-macro-desktop-macos-x86_64
     - nscloud-macos-sequoia-arm64-12x28
     - nscloud-macos-sequoia-arm64-12x28-with-cache
     - nscloud-macos-sequoia-arm64-6x14

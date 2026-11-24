@@ -67,9 +67,11 @@ projects.
   known bug is `#[ignore = "known bug: ..."]`; the fix removes the ignore.
   `tests/content_search/email_operators.rs` runs the same way and checks the
   conditions typed Mail search operators become (`EmailTextCondition`,
-  `EmailLabelCondition`, excluded threads, sent bounds), an address beside a
-  word, hyphenated and punctuated words in email text and searches at the term
-  cap inside the unified request; it needs the emails index empty too.
+  `EmailLabelCondition`, excluded threads, sent bounds), the inboxes and
+  shared threads a search reaches (`inbox_link_ids`, by inbox, never by
+  owner), an address beside a word, hyphenated and punctuated words in email
+  text and searches at the term cap inside the unified request; it needs the
+  emails index empty too.
 
 ## Gotchas
 

@@ -299,12 +299,16 @@ tools — hexagonal, heavily feature-gated.
   backfilled to the backfill, so no thread is classified twice at once. An inbox
   whose threads can't be read counts in `inboxes_failed` and the sweep goes on
   to the next, so one slow inbox can't stop the sweep for all. `stale_threads` reads one
-  inbox through its latest-inbound and latest-outbound indexes; keep its
-  `OFFSET 0` fence, or the per-thread calendar and contact checks run on every
-  thread in the window. It reads the owner's recent contacts once, from their
-  sent mail, and checks each thread's senders against that set: through
-  `email_message_recipients.contact_id` a list address, both the sender and a
-  recipient of all its mail, costs every thread the list's whole history.
+  inbox through its latest-inbound and latest-outbound indexes into a
+  materialized `stale` CTE; keep it materialized, or the per-thread calendar
+  and contact checks run on every thread in the window. Whether a sender is a
+  recent contact is decided once per distinct sender, never per thread: one
+  named on at most `ADDRESSED_PROBE_LIMIT` messages through those messages,
+  stopping at the first the owner sent lately; one named on more, a list
+  address being a recipient of all its mail, against the owner's recent
+  recipients, read only then. Reading the owner's sent mail on every page
+  costs thousands of cold pages in production, and probing a list per thread
+  costs its whole history.
 - A Focus thread's days (`due_on` and the day of the meeting it is about) are read
   in one call when new mail is classified, only for a thread
   with `is_focus` or `awaiting_reply`, never for a thread the backfill's second pass
@@ -411,6 +415,16 @@ tools — hexagonal, heavily feature-gated.
 - Include a reader’s cross-inbox reply draft on a shared thread at Edit only
   when it belongs to an inbox in the reader’s Drafts scope. Apply the same
   rule to full and parsed thread reads.
+
+- Labels people make are theirs: a thread opened through a share, a folder, a
+  channel or a CRM Team view shows its reader the made labels of an inbox
+  they own or manage, and none from anyone else's inbox. Every label read
+  (`labels_by_thread_ids`, `labels_by_message_ids`) takes the reader and
+  returns made labels only from the inboxes that person owns or manages, and
+  system labels, which are message state, to everyone; a bot, a signed-out
+  reader and an internal receipt get system labels alone. Give a new read of
+  labels the same condition; `test/label_readers.rs` runs every receipt and row
+  read over two shared threads.
 
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - `domain/scheduled_delivery/{state,identity,deletion}.rs` owns claim
@@ -699,6 +713,13 @@ tools — hexagonal, heavily feature-gated.
   slots, which waits the 10 s pace too. `enumerate_once` then goes on to the
   next due stream (up to `PACED_CLAIMS_PER_TURN`); otherwise a large import's
   waiting rounds, due again within seconds, would take the polls' turns.
+  The discovery that creates a folder's stream makes its first round due a
+  little early by role (`import_round_lead_seconds`: Inbox, then Sent, then
+  the rest): the rounds that read an import's first pages stay ahead of those
+  paced behind them, so without it Graph's alphabetical order would import
+  Archive and Deleted Items before the Inbox. The health snapshot's
+  `import_round_wait_seconds` is how long the mailbox's longest-due round has
+  waited for a claim.
   A message released after a failed read is due at once when a newer
   revision arrived during the lease.
 - A folder's import round is a delta snapshot, so mail that arrives during it

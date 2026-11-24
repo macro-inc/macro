@@ -163,7 +163,7 @@ async fn lost_rotation_fence_never_returns_or_caches_the_access_token() {
     repo.expect_release_refresh()
         .once()
         .withf(|_, _, revoke| !revoke)
-        .returning(|_, _, _| Ok(()));
+        .returning(|_, _, _| Ok(true));
     let mut provider = MockMicrosoftIdentityProvider::new();
     provider.expect_refresh().once().returning(|_| {
         Ok(RefreshedGrant {

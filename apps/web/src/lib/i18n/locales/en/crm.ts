@@ -363,7 +363,8 @@ export default {
   privacyContributionTitle: 'Your email contribution',
   privacyAvailability:
     'Email contribution is optional and separate from CRM access.',
-  privacyConnect: 'Connect your email first',
+  privacyConnect: 'No email connected',
+  privacyConnectEmail: 'Connect email',
   privacyShared: 'Your eligible emails are shared with your team.',
   privacyNotShared: 'Your emails are not contributing to CRM.',
   privacyOn: 'Sharing on',

@@ -1,3 +1,4 @@
+import { AGENT_SCREEN_ROUTE_ID } from '@app/features/agent-screen/core/route';
 import {
   AGENTS_ARCHIVE_ROUTE_ID,
   AGENTS_ARCHIVE_VIEW_ID,
@@ -199,9 +200,8 @@ export const welcomeRoute = defineRoute({
 });
 
 /**
- * Mobile-web visitors can't sign up on a phone, so instead of pushing them
- * through Google SSO + onboarding we capture their email and email them a
- * link to open on desktop. The marketing site redirects mobile browsers here.
+ * The retired phone email capture. Phones now sign up like desktop, so old
+ * links forward to /signup with their query.
  */
 export const mobileEmailSignupRoute = defineRoute({
   id: 'mobile-email-signup',
@@ -758,6 +758,26 @@ export const tasksProjectsRoute = defineRoute({
   params: z.object({}).transform(() => ({ projectsTab: 'projects' as const })),
 });
 
+/** Time across projects: the viewer's week, or their team's. */
+export const tasksTimeRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: 'tasks-time',
+  path: 'time/:timeView',
+  params: z.object({ timeView: z.enum(['week', 'team']) }),
+});
+
+/** A task opened from My week or Team, shown in their place. */
+export const tasksTimeTaskRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: 'tasks-time-task',
+  path: 'task/:taskId',
+  params: z.object({ taskId: z.string().min(1) }),
+  remountKey: ({ taskId }) => taskId,
+  claim: ({ taskId }) => ({ namespace: 'block', id: `md:${taskId}` }),
+  toReference: ({ taskId }) => uuidRouteReference(taskId, 'task'),
+  externalSearch: Object.values(MARKDOWN_URL_PARAMS),
+});
+
 export const tasksSplitRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: 'view-tasks',
@@ -852,6 +872,18 @@ export const callDetailRoute = defineRoute({
   externalSearch: [CALL_URL_PARAMS.transcriptId, CALL_URL_PARAMS.messageId],
   remountKey: ({ callId }) => callId,
   claim: ({ callId }) => ({ namespace: 'block', id: `call:${callId}` }),
+});
+
+/** An agent teammate's computer screen: watch it, and take over (`agent-screen`). */
+export const agentScreenRoute = defineRoute({
+  id: AGENT_SCREEN_ROUTE_ID,
+  path: 'screen/:harnessId',
+  params: z.object({ harnessId: z.string().min(1) }),
+  remountKey: ({ harnessId }) => harnessId,
+  claim: ({ harnessId }) => ({
+    namespace: 'component',
+    id: `${AGENT_SCREEN_ROUTE_ID}:${harnessId}`,
+  }),
 });
 
 export const companiesRoute = defineRoute({

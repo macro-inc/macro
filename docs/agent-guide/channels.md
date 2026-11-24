@@ -186,8 +186,9 @@ An external email can be selected as a channel participant. For an unregistered 
 **New direct message** opens a draft message whose To
 field takes either people or one existing conversation. People open their DM
 or group chat, creating it on the first message. While the field is empty it
-also suggests the channels and group chats you belong to (the same set as
-Share To; reach a one-to-one DM by picking the person). A picked channel is the
+also suggests every channel and group chat in your channel list, whatever its
+size (the same set as Share To and the iOS share sheet; reach a one-to-one DM
+by picking the person). A picked channel is the
 only recipient: the field takes no typing and suggests nothing until its chip
 is removed (its X, or Backspace), and once anyone is picked channels are no
 longer suggested. Send posts into the channel and opens it at the message, as
@@ -633,7 +634,11 @@ Escape also cancels an edit. The iOS app uses its native media picker. Check inl
 on desktop and touch: attach a file and save, then edit again and discard changes
 without changing the original message or attachments.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
-Check this arrangement at both phone and tablet widths.
+Check this arrangement at both phone and tablet widths. Its To field is the
+New direct message field (see [Create a channel](#create-a-channel)): people,
+or one channel or group chat, which fills the field until its chip is removed.
+Send posts into that channel and closes the sheet without leaving the current
+view. Phones and tablets behave the same.
 
 With a wrapping draft present, repeatedly narrow and widen the desktop split
 and window, then scroll the message history. The composer should settle into
@@ -1388,9 +1393,11 @@ There is no separate Browse channels row. Closing search restores the sectioned
 list. Collapsed sections retain unread rows by default; **Display → Unread when
 collapsed** turns those rows off without changing expanded membership. Off-page
 unread rows supplement only collapsed groups with that setting enabled; expanded
-groups keep the source's page order. An unseen invite (being added to a channel)
-makes the channel unread, as it is in Notifications and the Chat badge, until
-Chat opens the channel and marks the invite seen.
+groups keep the source's page order. A collapsed section and **Unread only**
+also keep a channel whose only unread is a mention in a thread: its row shows the
+mention count and no unread dot, and the mention lights the Chat badge. Being
+added to a channel does not make it unread; opening the channel in Chat marks
+its invite seen, which tidies Notifications.
 
 Drag a section heading or its name to reorder sections. There is no drag-handle
 icon. Keyboard focus reveals an icon-free **Reorder** control over the heading
@@ -1727,7 +1734,16 @@ and full notification edge load before the split opens with the same top-level
 read policy. Selecting another channel while that request is pending must cancel
 the pending open; failed lookups must not open a split or mark anything seen.
 
-The app-shell Chat badge uses `ChannelUnreadPresence`: only
+With unified notifications on, the app-shell Chat badge lights for an unseen
+top-level message or a mention, thread mentions included: what can make a channel
+unread in the sidebar or show a mention count on its row. A thread reply, a
+reaction, a ping or an invite leaves it dark (see
+[Notifications](notifications.md)). To check, have another account reply in a
+thread you are part of: the badge stays dark and Notifications lists the reply as
+unread. Then have them mention you in that thread: the badge lights and the
+channel's row shows **1**, under **Unread only** too.
+
+With unified notifications off, the badge uses `ChannelUnreadPresence`: only
 channel IDs and at most one unread top-level message/mention ID/state per channel, with a
 500-channel candidate bound and no history, message previews, or metadata. It
 excludes replies, thread mentions, and reactions, matching the channel-row badges.

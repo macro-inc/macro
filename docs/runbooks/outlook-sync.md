@@ -48,8 +48,13 @@ fewer than 200 messages ready to import; until then its enumerate spans read
 Messages backed off after their own failures don't count. Importing folders
 are claimed ahead of finished folders' polls that came due less than five
 minutes earlier, so a walk reads its next page soon after its import has
-room; a poll due longer than that goes first again. With the live pass
-on, the folder's new mail does not wait for its walk
+room; a poll due longer than that goes first again. A new import's Inbox
+round is due first and its Sent round next, so their pages are read before
+the other folders', which Graph lists alphabetically (Archive, Deleted Items).
+The snapshot's `import_round_wait_seconds` is how long the mailbox's
+longest-due import round has waited for a claim: when the polls ahead of it
+run more than five minutes late, each page of an import waits that long. With
+the live pass on, the folder's new mail does not wait for its walk
 ([New mail during an import](#new-mail-during-an-import)).
 
 A message whose own reads keep failing stops retrying: after 3 refusals Graph
@@ -225,7 +230,9 @@ needs a few more failures to alert.
 
 - Group `@outlook.token_cache:* @outlook.outcome:unavailable` spans by
   `@http.status_code`. 503 is authentication-service's own transient
-  failure; no status means the request never got an answer.
+  failure, including another refresh of the same grant in flight (each
+  replica refreshes once for its own cache, so a new grant's first seconds
+  see a few); no status means the request never got an answer.
 - Check authentication-service: errors on
   `GET /auth/internal/microsoft_access_token`, its recent deploys, and
   Microsoft's token endpoint (refresh failures in its logs).
@@ -246,6 +253,14 @@ token that works again clears the flag.
   the Microsoft app registration (an expired client secret, revoked consent),
   the encrypted grant store, or a refresh regression in a recent
   authentication-service deploy. Check its logs for refresh errors.
+- Why Microsoft refused: authentication-service logs `"microsoft refused a
+  token refresh"` with Microsoft's `@oauth.error` and AADSTS number
+  (`@microsoft.aadsts`), never its description, and `"microsoft grant revoked
+  after a refused refresh"` with the `@grant_id` and generation it revoked
+  (`microsoft.token.refresh` span, `@microsoft.outcome`). A refused refresh
+  (`invalid_grant`, `interaction_required`, `consent_required`, or a
+  response without the mail permissions) revokes the grant, so only a
+  reconnect brings the mailbox back.
 - Levers: fix the shared credential or roll back. Mailboxes already marked
   need their users to reconnect.
 
