@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { PLAN_BY_TIER } from '../paywall/plans';
+import { type PaidPlanTier, PLAN_BY_TIER } from '../paywall/plans';
 import type { BillingContext } from '../settings/context/billing-context';
 import type { UsageContext } from '../usage/context/usage-context';
 import { toUsageSummary } from '../usage/queries/usage-summary';
@@ -18,7 +18,7 @@ import { fixtureSnapshot } from './queries/fixture-snapshot';
 export type LabSurface = 'billing' | 'usage';
 export type LabPayment =
   | { kind: 'credits'; amountCents: number }
-  | { kind: 'subscription'; tier: 'premium' | 'max' }
+  | { kind: 'subscription'; tier: PaidPlanTier }
   | { kind: 'methods' };
 
 const defaultSurface = (scenario: ScenarioId): LabSurface =>

@@ -14,5 +14,6 @@ export type PlanTier = (typeof PlanTier)[keyof typeof PlanTier];
 export const PlanTier = {
   free: 'free',
   premium: 'premium',
+  business: 'business',
   max: 'max',
 } as const;

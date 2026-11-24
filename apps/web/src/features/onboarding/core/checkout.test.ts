@@ -9,8 +9,19 @@ describe('onboardingCheckoutRequest', () => {
       successUrl: `${ONBOARDING}?subscriptionSuccess=true&type=premium`,
       cancelUrl: `${ONBOARDING}?subscriptionCancel=true`,
       plan: 'premium',
+      interval: 'month',
       onboardingTrial: true,
     });
+  });
+
+  it('buys Business annually when chosen, and Pro monthly whatever is chosen', () => {
+    expect(
+      onboardingCheckoutRequest(ONBOARDING, 'business', 'standard', 'year')
+    ).toMatchObject({ plan: 'business', interval: 'year', onboardingTrial: false });
+    expect(
+      onboardingCheckoutRequest(ONBOARDING, 'premium', 'standard', 'year')
+        .interval
+    ).toBe('month');
   });
 
   it('uses standard paid terms for Max', () => {
@@ -49,6 +60,10 @@ describe('parseCheckoutReturn', () => {
     [
       { subscriptionSuccess: 'true', type: 'max' },
       { t: 'success', tier: 'max' },
+    ],
+    [
+      { subscriptionSuccess: 'true', type: 'business' },
+      { t: 'success', tier: 'business' },
     ],
     [
       { subscriptionSuccess: 'true', type: 'anything' },

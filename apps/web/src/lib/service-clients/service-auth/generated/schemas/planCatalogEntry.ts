@@ -4,6 +4,7 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PlanCatalogEntryAnnualPricePerMonthCents } from './planCatalogEntryAnnualPricePerMonthCents';
 import type { PlanCatalogEntryAutoReloadDefaultMonthlyLimitCents } from './planCatalogEntryAutoReloadDefaultMonthlyLimitCents';
 import type { PlanTier } from './planTier';
 
@@ -11,13 +12,16 @@ import type { PlanTier } from './planTier';
  * One plan in the catalog.
  */
 export interface PlanCatalogEntry {
+  /** Price per seat per month when billed annually, cents. Absent for plans
+not sold annually. */
+  annual_price_per_month_cents?: PlanCatalogEntryAnnualPricePerMonthCents;
   /** Monthly automatic reload limit a payer on this plan starts from,
 cents. Absent for plans that cannot reload. */
   auto_reload_default_monthly_limit_cents?: PlanCatalogEntryAutoReloadDefaultMonthlyLimitCents;
   /** Included AI per seat per period, in cents at provider cost. For the
 free plan this is its monthly hard cap. */
   included_ai_cents_per_seat: number;
-  /** Monthly subscription price per seat, cents. */
+  /** Month-to-month subscription price per seat, cents. */
   monthly_price_cents: number;
   /** Whether a new purchase or plan move may pick this plan today. */
   purchasable: boolean;

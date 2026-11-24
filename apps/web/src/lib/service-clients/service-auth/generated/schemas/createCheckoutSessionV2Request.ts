@@ -7,6 +7,7 @@
 
 import type { CheckoutSessionMetadata } from './checkoutSessionMetadata';
 import type { CreateCheckoutSessionV2RequestDiscount } from './createCheckoutSessionV2RequestDiscount';
+import type { CreateCheckoutSessionV2RequestInterval } from './createCheckoutSessionV2RequestInterval';
 import type { CreateCheckoutSessionV2RequestPlan } from './createCheckoutSessionV2RequestPlan';
 
 /**
@@ -17,6 +18,7 @@ export interface CreateCheckoutSessionV2Request {
   cancelUrl: string;
   /** Optional discount/promo code to apply */
   discount?: CreateCheckoutSessionV2RequestDiscount;
+  interval?: CreateCheckoutSessionV2RequestInterval;
   /** Tracking metadata for conversion attribution */
   metadata?: CheckoutSessionMetadata;
   /** Request the automatic, first-subscription 30-day Premium trial. */

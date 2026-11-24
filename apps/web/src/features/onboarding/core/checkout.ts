@@ -1,4 +1,6 @@
-import type { PaidPlanTier } from '@app/features/paywall/plans';
+import { type PaidPlanTier, soldAt } from '@app/features/paywall/plans';
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
+import { match, P } from 'ts-pattern';
 
 /** How the Stripe round-trip came back to the plan step, if it did. */
 export type CheckoutReturn =
@@ -16,6 +18,7 @@ export type OnboardingCheckoutRequest = {
   successUrl: string;
   cancelUrl: string;
   plan: PaidPlanTier;
+  interval: BillingInterval;
   onboardingTrial: boolean;
 };
 
@@ -28,12 +31,14 @@ export type OnboardingCheckoutRequest = {
 export function onboardingCheckoutRequest(
   onboardingUrl: string,
   tier: PaidPlanTier,
-  terms: CheckoutTerms
+  terms: CheckoutTerms,
+  interval: BillingInterval = 'month'
 ): OnboardingCheckoutRequest {
   return {
     successUrl: `${onboardingUrl}?subscriptionSuccess=true&type=${tier}`,
     cancelUrl: `${onboardingUrl}?subscriptionCancel=true`,
     plan: tier,
+    interval: soldAt(tier, interval) ? interval : 'month',
     onboardingTrial: terms === 'trial' && tier === 'premium',
   };
 }
@@ -44,8 +49,12 @@ export function parseCheckoutReturn(params: {
   subscriptionCancel?: unknown;
   type?: unknown;
 }): CheckoutReturn | undefined {
-  if (params.subscriptionSuccess === 'true')
-    return { t: 'success', tier: params.type === 'max' ? 'max' : 'premium' };
+  if (params.subscriptionSuccess === 'true') {
+    const tier = match(params.type)
+      .with(P.union('business', 'max'), (type) => type)
+      .otherwise((): PaidPlanTier => 'premium');
+    return { t: 'success', tier };
+  }
   if (params.subscriptionCancel === 'true') return { t: 'cancelled' };
   return undefined;
 }

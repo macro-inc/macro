@@ -144,7 +144,7 @@ export type AppEvents = {
    * everything connected along the way.
    */
   onboarding_v4_completed: {
-    plan: 'free' | 'premium' | 'max';
+    plan: 'free' | 'premium' | 'business' | 'max';
     plan_skipped: boolean;
     emails_connected: number;
     connectors_connected: string[];
@@ -271,8 +271,8 @@ export type AppEvents = {
   ai_credits_checkout_start: { amountCents: number };
   /** A payer changed their AI usage billing (overage) settings. */
   ai_overage_updated: { enabled: boolean; limitCents: number };
-  /** An existing subscriber moved between Premium and Max. */
-  plan_changed: { plan: 'premium' | 'max'; from?: string };
+  /** An existing subscriber moved between Premium, Business and Max. */
+  plan_changed: { plan: 'premium' | 'business' | 'max'; from?: string };
 
   /**
    * An email the user sent, counted once when the outbox accepts it. Undo

@@ -3,8 +3,11 @@ import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import { Button } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
 import { BillingPlanCard } from '../../settings/components/billing-plan-card';
-import type { BillingState } from '../../settings/core/billing-state';
-import { getUpgradePlans } from '../plans';
+import {
+  type BillingState,
+  cardInterval,
+} from '../../settings/core/billing-state';
+import { getUpgradePlans, PLAN_BY_TIER } from '../plans';
 
 export function PaywallView(props: {
   state: BillingState;
@@ -20,9 +23,9 @@ export function PaywallView(props: {
         <h2 class="text-2xl font-semibold text-ink">
           {props.state.tier === 'max'
             ? 'Manage your plan'
-            : props.state.tier === 'premium'
-              ? 'Upgrade to Max'
-              : 'Upgrade your plan'}
+            : props.state.tier === 'free'
+              ? 'Upgrade your plan'
+              : `Upgrade from ${PLAN_BY_TIER[props.state.tier].name}`}
         </h2>
         <p class="text-sm text-ink-extra-muted">
           {props.metadata?.description ?? 'Get more AI power and room to grow.'}
@@ -74,11 +77,18 @@ export function PaywallView(props: {
             <div
               class="grid grid-cols-1 gap-6"
               classList={{
-                '@2xl/plan-options:grid-cols-2': props.state.tier === 'free',
+                '@2xl/plan-options:grid-cols-2':
+                  getUpgradePlans(props.state.tier).length > 1,
               }}
             >
               <For each={getUpgradePlans(props.state.tier)}>
-                {(plan) => <BillingPlanCard plan={plan} state={props.state} />}
+                {(plan) => (
+                  <BillingPlanCard
+                    plan={plan}
+                    interval={cardInterval(plan, props.state, 'year')}
+                    state={props.state}
+                  />
+                )}
               </For>
             </div>
           </div>

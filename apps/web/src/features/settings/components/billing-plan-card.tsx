@@ -1,9 +1,13 @@
 import {
+  isUpgrade,
   type PaidPlanTier,
   PLAN_BY_TIER,
+  PLAN_USAGE_LABELS,
   type PlanTier,
   planBenefits,
+  planPriceAt,
 } from '@app/features/paywall/plans';
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import CheckIcon from '@phosphor-fill/check-fat-fill.svg';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
@@ -28,34 +32,47 @@ export const PlanFeatures = (props: {
 
 const PlanPrice = (props: {
   tier: PaidPlanTier;
+  interval: BillingInterval;
   perSeat: boolean;
   aiUsageEnabled: boolean;
 }) => {
   return (
     <p class="text-ink-extra-muted text-xs">
-      ${PLAN_BY_TIER[props.tier].price}{' '}
+      ${planPriceAt(props.tier, props.interval)}{' '}
       {props.perSeat ? 'per seat / month' : '/ month'}
-      <Show when={props.aiUsageEnabled}>
-        <Show when={props.tier === 'max'}> · 10× usage</Show>
+      {props.interval === 'year' ? ', billed annually' : ''}
+      <Show when={props.aiUsageEnabled && props.tier !== 'premium'}>
+        {' '}
+        · {PLAN_USAGE_LABELS[props.tier]}
       </Show>
     </p>
   );
 };
 
+const SERVICE_LABEL = {
+  'self-serve': 'Self-serve',
+  'white-glove': 'White-glove onboarding',
+} as const;
+
 /** Plan cards shared by Billing settings and the upgrade paywall. */
 export function BillingPlanCard(props: {
   plan: PaidPlanTier;
+  /** The interval the card prices at and a purchase starts on. */
+  interval: BillingInterval;
   state: Pick<
     BillingState,
     | 'hasPaid'
+    | 'tier'
     | 'teamRole'
     | 'aiUsageEnabled'
     | 'pending'
     | 'trialEligible'
     | 'trialing'
   >;
-  onSelectPlan?: (plan: PaidPlanTier) => void;
+  onSelectPlan?: (plan: PaidPlanTier, interval: BillingInterval) => void;
 }) {
+  const name = () => PLAN_BY_TIER[props.plan].name;
+  const upgrade = () => isUpgrade(props.state.tier, props.plan);
   return (
     <SettingsCard class="@container/plan-card h-full">
       <section class="flex h-full flex-col gap-4 p-5">
@@ -85,9 +102,17 @@ export function BillingPlanCard(props: {
             </div>
             <PlanPrice
               tier={props.plan}
+              interval={props.interval}
               perSeat={!!props.state.teamRole}
               aiUsageEnabled={props.state.aiUsageEnabled}
             />
+            <Show when={PLAN_BY_TIER[props.plan].service}>
+              {(service) => (
+                <p class="text-ink-extra-muted text-xs">
+                  {SERVICE_LABEL[service()]}
+                </p>
+              )}
+            </Show>
           </div>
           <Show when={props.onSelectPlan}>
             <Button
@@ -99,15 +124,13 @@ export function BillingPlanCard(props: {
                   props.plan === 'premium' &&
                   props.state.trialEligible === undefined)
               }
-              onClick={() => props.onSelectPlan?.(props.plan)}
+              onClick={() => props.onSelectPlan?.(props.plan, props.interval)}
             >
               {props.state.hasPaid
-                ? props.plan === 'premium'
-                  ? 'Switch to Pro'
-                  : 'Upgrade to Max'
-                : props.plan === 'premium'
-                  ? 'Get Pro'
-                  : 'Get Max'}
+                ? upgrade()
+                  ? `Upgrade to ${name()}`
+                  : `Switch to ${name()}`
+                : `Get ${name()}`}
             </Button>
           </Show>
         </header>
@@ -121,11 +144,11 @@ export function BillingPlanCard(props: {
           when={
             props.state.hasPaid &&
             props.onSelectPlan &&
-            (props.plan === 'max' || props.state.teamRole === 'owner')
+            (upgrade() || props.state.teamRole === 'owner')
           }
         >
           <p class="text-xs text-ink-extra-muted">
-            <Show when={props.plan === 'max'}>
+            <Show when={upgrade()}>
               {props.state.trialing
                 ? 'Charged today. The Pro trial ends.'
                 : 'Prorated for the rest of this period.'}

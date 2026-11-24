@@ -1,3 +1,4 @@
+import { isUpgrade, PLAN_BY_TIER } from '@app/features/paywall/plans';
 import { toast } from '@core/component/Toast/Toast';
 import type { IUser } from '@core/user';
 import { idToDisplayName, idToEmail } from '@core/user/util';
@@ -106,7 +107,13 @@ export function useRemoveUserFromTeamMutation(
   }));
 }
 
-type SetTeamMemberPlanArgs = { teamId: string; userId: string; plan: PaidPlan };
+type SetTeamMemberPlanArgs = {
+  teamId: string;
+  userId: string;
+  plan: PaidPlan;
+  /** The seat's plan before the change. */
+  from: PaidPlan;
+};
 type SetTeamMemberPlanCallbacks = MutationCallbacks<
   void,
   Error,
@@ -114,8 +121,8 @@ type SetTeamMemberPlanCallbacks = MutationCallbacks<
 >;
 
 /**
- * Move one member's seat between Pro and Max. Team admins only; the
- * Max upgrades apply immediately with proration; Pro downgrades start at renewal.
+ * Move one member's seat between Pro, Business and Max. Team admins only;
+ * upgrades apply immediately with proration; downgrades start at renewal.
  */
 export function useSetTeamMemberPlanMutation(
   callbacks?: SetTeamMemberPlanCallbacks
@@ -127,14 +134,15 @@ export function useSetTeamMemberPlanMutation(
 
     ...withCallbacks<void, Error, SetTeamMemberPlanArgs>(
       {
-        onSuccess: (_data, { teamId, plan }) => {
+        onSuccess: (_data, { teamId, plan, from }) => {
           fireAndForget(invalidateTeam(teamId), 'team-settings');
           fireAndForget(invalidateAiBillingSummary(), 'team-settings');
           fireAndForget(invalidateSubscriptionStatus(), 'team-settings');
+          const name = PLAN_BY_TIER[plan].name;
           toast.success(
-            plan === 'max'
-              ? 'Max applies immediately. Any pending downgrade is canceled.'
-              : 'Pro is scheduled for the next renewal. This seat keeps Max until then.'
+            plan === from || isUpgrade(from, plan)
+              ? `${name} applies immediately. Any pending downgrade is canceled.`
+              : `${name} is scheduled for the next renewal. This seat keeps ${PLAN_BY_TIER[from].name} until then.`
           );
         },
 

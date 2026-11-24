@@ -10,7 +10,6 @@ import {
   statusError,
 } from '@core/util/safeFetch';
 import { Telemetry } from '@macro-inc/observability';
-
 import { makePersisted } from '@solid-primitives/storage';
 import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
@@ -52,6 +51,7 @@ import type {
 import type { AgentApiKey } from './generated/schemas/agentApiKey';
 import type { AgentSetupResponse } from './generated/schemas/agentSetupResponse';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
+import type { BillingInterval } from './generated/schemas/billingInterval';
 import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdTeamInviteLinkResponse';
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
 import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
@@ -850,6 +850,9 @@ export const authServiceClient = {
     };
     /** The plan to subscribe to. The backend defaults to Premium. */
     plan?: PaidPlan;
+    /** How often it bills; the backend defaults to monthly. Premium is
+     * monthly only. */
+    interval?: BillingInterval;
     /** Request the server-validated first-subscription trial. */
     onboardingTrial?: boolean;
   }) {
@@ -863,6 +866,7 @@ export const authServiceClient = {
           discount: args.discount ?? undefined,
           metadata: args.metadata,
           plan: args.plan,
+          interval: args.interval,
           onboardingTrial: args.onboardingTrial,
         }),
         errorResponseHandler: async (response) => {

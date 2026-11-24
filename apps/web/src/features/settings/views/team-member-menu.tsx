@@ -11,6 +11,7 @@ import {
   removalLockReason,
   roleLockReason,
   roleName,
+  seatPlanName,
   seatPlanOptions,
   type TeamAgentMenuProps,
   type TeamMemberMenuProps,
@@ -107,12 +108,14 @@ export function TeamMemberMenu(props: TeamMemberMenuProps) {
                     )}
                   </For>
                 </Dropdown.RadioGroup>
-                <Show when={plan() === 'max' && props.pendingDowngrade}>
+                <Show when={props.pendingDowngrade}>
                   <Dropdown.Item
                     disabled={props.planPending}
-                    onSelect={() => props.onPlanChange('max')}
+                    onSelect={() => props.onPlanChange(plan())}
                   >
-                    {t('teamMembers.keepMax')}
+                    {t('teamMembers.keepPlan', {
+                      plan: seatPlanName(plan()),
+                    })}
                   </Dropdown.Item>
                 </Show>
               </Dropdown.Group>

@@ -1,5 +1,5 @@
 import { match } from 'ts-pattern';
-import type { PlanTier } from '../../paywall/plans';
+import { isUpgrade, type PlanTier } from '../../paywall/plans';
 import type { AutoReloadSettings } from '../../usage/core/usage';
 import { DEFAULT_AUTO_RELOAD } from '../../usage/core/usage';
 
@@ -7,6 +7,7 @@ import { DEFAULT_AUTO_RELOAD } from '../../usage/core/usage';
 export const FIXTURE_ALLOWANCES: Record<PlanTier, number> = {
   free: 100,
   premium: 2_000,
+  business: 6_000,
   max: 20_000,
 };
 
@@ -314,8 +315,7 @@ export function changePlan(
 ): BillingSimulation {
   if (state.role === 'member') return state;
   if (tier === state.tier) return { ...state, scheduledPlan: undefined };
-  const upgrading = state.tier === 'free' || tier === 'max';
-  if (!upgrading) return { ...state, scheduledPlan: tier };
+  if (!isUpgrade(state.tier, tier)) return { ...state, scheduledPlan: tier };
   return {
     ...state,
     tier,

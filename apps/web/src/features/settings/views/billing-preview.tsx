@@ -1,6 +1,11 @@
 import { PaywallDialog } from '@app/features/paywall/components/paywall-dialog';
 import { PaywallView } from '@app/features/paywall/components/paywall-view';
-import { PLAN_BY_TIER, type PlanTier } from '@app/features/paywall/plans';
+import {
+  type PaidPlanTier,
+  PLAN_BY_TIER,
+  type PlanTier,
+} from '@app/features/paywall/plans';
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import { Button } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { BillingSettingsView } from '../components/billing-settings-view';
@@ -79,7 +84,7 @@ export function BillingPreview(props: {
           : account() === 'team-owner'
             ? 'owner'
             : 'member',
-      teamPlans: ['premium', 'premium', 'max'],
+      teamPlans: ['premium', 'business', 'max'],
       summary:
         summaryStatus() === 'loaded'
           ? { tier: plan(), canManageBilling: account() !== 'team-member' }
@@ -151,7 +156,7 @@ export function BillingPreview(props: {
         <PreviewSelect
           label="Plan"
           value={plan()}
-          options={(['free', 'premium', 'max'] as const).map((tier) => ({
+          options={(['free', 'premium', 'business', 'max'] as const).map((tier) => ({
             value: tier,
             label: PLAN_BY_TIER[tier].name,
           }))}
@@ -215,9 +220,9 @@ export function BillingPreview(props: {
     </section>
   );
 
-  const selectPlan = (tier: 'premium' | 'max') =>
+  const selectPlan = (tier: PaidPlanTier, interval: BillingInterval) =>
     setAction(
-      `Preview only · ${state().tier === 'free' ? 'Checkout' : 'Change plan'}: ${PLAN_BY_TIER[tier].name}${state().tier === 'free' && tier === 'premium' && trialEligible() ? ' · 30-day trial' : ''} · no billing changes made`
+      `Preview only · ${state().tier === 'free' ? 'Checkout' : 'Change plan'}: ${PLAN_BY_TIER[tier].name} (${interval === 'year' ? 'annual' : 'monthly'})${state().tier === 'free' && tier === 'premium' && trialEligible() ? ' · 30-day trial' : ''} · no billing changes made`
     );
   const manage = () =>
     setAction('Preview only · Manage subscription · no billing changes made');

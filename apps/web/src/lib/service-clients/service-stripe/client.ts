@@ -1,6 +1,7 @@
 import { registerClient } from '@core/util/mockClient';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 
 /**
  * Gets Meta _fbp (browser ID) and _fbc (click ID) values from cookies set by the Meta Pixel.
@@ -49,6 +50,8 @@ export const stripeServiceClient = {
       cancelUrl?: string;
       /** The plan to subscribe to; defaults to Premium. */
       plan?: PaidPlan;
+      /** How often it bills; defaults to monthly. Premium is monthly only. */
+      interval?: BillingInterval;
       /** Request the server-validated first-subscription trial. */
       onboardingTrial?: boolean;
     } = {}
@@ -59,6 +62,7 @@ export const stripeServiceClient = {
       successUrl,
       cancelUrl,
       plan,
+      interval,
       onboardingTrial,
     } = args;
     const gaClientId = await getGaClientId();
@@ -77,6 +81,7 @@ export const stripeServiceClient = {
         fbc: fbc ?? null,
       },
       plan,
+      interval,
       onboardingTrial,
     });
 

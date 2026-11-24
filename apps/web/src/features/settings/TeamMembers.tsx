@@ -1,3 +1,4 @@
+import { isUpgrade } from '@app/features/paywall/plans';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { SearchBar } from '@app/components/view-shell/SearchBar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -100,8 +101,7 @@ import { TeamAgentMenu, TeamMemberMenu } from './views/team-member-menu';
  * schema carries `plan`, read it defensively; every seat starts on Pro.
  */
 function memberPlan(member: TeamMember): PaidPlan {
-  const plan = (member as TeamMember & { plan?: PaidPlan }).plan;
-  return plan === 'max' ? 'max' : 'premium';
+  return (member as TeamMember & { plan?: PaidPlan }).plan ?? 'premium';
 }
 
 /** A person's ⋯: a menu on desktop, a sheet on touch, as Machines does. */
@@ -288,8 +288,13 @@ export function TeamMembers(props: { team: TeamSummary }) {
 
   const crmAccessOf = (member: TeamMember) =>
     hasCrmAccess(member, teamQuery.data?.crm_member_access);
-  const pendingDowngradeOf = (member: TeamMember) =>
-    teamQuery.data?.scheduled_seat_plans?.[member.user_id]?.plan === 'premium';
+  // The cheaper plan a seat moves to at renewal, if one is scheduled.
+  const pendingDowngradeOf = (member: TeamMember): PaidPlan | undefined => {
+    const scheduled =
+      teamQuery.data?.scheduled_seat_plans?.[member.user_id]?.plan;
+    if (!scheduled || !isUpgrade(scheduled, memberPlan(member))) return;
+    return scheduled;
+  };
 
   // One muted line under the name: role, seat plan, and only what differs
   // from the usual (a Max seat dropping to Pro, CRM access turned off).
@@ -299,9 +304,10 @@ export function TeamMembers(props: { team: TeamSummary }) {
       roleName(member.role),
       showSeatPlans() && seatPlanName(plan),
       isAdminOrOwner() &&
-        plan === 'max' &&
         pendingDowngradeOf(member) &&
-        t('teamMembers.proAtRenewal'),
+        t('teamMembers.planAtRenewal', {
+          plan: seatPlanName(pendingDowngradeOf(member) ?? plan),
+        }),
       canManageCrm() && !crmAccessOf(member) && t('crm.memberAccessOff'),
     ]
       .filter(Boolean)
@@ -474,7 +480,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
                             plan={
                               showSeatPlans() ? memberPlan(member()) : undefined
                             }
-                            pendingDowngrade={pendingDowngradeOf(member())}
+                            pendingDowngrade={pendingDowngradeOf(member()) !== undefined}
                             planPending={planMovePending()}
                             onPlanChange={(plan) => {
                               if (!props.team.id) return;
@@ -482,6 +488,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
                                 teamId: props.team.id,
                                 userId: member().user_id,
                                 plan,
+                                from: memberPlan(member()),
                               });
                             }}
                             role={member().role}

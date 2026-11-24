@@ -24,12 +24,14 @@ import { useMacroComputersRollout } from '@queries/computers/computers';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import { createMemo, type JSX, Show, Suspense } from 'solid-js';
 import { BillingSettingsView } from './components/billing-settings-view';
 import { BillingComputers } from './computers/views/BillingComputers';
 import {
   getBillingState,
   getFreePlanCheckoutRequest,
+  planChangeMessage,
 } from './core/billing-state';
 
 const ConnectedTeamBillingBreakdown = lazyNamed(
@@ -110,10 +112,9 @@ function LiveBilling(props: { controls?: JSX.Element }) {
       teamReady: team.isSuccess,
       teamRole: teamRole(),
       teamPlans: team.isSuccess
-        ? team.data?.members.map((member) =>
-            (member as typeof member & { plan?: PaidPlan }).plan === 'max'
-              ? 'max'
-              : 'premium'
+        ? team.data?.members.map(
+            (member) =>
+              (member as typeof member & { plan?: PaidPlan }).plan ?? 'premium'
           )
         : undefined,
       summary: summary.isSuccess
@@ -132,17 +133,26 @@ function LiveBilling(props: { controls?: JSX.Element }) {
           ? trialEligibility.data.eligible
           : undefined,
       trialing: licenseStatus() === 'trialing',
+      interval: queryReadyGate(subscriptionStatus)
+        ? subscriptionStatus.data.billing?.interval
+        : undefined,
     });
 
-  const handleCheckout = async (plan: PaidPlan) => {
+  const handleCheckout = async (plan: PaidPlan, interval: BillingInterval) => {
     if (state().existingSubscription) return;
     const eligible = state().trialEligible;
     if (plan === 'premium' && eligible === undefined) return;
     try {
-      const url = await checkout.mutateAsync(
-        getFreePlanCheckoutRequest(plan, eligible === true)
+      const request = getFreePlanCheckoutRequest(
+        plan,
+        eligible === true,
+        interval
       );
-      analytics.track('subscription_start', { type: plan });
+      const url = await checkout.mutateAsync(request);
+      analytics.track('subscription_start', {
+        type: plan,
+        interval: request.interval,
+      });
       window.location.href = url;
     } catch (error) {
       console.error(error);
@@ -158,14 +168,8 @@ function LiveBilling(props: { controls?: JSX.Element }) {
     try {
       const previousTier = state().tier;
       await changePlan.mutateAsync({ plan });
-      analytics.track('plan_changed', { plan });
-      toast.success(
-        plan === previousTier
-          ? `Keeping your ${plan === 'max' ? 'Max' : 'Pro'} plan. Your scheduled downgrade is canceled.`
-          : plan === 'max'
-            ? 'Upgraded to Max. Your larger AI allowance applies right away.'
-            : 'Pro will start at your next renewal. You keep Max until then.'
-      );
+      analytics.track('plan_changed', { plan, from: previousTier });
+      toast.success(planChangeMessage(previousTier, plan));
     } catch (error) {
       console.error(error);
       toast.failure("Couldn't change your plan. Please try again.");
@@ -239,9 +243,11 @@ function LiveBilling(props: { controls?: JSX.Element }) {
         fireAndForget(handleChangePlan(plan), 'billing-settings')
       }
       onManage={() => fireAndForget(handleManage(), 'billing-settings')}
-      onSelectPlan={(plan) =>
+      onSelectPlan={(plan, interval) =>
         fireAndForget(
-          effectiveHasPaid() ? handleChangePlan(plan) : handleCheckout(plan),
+          effectiveHasPaid()
+            ? handleChangePlan(plan)
+            : handleCheckout(plan, interval),
           'billing-settings'
         )
       }

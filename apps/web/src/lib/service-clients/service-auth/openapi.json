@@ -8203,6 +8203,17 @@
             "type": ["string", "null"],
             "description": "Optional discount/promo code to apply"
           },
+          "interval": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BillingInterval",
+                "description": "How often the subscription bills. Defaults to monthly. Premium is\nsold monthly only; Business and Max are sold monthly or annually."
+              }
+            ]
+          },
           "metadata": {
             "$ref": "#/components/schemas/CheckoutSessionMetadata",
             "description": "Tracking metadata for conversion attribution"
@@ -9848,6 +9859,11 @@
           "purchasable"
         ],
         "properties": {
+          "annual_price_per_month_cents": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Price per seat per month when billed annually, cents. Absent for plans\nnot sold annually."
+          },
           "auto_reload_default_monthly_limit_cents": {
             "type": ["integer", "null"],
             "format": "int64",
@@ -9861,7 +9877,7 @@
           "monthly_price_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Monthly subscription price per seat, cents."
+            "description": "Month-to-month subscription price per seat, cents."
           },
           "purchasable": {
             "type": "boolean",
@@ -9924,7 +9940,7 @@
       "PlanTier": {
         "type": "string",
         "description": "The plans a user can be on, cheapest first.",
-        "enum": ["free", "premium", "max"]
+        "enum": ["free", "premium", "business", "max"]
       },
       "PostGetNamesRequestBody": {
         "type": "object",
@@ -10260,8 +10276,8 @@
       },
       "SeatPlan": {
         "type": "string",
-        "description": "The paid plan a seat is billed at. Every member of a paying team has one;\na team may mix them, and its Stripe subscription carries one seat item per\nplan in use.",
-        "enum": ["premium", "max"]
+        "description": "The paid plan a seat is billed at. Every member of a paying team has one;\na team may mix them, and its Stripe subscription carries one seat item per\nplan in use. Variants are ordered cheapest first, so `<` compares plans.",
+        "enum": ["premium", "business", "max"]
       },
       "SendDomainNoticeResponse": {
         "type": "object",

@@ -1,3 +1,4 @@
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import type { PaidPlanTier } from '@app/features/paywall/plans';
 import type { AppEvents } from '@app/lib/analytics/app-events';
 import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
@@ -173,7 +174,11 @@ export type OnboardingContext = {
     retry(): void;
   };
   /** The hosted checkout URL; rejects with a message fit to show. */
-  startCheckout(tier: PaidPlanTier, terms: CheckoutTerms): Promise<string>;
+  startCheckout(
+    tier: PaidPlanTier,
+    terms: CheckoutTerms,
+    interval: BillingInterval
+  ): Promise<string>;
   /**
    * Marks onboarding and the tutorial done and confirms the server agrees.
    * `skipped` records that the user left without going through the steps.

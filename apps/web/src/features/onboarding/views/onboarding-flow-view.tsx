@@ -220,9 +220,9 @@ export function OnboardingFlowView(props: {
             disabled={finish.finishing()}
             onContinueFree={() => choosePlan(() => finish.finishFree())}
             onBackToPro={() => focusStepHeading(content, true)}
-            onStartMax={() =>
+            onStartPlan={(plan, interval) =>
               fireAndForget(
-                finish.startPremiumCheckout('max', 'standard'),
+                finish.startPremiumCheckout(plan, 'standard', interval),
                 'onboarding'
               )
             }

@@ -10,7 +10,7 @@ import type { CreditPurchaseStatus } from './generated/schemas/creditPurchaseSta
  * caps, packs and `uncovered_cents` are customer cents.
  */
 
-export type AiPlanTier = 'free' | 'premium' | 'max';
+export type AiPlanTier = 'free' | 'premium' | 'business' | 'max';
 
 export type AiDenyReason =
   | 'allowance_exhausted'
@@ -83,7 +83,11 @@ export interface AiCreditPurchaseResult {
 
 export interface AiPlanCatalogEntry {
   tier: AiPlanTier;
+  /** Month-to-month price per seat. */
   monthly_price_cents: number;
+  /** Price per seat per month when billed annually; absent for plans not
+   * sold annually. */
+  annual_price_per_month_cents?: number | null;
   included_ai_cents_per_seat: number;
   purchasable: boolean;
   /** Monthly Auto-Reload limit a payer on this plan starts from; absent for
@@ -108,7 +112,7 @@ export interface AiPlanCatalog {
   auto_reload_defaults?: AiAutoReloadDefaults;
 }
 
-export type PaidPlan = 'premium' | 'max';
+export type PaidPlan = 'premium' | 'business' | 'max';
 
 /** Authoritative renewal and pending change from GET /user/stripe/plan. */
 export type { SubscriptionStatus } from './generated/schemas/subscriptionStatus';

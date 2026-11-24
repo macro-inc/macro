@@ -1,3 +1,4 @@
+import type { BillingInterval } from '@service-auth/generated/schemas/billingInterval';
 import {
   billingMessage,
   type PaidPlanTier,
@@ -94,12 +95,13 @@ export function createFlowFinish(
    */
   const startPremiumCheckout = async (
     tier: PaidPlanTier,
-    terms: CheckoutTerms = 'trial'
+    terms: CheckoutTerms = 'trial',
+    interval: BillingInterval = 'month'
   ) => {
     if (finishing()) return;
     setFinishing(true);
     try {
-      const url = await context.startCheckout(tier, terms);
+      const url = await context.startCheckout(tier, terms, interval);
       // Leave `finishing` set: the page is navigating away, and re-enabling
       // the buttons mid-unload invites a double checkout.
       options.onRedirect(url);

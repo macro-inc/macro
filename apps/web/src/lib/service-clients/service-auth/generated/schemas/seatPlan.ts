@@ -8,12 +8,13 @@
 /**
  * The paid plan a seat is billed at. Every member of a paying team has one;
 a team may mix them, and its Stripe subscription carries one seat item per
-plan in use.
+plan in use. Variants are ordered cheapest first, so `<` compares plans.
  */
 export type SeatPlan = (typeof SeatPlan)[keyof typeof SeatPlan];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SeatPlan = {
   premium: 'premium',
+  business: 'business',
   max: 'max',
 } as const;
