@@ -860,7 +860,7 @@ test.describe('a phone browser finishing onboarding', () => {
 
     await expect(heading(page, 'Macro is better on desktop.')).toBeVisible();
     await expect(
-      page.getByRole('link', { name: 'Download app' })
+      page.getByRole('link', { name: 'Download mobile app' })
     ).toHaveAttribute('href', /apps\.apple\.com/);
     const continueButton = page.getByRole('button', {
       name: 'Continue in browser',

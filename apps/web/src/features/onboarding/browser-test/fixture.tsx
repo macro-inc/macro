@@ -119,11 +119,17 @@ window.onboardingFixture = {
     }),
 };
 
-// `?handoff`: a phone browser's last screen, "Macro is better on desktop".
-// Kept in sessionStorage so it survives the simulated Stripe round-trip.
-if (params.handoff !== undefined)
-  sessionStorage.setItem(FIXTURE_KEYS.handoff, '1');
-const handoff = sessionStorage.getItem(FIXTURE_KEYS.handoff) === '1';
+// `?handoff`: a phone browser's last screen, "Macro is better on desktop";
+// `?handoff=android` shows the Google Play button. Kept in sessionStorage so
+// it survives the simulated Stripe round-trip.
+if (params.handoff !== undefined) {
+  sessionStorage.setItem(
+    FIXTURE_KEYS.handoff,
+    params.handoff === 'android' ? 'android' : 'ios'
+  );
+}
+const handoffPlatform = sessionStorage.getItem(FIXTURE_KEYS.handoff);
+const handoff = handoffPlatform !== null;
 
 function Fixture() {
   const [handoffTarget, setHandoffTarget] = createSignal<string>();
@@ -148,7 +154,12 @@ function Fixture() {
         <Match when={handoffTarget()}>
           {(target) => (
             <DesktopHandoffView
-              storeUrl="https://apps.apple.com/us/app/macro-app/id6743133649"
+              storeUrl={
+                handoffPlatform === 'android'
+                  ? 'https://play.google.com/store/apps/details?id=com.macro.workspace.mobile'
+                  : 'https://apps.apple.com/us/app/macro-app/id6743133649'
+              }
+              platform={handoffPlatform === 'android' ? 'android' : 'ios'}
               onContinue={() => land({ t: 'app', target: target() })}
             />
           )}

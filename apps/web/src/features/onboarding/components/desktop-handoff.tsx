@@ -1,5 +1,7 @@
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
-import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import AndroidLogoIcon from '@phosphor-icons/core/assets/fill/android-logo-fill.svg?component-solid';
+import AppleLogoIcon from '@phosphor-icons/core/assets/fill/apple-logo-fill.svg?component-solid';
+import { Show } from 'solid-js';
 import { MacroMarkIcon } from './macro-mark-icon';
 
 /**
@@ -8,6 +10,8 @@ import { MacroMarkIcon } from './macro-mark-icon';
  */
 export function DesktopHandoff(props: {
   storeUrl: string;
+  /** Picks the store's logo on the download button. */
+  platform: 'ios' | 'android';
   onDownloadApp: () => void;
   onContinue: () => void;
 }) {
@@ -43,8 +47,15 @@ export function DesktopHandoff(props: {
           onClick={() => props.onDownloadApp()}
           class="flex min-h-14 items-center justify-center gap-3 rounded-full bg-ink px-6 py-4 text-base font-medium text-surface transition-opacity not-touch:hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink"
         >
-          <DownloadIcon class="size-5 shrink-0" aria-hidden="true" />
-          Download app
+          <Show
+            when={props.platform === 'android'}
+            fallback={
+              <AppleLogoIcon class="size-5 shrink-0" aria-hidden="true" />
+            }
+          >
+            <AndroidLogoIcon class="size-5 shrink-0" aria-hidden="true" />
+          </Show>
+          Download mobile app
         </a>
         <button
           type="button"

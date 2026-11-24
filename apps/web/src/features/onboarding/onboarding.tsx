@@ -38,9 +38,10 @@ export function Onboarding(props: { next?: string }) {
   });
   // Phone browsers end on "Macro is better on desktop" before entering the
   // app; computers and the native apps go straight in.
+  const storePlatform = phoneStorePlatform(navigator.userAgent);
   const handoffStoreUrl =
     isMobile() && !isNativeMobilePlatform()
-      ? storeListingUrl(phoneStorePlatform(navigator.userAgent))
+      ? storeListingUrl(storePlatform)
       : undefined;
   const [handoffTarget, setHandoffTarget] = createSignal<string>();
   const flow = () => (
@@ -75,6 +76,7 @@ export function Onboarding(props: { next?: string }) {
         {(target) => (
           <DesktopHandoffView
             storeUrl={handoffStoreUrl ?? ''}
+            platform={storePlatform}
             onContinue={() => navigate(target, { replace: true })}
           />
         )}

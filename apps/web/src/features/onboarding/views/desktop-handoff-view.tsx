@@ -9,6 +9,7 @@ import { useOnboardingContext } from '../context/onboarding-context';
  */
 export function DesktopHandoffView(props: {
   storeUrl: string;
+  platform: 'ios' | 'android';
   onContinue: () => void;
 }) {
   const context = useOnboardingContext();
@@ -19,6 +20,7 @@ export function DesktopHandoffView(props: {
     <OnboardingShell>
       <DesktopHandoff
         storeUrl={props.storeUrl}
+        platform={props.platform}
         onDownloadApp={() =>
           context.track('onboarding_v4_desktop_handoff', {
             action: 'download_app',
