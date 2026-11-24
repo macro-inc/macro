@@ -320,6 +320,48 @@ describe('clearRegisteredCaches', () => {
     vi.useRealTimers();
   });
 
+  it.each(['logout', 'login'] as const)(
+    'starts no other host for a paused one at %s: it would meet the same outage',
+    async (event) => {
+      localStorage.setItem('graphql-cache:scope', 'current-scope');
+      const {
+        clearRegisteredCaches,
+        LOGOUT_CLEAR_TIMEOUT_MS,
+        recordSessionCacheWrite,
+        registerCacheHost,
+        replaceCacheWriteSession,
+      } = await import('./lifecycle');
+      const { createRetirableCacheHost } = await import(
+        './host/retirable-host'
+      );
+      const outage = async () => {
+        throw new Error('the database is held by another context');
+      };
+      const host = createRetirableCacheHost({
+        ...createNoopCacheHost(),
+        disabled: true,
+        paused: true,
+        clear: outage,
+        deleteRecords: outage,
+      });
+      const recover = vi.fn(() =>
+        createRetirableCacheHost({ ...createNoopCacheHost(), disabled: false })
+      );
+      registerCacheHost(host, recover, LOGOUT_CLEAR_TIMEOUT_MS);
+      recordSessionCacheWrite(host, 'Contact:1');
+      if (event === 'login')
+        await expect(replaceCacheWriteSession().ready).rejects.toThrow(
+          'held by another context'
+        );
+      else await clearRegisteredCaches();
+      expect(recover).not.toHaveBeenCalled();
+      // What could not be wiped is not opened again.
+      expect(
+        localStorage.getItem('graphql-cache:scope') === 'current-scope'
+      ).toBe(event === 'login');
+    }
+  );
+
   it('preserves a persisted scope on login without session-written records or a mounted host', async () => {
     localStorage.setItem('graphql-cache:scope', 'pending-drafts-scope');
     const { replaceCacheWriteSession } = await import('./lifecycle');

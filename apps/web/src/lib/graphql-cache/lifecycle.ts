@@ -134,6 +134,17 @@ async function clearUntil(host: CacheHost, limit?: AbortSignal): Promise<void> {
   }
 }
 
+/**
+ * The host to repair `failed`'s storage with, if its failure permits one. A
+ * paused host reopens the same storage itself, and another would meet the
+ * same outage.
+ */
+const replacementFor = (
+  failed: CacheHost,
+  error: unknown,
+  recover: RecoverCacheHost | undefined
+): CacheHost | undefined => (failed.paused ? undefined : recover?.(error));
+
 async function wipe(
   { owner, host, recover }: ClearedStorage,
   limit?: AbortSignal
@@ -143,10 +154,12 @@ async function wipe(
   const current = retainCacheHost(
     sessionRecords.get(owner)?.retained?.host ?? host
   );
+  const target = current?.host ?? host;
   try {
-    await clearUntil(current?.host ?? host, limit);
+    await clearUntil(target, limit);
   } catch (error) {
-    const replacement = limit?.aborted ? undefined : recover?.(error);
+    if (limit?.aborted) throw error;
+    const replacement = replacementFor(target, error, recover);
     if (!replacement) throw error;
     const recovered = retainCacheHost(replacement);
     replacement.dispose();
@@ -233,7 +246,7 @@ export function replaceCacheWriteSession() {
       try {
         await host.deleteRecords([...records.keys]);
       } catch (error) {
-        const replacement = records.recover?.(error);
+        const replacement = replacementFor(host, error, records.recover);
         if (!replacement) throw error;
         const retained = retainCacheHost(replacement);
         replacement.dispose();
