@@ -40,11 +40,12 @@ use model::sync_service::SyncServiceVersionID;
 use model_entity::Entity;
 
 use super::models::{
-    BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
-    DocumentError, DocumentTeamShare, DocumentTeamShareResponse, EditDocumentRepoArgs,
-    EditDocumentServiceArgs, EmailImportRepoOutcome, GithubPullRequestTasksResponse,
-    GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument,
-    OwnerTeam, TaskBranchName, TaskIdentity, TeamTaskMetadata, TeamTaskNumber,
+    AddedFileVersion, BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
+    CreateTaskRequest, DocumentError, DocumentTeamShare, DocumentTeamShareResponse,
+    EditDocumentRepoArgs, EditDocumentServiceArgs, EmailImportRepoOutcome,
+    GithubPullRequestTasksResponse, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+    LocationQueryParams, NewDocument, OwnerTeam, TaskBranchName, TaskIdentity, TeamTaskMetadata,
+    TeamTaskNumber,
 };
 
 /// Repository for accessing document data from the database.
@@ -351,6 +352,24 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         new_document_id: &str,
         original_document_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Make a `DocumentInstance` holding `sha` the newest version of a live
+    /// document of `file_type`, in one transaction that locks the document.
+    /// Answers the newest instance, `created: false`, when it already holds
+    /// `sha`, and `None` when no live document of that type has the id.
+    fn add_document_instance(
+        &self,
+        document_id: &str,
+        file_type: FileType,
+        sha: &str,
+    ) -> impl Future<Output = Result<Option<AddedFileVersion>, Self::Err>> + Send;
+
+    /// Delete a `DocumentInstance` whose bytes never reached storage.
+    fn remove_document_instance(
+        &self,
+        document_id: &str,
+        document_version_id: i64,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use model_owner::CreationPrincipal;
 
 use crate::domain::content::DocumentContent;
-use crate::domain::models::{CreateTaskRequest, DocumentError, NewDocument};
+use crate::domain::models::{AddedFileVersion, CreateTaskRequest, DocumentError, NewDocument};
 use crate::domain::response::CreateDocumentResponseData;
 
 /// Uploaded document bytes and metadata for a presigned object-storage URL.
@@ -28,6 +28,17 @@ pub trait DocumentBytesUploadPort: Send + Sync {
         &self,
         upload: DocumentBytesUpload,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+}
+
+/// A version of a file document reserved for bytes, and where to put them.
+#[derive(Debug)]
+pub struct FileVersionUpload {
+    /// The version, and whether it was made for these bytes.
+    pub version: AddedFileVersion,
+    /// Presigned URL the version's bytes go to.
+    pub presigned_url: String,
+    /// Content type to send with the upload.
+    pub content_type: String,
 }
 
 /// Service operations needed by backend-owned document creation.
@@ -70,6 +81,24 @@ pub trait DocumentCreationService: Send + Sync {
 
     /// Clean up a document that failed after its database row was created.
     fn cleanup_created_document(&self, document_id: &str) -> impl Future<Output = ()> + Send;
+
+    /// Reserve the newest version of a live file document for bytes with
+    /// hex SHA-256 `sha`: its newest version when that already holds them,
+    /// otherwise a new one. Refuses documents whose newest version is not
+    /// what they serve, or whose content is not in object storage.
+    fn begin_file_version(
+        &self,
+        document_id: &str,
+        sha: &str,
+    ) -> impl Future<Output = Result<FileVersionUpload, DocumentError>> + Send;
+
+    /// Delete a version [`DocumentCreationService::begin_file_version`]
+    /// created whose bytes never reached storage.
+    fn discard_file_version(
+        &self,
+        document_id: &str,
+        document_version_id: i64,
+    ) -> impl Future<Output = ()> + Send;
 }
 
 impl<T> DocumentCreationService for Arc<T>
@@ -114,6 +143,20 @@ where
 
     async fn cleanup_created_document(&self, document_id: &str) {
         (**self).cleanup_created_document(document_id).await
+    }
+
+    async fn begin_file_version(
+        &self,
+        document_id: &str,
+        sha: &str,
+    ) -> Result<FileVersionUpload, DocumentError> {
+        (**self).begin_file_version(document_id, sha).await
+    }
+
+    async fn discard_file_version(&self, document_id: &str, document_version_id: i64) {
+        (**self)
+            .discard_file_version(document_id, document_version_id)
+            .await
     }
 }
 
