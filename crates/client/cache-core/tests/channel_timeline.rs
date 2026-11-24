@@ -22,12 +22,15 @@ use channels::{
 const MUTATION: &str = "mutation Save { setEntityProperty { __typename id displayName } }";
 const UUID: &str = "22222222-2222-4222-8222-222222222222";
 
+/// Root m`n` of channel c1.
+fn root(n: usize) -> serde_json::Value {
+    message("c1", &format!("m{n}"), &format!("{n}0"), None)
+}
+
 /// Channel c1 with roots m1..m6 at sort keys 10..60, two replies under m3,
 /// and one root in channel c2, all read at sequence 7.
 async fn seeded() -> TestEngine {
-    let mut entries = (1..=6)
-        .map(|n| message("c1", &format!("m{n}"), &format!("{n}0"), None))
-        .collect::<Vec<_>>();
+    let mut entries = (1..=6).map(root).collect::<Vec<_>>();
     entries.push(message("c1", "r1", "~-31", Some("m3")));
     entries.push(message("c1", "r2", "~-32", Some("m3")));
     let mut engine = Engine::new(InMemoryStorage::new());
@@ -54,11 +57,12 @@ fn nothing_is_answered_before_a_stretch_is_committed() {
 fn pages_are_answered_inside_committed_stretches() {
     block_on(async {
         let mut engine = seeded().await;
-        let outcome = engine
-            .channel_timeline_commit(&page("c1", "7", vec![coverage(None, "40", TIMELINE_HEAD)]))
+        let newest = page("c1", "7", vec![coverage(None, "40", TIMELINE_HEAD)]);
+        let listed = [root(6), root(5), root(4)];
+        let outcome = write_page(&mut engine, "c1", "7", &listed, Some(&newest))
             .await
             .unwrap();
-        assert!(outcome.changed.is_empty());
+        assert!(!outcome.changed.contains(&key("m4")));
         let outcome = outcome.channel.unwrap();
         assert_eq!(
             (outcome.seq.as_deref(), outcome.outcome),
@@ -113,15 +117,16 @@ fn pages_are_answered_inside_committed_stretches() {
 fn jumping_to_a_message_centres_on_it_and_a_reply_lands_on_its_root() {
     block_on(async {
         let mut engine = seeded().await;
-        engine
-            .channel_timeline_commit(&page(
-                "c1",
-                "7",
-                vec![
-                    coverage(None, "20", "50"),
-                    coverage(Some("m3"), TIMELINE_START, TIMELINE_HEAD),
-                ],
-            ))
+        let around_m3 = page(
+            "c1",
+            "7",
+            vec![
+                coverage(None, "20", "50"),
+                coverage(Some("m3"), TIMELINE_START, TIMELINE_HEAD),
+            ],
+        );
+        let listed = [root(5), root(4), root(3), root(2)];
+        write_page(&mut engine, "c1", "7", &listed, Some(&around_m3))
             .await
             .unwrap();
         let mut around = latest("c1", 3);

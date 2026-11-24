@@ -8,8 +8,8 @@
 
 use super::commit::ParsedWatermark;
 use super::{
-    ChannelCommitStatus, ChannelTimelineCommit, ChannelTimelineRow, TimelineScope, TimelineSpan,
-    merge_spans,
+    ChannelCommitStatus, ChannelTimelineCommit, ChannelTimelineRow, TIMELINE_HEAD, TIMELINE_START,
+    TimelineScope, TimelineSpan, covering_span, merge_spans,
 };
 use crate::value::EntityKey;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -143,7 +143,8 @@ impl ChannelWrite {
 ///
 /// Content without a stamp has no known age, so it only fills what nothing
 /// dates. An entry the device does not hold is known not to exist as of the
-/// watermark, so an older answer that has it is out of date.
+/// watermark, so an older answer that has it is out of date; one it knows is
+/// removed may have been removed after that.
 pub fn admits(
     state: Option<&ChannelEntryState>,
     stamp: Option<i64>,
@@ -152,8 +153,11 @@ pub fn admits(
     match (state, stamp) {
         (None, None) => true,
         (Some(_), None) => false,
-        (Some(state), Some(stamp)) => stamp >= state.seq,
-        (None, Some(stamp)) => watermark.is_none_or(|watermark| stamp >= watermark),
+        (Some(state), Some(stamp)) if !state.removed => stamp >= state.seq,
+        (state, Some(stamp)) => {
+            state.is_none_or(|removed| stamp >= removed.seq)
+                && watermark.is_none_or(|watermark| stamp >= watermark)
+        }
     }
 }
 
@@ -174,10 +178,40 @@ impl ParsedWatermark {
     }
 }
 
+/// The part of a fetched stretch that is known complete. A page is asked for
+/// next to a bound it does not list: the entry there may be one the device no
+/// longer has, unless it covers the bound already.
+fn proven(
+    span: TimelineSpan,
+    listed: Option<&BTreeSet<String>>,
+    held: Option<&Vec<TimelineSpan>>,
+) -> Option<TimelineSpan> {
+    let known = |bound: &str| {
+        bound == TIMELINE_START
+            || bound == TIMELINE_HEAD
+            || listed.is_some_and(|listed| listed.contains(bound))
+            || held.is_some_and(|held| covering_span(held, bound).is_some())
+    };
+    let mut inside = listed
+        .into_iter()
+        .flat_map(|listed| listed.range(span.start.clone()..=span.end.clone()));
+    let start = match known(&span.start) {
+        true => span.start.clone(),
+        false => inside.clone().next()?.clone(),
+    };
+    let end = match known(&span.end) {
+        true => span.end.clone(),
+        false => inside.next_back()?.clone(),
+    };
+    Some(TimelineSpan { start, end })
+}
+
 /// The coverage `commit` leaves its lists with, over what the guard read.
+/// `listed` has the sort keys of the entries its response carries.
 pub(crate) fn coverage_writes(
     commit: &ChannelTimelineCommit,
     guard: &ChannelGuard,
+    listed: &BTreeMap<TimelineScope, BTreeSet<String>>,
 ) -> Vec<ChannelCoverageWrite> {
     let mut scopes = commit
         .dropped_thread_root_ids
@@ -190,8 +224,11 @@ pub(crate) fn coverage_writes(
             .coverage
             .get(&(commit.channel_id.clone(), scope.clone()))
             .filter(|_| !fresh);
+        let spans = spans
+            .into_iter()
+            .filter_map(|span| proven(span, listed.get(&scope), held));
         let spans = merge_spans(held.into_iter().flatten().cloned().chain(spans));
-        if held != Some(&spans) {
+        if held.map_or(&[][..], Vec::as_slice) != spans {
             scopes.insert(scope, spans);
         }
     }

@@ -18,6 +18,8 @@ fn a_write_takes_effect_only_where_it_is_as_new_as_what_is_known() {
         // A removed entry comes back only with content as new as its removal.
         (Some(state(5, true)), Some(5), None, true),
         (Some(state(5, true)), Some(4), None, false),
+        // Changes applied since its removal did not bring it back either.
+        (Some(state(5, true)), Some(8), Some(9), false),
         (Some(state(5, true)), None, None, false),
         // An entry not held is known not to exist as of the watermark.
         (None, Some(9), Some(9), true),
@@ -82,8 +84,15 @@ fn coverage_joins_what_is_held_unless_the_commit_drops_it() {
         coverage: vec![covering(None, "20", "30"), covering(Some("m1"), "3", "4")],
         ..ChannelTimelineCommit::default()
     };
+    let listed = [
+        (channel.clone(), ["20", "25", "30"]),
+        (thread.clone(), ["3", "4", "4"]),
+    ];
+    let listed = listed
+        .map(|(scope, keys)| (scope, keys.map(str::to_owned).into()))
+        .into();
     let written = |commit: &ChannelTimelineCommit| {
-        coverage_writes(commit, &guard)
+        coverage_writes(commit, &guard, &listed)
             .into_iter()
             .map(|write| (write.scope, write.spans))
             .collect::<Vec<_>>()
@@ -114,4 +123,33 @@ fn coverage_joins_what_is_held_unless_the_commit_drops_it() {
             (thread, vec![span("3", "4")]),
         ]
     );
+}
+
+#[test]
+fn a_bound_the_page_does_not_list_is_proven_only_by_held_coverage() {
+    let span = |(start, end): (&str, &str)| TimelineSpan {
+        start: start.into(),
+        end: end.into(),
+    };
+    let listed = BTreeSet::from(["20", "30"].map(str::to_owned));
+    let held = vec![span(("40", "60"))];
+    for (fetched, listed, held, expected) in [
+        (("20", "30"), Some(&listed), None, Some(("20", "30"))),
+        (("", "\u{10FFFF}"), None, None, Some(("", "\u{10FFFF}"))),
+        // An older page, next to a message the device covers, and to one not.
+        (("20", "40"), Some(&listed), Some(&held), Some(("20", "40"))),
+        (("20", "40"), Some(&listed), None, Some(("20", "30"))),
+        (("10", "30"), Some(&listed), None, Some(("20", "30"))),
+        (("", "40"), Some(&listed), None, Some(("", "30"))),
+        // A page that lists nothing.
+        (("", "40"), None, Some(&held), Some(("", "40"))),
+        (("", "40"), None, None, None),
+        (("70", "\u{10FFFF}"), None, Some(&held), None),
+    ] {
+        assert_eq!(
+            proven(span(fetched), listed, held),
+            expected.map(span),
+            "{fetched:?}"
+        );
+    }
 }

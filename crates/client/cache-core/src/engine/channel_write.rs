@@ -5,13 +5,13 @@ use super::{Engine, EngineError, Storage};
 use crate::channel_timeline::{
     ChannelCommitOutcome, ChannelCommitStatus, ChannelEntries, ChannelGuard, ChannelGuardQuery,
     ChannelRowWrite, ChannelStamps, ChannelSync, ChannelTimelineCommit, ChannelTombstone,
-    ChannelWrite, TOMBSTONE_REPLAY, admits, coverage_writes, entry_channel_id, is_channel_entry,
-    project_channel_timeline,
+    ChannelWrite, TOMBSTONE_REPLAY, TimelineScope, admits, coverage_writes, entry_channel_id,
+    is_channel_entry, project_channel_timeline,
 };
 use crate::identity::{ALIAS_FIELD, DELETED_FIELD, MUTATION_UUID_FIELD};
 use crate::normalize::RecordUpdates;
 use crate::value::{CacheValue, EntityKey, Record};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// What a write keeps of an entry it may not store.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,6 +41,8 @@ pub(super) struct ChannelAdmission {
     pub(super) changes_reads: bool,
     /// The channels whose timelines the write changes.
     pub(super) changes: ChannelChanges,
+    /// Sort keys of the entries the response carries, by list.
+    listed: BTreeMap<TimelineScope, BTreeSet<String>>,
     stamped: HashMap<EntityKey<'static>, Admitted>,
     /// Records written whole: nothing they held before is merged into.
     replaced: BTreeSet<EntityKey<'static>>,
@@ -189,6 +191,10 @@ impl<S: Storage> Engine<S> {
             let Some(record) = updates.get_mut(&key) else {
                 continue;
             };
+            if let Some(row) = stamp.and_then(|_| project_channel_timeline(&key, record)) {
+                let listed = admission.listed.entry(row.scope).or_default();
+                listed.insert(row.sort_key);
+            }
             let channel_id = entry_channel_id(record)
                 .or(state.map(|state| state.channel_id.as_str()))
                 .or(commit.map(|commit| commit.channel_id.as_str()));
@@ -305,7 +311,7 @@ impl<S: Storage> Engine<S> {
         }
         admission.write.deleted = doomed.into_iter().collect();
 
-        admission.write.coverage = coverage_writes(commit, guard);
+        admission.write.coverage = coverage_writes(commit, guard, &admission.listed);
         let stored = guard.sync.get(channel_id);
         let touched = stored.map_or(0, |sync| sync.touched_at_ms);
         let sync = ChannelSync {
