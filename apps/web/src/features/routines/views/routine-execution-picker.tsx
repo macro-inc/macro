@@ -35,7 +35,7 @@ type Props = RoutineExecutionPickerProps & {
 };
 
 function savedSelection(target: RoutineTarget): string {
-  if (target.kind === 'model') return `Model: ${target.model}`;
+  if (target.kind === 'model') return `Model: ${currentModelId(target.model)}`;
   const label = `Agent: ${target.agentId}`;
   return target.modelOverride ? `${label} · ${target.modelOverride}` : label;
 }

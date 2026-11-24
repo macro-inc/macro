@@ -1,5 +1,4 @@
 import { UnifiedModelSelector } from '@app/features/agents-view/model-selector';
-import { currentModelId } from '@core/component/AI/constant/model';
 import {
   catalogModelLabel,
   modelLabel,
@@ -44,6 +43,7 @@ import {
   effortConfigOption,
   selectConfigOption,
 } from '../state/session-config';
+import { shownSessionModel, shownSessionModels } from '../state/session-model';
 import {
   AgentInput,
   type AgentInputProps,
@@ -146,17 +146,17 @@ export function AgentComposer(props: {
     return option ? changingConfig(messages(), option.id) : undefined;
   };
 
-  /** The model the session runs. A Macro session last run on a retired model
-   * moves to its replacement on its next turn, so it shows as that replacement. */
   const sessionModel = (): string | undefined => {
     const model = metadata()?.model ?? undefined;
-    return model && isMacroHarness(session()?.harness)
-      ? currentModelId(model)
-      : model;
+    return model && shownSessionModel(model, session()?.harness);
   };
 
+  const runtimeModels = createMemo(() =>
+    shownSessionModels(metadata()?.supportedModels ?? [], session()?.harness)
+  );
+
   const catalog = createMemo(() =>
-    (metadata()?.supportedModels ?? []).map((option) => ({
+    runtimeModels().map((option) => ({
       id: option.id,
       label: modelLabel(option.id, option.name, option.description),
       group: option.group ?? undefined,
@@ -356,14 +356,10 @@ export function AgentComposer(props: {
             'agent-composer'
           )
         }
-        modelName={catalogModelLabel(
-          sessionModel(),
-          metadata()?.supportedModels ?? []
-        )}
+        modelName={catalogModelLabel(sessionModel(), runtimeModels())}
         supportsImages={
-          metadata()?.supportedModels.find(
-            (model) => model.id === sessionModel()
-          )?.supportsImages
+          runtimeModels().find((model) => model.id === sessionModel())
+            ?.supportsImages
         }
         attachments={attachmentTracker.attachments()}
         onAttachFiles={attachFiles}
