@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::changes::ChannelChangeKind;
+use crate::domain::changes::{ChannelChangeKind, ChannelChangeLogPruner};
 use std::sync::Arc;
 use tokio::{
     sync::{Barrier, Semaphore},
@@ -629,7 +629,7 @@ async fn channel_stalled_holder_guard_applies_with_database_timeouts_disabled(po
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_removed_channel_takes_its_change_history_and_counter(pool: PgPool) {
+async fn a_removed_channel_takes_its_change_history_and_then_its_counter(pool: PgPool) {
     setup(&pool).await;
     let (removed, kept) = (channel_fixture(&pool).await, channel_fixture(&pool).await);
     let repo = PgMessageRepository::new(pool.clone());
@@ -644,15 +644,20 @@ async fn a_removed_channel_takes_its_change_history_and_counter(pool: PgPool) {
         .await
         .unwrap();
 
-    let counters = sqlx::query_scalar!("SELECT channel_id FROM channel_change_counters")
-        .fetch_all(&pool)
-        .await
-        .unwrap();
     let logged = sqlx::query_scalar!("SELECT channel_id FROM channel_change_log")
         .fetch_all(&pool)
         .await
         .unwrap();
-    assert_eq!((counters, logged), (vec![kept], vec![kept]));
+    assert_eq!(logged, vec![kept]);
+
+    // Retention sweeps the counter once it has been idle past the cutoff.
+    let later = Utc::now() + chrono::Duration::seconds(1);
+    assert_eq!(repo.prune_channel_change_log(later, 10).await.unwrap(), 1);
+    let counters = sqlx::query_scalar!("SELECT channel_id FROM channel_change_counters")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(counters, vec![kept]);
 }
 
 async fn channel_thread_call(pool: &PgPool, owner: &str, channel_id: Uuid) -> Uuid {

@@ -40,8 +40,11 @@ These helpers let each domain append a change inside its own write transaction.
   stay, and readers past the hole would miss changes without a reset. One pruner
   runs at a time under `try_lock_prune_in`.
 - Database triggers also write here, for removals no service code sees: a
-  removed channel deletes its log and counter, and channel-thread calls removed
-  with their owner append message changes, counters locked in channel order
+  removed channel deletes its log, and channel-thread calls removed with their
+  owner append message changes, counters locked in channel order. A removed
+  channel's counter is swept by retention (`prune_orphaned_counters_in`), not
+  by the trigger: deleting counters in cascade order could deadlock with an
+  activity batch
   (`20261124030000_channel_change_log_cleanup.sql`).
 - Read limits and retention cutoffs come from callers; do not add client policy here.
 

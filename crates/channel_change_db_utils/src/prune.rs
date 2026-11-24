@@ -15,6 +15,37 @@ pub async fn try_lock_prune_in(tx: &mut Transaction<'_, Postgres>) -> Result<boo
     .await
 }
 
+/// Remove at most `batch` counters of channels that no longer exist.
+///
+/// A removed channel's log goes with it, but its counter is left for this
+/// sweep, as is one an activity recreated after the channel was gone. Only
+/// counters idle since before `cutoff` are looked at, so none is taken from
+/// under a write in flight. The caller owns the transaction and its timeout.
+pub async fn prune_orphaned_counters_in(
+    tx: &mut Transaction<'_, Postgres>,
+    cutoff: DateTime<Utc>,
+    batch: i64,
+) -> Result<u64, sqlx::Error> {
+    Ok(sqlx::query!(
+        r#"
+            DELETE FROM channel_change_counters
+            WHERE channel_id = ANY(ARRAY(
+                SELECT counter.channel_id FROM channel_change_counters counter
+                WHERE counter.updated_at < $1
+                    AND NOT EXISTS (
+                        SELECT 1 FROM comms_channels WHERE id = counter.channel_id
+                    )
+                LIMIT $2
+            )) AND updated_at < $1
+            "#,
+        cutoff,
+        batch,
+    )
+    .execute(&mut **tx)
+    .await?
+    .rows_affected())
+}
+
 /// Remove at most `batch` oldest rows before `cutoff`, preserving counters.
 /// The caller owns retention policy, transaction, and statement timeout.
 pub async fn prune_in(

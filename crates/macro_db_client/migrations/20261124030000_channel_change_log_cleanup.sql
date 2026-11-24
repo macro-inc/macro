@@ -1,13 +1,16 @@
--- A removed channel takes its change history and its counter with it. The
--- tables have no foreign key to the channel, so nothing else removes them.
--- This trigger's name sorts after the channel's foreign-key triggers, so it
--- runs once the channel's messages are gone and takes the counter lock last,
--- as every writer does.
+-- CREATE TRIGGER locks comms_channels against writes; do not queue behind a
+-- long query with every channel write queued behind this.
+SET LOCAL lock_timeout = '5s';
+
+-- A removed channel takes its change history with it; the table has no foreign
+-- key to the channel, so nothing else removes it. Its counter is left to the
+-- retention job: removing counters here, in the order a team's channels happen
+-- to be deleted, could deadlock with an activity batch that locks several
+-- counters in channel order.
 CREATE FUNCTION cleanup_channel_change_log() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
     DELETE FROM channel_change_log WHERE channel_id = OLD.id;
-    DELETE FROM channel_change_counters WHERE channel_id = OLD.id;
     RETURN OLD;
 END;
 $$;
@@ -21,13 +24,14 @@ CREATE TRIGGER cleanup_channel_change_log
 -- channel records the change here; clients then read the root again. The calls
 -- are removed first, so their own cleanup has taken its locks before any
 -- counter is locked, and counters lock in channel order as activity batches do.
+-- As in the services' appends, a stalled counter holder is given five seconds
+-- unless the caller already allows less; the caller's setting is put back.
 CREATE OR REPLACE FUNCTION cleanup_user_call_entities() RETURNS trigger
-LANGUAGE plpgsql
-SET lock_timeout = '5s'
-AS $$
+LANGUAGE plpgsql AS $$
 DECLARE
     channels uuid[];
     calls uuid[];
+    saved text;
 BEGIN
     WITH gone AS (
         DELETE FROM call_entities WHERE user_id = OLD.id
@@ -39,6 +43,11 @@ BEGIN
     WHERE discussion = 'channel_thread' AND channel_id IS NOT NULL;
 
     IF channels IS NOT NULL THEN
+        saved := current_setting('lock_timeout');
+        PERFORM set_config('lock_timeout', CASE
+            WHEN saved::interval > interval '0'
+                AND saved::interval < interval '5 seconds' THEN saved
+            ELSE '5s' END, true);
         WITH pending AS MATERIALIZED (
             SELECT channel_id, call_id,
                    row_number() OVER (PARTITION BY channel_id ORDER BY ordinal) AS position,
@@ -60,6 +69,7 @@ BEGIN
                1, pending.call_id
         FROM pending JOIN advanced USING (channel_id)
         ORDER BY pending.channel_id, pending.position;
+        PERFORM set_config('lock_timeout', saved, true);
     END IF;
     RETURN OLD;
 END;
