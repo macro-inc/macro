@@ -143,8 +143,9 @@ channel message tools change a message as their bot only when
   `Cargo.toml`'s `[features]` table before adding a dependency edge.
 - Every composition root of `ChannelMessageDelivery` wraps its realtime in
   `ChannelTimelineRealtime`; a writer that doesn't publishes nothing to
-  `channelTimelineUpdates`, and subscribers only catch up on reconnect. Call
-  end/delete and historical-import resets advance the sequence with no update.
+  `channelTimelineUpdates`. Call end/delete, the call cleanup trigger for a
+  removed user and historical-import resets also advance the sequence with no
+  update. Subscribers catch up at the gap the next update shows, or on reconnect.
 
 - Thread summaries count live replies on each page. With stale statistics after a
   very large import, an ordinary-reply page can also scan that thread's imported
