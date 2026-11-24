@@ -751,9 +751,9 @@ describe('createWorkerCacheHost', () => {
       scope: 'scope-1',
       onInitializationError,
     });
-    const rejected = expect(host.currentRevision()).rejects.toThrow(
-      'disposed during startup'
-    );
+    const rejected = expect(host.currentRevision()).rejects.toMatchObject({
+      errorCode: 'host-disposed',
+    });
     host.dispose();
     await rejected;
     expect(adapterFactory).toHaveBeenCalledOnce();
@@ -2083,6 +2083,58 @@ describe('createWorkerCacheHost', () => {
     await expect(host.clear()).rejects.toThrow(
       'cache worker host was disposed'
     );
+  });
+
+  it('leaves with the database kept when disposed before it is ready again', async () => {
+    configureAdapter = (fake) => {
+      fake.ignoredKinds.add('enqueue-optimistic-mutation');
+    };
+    localStorage.setItem('graphql-cache:scope', 'scope-1');
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    await host.clear();
+    const adapter = requireAdapter();
+    const mutation = host.enqueueOptimisticMutation(
+      {
+        generation: TEST_AUTHORITY_GENERATION,
+        uuid: '00000000-0000-4000-8000-000000000100',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      },
+      { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
+    );
+    await vi.waitFor(() =>
+      expect(adapter.requests.map(({ kind }) => kind)).toContain(
+        'enqueue-optimistic-mutation'
+      )
+    );
+    adapter.ignoredKinds.add('init');
+    adapter.replace(2);
+    const read = host.readQuery({ query: 'query Waiting { waiting }' });
+    const rejections = Promise.all([
+      expect(mutation).rejects.toMatchObject({
+        errorCode: 'admitted-enqueue-uncertain',
+        cause: { errorCode: 'host-disposed' },
+      }),
+      expect(read).rejects.toMatchObject({ errorCode: 'host-disposed' }),
+    ]);
+
+    host.dispose();
+    await rejections;
+    dispatchEvent(new Event('pagehide'));
+
+    expect(adapter.dispose).toHaveBeenCalledExactlyOnceWith({
+      graceful: false,
+      preserveDatabase: true,
+    });
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
+    expect(onInitializationError).not.toHaveBeenCalled();
+    await expect(host.clear()).rejects.toMatchObject({
+      errorCode: 'host-disposed',
+    });
   });
 
   it('keeps pagehide armed until graceful adapter retirement resolves', async () => {

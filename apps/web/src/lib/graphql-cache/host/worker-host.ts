@@ -85,6 +85,7 @@ import {
   STARTUP_RESPONSE_GRACE_MS,
 } from '../worker/startup';
 import { unsupportedBrowserReason } from './browser-support';
+import { CacheHostDisposedError } from './errors';
 import { CacheNavigationError } from './navigation-error';
 import { createNoopCacheHost } from './noop-host';
 import {
@@ -311,7 +312,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let adapterDisposePromise: Promise<void> | undefined;
   let adapterDisposeWasGraceful = false;
   let adapterDisposalStarted = false;
-  let disposalMode: 'graceful' | 'navigation' | 'abrupt' | undefined;
+  let disposalMode: 'draining' | 'leaving' | 'navigation' | undefined;
   let pagehideRegistered = false;
   let legacyIdbDeletionStarted = false;
   let telemetryRelayStarted = false;
@@ -706,7 +707,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         if (initializationId !== initializationAttempt)
           throw new CacheNavigationError();
         if (state !== 'initializing')
-          throw new Error('cache worker host was disposed during startup');
+          throw new CacheHostDisposedError();
         const current = getAdapter();
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
@@ -724,7 +725,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           if (initializationId !== initializationAttempt)
             throw new CacheNavigationError();
           if (state !== 'initializing')
-            throw new Error('cache worker host was disposed during startup');
+            throw new CacheHostDisposedError();
           registeredAdapter = current;
           return;
         } catch (error) {
@@ -959,12 +960,6 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     reportFailure(error);
   }
 
-  function hasAdmittedEnqueue(): boolean {
-    return [...pending.values()].some(
-      (entry) => entry.admitted && entry.kind === 'enqueue-optimistic-mutation'
-    );
-  }
-
   function failTransport(error: Error): void {
     if (terminalFailureHandled || state === 'suspended') return;
     const storageWasUntouched = error instanceof CacheBootstrapExhaustedError;
@@ -1033,7 +1028,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   function finishGracefulDisposeIfDrained(): void {
     if (
       state !== 'disposing' ||
-      disposalMode !== 'graceful' ||
+      disposalMode !== 'draining' ||
       pending.size > 0
     ) {
       return;
@@ -1041,69 +1036,49 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     startAdapterDisposal(true);
   }
 
-  function disposeHost(graceful: boolean, preserveDatabase = false): void {
-    cancelRegistration?.(
-      preserveDatabase
+  /**
+   * Stops the host where it is: whatever is pending rejects (an admitted
+   * enqueue as uncertain, its queue entry may be stored), and the page leaves
+   * the coordinator with the database kept, as a navigating page does.
+   */
+  function leave(mode: 'leaving' | 'navigation'): void {
+    state = 'disposing';
+    disposalMode = mode;
+    clearSubscribers();
+    rejectPending(
+      mode === 'navigation'
         ? new CacheNavigationError()
-        : new Error('cache worker host was disposed during startup')
+        : new CacheHostDisposedError(),
+      true
     );
+    startAdapterDisposal(false, true);
+  }
+
+  function disposeForNavigation(): void {
+    cancelRegistration?.(new CacheNavigationError());
     stopStorageHealthSampling();
     if (state === 'disposed') return;
-    if (state === 'disposing') {
-      if (
-        graceful ||
-        disposalMode === 'abrupt' ||
-        (preserveDatabase && disposalMode === 'navigation')
-      ) {
-        return;
-      }
-      if (preserveDatabase) {
-        disposalMode = 'navigation';
-        clearSubscribers();
-        rejectPending(new CacheNavigationError(), true);
-        startAdapterDisposal(false, true);
-        return;
-      }
-      disposalMode = 'abrupt';
-      const quarantine = hasAdmittedEnqueue();
-      clearSubscribers();
-      if (quarantine)
-        fireAndForget(
-          quarantineCacheScope(options.scope),
-          'graphql-cache-host'
-        );
-      rejectPending(new Error('cache worker host was abruptly disposed'), true);
-      startAdapterDisposal(false);
-      return;
-    }
-    if (graceful && state === 'ready') {
-      // Stop admission first, but keep the requester/standby connected until
-      // every already-admitted RPC has a response or its existing read timer.
-      // Mutations deliberately have no arbitrary disposal timeout.
-      state = 'disposing';
-      disposalMode = 'graceful';
-      clearSubscribers();
-      // Keep pagehide armed through coordinator retirement so navigation can
-      // terminate the worker without converting the handoff into a wipe.
-      finishGracefulDisposeIfDrained();
-      return;
-    }
+    if (state === 'disposing' && disposalMode !== 'draining') return;
+    leave('navigation');
+  }
 
+  function disposeHost(): void {
+    cancelRegistration?.(new CacheHostDisposedError());
+    stopStorageHealthSampling();
+    if (state === 'disposed' || state === 'disposing') return;
+    if (state !== 'ready') {
+      leave('leaving');
+      return;
+    }
+    // Stop admission first, but keep the requester/standby connected until
+    // every already-admitted RPC has a response or its existing read timer.
+    // Mutations deliberately have no arbitrary disposal timeout.
     state = 'disposing';
+    disposalMode = 'draining';
     clearSubscribers();
-    if (preserveDatabase) {
-      disposalMode = 'navigation';
-      rejectPending(new CacheNavigationError(), true);
-      startAdapterDisposal(false, true);
-      return;
-    }
-
-    const quarantine = hasAdmittedEnqueue();
-    disposalMode = 'abrupt';
-    if (quarantine)
-      fireAndForget(quarantineCacheScope(options.scope), 'graphql-cache-host');
-    rejectPending(new Error('cache worker host was abruptly disposed'), true);
-    startAdapterDisposal(false);
+    // Keep pagehide armed through coordinator retirement so navigation can
+    // terminate the worker without converting the handoff into a wipe.
+    finishGracefulDisposeIfDrained();
   }
 
   async function finishSuspension(
@@ -1173,7 +1148,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       state === 'disposing' ||
       state === 'disposed'
     ) {
-      disposeHost(false, true);
+      disposeForNavigation();
       return;
     }
     if (state === 'suspended') return;
@@ -1251,7 +1226,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const canceled = navigationError();
     if (canceled) return Promise.reject(canceled);
     if (state === 'disposing' || state === 'disposed') {
-      return Promise.reject(new Error('cache worker host was disposed'));
+      return Promise.reject(new CacheHostDisposedError());
     }
 
     if (isReadOnlyCacheRequest(msg.kind) && readAvailability.error) {
@@ -1377,7 +1352,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         await suspended;
         if (attempt !== initializationAttempt) throw new CacheNavigationError();
         if (state !== 'initializing')
-          throw new Error('cache worker host was disposed');
+          throw new CacheHostDisposedError();
         suspension = undefined;
         adapter = undefined;
         registeredAdapter = undefined;
@@ -1485,7 +1460,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const canceled = navigationError();
     if (canceled) return Promise.reject(canceled);
     if (state === 'disposing' || state === 'disposed') {
-      return Promise.reject(new Error('cache worker host was disposed'));
+      return Promise.reject(new CacheHostDisposedError());
     }
     return startInitialization();
   }
@@ -1940,7 +1915,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     },
 
     dispose() {
-      disposeHost(true);
+      disposeHost();
     },
   };
 }

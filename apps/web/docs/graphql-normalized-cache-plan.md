@@ -274,7 +274,10 @@ already loading/opening first finishes startup before draining. The runtime wait
 for admitted work and closes OPFS before acknowledging. Only then may another
 eligible visible page acquire the owner lock and open the existing database.
 Clients and their subscribers stay connected; an explicit page disposal can join
-the same drain and retire that page normally.
+the same drain and retire that page normally. A host disposed before it is ready
+leaves like a navigating page instead: it keeps the database and the cache scope,
+rejects its requests with `host-disposed`, and reports an admitted enqueue as
+uncertain.
 
 If no eligible tab is visible, the coordinator enters `parked` with no engine.
 Background cache work queues until a visible page resumes ownership; it never

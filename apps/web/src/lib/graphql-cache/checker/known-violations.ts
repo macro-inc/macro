@@ -17,8 +17,6 @@ const WIPE =
   'The open after an engine died in a live page wipes the database, queued writes included.';
 const STARTUP_LOSS =
   "An owner lost while a tab's startup handshake is pending fails the handshake. The page drops a host that was waiting for the next owner, and recovery calls the error unrecoverable and stops until reload.";
-const DISPOSE_QUARANTINE =
-  'Disposing a host that is not ready quarantines its scope, so its queued writes are left behind in the old database.';
 const RESTART_AT_STARTUP =
   'A coordinator restart during startup drops a host that could re-register.';
 const BFCACHE_AT_STARTUP =
@@ -54,17 +52,12 @@ const known = (
   }));
 
 const WIPED = 'S3:queued write lost (database wiped)';
-const ABANDONED = 'S3:queued write lost (scope changed)';
-const ABANDONED_OPEN =
-  'S3:queued write lost (scope changed, old database still open)';
 const EPOCH_LOST = 'S2:host retired on CacheResponseError:owner-epoch-lost';
 const STOPPED =
   'L1:cache not back (recovery-required, stopped unrecoverable, probe read not made)';
 const UNSERVED = 'L2:no active engine (waiting-for-tab)';
 const UNSTARTED = 'L2:no active engine (no coordinator)';
 const PARKED = 'L2:no active engine (parked)';
-const READ_DISPOSED =
-  'S5:read refused without a code: Error:untyped:cache worker host was abruptly disposed';
 const OPEN_FAILED =
   'Error:untyped:cache recovery failed after 5 attempts: storage error: unable to open database file';
 
@@ -94,18 +87,8 @@ const CONTENDING: InjectedFault[] = [
 
 export const KNOWN_VIOLATIONS: KnownViolation[] = [
   ...known(WIPE, ['crash-engine owner'], [WIPED]),
-  ...OWNER_LOST.flatMap((fault) => [
-    ...known(STARTUP_LOSS, [fault], [EPOCH_LOST, STOPPED, UNSERVED]),
-    ...known(STARTUP_LOSS, [fault], [READ_DISPOSED, UNSTARTED]),
-    ...known(
-      DISPOSE_QUARANTINE,
-      [fault],
-      [fault === 'crash-engine owner' ? ABANDONED_OPEN : ABANDONED]
-    ),
-  ]),
-  ...(['close owner', 'kill owner', 'bfcache owner'] as const).flatMap(
-    (fault) =>
-      known(DISPOSE_QUARANTINE, [fault], [ABANDONED_OPEN], { deep: true })
+  ...OWNER_LOST.flatMap((fault) =>
+    known(STARTUP_LOSS, [fault], [EPOCH_LOST, STOPPED, UNSERVED])
   ),
   ...known(STARTUP_LOSS, ['expire-session owner'], [EPOCH_LOST, STOPPED]),
   ...known(
@@ -160,18 +143,8 @@ export const KNOWN_VIOLATIONS: KnownViolation[] = [
       UNSERVED,
     ]
   ),
-  ...known(STARTUP_LOSS, ['expire-session owner'], [READ_DISPOSED], {
-    reordered: true,
-    deep: true,
-  }),
   ...(['hide', 'hide owner'] as const).flatMap((fault) =>
     known(STARTUP_TIMEOUT, [fault, 'late-message'], [PARKED], { deep: true })
-  ),
-  ...known(
-    DISPOSE_QUARANTINE,
-    ['hide owner', 'late-message'],
-    [ABANDONED, ABANDONED_OPEN],
-    { deep: true }
   ),
   ...known(
     UNCODED_TIMEOUT,

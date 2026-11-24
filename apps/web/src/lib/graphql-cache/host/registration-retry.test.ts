@@ -201,7 +201,7 @@ describe('coordinator registration retry', () => {
       host.dispose();
       await expect(outcome).resolves.toEqual(
         expect.objectContaining({
-          message: 'cache worker host was disposed during startup',
+          errorCode: 'host-disposed',
         })
       );
       await vi.advanceTimersByTimeAsync(1_000);
@@ -248,7 +248,7 @@ describe('coordinator registration retry', () => {
     host.dispose();
     await expect(outcome).resolves.toEqual(
       expect.objectContaining({
-        message: 'cache worker host was disposed during startup',
+        errorCode: 'host-disposed',
       })
     );
     await vi.advanceTimersByTimeAsync(1_000);
