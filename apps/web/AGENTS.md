@@ -1172,8 +1172,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   failed download and retried once from bytes.
 - Drain browser cache engines once their last visible consumer has been hidden
   for a second, then park without retiring clients; end a drain that takes 15 s
-  while a page is visible like a departed owner, keeping its files; queue background work until a visible owner reopens
-  storage, retaining accepted mutation settlements even if their caller leaves.
+  while a page is visible like a departed owner, keeping its files; queue
+  background work until a visible owner reopens storage, retaining accepted
+  mutation settlements even if their caller leaves.
   Publish recovery reset outcomes before parking while retaining the read pause.
   A typed search held across an engine restart reaches the new engine first, and
   one already sent is not refused when the read budget expires; it has no

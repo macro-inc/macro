@@ -350,7 +350,8 @@ to its event loop before starting (and again after each request), repeating
 while requests keep arriving (up to a bound), and then picks by priority. A
 typed search with nothing else queued starts at once. A visible consumer starts a one-second read budget
 covering drain/startup/resume; changes of candidate do not extend it. If everyone
-hides again, cancel that budget: the next visible consumer starts a fresh one. On expiry, `blocked` allows ordinary query network
+hides again, cancel that budget: the next visible consumer starts a fresh one. On
+expiry, `blocked` allows ordinary query network
 fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.
 Only read callers are canceled, not admitted engine work or writes. A typed
 search already sent is the exception: it has no network fallback, so it stays
