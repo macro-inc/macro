@@ -237,6 +237,29 @@ pub enum OpensearchClientError {
     #[error("a network error occurred. status_code: {status_code} message: {message}")]
     NetworkError { status_code: u16, message: String },
 
+    /// OpenSearch answered a search with an error status. Only the status and
+    /// the error's type are kept: its reason can quote the query.
+    #[error(
+        "opensearch refused the search. operation: {operation} status_code: {status_code} error_type: {error_type:?}"
+    )]
+    SearchRefused {
+        status_code: u16,
+        error_type: Option<String>,
+        operation: OpensearchOperation,
+    },
+
+    /// Some shards failed a search, so its page is missing results. Only the
+    /// counts and the failures' types are kept: a reason can quote the query.
+    #[error(
+        "opensearch failed {failed} of {total} shards. operation: {operation} failure_types: {failure_types:?}"
+    )]
+    ShardsFailed {
+        failed: u32,
+        total: u32,
+        failure_types: Vec<String>,
+        operation: OpensearchOperation,
+    },
+
     #[error("invalid match type. match_type: {match_type}")]
     InvalidMatchType { match_type: String },
 

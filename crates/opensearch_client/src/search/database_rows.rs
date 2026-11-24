@@ -12,9 +12,8 @@ use opensearch_query_builder::{
 };
 use uuid::Uuid;
 
-use super::model::DefaultSearchResponse;
 use super::query::{QueryKey, TermCombine, generate_terms_must_query_for_fields};
-use crate::error::{OpensearchClientError, OpensearchOperation, ResponseExt as _, error_chain};
+use crate::error::{OpensearchClientError, OpensearchOperation, error_chain};
 use crate::retry::resend_on_lost_connection;
 use crate::{OpensearchClient, Result};
 
@@ -55,11 +54,112 @@ pub struct DatabaseRowSearchArgs {
     pub limit: u32,
 }
 
+/// The parts of a search answer row search reads. Error reasons are never
+/// read: they can quote the query.
+#[derive(Debug, serde::Deserialize)]
+struct RowSearchAnswer {
+    took: i64,
+    #[serde(rename = "_shards")]
+    shards: ShardCounts,
+    hits: RowHits,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ShardCounts {
+    total: u32,
+    failed: u32,
+    #[serde(default)]
+    failures: Vec<ShardFailure>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ShardFailure {
+    #[serde(default)]
+    reason: FailureReason,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct FailureReason {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct RowHits {
+    hits: Vec<RowHit>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct RowHit {
+    #[serde(rename = "_source")]
+    source: RowSource,
+}
+
 #[derive(Debug, serde::Deserialize)]
 struct RowSource {
     row_id: Uuid,
     /// Epoch milliseconds.
     updated_at: i64,
+}
+
+/// The error for a search answered with `status`: the status and the error's
+/// type, never its reason or the body.
+fn refused(status: u16, body: &[u8]) -> OpensearchClientError {
+    #[derive(serde::Deserialize)]
+    struct ErrorBody {
+        error: ErrorKind,
+    }
+    #[derive(serde::Deserialize)]
+    struct ErrorKind {
+        #[serde(rename = "type")]
+        kind: String,
+    }
+    OpensearchClientError::SearchRefused {
+        status_code: status,
+        error_type: serde_json::from_slice::<ErrorBody>(body)
+            .ok()
+            .map(|body| body.error.kind),
+        operation: OpensearchOperation::SearchDatabaseRows,
+    }
+}
+
+/// The rows of a successful answer. A shard that failed leaves the page
+/// short, which would read as the end of the rows, so it fails the search.
+fn rows_of(body: &[u8]) -> Result<(Vec<DatabaseRowPosition>, i64)> {
+    let answer: RowSearchAnswer =
+        serde_json::from_slice(body).map_err(|e| OpensearchClientError::DeserializationFailed {
+            details: e.to_string(),
+            operation: OpensearchOperation::SearchDatabaseRows,
+        })?;
+    if answer.shards.failed > 0 {
+        let mut failure_types: Vec<String> = answer
+            .shards
+            .failures
+            .into_iter()
+            .filter_map(|failure| failure.reason.kind)
+            .collect();
+        failure_types.sort();
+        failure_types.dedup();
+        return Err(OpensearchClientError::ShardsFailed {
+            failed: answer.shards.failed,
+            total: answer.shards.total,
+            failure_types,
+            operation: OpensearchOperation::SearchDatabaseRows,
+        });
+    }
+    let rows = answer
+        .hits
+        .hits
+        .into_iter()
+        .filter_map(|hit| {
+            let updated_at = DateTime::from_timestamp_millis(hit.source.updated_at)?;
+            Some(DatabaseRowPosition {
+                updated_at,
+                row_id: hit.source.row_id,
+            })
+        })
+        .collect();
+    Ok((rows, answer.took))
 }
 
 fn build_request(args: &DatabaseRowSearchArgs) -> Result<SearchRequest<'static>> {
@@ -151,37 +251,23 @@ async fn search_database_rows(
             None,
         )
         .await
-        .map_client_error(OpensearchOperation::SearchDatabaseRows)
-        .await?;
-
+        .map_err(|error| {
+            OpensearchClientError::request_failed(OpensearchOperation::SearchDatabaseRows, &error)
+        })?;
+    let status = response.status_code();
     let bytes = response
         .bytes()
         .await
         .map_err(|e| OpensearchClientError::HttpBytesError {
             details: error_chain(&e),
         })?;
-    let result: DefaultSearchResponse<RowSource> = serde_json::from_slice(&bytes).map_err(|e| {
-        OpensearchClientError::SearchDeserializationFailed {
-            details: e.to_string(),
-            raw_body: String::from_utf8_lossy(&bytes).to_string(),
-        }
-    })?;
-    result.warn_on_shard_failures(OpensearchOperation::SearchDatabaseRows);
+    if !status.is_success() {
+        return Err(refused(status.as_u16(), &bytes));
+    }
+    let (rows, took) = rows_of(&bytes)?;
 
     let span = tracing::Span::current();
-    span.record("hit_count", result.hits.hits.len());
-    span.record("opensearch_took_ms", result.took);
-
-    Ok(result
-        .hits
-        .hits
-        .into_iter()
-        .filter_map(|hit| {
-            let updated_at = DateTime::from_timestamp_millis(hit.source.updated_at)?;
-            Some(DatabaseRowPosition {
-                updated_at,
-                row_id: hit.source.row_id,
-            })
-        })
-        .collect())
+    span.record("hit_count", rows.len());
+    span.record("opensearch_took_ms", took);
+    Ok(rows)
 }
