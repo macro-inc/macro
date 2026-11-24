@@ -196,7 +196,8 @@ Kafka messages are traced and skipped so they do not block a partition.
 
 ## Live event stream and resuming
 
-`GET /webhook/events/stream` is ephemeral: each process consumes every event
+`GET /webhook/events/stream` (or `POST` with `{scope, filters}` as a JSON
+body, which keeps filter ids out of the URL) is ephemeral: each process consumes every event
 from the moment it starts and fans it out to its open streams. Each SSE event's
 `id` is the broker event id (a UUIDv7). The process also keeps the last two
 minutes of events, up to 4,096 (`StreamFeed`). A client that opens the stream
@@ -450,8 +451,9 @@ encrypts the secret before calling it.
   encrypts it with its KMS key (purpose `mcp-event-subscription-secret`,
   bound to the user); this service only decrypts it, per delivery.
 - **Stream mode.** `events/stream` stores nothing here: the MCP server reads
-  this service's live event stream (`GET /webhook/events/stream`, scope
-  `user`) as the subscriber, one connection per `stream_groups` entry, and
+  this service's live event stream (`POST /webhook/events/stream`, scope
+  `user`, the filter in the body so its ids stay out of access logs) as the
+  subscriber, one connection per `stream_groups` entry, and
   matches each event against the filter itself, so access is the stream's
   per-event check.
 - **Internal calls.** `inbound/mcp_router.rs`, nested under `/internal` in

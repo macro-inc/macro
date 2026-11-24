@@ -7,6 +7,7 @@ use futures::StreamExt as _;
 use futures::stream::BoxStream;
 use macro_authorization::inbound::axum::{INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER};
 use macro_user_id::user_id::MacroUserIdStr;
+use serde_json::json;
 use sse_core::{SseDecoder, SseEvent, SseStream};
 use std::num::NonZeroUsize;
 use std::time::Duration;
@@ -228,12 +229,12 @@ impl EventSource for DssEvents {
         filter: &WebhookFilter,
         resume_after: Option<&str>,
     ) -> Result<SourceStream, SourceError> {
-        let filters = serde_json::to_string(std::slice::from_ref(filter))
-            .map_err(|error| SourceError(rootcause::Report::new(error).into_dynamic()))?;
+        // In the body, not the URL: access logs record URLs, and a filter's
+        // ids can be user ids, which are emails.
         let mut builder = self
-            .request(reqwest::Method::GET, STREAM_PATH, user)
+            .request(reqwest::Method::POST, STREAM_PATH, user)
             .map_err(SourceError)?
-            .query(&[("scope", "user"), ("filters", filters.as_str())])
+            .json(&json!({"scope": "user", "filters": [filter]}))
             .header(http::header::ACCEPT, "text/event-stream");
         if let Some(event_id) = resume_after {
             builder = builder
