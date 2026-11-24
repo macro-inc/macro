@@ -109,8 +109,14 @@ export function createCrmAccessAuthority(options: Options) {
   let deniedProof:
     | { owner: CacheAuthorityHost; generation: string }
     | undefined;
+  // What the paused host had, and the generations this page retired while it
+  // was paused. Such a host serves again with the retired one; only a proof
+  // committed against it makes a generation of it valid here again.
+  let pausedFrom: CacheAuthority | undefined;
+  const retiredWhilePaused = new Set<string>();
 
   function observe(next: CacheAuthority, retryRetirement = false) {
+    if (retiredWhilePaused.has(next.generation)) return;
     const previous = observed;
     observationVersion += 1;
     if (
@@ -257,7 +263,11 @@ export function createCrmAccessAuthority(options: Options) {
           if (!current()) return;
           if (!isCrmPolicy(policy))
             throw new Error('Invalid CRM access policy');
-          if (observed && observed.generation !== before.generation)
+          if (
+            observed &&
+            observed.generation !== before.generation &&
+            !retiredWhilePaused.has(before.generation)
+          )
             throw new StaleCacheAuthorityError();
           earlyAccess = undefined;
           // A proven denial hides entry points even if local disk cleanup fails.
@@ -293,6 +303,7 @@ export function createCrmAccessAuthority(options: Options) {
           deniedProof = denied
             ? { owner: target, generation: result.authority.generation }
             : undefined;
+          retiredWhilePaused.delete(result.authority.generation);
           span.run(() => observe(result.authority));
           await retiring;
           return;
@@ -341,6 +352,15 @@ export function createCrmAccessAuthority(options: Options) {
      * neither losing nor regaining it counts as a new session. */
     setHost(next: CacheAuthorityHost | undefined, paused?: CacheAuthority) {
       if (next === shared) return;
+      const left = owner.snapshot();
+      if (
+        next &&
+        pausedFrom &&
+        left &&
+        left.generation !== pausedFrom.generation
+      )
+        retiredWhilePaused.add(pausedFrom.generation);
+      pausedFrom = next ? undefined : paused;
       shared = next;
       if (earlyAccess) setState('pending');
       earlyAccess = undefined;

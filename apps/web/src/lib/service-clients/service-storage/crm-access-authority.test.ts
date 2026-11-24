@@ -201,6 +201,42 @@ it.each([
   }
 );
 
+it.each([
+  ['the proof is committed', `${otherTeam}:allowed`],
+  ['the first team is proven again', `${team}:allowed`],
+])(
+  'does not reopen the generation a paused proof retired until %s',
+  async (_, provenAfter) => {
+    const owner = sharedOwner(`${team}:allowed`);
+    const { authority, fetchProof, retire } = client(owner);
+    await authority.refresh();
+    const generation = owner.snapshot()?.generation;
+    const generations = () =>
+      (retire.mock.calls as unknown[][]).map(([, next]) => next);
+
+    fetchProof.mockResolvedValue(`${otherTeam}:allowed`);
+    authority.setHost(undefined, authority.snapshot());
+    await authority.refresh();
+    retire.mockClear();
+
+    const proof = Promise.withResolvers<string>();
+    fetchProof.mockReturnValueOnce(proof.promise);
+    authority.setHost(owner);
+    await authority.initialize();
+    const refreshed = authority.refresh();
+    await vi.waitFor(() => expect(fetchProof).toHaveBeenCalledTimes(3));
+    expect(generations()).not.toContain(generation);
+    expect(authority.snapshot()?.generation).not.toBe(generation);
+
+    proof.resolve(provenAfter);
+    await refreshed;
+    expect(authority.snapshot()).toEqual(owner.snapshot());
+    expect(authority.snapshot()?.policy).toBe(provenAfter);
+    expect(generations()).toEqual([owner.snapshot()?.generation]);
+    expect(authority.state()).toBe('allowed');
+  }
+);
+
 it('follows a regrant committed by another window after proving the denial itself', async () => {
   const owner = sharedOwner(`${team}:allowed`);
   const first = client(owner);
