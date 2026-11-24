@@ -54,7 +54,9 @@ it('shows the first letter of the name as the picture, and adds the agent with t
   const name = screen.getByRole('textbox', { name: 'Name it' });
   const picture = () =>
     view.container.querySelector('[data-slot="avatar"]')?.textContent;
-  expect(picture()).toBe('?');
+  // A new invite starts named Macronaught, which the admin can keep or change.
+  expect((name as HTMLInputElement).value).toBe('Macronaught');
+  expect(picture()).toBe('M');
   // What Add charges for is said before anything is bought, in one line.
   expect(
     screen.getByText(
@@ -68,7 +70,7 @@ it('shows the first letter of the name as the picture, and adds the agent with t
   fireEvent.input(name, { target: { value: 'Ada Lovelace' } });
   expect(picture()).toBe('A');
   // Renaming redraws it.
-  fireEvent.input(name, { target: { value: '  Émile' } });
+  fireEvent.input(name, { target: { value: '  Émile Zola' } });
   expect(picture()).toBe('É');
   // A letter outside the BMP stays whole.
   fireEvent.input(name, { target: { value: '𝓩ed' } });
@@ -94,7 +96,95 @@ it('shows the first letter of the name as the picture, and adds the agent with t
   );
 });
 
-it('marks the name instead of adding when it is empty', () => {
+it('adds Macronaught when the name is left as it starts', () => {
+  const onSubmit = vi.fn();
+  const noop = () => {};
+  render(() => (
+    <InviteAgentForm
+      offers={[
+        {
+          size: 'standard',
+          vcpus: 4,
+          memoryGb: 8,
+          diskGb: 100,
+          soldOut: false,
+          quote: {
+            size: 'standard',
+            amount: 4000,
+            currency: 'usd',
+            interval: 'month',
+            priceId: 'price_standard',
+          },
+        },
+      ]}
+      offersFailed={false}
+      onRetryOffers={noop}
+      state={{ kind: 'editing' }}
+      purchaseKey="example"
+      onCancel={noop}
+      onSubmit={onSubmit}
+      onRetryStart={noop}
+      onEdit={noop}
+      onBilling={noop}
+    />
+  ));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Add Macronaught · $40.00/month' })
+  );
+  expect(onSubmit).toHaveBeenCalledWith(
+    {
+      name: 'Macronaught',
+      jobDescription: '',
+      personality: '',
+      size: 'standard',
+      avatarUrl: null,
+      purchaseKey: 'example',
+    },
+    'standard'
+  );
+});
+
+it('starts from the name a retry passes in, such as after Update card', () => {
+  const noop = () => {};
+  const view = render(() => (
+    <InviteAgentForm
+      offers={[
+        {
+          size: 'standard',
+          vcpus: 4,
+          memoryGb: 8,
+          diskGb: 100,
+          soldOut: false,
+          quote: {
+            size: 'standard',
+            amount: 4000,
+            currency: 'usd',
+            interval: 'month',
+            priceId: 'price_standard',
+          },
+        },
+      ]}
+      offersFailed={false}
+      onRetryOffers={noop}
+      state={{ kind: 'editing' }}
+      purchaseKey="example"
+      initialName="Émile Zola"
+      onCancel={noop}
+      onSubmit={noop}
+      onRetryStart={noop}
+      onEdit={noop}
+      onBilling={noop}
+    />
+  ));
+  expect(
+    (screen.getByRole('textbox', { name: 'Name it' }) as HTMLInputElement).value
+  ).toBe('Émile Zola');
+  expect(
+    view.container.querySelector('[data-slot="avatar"]')?.textContent
+  ).toBe('É');
+});
+
+it('marks the name instead of adding when it is cleared', () => {
   const onSubmit = vi.fn();
   const noop = () => {};
   render(() => (
@@ -127,6 +217,7 @@ it('marks the name instead of adding when it is empty', () => {
     />
   ));
   const name = screen.getByRole('textbox', { name: 'Name it' });
+  fireEvent.input(name, { target: { value: '' } });
   fireEvent.click(
     screen.getByRole('button', { name: 'Add Agent · $40.00/month' })
   );

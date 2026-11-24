@@ -259,8 +259,10 @@ asks only for a name and the agent's computer size: the field headed **Name
 it**, with the agent's avatar beside it, then **Give it a computer**. The
 avatar is the name's first character, upper-cased (`agentInitial`: one
 grapheme, after any invisible marks or punctuation, so "Ada Lovelace" is
-**A** and an emoji or CJK character stays whole; **?** while the name is
-empty), redrawn as it is typed. The agent's Members row draws the same letter;
+**A** and an emoji or CJK character stays whole; the example name's **M** while the field is
+cleared), redrawn as it is typed. A new invite starts named **Macronaught**,
+a real value the admin can keep (Add then adds Macronaught) or change; a
+cleared field still needs a name. The agent's Members row draws the same letter;
 people keep their two initials. Agents have no picture editor. Under the sizes, one line says
 what Add charges for: "Its own computer, always on. $X/month is added to your
 team subscription, prorated for the rest of this billing period. The agent's

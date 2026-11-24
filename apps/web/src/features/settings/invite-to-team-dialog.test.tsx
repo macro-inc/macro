@@ -313,10 +313,13 @@ describe('InviteToTeamDialog agent teammates', () => {
       .mockResolvedValue({ agents: [{ ...ada, status: 'running' }] });
     openAsAdmin(onClose);
 
-    // Add stays pressable: with no name it marks the field and sends nothing.
+    // It starts named Macronaught; cleared, Add marks the field and sends
+    // nothing.
     const field = screen.getByRole('textbox', {
       name: 'Name it',
     });
+    expect((field as HTMLInputElement).value).toBe('Macronaught');
+    fireEvent.input(field, { target: { value: '' } });
     fireEvent.click(addButton());
     expect(field.getAttribute('aria-invalid')).toBe('true');
     expect(document.activeElement).toBe(field);

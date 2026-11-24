@@ -2,7 +2,7 @@ export default {
   inviteTitle: 'Invite an agent',
   agent: 'Agent',
   nameIt: 'Name it',
-  namePlaceholder: 'Ada',
+  defaultName: 'Macronaught',
   tooLong: {
     one: 'Use at most {{count}} character',
     other: 'Use at most {{count}} characters',

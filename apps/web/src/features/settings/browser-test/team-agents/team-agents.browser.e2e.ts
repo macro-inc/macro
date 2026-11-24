@@ -572,7 +572,13 @@ test('adding an agent waits in the dialog until it is online, then closes into i
   const nameField = dialog.getByRole('textbox', {
     name: 'Name it',
   });
+  // A new invite starts named Macronaught, the avatar its M.
+  await expect(nameField).toHaveValue('Macronaught');
+  await expect(dialog.locator('[data-slot="avatar"]')).toHaveText('M');
+  await expect(add).toHaveText('Add Macronaught · $40.00/month');
   await screenshot(page, testInfo, 'add-agent-empty');
+  // Cleared, it still needs a name.
+  await nameField.fill('');
   await add.click();
   await expect(nameField).toHaveAttribute('aria-invalid', 'true');
   await expect(nameField).toBeFocused();
@@ -581,8 +587,10 @@ test('adding an agent waits in the dialog until it is online, then closes into i
   expect(backend.created).toEqual([]);
   // The picture is the name's initial, redrawn as it is renamed.
   const picture = dialog.locator('[data-slot="avatar"]');
-  await expect(picture).toHaveText('?');
-  await nameField.fill('émile');
+  // Cleared, it matches the example name the field shows.
+  await expect(nameField).toHaveAttribute('placeholder', 'Macronaught');
+  await expect(picture).toHaveText('M');
+  await nameField.fill('Émile Zola');
   await expect(picture).toHaveText('É');
   await nameField.fill('小明');
   await expect(picture).toHaveText('小');
@@ -720,6 +728,23 @@ test('a declined card keeps the dialog, nothing behind, and Try again buys anew'
   expect(again?.purchaseKey).not.toBe(declined?.purchaseKey);
 });
 
+test('each new invite starts from Macronaught, whatever the last one was renamed to', async ({
+  page,
+}) => {
+  await scriptAuthService(page, 2);
+  await page.goto('/');
+  let dialog = await openInviteAgent(page);
+  const nameField = () => dialog.getByRole('textbox', { name: 'Name it' });
+  await expect(nameField()).toHaveValue('Macronaught');
+  await nameField().fill('Émile Zola');
+  await expect(dialog.locator('[data-slot="avatar"]')).toHaveText('É');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  dialog = await openInviteAgent(page);
+  await expect(nameField()).toHaveValue('Macronaught');
+  await expect(dialog.locator('[data-slot="avatar"]')).toHaveText('M');
+});
+
 test('Update card after a decline opens Billing, and the next invite keeps the name and size', async ({
   page,
 }) => {
@@ -748,12 +773,12 @@ test('Update card after a decline opens Billing, and the next invite keeps the n
     dialog.getByRole('button', { name: 'Add Ada · $80.00/month' })
   ).toBeVisible();
 
-  // Cancel forgets it.
+  // Cancel forgets it: a fresh invite starts from Macronaught again.
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();
   dialog = await openInviteAgent(page);
   await expect(dialog.getByRole('textbox', { name: 'Name it' })).toHaveValue(
-    ''
+    'Macronaught'
   );
 });
 
@@ -785,6 +810,17 @@ test('a long name shortens on Add while the price stays whole', async ({
   expect(
     await price.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
   ).toBe(true);
+  // Cancel stays beside Add, on the same row (measured together, once the
+  // sheet has settled).
+  const cancel = dialog.getByRole('button', { name: 'Cancel' });
+  await expect
+    .poll(async () => {
+      const [a, c] = [await add.boundingBox(), await cancel.boundingBox()];
+      if (!a || !c) return Number.POSITIVE_INFINITY;
+      if (c.x + c.width > a.x) return Number.POSITIVE_INFINITY;
+      return Math.abs(c.y + c.height / 2 - (a.y + a.height / 2));
+    })
+    .toBeLessThan(4);
 });
 
 test('a size with no room is marked and another size can be added', async ({

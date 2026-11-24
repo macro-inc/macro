@@ -77,7 +77,11 @@ export function InviteAgentForm(props: {
   initialName?: string;
   initialSize?: ComputerSize;
 }) {
-  const [name, setName] = createSignal(props.initialName ?? '');
+  // A new invite starts named Macronaught, which the admin keeps or changes;
+  // one put aside for Update card starts from what was typed.
+  const [name, setName] = createSignal(
+    props.initialName ?? t('teamAgents.defaultName')
+  );
   const [chosenSize, setChosenSize] = createSignal<ComputerSize | undefined>(
     props.initialSize
   );
@@ -112,8 +116,10 @@ export function InviteAgentForm(props: {
     purchaseKey: props.purchaseKey,
   });
   const trimmedName = () => name().trim();
-  // The same letter the agent's avatar shows once it is added.
-  const initial = () => agentInitial(name());
+  // The same letter the agent's avatar shows once it is added; while the
+  // field is cleared, the letter of the example name it shows.
+  const initial = () =>
+    agentInitial(trimmedName() || t('teamAgents.defaultName'));
   const tooLong = () => addBlocker(draft()) === 'name_too_long';
   const nameInvalid = () => tooLong() || (asked() && !trimmedName());
 
@@ -214,7 +220,7 @@ export function InviteAgentForm(props: {
           <TextField.Input
             ref={nameInput}
             class="min-w-0 flex-1"
-            placeholder={t('teamAgents.namePlaceholder')}
+            placeholder={t('teamAgents.defaultName')}
             required
           />
         </div>
@@ -343,10 +349,12 @@ export function InviteAgentForm(props: {
           {noticeArea}
         </div>
       </Panel.Body>
-      <Panel.Footer class="flex-wrap justify-end gap-2 px-5 py-3">
+      {/* One row at every width: a long name shortens inside Add instead. */}
+      <Panel.Footer class="justify-end gap-2 px-5 py-3">
         <Button
           type="button"
           variant="ghost"
+          class="shrink-0"
           disabled={adding()}
           onClick={() => props.onCancel()}
         >
@@ -355,7 +363,7 @@ export function InviteAgentForm(props: {
         <Button
           type="button"
           variant="primary"
-          class="min-w-0 max-w-full"
+          class="min-w-0 max-w-full shrink"
           // Always pressable: with no name it marks the field instead. While
           // adding it keeps focus, so a phone sheet's focus trap doesn't move
           // it to the name field when a refusal arrives; `submit` ignores
