@@ -15,8 +15,6 @@ use std::{
     time::Instant,
 };
 
-use chrono::{DateTime, Utc};
-
 use database_row_search::{
     RowSearchText,
     index::{DatabaseTables, RowPlace, TableChanges, TableState},
@@ -132,14 +130,21 @@ pub trait DatabaseRowSource: Send + Sync + 'static {
     -> impl Future<Output = Result<Option<i64>, Report>> + Send;
 
     /// Record that the index holds the table up to `version`.
+    /// A digest of the table's columns and their definitions' options, which
+    /// changes when they change outside the journal.
+    fn column_fingerprint(
+        &self,
+        table_id: Uuid,
+    ) -> impl Future<Output = Result<String, Report>> + Send;
+
     /// Record that the index holds the table up to `version`, from a pass
-    /// that started reading at `read_at` (the database's clock).
+    /// that read the columns as `column_fingerprint`.
     fn raise_watermark(
         &self,
         table_id: Uuid,
         database_id: Uuid,
         version: i64,
-        read_at: DateTime<Utc>,
+        column_fingerprint: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Forget the table's watermark.
@@ -157,11 +162,9 @@ pub trait DatabaseRowSource: Send + Sync + 'static {
         limit: usize,
     ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
-    /// Tables placing a definition whose options changed after `since` and
-    /// after the table's watermark last moved.
-    fn relabelled_tables(
+    /// Tables whose column fingerprint changed since their last pass.
+    fn reshaped_tables(
         &self,
-        since: DateTime<Utc>,
         limit: usize,
     ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
@@ -282,25 +285,32 @@ pub struct StaleRemoval {
 pub struct CatchUp {
     /// Lagging tables passed over.
     pub lagging: usize,
-    /// Tables reindexed for a relabelled option.
-    pub relabelled: usize,
+    /// Tables reindexed because their columns or options changed outside
+    /// the journal.
+    pub reshaped: usize,
     /// Passes that failed, retried next round.
     pub failed: usize,
 }
 
 const DATABASES_PER_PAGE: usize = 100;
 const LAGGING_TABLES_PER_PAGE: usize = 100;
-const RELABELLED_TABLES_PER_ROUND: usize = 500;
+const RESHAPED_TABLES_PER_ROUND: usize = 500;
 const GONE_TABLES_PER_ROUND: usize = 100;
 
 /// How often a held database lock is shown to the server as in use; far
 /// below the lock pool's idle-in-transaction limit.
 const LOCK_KEEPALIVE: std::time::Duration = std::time::Duration::from_secs(60);
 
+/// The longest a pass may hold a database's lock. A pass still running then
+/// is stopped and its lock released, so a pass that hangs cannot hold every
+/// later event for its database; it is retried like any failed pass.
+const PASS_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
 pub struct DatabaseRowIndexService<S, I> {
     source: S,
     index: I,
     lock_keepalive: std::time::Duration,
+    pass_deadline: std::time::Duration,
 }
 
 impl<S, I> DatabaseRowIndexService<S, I> {
@@ -309,6 +319,16 @@ impl<S, I> DatabaseRowIndexService<S, I> {
             source,
             index,
             lock_keepalive: LOCK_KEEPALIVE,
+            pass_deadline: PASS_DEADLINE,
+        }
+    }
+
+    /// Stop a pass that holds its lock longer than `deadline` instead of
+    /// [`PASS_DEADLINE`].
+    pub fn with_pass_deadline(self, deadline: std::time::Duration) -> Self {
+        Self {
+            pass_deadline: deadline,
+            ..self
         }
     }
 
@@ -437,7 +457,9 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         // The lock's own connection runs no statement during the pass (its
         // reads use another pool), so touch it while the pass runs. A failed
         // touch means the lock may be gone: the pass stops there.
-        let pass = pass();
+        // The keepalive would also keep a hung pass's lock forever, so the
+        // pass has a deadline; past it the pass is dropped and fails.
+        let pass = tokio::time::timeout(self.pass_deadline, pass());
         tokio::pin!(pass);
         let mut keepalive = tokio::time::interval_at(
             tokio::time::Instant::now() + self.lock_keepalive,
@@ -445,7 +467,9 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         );
         let result = loop {
             tokio::select! {
-                result = &mut pass => break result,
+                result = &mut pass => break result.unwrap_or_else(|_| {
+                    Err(Report::new_sendsync(PassDeadlineExceeded).into_dynamic())
+                }),
                 _ = keepalive.tick() => {
                     if let Err(error) = self.source.keep_lock_alive(&mut lock).await {
                         break Err(error);
@@ -482,6 +506,10 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
             self.remove_database(state.database_id).await?;
             return Ok(TableOutcome::Removed);
         }
+
+        // Read before any row, so a column or option change after this read
+        // shows as a different fingerprint and the sweep reindexes the table.
+        let column_fingerprint = self.source.column_fingerprint(table_id).await?;
 
         let watermark = match kind {
             PassKind::CatchUp => self.source.watermark(table_id).await?,
@@ -533,7 +561,12 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
             return Ok(TableOutcome::Removed);
         }
         self.source
-            .raise_watermark(table_id, state.database_id, state.version, state.read_at)
+            .raise_watermark(
+                table_id,
+                state.database_id,
+                state.version,
+                &column_fingerprint,
+            )
             .await?;
         Ok(outcome)
     }
@@ -740,14 +773,14 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
     }
 
     /// Catch up tables whose events were lost (a watermark missing or below
-    /// the table's version), and reindex tables whose options were
-    /// relabelled since `relabelled_since` without a databases event (a tag
-    /// set changed through the properties service). One table failing does
-    /// not stop the others; the next round retries it.
-    #[tracing::instrument(err, skip_all, fields(lagging, relabelled, failed, duration_ms))]
+    /// the table's version), and reindex tables whose columns or options
+    /// changed outside the journal (a definition deleted with its columns, a
+    /// tag set relabelled, pruned or merged through the properties service),
+    /// found by their column fingerprint. One table failing does not stop the
+    /// others; the next round retries it.
+    #[tracing::instrument(err, skip_all, fields(lagging, reshaped, failed, duration_ms))]
     pub async fn catch_up(
         &self,
-        relabelled_since: DateTime<Utc>,
         gate: &BackfillGate,
         cancel: &CancellationToken,
     ) -> Result<CatchUp, Report> {
@@ -780,12 +813,12 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         }
 
         if !cancel.is_cancelled() {
-            let relabelled = self
+            let reshaped = self
                 .source
-                .relabelled_tables(relabelled_since, RELABELLED_TABLES_PER_ROUND)
+                .reshaped_tables(RESHAPED_TABLES_PER_ROUND)
                 .await?;
-            for table_id in relabelled {
-                catch_up.relabelled += 1;
+            for table_id in reshaped {
+                catch_up.reshaped += 1;
                 let _permit = gate.admit().await;
                 // The table's version did not move, so only a full pass
                 // rereads it.
@@ -801,7 +834,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
 
         let span = tracing::Span::current();
         span.record("lagging", catch_up.lagging);
-        span.record("relabelled", catch_up.relabelled);
+        span.record("reshaped", catch_up.reshaped);
         span.record("failed", catch_up.failed);
         span.record("duration_ms", elapsed_ms(started));
         Ok(catch_up)
@@ -813,7 +846,6 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
     #[tracing::instrument(err, skip_all, fields(led, scan_index))]
     pub async fn sweep_once(
         &self,
-        relabelled_since: DateTime<Utc>,
         scan_index: bool,
         gate: &BackfillGate,
         cancel: &CancellationToken,
@@ -823,7 +855,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         let lease = self.source.lead_stale_sweep().await?;
         span.record("led", lease.is_some());
         if lease.is_some() {
-            self.catch_up(relabelled_since, gate, cancel).await?;
+            self.catch_up(gate, cancel).await?;
             if scan_index {
                 self.remove_stale(Some(gate), cancel).await?;
             }
@@ -913,6 +945,11 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         })
     }
 }
+
+/// A pass held its database's lock past the deadline and was stopped.
+#[derive(Debug, thiserror::Error)]
+#[error("database row pass ran past its deadline and was stopped")]
+pub struct PassDeadlineExceeded;
 
 /// Whether the journal covers every version after the watermark, one by
 /// one, and names every row whose text could have changed.

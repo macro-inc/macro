@@ -14,9 +14,6 @@ pub struct TableState {
     /// Whether its rows belong in the index: the database has a database
     /// entity and it is not in the Trash.
     pub searchable: bool,
-    /// The database's clock when this was read: a pass that starts here
-    /// reads every option change committed before it.
-    pub read_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// The table's state, or `None` when the table no longer exists.
@@ -34,8 +31,7 @@ where
         SELECT
             t.database_id AS "database_id!",
             t.version AS "version!",
-            (de.database_id IS NOT NULL AND de.trashed_at IS NULL) AS "searchable!",
-            now() AS "read_at!"
+            (de.database_id IS NOT NULL AND de.trashed_at IS NULL) AS "searchable!"
         FROM database_tables t
         LEFT JOIN database_entities de ON de.database_id = t.database_id
         WHERE t.id = $1
@@ -323,57 +319,46 @@ where
     }
 }
 
-/// Tables with a watermark that place a definition whose options changed
-/// after `since` and after the table's pass last started: a tag set
-/// relabelled outside any database leaves no trace in the table's journal
-/// or version. An option's `updated_at` records a relabel; its definition's
-/// records a deletion or a merge, whose option row is gone. A minute of
-/// slack covers a change whose transaction began before a pass read and
-/// committed after.
+/// Tables with a watermark whose current column fingerprint differs from
+/// the one their last pass read, at most `limit`: their columns or their
+/// definitions' options changed without a journal entry (a definition
+/// deleted with its columns, a tag set relabelled, pruned or merged through
+/// the properties service). A table that is gone reads as having no columns.
 #[tracing::instrument(skip(executor), err)]
-pub async fn read_relabelled_tables<'e, Executor>(
+pub async fn read_reshaped_tables<'e, Executor>(
     executor: Executor,
-    since: chrono::DateTime<chrono::Utc>,
     limit: i64,
 ) -> sqlx::Result<Vec<Uuid>>
 where
     Executor: sqlx::PgExecutor<'e>,
 {
-    // Starts from what changed since `since`, through
-    // `idx_property_options_updated_at` and
-    // `idx_property_definitions_updated_at`, one line per definition; the
-    // watermark of each table placing one is a primary key probe. Joined
-    // plainly, the planner walks every column in table order instead.
+    // Same digest as `read_column_fingerprint`, for every table at once:
+    // one pass over `property_options` and one over `database_columns`.
     sqlx::query_scalar!(
         r#"
-        WITH changed AS MATERIALIZED (
-            SELECT property_definition_id, max(changed_at) AS changed_at
-            FROM (
-                SELECT property_definition_id, updated_at AS changed_at
-                FROM property_options
-                WHERE updated_at > $1
-                UNION ALL
-                SELECT id, updated_at
-                FROM property_definitions
-                WHERE updated_at > $1
-            ) changes
+        WITH option_stats AS MATERIALIZED (
+            SELECT property_definition_id, count(*) AS options, max(updated_at) AS changed_at
+            FROM property_options
             GROUP BY property_definition_id
+        ),
+        current_columns AS (
+            SELECT c.table_id, md5(string_agg(
+                c.id::TEXT || ':' || c.property_definition_id::TEXT || ':'
+                    || COALESCE(s.options, 0)::TEXT || ':'
+                    || COALESCE((extract(epoch FROM s.changed_at) * 1000000)::BIGINT::TEXT, ''),
+                ',' ORDER BY c.id
+            )) AS fingerprint
+            FROM database_columns c
+            LEFT JOIN option_stats s ON s.property_definition_id = c.property_definition_id
+            GROUP BY c.table_id
         )
-        SELECT DISTINCT c.table_id AS "table_id!"
-        FROM changed
-        JOIN database_columns c ON c.property_definition_id = changed.property_definition_id
-        JOIN LATERAL (
-            SELECT w.updated_at
-            FROM database_row_search_watermarks w
-            WHERE w.table_id = c.table_id
-            -- Keeps the lookup per column: without it Postgres flattens the
-            -- lateral into a join over every watermark.
-            LIMIT 1
-        ) w ON TRUE
-        WHERE changed.changed_at > w.updated_at - INTERVAL '1 minute'
-        LIMIT $2
+        SELECT w.table_id
+        FROM database_row_search_watermarks w
+        LEFT JOIN current_columns cur ON cur.table_id = w.table_id
+        WHERE w.column_fingerprint <> COALESCE(cur.fingerprint, md5(''))
+        ORDER BY w.table_id
+        LIMIT $1
         "#,
-        since,
         limit,
     )
     .fetch_all(executor)
@@ -420,16 +405,17 @@ where
     .await
 }
 
-/// Record that the index holds the table up to `version`, as read from
-/// `read_at`, the database clock when its pass started. Neither moves back,
-/// so a slower pass that finishes later cannot undo a faster one.
-#[tracing::instrument(skip(executor), err)]
+/// Record that the index holds the table up to `version`, read when the
+/// table's columns had `column_fingerprint` ([`read_column_fingerprint`]).
+/// The version never moves back, so a slower pass that finishes later
+/// cannot undo a faster one; the fingerprint is the latest pass's.
+#[tracing::instrument(skip(executor, column_fingerprint), err)]
 pub async fn raise_watermark<'e, Executor>(
     executor: Executor,
     table_id: Uuid,
     database_id: Uuid,
     version: i64,
-    read_at: chrono::DateTime<chrono::Utc>,
+    column_fingerprint: &str,
 ) -> sqlx::Result<()>
 where
     Executor: sqlx::PgExecutor<'e>,
@@ -437,26 +423,60 @@ where
     sqlx::query!(
         r#"
         INSERT INTO database_row_search_watermarks
-            (table_id, database_id, indexed_version, updated_at)
+            (table_id, database_id, indexed_version, column_fingerprint)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (table_id) DO UPDATE SET
             indexed_version = GREATEST(
                 database_row_search_watermarks.indexed_version,
                 EXCLUDED.indexed_version
             ),
-            updated_at = GREATEST(
-                database_row_search_watermarks.updated_at,
-                EXCLUDED.updated_at
-            )
+            column_fingerprint = EXCLUDED.column_fingerprint,
+            updated_at = now()
         "#,
         table_id,
         database_id,
         version,
-        read_at,
+        column_fingerprint,
     )
     .execute(executor)
     .await?;
     Ok(())
+}
+
+/// A digest of the table's columns and, for each column's definition, how
+/// many options it has and when one last changed. A pass reads it before
+/// reading rows; the sweep compares it with [`read_reshaped_tables`].
+///
+/// The digest is spelled out the same way in both queries; a test checks a
+/// freshly raised watermark is never reported as reshaped.
+#[tracing::instrument(skip(executor), err)]
+pub async fn read_column_fingerprint<'e, Executor>(
+    executor: Executor,
+    table_id: Uuid,
+) -> sqlx::Result<String>
+where
+    Executor: sqlx::PgExecutor<'e>,
+{
+    sqlx::query_scalar!(
+        r#"
+        SELECT md5(COALESCE(string_agg(
+            c.id::TEXT || ':' || c.property_definition_id::TEXT || ':'
+                || s.options::TEXT || ':'
+                || COALESCE((extract(epoch FROM s.changed_at) * 1000000)::BIGINT::TEXT, ''),
+            ',' ORDER BY c.id
+        ), '')) AS "fingerprint!"
+        FROM database_columns c
+        CROSS JOIN LATERAL (
+            SELECT count(*) AS options, max(po.updated_at) AS changed_at
+            FROM property_options po
+            WHERE po.property_definition_id = c.property_definition_id
+        ) s
+        WHERE c.table_id = $1
+        "#,
+        table_id,
+    )
+    .fetch_one(executor)
+    .await
 }
 
 /// Forget the table's mark, after its rows left the index.

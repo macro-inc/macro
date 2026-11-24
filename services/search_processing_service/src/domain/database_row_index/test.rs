@@ -36,8 +36,8 @@ struct SourceState {
     rows: BTreeMap<Uuid, String>,
     journal: Vec<(i64, Vec<Uuid>, bool)>,
     watermarks: HashMap<Uuid, (Uuid, i64)>,
-    /// Tables the properties service relabelled an option of.
-    relabelled: Vec<Uuid>,
+    /// Tables whose columns or options changed outside their journal.
+    reshaped: Vec<Uuid>,
     /// Trash the database once this many more table reads have happened.
     trash_after_reads: Option<usize>,
     /// A database whose reads fail.
@@ -52,7 +52,6 @@ impl FakeSource {
                     database_id: DATABASE,
                     version,
                     searchable: true,
-                    read_at: Utc.with_ymd_and_hms(2026, 11, 24, 12, 0, 0).unwrap(),
                 }),
                 database_searchable: Some(true),
                 rows: rows
@@ -231,12 +230,16 @@ impl DatabaseRowSource for FakeSource {
         Ok(self.watermark_of(table_id))
     }
 
+    async fn column_fingerprint(&self, _table_id: Uuid) -> Result<String, Report> {
+        Ok("columns".to_owned())
+    }
+
     async fn raise_watermark(
         &self,
         table_id: Uuid,
         database_id: Uuid,
         version: i64,
-        _read_at: DateTime<Utc>,
+        _column_fingerprint: &str,
     ) -> Result<(), Report> {
         let mut state = self.state.lock().unwrap();
         let mark = state
@@ -277,12 +280,8 @@ impl DatabaseRowSource for FakeSource {
             .collect())
     }
 
-    async fn relabelled_tables(
-        &self,
-        _since: DateTime<Utc>,
-        _limit: usize,
-    ) -> Result<Vec<Uuid>, Report> {
-        Ok(std::mem::take(&mut self.state.lock().unwrap().relabelled))
+    async fn reshaped_tables(&self, _limit: usize) -> Result<Vec<Uuid>, Report> {
+        Ok(std::mem::take(&mut self.state.lock().unwrap().reshaped))
     }
 
     async fn gone_tables(&self, _limit: usize) -> Result<Vec<Uuid>, Report> {
@@ -719,11 +718,7 @@ async fn a_sweep_catches_up_a_table_whose_event_was_lost() {
     let service = DatabaseRowIndexService::new(source, index);
 
     let catch_up = service
-        .catch_up(
-            Utc::now(),
-            &BackfillGate::open(4),
-            &CancellationToken::new(),
-        )
+        .catch_up(&BackfillGate::open(4), &CancellationToken::new())
         .await
         .unwrap();
 
@@ -731,7 +726,7 @@ async fn a_sweep_catches_up_a_table_whose_event_was_lost() {
         catch_up,
         CatchUp {
             lagging: 1,
-            relabelled: 0,
+            reshaped: 0,
             failed: 0,
         }
     );
@@ -749,21 +744,17 @@ async fn a_sweep_reindexes_a_table_whose_tag_was_relabelled_elsewhere() {
     let source = FakeSource::new(6, &[(ROW_A, "critical")]);
     source.edit(|state| {
         state.watermarks.insert(TABLE, (DATABASE, 6));
-        state.relabelled = vec![TABLE];
+        state.reshaped = vec![TABLE];
     });
     let index = FakeIndex::holding(&[(ROW_A, "urgent", 6)]);
     let service = DatabaseRowIndexService::new(source, index);
 
     let catch_up = service
-        .catch_up(
-            Utc::now(),
-            &BackfillGate::open(4),
-            &CancellationToken::new(),
-        )
+        .catch_up(&BackfillGate::open(4), &CancellationToken::new())
         .await
         .unwrap();
 
-    assert_eq!(catch_up.relabelled, 1);
+    assert_eq!(catch_up.reshaped, 1);
     assert_eq!(
         service.index.contents(),
         vec![(ROW_A, "critical".to_owned(), 6)]
@@ -875,4 +866,43 @@ async fn a_backfill_goes_on_past_a_database_that_fails() {
         cause.starts_with("1 of 2 databases failed to reindex"),
         "{cause}"
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_pass_past_its_deadline_is_stopped_and_releases_its_lock() {
+    // OpenSearch stops answering; the pass would hold the lock for good.
+    struct HungIndex;
+    impl DatabaseRowIndex for HungIndex {
+        async fn write(&self, _writes: Vec<RowIndexWrite>) -> Result<RowWriteOutcome, Report> {
+            std::future::pending().await
+        }
+        async fn delete(&self, _scope: RowIndexScope) -> Result<u64, Report> {
+            std::future::pending().await
+        }
+        async fn page(
+            &self,
+            _after: Option<Uuid>,
+            _size: usize,
+        ) -> Result<Vec<IndexedRow>, Report> {
+            std::future::pending().await
+        }
+    }
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6")]);
+    let service = DatabaseRowIndexService::new(source, HungIndex)
+        .with_pass_deadline(std::time::Duration::from_secs(600));
+
+    let error = service
+        .reconcile_table(TABLE, PassKind::Full)
+        .await
+        .unwrap_err();
+
+    assert!(
+        error.iter_reports().any(|report| report
+            .downcast_current_context::<PassDeadlineExceeded>()
+            .is_some()),
+        "{error:?}"
+    );
+    // The lock is free again for the retry.
+    assert!(service.source.lock.try_lock().is_ok());
+    assert_eq!(service.source.watermark_of(TABLE), None);
 }

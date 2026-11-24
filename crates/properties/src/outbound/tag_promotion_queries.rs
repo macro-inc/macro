@@ -168,16 +168,13 @@ pub async fn merge_tag_option(
 }
 
 /// Take the definition-level lock that serializes writers competing for the
-/// same label name in one tag set, and mark the set changed.
+/// same label name in one tag set.
 async fn lock_definition(
     tx: &mut Transaction<'_, Postgres>,
     definition_id: Uuid,
 ) -> anyhow::Result<()> {
-    // Touching `updated_at` records that options moved between the two
-    // sets, for readers that follow option changes (the database row search
-    // sweep): a merged option's row is gone.
     sqlx::query_scalar!(
-        "UPDATE property_definitions SET updated_at = NOW() WHERE id = $1 RETURNING id",
+        "SELECT id FROM property_definitions WHERE id = $1 FOR UPDATE",
         definition_id
     )
     .fetch_optional(&mut **tx)

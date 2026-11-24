@@ -122,7 +122,8 @@ OpenSearch, and exposes backfill HTTP routes for each.
   transaction-scoped lock on its own pool). Only a table that is gone, which
   never comes back, is cleaned up without it. The 15-minute sweep
   (`inbound/database_row_sweep.rs`) is the safety net for lost events and
-  tag relabels outside databases; keep it cheap, and keep the whole-index
+  column or option changes outside the journal (column fingerprints on the
+  watermarks); keep it cheap, and keep the whole-index
   scan on its slower cadence.
 - Full-scan backfills page by UUID, not `modified_at`, and cannot discover
   already-deleted IDs — target specific IDs for those. Chat messages deleted

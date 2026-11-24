@@ -93,7 +93,7 @@ fn cell_strings(cell: &CellInput) -> Vec<String> {
                 links
                     .iter()
                     .filter_map(serde_json::Value::as_str)
-                    .map(searchable_link)
+                    .flat_map(searchable_link)
                     .collect()
             })
             .unwrap_or_default(),
@@ -107,18 +107,21 @@ fn cell_strings(cell: &CellInput) -> Vec<String> {
         .collect()
 }
 
-/// A link without the parts that can carry secrets: its userinfo
-/// (`user:password@`), query string and fragment, which have no business in
-/// a second store. A link written without a scheme is read as `https`.
-pub(crate) fn searchable_link(link: &str) -> String {
-    let with_scheme = format!("https://{link}");
+/// A link as search holds it, without the parts that can carry secrets:
+/// its userinfo (`user:password@`), query string and fragment. A link
+/// written without a scheme is read as `https`.
+///
+/// It yields the normalized form (punycode host, percent-encoded path) and,
+/// when it differs, the form a reader sees (Unicode host, decoded path), so
+/// a search for either finds it.
+pub(crate) fn searchable_link(link: &str) -> Vec<String> {
     let (parsed, scheme_added) = match url::Url::parse(link) {
         Ok(url) if url.has_host() => (Some(url), false),
-        _ => (url::Url::parse(&with_scheme).ok(), true),
+        _ => (url::Url::parse(&format!("https://{link}")).ok(), true),
     };
     let Some(mut url) = parsed else {
         // Not a URL at all: keep the text before anything query-like.
-        return link.split(['?', '#']).next().unwrap_or_default().to_owned();
+        return vec![link.split(['?', '#']).next().unwrap_or_default().to_owned()];
     };
 
     // Clearing userinfo only fails for URLs that cannot have a host, which
@@ -128,10 +131,26 @@ pub(crate) fn searchable_link(link: &str) -> String {
     url.set_query(None);
     url.set_fragment(None);
 
-    let cleaned = url.to_string();
-    match cleaned.strip_prefix("https://") {
+    let without_added_scheme = |text: String| match text.strip_prefix("https://") {
         Some(rest) if scheme_added => rest.to_owned(),
-        _ => cleaned,
+        _ => text,
+    };
+
+    let normalized = without_added_scheme(url.to_string());
+    let host = url::quirks::domain_to_unicode(url.host_str().unwrap_or_default());
+    let port = url
+        .port()
+        .map(|port| format!(":{port}"))
+        .unwrap_or_default();
+    let path = urlencoding::decode(url.path())
+        .map(|path| path.into_owned())
+        .unwrap_or_else(|_| url.path().to_owned());
+    let displayed = without_added_scheme(format!("{}://{host}{port}{path}", url.scheme()));
+
+    if displayed == normalized {
+        vec![normalized]
+    } else {
+        vec![normalized, displayed]
     }
 }
 

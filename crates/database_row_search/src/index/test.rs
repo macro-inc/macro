@@ -117,10 +117,10 @@ async fn pages_a_tables_rows_in_position_order(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_watermark_never_moves_back(pool: PgPool) {
-    raise_watermark(&pool, TABLE, DATABASE, 7, chrono::Utc::now())
+    raise_watermark(&pool, TABLE, DATABASE, 7, "fingerprint")
         .await
         .unwrap();
-    raise_watermark(&pool, TABLE, DATABASE, 5, chrono::Utc::now())
+    raise_watermark(&pool, TABLE, DATABASE, 5, "fingerprint")
         .await
         .unwrap();
     assert_eq!(read_watermark(&pool, TABLE).await.unwrap(), Some(7));
@@ -180,7 +180,7 @@ async fn a_searchable_table_behind_its_watermark_is_lagging(pool: PgPool) {
         vec![TABLE]
     );
 
-    raise_watermark(&pool, TABLE, DATABASE, 7, chrono::Utc::now())
+    raise_watermark(&pool, TABLE, DATABASE, 7, "fingerprint")
         .await
         .unwrap();
     assert_eq!(
@@ -205,69 +205,45 @@ async fn a_searchable_table_behind_its_watermark_is_lagging(pool: PgPool) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("rows"))
 )]
-async fn a_tag_relabelled_after_the_watermark_marks_its_tables(pool: PgPool) {
-    raise_watermark(&pool, TABLE, DATABASE, 7, chrono::Utc::now())
-        .await
-        .unwrap();
-    sqlx::query(
-        "UPDATE database_row_search_watermarks SET updated_at = now() - INTERVAL '1 hour' WHERE table_id = $1",
-    )
-    .bind(TABLE)
-    .execute(&pool)
-    .await
-    .unwrap();
-    let a_day_ago = chrono::Utc::now() - chrono::Duration::days(1);
+async fn a_change_outside_the_journal_reshapes_the_table(pool: PgPool) {
+    let raise = async || {
+        let fingerprint = read_column_fingerprint(&pool, TABLE).await.unwrap();
+        raise_watermark(&pool, TABLE, DATABASE, 7, &fingerprint)
+            .await
+            .unwrap();
+    };
+    let reshaped = async || read_reshaped_tables(&pool, 10).await.unwrap();
 
-    // Nothing changed since the watermark moved.
-    sqlx::raw_sql(
-        "UPDATE property_options SET updated_at = now() - INTERVAL '2 hours';
-         UPDATE property_definitions SET updated_at = now() - INTERVAL '2 hours';",
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    assert_eq!(
-        read_relabelled_tables(&pool, a_day_ago, 10).await.unwrap(),
-        Vec::<Uuid>::new()
-    );
+    // A watermark raised from the current columns is not reshaped: the two
+    // queries spell the digest the same way.
+    raise().await;
+    assert_eq!(reshaped().await, Vec::<Uuid>::new());
 
     // The owner's tag set relabelled through the properties service.
     sqlx::query(
-        "UPDATE property_options SET string_value = 'critical', updated_at = now() WHERE id = '40000000-0000-7000-8000-000000000003'",
+        "UPDATE property_options SET string_value = 'critical', updated_at = now() + INTERVAL '1 second' WHERE id = '40000000-0000-7000-8000-000000000003'",
     )
     .execute(&pool)
     .await
     .unwrap();
-    assert_eq!(
-        read_relabelled_tables(&pool, a_day_ago, 10).await.unwrap(),
-        vec![TABLE]
-    );
+    assert_eq!(reshaped().await, vec![TABLE]);
+    raise().await;
+    assert_eq!(reshaped().await, Vec::<Uuid>::new());
 
-    // A pass that reads the table afterwards moves the watermark past it.
-    raise_watermark(
-        &pool,
-        TABLE,
-        DATABASE,
-        7,
-        chrono::Utc::now() + chrono::Duration::minutes(2),
-    )
-    .await
-    .unwrap();
-    assert_eq!(
-        read_relabelled_tables(&pool, a_day_ago, 10).await.unwrap(),
-        Vec::<Uuid>::new()
-    );
+    // An option deleted from the tag set leaves no option row.
+    sqlx::query("DELETE FROM property_options WHERE id = '40000000-0000-7000-8000-000000000003'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(reshaped().await, vec![TABLE]);
+    raise().await;
 
-    // An option deleted from the tag set leaves no option row; the
-    // properties service touches its definition instead.
+    // The tag set itself deleted: its column goes with it, unjournaled.
     sqlx::query(
-        "UPDATE property_definitions SET updated_at = now() + INTERVAL '3 minutes' WHERE id = '30000000-0000-7000-8000-000000000006'",
+        "DELETE FROM property_definitions WHERE id = '30000000-0000-7000-8000-000000000006'",
     )
     .execute(&pool)
     .await
     .unwrap();
-    assert_eq!(
-        read_relabelled_tables(&pool, a_day_ago, 10).await.unwrap(),
-        vec![TABLE]
-    );
+    assert_eq!(reshaped().await, vec![TABLE]);
 }

@@ -50,8 +50,8 @@ const LOCK_IDLE_TIMEOUT: &str = "15min";
 /// Connect options for the lock pool: `lock_timeout` bounds the wait for an
 /// advisory lock, and `idle_in_transaction_session_timeout` is set here
 /// rather than inherited. A pass touches its lock far more often than that
-/// (`DatabaseRowIndexService`'s keepalive), so only a lock its task stopped
-/// touching (a hung or crashed pass) is ended by the server.
+/// (`DatabaseRowIndexService`'s keepalive) and is stopped at its own
+/// deadline, so the server only ends a lock whose task died.
 pub fn lock_pool_options(
     database_url: &str,
 ) -> Result<sqlx::postgres::PgConnectOptions, sqlx::Error> {
@@ -169,14 +169,21 @@ impl DatabaseRowSource for PgDatabaseRows {
         Ok(index::read_watermark(&self.db, table_id).await?)
     }
 
+    async fn column_fingerprint(&self, table_id: Uuid) -> Result<String, Report> {
+        Ok(index::read_column_fingerprint(&self.db, table_id).await?)
+    }
+
     async fn raise_watermark(
         &self,
         table_id: Uuid,
         database_id: Uuid,
         version: i64,
-        read_at: chrono::DateTime<chrono::Utc>,
+        column_fingerprint: &str,
     ) -> Result<(), Report> {
-        Ok(index::raise_watermark(&self.db, table_id, database_id, version, read_at).await?)
+        Ok(
+            index::raise_watermark(&self.db, table_id, database_id, version, column_fingerprint)
+                .await?,
+        )
     }
 
     async fn forget_table(&self, table_id: Uuid) -> Result<(), Report> {
@@ -198,16 +205,14 @@ impl DatabaseRowSource for PgDatabaseRows {
         Ok(tables)
     }
 
-    async fn relabelled_tables(
-        &self,
-        since: chrono::DateTime<chrono::Utc>,
-        page: usize,
-    ) -> Result<Vec<Uuid>, Report> {
+    async fn reshaped_tables(&self, page: usize) -> Result<Vec<Uuid>, Report> {
         let mut transaction = self.db.begin().await?;
+        // One pass over every column and option; give up rather than hold
+        // the round.
         sqlx::query!("SET LOCAL statement_timeout = '30s'")
             .execute(&mut *transaction)
             .await?;
-        let tables = index::read_relabelled_tables(&mut *transaction, since, limit(page)).await?;
+        let tables = index::read_reshaped_tables(&mut *transaction, limit(page)).await?;
         transaction.commit().await?;
         Ok(tables)
     }

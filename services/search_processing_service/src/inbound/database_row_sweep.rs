@@ -1,8 +1,8 @@
 //! Periodically catches the database rows index up with what events missed.
 //!
 //! Live events cover writes through the databases service. Every round
-//! catches up tables whose events were lost and reindexes tables whose tag
-//! sets were relabelled outside any database; every
+//! catches up tables whose events were lost and reindexes tables whose
+//! columns or options changed outside their journal; every
 //! [`ROUNDS_PER_INDEX_SCAN`]th round also walks the whole index for documents
 //! whose rows or tables are gone. Every task runs the loop, and one at a time
 //! leads each round (`DatabaseRowIndexService::sweep_once`). Its passes wait
@@ -19,10 +19,6 @@ pub(crate) const SWEEP_INTERVAL: Duration = Duration::from_secs(15 * 60);
 
 /// Rounds between walks of the whole index: every six hours.
 pub(crate) const ROUNDS_PER_INDEX_SCAN: u32 = 24;
-
-/// How far back a round looks for relabelled options. Far longer than a
-/// round, so rounds a restart skipped are still covered.
-const RELABEL_LOOKBACK: chrono::TimeDelta = chrono::TimeDelta::days(1);
 
 /// Sweep every `interval` until `cancel`, starting one interval from now so
 /// a deploy's tasks do not all sweep as they start.
@@ -42,13 +38,12 @@ pub(crate) async fn run_sweeps(
         }
         round = round.wrapping_add(1);
         let scan_index = round.is_multiple_of(ROUNDS_PER_INDEX_SCAN);
-        let relabelled_since = chrono::Utc::now() - RELABEL_LOOKBACK;
 
         // One span per round, so each round is its own finished trace.
         let span = tracing::info_span!("database_rows.sweep");
         // The error is recorded on the round's span; the next round retries.
         let _ = indexer
-            .sweep_once(relabelled_since, scan_index, &gate, &cancel)
+            .sweep_once(scan_index, &gate, &cancel)
             .instrument(span)
             .await;
     }

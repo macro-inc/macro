@@ -7,10 +7,18 @@
 -- removed its rows from the index, then the indexer deletes the mark. A
 -- missing mark means "unknown", which makes the next pass reindex the table
 -- whole.
+--
+-- `column_fingerprint` digests, as the pass that raised the mark read them,
+-- the table's columns and the option count and latest option change of each
+-- column's definition. Changes outside the table's journal (a definition
+-- deleted with its columns, a tag set relabelled or pruned through the
+-- properties service) change it, and the indexer's sweep reindexes a table
+-- whose current fingerprint differs.
 CREATE TABLE database_row_search_watermarks (
     table_id UUID PRIMARY KEY,
     database_id UUID NOT NULL,
     indexed_version BIGINT NOT NULL,
+    column_fingerprint TEXT NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

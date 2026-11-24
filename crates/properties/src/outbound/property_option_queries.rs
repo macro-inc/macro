@@ -451,10 +451,8 @@ pub(crate) async fn delete_options_in_tx(
 ) -> Result<(u64, Vec<EntityPropertyMutationSnapshot>), PropertyQueryError> {
     // Serialize removals before their cleanup snapshot. Otherwise an
     // assignment can commit between cleanup and DELETE, leaving a stale id.
-    // Touching `updated_at` records the removal, which leaves no option row,
-    // for readers that follow option changes (the database row search sweep).
     sqlx::query_scalar!(
-        "UPDATE property_definitions SET updated_at = NOW() WHERE id = $1 RETURNING id",
+        "SELECT id FROM property_definitions WHERE id = $1 FOR UPDATE",
         property_definition_id
     )
     .fetch_optional(&mut **tx)

@@ -6391,6 +6391,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "url",
+ "urlencoding",
  "uuid",
  "workspace-hack",
 ]

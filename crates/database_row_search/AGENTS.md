@@ -11,14 +11,16 @@ database before exposing a hit.
 
 - `src/read.rs`: `read_row_search_text`, one statement over any executor.
 - `src/index.rs`: the indexer's journal reads and its per-table watermark
-  (`database_row_search_watermarks`, which this crate alone reads and writes).
+  (`database_row_search_watermarks`, which this crate alone reads and writes),
+  with a column fingerprint spelled the same way in `read_column_fingerprint`
+  and `read_reshaped_tables`; change both together.
 - `src/visible_text.rs`: which column types are searchable and how a cell
   becomes text (mentions reduced to their visible label).
 
 ## Scope
 
 - Owns: the searchable-text rules (title = first column; text, links without
-  userinfo, query string or fragment, select, number select and tag labels of the
+  userinfo, query string or fragment (normalized and as displayed), select, number select and tag labels of the
   column's own definition; nothing else) and the reads behind them.
 - Not here: the index document and mapping → `crates/models_opensearch`,
   `infra/stacks/opensearch/helpers`; writing the index →
