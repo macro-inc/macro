@@ -93,12 +93,12 @@ async fn a_send_repeated_by_the_queue_stores_one_message_and_returns_it_again(po
         &harness,
         &context,
         &format!(
-            "channelMessage(channelId: \"{CHANNEL_ID}\", messageId: \"{id}\") {{ {} }}",
+            "channelMessage(channelId: \"{CHANNEL_ID}\", messageId: \"{id}\") {{ message {{ {} }} }}",
             message_selection()
         ),
     )
     .await;
-    assert_eq!(read["channelMessage"], first);
+    assert_eq!(read["channelMessage"]["message"], first);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
