@@ -1500,7 +1500,7 @@ it('keeps a channel with a repair left out of current after a server read', asyn
   }
 });
 
-it('keeps the sequence a server read lowered while a page commit was unanswered', async () => {
+it('replays from a server read answered after a page commit that it lowered', async () => {
   vi.useFakeTimers();
   quiet();
   const test = setup();
@@ -1524,19 +1524,21 @@ it('keeps the sequence a server read lowered while a page commit was unanswered'
     await vi.advanceTimersByTimeAsync(20);
     test.requests[0].answer(delta('6', { messages: [latest] }));
     await durable.promise;
-    // An older window stores over the edit and lowers the device to 5.
+    // An older window stores over the edit and lowers the device to 5; the
+    // device answers it after the page's commit.
     test.records.set(key, original.content);
     const lowered = await commit({
       channelId: CHANNEL_ID,
       seq: { kind: 'lower', seq: '5' },
     });
+    ack.resolve();
+    await vi.advanceTimersByTimeAsync(0);
     test.runtime.noteServerRead(
       CHANNEL_ID,
       lowered.channelSeq,
       test.runtime.epoch(),
       '5'
     );
-    ack.resolve();
     await vi.advanceTimersByTimeAsync(CATCH_UP_RETRY_MS + 600);
     expect(cursors(test)).toEqual(['5', '5']);
     test.requests[1].answer(delta('6', { messages: [latest] }));

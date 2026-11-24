@@ -121,11 +121,6 @@ type ChannelState = {
   /** Counts forgets, so a row write acknowledged across one marks nothing. */
   forgets: number;
   /**
-   * Counts server reads noted, so a page commit acknowledged after one keeps
-   * the sequence the read left.
-   */
-  reads: number;
-  /**
    * The changes pages out for this channel, each with the newest frame that
    * stored records while it was out.
    */
@@ -260,7 +255,6 @@ export function createChannelSyncRuntime(
         seenSeq: undefined,
         sweepable: false,
         forgets: 0,
-        reads: 0,
         pagesOut: new Set(),
         covered: new Set(),
         opens: new Set(),
@@ -575,7 +569,6 @@ export function createChannelSyncRuntime(
         delta.activities.length +
         delta.removedIds.length;
       const stored = state.seq ?? from;
-      const reads = state.reads;
       if (to <= stored && delta.removedIds.length === 0) yield* release;
       else {
         const committed = yield* commit(
@@ -608,14 +601,14 @@ export function createChannelSyncRuntime(
         );
         if (committed.kind !== 'committed') break;
         progress.committed = true;
-        // A server read noted while the commit was out may have lowered the
-        // device since: its sequence stands, and the replay starts there.
-        if (state.reads === reads) state.seq = parseSeq(committed.channelSeq);
-        // Gone meanwhile (evicted, reset or forgotten): nothing to catch up.
-        if (state.seq === null || state.seq === undefined)
-          return 'not-held' as const;
-        // A read lowered the sequence meanwhile: replay from there.
-        if (to > stored && state.seq !== to) {
+        state.seq = parseSeq(committed.channelSeq);
+        // Gone meanwhile (evicted or reset): nothing to catch up.
+        if (state.seq === null) return 'not-held' as const;
+        // A read moved the sequence meanwhile, a commit of removals only
+        // included: replay from there, and the channel is not current until
+        // that replay holds.
+        if (state.seq !== (to > stored ? to : stored)) {
+          state.current = false;
           after = state.seq;
           continue;
         }
@@ -951,7 +944,6 @@ export function createChannelSyncRuntime(
     noteServerRead(channelId, seq, epoch, readSeq) {
       const state = stateOf(channelId);
       state.seq = parseSeq(seq);
-      state.reads += 1;
       const read = parseSeq(readSeq);
       if (state.seq === null || read === null || read > state.seq) {
         // Nothing stored, or the device kept rows the server has since

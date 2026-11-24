@@ -32,8 +32,10 @@ TanStack path in `../` runs untouched.
   overtook it, rising to each page before then), so a drop or a
   failure on the way repairs from it; a channel with a repair left is not
   current, a server read included. A page is watched for frames until its
-  commit is answered, and a commit answered after a server read keeps the
-  sequence the read left. A frame past a page's cursor that stored while it or an earlier
+  commit is answered, and a commit that finds the sequence moved by a read
+  (removals only included) replays from it, the channel not current until
+  then; this assumes the device answers commits in the order it applies
+  them. A frame past a page's cursor that stored while it or an earlier
   page was out is covered by the first later page that lands through it
   (the server reads the log before the records), and asks for no repair. Only the request
   can be interrupted: a commit the device takes always records its sequence
