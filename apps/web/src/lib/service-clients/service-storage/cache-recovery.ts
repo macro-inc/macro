@@ -149,10 +149,6 @@ export function createCacheRecovery(
   };
   const failed = (error: unknown) => {
     failure = error;
-    cancelOffLimit ??= visibleTimeout(
-      () => options.onOffPastLimit?.(attempt, failure),
-      CACHE_OFF_LIMIT_MS
-    );
     if (healthyTimer !== undefined) {
       relapses += 1;
       options.onRelapse?.(relapses, error);
@@ -162,9 +158,15 @@ export function createCacheRecovery(
     const recoverable = canRetryCacheFailure(error);
     const stopping = !recoverable && state() !== 'recovery-required';
     setState(recoverable ? 'unavailable' : 'recovery-required');
-    if (recoverable) schedule();
-    else {
+    if (recoverable) {
+      cancelOffLimit ??= visibleTimeout(
+        () => options.onOffPastLimit?.(attempt, failure),
+        CACHE_OFF_LIMIT_MS
+      );
+      schedule();
+    } else {
       clearTimer();
+      clearOffLimit();
       unlisten();
       if (stopping)
         options.onStopped?.(

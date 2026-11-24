@@ -201,28 +201,38 @@ it.each([
   }
 );
 
-it('never retries after a newer build took the database over', async () => {
-  const rebuild = vi.fn(async () => {});
-  const onStopped = vi.fn();
-  const recovery = createCacheRecovery(rebuild, { onStopped });
-  const superseded = Object.assign(
-    new Error('a newer version of the app took over the local cache'),
-    { errorCode: 'cache-superseded' }
-  );
-  recovery.failed(superseded);
-  expect(recovery.state()).toBe('recovery-required');
-  document.dispatchEvent(new Event('visibilitychange'));
-  window.dispatchEvent(new Event('online'));
-  await vi.advanceTimersByTimeAsync(10 * 60_000);
-  expect(rebuild).not.toHaveBeenCalled();
-  await expect(recovery.retry()).rejects.toBe(superseded);
-  expect(onStopped).toHaveBeenCalledExactlyOnceWith(
-    'superseded',
-    0,
-    superseded
-  );
-  recovery.reset();
-});
+it.each([false, true])(
+  'never retries after a newer build took the database over (it had failed before: %s)',
+  async (failedBefore) => {
+    const rebuild = vi.fn(async () => {});
+    const onStopped = vi.fn();
+    const onOffPastLimit = vi.fn();
+    const recovery = createCacheRecovery(rebuild, {
+      onStopped,
+      onOffPastLimit,
+    });
+    const superseded = Object.assign(
+      new Error('a newer version of the app took over the local cache'),
+      { errorCode: 'cache-superseded' }
+    );
+    if (failedBefore) recovery.failed(hostFailed());
+    recovery.failed(superseded);
+    expect(recovery.state()).toBe('recovery-required');
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('online'));
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(rebuild).not.toHaveBeenCalled();
+    await expect(recovery.retry()).rejects.toBe(superseded);
+    expect(onStopped).toHaveBeenCalledExactlyOnceWith(
+      'superseded',
+      0,
+      superseded
+    );
+    // It stopped, which is told: it is not off and trying.
+    expect(onOffPastLimit).not.toHaveBeenCalled();
+    recovery.reset();
+  }
+);
 
 it('keeps restarting a cache that fails soon after each successful restart, at a capped rate', async () => {
   const rebuild = vi.fn(async () => {});
