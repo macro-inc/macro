@@ -38,6 +38,7 @@ import {
   channelMessageKey,
   mapChannelMessage,
   mapChannelTimelineEntry,
+  timestampMicros,
   unplacedSortKey,
 } from './channel-map';
 import { queryChannelNetwork } from './channel-network';
@@ -495,16 +496,18 @@ export function predictedRootWithout(
   };
 }
 
-/** The newest creation time among `messages`. */
+/** The newest creation time among `messages`, to the server's microsecond. */
 function newestCreatedAt(
   messages: readonly Pick<ChannelMessageFieldsFragment, 'createdAt'>[]
 ): string | undefined {
-  let newest: string | undefined;
+  let newest: { at: string; micros: bigint } | undefined;
   for (const { createdAt } of messages) {
-    if (newest === undefined || Date.parse(createdAt) > Date.parse(newest))
-      newest = createdAt;
+    const micros = timestampMicros(createdAt);
+    if (micros === undefined) continue;
+    if (newest === undefined || micros > newest.micros)
+      newest = { at: createdAt, micros };
   }
-  return newest;
+  return newest?.at;
 }
 
 interface Write<TData, TVariables extends AnyVariables> {

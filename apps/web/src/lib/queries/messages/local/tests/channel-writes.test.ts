@@ -323,38 +323,48 @@ describe('createChannelWrites', () => {
     expect(asked).toHaveLength(1);
   });
 
-  it('gives the root its newest reply’s time when a queued reply sits last with an older one', async () => {
+  it('gives the root the newest time in its preview, wherever that reply sits', async () => {
     const rootId = graphqlMessage(2).id;
-    const replies = [3, 4].map((n) => graphqlMessage(n, { threadId: rootId }));
-    // Sent from a clock behind the server's: last in the preview, older in time.
-    const queued = graphqlMessage(9, {
-      threadId: rootId,
-      createdAt: replies[0]!.createdAt,
-    });
-    const root = graphqlMessage(2, {
-      thread: {
-        ...graphqlMessage(2).thread!,
-        replyCount: 3,
-        latestReplyAt: replies[1]!.createdAt,
-        preview: [...replies, queued],
-      },
-    });
-    const { writes, calls } = setup(
-      () => ({ disposition: { kind: 'committed' } }),
-      [root, ...replies, queued]
-    );
-    await writes
-      .remove({ channelId: CHANNEL_ID, id: replies[0]!.id, nonce: 'd' })
-      .catch(() => undefined);
-    expect(
-      (
+    const reply = (n: number, createdAt?: string) =>
+      graphqlMessage(n, { threadId: rootId, ...(createdAt && { createdAt }) });
+    /** The root's latest reply time once the first of `preview` is deleted. */
+    const latestAfterDeletingFirst = async (
+      preview: ReturnType<typeof graphqlMessage>[]
+    ) => {
+      const root = graphqlMessage(2, {
+        thread: {
+          ...graphqlMessage(2).thread!,
+          replyCount: preview.length,
+          latestReplyAt: null,
+          preview,
+        },
+      });
+      const { writes, calls } = setup(
+        () => ({ disposition: { kind: 'committed' } }),
+        [root, ...preview]
+      );
+      await writes
+        .remove({ channelId: CHANNEL_ID, id: preview[0]!.id, nonce: 'd' })
+        .catch(() => undefined);
+      return (
         calls[0]!.context.optimisticResponse as {
           deleteChannelMessage: {
             root?: { thread: { latestReplyAt: string | null } };
           };
         }
-      ).deleteChannelMessage.root?.thread.latestReplyAt
-    ).toBe(replies[1]!.createdAt);
+      ).deleteChannelMessage.root?.thread.latestReplyAt;
+    };
+    const [first, newest] = [reply(3), reply(4)];
+
+    // Sent from a clock behind the server's: last in the preview, older.
+    expect(
+      await latestAfterDeletingFirst([first, newest, reply(9, first.createdAt)])
+    ).toBe(newest.createdAt);
+    // Within one millisecond, the server orders by microsecond.
+    const later = reply(8, newest.createdAt.replace('.000123Z', '.000456Z'));
+    expect(await latestAfterDeletingFirst([first, newest, later])).toBe(
+      later.createdAt
+    );
   });
 
   it('shows a waiting reply in its thread, not at the live end', async () => {
