@@ -221,6 +221,12 @@ struct Crm {
     email_lookups: Mutex<Vec<String>>,
     /// Reads of a company's pipeline entries.
     entry_reads: std::sync::atomic::AtomicUsize,
+    /// Creating the company with this name signals shutdown and fails, as a
+    /// call cut short by the process stopping would.
+    stop_on_create: Mutex<Option<(String, CancellationToken)>>,
+    /// Creating the company with this name first settles this ledger row
+    /// elsewhere, so the write finds it no longer importing.
+    settle_on_create: Mutex<Option<(String, PgPool, String)>>,
 }
 
 impl Crm {
@@ -265,6 +271,26 @@ impl CrmImportWriter for Crm {
     ) -> anyhow::Result<Uuid> {
         if self.failing_companies.lock().unwrap().contains(name) {
             anyhow::bail!("CRM refused the company");
+        }
+        let stop = self
+            .stop_on_create
+            .lock()
+            .unwrap()
+            .take_if(|(stop, _)| stop == name);
+        if let Some((_, shutdown)) = stop {
+            shutdown.cancel();
+            anyhow::bail!("the process is stopping");
+        }
+        let settle = self
+            .settle_on_create
+            .lock()
+            .unwrap()
+            .take_if(|(settle, ..)| settle == name);
+        if let Some((_, pool, key)) = settle {
+            sqlx::query("UPDATE import_entity SET status = 'discarded' WHERE foreign_id = $1")
+                .bind(key)
+                .execute(&pool)
+                .await?;
         }
         let id = Uuid::now_v7();
         self.companies
@@ -927,4 +953,79 @@ async fn a_companys_entries_are_read_once_per_write(pool: PgPool) {
     assert_eq!(crm.entries.lock().unwrap().len(), 5);
     // One read per company and pipeline, not one per deal.
     assert_eq!(crm.entry_reads.load(std::sync::atomic::Ordering::SeqCst), 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_object_cut_short_by_shutdown_is_left_for_the_next_worker(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "hubspot-handover", team).await;
+    let crm = crm_for(team, &[&owner]);
+    let shutdown = CancellationToken::new();
+    *crm.stop_on_create.lock().unwrap() = Some(("Acme".into(), shutdown.clone()));
+    let tracker = TaskTracker::new();
+    let service = service(&pool, Writer::default(), shutdown, tracker.clone()).with_hubspot(
+        Arc::new(Reader(portal("hubspot-handover@example.com"))),
+        crm.clone(),
+    );
+    service
+        .prepare_workspace_import(&owner, ImportSource::Hubspot, None, Duration::from_secs(60))
+        .await
+        .unwrap();
+    let review = present(&pool, &service, &owner).await;
+    service
+        .start_workspace_write(
+            &owner,
+            ImportSource::Hubspot,
+            review,
+            NotionWriteChoices::default(),
+        )
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+
+    let rows = PgImportRepo::new(pool)
+        .list(&owner, Some(ImportSource::Hubspot), None)
+        .await
+        .unwrap();
+    let acme = rows
+        .iter()
+        .find(|row| row.foreign_id == "248109388:company:10")
+        .unwrap();
+    // Still importing: the next process adopts the run and finishes it.
+    assert_eq!(acme.status, ImportStatus::Importing, "{acme:?}");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_record_the_ledger_did_not_take_is_not_linked_to(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "hubspot-settled", team).await;
+    let crm = crm_for(team, &[&owner]);
+    *crm.settle_on_create.lock().unwrap() =
+        Some(("Acme".into(), pool.clone(), "248109388:company:10".into()));
+
+    import(
+        &pool,
+        portal("hubspot-settled@example.com"),
+        crm.clone(),
+        &owner,
+    )
+    .await;
+
+    let acme = crm
+        .companies
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|(_, name, _)| name == "Acme")
+        .map(|(id, ..)| *id)
+        .unwrap();
+    // Its row ended elsewhere, so nothing was filed under the company.
+    let contacts = crm.contacts.lock().unwrap();
+    assert!(
+        contacts
+            .iter()
+            .all(|(_, contact)| contact.company != Some(acme)),
+        "{contacts:?}"
+    );
 }

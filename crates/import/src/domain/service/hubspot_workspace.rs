@@ -331,6 +331,9 @@ where
                             known.targets.insert(row.foreign_id.clone(), id);
                         }
                         Ok(None) => {}
+                        // Cut short by shutdown: the row stays importing for
+                        // the process that adopts the run.
+                        Err(_) if control.handed_over() => return Ok(phase_failed),
                         Err(error) => {
                             phase_failed += 1;
                             self.repo
@@ -389,10 +392,13 @@ where
                 entity_id,
                 entity_type,
             } => {
-                self.repo
+                // A row that left importing meanwhile is not this write's to
+                // link, so nothing may be filed under it.
+                let marked = self
+                    .repo
                     .mark_imported(user, row.id, &entity_id, &entity_type, None)
                     .await?;
-                return Ok(entity_id.parse().ok());
+                return Ok(marked.and_then(|_| entity_id.parse().ok()));
             }
             TeamClaim::Waiting { .. } => return Ok(None),
             TeamClaim::Held | TeamClaim::Free => {}
@@ -415,7 +421,10 @@ where
                 id
             }
         };
-        self.repo
+        // The record stays journaled when its row left importing meanwhile,
+        // so a later write reconciles it; this one does not file under it.
+        let marked = self
+            .repo
             .mark_imported(
                 user,
                 row.id,
@@ -424,7 +433,7 @@ where
                 Some(team),
             )
             .await?;
-        Ok(Some(id))
+        Ok(marked.map(|_| id))
     }
 
     /// The CRM record for one object: an existing one by its natural key
