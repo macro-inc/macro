@@ -13,6 +13,9 @@ const headerMeasurement = vi.hoisted(() => ({
   height: 60,
   notify: undefined as (() => void) | undefined,
 }));
+const favoriteRows = vi.hoisted(() => ({
+  items: [] as { entityType: string; entityId: string }[],
+}));
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -62,7 +65,7 @@ vi.mock('@app/components/view-shell', async () => ({
   ViewSidebar: { Toggle: () => <button aria-label="Show sidebar" /> },
 }));
 vi.mock('@queries/favorites/favorites', () => ({
-  useFavoritesData: () => () => ({ favorites: [] }),
+  useFavoritesData: () => () => ({ favorites: favoriteRows.items }),
 }));
 vi.mock('@app/features/soup', () => ({
   MaybeSoupEntityActionDrawerManager: (props: { children: JSX.Element }) =>
@@ -88,6 +91,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   headerMeasurement.height = 60;
   headerMeasurement.notify = undefined;
+  favoriteRows.items = [];
 });
 
 function Harness(props: {
@@ -138,7 +142,7 @@ function Harness(props: {
 
 describe('phone Agents list', () => {
   it.each([false, true])(
-    'reserves the measured island row once before the sticky heading (archived=%s)',
+    'reserves the measured island row once on the list scroller (archived=%s)',
     (archived) => {
       vi.spyOn(
         HTMLElement.prototype,
@@ -162,16 +166,20 @@ describe('phone Agents list', () => {
           name: archived ? 'Archived' : 'Conversations',
         })
         .closest('header')!;
-      const scroller = heading.parentElement!;
-      const spacer = scroller.firstElementChild!;
+      const scroller = heading.closest('[data-agents-list-scroll]')!;
       expect(layout.style.getPropertyValue('--mobile-content-inset-top')).toBe(
         '60px'
       );
-      expect(spacer.getAttribute('aria-hidden')).toBe('true');
-      expect(spacer.className).toContain('h-(--mobile-content-inset-top)');
-      expect(spacer.className).toContain('shrink-0');
-      expect(scroller.className).not.toContain('pt-');
+      expect(scroller.className).toContain('pt-(--mobile-content-inset-top)');
+      expect(
+        scroller.querySelector('.h-\\(--mobile-content-inset-top\\)')
+      ).toBeNull();
+      expect(heading.parentElement?.tagName).toBe('SECTION');
       expect(heading.className).toContain('top-(--mobile-content-inset-top)');
+      const verticalScrollers = Array.from(
+        container.querySelectorAll('[class]')
+      ).filter((element) => element.classList.contains('overflow-y-auto'));
+      expect(verticalScrollers).toEqual([scroller]);
 
       headerMeasurement.height = 76;
       headerMeasurement.notify?.();
@@ -206,7 +214,10 @@ describe('phone Agents list', () => {
     expect(focus).toHaveBeenCalledOnce();
   });
 
-  it('keeps bubbles, one sticky collection heading, waiting card, and remaining rows in scroll order', () => {
+  it('bounds sticky headings by their own rows instead of neighboring cards', () => {
+    favoriteRows.items = [
+      { entityType: 'agent_session', entityId: 'favorite' },
+    ];
     const { container } = render(() => (
       <Harness
         rows={[
@@ -228,6 +239,15 @@ describe('phone Agents list', () => {
             status: 'acp_ready',
             turnState: 'complete',
           },
+          {
+            type: 'agent_session',
+            id: 'favorite',
+            botId: 'agent',
+            name: 'Favorite session',
+            ownerId: 'owner',
+            status: 'acp_ready',
+            turnState: 'complete',
+          },
         ]}
       />
     ));
@@ -235,10 +255,12 @@ describe('phone Agents list', () => {
     const heading = screen.getByRole('heading', { name: 'Conversations' });
     const waiting = screen.getByRole('region', { name: 'Waiting on you' });
     const row = screen.getByText('Recent session');
+    const favorites = screen.getByRole('region', { name: 'Favorites' });
     for (const [before, after] of [
-      [bubbles, heading],
-      [heading, waiting],
-      [waiting, row],
+      [bubbles, waiting],
+      [waiting, favorites],
+      [favorites, heading],
+      [heading, row],
     ]) {
       expect(
         before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING
@@ -253,10 +275,22 @@ describe('phone Agents list', () => {
     );
     expect(sticky?.className).toContain('bg-panel');
     expect(heading.className).toContain('text-[20px]/[26px]');
-    expect(sticky?.parentElement?.firstElementChild?.className).toContain(
-      'h-(--mobile-content-inset-top)'
-    );
-    expect(sticky?.parentElement?.className).not.toContain('calc');
+    const conversations = screen.getByRole('region', { name: 'Conversations' });
+    expect(sticky?.parentElement).toBe(conversations);
+    expect(row.closest('section')).toBe(conversations);
+    for (const section of [waiting, favorites, conversations]) {
+      const header = section.querySelector('header')!;
+      expect(header.parentElement).toBe(section);
+      expect(header.classList.contains('sticky')).toBe(true);
+      expect(section.className).not.toContain('overflow');
+    }
+    const list = container.querySelector('[data-agents-list-scroll]')!;
+    expect(list.querySelectorAll('header')).toHaveLength(3);
+    for (const element of list.querySelectorAll('section, header')) {
+      expect(
+        [...element.classList].filter((name) => /^-?m[trblxyse]?-/.test(name))
+      ).toEqual([]);
+    }
     expect(
       container.querySelectorAll('[data-mobile-list-header]')
     ).toHaveLength(1);
@@ -343,9 +377,17 @@ describe('phone Agents list', () => {
     const heading = screen.getByRole('heading', { name: 'Archived' });
     const header = heading.closest('header');
     expect(header?.classList.contains('px-3')).toBe(true);
-    expect(header?.parentElement?.firstElementChild?.className).toContain(
-      'h-(--mobile-content-inset-top)'
+    expect(header?.parentElement?.tagName).toBe('SECTION');
+    expect(header?.parentElement?.firstElementChild).toBe(header);
+    expect(header?.closest('[data-agents-list-scroll]')?.className).toContain(
+      'pt-(--mobile-content-inset-top)'
     );
+    expect(
+      screen.getByRole('status').classList.contains('overflow-y-auto')
+    ).toBe(false);
+    expect(
+      screen.getByRole('status').classList.contains('overflow-visible')
+    ).toBe(true);
     expect(header?.closest('[data-mobile-list-header]')).toBeNull();
     expect(screen.getAllByRole('heading', { name: 'Archived' })).toHaveLength(
       1
