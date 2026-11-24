@@ -533,15 +533,22 @@ describe('serverPageCoverage', () => {
 });
 
 describe('createChannelTouches', () => {
-  it('keeps a new session’s mark when a late read of the old one is refused', () => {
-    const touches = createChannelTouches();
-    expect(touches.due(CHANNEL_ID, 1_000, 'new')).toBe(1_000);
-    touches.settled(CHANNEL_ID, 1_000, 'new', true);
-    // A read sent before the session changed reaches the touches late; the
-    // device refuses its mark.
-    expect(touches.due(CHANNEL_ID, 1_001, 'old')).toBe(1_001);
-    touches.settled(CHANNEL_ID, 1_001, 'old', false);
+  it('keeps the current session’s mark through late reads of earlier ones', () => {
+    const touches = createChannelTouches(
+      undefined,
+      (generation) => generation === 'current'
+    );
+    expect(touches.due(CHANNEL_ID, 1_000, 'current')).toBe(1_000);
+    touches.settled(CHANNEL_ID, 1_000, 'current', true);
+    // Two reads sent before the session changed reach the touches late, and
+    // the device refuses their marks after both.
+    const late = ['oldest', 'previous'].map((earlier, index) => ({
+      earlier,
+      at: touches.due(CHANNEL_ID, 1_001 + index, earlier),
+    }));
+    for (const { earlier, at } of late)
+      if (at !== undefined) touches.settled(CHANNEL_ID, at, earlier, false);
 
-    expect(touches.due(CHANNEL_ID, 1_002, 'new')).toBeUndefined();
+    expect(touches.due(CHANNEL_ID, 1_010, 'current')).toBeUndefined();
   });
 });

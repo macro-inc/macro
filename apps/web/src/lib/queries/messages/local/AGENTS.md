@@ -94,7 +94,7 @@ TanStack path in `../` runs untouched.
   30-day eviction would take at once. A touch counts only once the device
   stored it (`settled`), and only in the cache session it was sent in: a
   refused one, or one from an earlier session, is sent again with the next
-  read.
+  read. A read from a session that is no longer current marks nothing.
 - `effect` is allowed only in `channel-sync-runtime.ts`, `channel-writes.ts`,
   `channel-prewarm.ts` and the tests that run their effects (FE-46).
 - Channel queries abort through `firstOrAborted`: urql replaces

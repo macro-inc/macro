@@ -138,40 +138,33 @@ export const CHANNEL_TOUCH_INTERVAL_MS = 6 * 60 * 60 * 1000;
  * at 0, and the next eviction would take it while it is on screen. A mark
  * counts only in the cache session it was sent in: the device refuses one
  * from an earlier session, so a read in a new session marks the channel
- * again, even while the earlier mark is still on its way. Each session keeps
- * its own mark, so a late read of an earlier session never replaces a newer
- * session's.
+ * again, even while the earlier mark is still on its way. A read from a
+ * session that is no longer current marks nothing, since the device would
+ * refuse it, so it never replaces the current session's mark.
  */
 export function createChannelTouches(
-  intervalMs = CHANNEL_TOUCH_INTERVAL_MS
+  intervalMs = CHANNEL_TOUCH_INTERVAL_MS,
+  isCurrent: (generation: string) => boolean = cacheSessionGeneration.isCurrent
 ): ChannelTouches {
-  // Per channel, the mark of each of its latest sessions, oldest first.
-  const touched = new Map<string, Map<string, number>>();
+  const touched = new Map<string, { atMs: number; generation: string }>();
   return {
     due(channelId, nowMs, generation) {
-      const marks = touched.get(channelId) ?? new Map<string, number>();
-      const last = marks.get(generation);
-      if (last !== undefined && nowMs - last < intervalMs) return undefined;
-      marks.delete(generation);
-      marks.set(generation, nowMs);
-      for (const oldest of marks.keys()) {
-        if (marks.size <= TOUCH_SESSIONS_KEPT) break;
-        marks.delete(oldest);
-      }
-      touched.set(channelId, marks);
+      if (!isCurrent(generation)) return undefined;
+      const last = touched.get(channelId);
+      const recent =
+        last?.generation === generation && nowMs - last.atMs < intervalMs;
+      if (recent) return undefined;
+      touched.set(channelId, { atMs: nowMs, generation });
       return nowMs;
     },
     settled(channelId, touchedAtMs, generation, stored) {
-      const marks = touched.get(channelId);
-      if (stored || marks?.get(generation) !== touchedAtMs) return;
-      marks.delete(generation);
-      if (marks.size === 0) touched.delete(channelId);
+      const last = touched.get(channelId);
+      if (stored || last?.generation !== generation) return;
+      if (last.atMs !== touchedAtMs) return;
+      touched.delete(channelId);
     },
   };
 }
-
-/** Sessions whose marks a channel keeps: the current one and the one before. */
-const TOUCH_SESSIONS_KEPT = 2;
 
 /** Commits a page or a mark, and settles the mark it carries. */
 async function commitTouch(
