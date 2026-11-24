@@ -38,6 +38,8 @@ const SOURCE_SILENCE: Duration =
 const FIRST_RETRY: Duration = Duration::from_millis(500);
 /// Longest wait between reconnects.
 const MAX_RETRY: Duration = Duration::from_secs(30);
+/// The notification that carries one event.
+const EVENT_NOTIFICATION: &str = "notifications/events/event";
 
 /// Where a stream's notifications go.
 pub(crate) trait NotificationSink: Send + Sync {
@@ -164,8 +166,7 @@ pub(crate) async fn run(
                     if !recent.insert(&event.event_id) {
                         continue;
                     }
-                    stats.delivered += 1;
-                    ("notifications/events/event", occurrence(&plan.name, event, &meta))
+                    (EVENT_NOTIFICATION, occurrence(&plan.name, event, &meta))
                 }
                 Some(GroupItem::Lost) => {
                     stats.source_errors += 1;
@@ -191,6 +192,10 @@ pub(crate) async fn run(
         };
         if let Err(end) = send(sink, &cancel, method, params).await {
             return (end, stats);
+        }
+        // Counted once sent: a send cancelled while pending delivered nothing.
+        if method == EVENT_NOTIFICATION {
+            stats.delivered += 1;
         }
         heartbeat
             .as_mut()
