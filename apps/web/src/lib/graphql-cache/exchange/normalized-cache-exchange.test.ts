@@ -71,6 +71,7 @@ import {
 } from './normalized-cache-exchange';
 import {
   executeOptimisticMutation,
+  MutationHeldError,
   optimisticContextOf,
   optimisticMutationDispositionOf,
 } from './optimistic';
@@ -5457,9 +5458,11 @@ describe('normalizedCacheExchange', () => {
         ],
       },
     ])(
-      'acknowledges a mutation sent past a queue that refused it ($refusal)',
+      'sends a mutation straight out when its queue refused it ($refusal)',
       async ({ errorCode, linkPatches = [] }) => {
-        const acknowledge = vi.fn();
+        const enqueued = vi.fn();
+        const straightOut = vi.fn();
+        let mayForward = true;
         const warn = vi
           .spyOn(console, 'warn')
           .mockImplementation(() => undefined);
@@ -5470,24 +5473,39 @@ describe('normalizedCacheExchange', () => {
             Object.assign(new Error('refused'), errorCode && { errorCode })
           );
         const { ops, forwarded, results } = controlledQueryHarness(host);
-        ops.next(
-          makeOperation(base.kind, base, {
-            ...base.context,
-            normalizedCacheOptimistic: {
-              uuid: crypto.randomUUID(),
-              optimisticResponse: optimistic,
-              linkPatches,
-              revalidations: [],
-            },
-            normalizedCacheOptimisticEnqueued: acknowledge,
-          })
-        );
+        const send = () =>
+          ops.next(
+            makeOperation(base.kind, base, {
+              ...base.context,
+              normalizedCacheOptimistic: {
+                uuid: crypto.randomUUID(),
+                optimisticResponse: optimistic,
+                linkPatches,
+                revalidations: [],
+              },
+              normalizedCacheOptimisticEnqueued: enqueued,
+              normalizedCacheForwarded: straightOut,
+              normalizedCacheMayForward: () => mayForward,
+            })
+          );
         try {
+          send();
           await tick();
           // Sent, and not yet answered.
           expect(forwarded).toHaveLength(1);
           expect(results).toEqual([]);
-          expect(acknowledge).toHaveBeenCalledOnce();
+          expect(straightOut).toHaveBeenCalledOnce();
+          expect(enqueued).not.toHaveBeenCalled();
+
+          // The caller's no, by the time the queue refuses it.
+          send();
+          mayForward = false;
+          await tick();
+          expect(forwarded).toHaveLength(1);
+          expect(straightOut).toHaveBeenCalledOnce();
+          expect(results.map(({ error }) => error?.networkError)).toEqual([
+            expect.any(MutationHeldError),
+          ]);
         } finally {
           warn.mockRestore();
         }

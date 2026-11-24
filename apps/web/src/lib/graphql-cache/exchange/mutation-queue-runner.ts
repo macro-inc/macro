@@ -77,6 +77,7 @@ import {
 } from './mutation-queue-telemetry';
 import type { NormalizedCacheExchangeOptions } from './normalized-cache-exchange';
 import {
+  LocalCommitFailedError,
   notifyOptimisticMutationEnqueued,
   optimisticContextOf,
   withOptimisticMutationDisposition,
@@ -1227,7 +1228,10 @@ export function createMutationQueueRunner(
           }
         }
         if (committed.kind === 'failed') {
-          const error = new Error(committed.error);
+          const error = new LocalCommitFailedError(
+            committed.error,
+            result.data
+          );
           try {
             options.onCacheError?.(error, op);
           } catch {

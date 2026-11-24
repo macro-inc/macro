@@ -115,9 +115,10 @@ import {
 } from './mutation-queue-telemetry';
 import type { QueryRevalidation } from './optimistic';
 import {
-  CachePausedError,
-  holdsWhilePaused,
+  holdsBack,
+  MutationHeldError,
   normalizedEntityKey,
+  notifyMutationForwarded,
   notifyOptimisticMutationEnqueued,
   optimisticContextOf,
   withOptimisticMutationDisposition,
@@ -1236,11 +1237,18 @@ export function normalizedCacheExchange(
       ): Promise<OperationResult | undefined> {
         const epoch = mutationQueue.epoch();
         // Straight out, a mutation would overtake the ones the queue keeps.
-        const held = () => Boolean(host.paused) && holdsWhilePaused(op);
-        if (host.disabled) {
-          if (held()) return uncertainEnqueueResult(op, new CachePausedError());
-          notifyOptimisticMutationEnqueued(op);
+        const held = () => holdsBack(op, Boolean(host.paused));
+        const forwardPastQueue = () => {
+          notifyMutationForwarded(op, () =>
+            client.reexecuteOperation(makeOperation('teardown', op, op.context))
+          );
           enqueueForward(op);
+        };
+        if (host.disabled) {
+          if (held())
+            return uncertainEnqueueResult(op, new MutationHeldError());
+          notifyOptimisticMutationEnqueued(op);
+          forwardPastQueue();
           return undefined;
         }
         // Reconstructed startup retries already have a durable transaction.
@@ -1303,10 +1311,9 @@ export function normalizedCacheExchange(
             if (held())
               return uncertainEnqueueResult(
                 op,
-                new CachePausedError({ cause: error })
+                new MutationHeldError({ cause: error })
               );
-            notifyOptimisticMutationEnqueued(op);
-            enqueueForward(op);
+            forwardPastQueue();
             return undefined;
           }
           // A cached bin/page may disappear between inspect and enqueue. Do
@@ -1318,10 +1325,9 @@ export function normalizedCacheExchange(
             if (held())
               return uncertainEnqueueResult(
                 op,
-                new CachePausedError({ cause: error })
+                new MutationHeldError({ cause: error })
               );
-            notifyOptimisticMutationEnqueued(op);
-            enqueueForward(op);
+            forwardPastQueue();
             return undefined;
           }
           linkPatchesDegraded = true;
@@ -1374,10 +1380,9 @@ export function normalizedCacheExchange(
             if (held())
               return uncertainEnqueueResult(
                 op,
-                new CachePausedError({ cause: fallbackError })
+                new MutationHeldError({ cause: fallbackError })
               );
-            notifyOptimisticMutationEnqueued(op);
-            enqueueForward(op);
+            forwardPastQueue();
             return undefined;
           }
         }

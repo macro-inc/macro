@@ -182,7 +182,16 @@ describe('a write the server took and the device could not store', () => {
     );
   });
 
-  it('does not fail an edit the server took', async () => {
+  it('answers an edit with the server’s copy, not the device’s', async () => {
+    const taken = { ...first, content: 'edited' };
+    const fixture = setup(queuedAnswer, [first], [taken]);
+    const editing = fixture.writes.edit(edit(first));
+    await settleMicrotasks();
+    fixture.settle(uncommitted(fixture.queue.lastUuid));
+    expect((await editing).content).toBe('edited');
+  });
+
+  it('does not fail an edit whose copy it cannot read', async () => {
     const fixture = setup(queuedAnswer, [first]);
     const editing = fixture.writes.edit(edit(first));
     await settleMicrotasks();
