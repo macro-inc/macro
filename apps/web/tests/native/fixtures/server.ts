@@ -220,12 +220,11 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
             },
             workFeed: { entries: [], nextCursor: null, nextPosition: null },
             contacts: { nodes: [], nextCursor: null },
-            // No running timer; the app compares serverNow with its clock.
-            timeTracking: () => ({
+            timeTracking: {
               id: USER_ID,
               runningTimer: null,
               serverNow: new Date().toISOString(),
-            }),
+            },
             favorites: ({ filter }: { filter?: FavoritesFilterInput | null }) =>
               (corpus ?? [])
                 .filter(

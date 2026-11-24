@@ -36,6 +36,8 @@ account, Docker, sudo, or local backend stack is required.
 Both suites must pass. Both resize the window to 400px wide while online and
 expect every Email list header control, Search included, inside the header,
 then restore the size and expect the view options (the reading pane toggle) back.
+They then open two more splits beside Email, resize the window to 1000px and
+900px wide (a third each), expect the same, and close the splits again.
 They then open Tasks, narrow the window from 520px to 400px and expect every
 Tasks list header control, New and Search included, inside the header, then
 restore the size and expect the layout switch and Group by back.

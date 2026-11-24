@@ -109,6 +109,10 @@ per-entity-type search plus a unified search across them — mounted into
   `metadata.deleted_at`: saved AI chats render their stored search results
   through it, and older ones hold trashed hits. `/search/simple` returns hits
   unenriched and is not covered.
+- A phrase is quoted with straight or curly double quotes
+  (`terms::is_phrase_quote`), since phones and Macs type `“ ”` and `„ “` for
+  `"`. The web app reads a query's quotes too, to gate empty searches and pick
+  exact matching (`straightenQuotes`): change both together.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
   blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
   term under three characters matches as a whole word in document, chat, call
