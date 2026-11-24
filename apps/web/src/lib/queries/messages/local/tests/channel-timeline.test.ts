@@ -491,8 +491,9 @@ describe('createLocalChannelTimeline', () => {
       reload.resolve(
         page(rows.slice(21), rows[21]!.sortKey, Promise.resolve())
       );
-      await waitFor(() => ids(timeline)[0] === rows[70]!.id);
+      // The window replaces what it showed once it reaches as far back.
       secondPage.resolve();
+      await waitFor(() => ids(timeline)[0] === rows[70]!.id);
       await newLoad;
       expect(timeline.hasOlder() || ids(timeline).includes(rows[20]!.id)).toBe(
         true
@@ -756,7 +757,109 @@ describe('createLocalChannelTimeline', () => {
     keys = [keyOf(added), keyOf(latest)];
     runtime.changed();
     await waitFor(() => ids(timeline)[0] === added.id);
+    // The page being read stays where it is.
+    expect(ids(timeline)).toContain(first.id);
     dispose();
+  });
+
+  it('follows the device again when a page read as an outage ended could not be held', async () => {
+    const [older, latest, added] = messages(3) as [Row, Row, Row];
+    let keys = [keyOf(latest)];
+    const lostRead = Promise.withResolvers<never>();
+    let olderReads = 0;
+    const host = fakeHost(
+      (args) => {
+        if (args.before === undefined)
+          return devicePage(keys, { olderCursor: latest.sortKey });
+        olderReads += 1;
+        return olderReads === 1
+          ? (lostRead.promise as never)
+          : devicePage([keyOf(older)]);
+      },
+      { records: [older, latest, added] }
+    );
+    const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
+      page: {
+        __typename: 'GraphqlChannelTimelinePage',
+        entries: [older],
+        olderCursor: null,
+        newerCursor: older.sortKey,
+        seq: '7',
+      } as never,
+      cached: Promise.resolve(),
+    }));
+    const runtime = fakeRuntime();
+    const { timeline, dispose } = createRoot((dispose) => ({
+      dispose,
+      timeline: createLocalChannelTimeline(
+        { host, runtime, touches: createChannelTouches(), fetchPage },
+        CHANNEL_ID,
+        () => undefined,
+        vi.fn()
+      ),
+    }));
+    await waitFor(() => vi.mocked(runtime.noteStoredSeq).mock.calls.length > 0);
+    const page = timeline.loadOlder();
+    await waitFor(() => olderReads === 1);
+
+    // The outage ends while the device's answer is still on its way.
+    runtime.resumed();
+    await settle();
+    lostRead.reject(new Error('the page was read during the outage'));
+    await page;
+
+    keys = [keyOf(added), keyOf(latest)];
+    runtime.changed();
+    await waitFor(() => ids(timeline)[0] === added.id);
+    dispose();
+  });
+
+  it('keeps every page shown when an unheld window is read again', async () => {
+    const rows = messages(120);
+    const [newest] = rows.slice(-1) as [Row];
+    let away = true;
+    const fetchPage = vi.fn<FetchChannelServerPage>(async (input) => {
+      const upTo = rows.filter(
+        (row) => input.before == null || row.sortKey < input.before
+      );
+      const page = upTo.slice(-50).reverse();
+      const oldest = page.at(-1) as Row;
+      return {
+        page: {
+          __typename: 'GraphqlChannelTimelinePage',
+          entries: page,
+          olderCursor: oldest === rows[0] ? null : oldest.sortKey,
+          newerCursor: input.before == null ? null : (page[0] as Row).sortKey,
+          seq: '9',
+        } as never,
+        cached: away
+          ? Promise.reject(new Error('cache is away'))
+          : Promise.resolve(),
+      };
+    });
+    const mounted = mount({ rows, held: false, fetchPage });
+    const { timeline, runtime } = mounted;
+    await waitFor(() => timeline.entries().length === 50);
+    await settle();
+    await timeline.loadOlder();
+    expect(timeline.entries()).toHaveLength(100);
+
+    away = false;
+    const shown: number[] = [];
+    runtime.resumed();
+    await waitFor(() => {
+      shown.push(timeline.entries().length);
+      return !timeline.isLoadingOlder();
+    });
+    expect(Math.min(...shown)).toBe(100);
+    expect(ids(timeline)[0]).toBe(newest.id);
+    // The server's pages are held now: the window follows the device.
+    mounted.setHeld(true);
+    await settle();
+    mounted.addRow(graphqlMessage(121));
+    runtime.changed();
+    await waitFor(() => timeline.entries().length === 101);
+    mounted.dispose();
   });
 
   it('reads a held window again once the cache serves again', async () => {
