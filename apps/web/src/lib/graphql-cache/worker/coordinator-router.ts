@@ -853,7 +853,6 @@ export class CoordinatorRouter {
               startedAt === undefined ? undefined : this.now() - startedAt,
           });
           this.clearActivationTimer();
-          this.resetRecoveryRetries();
           this.scheduleHeartbeat(message.ownerEpoch);
           this.allowStaleDatabaseRemoval(route).catch(
             reportCoordinatorTaskFailure
@@ -2044,6 +2043,8 @@ export class CoordinatorRouter {
       this.heartbeatTimeoutTimer = undefined;
     }
     this.pendingHeartbeat = undefined;
+    // Open and still running: one that fails as it opens is another attempt.
+    this.resetRecoveryRetries();
     this.scheduleHeartbeat(ownerEpoch);
   }
 
