@@ -101,6 +101,24 @@ function ScreenCanvas(props: {
     return `clamp(100%, ${(fit * 100).toFixed(1)}%, 640px)`;
   };
 
+  // Keep the 2px outline + 2px offset inside the clipped frame on every edge.
+  const clampedFocus = () => {
+    const focus = props.frame.focus;
+    if (!focus) return undefined;
+    const padX = Math.max(8, Math.round(props.frame.width * 0.01));
+    const padY = Math.max(8, Math.round(props.frame.height * 0.01));
+    const left = Math.max(focus.x, padX);
+    const top = Math.max(focus.y, padY);
+    const right = Math.min(focus.x + focus.width, props.frame.width - padX);
+    const bottom = Math.min(focus.y + focus.height, props.frame.height - padY);
+    return {
+      x: left,
+      y: top,
+      width: Math.max(0, right - left),
+      height: Math.max(0, bottom - top),
+    };
+  };
+
   return (
     <div
       ref={viewport}
@@ -121,7 +139,7 @@ function ScreenCanvas(props: {
           loading="lazy"
           decoding="async"
         />
-        <Show when={props.frame.focus}>
+        <Show when={clampedFocus()}>
           {(focus) => (
             <span
               class="feature-screenshot-focus"
