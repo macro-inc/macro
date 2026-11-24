@@ -11,9 +11,12 @@ export const turnstileTestKey = '1x00000000000000000000AA';
 export const recaptchaTestKey = '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI';
 
 const html = (body: string, title = 'Fixture') =>
-  new Response(`<!doctype html><html><head><title>${title}</title></head><body>${body}</body></html>`, {
-    headers: { 'content-type': 'text/html' },
-  });
+  new Response(
+    `<!doctype html><html><head><title>${title}</title></head><body>${body}</body></html>`,
+    {
+      headers: { 'content-type': 'text/html' },
+    }
+  );
 
 /** The fixture pages, by path. */
 export const fixturePage = (path: string): Response => {
@@ -60,7 +63,9 @@ export const standInRunId = '01a1fa00-0000-7000-8000-00000000c0de';
 
 export type ChatTurn = (body: {
   readonly messages: ReadonlyArray<{ readonly role: string }>;
-  readonly tools?: ReadonlyArray<{ readonly function: { readonly name: string } }>;
+  readonly tools?: ReadonlyArray<{
+    readonly function: { readonly name: string };
+  }>;
 }) => { readonly tool?: string; readonly text?: string };
 
 /** An OpenAI-style streamed reply: one tool call, or text. */
@@ -71,16 +76,32 @@ const streamed = (model: string, turn: ReturnType<ChatTurn>): Response => {
       : {
           role: 'assistant',
           tool_calls: [
-            { index: 0, id: 'call_1', type: 'function', function: { name: turn.tool, arguments: '{}' } },
+            {
+              index: 0,
+              id: 'call_1',
+              type: 'function',
+              function: { name: turn.tool, arguments: '{}' },
+            },
           ],
         };
   const chunks = [
-    { id: 'chatcmpl-standin', object: 'chat.completion.chunk', model, choices: [{ index: 0, delta }] },
     {
       id: 'chatcmpl-standin',
       object: 'chat.completion.chunk',
       model,
-      choices: [{ index: 0, delta: {}, finish_reason: turn.tool === undefined ? 'stop' : 'tool_calls' }],
+      choices: [{ index: 0, delta }],
+    },
+    {
+      id: 'chatcmpl-standin',
+      object: 'chat.completion.chunk',
+      model,
+      choices: [
+        {
+          index: 0,
+          delta: {},
+          finish_reason: turn.tool === undefined ? 'stop' : 'tool_calls',
+        },
+      ],
     },
     {
       id: 'chatcmpl-standin',
@@ -91,7 +112,9 @@ const streamed = (model: string, turn: ReturnType<ChatTurn>): Response => {
     },
   ];
   const text = `${chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join('')}data: [DONE]\n\n`;
-  return new Response(text, { headers: { 'content-type': 'text/event-stream' } });
+  return new Response(text, {
+    headers: { 'content-type': 'text/event-stream' },
+  });
 };
 
 /**
@@ -130,9 +153,15 @@ export const startFixture = ({
           modelCalls: 16,
           solves: 2,
         });
-      if (pathname === '/brain/captcha/solve') return Response.json(await solve(body));
-      if (pathname === '/brain/fireworks/v1/chat/completions' && chat !== undefined) {
-        const typed = body as Parameters<ChatTurn>[0] & { readonly model: string };
+      if (pathname === '/brain/captcha/solve')
+        return Response.json(await solve(body));
+      if (
+        pathname === '/brain/fireworks/v1/chat/completions' &&
+        chat !== undefined
+      ) {
+        const typed = body as Parameters<ChatTurn>[0] & {
+          readonly model: string;
+        };
         return streamed(typed.model, chat(typed));
       }
       return new Response('no such route', { status: 404 });

@@ -140,7 +140,11 @@ describe('relayHandler: brain routes', () => {
     const end = await relay(
       new Request(
         'http://127.0.0.1:1/brain/captcha/runs/01a1fa00-0000-7000-8000-00000000c0de/end',
-        { method: 'POST', headers: { authorization: `Bearer ${capability}` }, body: '{}' }
+        {
+          method: 'POST',
+          headers: { authorization: `Bearer ${capability}` },
+          body: '{}',
+        }
       )
     );
     expect(end.status).toBe(201);
@@ -199,9 +203,13 @@ describe('relayHandler: brain routes', () => {
         headers: { authorization: `Bearer ${capability}` },
       })
     );
-    expect([other.status, climbing.status, get.status, wrong.status, none.status]).toEqual([
-      404, 404, 405, 401, 404,
-    ]);
+    expect([
+      other.status,
+      climbing.status,
+      get.status,
+      wrong.status,
+      none.status,
+    ]).toEqual([404, 404, 405, 401, 404]);
     expect(macro.seen).toEqual([]);
   });
 });

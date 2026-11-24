@@ -5,8 +5,8 @@
 import { behavior } from '@macro-inc/muppet/core/behavior';
 import { module } from '@macro-inc/muppet/core/capability';
 import type { Target } from '@macro-inc/muppet/utilities/browser';
-import { type Stepped, step } from './browse.ts';
 import { defaultBrowser, variables } from '../../context/startup.ts';
+import { type Stepped, step } from './browse.ts';
 import type { BrowserContext } from './context.ts';
 import { refusal } from './driver.ts';
 
@@ -16,7 +16,9 @@ type Needs = Pick<BrowserContext, 'browser' | 'trace' | 'join' | 'clock'>;
 const one = async (needs: Needs, action: Parameters<typeof step>[1]) => {
   const refused = refusal(await needs.browser.driving.driver());
   if (refused !== undefined) throw new Error(refused);
-  return needs.browser.withTab((tab) => step({ tab, trace: needs.trace }, action));
+  return needs.browser.withTab((tab) =>
+    step({ tab, trace: needs.trace }, action)
+  );
 };
 
 /**

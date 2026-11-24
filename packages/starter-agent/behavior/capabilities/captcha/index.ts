@@ -3,14 +3,14 @@
  * `solveCaptcha` hands it to a solver, then tells you what the page did.
  */
 import { mkdir, readFile, rm } from 'node:fs/promises';
-import { module } from '@macro-inc/muppet/core/capability';
 import { behavior } from '@macro-inc/muppet/core/behavior';
-import type { CaptchaContext } from './context.ts';
+import { module } from '@macro-inc/muppet/core/capability';
 import {
   agentTelemetryId,
   telemetryEnvironment,
 } from '../../context/telemetry.ts';
 import { endRun, startRun } from './brain.ts';
+import type { CaptchaContext } from './context.ts';
 import type { Recorded } from './mcp.ts';
 import { openCodeArgv, openCodeEnvironment } from './opencode.ts';
 import { findChallenge, type Outcome } from './solve.ts';
@@ -43,8 +43,11 @@ const readOrMissing = (path: string): Promise<string | undefined> =>
 
 /** Your owner's link to take over your screen, if the harness has said which computer this is. */
 const screenLink = async (needs: Needs): Promise<string | undefined> => {
-  const harness = (await readOrMissing(needs.captcha.config.harnessIdFile))?.trim();
-  if (harness === undefined || !/^[0-9a-f-]{36}$/i.test(harness)) return undefined;
+  const harness = (
+    await readOrMissing(needs.captcha.config.harnessIdFile)
+  )?.trim();
+  if (harness === undefined || !/^[0-9a-f-]{36}$/i.test(harness))
+    return undefined;
   const origin = (await needs.macro()).webAppUrl.replace(/\/+$/, '');
   return `${origin}/app/screen/${harness}?mode=drive`;
 };
@@ -92,7 +95,9 @@ const recorded = (text: string | undefined): readonly Recorded[] =>
  * now (an earlier `injected` is stale once the owner took over or the page
  * moved on).
  */
-export const bestOutcome = (attempts: readonly Recorded[]): Outcome | undefined =>
+export const bestOutcome = (
+  attempts: readonly Recorded[]
+): Outcome | undefined =>
   attempts.find(({ outcome }) => outcome.outcome === 'solved')?.outcome ??
   attempts.at(-1)?.outcome;
 
@@ -195,7 +200,10 @@ export const solveCaptcha = (
       } finally {
         // A failure to end it only delays the next run until the run expires.
         await needs.trace('captcha.end_run', async () =>
-          endRun({ relay: await needs.relay(), fetch: needs.captcha.fetch }, run.runId)
+          endRun(
+            { relay: await needs.relay(), fetch: needs.captcha.fetch },
+            run.runId
+          )
         );
       }
     } finally {

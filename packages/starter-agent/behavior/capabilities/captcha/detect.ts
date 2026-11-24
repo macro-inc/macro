@@ -95,9 +95,7 @@ const recaptchaHosts = new Set([
 /** A reCAPTCHA anchor frame: `…/recaptcha/(api2|enterprise)/anchor?k=<site key>`. */
 const anchorFrame = (frame: URL): Challenge | undefined => {
   if (!recaptchaHosts.has(frame.host)) return undefined;
-  const match = /^\/recaptcha\/(api2|enterprise)\/anchor$/.exec(
-    frame.pathname
-  );
+  const match = /^\/recaptcha\/(api2|enterprise)\/anchor$/.exec(frame.pathname);
   const siteKey = frame.searchParams.get('k');
   if (match === null || siteKey === null || siteKey === '') return undefined;
   return {

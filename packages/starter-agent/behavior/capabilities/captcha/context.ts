@@ -15,7 +15,9 @@ export type CaptchaPorts = {
   readonly browserEndpoint: string;
   /** The harness's take-over file (`BrowserConfig.screenDriver`). */
   readonly screenDriver: string;
-  readonly withPage: <Value>(use: (page: Page) => Promise<Value>) => Promise<Value>;
+  readonly withPage: <Value>(
+    use: (page: Page) => Promise<Value>
+  ) => Promise<Value>;
   readonly driving: BrowserPorts['driving'];
   readonly fetch: (request: Request) => Promise<Response>;
 };

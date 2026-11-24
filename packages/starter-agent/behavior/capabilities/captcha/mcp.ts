@@ -8,18 +8,18 @@
  * Run as `bun mcp.ts`, with the variables in {@link mcpVariables}.
  */
 import { appendFile } from 'node:fs/promises';
+import { Telemetry } from '@macro-inc/observability/core';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { Telemetry } from '@macro-inc/observability/core';
 import {
   startTelemetryAs,
   trace,
   traceparentVariable,
   underParent,
 } from '../../context/telemetry.ts';
-import { findChallenge, type Outcome, solveOnPage } from './solve.ts';
 import { ownerDriving, readOrMissing } from '../browser/driver.ts';
 import { withCurrentPage, withTargetPage } from './page.ts';
+import { findChallenge, type Outcome, solveOnPage } from './solve.ts';
 
 /** What the server is started with. */
 export const mcpVariables = {
@@ -43,7 +43,8 @@ export const mostAttempts = 2;
 
 const required = (name: string): string => {
   const value = process.env[name];
-  if (value === undefined || value === '') throw new Error(`${name} is not set`);
+  if (value === undefined || value === '')
+    throw new Error(`${name} is not set`);
   return value;
 };
 
@@ -87,7 +88,8 @@ export const startServer = async (): Promise<void> => {
   const runId = required(mcpVariables.runId);
   const record = required(mcpVariables.record);
   const screenDriver = required(mcpVariables.screenDriver);
-  const ownerDrivingNow = async () => ownerDriving(await readOrMissing(screenDriver));
+  const ownerDrivingNow = async () =>
+    ownerDriving(await readOrMissing(screenDriver));
   const withPage = <Value>(use: Parameters<typeof withCurrentPage<Value>>[1]) =>
     withCurrentPage(endpoint, use);
   const withTarget = <Value>(

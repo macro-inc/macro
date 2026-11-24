@@ -160,14 +160,19 @@ const forwardBrain = async ({
   if (!equal(bearer(request), capability))
     return refuse(401, 'the relay needs its capability');
   const path = url.pathname.split('/').slice(2).join('/');
-  const route = brainRoutes.some((known) => known.test(path)) ? path : undefined;
+  const route = brainRoutes.some((known) => known.test(path))
+    ? path
+    : undefined;
   if (route === undefined || brain === undefined)
     return refuse(404, 'the relay has no address for that path');
-  if (request.method !== 'POST')
-    return refuse(405, 'a brain route takes POST');
+  if (request.method !== 'POST') return refuse(405, 'a brain route takes POST');
   const headers = new Headers();
   for (const [name, value] of request.headers)
-    if (!dropped.has(name) && name !== 'x-api-key' && !name.startsWith(botHeaders))
+    if (
+      !dropped.has(name) &&
+      name !== 'x-api-key' &&
+      !name.startsWith(botHeaders)
+    )
       headers.set(name, value);
   headers.set('authorization', `Bearer ${apiKey}`);
   try {

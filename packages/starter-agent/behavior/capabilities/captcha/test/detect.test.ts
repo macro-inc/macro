@@ -115,7 +115,11 @@ describe('detect', () => {
       })
     ).toEqual({
       kind: 'supported',
-      challenge: { kind: 'recaptchaV3', siteKey: '6LcV3Key', enterprise: false },
+      challenge: {
+        kind: 'recaptchaV3',
+        siteKey: '6LcV3Key',
+        enterprise: false,
+      },
     });
   });
 
@@ -152,8 +156,15 @@ describe('detect', () => {
       detect({
         url: 'https://site.example/',
         title: 'Site',
-        widgets: [{ className: 'h-captcha', siteKey: '10000000-ffff-ffff-ffff-000000000001' }],
-        frames: ['https://newassets.hcaptcha.com/captcha/v1/abc/static/hcaptcha.html'],
+        widgets: [
+          {
+            className: 'h-captcha',
+            siteKey: '10000000-ffff-ffff-ffff-000000000001',
+          },
+        ],
+        frames: [
+          'https://newassets.hcaptcha.com/captcha/v1/abc/static/hcaptcha.html',
+        ],
         scripts: ['https://js.hcaptcha.com/1/api.js'],
         markers: ['h-captcha'],
       })
@@ -189,7 +200,9 @@ describe('detect', () => {
         url: 'https://evil.example/',
         title: 'x',
         widgets: [],
-        frames: ['https://www.google.com.evil.example/recaptcha/api2/anchor?k=6LcFake'],
+        frames: [
+          'https://www.google.com.evil.example/recaptcha/api2/anchor?k=6LcFake',
+        ],
         scripts: [],
         markers: [],
       })

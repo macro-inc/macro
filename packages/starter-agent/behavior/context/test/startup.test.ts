@@ -329,7 +329,7 @@ describe('addresses', () => {
     ).toMatchObject({ kind: 'invalid' });
   });
 
-  test("the CAPTCHA brain and owner links go where enrollment says", () => {
+  test('the CAPTCHA brain and owner links go where enrollment says', () => {
     const configured = addresses({
       MACRO_GATEWAY: 'http://proxy:30734',
       OVERRIDE_AGENT_HARNESS_EGRESS_URL: 'http://agent-harness-service:8102/',

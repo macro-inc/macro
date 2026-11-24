@@ -64,7 +64,10 @@ test.skipIf(!available)(
   "Turnstile: sends only the challenge's parameters, puts the token in, and sees the page take it",
   async () => {
     await open('/turnstile?next=%2Fsecret-path');
-    const outcome = await solveOnPage(needs, { solveId: 'solve-turnstile', runId: 'run-1' });
+    const outcome = await solveOnPage(needs, {
+      solveId: 'solve-turnstile',
+      runId: 'run-1',
+    });
     expect(outcome).toEqual({ outcome: 'solved', evidence: 'challengeGone' });
 
     const sent = fixture.seen.at(-1);
@@ -92,7 +95,8 @@ test.skipIf(!available)(
         };
         return {
           callback: document.body.dataset.token,
-          field: document.querySelector('[name="cf-turnstile-response"]')?.value,
+          field: document.querySelector('[name="cf-turnstile-response"]')
+            ?.value,
         };
       })
     );
@@ -104,7 +108,10 @@ test.skipIf(!available)(
   "reCAPTCHA v2 with no callback: the token is in the form, and that's all it claims",
   async () => {
     await open('/recaptcha');
-    const outcome = await solveOnPage(needs, { solveId: 'solve-recaptcha', runId: 'run-1' });
+    const outcome = await solveOnPage(needs, {
+      solveId: 'solve-recaptcha',
+      runId: 'run-1',
+    });
     expect(outcome).toEqual({ outcome: 'injected' });
     expect(fixture.seen.at(-1)?.body).toEqual({
       solveId: 'solve-recaptcha',
@@ -124,12 +131,19 @@ test.skipIf(!available)(
   async () => {
     const before = fixture.seen.length;
     await open('/interstitial');
-    expect(await solveOnPage(needs, { solveId: 'solve-interstitial', runId: 'run-1' })).toEqual({
+    expect(
+      await solveOnPage(needs, {
+        solveId: 'solve-interstitial',
+        runId: 'run-1',
+      })
+    ).toEqual({
       outcome: 'unsupported',
       provider: 'cloudflareChallenge',
     });
     await open('/plain');
-    expect(await solveOnPage(needs, { solveId: 'solve-plain', runId: 'run-1' })).toEqual({
+    expect(
+      await solveOnPage(needs, { solveId: 'solve-plain', runId: 'run-1' })
+    ).toEqual({
       outcome: 'noChallenge',
     });
     expect(fixture.seen.length).toBe(before);
@@ -144,13 +158,17 @@ test.skipIf(!available)(
       withCurrentPage(endpoint, async (page) => {
         await page.evaluate(() => {
           const { history } = globalThis as unknown as {
-            history: { replaceState: (data: null, unused: string, url: string) => void };
+            history: {
+              replaceState: (data: null, unused: string, url: string) => void;
+            };
           };
           history.replaceState(null, '', '#step2');
         });
       });
     try {
-      expect(await solveOnPage(needs, { solveId: 'solve-hash', runId: 'run-1' })).toEqual({
+      expect(
+        await solveOnPage(needs, { solveId: 'solve-hash', runId: 'run-1' })
+      ).toEqual({
         outcome: 'injected',
       });
     } finally {
@@ -167,15 +185,20 @@ test.skipIf(!available)(
       ownerHasTakenOver = true;
     };
     try {
-      expect(await solveOnPage(needs, { solveId: 'solve-owner', runId: 'run-1' })).toEqual({
+      expect(
+        await solveOnPage(needs, { solveId: 'solve-owner', runId: 'run-1' })
+      ).toEqual({
         outcome: 'ownerDriving',
       });
       const field = await withCurrentPage(endpoint, (page) =>
         page.evaluate(() => {
           const { document } = globalThis as unknown as {
-            document: { querySelector: (selector: string) => { value: string } | null };
+            document: {
+              querySelector: (selector: string) => { value: string } | null;
+            };
           };
-          return document.querySelector('[name="cf-turnstile-response"]')?.value;
+          return document.querySelector('[name="cf-turnstile-response"]')
+            ?.value;
         })
       );
       expect(field).toBe('');
@@ -188,7 +211,10 @@ test.skipIf(!available)(
 
 type PageScope = {
   document: {
-    querySelector: (selector: string) => { value: string; setAttribute: (name: string, value: string) => void } | null;
+    querySelector: (selector: string) => {
+      value: string;
+      setAttribute: (name: string, value: string) => void;
+    } | null;
   };
   grecaptcha: { execute: () => Promise<string> };
 };
@@ -201,11 +227,15 @@ test.skipIf(!available)(
       withCurrentPage(endpoint, async (page) => {
         await page.evaluate(() => {
           const { document } = globalThis as unknown as PageScope;
-          document.querySelector('.cf-turnstile')?.setAttribute('data-sitekey', '0x4AAAAAAAnewKey');
+          document
+            .querySelector('.cf-turnstile')
+            ?.setAttribute('data-sitekey', '0x4AAAAAAAnewKey');
         });
       });
     try {
-      expect(await solveOnPage(needs, { solveId: 'solve-swap', runId: 'run-1' })).toEqual({
+      expect(
+        await solveOnPage(needs, { solveId: 'solve-swap', runId: 'run-1' })
+      ).toEqual({
         outcome: 'pageChanged',
       });
     } finally {
@@ -228,7 +258,9 @@ test.skipIf(!available)(
       await browser.close();
     };
     try {
-      expect(await solveOnPage(needs, { solveId: 'solve-tabs', runId: 'run-1' })).toEqual({
+      expect(
+        await solveOnPage(needs, { solveId: 'solve-tabs', runId: 'run-1' })
+      ).toEqual({
         outcome: 'injected',
       });
       const { chromium: playwright } = await import('playwright-core');
@@ -237,10 +269,13 @@ test.skipIf(!available)(
       for (const page of browser.contexts()[0]?.pages() ?? []) {
         if (!page.url().includes('/recaptcha')) continue;
         const id = await targetIdOf(page);
-        filled[id === original ? 'original' : 'second'] = await page.evaluate(() => {
-          const { document } = globalThis as unknown as PageScope;
-          return document.querySelector('[name="g-recaptcha-response"]')?.value;
-        });
+        filled[id === original ? 'original' : 'second'] = await page.evaluate(
+          () => {
+            const { document } = globalThis as unknown as PageScope;
+            return document.querySelector('[name="g-recaptcha-response"]')
+              ?.value;
+          }
+        );
         if (id !== original) await page.close();
       }
       await browser.close();
@@ -255,7 +290,9 @@ test.skipIf(!available)(
   "reCAPTCHA v3: execute answers the token once, then the page's own again",
   async () => {
     await open('/recaptcha-v3');
-    expect(await solveOnPage(needs, { solveId: 'solve-v3', runId: 'run-1' })).toEqual({
+    expect(
+      await solveOnPage(needs, { solveId: 'solve-v3', runId: 'run-1' })
+    ).toEqual({
       outcome: 'injected',
     });
     const answers = await withCurrentPage(endpoint, (page) =>

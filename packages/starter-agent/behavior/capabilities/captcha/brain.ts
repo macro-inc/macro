@@ -121,7 +121,10 @@ const runEnded = z.object({ outcome: z.literal('ended') });
  * Ends the run, so the agent may start the next one at once (the harness
  * also ends it after its last solve; expiry is the backstop).
  */
-export const endRun = (relay: Relay, runId: string): Promise<z.infer<typeof runEnded> | Refused> =>
+export const endRun = (
+  relay: Relay,
+  runId: string
+): Promise<z.infer<typeof runEnded> | Refused> =>
   post(relay, `${runsRoute}/${runId}/end`, {}, {}, runEnded);
 
 /** Starts a solver run for the calling agent: one at a time, with a fixed allowance of model calls and solves. */

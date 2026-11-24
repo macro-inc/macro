@@ -13,7 +13,13 @@ import {
   solvePageUrl,
   type UnsupportedProvider,
 } from './detect.ts';
-import { injectToken, type Page, readFacts, settle, targetIdOf } from './page.ts';
+import {
+  injectToken,
+  type Page,
+  readFacts,
+  settle,
+  targetIdOf,
+} from './page.ts';
 
 /**
  * How the page shows a token took: it moved to another page, or the
@@ -42,7 +48,9 @@ export type Outcome =
 
 export type SolveNeeds = {
   /** Runs `use` on the agent's current tab. */
-  readonly withPage: <Value>(use: (page: Page) => Promise<Value>) => Promise<Value>;
+  readonly withPage: <Value>(
+    use: (page: Page) => Promise<Value>
+  ) => Promise<Value>;
   /** Runs `use` on the tab with this DevTools target id; undefined when it is gone. */
   readonly withTarget: <Value>(
     targetId: string,
@@ -84,15 +92,19 @@ export const findChallenge = async (
     url: page.url(),
     pageUrl,
     challenge: detection.challenge,
-    ...(detection.callback === undefined ? {} : { callback: detection.callback }),
+    ...(detection.callback === undefined
+      ? {}
+      : { callback: detection.callback }),
   };
 };
 
-const isFound = (value: Found | Outcome): value is Found => 'challenge' in value;
+const isFound = (value: Found | Outcome): value is Found =>
+  'challenge' in value;
 
 /** A page that navigated mid-evaluate throws; that is the page moving on, not a failure. */
 const contextDestroyed = (error: unknown): boolean =>
-  error instanceof Error && /context was destroyed|navigat/i.test(error.message);
+  error instanceof Error &&
+  /context was destroyed|navigat/i.test(error.message);
 
 /**
  * Puts the token in, waits for the page, and says what it saw. "Navigated"
@@ -108,7 +120,8 @@ const apply = async (
   const before = page.url();
   if (solvePageUrl(before) !== found.pageUrl) return { outcome: 'pageChanged' };
   // The page may have swapped its widget while the harness solved: the token is for the old one.
-  if (!sameChallenge(detect(await readFacts(page)), found)) return { outcome: 'pageChanged' };
+  if (!sameChallenge(detect(await readFacts(page)), found))
+    return { outcome: 'pageChanged' };
   // Checked again on the tab itself: the owner may have taken over while we attached.
   if (await ownerDriving()) return { outcome: 'ownerDriving' };
   const moved = () => solvePageUrl(page.url()) !== found.pageUrl;
@@ -133,13 +146,17 @@ const apply = async (
     await settle(page, page.url());
     after = detect(await readFacts(page));
   }
-  if (moved() && after.kind === 'none') return { outcome: 'solved', evidence: 'navigated' };
-  if (after.kind === 'none') return { outcome: 'solved', evidence: 'challengeGone' };
+  if (moved() && after.kind === 'none')
+    return { outcome: 'solved', evidence: 'navigated' };
+  if (after.kind === 'none')
+    return { outcome: 'solved', evidence: 'challengeGone' };
   if (
     !moved() &&
     sameChallenge(after, found) &&
     injected !== undefined &&
-    (injected.filled > 0 || injected.executeAnswered || injected.callback === 'ran')
+    (injected.filled > 0 ||
+      injected.executeAnswered ||
+      injected.callback === 'ran')
   )
     return { outcome: 'injected' };
   return { outcome: 'stillChallenged' };
@@ -200,6 +217,7 @@ export const solveOnPage = (
         )
       )) ?? ({ outcome: 'pageChanged' } as const);
     span.set('captcha.outcome', outcome.outcome);
-    if (outcome.outcome === 'solved') span.set('captcha.evidence', outcome.evidence);
+    if (outcome.outcome === 'solved')
+      span.set('captcha.evidence', outcome.evidence);
     return outcome;
   });

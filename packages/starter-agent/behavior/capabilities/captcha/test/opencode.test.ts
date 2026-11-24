@@ -17,7 +17,8 @@ import { solveCaptcha } from '../index.ts';
 import { withCurrentPage } from '../page.ts';
 import { standInRunId, startFixture } from './fixture.ts';
 
-const available = Bun.which('chromium') !== null && Bun.which('opencode') !== null;
+const available =
+  Bun.which('chromium') !== null && Bun.which('opencode') !== null;
 const port = 9439;
 const endpoint = `http://127.0.0.1:${port}`;
 const token = 'XXXX.DUMMY.TOKEN.XXXX';
@@ -26,7 +27,12 @@ let directory = '';
 let running: Running | undefined;
 const toolsOffered: string[][] = [];
 const fixture = startFixture({
-  solve: () => ({ outcome: 'solved', token, userAgent: null, taskId: 'task-1' }),
+  solve: () => ({
+    outcome: 'solved',
+    token,
+    userAgent: null,
+    taskId: 'task-1',
+  }),
   // The stand-in model: solve once, then say what came back.
   chat: ({ messages, tools }) => {
     toolsOffered.push((tools ?? []).map((tool) => tool.function.name));
@@ -86,7 +92,8 @@ test.skipIf(!available)(
         sandbox: [],
         join,
         relay: () => Promise.resolve({ url: relay.url, token: relay.token }),
-        macro: () => Promise.reject(new Error('no screen link is needed when solved')),
+        macro: () =>
+          Promise.reject(new Error('no screen link is needed when solved')),
         trace: passthrough,
       },
       { reason: 'signing in to the shop' }
@@ -97,14 +104,18 @@ test.skipIf(!available)(
       evidence: 'challengeGone',
       next: 'Cleared. Carry on with the page.',
     });
-    const runs = fixture.seen.filter(({ path }) => path === '/brain/captcha/runs');
+    const runs = fixture.seen.filter(
+      ({ path }) => path === '/brain/captcha/runs'
+    );
     expect(runs.length).toBe(1);
     expect(
       fixture.seen.filter(
         ({ path }) => path === `/brain/captcha/runs/${standInRunId}/end`
       ).length
     ).toBe(1);
-    const solves = fixture.seen.filter(({ path }) => path === '/brain/captcha/solve');
+    const solves = fixture.seen.filter(
+      ({ path }) => path === '/brain/captcha/solve'
+    );
     expect(solves.map(({ run }) => run)).toEqual([standInRunId]);
     expect(solves.map(({ authorization }) => authorization)).toEqual([
       'Bearer agent-macro-key',

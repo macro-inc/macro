@@ -24,7 +24,10 @@ type PageDocument = {
   getElementById(id: string): unknown;
   getElementsByClassName(name: string): { readonly length: number };
 };
-type PageGlobals = { readonly document: PageDocument } & Record<string, unknown>;
+type PageGlobals = { readonly document: PageDocument } & Record<
+  string,
+  unknown
+>;
 
 export type Page = Awaited<
   ReturnType<Awaited<ReturnType<typeof chromium.connectOverCDP>>['newPage']>
