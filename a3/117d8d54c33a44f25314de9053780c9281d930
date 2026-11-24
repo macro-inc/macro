@@ -1,0 +1,30 @@
+apps/web/tests/native/fixtures/server.ts
+  s_0ad61ff8fce6ed::t_d98b93acc52269 223-227
+apps/web/tests/native/fixtures/server.test.ts
+  s_0ad61ff8fce6ed::t_8a0377df474e58 13-14,518-533
+  s_9d3802eede733c::t_84c5959550a155 534-535
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a3117d8d54c33a44f25314de9053780c9281d930",
+  "prompts": {},
+  "sessions": {
+    "s_0ad61ff8fce6ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "79bbd91d-3c11-40da-be4b-34bd184b6569",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_9d3802eede733c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d99d634e-e651-4b79-9c72-0c70c17501c1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
