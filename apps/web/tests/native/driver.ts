@@ -192,7 +192,8 @@ export async function expectAccountInitials(
  * The controls that the pane cuts off in the header holding the `search`
  * button (its aria-label): each must lie inside its top bar and be the
  * element at its own center, so a control laid out past the bar's edge, or
- * clipped by the scrolling actions row, is listed.
+ * clipped by the scrolling actions row, is listed. Controls kept mounted but
+ * hidden (a collapsed search field, `aria-hidden` and `inert`) are skipped.
  */
 export async function clippedHeaderControls(browser: Browser, search: string) {
   return browser.execute((label) => {
@@ -202,7 +203,12 @@ export async function clippedHeaderControls(browser: Browser, search: string) {
     const edge = bar.getBoundingClientRect();
     return [...bar.querySelectorAll('button, label')]
       .map((control) => ({ control, box: control.getBoundingClientRect() }))
-      .filter(({ box }) => box.width > 0 && box.height > 0)
+      .filter(
+        ({ control, box }) =>
+          box.width > 0 &&
+          box.height > 0 &&
+          !control.closest('[aria-hidden="true"], [inert]')
+      )
       .filter(({ control, box }) => {
         const hit = document.elementFromPoint(
           box.left + box.width / 2,

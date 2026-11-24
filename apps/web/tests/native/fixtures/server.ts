@@ -220,6 +220,11 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
             },
             workFeed: { entries: [], nextCursor: null, nextPosition: null },
             contacts: { nodes: [], nextCursor: null },
+            timeTracking: {
+              id: USER_ID,
+              runningTimer: null,
+              serverNow: TIMESTAMP,
+            },
             favorites: ({ filter }: { filter?: FavoritesFilterInput | null }) =>
               (corpus ?? [])
                 .filter(
