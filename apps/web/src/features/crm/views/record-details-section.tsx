@@ -28,11 +28,20 @@ export function RecordDetailsSection(props: {
         </SidePanel.Row>
         <Show when={props.company}>
           {(company) => (
-            <SidePanel.Row label="Website">
-              <Show when={company().id} keyed>
-                {(_id) => <CompanyDomainField company={company()} />}
-              </Show>
-            </SidePanel.Row>
+            <>
+              {/* Several domains run over several lines; the label sits on
+                  the first, as on the Email row. */}
+              <span class="self-start truncate pt-1.5 text-ink-muted touch:pt-3">
+                Website
+              </span>
+              <div class="min-w-0 self-start py-0.5">
+                <Show when={company().id} keyed>
+                  {(_id) => (
+                    <CompanyDomainField company={company()} surface="details" />
+                  )}
+                </Show>
+              </div>
+            </>
           )}
         </Show>
         <Show when={props.contact}>
