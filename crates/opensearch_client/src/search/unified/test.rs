@@ -1414,7 +1414,10 @@ fn every_searched_index_contributes_a_named_clause() -> anyhow::Result<()> {
         .filter_map(|clause| clause["bool"]["_name"].as_str())
         .collect();
 
-    for entity in OpenSearchEntityType::iter() {
+    // The unified request does not search database rows yet.
+    for entity in
+        OpenSearchEntityType::iter().filter(|entity| *entity != OpenSearchEntityType::DatabaseRows)
+    {
         assert!(
             names.contains(entity.query_name()),
             "{} contributed an unnamed clause; its hits would be undispatchable",
