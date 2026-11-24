@@ -66,8 +66,12 @@ The forwarder sets the mark and trace context itself, outside the realm, drops
 the ones the program set, follows no redirects and records a
 `code_execution.egress` span per request. It stops when the run ends, is
 cancelled or times out. The agent harness picks it per user with the
-fail-closed `enable-code-execution-egress-proxy` flag; `Egress::Direct` (the
-default) is the old path.
+fail-closed `enable-code-execution-egress-proxy` flag, and always proxies a
+run under a default-deny scope. A forwarder that can't start fails the run
+with `FailureCode::Egress` (never a direct fallback). Each forwarder has a
+lifetime span (`code_execution.egress_forwarder`: `outcome` ready or
+failed, `listener` failed, and the `forwarded`, `refused` and `failed`
+request counts when it stops); `Egress::Direct` (the default) is the old path.
 
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
 host fills both from `macro_service_urls`. Leaving `webAppUrl` out of

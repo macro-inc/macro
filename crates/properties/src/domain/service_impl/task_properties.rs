@@ -41,6 +41,12 @@ where
         let Some(PropertyValue::EntityRef(references)) = value else {
             return Ok(());
         };
+        refuse_assigning_others(
+            references
+                .iter()
+                .map(|reference| reference.entity_id.as_str()),
+            access.acting_user_id().map(ToString::to_string).as_deref(),
+        )?;
         let mut assignee_ids = Vec::new();
         for reference in references {
             if reference.entity_type != EntityType::User {
@@ -141,6 +147,11 @@ where
                 ));
             }
         };
+        // Joining a project inherits its agents, whose work runs with the
+        // owner's full access: a scoped request starts no such work.
+        if !agent_correlation::context::may_assign_agents() {
+            return Err(PropertiesErr::PermissionDenied);
+        }
         self.check_referenced_edit_access(
             access,
             entity_access::domain::models::EntityType::Initiative,
@@ -252,6 +263,12 @@ where
             }
             return Ok(());
         };
+        refuse_assigning_others(
+            references
+                .iter()
+                .map(|reference| reference.entity_id.as_str()),
+            assigned_by_user_id.map(ToString::to_string).as_deref(),
+        )?;
 
         let mut assignee_ids = Vec::new();
         for reference in references {
@@ -384,4 +401,25 @@ where
 
         Ok(())
     }
+}
+
+/// Under a scope (none may share or put an agent to work), assigning
+/// anyone but the acting user reaches them: it grants access, notifies
+/// them, or starts an agent's work with the person's full access. Refused,
+/// and recorded as a sharing refusal.
+fn refuse_assigning_others<'a>(
+    assignees: impl IntoIterator<Item = &'a str>,
+    acting_user: Option<&str>,
+) -> Result<(), PropertiesErr> {
+    if agent_correlation::context::may_share() && agent_correlation::context::may_assign_agents() {
+        return Ok(());
+    }
+    if assignees
+        .into_iter()
+        .any(|assignee| Some(assignee) != acting_user)
+    {
+        let _ = agent_correlation::context::refuse_sharing(true);
+        return Err(PropertiesErr::PermissionDenied);
+    }
+    Ok(())
 }

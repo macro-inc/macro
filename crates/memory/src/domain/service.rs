@@ -31,11 +31,28 @@ impl<R> MemoryServiceImpl<R> {
     }
 }
 
+/// A person's own read enrolls them in daily memory refresh
+/// ([`MemoryReader`]); a program's only reads.
+async fn enroll_a_person<R: ComposedMemoryRepo>(
+    repo: &R,
+    user: &MacroUserIdStr<'_>,
+    reader: MemoryReader,
+) -> Result<()> {
+    match reader {
+        MemoryReader::Person => repo.enroll(user).await,
+        MemoryReader::Program => Ok(()),
+    }
+}
+
 impl<R: ComposedMemoryRepo> MemoryService for MemoryServiceImpl<R> {
     #[tracing::instrument(skip_all, err)]
-    async fn get_memory(&self, user: MacroUserIdStr<'static>) -> Result<Option<Memory>> {
+    async fn get_memory(
+        &self,
+        user: MacroUserIdStr<'static>,
+        reader: MemoryReader,
+    ) -> Result<Option<Memory>> {
         // Retain the deployed method contract, but reads no longer spawn generation.
-        self.repo.enroll(&user).await?;
+        enroll_a_person(&self.repo, &user, reader).await?;
         let selected = self.repo.latest_activity(&user).await?;
         let explicit = self.repo.explicit(&user).await?;
         let teams = self.teams.members(&user).await?;
@@ -63,8 +80,12 @@ impl<R: ComposedMemoryRepo> MemoryService for MemoryServiceImpl<R> {
 
     /// Private memory is always read as the authenticated caller.
     #[tracing::instrument(skip_all, err)]
-    async fn explicit(&self, user: &MacroUserIdStr<'_>) -> Result<ExplicitMemory> {
-        self.repo.enroll(user).await?;
+    async fn explicit(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        reader: MemoryReader,
+    ) -> Result<ExplicitMemory> {
+        enroll_a_person(&self.repo, user, reader).await?;
         self.repo.explicit(user).await
     }
 

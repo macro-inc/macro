@@ -111,8 +111,11 @@ fn app(state: AppState, jwt_validation_args: JwtValidationArgs) -> Router {
                 .url("/api/api-doc/openapi.json", swagger::ApiDoc::openapi()),
         )
         .layer(axum::middleware::from_fn_with_state(
-            jwt_validation_args,
-            agent_correlation::inbound::enforce_signed_scope,
+            agent_correlation::inbound::SignedScopeState {
+                jwt: jwt_validation_args,
+                specs: &["static-files"],
+            },
+            agent_correlation::inbound::enforce_signed_scope_serving,
         ))
         .layer(macro_cors::cors_layer())
         .layer(DefaultBodyLimit::disable())
