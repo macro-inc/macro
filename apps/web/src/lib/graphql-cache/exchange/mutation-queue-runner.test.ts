@@ -478,6 +478,7 @@ function liveOwner(departure: () => Promise<void>) {
   return {
     claimOwner: () => 'exchange-live:here',
     holds: () => true,
+    dispose: () => {},
     departed: vi.fn((leaseOwner: string) =>
       leaseOwner.startsWith('exchange-live:') ? departure() : undefined
     ),
