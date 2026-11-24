@@ -1470,9 +1470,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     for (const resolve of waiters) resolve();
   }
 
-  /** Waits for the next owner while this host has none. */
+  /** Waits for the next owner while this host has none, or no connection. */
   function transportReady(): Promise<void> {
-    if (state !== 'awaiting-replacement') return Promise.resolve();
+    if (state !== 'awaiting-replacement' && state !== 'suspended')
+      return Promise.resolve();
     return new Promise((resolve) => transportWaiters.add(resolve));
   }
 
@@ -1539,13 +1540,18 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     return authorityObserver.observeCurrent(value, version);
   }
 
-  /** Answers once there is an owner to ask, however many are lost meanwhile. */
+  /**
+   * Answers once there is an owner to ask, however many are lost or however
+   * often the page is suspended meanwhile: a page waits on it to start.
+   */
   async function currentAuthority(): Promise<CacheAuthority> {
     for (;;) {
       try {
         return await askAuthority();
       } catch (error) {
-        if (!isOwnerEpochLoss(error) || !isServing()) throw error;
+        const interrupted =
+          isOwnerEpochLoss(error) || error instanceof CacheNavigationError;
+        if (!interrupted || !isServing()) throw error;
         await transportReady();
       }
     }

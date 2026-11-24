@@ -15,8 +15,6 @@ export type KnownViolation = ViolationKey & {
 
 const WIPE =
   'The open after an engine died in a live page wipes the database, queued writes included.';
-const BFCACHE_AT_STARTUP =
-  'A tab that enters the back/forward cache while starting drops its host, and nothing restarts it when the tab comes back.';
 const SUPERSEDED_AT_STARTUP =
   'A tab refused at startup because a newer build has the database is never told to reload.';
 const HOLDER_KEPT =
@@ -75,16 +73,6 @@ const CONTENDING: InjectedFault[] = [
 
 export const KNOWN_VIOLATIONS: KnownViolation[] = [
   ...known(WIPE, ['crash-engine owner'], [WIPED]),
-  ...(['bfcache', 'bfcache owner'] as const).flatMap((fault) =>
-    known(
-      BFCACHE_AT_STARTUP,
-      [fault],
-      [
-        'S2:host retired on CacheNavigationError:untyped:cache worker host was disposed for page navigation',
-      ]
-    )
-  ),
-  ...known(BFCACHE_AT_STARTUP, ['bfcache', 'restore'], [STOPPED, UNSTARTED]),
   ...known(
     SUPERSEDED_AT_STARTUP,
     [],

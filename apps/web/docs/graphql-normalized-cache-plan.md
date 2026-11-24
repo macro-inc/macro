@@ -408,7 +408,9 @@ late old-epoch responses cannot settle the rejected requests.
 Any other request its owner left without an answer, drained or lost, is refused
 with `owner-epoch-lost`. A page still starting asks the next owner again and
 keeps its callers waiting, and so does an authority read, which startup waits on
-after the handshake. Reads and writes are not replayed. During a handover the
+after the handshake. An authority read also waits out a suspension in the
+back/forward cache and a coordinator restart, so neither makes a starting page
+drop its host. Reads and writes are not replayed. During a handover the
 coordinator announced, a host told its owner was lost keeps sending it requests,
 which wait there for the next owner.
 

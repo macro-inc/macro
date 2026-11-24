@@ -25,6 +25,7 @@ import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type EngineOpenOutcome,
 } from '../worker/coordinator-protocol';
+import { WorkerRestartedError } from '../worker/effect-worker-transport';
 import {
   CacheBootstrapExhaustedError,
   COORDINATOR_CONNECT_TIMEOUT_MS,
@@ -2463,6 +2464,68 @@ describe('createWorkerCacheHost', () => {
       host.dispose();
     }
   );
+
+  it.each(['registration', 'init', 'ready'] as const)(
+    'answers an authority read interrupted by pagehide at %s once restored',
+    async (phase) => {
+      configureAdapter = (fake) => {
+        if (phase === 'registration')
+          fake.start.mockImplementationOnce(() => new Promise(() => {}));
+        if (phase === 'init') fake.ignoredKinds.add('init');
+        if (phase === 'ready') fake.ignoredKinds.add('current-authority');
+      };
+      const onInitializationError = vi.fn();
+      const host = createWorkerCacheHost({
+        scope: 'scope-1',
+        onInitializationError,
+      });
+      const authority = host.authority?.current();
+      const old = requireAdapter();
+      if (phase === 'init')
+        await vi.waitFor(() => expect(old.requests).toHaveLength(1));
+      if (phase === 'ready')
+        await vi.waitFor(() => expect(old.authorityRequests).toHaveLength(1));
+      dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      // One made while suspended waits as well.
+      const whileSuspended = host.authority?.current();
+      configureAdapter = () => undefined;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      for (const answer of [authority, whileSuspended])
+        await expect(answer).resolves.toMatchObject({
+          generation: TEST_AUTHORITY_GENERATION,
+        });
+      expect(onInitializationError).not.toHaveBeenCalled();
+      host.dispose();
+    }
+  );
+
+  it('answers an authority read interrupted by a coordinator restart', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    configureAdapter = (fake) => fake.ignoredKinds.add('current-authority');
+    const authority = host.authority?.current();
+    const old = requireAdapter();
+    await vi.waitFor(() => expect(old.authorityRequests).toHaveLength(1));
+    configureAdapter = () => undefined;
+    old.terminalError(new WorkerRestartedError());
+    await expect(authority).resolves.toMatchObject({
+      generation: TEST_AUTHORITY_GENERATION,
+    });
+    expect(requireAdapter()).not.toBe(old);
+    host.dispose();
+  });
+
+  it('refuses an authority read made while suspended once the host is disposed', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    const refused = expect(host.authority?.current()).rejects.toMatchObject({
+      errorCode: 'host-disposed',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    host.dispose();
+    await refused;
+  });
 
   it.each([false, true])(
     'does not resurrect an explicitly disposed host (restore started: %s)',
