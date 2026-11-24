@@ -151,6 +151,7 @@ export async function loadPropertyDefinitionsWithOptions(
   params: Omit<ListPropertiesQueryParams, 'includeOptions'>
 ): Promise<PropertyDefinitionResponse[]> {
   const client = getGraphqlSoupClient();
+  const host = getGraphqlSoupCacheHost();
   const variables = {
     scope: toGraphqlDefinitionScope(params.scope),
     forEntityType: (params.forEntityType ??
@@ -162,7 +163,13 @@ export async function loadPropertyDefinitionsWithOptions(
     })
     .toPromise();
   if (result.data) return definitionsWithOptions(result.data);
-  if (result.error?.networkError && getGraphqlSoupCacheHost()) {
+  // Only the cache the read went through answers it: a client without one
+  // would send a cache-only read as a second request.
+  if (
+    result.error?.networkError &&
+    host &&
+    getGraphqlSoupCacheHost() === host
+  ) {
     const cached = await client
       .query(PropertyCatalogDefinitionsWithOptionsDocument, variables, {
         requestPolicy: 'cache-only',
