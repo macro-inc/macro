@@ -131,6 +131,7 @@ members = [
   "services/firecracker_host",
   "crates/import",
   "crates/import_notion",
+  "crates/fusion_import",
   "crates/import_tracker",
   "crates/import_linear",
   "crates/import_jira",
