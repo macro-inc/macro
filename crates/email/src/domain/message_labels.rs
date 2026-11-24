@@ -312,11 +312,9 @@ where
                 is_adding,
                 EmailEventOrigin::UserAction,
             );
-            if let Some(event) = event {
-                let _ = self.broker.send_event(&event).inspect_err(|e| {
-                    tracing::error!(error=?e, "failed to publish email macro event");
-                });
-            }
+            let _ = self.broker.send_event(&event).inspect_err(|e| {
+                tracing::error!(error=?e, "failed to publish email macro event");
+            });
         }
 
         let (labels_to_add, labels_to_remove) = if is_adding {
