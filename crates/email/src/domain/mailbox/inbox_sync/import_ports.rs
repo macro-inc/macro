@@ -56,6 +56,15 @@ pub trait InboxSyncHistoryFacts: InboxSyncRepository {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
+/// A message carrying a label, and its thread.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LabelledMessage {
+    /// Message row id.
+    pub message_id: Uuid,
+    /// Thread row id.
+    pub thread_id: Uuid,
+}
+
 /// Existing Catalog capabilities for inbox imports.
 pub trait InboxSyncCatalog: InboxSyncRepository {
     /// Read the complete stored label catalog.
@@ -74,12 +83,15 @@ pub trait InboxSyncCatalog: InboxSyncRepository {
         &self,
         labels: Vec<service::label::Label>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    /// The threads with a message carrying any of these provider labels.
-    fn labelled_threads(
+    /// Up to `limit` messages carrying this provider label, in message order
+    /// after `after` (the nil id for the first page).
+    fn labelled_messages(
         &self,
         link: Uuid,
-        labels: &[String],
-    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+        label: &str,
+        after: Uuid,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<LabelledMessage>, Self::Err>> + Send;
 }
 
 /// Existing MessageStore capabilities for inbox imports.

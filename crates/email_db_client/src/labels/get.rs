@@ -7,44 +7,59 @@ use sqlx::PgPool;
 use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
 
-/// The threads of `link_id` with a message carrying any of these provider labels.
-#[tracing::instrument(skip(pool, provider_label_ids), err)]
-pub async fn fetch_thread_ids_by_provider_label_ids(
+/// A message carrying a label, and its thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LabelledMessage {
+    pub message_id: Uuid,
+    pub thread_id: Uuid,
+}
+
+/// Up to `limit` messages of `link_id` carrying the provider label, in message
+/// id order after `after` (the nil id for the first page).
+#[tracing::instrument(skip(pool, provider_label_id), err)]
+pub async fn fetch_labelled_messages_page(
     pool: &PgPool,
     link_id: Uuid,
-    provider_label_ids: &[String],
-) -> anyhow::Result<Vec<Uuid>> {
-    if provider_label_ids.is_empty() {
-        return Ok(Vec::new());
-    }
-
+    provider_label_id: &str,
+    after: Uuid,
+    limit: i64,
+) -> anyhow::Result<Vec<LabelledMessage>> {
     let mut tx = pool.begin().await?;
     sqlx::query!("SET LOCAL statement_timeout = '15s'")
         .execute(&mut *tx)
         .await?;
 
-    // The OFFSET 0 fences keep one index lookup per label and per message:
-    // with them joined, a generic plan scans every mailbox's messages.
-    let thread_ids = sqlx::query_scalar!(
+    // The inner LIMIT and the OFFSET 0 fence keep one index range read and one
+    // lookup per message of the page: with the tables joined, a generic plan
+    // scans every mailbox's messages.
+    let mut messages = sqlx::query_as!(
+        LabelledMessage,
         r#"
-        SELECT DISTINCT m.thread_id AS "thread_id!"
+        SELECT ml.message_id AS "message_id!", m.thread_id AS "thread_id!"
         FROM email_labels l
         CROSS JOIN LATERAL (
-            SELECT ml.message_id FROM email_message_labels ml WHERE ml.label_id = l.id OFFSET 0
+            SELECT ml.message_id
+            FROM email_message_labels ml
+            WHERE ml.label_id = l.id AND ml.message_id > $3
+            ORDER BY ml.message_id
+            LIMIT $4
         ) ml
         CROSS JOIN LATERAL (
             SELECT em.thread_id FROM email_messages em WHERE em.id = ml.message_id OFFSET 0
         ) m
-        WHERE l.link_id = $1 AND l.provider_label_id = ANY($2)
+        WHERE l.link_id = $1 AND l.provider_label_id = $2
         "#,
         link_id,
-        provider_label_ids,
+        provider_label_id,
+        after,
+        limit,
     )
     .fetch_all(&mut *tx)
     .await?;
 
     tx.commit().await?;
-    Ok(thread_ids)
+    messages.sort_by_key(|message| message.message_id);
+    Ok(messages)
 }
 
 /// retrieves a message label if it exists

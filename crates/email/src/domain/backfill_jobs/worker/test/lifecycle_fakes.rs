@@ -1,5 +1,7 @@
 use super::*;
-use crate::domain::mailbox::inbox_sync::{InboxSyncAttachmentRecipients, LabelCatalogRepository};
+use crate::domain::mailbox::inbox_sync::{
+    InboxSyncAttachmentRecipients, LabelCatalogRepository, LabelledMessage,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::link::Link;
 use models_email::service::{attachment::AttachmentUploadMetadata, label::Label};
@@ -94,12 +96,14 @@ impl LabelCatalogRepository for Fake {
         self.0.lock().unwrap().lifecycle.stored_labels = labels;
         Ok(())
     }
-    async fn labelled_threads(
+    async fn labelled_messages(
         &self,
         _: Uuid,
-        _: &[String],
-    ) -> Result<Vec<Uuid>, Self::CatalogError> {
-        self.lifecycle_call("labelled_threads")
+        _: &str,
+        _: Uuid,
+        _: u16,
+    ) -> Result<Vec<LabelledMessage>, Self::CatalogError> {
+        self.lifecycle_call("labelled_messages")
             .map_err(|source| BackfillDatabaseError {
                 source,
                 sqlstates: vec![],

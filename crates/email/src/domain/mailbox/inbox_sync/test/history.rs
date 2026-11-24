@@ -405,7 +405,19 @@ fn rename(fake: &super::fakes::Fake, name: &str) {
     renamed.name = Some(name.into());
     s.import.catalog = vec![stored];
     s.import.provider_catalog = Ok(vec![renamed]);
-    s.import.labelled_threads = vec![Uuid::from_u128(21), Uuid::from_u128(22)];
+    s.import.labelled_messages = vec![
+        labelled(1, 21),
+        labelled(2, 22),
+        // Another message of the first thread.
+        labelled(3, 21),
+    ];
+}
+
+fn labelled(message: u128, thread: u128) -> LabelledMessage {
+    LabelledMessage {
+        message_id: Uuid::from_u128(message),
+        thread_id: Uuid::from_u128(thread),
+    }
 }
 
 /// The index holds a message's label names, so renaming a label leaves the
@@ -427,8 +439,11 @@ async fn a_renamed_label_queues_its_threads_before_its_name_is_stored() {
             .unwrap()
     };
     assert_eq!(
-        calls[position("labelled_threads")],
-        Call::Import("labelled_threads", serde_json::json!(["Label_1"]))
+        calls[position("labelled_messages")],
+        Call::Import(
+            "labelled_messages",
+            serde_json::json!(["Label_1", Uuid::nil(), 5_000])
+        )
     );
     assert_eq!(
         calls[position("reindex_queue")],
@@ -443,6 +458,45 @@ async fn a_renamed_label_queues_its_threads_before_its_name_is_stored() {
     assert!(position("reindex_queue") < position("upsert_catalog"));
 }
 
+/// A label on more messages than one page reads them page by page and queues
+/// each thread once.
+#[tokio::test]
+async fn a_renamed_label_is_read_in_pages() {
+    let (svc, fake) = make_service(false);
+    rename(&fake, "Renamed");
+    fake.0.lock().unwrap().import.labelled_messages = (1..=5_001)
+        .map(|message| labelled(message, 100_000 + message / 2))
+        .collect();
+    assert!(matches!(
+        svc.process(Ok(input(gmail_notification()))).await,
+        InboxSyncDisposition::DoneDelete
+    ));
+    let calls = fake.calls();
+    let pages: Vec<_> = calls
+        .iter()
+        .filter_map(|c| match c {
+            Call::Import("labelled_messages", request) => Some(request.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        pages,
+        vec![
+            serde_json::json!(["Label_1", Uuid::nil(), 5_000]),
+            serde_json::json!(["Label_1", Uuid::from_u128(5_000), 5_000]),
+        ]
+    );
+    let queued: Vec<_> = calls
+        .iter()
+        .filter_map(|c| match c {
+            Call::Import("reindex_queue", request) => Some(request[1].as_array().unwrap().len()),
+            _ => None,
+        })
+        .collect();
+    // Messages 1 to 5,001 pair up into threads 100,000 to 102,500.
+    assert_eq!(queued, vec![2_501]);
+}
+
 /// Adding a label or changing how it is shown changes no indexed name.
 #[tokio::test]
 async fn a_label_that_keeps_its_name_reindexes_nothing() {
@@ -455,7 +509,7 @@ async fn a_label_that_keeps_its_name_reindexes_nothing() {
         hidden.label_list_visibility = None;
         s.import.catalog = vec![stored];
         s.import.provider_catalog = Ok(vec![hidden, super::fakes::label("Label_2").into()]);
-        s.import.labelled_threads = vec![Uuid::from_u128(21)];
+        s.import.labelled_messages = vec![labelled(1, 21)];
     }
     assert!(matches!(
         svc.process(Ok(input(gmail_notification()))).await,
@@ -463,7 +517,7 @@ async fn a_label_that_keeps_its_name_reindexes_nothing() {
     ));
     let calls = names(&fake.calls());
     assert!(calls.contains(&"upsert_catalog"));
-    assert!(!calls.contains(&"labelled_threads"));
+    assert!(!calls.contains(&"labelled_messages"));
     assert!(!calls.contains(&"reindex_queue"));
 }
 
@@ -472,7 +526,7 @@ async fn a_label_that_keeps_its_name_reindexes_nothing() {
 async fn renaming_an_unused_label_queues_nothing() {
     let (svc, fake) = make_service(false);
     rename(&fake, "Renamed");
-    fake.0.lock().unwrap().import.labelled_threads = vec![];
+    fake.0.lock().unwrap().import.labelled_messages = vec![];
     assert!(matches!(
         svc.process(Ok(input(gmail_notification()))).await,
         InboxSyncDisposition::DoneDelete
@@ -486,7 +540,7 @@ async fn renaming_an_unused_label_queues_nothing() {
 /// sync finds it again, and the mailbox's sync goes on.
 #[tokio::test]
 async fn a_rename_that_cannot_be_queued_is_not_stored_and_does_not_stop_the_sync() {
-    for step in ["labelled_threads", "reindex_queue"] {
+    for step in ["labelled_messages", "reindex_queue"] {
         let (svc, fake) = make_service(false);
         rename(&fake, "Renamed");
         fake.0.lock().unwrap().failures.push((step, 1));

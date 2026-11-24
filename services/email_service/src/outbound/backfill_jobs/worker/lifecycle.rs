@@ -1,6 +1,8 @@
 use super::database_error::database_error;
 use super::*;
-use email::domain::mailbox::inbox_sync::{InboxSyncAttachmentRecipients, LabelCatalogRepository};
+use email::domain::mailbox::inbox_sync::{
+    InboxSyncAttachmentRecipients, LabelCatalogRepository, LabelledMessage,
+};
 use email::domain::message_labels::state as label_state;
 use email::outbound::label_state_pg::PgLabelCatalog;
 use email_db_client::backfill::job::update as jobs;
@@ -27,18 +29,28 @@ impl LabelCatalogRepository for PgBackfillWorker {
             .await
             .map_err(database_error)
     }
-    async fn labelled_threads(
+    async fn labelled_messages(
         &self,
         link: Uuid,
-        labels: &[String],
-    ) -> Result<Vec<Uuid>, Self::CatalogError> {
-        email_db_client::labels::get::fetch_thread_ids_by_provider_label_ids(
+        label: &str,
+        after: Uuid,
+        limit: u16,
+    ) -> Result<Vec<LabelledMessage>, Self::CatalogError> {
+        Ok(email_db_client::labels::get::fetch_labelled_messages_page(
             &self.jobs.0,
             link,
-            labels,
+            label,
+            after,
+            i64::from(limit),
         )
         .await
-        .map_err(database_error)
+        .map_err(database_error)?
+        .into_iter()
+        .map(|message| LabelledMessage {
+            message_id: message.message_id,
+            thread_id: message.thread_id,
+        })
+        .collect())
     }
 }
 impl BackfillInitRepository for PgBackfillWorker {

@@ -37,7 +37,8 @@ pub(super) struct ImportState {
     pub labels_during_fetch: Option<Vec<String>>,
     /// The stored labels once the message is inserted.
     pub labels_after_insert: Option<Vec<db::label::Label>>,
-    pub labelled_threads: Vec<Uuid>,
+    /// Every message carrying the label, in message order.
+    pub labelled_messages: Vec<LabelledMessage>,
 }
 impl Default for ImportState {
     fn default() -> Self {
@@ -63,7 +64,7 @@ impl Default for ImportState {
             previews: VecDeque::new(),
             labels_during_fetch: None,
             labels_after_insert: None,
-            labelled_threads: vec![],
+            labelled_messages: vec![],
         }
     }
 }
@@ -109,9 +110,25 @@ impl InboxSyncCatalog for Fake {
     async fn upsert_catalog(&self, labels: Vec<service::label::Label>) -> Result<(), Failure> {
         self.io("upsert_catalog", labels)
     }
-    async fn labelled_threads(&self, _: Uuid, labels: &[String]) -> Result<Vec<Uuid>, Failure> {
-        self.io("labelled_threads", labels)?;
-        Ok(self.0.lock().unwrap().import.labelled_threads.clone())
+    async fn labelled_messages(
+        &self,
+        _: Uuid,
+        label: &str,
+        after: Uuid,
+        limit: u16,
+    ) -> Result<Vec<LabelledMessage>, Failure> {
+        self.io("labelled_messages", (label, after, limit))?;
+        Ok(self
+            .0
+            .lock()
+            .unwrap()
+            .import
+            .labelled_messages
+            .iter()
+            .filter(|message| message.message_id > after)
+            .take(usize::from(limit))
+            .copied()
+            .collect())
     }
 }
 impl InboxSyncMessageStore for Fake {

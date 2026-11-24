@@ -1,9 +1,9 @@
 use super::super::telemetry::span_int;
-use super::{ConnectionSourceError, InboxSyncCatalog};
+use super::{ConnectionSourceError, InboxSyncCatalog, LabelledMessage};
 use anyhow::Context;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::email::service::label::Label;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use tracing::field;
 use uuid::Uuid;
 
@@ -138,6 +138,11 @@ pub async fn sync_labels<R: LabelCatalogRepository, Q: ThreadReindexQueue>(
     Ok(())
 }
 
+/// Messages read per page of a renamed label, so no read grows with the label.
+const LABELLED_MESSAGES_PAGE: u16 = 5_000;
+
+/// Queue the reindex of the threads carrying the renamed labels. They are read
+/// in pages and queued together, so the queue's delay starts after the read.
 async fn queue_renamed_label_reindex<R: LabelCatalogRepository, Q: ThreadReindexQueue>(
     db: &R,
     queue: &Q,
@@ -148,11 +153,25 @@ async fn queue_renamed_label_reindex<R: LabelCatalogRepository, Q: ThreadReindex
     let span = tracing::Span::current();
     span.record("labels.renamed", span_int(renamed_labels.len()));
 
-    let threads = db
-        .labelled_threads(link_id, renamed_labels)
-        .await
-        .map_err(ConnectionSourceError::into_original)
-        .context("Failed to fetch the threads carrying renamed labels")?;
+    let mut threads = BTreeSet::new();
+    for label in renamed_labels {
+        let mut after = Uuid::nil();
+        loop {
+            let page = db
+                .labelled_messages(link_id, label, after, LABELLED_MESSAGES_PAGE)
+                .await
+                .map_err(ConnectionSourceError::into_original)
+                .context("Failed to fetch the messages carrying a renamed label")?;
+            threads.extend(page.iter().map(|message| message.thread_id));
+
+            match page.last() {
+                Some(last) if page.len() == usize::from(LABELLED_MESSAGES_PAGE) => {
+                    after = last.message_id;
+                }
+                _ => break,
+            }
+        }
+    }
     span.record("labels.reindexed_threads", span_int(threads.len()));
 
     if threads.is_empty() {
@@ -160,7 +179,7 @@ async fn queue_renamed_label_reindex<R: LabelCatalogRepository, Q: ThreadReindex
     }
 
     queue
-        .enqueue_thread_reindex(owner, threads)
+        .enqueue_thread_reindex(owner, threads.into_iter().collect())
         .await
         .map_err(ConnectionSourceError::into_original)
         .context("Failed to queue the threads")
@@ -186,12 +205,15 @@ pub trait LabelCatalogRepository: Send + Sync {
         &self,
         labels: Vec<Label>,
     ) -> impl Future<Output = Result<(), Self::CatalogError>> + Send;
-    /// The threads with a message carrying any of these provider labels.
-    fn labelled_threads(
+    /// Up to `limit` messages carrying this provider label, in message order
+    /// after `after` (the nil id for the first page).
+    fn labelled_messages(
         &self,
         link: Uuid,
-        labels: &[String],
-    ) -> impl Future<Output = Result<Vec<Uuid>, Self::CatalogError>> + Send;
+        label: &str,
+        after: Uuid,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<LabelledMessage>, Self::CatalogError>> + Send;
 }
 
 /// Bulk search reindexing, kept off the queue that carries live mail's events.
@@ -221,11 +243,13 @@ impl<R: InboxSyncCatalog> LabelCatalogRepository for R {
     async fn upsert_stored_catalog(&self, labels: Vec<Label>) -> Result<(), Self::CatalogError> {
         self.upsert_catalog(labels).await
     }
-    async fn labelled_threads(
+    async fn labelled_messages(
         &self,
         link: Uuid,
-        labels: &[String],
-    ) -> Result<Vec<Uuid>, Self::CatalogError> {
-        InboxSyncCatalog::labelled_threads(self, link, labels).await
+        label: &str,
+        after: Uuid,
+        limit: u16,
+    ) -> Result<Vec<LabelledMessage>, Self::CatalogError> {
+        InboxSyncCatalog::labelled_messages(self, link, label, after, limit).await
     }
 }
