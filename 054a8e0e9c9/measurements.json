@@ -1,0 +1,3179 @@
+{
+ "title": "IMAP location fingerprint and recent-id lookups: database plan evidence",
+ "sourceCommit": "054a8e0e9c96ac13f0f7eeb05d78966b5b79843e",
+ "sourceTree": "d40a00735f09c7e12ad6e85974e224153f3d4333",
+ "sources": {
+  "locationFingerprintsSql": "e4d4d2f8751929beb10bfda2b0d5ee9302efdcd275375d0c9430ff1a8af0b81e",
+  "migration20261119063901": "75e1feca1d672984313f2360fb4293094f6ce8418d510c33f9d1859f00983ed3",
+  "manifestStatementKeys": [
+   "12e9b7987c8b5074",
+   "35519802a9b11063",
+   "516ea3530bff2ece",
+   "536900a16f8e0e3b",
+   "545b086dfd4292eb",
+   "63596ad3f0796983",
+   "7c70c7a4bfb53d33",
+   "956b9144a2f5c372",
+   "ac5ccd18308357f0",
+   "b9b0418e01fdba73",
+   "d6cb314ccba3c4de",
+   "e4d4d2f8751929be",
+   "e87a3f76d9caee32",
+   "eabfb98e7f2f7518",
+   "f01332ffd2953142",
+   "fe99328d03fe61f5"
+  ],
+  "forwardMigrations": 943,
+  "downMigrationsNotApplied": 155,
+  "fullSyncStatement": "ac5ccd18308357f089d08e0f839579cedeb9d0f825af6e7d328ccbd472d29e10"
+ },
+ "method": {
+  "engine": "PostgreSQL 14, new databases created from template0, dropped after use; synthetic data only",
+  "plans": "EXPLAIN (ANALYZE, BUFFERS) of the exact prepared statements, plan_cache_mode custom and generic, first and repeat, rolled back",
+  "statistics": "fresh = VACUUM ANALYZE after load; stale = ANALYZE after ~1% of the data, autovacuum off, then the rest",
+  "notClaimed": "no wall-time, native, production or real-provider claims; buffers, rows and plan shape only"
+ },
+ "redOldAnyForm": {
+  "status": "RED (superseded)",
+  "statement": "previous location-fingerprint lookup: fingerprint = ANY($2) with ORDER BY key COLLATE \"C\"",
+  "finding": "generic plan used imap_state_location_fingerprints with Index Cond (link_id = $1) only and the fingerprint as a filter: 101,077 buffers for 0, 1 or 2 result rows on the 100,000-location account (custom plans 3-5)",
+  "measured": [
+   {
+    "request": "hot_0",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "rows": 0,
+    "oracleRows": 0,
+    "buffers": 3,
+    "indexes": [
+     {
+      "index": "imap_state_location_fingerprints",
+      "indexCond": "((link_id = <literal>::uuid) AND (fingerprint = ANY (<literal>::bytea[])))"
+     }
+    ]
+   },
+   {
+    "request": "hot_0",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "rows": 0,
+    "oracleRows": 0,
+    "buffers": 0,
+    "indexes": [
+     {
+      "index": "imap_state_location_fingerprints",
+      "indexCond": "((link_id = <literal>::uuid) AND (fingerprint = ANY (<literal>::bytea[])))"
+     }
+    ]
+   },
+   {
+    "request": "hot_0",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "rows": 0,
+    "oracleRows": 0,
+    "buffers": 101077,
+    "indexes": [
+     {
+      "index": "imap_state_location_fingerprints",
+      "indexCond": "(link_id = $1)"
+     }
+    ]
+   },
+   {
+    "request": "hot_0",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "rows": 0,
+    "oracleRows": 0,
+    "buffers": 101077,
+    "indexes": [
+     {
+      "index": "imap_state_location_fingerprints",
+      "indexCond": "(link_id = $1)"
+     }
+    ]
+   },
+   {
+    "request": "hot_1_unique",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "rows": 1,
+    "oracleRows": 1,
+    "buffers": 4,
+    "indexes": [
+     {
+      "index": "imap_state_location_fingerprints",
+      "indexCond": "((link_id = <literal>::uuid) AND (fingerprint = ANY (<literal>::bytea[])))"
+     }
+    ]
+   },
+   {
+    "request": "hot_1_unique",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "rows": 1,
+    "oracleRows": 1,
+    "buffers": 4,
+    "indexes": [
+     {
+      "index": "imap_state_location_fingerprints",
+      "indexCond": "((link_id = <literal>::uuid) AND (fingerprint = ANY (<literal>::bytea[])))"
+     }
+    ]
+   },
+   {
+    "request": "hot_1_unique",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "rows": 1,
+    "oracleRows": 1,
+    "buffers": 101077,
+    "indexes": [
+     {
+      "index": "imap_state_location_fingerprints",
+      "indexCond": "(link_id = $1)"
+     }
+    ]
+   },
+   {
+    "request": "hot_1_unique",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "rows": 1,
+    "oracleRows": 1,
+    "buffers": 101077,
+    "indexes": [
+     {
+      "index": "imap_state_location_fingerprints",
+      "indexCond": "(link_id = $1)"
+     }
+    ]
+   },
+   {
+    "request": "hot_1_inlink_duplicate",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "rows": 2,
+    "oracleRows": 2,
+    "buffers": 5,
+    "indexes": [
+     {
+      "index": "imap_state_location_fingerprints",
+      "indexCond": "((link_id = <literal>::uuid) AND (fingerprint = ANY (<literal>::bytea[])))"
+     }
+    ]
+   },
+   {
+    "request": "hot_1_inlink_duplicate",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "rows": 2,
+    "oracleRows": 2,
+    "buffers": 5,
+    "indexes": [
+     {
+      "index": "imap_state_location_fingerprints",
+      "indexCond": "((link_id = <literal>::uuid) AND (fingerprint = ANY (<literal>::bytea[])))"
+     }
+    ]
+   },
+   {
+    "request": "hot_1_inlink_duplicate",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "rows": 2,
+    "oracleRows": 2,
+    "buffers": 101077,
+    "indexes": [
+     {
+      "index": "imap_state_location_fingerprints",
+      "indexCond": "(link_id = $1)"
+     }
+    ]
+   },
+   {
+    "request": "hot_1_inlink_duplicate",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "rows": 2,
+    "oracleRows": 2,
+    "buffers": 101077,
+    "indexes": [
+     {
+      "index": "imap_state_location_fingerprints",
+      "indexCond": "(link_id = $1)"
+     }
+    ]
+   }
+  ],
+  "note": "fresh statistics only; the run stopped at a harness error after these requests (classified below)"
+ },
+ "greenKeyDrivenLookup": {
+  "status": "GREEN",
+  "statement": "DISTINCT unnest(requested digests) -> per-digest equality LATERAL (link_id, kind = location, fingerprint) OFFSET 0 -> ORDER BY key COLLATE \"C\"",
+  "datasets": [
+   {
+    "stats": "fresh",
+    "locations": 999991,
+    "hotLocations": 100000,
+    "links": 100000,
+    "distinctDigestsGlobal": 939991,
+    "globalMultiplicity": {
+     "3": 10000,
+     "2": 40000,
+     "1": 889991
+    },
+    "withinLinkMultiplicity": {
+     "2": 10000,
+     "1": 979991
+    },
+    "hotDistinctDigests": 90000,
+    "uniqueIndexOnLinkFingerprint": false
+   },
+   {
+    "stats": "stale",
+    "locations": 999991,
+    "hotLocations": 100000,
+    "links": 100000,
+    "distinctDigestsGlobal": 939991,
+    "globalMultiplicity": {
+     "3": 10000,
+     "2": 40000,
+     "1": 889991
+    },
+    "withinLinkMultiplicity": {
+     "2": 10000,
+     "1": 979991
+    },
+    "hotDistinctDigests": 90000,
+    "uniqueIndexOnLinkFingerprint": false
+   }
+  ],
+  "summary": {
+   "measurements": 80,
+   "rowsMatchOracle": 80,
+   "indexCondLinkAndFingerprint": 80,
+   "byteOrderKeys": 80,
+   "seqScans": 0,
+   "maxBuffers": 2050,
+   "perRequest": [
+    {
+     "request": "hot_0",
+     "rows": [
+      0
+     ],
+     "buffers": [
+      0,
+      3
+     ]
+    },
+    {
+     "request": "hot_1_unique",
+     "rows": [
+      1
+     ],
+     "buffers": [
+      4
+     ]
+    },
+    {
+     "request": "hot_1_inlink_duplicate",
+     "rows": [
+      2
+     ],
+     "buffers": [
+      5
+     ]
+    },
+    {
+     "request": "hot_500_with_50_duplicates",
+     "rows": [
+      550
+     ],
+     "buffers": [
+      2050
+     ]
+    },
+    {
+     "request": "hot_500_cross_link_shared",
+     "rows": [
+      500
+     ],
+     "buffers": [
+      2000
+     ]
+    },
+    {
+     "request": "hot_500_request_with_250_repeats",
+     "rows": [
+      250
+     ],
+     "buffers": [
+      1000
+     ]
+    },
+    {
+     "request": "hot_500_absent",
+     "rows": [
+      0
+     ],
+     "buffers": [
+      1500
+     ]
+    },
+    {
+     "request": "cold_1",
+     "rows": [
+      1
+     ],
+     "buffers": [
+      4
+     ]
+    },
+    {
+     "request": "cold_9_all",
+     "rows": [
+      9
+     ],
+     "buffers": [
+      36
+     ]
+    },
+    {
+     "request": "cold_500_mixed_links",
+     "rows": [
+      1
+     ],
+     "buffers": [
+      1501
+     ]
+    }
+   ],
+   "indexes": [
+    "imap_state_location_fingerprints"
+   ]
+  }
+ },
+ "fullSchemaV3": {
+  "status": "Historical128 measured cells;104 unchanged-query cells carried;24 full-Sync cells superseded (8 actual caller,16 synthetic controls). Current actual full-Sync is measured separately below.",
+  "migrations": {
+   "ledgerRows": 943,
+   "ledgerChecksumsMatchForwardFiles": true,
+   "allSuccess": true,
+   "ledgerListSha256": "d9bccec4609efc5e1d15211a0b8a7b4056876b2f04a737592e7fb53206371bfe"
+  },
+  "dataset": {
+   "accounts": 100000,
+   "entries": 1141111,
+   "hotAccountByKind": {
+    "attachment": 500,
+    "change": 40000,
+    "draft": 500,
+    "folder": 20,
+    "location": 100000,
+    "message": 100000,
+    "upload": 100
+   },
+   "entryIndexes": [
+    {
+     "index": "imap_state_entries_pkey",
+     "valid": true,
+     "unique": true
+    },
+    {
+     "index": "imap_state_folder_members",
+     "valid": true,
+     "unique": false
+    },
+    {
+     "index": "imap_state_message_locations",
+     "valid": true,
+     "unique": false
+    },
+    {
+     "index": "imap_state_folder_changes",
+     "valid": true,
+     "unique": false
+    },
+    {
+     "index": "imap_state_recent_messages",
+     "valid": true,
+     "unique": false
+    },
+    {
+     "index": "imap_state_location_fingerprints",
+     "valid": true,
+     "unique": false
+    }
+   ]
+  },
+  "cells": [
+   {
+    "stats": "fresh",
+    "call": "fence_valid",
+    "statement": "d6cb314c",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 8,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "fence_valid",
+    "statement": "d6cb314c",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 8,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "fence_valid",
+    "statement": "d6cb314c",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 8,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "fence_valid",
+    "statement": "d6cb314c",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 8,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "fence_stale_revision",
+    "statement": "d6cb314c",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "fence_stale_revision",
+    "statement": "d6cb314c",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "fence_stale_revision",
+    "statement": "d6cb314c",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "fence_stale_revision",
+    "statement": "d6cb314c",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "sync_hydration_ACTUAL_caller_six_kinds",
+    "statement": "ccbf199f",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 60455,
+     "rows": 240520,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 60452,
+     "rows": 240520,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "sync_hydration_ACTUAL_caller_six_kinds",
+    "statement": "ccbf199f",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 60452,
+     "rows": 240520,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 60452,
+     "rows": 240520,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "sync_hydration_ACTUAL_caller_six_kinds",
+    "statement": "ccbf199f",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 19479,
+     "rows": 240520,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 19479,
+     "rows": 240520,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "sync_hydration_ACTUAL_caller_six_kinds",
+    "statement": "ccbf199f",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 19479,
+     "rows": 240520,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 19479,
+     "rows": 240520,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "synthetic_control_kinds_folder_upload",
+    "statement": "ccbf199f",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 9,
+     "rows": 120,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 9,
+     "rows": 120,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "synthetic_control_kinds_folder_upload",
+    "statement": "ccbf199f",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 9,
+     "rows": 120,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 9,
+     "rows": 120,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "synthetic_control_kinds_folder_upload",
+    "statement": "ccbf199f",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 19479,
+     "rows": 120,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 19479,
+     "rows": 120,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "synthetic_control_kinds_folder_upload",
+    "statement": "ccbf199f",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 19479,
+     "rows": 120,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 19479,
+     "rows": 120,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "synthetic_control_kinds_folder_change",
+    "statement": "ccbf199f",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 2495,
+     "rows": 40020,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 2495,
+     "rows": 40020,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "synthetic_control_kinds_folder_change",
+    "statement": "ccbf199f",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 2495,
+     "rows": 40020,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 2495,
+     "rows": 40020,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "synthetic_control_kinds_folder_change",
+    "statement": "ccbf199f",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 19479,
+     "rows": 40020,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 19479,
+     "rows": 40020,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "synthetic_control_kinds_folder_change",
+    "statement": "ccbf199f",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 19479,
+     "rows": 40020,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 19479,
+     "rows": 40020,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "folders_2000",
+    "statement": "12e9b798",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "folders_2000",
+    "statement": "12e9b798",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "folders_2000",
+    "statement": "12e9b798",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "folders_2000",
+    "statement": "12e9b798",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "recent_messages_2_folders_50",
+    "statement": "63596ad3",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 474,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 474,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "recent_messages_2_folders_50",
+    "statement": "63596ad3",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 474,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 474,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "recent_messages_2_folders_50",
+    "statement": "63596ad3",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 474,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 474,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "recent_messages_2_folders_50",
+    "statement": "63596ad3",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 474,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 474,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "locations_100_message_ids_ACTUAL_recent_caller_cap",
+    "statement": "956b9144",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 400,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 302,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "locations_100_message_ids_ACTUAL_recent_caller_cap",
+    "statement": "956b9144",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 400,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 302,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "locations_100_message_ids_ACTUAL_recent_caller_cap",
+    "statement": "956b9144",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 400,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 101199,
+     "rows": 100,
+     "indexes": [
+      "imap_state_location_fingerprints"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "locations_100_message_ids_ACTUAL_recent_caller_cap",
+    "statement": "956b9144",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 400,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 101199,
+     "rows": 100,
+     "indexes": [
+      "imap_state_location_fingerprints"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "locations_500_message_ids_broader_control",
+    "statement": "956b9144",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 1508,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "locations_500_message_ids_broader_control",
+    "statement": "956b9144",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 1508,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "locations_500_message_ids_broader_control",
+    "statement": "956b9144",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 101199,
+     "rows": 500,
+     "indexes": [
+      "imap_state_location_fingerprints"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "locations_500_message_ids_broader_control",
+    "statement": "956b9144",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 101199,
+     "rows": 500,
+     "indexes": [
+      "imap_state_location_fingerprints"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "upload_by_key",
+    "statement": "545b086d",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "upload_by_key",
+    "statement": "545b086d",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "upload_by_key",
+    "statement": "545b086d",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "upload_by_key",
+    "statement": "545b086d",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "folder_locations_page_501",
+    "statement": "7c70c7a4",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 804,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 804,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "folder_locations_page_501",
+    "statement": "7c70c7a4",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 804,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 804,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "folder_locations_page_501",
+    "statement": "7c70c7a4",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 804,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 804,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "folder_locations_page_501",
+    "statement": "7c70c7a4",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 804,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 804,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "folder_changes_after_1500",
+    "statement": "35519802",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 27,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 24,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "folder_changes_after_1500",
+    "statement": "35519802",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 24,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 24,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "folder_changes_after_1500",
+    "statement": "35519802",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 81,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 81,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "folder_changes_after_1500",
+    "statement": "35519802",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 81,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 81,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "message_with_locations",
+    "statement": "eabfb98e",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "message_with_locations",
+    "statement": "eabfb98e",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "message_with_locations",
+    "statement": "eabfb98e",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "message_with_locations",
+    "statement": "eabfb98e",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "draft_attachments_message",
+    "statement": "516ea353",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 12,
+     "rows": 3,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 12,
+     "rows": 3,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "draft_attachments_message",
+    "statement": "516ea353",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 12,
+     "rows": 3,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 12,
+     "rows": 3,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "draft_attachments_message",
+    "statement": "516ea353",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 27,
+     "rows": 3,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 27,
+     "rows": 3,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "draft_attachments_message",
+    "statement": "516ea353",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 27,
+     "rows": 3,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 27,
+     "rows": 3,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "fingerprint_lookup_500",
+    "statement": "e4d4d2f8",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_location_fingerprints"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "fingerprint_lookup_500",
+    "statement": "e4d4d2f8",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_location_fingerprints"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "fingerprint_lookup_500",
+    "statement": "e4d4d2f8",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_location_fingerprints"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "fingerprint_lookup_500",
+    "statement": "e4d4d2f8",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_location_fingerprints"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "upsert_500_250new_250conflict",
+    "statement": "fe99328d",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 12591,
+     "rows": 0,
+     "indexes": [],
+     "seqScanAccepted": false,
+     "tuplesInserted": 250,
+     "conflictingTuples": 250
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "upsert_500_250new_250conflict",
+    "statement": "fe99328d",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 12872,
+     "rows": 0,
+     "indexes": [],
+     "seqScanAccepted": false,
+     "tuplesInserted": 250,
+     "conflictingTuples": 250
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "upsert_500_250new_250conflict",
+    "statement": "fe99328d",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 12874,
+     "rows": 0,
+     "indexes": [],
+     "seqScanAccepted": false,
+     "tuplesInserted": 250,
+     "conflictingTuples": 250
+    }
+   },
+   {
+    "stats": "fresh",
+    "call": "upsert_500_250new_250conflict",
+    "statement": "fe99328d",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 12934,
+     "rows": 0,
+     "indexes": [],
+     "seqScanAccepted": false,
+     "tuplesInserted": 250,
+     "conflictingTuples": 250
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "fence_valid",
+    "statement": "d6cb314c",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 8,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "fence_valid",
+    "statement": "d6cb314c",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 8,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "fence_valid",
+    "statement": "d6cb314c",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 8,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "fence_valid",
+    "statement": "d6cb314c",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 8,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "fence_stale_revision",
+    "statement": "d6cb314c",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "fence_stale_revision",
+    "statement": "d6cb314c",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "fence_stale_revision",
+    "statement": "d6cb314c",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "fence_stale_revision",
+    "statement": "d6cb314c",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "email_links_pkey",
+      "imap_accounts_pkey"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "sync_hydration_ACTUAL_caller_six_kinds",
+    "statement": "ccbf199f",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 14425,
+     "rows": 240520,
+     "indexes": [],
+     "seqScanAccepted": true
+    },
+    "before": {
+     "buffers": 14343,
+     "rows": 240520,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "sync_hydration_ACTUAL_caller_six_kinds",
+    "statement": "ccbf199f",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 14425,
+     "rows": 240520,
+     "indexes": [],
+     "seqScanAccepted": true
+    },
+    "before": {
+     "buffers": 14343,
+     "rows": 240520,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "sync_hydration_ACTUAL_caller_six_kinds",
+    "statement": "ccbf199f",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 58238,
+     "rows": 240520,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 58235,
+     "rows": 240520,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "sync_hydration_ACTUAL_caller_six_kinds",
+    "statement": "ccbf199f",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 58235,
+     "rows": 240520,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 58235,
+     "rows": 240520,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "synthetic_control_kinds_folder_upload",
+    "statement": "ccbf199f",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 9,
+     "rows": 120,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 9,
+     "rows": 120,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "synthetic_control_kinds_folder_upload",
+    "statement": "ccbf199f",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 9,
+     "rows": 120,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 9,
+     "rows": 120,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "synthetic_control_kinds_folder_upload",
+    "statement": "ccbf199f",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 9,
+     "rows": 120,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 9,
+     "rows": 120,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "synthetic_control_kinds_folder_upload",
+    "statement": "ccbf199f",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 9,
+     "rows": 120,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 9,
+     "rows": 120,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "synthetic_control_kinds_folder_change",
+    "statement": "ccbf199f",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 2495,
+     "rows": 40020,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 2495,
+     "rows": 40020,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "synthetic_control_kinds_folder_change",
+    "statement": "ccbf199f",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 2495,
+     "rows": 40020,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 2495,
+     "rows": 40020,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "synthetic_control_kinds_folder_change",
+    "statement": "ccbf199f",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 2495,
+     "rows": 40020,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 2495,
+     "rows": 40020,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "synthetic_control_kinds_folder_change",
+    "statement": "ccbf199f",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 2495,
+     "rows": 40020,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 2495,
+     "rows": 40020,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "folders_2000",
+    "statement": "12e9b798",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "folders_2000",
+    "statement": "12e9b798",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "folders_2000",
+    "statement": "12e9b798",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "folders_2000",
+    "statement": "12e9b798",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 20,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "recent_messages_2_folders_50",
+    "statement": "63596ad3",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 61,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 61,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "recent_messages_2_folders_50",
+    "statement": "63596ad3",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 61,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 61,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "recent_messages_2_folders_50",
+    "statement": "63596ad3",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 61,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 61,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "recent_messages_2_folders_50",
+    "statement": "63596ad3",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 61,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 61,
+     "rows": 50,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "locations_100_message_ids_ACTUAL_recent_caller_cap",
+    "statement": "956b9144",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 400,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 302,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "locations_100_message_ids_ACTUAL_recent_caller_cap",
+    "statement": "956b9144",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 400,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 302,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "locations_100_message_ids_ACTUAL_recent_caller_cap",
+    "statement": "956b9144",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 400,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 302,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "locations_100_message_ids_ACTUAL_recent_caller_cap",
+    "statement": "956b9144",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 400,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 302,
+     "rows": 100,
+     "indexes": [
+      "imap_state_message_locations"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "locations_500_message_ids_broader_control",
+    "statement": "956b9144",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 1508,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "locations_500_message_ids_broader_control",
+    "statement": "956b9144",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 1508,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "locations_500_message_ids_broader_control",
+    "statement": "956b9144",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 1508,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "locations_500_message_ids_broader_control",
+    "statement": "956b9144",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 1508,
+     "rows": 500,
+     "indexes": [
+      "imap_state_message_locations"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "upload_by_key",
+    "statement": "545b086d",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "upload_by_key",
+    "statement": "545b086d",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 4,
+     "rows": 1,
+     "indexes": [
+      "imap_state_entries_pkey"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "upload_by_key",
+    "statement": "545b086d",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 5,
+     "rows": 1,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 5,
+     "rows": 1,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "upload_by_key",
+    "statement": "545b086d",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 5,
+     "rows": 1,
+     "indexes": [
+      "imap_state_recent_messages"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 5,
+     "rows": 1,
+     "indexes": [
+      "imap_state_recent_messages"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "folder_locations_page_501",
+    "statement": "7c70c7a4",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 289,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 277,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "folder_locations_page_501",
+    "statement": "7c70c7a4",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 277,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 266,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "folder_locations_page_501",
+    "statement": "7c70c7a4",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 804,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 804,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "folder_locations_page_501",
+    "statement": "7c70c7a4",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 804,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 804,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_members"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "folder_changes_after_1500",
+    "statement": "35519802",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 27,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 24,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "folder_changes_after_1500",
+    "statement": "35519802",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 24,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 24,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "folder_changes_after_1500",
+    "statement": "35519802",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 24,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 24,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "folder_changes_after_1500",
+    "statement": "35519802",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 24,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 24,
+     "rows": 501,
+     "indexes": [
+      "imap_state_folder_changes"
+     ]
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "message_with_locations",
+    "statement": "eabfb98e",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "message_with_locations",
+    "statement": "eabfb98e",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "message_with_locations",
+    "statement": "eabfb98e",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "message_with_locations",
+    "statement": "eabfb98e",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 8,
+     "rows": 2,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "draft_attachments_message",
+    "statement": "516ea353",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 12,
+     "rows": 3,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 12,
+     "rows": 3,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "draft_attachments_message",
+    "statement": "516ea353",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 12,
+     "rows": 3,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 12,
+     "rows": 3,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "draft_attachments_message",
+    "statement": "516ea353",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 12,
+     "rows": 3,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 12,
+     "rows": 3,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "draft_attachments_message",
+    "statement": "516ea353",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 12,
+     "rows": 3,
+     "indexes": [],
+     "seqScanAccepted": false
+    },
+    "before": {
+     "buffers": 12,
+     "rows": 3,
+     "indexes": []
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "fingerprint_lookup_500",
+    "statement": "e4d4d2f8",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_location_fingerprints"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "fingerprint_lookup_500",
+    "statement": "e4d4d2f8",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_location_fingerprints"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "fingerprint_lookup_500",
+    "statement": "e4d4d2f8",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_location_fingerprints"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "fingerprint_lookup_500",
+    "statement": "e4d4d2f8",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 2000,
+     "rows": 500,
+     "indexes": [
+      "imap_state_location_fingerprints"
+     ],
+     "seqScanAccepted": false
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "upsert_500_250new_250conflict",
+    "statement": "fe99328d",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 12581,
+     "rows": 0,
+     "indexes": [],
+     "seqScanAccepted": false,
+     "tuplesInserted": 250,
+     "conflictingTuples": 250
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "upsert_500_250new_250conflict",
+    "statement": "fe99328d",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 12948,
+     "rows": 0,
+     "indexes": [],
+     "seqScanAccepted": false,
+     "tuplesInserted": 250,
+     "conflictingTuples": 250
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "upsert_500_250new_250conflict",
+    "statement": "fe99328d",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 13066,
+     "rows": 0,
+     "indexes": [],
+     "seqScanAccepted": false,
+     "tuplesInserted": 250,
+     "conflictingTuples": 250
+    }
+   },
+   {
+    "stats": "stale",
+    "call": "upsert_500_250new_250conflict",
+    "statement": "fe99328d",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 13020,
+     "rows": 0,
+     "indexes": [],
+     "seqScanAccepted": false,
+     "tuplesInserted": 250,
+     "conflictingTuples": 250
+    }
+   }
+  ],
+  "notes": [
+   "Historical v3 actual full-Sync six-kind call returned240520 rows. Its SQL sort is removed in the current source; the current8-cell comparison follows. Whole-account work remains proportional to metadata rows.",
+   "synthetic kind controls are not real calls",
+   "recent-id location lookup: actual caller caps ids at 100; 500 is a broader control; the previous = ANY form had a 101,199-buffer generic plan, the key-driven form costs ~4 buffers per id with either plan",
+   "upsert: 500 rows built as 250 new + 250 existing keys; ModifyTable measured Tuples Inserted 250 and Conflicting Tuples 250 (UPDATE) in every run; rolled back"
+  ]
+ },
+ "intermediateAttempts": [
+  "lookup attempt 1: stopped by the harness temp-file guard in a dataset statistics query (no measurement)",
+  "lookup v1 rerun: stopped by a harness error (EXECUTE parameter subquery) after the red measurements above",
+  "full-schema v2 attempts 1-4: harness-only (raw migration apply needs the sqlx ledger; success-flag parse; EXECUTE subquery; argument splitter); none used as evidence",
+  "full-schema v2 rerun: fresh complete, stale stopped by the then hard stop on the whole-account Sync scan; superseded by v3"
+ ],
+ "currentFullSyncSortRemoval": {
+  "status": "8/8 current plans have no Sort and no temporary writes",
+  "method": "same full-schema fixture and actual six-kind caller, fresh/stale, custom/generic, first/repeat; current and previous SQL on the same state",
+  "results": [
+   {
+    "stats": "fresh",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 60452,
+     "rows": 240520,
+     "sortPresent": false,
+     "sorts": [],
+     "tempReadBlocks": 0,
+     "tempWrittenBlocks": 0
+    },
+    "previousSorted": {
+     "buffers": 60455,
+     "rows": 240520,
+     "sortPresent": true,
+     "sorts": [
+      {
+       "method": "external merge",
+       "spaceType": "Disk",
+       "spaceKb": 19456
+      }
+     ],
+     "tempReadBlocks": 2432,
+     "tempWrittenBlocks": 2441
+    }
+   },
+   {
+    "stats": "fresh",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 60452,
+     "rows": 240520,
+     "sortPresent": false,
+     "sorts": [],
+     "tempReadBlocks": 0,
+     "tempWrittenBlocks": 0
+    },
+    "previousSorted": {
+     "buffers": 60452,
+     "rows": 240520,
+     "sortPresent": true,
+     "sorts": [
+      {
+       "method": "external merge",
+       "spaceType": "Disk",
+       "spaceKb": 19456
+      }
+     ],
+     "tempReadBlocks": 2432,
+     "tempWrittenBlocks": 2441
+    }
+   },
+   {
+    "stats": "fresh",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 19479,
+     "rows": 240520,
+     "sortPresent": false,
+     "sorts": [],
+     "tempReadBlocks": 0,
+     "tempWrittenBlocks": 0
+    },
+    "previousSorted": {
+     "buffers": 19479,
+     "rows": 240520,
+     "sortPresent": true,
+     "sorts": [
+      {
+       "method": "external merge",
+       "spaceType": "Disk",
+       "spaceKb": 19456
+      }
+     ],
+     "tempReadBlocks": 2432,
+     "tempWrittenBlocks": 2441
+    }
+   },
+   {
+    "stats": "fresh",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 19479,
+     "rows": 240520,
+     "sortPresent": false,
+     "sorts": [],
+     "tempReadBlocks": 0,
+     "tempWrittenBlocks": 0
+    },
+    "previousSorted": {
+     "buffers": 19479,
+     "rows": 240520,
+     "sortPresent": true,
+     "sorts": [
+      {
+       "method": "external merge",
+       "spaceType": "Disk",
+       "spaceKb": 19456
+      }
+     ],
+     "tempReadBlocks": 2432,
+     "tempWrittenBlocks": 2441
+    }
+   },
+   {
+    "stats": "stale",
+    "mode": "force_custom_plan",
+    "run": "first",
+    "current": {
+     "buffers": 14343,
+     "rows": 240520,
+     "sortPresent": false,
+     "sorts": [],
+     "tempReadBlocks": 0,
+     "tempWrittenBlocks": 0
+    },
+    "previousSorted": {
+     "buffers": 14425,
+     "rows": 240520,
+     "sortPresent": true,
+     "sorts": [
+      {
+       "method": "external merge",
+       "spaceType": "Disk",
+       "spaceKb": 6832
+      }
+     ],
+     "tempReadBlocks": 4864,
+     "tempWrittenBlocks": 4882
+    }
+   },
+   {
+    "stats": "stale",
+    "mode": "force_custom_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 14343,
+     "rows": 240520,
+     "sortPresent": false,
+     "sorts": [],
+     "tempReadBlocks": 0,
+     "tempWrittenBlocks": 0
+    },
+    "previousSorted": {
+     "buffers": 14425,
+     "rows": 240520,
+     "sortPresent": true,
+     "sorts": [
+      {
+       "method": "external merge",
+       "spaceType": "Disk",
+       "spaceKb": 6968
+      }
+     ],
+     "tempReadBlocks": 4864,
+     "tempWrittenBlocks": 4882
+    }
+   },
+   {
+    "stats": "stale",
+    "mode": "force_generic_plan",
+    "run": "first",
+    "current": {
+     "buffers": 16573,
+     "rows": 240520,
+     "sortPresent": false,
+     "sorts": [],
+     "tempReadBlocks": 0,
+     "tempWrittenBlocks": 0
+    },
+    "previousSorted": {
+     "buffers": 16570,
+     "rows": 240520,
+     "sortPresent": true,
+     "sorts": [
+      {
+       "method": "external merge",
+       "spaceType": "Disk",
+       "spaceKb": 19456
+      }
+     ],
+     "tempReadBlocks": 2432,
+     "tempWrittenBlocks": 2441
+    }
+   },
+   {
+    "stats": "stale",
+    "mode": "force_generic_plan",
+    "run": "repeat",
+    "current": {
+     "buffers": 16570,
+     "rows": 240520,
+     "sortPresent": false,
+     "sorts": [],
+     "tempReadBlocks": 0,
+     "tempWrittenBlocks": 0
+    },
+    "previousSorted": {
+     "buffers": 16570,
+     "rows": 240520,
+     "sortPresent": true,
+     "sorts": [
+      {
+       "method": "external merge",
+       "spaceType": "Disk",
+       "spaceKb": 19456
+      }
+     ],
+     "tempReadBlocks": 2432,
+     "tempWrittenBlocks": 2441
+    }
+   }
+  ],
+  "wholeAccountScan": "A sequential scan is accepted for this full-account read; no point/list exemption.",
+  "otherStatements": "Fingerprint and recent-id lookups and all943 forward migrations are byte-identical to the carried measurements."
+ },
+ "implementationChecks": {
+  "focusedTests": 14,
+  "crossLinkIndexedLookupAndSync": true,
+  "uidValidityReuseIndexedLookup": true,
+  "moveWithoutCopyUidPlaceholderIndexedLookup": true,
+  "missingDomainDigestRejected": "assertion red on the previous default/skip behavior, green with required digest and a separate storage DTO",
+  "inputOrderNormalized": "BTreeMap normalizes full hydration; bounded lookup and pure matching use byte-key order.",
+  "instrumentation": "One child span per lookup batch with batch_size/match_count; parent records maximum batch size. Runtime trace proof is not claimed here."
+ }
+}
