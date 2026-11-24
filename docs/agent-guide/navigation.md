@@ -1196,9 +1196,10 @@ opens `/app/scheduling`, highlights while active, and uses header islands for it
 section and Personal/team owner drawers; it does not add a search-scope pill.
 
 No dock, Search, filter pill, or create-menu tap triggers haptics. Buttons
-activate on click/release. Holding a button only shows its pressed state; cancelling the touch does not navigate. More views also opens on
-release so holding its trigger cannot drag or dismiss the opening sheet. Mouse,
-keyboard, and assistive activation use the normal click behavior.
+activate on click/release. Holding a button only shows its pressed state;
+cancelling the touch does not navigate. More views also opens on release so
+holding its trigger cannot drag or dismiss the opening sheet. Mouse, keyboard,
+and assistive activation use the normal click behavior.
 
 The dock's More views menu uses the same rounded glass bottom sheet as filters,
 with a blurred backdrop, drag handle, and an even 8px outer inset. The home

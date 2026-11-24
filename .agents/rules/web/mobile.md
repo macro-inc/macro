@@ -71,8 +71,8 @@ read their code, and follow that pattern rather than inventing a new one.
   gestures with no cue under the finger: `hapticImpact('medium')` when a long
   press fires (`touchHandler`, the mobile canvas), and `hapticImpact('light')`
   as a swipe row (`SwipableRow`) or pull to refresh crosses its threshold and
-  backs off it, and as a dock reorder drag starts and moves a view. Taps and
-  sends stay silent. Navigation acts on click so held or cancelled touches do
+  backs off it, as a dock reorder drag starts, and as each reorder (drag or
+  arrow key) moves a view. Taps and sends stay silent. Navigation acts on click so held or cancelled touches do
   nothing. Touch `glass` and `island` surfaces draw a flat hairline edge.
 
 ## Sheets, menus, and dialogs
