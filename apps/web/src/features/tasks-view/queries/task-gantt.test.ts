@@ -5,6 +5,7 @@ import {
   taskGanttDates,
   taskGanttTimed,
   taskGanttWholeDay,
+  taskGanttWholeDayEnd,
 } from './task-gantt';
 
 const CREATED = '2026-11-10T09:12:00Z';
@@ -59,6 +60,14 @@ describe('taskGanttTimed and taskGanttWholeDay', () => {
     });
     expect(taskGanttTimed(mixed)).toBe(true);
     expect(taskGanttWholeDay(mixed)).toBe('start');
+    expect(taskGanttWholeDayEnd(mixed)).toBe('start');
+
+    const wholeDayDue = task({
+      start: { value: '2026-11-21T14:00:00Z', has_time: true },
+      due: { value: '2026-11-30T05:00:00Z' },
+    });
+    expect(taskGanttWholeDay(wholeDayDue)).toBe('due');
+    expect(taskGanttWholeDayEnd(wholeDayDue)).toBe('end');
 
     const timed = task({
       start: { value: '2026-11-26T19:00:00Z', has_time: true },
