@@ -756,7 +756,22 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
         channelId: edit.channelId,
         messageId: edit.id,
         uuid: crypto.randomUUID(),
-        applied: (message) => message.content === edit.content,
+        // The text alone cannot tell an attachment-only edit was undone.
+        applied: (message) =>
+          message.content === edit.content &&
+          edit.removeAttachmentIds.every(
+            (id) =>
+              !message.attachments.some(
+                (attachment) => attachment.attachmentId === id
+              )
+          ) &&
+          edit.addAttachments.every((added) =>
+            message.attachments.some(
+              (attachment) =>
+                attachment.entityType === added.entity_type &&
+                attachment.entityId === added.entity_id
+            )
+          ),
         run: (client, options) =>
           executeOptimisticMutation(
             client as Client,

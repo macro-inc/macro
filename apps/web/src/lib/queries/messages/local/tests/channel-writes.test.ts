@@ -455,6 +455,65 @@ describe('createChannelWrites', () => {
       );
     });
 
+    const editAttachments =
+      (
+        id: string,
+        change: {
+          removeAttachmentIds?: string[];
+          addAttachments?: { entity_type: string; entity_id: string }[];
+        }
+      ) =>
+      (writes: ReturnType<typeof setup>['writes']) =>
+        writes.edit({
+          channelId: CHANNEL_ID,
+          id,
+          content: 'edited',
+          mentions: [],
+          removeAttachmentIds: change.removeAttachmentIds ?? [],
+          addAttachments: change.addAttachments ?? [],
+          nonce: 'e',
+        });
+    const attachment = (attachmentId: string, entityId: string) => ({
+      attachmentId,
+      entityType: 'document',
+      entityId,
+      width: null,
+      height: null,
+      createdAt: NOW.toISOString(),
+    });
+
+    it('rejects an edit whose added attachment another tab rolled back', async () => {
+      // The text matches: only the attachment tells the edit was undone.
+      const stored = graphqlMessage(7, { content: 'edited' });
+      const added = editAttachments(stored.id, {
+        addAttachments: [{ entity_type: 'document', entity_id: 'doc-1' }],
+      });
+      expect(rolledBack(await away(stored, added))).toBe(true);
+    });
+
+    it('rejects an edit whose removed attachment the device still shows', async () => {
+      const stored = graphqlMessage(7, {
+        content: 'edited',
+        attachments: [attachment('att-1', 'doc-1')],
+      });
+      const removed = editAttachments(stored.id, {
+        removeAttachmentIds: ['att-1'],
+      });
+      expect(rolledBack(await away(stored, removed))).toBe(true);
+    });
+
+    it('resolves an edit whose attachment changes the device shows', async () => {
+      const stored = graphqlMessage(7, {
+        content: 'edited',
+        attachments: [attachment('att-2', 'doc-2')],
+      });
+      const changed = editAttachments(stored.id, {
+        removeAttachmentIds: ['att-1'],
+        addAttachments: [{ entity_type: 'document', entity_id: 'doc-2' }],
+      });
+      expect(await away(stored, changed)).toEqual(mapChannelMessage(stored));
+    });
+
     it('rejects a reaction another tab rolled back', async () => {
       const stored = graphqlMessage(7);
       expect(rolledBack(await away(stored, react(stored.id)))).toBe(true);
