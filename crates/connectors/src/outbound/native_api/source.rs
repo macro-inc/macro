@@ -189,8 +189,18 @@ impl Inner {
                     access_token: tokens.access_token,
                     refresh_token: tokens.refresh_token.unwrap_or(grant.refresh_token),
                 };
-                let sealed = self.cipher.encrypt(user, app, &refreshed).await?;
-                locked.store(&sealed, expires_at).await?;
+                // Autodesk has spent the old refresh token. If the new one
+                // can't be kept, the next refresh fails `invalid_grant` and
+                // the user must sign in again; say so where it happens.
+                let sealed = self
+                    .cipher
+                    .encrypt(user, app, &refreshed)
+                    .await
+                    .inspect_err(|error| tracing::warn!(app = %app, error = ?error, "failed to seal a rotated refresh token; the user will have to sign in again"))?;
+                locked
+                    .store(&sealed, expires_at)
+                    .await
+                    .inspect_err(|error| tracing::warn!(app = %app, error = ?error, "failed to store a rotated refresh token; the user will have to sign in again"))?;
                 Ok(refreshed.access_token)
             }
             Err(TokenError::InvalidGrant) => {
@@ -198,7 +208,12 @@ impl Inner {
                 locked.mark_needs_reauth().await?;
                 Err(needs_reauth(app))
             }
-            Err(error) => Err(Report::new(error).into_dynamic()),
+            Err(error) => {
+                // A refresh the vendor processed but whose answer was lost
+                // (a timeout) has spent the refresh token all the same.
+                tracing::warn!(app = %app, error = ?error, "an API app refresh failed; if the vendor processed it, the user will have to sign in again");
+                Err(Report::new(error).into_dynamic())
+            }
         }
     }
 }
