@@ -157,17 +157,14 @@ export function useEntityPropertiesQuery(
   );
 
   // GraphQL properties carry a select's option IDs only, and REST ones carry
-  // its options. Custom selects take theirs from the definitions list Add
-  // property reads, held back until its first answer so no ID shows meanwhile.
+  // its options. Custom selects take theirs from every definition the viewer
+  // can see, the list the app's item actions keep loaded, held back until its
+  // first answer so no ID shows meanwhile.
   const needsOptions = createMemo(() =>
     (graphqlQuery.result.data ?? []).some(needsDefinitionOptions)
   );
   const definitionsQuery = useListPropertiesQuery(
-    () => ({
-      scope: 'all',
-      includeOptions: true,
-      forEntityType: entityType(),
-    }),
+    () => ({ scope: 'all', includeOptions: true }),
     () => usesGraphql() && needsOptions()
   );
   const optionsByDefinition = createMemo(() => {

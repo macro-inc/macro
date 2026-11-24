@@ -150,10 +150,13 @@ A select's value is option IDs. The GraphQL read of an item's properties
 carries only those IDs; Status and Priority get their options where they are
 mapped (`soupPropertyToProperty`), and the REST read carries every select's
 options. For the rest, `useEntityPropertiesQuery` adds each custom select's
-options from the definitions list Add property reads (`withDefinitionOptions`),
-and holds its answer until that list first loads, so the side panel, Record
-details, title pills and their cards never show an option ID. A failed list
-read shows the values as they are.
+options from the list of every definition the viewer can see
+(`withDefinitionOptions`), and holds its answer until that list first loads,
+so the side panel, Record details, title pills and their cards never show an
+option ID. Item actions and hotkeys keep that list loaded, so it has usually
+answered before an item's properties do and the hold costs nothing; keep the
+read on that unfiltered key, since a per-type list is one more request after
+the properties answer. A failed list read shows the values as they are.
 
 ## Adding a property
 

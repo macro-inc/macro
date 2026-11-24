@@ -535,7 +535,6 @@ describe('useEntityPropertiesQuery transport', () => {
         expect(listPropertiesMock).toHaveBeenCalledWith({
           scope: 'all',
           include_options: true,
-          for_entity_type: 'DOCUMENT',
         })
       );
       expect(entityQuery.data).toBeUndefined();
