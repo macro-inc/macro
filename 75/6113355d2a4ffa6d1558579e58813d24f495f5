@@ -1,0 +1,26 @@
+tooling/xtask/crates/xtask_local/src/local/local_env.rs
+  s_8631497025cd75::t_21a4847238ad73 432-437
+tooling/xtask/crates/xtask_local/src/local/localstack.rs
+  s_8631497025cd75::t_21a4847238ad73 92-94
+  s_8631497025cd75::t_3793b56f1e8d6a 91
+tooling/xtask/crates/xtask_local/src/local/resources.rs
+  s_8631497025cd75::t_21a4847238ad73 51-54
+infra/stacks/agent-harness-service/agent_harness_service.ts
+  s_8631497025cd75::t_72aef62e0aa267 32-34,319,608,626-668,671,673,701,704,710,721-725,729,736,741,753,757
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "756113355d2a4ffa6d1558579e58813d24f495f5",
+  "prompts": {},
+  "sessions": {
+    "s_8631497025cd75": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "98447833-e739-47e2-9551-6c274bcec5ff",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
