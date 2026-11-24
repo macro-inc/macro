@@ -3,4 +3,5 @@
 
 pub mod aps;
 pub mod pg_repo;
+pub mod rollout;
 pub mod signed_download;
