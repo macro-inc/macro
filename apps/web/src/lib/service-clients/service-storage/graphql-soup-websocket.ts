@@ -351,11 +351,15 @@ export function createGraphqlSoupSubscriptionsLifecycle(
     replace(client?: Pick<Client, 'subscription' | 'query'>, host?: CacheHost) {
       if (currentClient && currentClient !== client)
         disposeChannelNotificationRefresh(currentClient);
+      const resubscribed = currentClient === client && activity !== undefined;
       currentClient = client;
       currentHost = host;
       unsubscribeAll();
       if (!client || suspended) return;
       activity = createActivityUpdatesHandler(client);
+      // Ending the last set dropped a refresh that was not due yet, and missed
+      // what is pushed before this one starts.
+      if (resubscribed) activity.reconnect();
       channels = createChannelListUpdatesHandler(client, host);
       const activityHandler = activity;
       const channelHandler = channels;
