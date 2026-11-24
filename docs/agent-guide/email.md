@@ -75,7 +75,7 @@ field, in an open thread, and in another mailbox, whose header has no tabs,
 `Tab` is browser focus order. Leaving the
 search field (`Escape`, `ArrowDown`, `Enter`, or picking a recent search)
 hands the keyboard to the view; a search shows no tabs, so `Tab` and `1`–`3`
-switch them again once it is cleared. Calendar mail
+switch them again once it closes. Calendar mail
 remains available through
 the calendar filter and existing Calendar route. Touch shows the same Inbox
 pills as desktop: Signal and Noise, with Focus first when enabled. Other
@@ -116,15 +116,16 @@ has no view of, end the search, and so does any tab picked before a word is
 typed. While a search runs, the sidebar and the header show the view its `in:`
 filter names (the header says Focus, and the sidebar selects Inbox, for
 `in:focus`); a search with no `in:` selects nothing, and the header says
-Search. The Focus, Signal and Noise tabs never show while the field holds a
-query, whatever it says, on desktop or phone; clearing it brings them back on
-the tab that was open. Text with no words yet (`in:`, `in:se`, or a view alone
-such as `in:focus`) runs no search of its own: the list, header and sidebar
-stay on the last search that had words, or on the open view when there was
-none (the text was pasted). Check from Inbox with a
+Search. The Focus, Signal and Noise tabs never show while the field is open,
+empty or not, on desktop or phone; closing it brings them back on the tab that
+was open. Open and empty, the field leaves that tab's rows on screen, and the
+desktop header names it (Signal). Text with no words yet (`in:`, `in:se`, or a
+view alone such as `in:focus`) runs no search of its own: the list, header and
+sidebar stay on the last search that had words, or on the open view when there
+was none (the text was pasted). Check from Inbox with a
 term that only Noise or archived mail holds, then the same term with each
 `in:`, then pick Sent and All mail in the sidebar while it runs; then type
-`in`, `in:`, pick Focus and type a word, and clear the field.
+`in`, `in:`, pick Focus and type a word, clear the field, and close it.
 
 ### Wide search (flagged)
 
@@ -141,12 +142,22 @@ result. A search is remembered when the field is left with words in it, with
 its `in:` filter, at most eight per person, in this browser only and not per
 inbox. Typing `in:` lists the views instead (only those the person has, so
 Focus only with its flag), narrowed as the name is typed, and `-in:` lists the
-views a search can leave out; `Enter` or a click finishes the `in:` where it
-was typed, and the keyboard stays in the field. Two or more letters of an
+views a search can leave out, then the labels and tags whose names hold what
+follows `in:` (not one that reads as a view, such as Archive, which
+`label:` still offers); `Enter` or a click finishes the `in:` where it was
+typed, and the keyboard stays in the field. Two or more letters of an
 operator's name list that operator above the recent searches (`su` gives
-`subject:`, `-fr` gives `-from:`), and `is:` and `has:` list their values;
-picking one finishes it the same way. Typing changes the rows, so it also
-clears the row the arrow keys picked out. Operators stay ordinary text (caret,
+`subject:`, `-fr` gives `-from:`); `is:` and `has:` list their values;
+`from:`, `to:`, `cc:` and `bcc:` list the people matching what follows,
+found and ranked as the composer's recipient picker finds them, and finish
+with their address; `label:` lists the person's tags and their inboxes' own
+labels (not system labels such as Inbox), quoting a name with a space.
+People and labels are read only while the field has focus and such an
+operator is typed. Picking one finishes it the same way. A row is the
+filter's text, drawn as an operator, with a few words beside it only when
+they say something the text does not (`to:` also covers Cc and Bcc;
+`after:` counts its day, `before:` does not). Typing changes the rows, so it
+also clears the row the arrow keys picked out. Operators stay ordinary text (caret,
 selection, `Backspace`, paste), and every one the search service would read,
 once complete and valid (`in:sent`, `subject:"team lunch"`, `-from:ana`,
 `newer_than:7d`, `in:travel`), is drawn as an operator token: accent ink on a
@@ -174,8 +185,9 @@ keeping the previous rows dimmed while a new query loads. The keyboard's Search
 key drops the keyboard to show the results; the field's X clears the text and
 keeps the keyboard; Cancel (or Android Back) clears the search and returns to
 the mailbox. Opening a result and coming back returns to the search page with
-its results. If the flag turns off or the tab changes to one that cannot be
-searched while the page is open, the page closes and its search ends. The
+its results. If the flag turns off, the tab changes to one that cannot be
+searched, or a view is picked before a word is typed while the page is open,
+the page closes and its search ends. The
 dock's app-wide search is unchanged. Check at 390px with touch
 emulation: the pill row scrolls, so the search pill can start off screen on a
 tab far to the right.
@@ -186,8 +198,8 @@ keeps its app-wide meaning inside Email too ([navigation](navigation.md)):
 `g e` opens Email on Signal and `g s` on Sent from any view, as long as no
 editor or input (Email search included) has focus; other mailboxes are in the
 sidebar. `Escape` in a
-list steps back one level: it clears a selection, then a search, and with
-neither returns to Signal; in the reading pane it first hands the keyboard back
+list steps back one level: it clears a selection, then a search (an open
+field counts, empty or not), and with neither returns to Signal; in the reading pane it first hands the keyboard back
 to the list. From the search field, `ArrowDown` or `Enter` moves to the first
 result and `Escape` leaves the field with the search kept (see
 [list search keys](navigation.md)). `?` lists every shortcut for the focused

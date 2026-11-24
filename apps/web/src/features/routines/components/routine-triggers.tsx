@@ -4,12 +4,9 @@ import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import SparkleIcon from '@icon/system/regular/sparkle.svg';
-import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
 import {
   Button,
-  ButtonGroup,
   type ButtonSize,
   type ButtonVariant,
   badgeTriggerClasses,
@@ -41,33 +38,10 @@ import {
 } from '../core/routine-triggers';
 import { RoutineScheduleSettings } from './routine-schedule-settings';
 import { menuMount } from './routine-search-menu';
+import { addableFilters, TriggerFilters } from './routine-trigger-filters';
 import { TRIGGER_GROUP_ICONS } from './routine-trigger-icons';
 import { TriggerMenu } from './routine-trigger-menu';
-
-type EventSlots = {
-  renderEventLabel: (trigger: Accessor<EventTriggerDraft>) => JSX.Element;
-  renderEventScope: (
-    trigger: Accessor<EventTriggerDraft>,
-    change: (ids: string[] | undefined) => void
-  ) => JSX.Element;
-  /** Settings particular to some events, such as GitHub's selector. */
-  renderEventSettings?: (
-    trigger: Accessor<EventTriggerDraft>,
-    change: (patch: Partial<EventTriggerDraft>) => void
-  ) => JSX.Element;
-  /** Absent where conditions are unavailable. */
-  renderEventCondition?: (
-    trigger: Accessor<EventTriggerDraft>,
-    change: (condition: string | undefined) => void
-  ) => JSX.Element;
-  /** Wraps a group's choices, e.g. to ask for an account they need first. */
-  renderEventGroup?: (
-    group: RoutineEventGroup,
-    options: () => JSX.Element
-  ) => JSX.Element;
-  /** False hides event triggers from the menu; existing ones stay editable. */
-  offerEvents?: boolean;
-};
+import type { EventSlots } from './routine-trigger-slots';
 
 function triggerGroup(trigger: EventTriggerDraft): RoutineEventGroup {
   return match(eventScopeKind(trigger))
@@ -469,6 +443,7 @@ function switchEvent(
     ...current,
     events: next.events,
     ids: sameItems ? current.ids : next.ids,
+    inboxes: sameItems ? current.inboxes : undefined,
     ...switchGithub(current, next),
   };
 }
@@ -650,150 +625,6 @@ function GithubToken(
   );
 }
 
-/** Edits a trigger's AI check: Cancel keeps it, Done saves it. */
-function ConditionBody(
-  props: EventSlots & {
-    trigger: EventTriggerDraft;
-    onSave: (trigger: RoutineTriggerDraft) => void;
-    onClose: () => void;
-  }
-) {
-  const [condition, setCondition] = createSignal(props.trigger.condition);
-  return (
-    <>
-      <div class="px-3.5 pb-3.5 pt-3">
-        {props.renderEventCondition?.(
-          () => ({ ...props.trigger, condition: condition() }),
-          setCondition
-        )}
-      </div>
-      <div class="flex items-center justify-end gap-1.5 border-t border-edge-muted px-3.5 py-2.5">
-        <Button variant="ghost" size="sm" onClick={() => props.onClose()}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => {
-            const value = condition()?.trim();
-            props.onSave({
-              ...props.trigger,
-              condition: value ? value : undefined,
-            });
-            props.onClose();
-          }}
-        >
-          Done
-        </Button>
-      </div>
-    </>
-  );
-}
-
-/** A filter hanging off its trigger on a connector elbow. */
-function FilterRow(props: { children: JSX.Element }) {
-  return (
-    <div class="flex min-w-0 items-center gap-2.5">
-      <span
-        aria-hidden="true"
-        class="-mt-4 h-4.5 w-3.5 shrink-0 rounded-bl-md border-b border-l border-edge"
-      />
-      {props.children}
-    </div>
-  );
-}
-
-/** "✦ Only if | question | ×", or "+ Filter" to add one. */
-function ConditionFilter(
-  props: EventSlots & {
-    trigger: EventTriggerDraft;
-    onSave: (trigger: RoutineTriggerDraft) => void;
-  }
-) {
-  let anchor: HTMLDivElement | undefined;
-  const [open, setOpen] = createSignal(false);
-  const condition = () => props.trigger.condition?.trim();
-  return (
-    <Popover
-      open={open()}
-      onOpenChange={setOpen}
-      anchorRef={() => anchor}
-      placement="bottom-start"
-      gutter={6}
-    >
-      <FilterRow>
-        <div ref={anchor} class="flex min-w-0 max-w-full">
-          <Show
-            when={condition()}
-            fallback={
-              <Popover.Trigger
-                as={Button}
-                variant="ghost"
-                size="sm"
-                aria-label="Add filter"
-              >
-                <PlusIcon class="size-3.5 shrink-0" />
-                Filter
-              </Popover.Trigger>
-            }
-          >
-            {(question) => (
-              <ButtonGroup class="min-w-0 max-w-full">
-                <Popover.Trigger
-                  as={ButtonGroup.Button}
-                  class="shrink-0 gap-1.5"
-                  aria-label={`Edit condition: ${question()}`}
-                  title={question()}
-                >
-                  <SparkleIcon class="size-3.5 shrink-0 text-accent" />
-                  <span class="text-ink-muted">Only if</span>
-                </Popover.Trigger>
-                <ButtonGroup.Divider />
-                <ButtonGroup.Button
-                  class="min-w-0 shrink"
-                  title={question()}
-                  aria-haspopup="dialog"
-                  aria-expanded={open()}
-                  onClick={() => setOpen(true)}
-                >
-                  <span class="min-w-0 truncate">{question()}</span>
-                </ButtonGroup.Button>
-                <ButtonGroup.Divider />
-                <ButtonGroup.Button
-                  size="icon-md"
-                  aria-label="Remove condition"
-                  onClick={() =>
-                    props.onSave({ ...props.trigger, condition: undefined })
-                  }
-                >
-                  <XIcon class="size-3.5" />
-                </ButtonGroup.Button>
-              </ButtonGroup>
-            )}
-          </Show>
-        </div>
-      </FilterRow>
-      <Popover.Portal mount={menuMount(anchor)}>
-        <Popover.Content class="menu-surface z-modal flex w-[22rem] max-w-[calc(100vw-1rem)] flex-col overflow-hidden">
-          <Popover.Title class="sr-only">
-            {condition() ? 'Edit condition' : 'Add filter'}
-          </Popover.Title>
-          <ConditionBody
-            trigger={props.trigger}
-            renderEventLabel={props.renderEventLabel}
-            renderEventScope={props.renderEventScope}
-            renderEventCondition={props.renderEventCondition}
-            renderEventSettings={props.renderEventSettings}
-            renderEventGroup={props.renderEventGroup}
-            onSave={props.onSave}
-            onClose={() => setOpen(false)}
-          />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover>
-  );
-}
-
 /** One trigger as a sentence of tokens, its filters hanging below. */
 function TriggerSentence(
   props: EventSlots & {
@@ -807,10 +638,13 @@ function TriggerSentence(
     props.trigger.kind === 'event' ? props.trigger : undefined;
   const schedule = () =>
     props.trigger.kind === 'schedule' ? props.trigger : undefined;
-  /** An event trigger with a check, or one that can take a filter. */
+  /** An event trigger with a filter, or one that can take one. */
   const filtered = () => {
     const value = event();
-    return value && (value.condition?.trim() || props.renderEventCondition)
+    return value &&
+      (value.condition?.trim() ||
+        value.inboxes?.length ||
+        addableFilters(props, value).length)
       ? value
       : undefined;
   };
@@ -854,7 +688,7 @@ function TriggerSentence(
                 when={hasScope(value())}
                 fallback={
                   <Switch>
-                    {/* Email always watches the owner's inbox: said, not picked. */}
+                    {/* Email watches the owner's inboxes; an inbox filter narrows them. */}
                     <Match when={eventScopeKind(value()) === 'THREAD'}>
                       <span class="flex min-w-0 max-w-full items-center gap-2">
                         <span class="text-sm text-ink-muted">in</span>
@@ -883,11 +717,7 @@ function TriggerSentence(
         </Show>
       </div>
       <Show when={filtered()}>
-        {(value) => (
-          <div class="flex min-w-0 flex-col gap-2 pl-4.5">
-            <ConditionFilter {...props} trigger={value()} />
-          </div>
-        )}
+        {(value) => <TriggerFilters {...props} trigger={value()} />}
       </Show>
     </div>
   );
@@ -921,6 +751,8 @@ export function RoutineTriggers(
     renderEventScope: props.renderEventScope,
     renderEventSettings: props.renderEventSettings,
     renderEventCondition: props.renderEventCondition,
+    renderInboxPicker: props.renderInboxPicker,
+    renderInboxesLabel: props.renderInboxesLabel,
     renderEventGroup: props.renderEventGroup,
     offerEvents: props.offerEvents,
   });

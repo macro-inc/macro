@@ -553,8 +553,24 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   candidate's owner isn't the inbox's (`event_runs/admission.rs`, `Audience`).
   Like the other audience rules (`IncomingEvent::is_for_owner`), it is never
   an access grant: each owner's entity access is still checked.
+- A new-email filter can name `inboxes` (email link ids, at most 25; empty is
+  every inbox). Saving checks them against the owner's current own and
+  delegated inboxes on create and on a trigger change, so a later disconnect
+  never blocks unrelated edits. `OwnerInboxes` asks the email domain's
+  `EmailRepo` which of the picked ids the owner reads (`inbox_ids_among`, the
+  same own-plus-delegated set the app lists, one index probe per pick), so the
+  check never reads the owner's other inboxes or an inbox's other delegates.
+  `routine.admit_event` counts the routines only their inboxes turned away as
+  `outside_inboxes`. No run keeps the received `inbox`, so every replica can
+  read every run: admission checks it, and a filter changed since supersedes
+  the run by revision. A shared template drops its inboxes: they are the
+  publisher's own. Code without inbox filters can't decode a routine that
+  picks some, and skips it at intake.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
+  Its dispatcher fails a whole page of pending runs on one such row, stopping
+  every routine's event runs, so don't store what only admission needs, as
+  the received inbox.
 
 ## Related
 

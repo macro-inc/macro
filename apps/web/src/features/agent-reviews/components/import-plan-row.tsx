@@ -261,6 +261,10 @@ export function ImportPlanRow(props: {
             .with('task', () => 'task' as const)
             .with('project', () => 'initiative' as const)
             .with('page', () => 'md' as const)
+            .with('pipeline', () => 'pipeline' as const)
+            .with('company', () => 'crm_company' as const)
+            .with('contact', () => 'contact' as const)
+            .with('deal', () => 'pipeline' as const)
             .exhaustive()}
           size="xs"
         />

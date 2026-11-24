@@ -23,6 +23,7 @@ verified live against a local stack (`just run_local`, which needs no terminal: 
 | [search.md](search.md) | Search |
 | [files.md](files.md) | Files (Drive) |
 | [calls.md](calls.md) | Calls, call links, guests, and sharing |
+| [agent-screen.md](agent-screen.md) | An agent teammate's computer screen: route, entry points, watching, take over and hand back |
 | [crm.md](crm.md) | Customers (CRM) |
 | [passwords.md](passwords.md) | Team vault, inline editing, sharing and recent sign-in |
 | [pull-requests.md](pull-requests.md) | Pull request review |

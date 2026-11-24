@@ -285,7 +285,7 @@ where
         let message_ids: Vec<Uuid> = messages.iter().map(|message| message.db_id).collect();
         let labels_by_message = self
             .email_repo
-            .labels_by_message_ids(&message_ids)
+            .labels_by_message_ids(&message_ids, Some(&macro_id))
             .await
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
         let unread_label_id = labels_by_message

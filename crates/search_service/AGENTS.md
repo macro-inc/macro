@@ -205,6 +205,11 @@ per-entity-type search plus a unified search across them — mounted into
   `has:attachment` and the left-out views past `MAX_THREAD_SET_ALLOWLIST`
   are page checks: `ThreadStates::excluded` runs each as its own positive
   check and drops the threads it matches.
+  A label matches a message only in an inbox the caller owns or manages
+  (`UnifiedEmailSearchArgs::label_link_ids`, filled from the inboxes search
+  reaches), for `label:`, `in:<name>`, `include_labels` and `exclude_labels`
+  alike, and a hit from any other inbox (a thread shared with the caller)
+  comes back with no labels: the labels people make are theirs.
 - Email search scopes by the owners of the inboxes the caller can reach
   (`fetch_search_inboxes_for_macro_id`), so a link's mail matches until its
   documents are deleted. An inbox whose disconnect has started (`deleting_at`)

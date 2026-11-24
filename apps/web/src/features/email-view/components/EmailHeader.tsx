@@ -132,12 +132,18 @@ export function EmailHeader(props: EmailHeaderProps) {
     setTab,
     shownTab,
     showsInboxTabs,
+    registerSearchField,
     tagViewTitle,
     savedViewActive,
     savedViews,
   } = useEmailView();
   const savedViewTitle = useEmailSavedViewTitle();
   const [filterOpen, setFilterOpen] = createSignal(false);
+  const [searchFieldOpen, setSearchFieldOpen] = createSignal(false);
+  registerSearchField({
+    open: searchFieldOpen,
+    close: () => setSearchFieldOpen(false),
+  });
   let releaseSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
   const isVisible = useVisibleEmailTab();
@@ -197,7 +203,10 @@ export function EmailHeader(props: EmailHeaderProps) {
   // The filter menu is unmounted with the other actions, so the search only
   // takes the header while it is closed.
   const searchOwnsHeader = () =>
-    !!props.searchSuggestions?.open() && canSearch() && !filterOpen();
+    !!props.searchSuggestions &&
+    searchFieldOpen() &&
+    canSearch() &&
+    !filterOpen();
 
   return (
     <ListHeader
@@ -275,7 +284,8 @@ export function EmailHeader(props: EmailHeaderProps) {
           operators={emailSearchTextParts}
           focusResults={props.focusSearchResults}
           wide={!!props.searchSuggestions}
-          onOpenChange={props.searchSuggestions?.setOpen}
+          open={searchFieldOpen()}
+          onOpenChange={setSearchFieldOpen}
           onFocusChange={props.searchSuggestions?.setFocused}
           suggestions={props.searchSuggestions}
           registerFocus={(focus) => {
