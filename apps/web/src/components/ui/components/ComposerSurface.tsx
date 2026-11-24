@@ -11,10 +11,7 @@ function ComposerPanel(props: ComposerPanelProps) {
   return (
     <Surface
       {...rest}
-      class={cn(
-        'touch:rounded-3xl touch:island touch:bg-chrome-glass',
-        local.class
-      )}
+      class={cn('touch:rounded-3xl touch:island touch:bg-chrome', local.class)}
       // Glass draws its own 1px rim; a Surface border would inset that rim
       // and create a second outline around the composer.
       hideBorder

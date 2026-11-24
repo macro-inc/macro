@@ -223,8 +223,7 @@ beneath the header. The fade grows with the scroll
 offset and clears at the top; it does not blur content or change mobile fades.
 
 On touch, glass surfaces draw an even 1px hairline edge with no highlight or
-bevel, and dark mode shows the content behind floating chrome through a blur
-(see [mobile glass feedback](navigation.md#mobile-glass-feedback)).
+bevel (see [mobile glass feedback](navigation.md#mobile-glass-feedback)).
 
 ## Selection controls
 
