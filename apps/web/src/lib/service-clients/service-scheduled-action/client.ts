@@ -199,6 +199,12 @@ export const scheduledActionClient = {
       { method: 'POST', errorResponseHandler: aiUsageErrorResponseHandler }
     ),
 
+  /** Stop the run in progress; with none running, nothing changes. */
+  stopRun: async (args: { scheduleId: string }) =>
+    scheduledActionFetch(`/scheduled-actions/${args.scheduleId}/stop`, {
+      method: 'POST',
+    }),
+
   listHistory: async (args: { scheduleId: string }) =>
     scheduledActionFetch<ExecutionRecordResponse[]>(
       `/scheduled-actions/${args.scheduleId}/history`,
