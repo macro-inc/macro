@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use super::{
     OutlookApiClientRepository,
-    transport::{GraphFailure, invalid_response, read_json},
+    transport::{GraphFailure, decode, invalid_response, read_body, read_json},
     wire,
 };
 use crate::domain::models::{
@@ -17,7 +17,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{MailboxActionWriter, MailboxCalendarClient, MailboxContentReader};
 
-const MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,changeKey,internetMessageId,subject,bodyPreview,body,from,toRecipients,ccRecipients,bccRecipients,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime,createdDateTime,lastModifiedDateTime,internetMessageHeaders,webLink";
+const MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,changeKey,internetMessageId,subject,bodyPreview,body,from,toRecipients,ccRecipients,bccRecipients,replyTo,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime,createdDateTime,lastModifiedDateTime,internetMessageHeaders,webLink";
 
 /// Enough to read who wrote and what about, without bodies or headers.
 pub(super) const RECENT_MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,subject,bodyPreview,from,toRecipients,ccRecipients,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime";
@@ -207,10 +207,15 @@ impl MailboxContentReader for OutlookApiClientRepository {
                 super::drafts::CORRELATION_PROPERTY
             ),
         );
-        let message: wire::Message = match self.get(token, url).await {
-            Ok(message) => message,
+        let body = match self.request(token, Method::GET, url, None).await {
+            Ok(response) => read_body(response).await?,
             Err(EmailApiError::NotFound) => return Ok(None),
             Err(error) => return Err(error),
+        };
+        let message: wire::Message = decode(body.as_ref())?;
+        let draft_content = match message.is_draft {
+            Some(true) => super::drafts::content_of(&decode(body.as_ref())?),
+            _ => None,
         };
         let mut attachments = Vec::new();
         let mut url = self.endpoint(&["me", "messages", id.as_str(), "attachments"])?;
@@ -275,6 +280,7 @@ impl MailboxContentReader for OutlookApiClientRepository {
         };
         let mut normalized = normalize(message, attachments, link_id, folders)?;
         normalized.calendar_parts_unavailable = calendar_parts.is_none();
+        normalized.draft_content = draft_content;
         normalized.content.calendar_parts = calendar_parts.unwrap_or_default();
         Ok(Some(normalized))
     }
@@ -557,6 +563,7 @@ pub(super) fn normalize(
         folder_id,
         tags: source.categories,
         version: source.etag,
+        draft_content: None,
     })
 }
 

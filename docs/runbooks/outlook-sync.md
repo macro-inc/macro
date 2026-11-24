@@ -261,10 +261,12 @@ draft that already stopped logs `email_send.admitted_stopped`. Every step is an
 `outlook.draft.step` span (`@draft.stage`, `@draft.error_code`) whose children
 are its Graph requests.
 
-A moved version alone never stops a draft: the step goes on and logs
-`email_send.draft_version_moved` (INFO). On a mailbox whose tenant changes drafts
-on its own, those lines show the rule at work, and a `change=content` line shows
-where it does not apply, with the field a tool rewrites.
+A moved version goes on only when the content Macro last read or wrote is
+recorded and Graph still returns it: the step logs
+`email_send.draft_version_moved` (INFO). With nothing recorded the draft stops as
+`change=unknown`. On a mailbox whose tenant changes drafts on its own, the INFO
+lines show the rule at work, and a `change=content` line shows where it does not
+apply, with the field a tool rewrites.
 
 ## No mailbox
 

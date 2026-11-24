@@ -2,11 +2,9 @@ use super::super::MailboxKey;
 use crate::domain::models::ResolvedDraftInput;
 use chrono::{DateTime, Utc};
 use email_api_client::domain::models::{
-    AttachmentUploadSession, ProviderDraft, ProviderId, SendRequest,
+    AttachmentUploadSession, DraftContent, ProviderDraft, ProviderId, SendRequest,
 };
-use models_email::service::message::Message;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 
 /// A frozen attachment source, always resolved through authorized server records.
@@ -97,54 +95,6 @@ pub struct DraftLease {
     pub base_content: Option<DraftContent>,
     pub delete_requested: bool,
     pub checkpoint: Option<DraftCheckpoint>,
-}
-
-/// Whether `remote`, a read of the draft, still holds what Macro last synced
-/// to it. The provider rewrites whitespace as it stores a body, so whitespace
-/// does not count.
-pub fn holds_synced(synced: &ResolvedDraftInput, remote: &Message) -> bool {
-    fn compact(body: Option<&str>) -> String {
-        body.unwrap_or_default().split_whitespace().collect()
-    }
-    fn addresses<'a>(emails: impl Iterator<Item = &'a String>) -> BTreeSet<String> {
-        emails.map(|email| email.to_lowercase()).collect()
-    }
-    let same_body = match &synced.body_html {
-        Some(html) => compact(Some(html)) == compact(remote.body_html_sanitized.as_deref()),
-        None => compact(synced.body_text.as_deref()) == compact(remote.body_text.as_deref()),
-    };
-    let same_recipients = [
-        (&synced.to, &remote.to),
-        (&synced.cc, &remote.cc),
-        (&synced.bcc, &remote.bcc),
-    ]
-    .into_iter()
-    .all(|(synced, remote)| {
-        addresses(synced.iter().map(|contact| &contact.email))
-            == addresses(remote.iter().map(|contact| &contact.email))
-    });
-
-    same_body
-        && same_recipients
-        && synced.subject.trim() == remote.subject.as_deref().unwrap_or_default().trim()
-}
-
-/// The content of a draft as the provider held it, by digest: the whole, and
-/// each field by its provider name.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DraftContent {
-    pub fingerprint: String,
-    #[serde(default)]
-    pub fields: BTreeMap<String, String>,
-}
-
-impl DraftContent {
-    pub fn of(draft: &ProviderDraft) -> Option<Self> {
-        Some(Self {
-            fingerprint: draft.content_fingerprint.clone()?,
-            fields: draft.field_digests.clone(),
-        })
-    }
 }
 
 /// How a draft differs from the one Macro last read or wrote. Names only, so it

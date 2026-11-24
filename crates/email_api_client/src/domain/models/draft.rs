@@ -42,6 +42,28 @@ pub struct ProviderDraft {
     pub field_digests: BTreeMap<String, String>,
 }
 
+/// The content of a draft as the provider held it, by digest: the whole, and
+/// each field by its provider name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DraftContent {
+    /// Digest of every field the fingerprint covers.
+    pub fingerprint: String,
+    /// Digest of each of those fields.
+    #[serde(default)]
+    pub fields: BTreeMap<String, String>,
+}
+
+impl ProviderDraft {
+    /// The content this read of the draft holds, if the provider returned all
+    /// of it.
+    pub fn content(&self) -> Option<DraftContent> {
+        Some(DraftContent {
+            fingerprint: self.content_fingerprint.clone()?,
+            fields: self.field_digests.clone(),
+        })
+    }
+}
+
 /// Attachment identity supplied by the provider and the app's stable content ID.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DraftAttachment {

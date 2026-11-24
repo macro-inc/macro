@@ -530,9 +530,10 @@ tools — hexagonal, heavily feature-gated.
   moves them, which move the version and keep the content fingerprint. Compare
   Outlook's copy with Outlook's earlier copy, never with what Macro submitted,
   because Outlook rewrites whitespace as it stores a body. `base_content`
-  is that earlier copy once a new revision clears the checkpoint: `settle_draft`
-  writes it, a resolution clears it, and `ingest` clears it only when
-  `holds_synced` says the content changed. Without one, a moved version
+  is that earlier copy once a new revision clears the checkpoint, always the
+  content of `base_version`: `settle_draft` writes it from the draft read,
+  `ingest` from the sync read (`MailboxMessage::draft_content`, the same digests
+  of the same fields), and a resolution clears it. Without one, a moved version
   conflicts. The fingerprint leaves attachments out, so a step that acts on a
   moved version checks the approved files itself (`attached`). A refused PATCH
   (412) is written again at most `UPDATE_ATTEMPTS` times, after a read that

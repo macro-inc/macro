@@ -269,7 +269,8 @@ impl DraftRepository for PgMailboxSync {
         let draft = checkpoint.draft.as_ref().ok_or(MailboxError::Persistence)?;
         Self::bind_draft(&mut tx, lease, draft).await?;
         let value = serde_json::to_value(checkpoint).map_err(|_| MailboxError::Persistence)?;
-        let base = DraftContent::of(draft)
+        let base = draft
+            .content()
             .map(serde_json::to_value)
             .transpose()
             .map_err(|_| MailboxError::Persistence)?;

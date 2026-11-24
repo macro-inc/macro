@@ -320,8 +320,8 @@ impl World {
             .unwrap();
     }
 
-    /// Mailbox sync reads the draft back with this body.
-    async fn read_back(&self, body: &str) {
+    /// Mailbox sync reads the draft back.
+    async fn read_back(&self) {
         let work = self
             .sync
             .claim_message(Uuid::now_v7())
@@ -333,27 +333,26 @@ impl World {
             sync_generation: 1,
             grant_generation: 1,
         };
-        let remote = self
+        let read = self
             .graph
             .api
-            .get_draft(access(mailbox), &work.provider_id)
+            .message(access(mailbox), &work.provider_id, &self.folders().await)
             .await
             .unwrap()
             .unwrap();
-        let state = MailboxState {
-            is_draft: true,
-            ..MailboxState::default()
-        };
-        let mut read = snapshot(
-            self.link,
-            work.provider_id.as_str(),
-            state,
-            &remote.version.unwrap(),
-        );
-        read.content.message.is_draft = true;
-        read.content.message.subject = Some(self.input.subject.clone());
-        read.content.message.body_text = Some(body.into());
         self.sync.ingest(&work, read).await.unwrap();
+    }
+
+    async fn folders(&self) -> Vec<MailFolder> {
+        let mailbox = MailboxKey {
+            link_id: self.link,
+            sync_generation: 1,
+            grant_generation: 1,
+        };
+        match self.graph.api.folders(access(mailbox)).await.unwrap() {
+            MailFolderCatalog::Folders(folders) => folders,
+            catalog => panic!("no folders: {catalog:?}"),
+        }
     }
 
     async fn base_content(&self) -> Option<serde_json::Value> {
@@ -444,7 +443,7 @@ async fn a_draft_stamped_again_after_sync_read_the_first_stamp_still_sends(db: P
     let content = world.base_content().await;
     assert!(content.is_some());
     world.stamp();
-    world.read_back("Local  body\n").await;
+    world.read_back().await;
     assert_eq!(world.base_content().await, content);
     world.stamp();
     world.save("Ready to go", true).await;
@@ -453,17 +452,56 @@ async fn a_draft_stamped_again_after_sync_read_the_first_stamp_still_sends(db: P
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn an_edit_sync_read_is_a_new_baseline_with_no_content_digests(db: PgPool) {
+async fn a_draft_outlook_rewrote_before_sync_read_it_still_sends_when_stamped_again(db: PgPool) {
+    let mut world = World::new(db).await;
+    world.work().await;
+    let content = world.base_content().await;
+    world.edit("Local  body\r\n");
+    world.read_back().await;
+    assert_ne!(world.base_content().await, content);
+    world.stamp();
+    world.save("Ready to go", true).await;
+    world.work().await;
+    assert_eq!(world.state().await, ("sent".into(), None));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_draft_synced_before_baselines_gets_one_when_sync_reads_it(db: PgPool) {
+    let mut world = World::new(db).await;
+    world.work().await;
+    sqlx::query!("UPDATE email_mailbox_drafts SET base_content = NULL")
+        .execute(&world.db)
+        .await
+        .unwrap();
+    world.stamp();
+    world.read_back().await;
+    assert!(world.base_content().await.is_some());
+    world.stamp();
+    world.save("Ready to go", true).await;
+    world.work().await;
+    assert_eq!(world.state().await, ("sent".into(), None));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_edit_sync_read_is_the_new_baseline(db: PgPool) {
     let mut world = World::new(db).await;
     world.work().await;
     world.edit("Edited in Outlook");
-    world.read_back("Edited in Outlook").await;
-    assert_eq!(world.base_content().await, None);
+    world.read_back().await;
 
     // Macro edits on top of what sync read: known, so it is written.
     world.save("Edited after reading it", false).await;
     world.work().await;
     assert_eq!(world.state().await, ("synced".into(), None));
+
+    // An edit nobody has read since is a conflict, as ever.
+    world.edit("Edited in Outlook again");
+    let writes = world.writes();
+    world.save("Not read", false).await;
+    world.work().await;
+    let conflict = ("conflict".to_owned(), Some("draft_conflict".to_owned()));
+    assert_eq!(world.state().await, conflict);
+    assert_eq!(world.writes(), writes);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

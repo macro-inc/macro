@@ -345,7 +345,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
             return Ok(());
         }
         // Attachment writes move the version, so only the content counts here.
-        let written = DraftContent::of(draft);
+        let written = draft.content();
         if let Some(change) = DraftChange::between(None, written.as_ref(), &observed) {
             return Err(MailboxError::DraftChanged(change));
         }
@@ -643,7 +643,7 @@ fn refuse_edit_since(
     refuse_edit(
         lease,
         prior.version.as_deref(),
-        DraftContent::of(prior).as_ref(),
+        prior.content().as_ref(),
         observed,
     )
 }

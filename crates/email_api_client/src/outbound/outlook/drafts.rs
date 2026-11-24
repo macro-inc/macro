@@ -52,14 +52,13 @@ impl TryFrom<Draft> for ProviderDraft {
     type Error = EmailApiError;
 
     fn try_from(value: Draft) -> Result<Self, Self::Error> {
-        let fields = content_fields(&value.content);
+        let (content_fingerprint, field_digests) = match content_of(&value.content) {
+            Some(content) => (Some(content.fingerprint), content.fields),
+            None => (None, BTreeMap::new()),
+        };
         Ok(Self {
-            content_fingerprint: fields.as_ref().and_then(content_fingerprint),
-            field_digests: fields
-                .iter()
-                .flatten()
-                .map(|(name, value)| ((*name).to_owned(), digest(value)))
-                .collect(),
+            content_fingerprint,
+            field_digests,
             id: ProviderId::new(value.id)?,
             conversation_id: ProviderId::new(value.conversation_id)?,
             // changeKey is not an HTTP entity tag. Never manufacture If-Match.
@@ -72,6 +71,19 @@ impl TryFrom<Draft> for ProviderDraft {
                 .and_then(|property| property.value.parse().ok()),
         })
     }
+}
+
+/// The content of the draft Graph returned as `content`, or `None` when it left
+/// part of it out.
+pub(super) fn content_of(content: &serde_json::Map<String, Value>) -> Option<DraftContent> {
+    let fields = content_fields(content)?;
+    Some(DraftContent {
+        fingerprint: content_fingerprint(&fields)?,
+        fields: fields
+            .iter()
+            .map(|(name, value)| ((*name).to_owned(), digest(value)))
+            .collect(),
+    })
 }
 
 // Compare provider-normalized bodies to prior provider snapshots. Comparing to

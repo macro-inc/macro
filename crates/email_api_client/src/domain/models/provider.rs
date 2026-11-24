@@ -192,6 +192,9 @@ pub struct MailboxMessage {
     pub tags: Vec<String>,
     /// Opaque provider version for detecting changes, not a sortable timestamp.
     pub version: Option<String>,
+    /// What a draft holds at that version, as a draft read would digest it.
+    /// `None` for any other message.
+    pub draft_content: Option<super::DraftContent>,
 }
 
 /// Lightweight facts for command reconciliation, without body or attachment IO.
