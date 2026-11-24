@@ -316,9 +316,41 @@ pub(super) fn build_thread_conjunct_filter(
     ast: &Expr<EmailLiteral>,
     sort_ts_field: &str,
 ) -> SqlFragment {
+    thread_conjuncts_sql(ast, sort_ts_field, |_| true)
+        .map(SqlFragment::with_and_prefix)
+        .unwrap_or_else(SqlFragment::empty)
+}
+
+/// [`build_thread_conjunct_filter`] without the label tree
+/// [`build_label_superset`] reads: the owned read's inbox windows walk a
+/// set number of threads, so the label match runs on each walked thread
+/// ([`build_label_tree_predicate`]) instead of stretching the window.
+pub(super) fn build_thread_conjunct_filter_without_labels(
+    ast: &Expr<EmailLiteral>,
+    sort_ts_field: &str,
+) -> SqlFragment {
+    thread_conjuncts_sql(ast, sort_ts_field, |term| !is_label_tree(term))
+        .map(SqlFragment::with_and_prefix)
+        .unwrap_or_else(SqlFragment::empty)
+}
+
+/// The label tree of [`build_label_superset`] as a predicate on `t`.
+pub(super) fn build_label_tree_predicate(
+    ast: &Expr<EmailLiteral>,
+    sort_ts_field: &str,
+) -> SqlFragment {
+    thread_conjuncts_sql(ast, sort_ts_field, is_label_tree)
+        .unwrap_or_else(|| SqlFragment::raw("TRUE"))
+}
+
+fn thread_conjuncts_sql(
+    ast: &Expr<EmailLiteral>,
+    sort_ts_field: &str,
+    keep: impl Fn(&Expr<EmailLiteral>) -> bool,
+) -> Option<SqlFragment> {
     top_level_conjuncts(ast)
         .into_iter()
-        .filter(|term| !has_message_literals(term))
+        .filter(|term| !has_message_literals(term) && keep(term))
         .map(|term| {
             term.collapse_frames(|frame| match frame {
                 filter_ast::ExprFrame::And(a, b) => SqlFragment::and(a, b),
@@ -330,8 +362,6 @@ pub(super) fn build_thread_conjunct_filter(
             })
         })
         .reduce(SqlFragment::and)
-        .map(SqlFragment::with_and_prefix)
-        .unwrap_or_else(SqlFragment::empty)
 }
 
 fn build_thread_literal_predicate(
@@ -1007,4 +1037,73 @@ pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
         // equality scan can stop at LIMIT.
         _ => "COALESCE(t.latest_non_spam_message_ts, t.updated_at)",
     }
+}
+
+/// The superset the owned read streams for a label filter: the threads of
+/// `links` with a message carrying one of the labels of the filter's single
+/// top-level OR-tree of positive `Label` terms, listed through
+/// `idx_email_message_labels_by_label`. `None` for a tree with a message-level
+/// term, whose preview pick could drop most of a window, or without exactly
+/// one such label tree.
+pub(super) fn build_label_superset(
+    ast: &Expr<EmailLiteral>,
+    links: &[Uuid],
+) -> Option<AddressSuperset> {
+    if has_message_literals(ast) {
+        return None;
+    }
+    let trees = top_level_conjuncts(ast)
+        .into_iter()
+        .filter_map(|term| {
+            let mut labels = Vec::new();
+            labels_of(term, &mut labels).then_some(labels)
+        })
+        .collect::<Vec<_>>();
+    let [labels] = trees.as_slice() else {
+        return None;
+    };
+    let mut labels = labels.clone();
+    labels.sort_unstable();
+    labels.dedup();
+    let branches = labels
+        .into_iter()
+        .map(|label| {
+            let mut f = SqlFragment::raw(
+                "SELECT lm.thread_id FROM email_effective_message_labels ml JOIN email_messages lm ON lm.id = ml.message_id WHERE ml.label_id = ",
+            );
+            f.extend(SqlFragment::bind_uuid(label));
+            f.push_raw(" AND lm.link_id = ANY(");
+            f.extend(SqlFragment::bind_uuid_array(links.to_vec()));
+            // As the condition itself: only inboxes the viewer owns or manages.
+            f.push_raw(") AND lm.link_id IN (SELECT el.id FROM email_links el WHERE el.macro_id = ");
+            f.extend(SqlFragment::bind_viewer());
+            f.push_raw(
+                " UNION ALL SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = ",
+            );
+            f.extend(SqlFragment::bind_viewer());
+            f.push_raw(")");
+            f
+        })
+        .collect::<Vec<_>>();
+    Some(AddressSuperset {
+        contact_ctes: Vec::new(),
+        indexed_branches: branches.clone(),
+        branches,
+    })
+}
+
+/// Whether `expr` is an OR-tree of positive `Label` terms, collecting them.
+fn labels_of(expr: &Expr<EmailLiteral>, out: &mut Vec<Uuid>) -> bool {
+    match expr {
+        Expr::Or(a, b) => labels_of(a, out) && labels_of(b, out),
+        Expr::Literal(EmailLiteral::Label(id)) => {
+            out.push(*id);
+            true
+        }
+        _ => false,
+    }
+}
+
+fn is_label_tree(expr: &Expr<EmailLiteral>) -> bool {
+    labels_of(expr, &mut Vec::new())
 }
