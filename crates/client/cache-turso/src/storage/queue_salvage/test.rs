@@ -302,6 +302,10 @@ fn a_loss_leaves_the_queue_before_it_in_doubt() {
         assert_eq!(decoded(&[&frame, &loss]), doubted);
         assert_eq!(decoded(&[&frame, &loss, &frame[..9]]), doubted);
         assert_eq!(decoded(&[&frame, &loss, &frame]), Some(queue));
+        let reads = |frames: &[&[u8]]| SalvageFile::decode(&frames.concat()).reads();
+        let attempt = SalvageFile::read_attempt();
+        assert_eq!(reads(&[&attempt, &attempt]), 2);
+        assert_eq!(reads(&[&attempt, &attempt, &loss]), 0);
     });
 }
 
@@ -720,6 +724,27 @@ fn two_queues_join_behind_the_newer_one() {
                 ]
             );
         }
+    });
+}
+
+#[test]
+fn a_queue_joined_with_a_lost_one_is_never_called_whole() {
+    block_on(async {
+        let mut older = fresh();
+        enqueue(&mut older, "Older").await;
+        let older = carried(&older);
+        let mut newer = fresh();
+        enqueue(&mut newer, "Newer").await;
+        let joined = newer.salvage_queue(SCOPE, Some(older), 0).queue.unwrap();
+
+        // Ended before the wipe, whose database is read again.
+        let again = newer.salvage_queue(SCOPE, Some(through_file(&joined)), 0);
+        assert!(again.forget_pending && !again.complete);
+        let queue = again.queue.unwrap();
+        assert_eq!(queue.len(), 1);
+        assert!(!fresh().import_queue(&queue, 0).unwrap().complete);
+        // Opened again instead.
+        assert!(!newer.import_queue(&joined, 0).unwrap().complete);
     });
 }
 

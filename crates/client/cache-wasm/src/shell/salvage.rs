@@ -296,8 +296,15 @@ impl Crossing {
             return Ok(report);
         }
         let file = SalvageFile::decode(&bytes);
-        let (end, imports) = (file.end(), file.imports());
+        let (end, lost) = (file.end(), file.lost());
+        let imports = match self.unwritten {
+            Some(_) => 0,
+            None => file.imports(),
+        };
         let Some(queue) = self.unwritten.or(file.into_queue()) else {
+            if lost && report.outcome == QueueOutcome::None {
+                report.outcome = QueueOutcome::Unreadable;
+            }
             remove(sidecar).await?;
             return Ok(report);
         };
@@ -319,6 +326,10 @@ impl Crossing {
             (true, 1.., _) => QueueOutcome::Kept,
             (false, 1.., _) => QueueOutcome::Partial,
             (_, 0, 1..) => QueueOutcome::Abandoned,
+            // Held already: whoever imported it may not have told.
+            (_, 0, 0) if !imported.complete && report.outcome == QueueOutcome::None => {
+                QueueOutcome::Partial
+            }
             (_, 0, 0) => report.outcome,
         };
         // The database names the queue it holds, so a copy that stays for any

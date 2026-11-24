@@ -327,6 +327,56 @@ async fn a_wiped_queue_that_left_no_copy_is_never_called_kept() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn a_wipe_that_left_no_copy_at_all_says_so() {
+    const SCOPE: &str = "cache-wasm-salvage-nothing";
+    for recovery in [false, true] {
+        closed_with_queue(SCOPE).await;
+        refuse_queue_frames(true).await;
+        wipe_and_die(SCOPE).await;
+        refuse_queue_frames(false).await;
+        let (engine, _, queue) = open(SCOPE, recovery).await;
+        assert_eq!(queue, serde_json::json!(["unreadable", 0, 0]));
+        assert!(!opfs_file_exists(&side_file(SCOPE)).await);
+        close_and_destroy(&engine, SCOPE).await;
+    }
+}
+
+#[wasm_bindgen_test(async)]
+async fn a_partial_import_that_could_not_tell_is_told_by_the_next_open() {
+    const SCOPE: &str = "cache-wasm-salvage-untold";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let mut partial = read_side_file(SCOPE).await;
+    partial.extend(SalvageFile::loss());
+    write_side_file(SCOPE, &partial).await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["partial", 1, 0]));
+    resolved(engine.close()).await;
+    write_side_file(SCOPE, &partial).await;
+    let (engine, _, queue) = open(SCOPE, false).await;
+    assert_eq!(queue, serde_json::json!(["partial", 0, 0]));
+    assert_kept(&engine, SCOPE).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn failed_imports_of_an_older_queue_do_not_give_up_a_newer_one() {
+    const SCOPE: &str = "cache-wasm-salvage-other-imports";
+    closed_with_queue(SCOPE).await;
+    wipe_and_die(SCOPE).await;
+    let mut older = read_side_file(SCOPE).await;
+    older.extend(SalvageFile::import_attempt().repeat(3));
+    closed_with(SCOPE, "00000000-0000-4000-8000-000000000012").await;
+    write_side_file(SCOPE, &older).await;
+    refuse_queue_frames(true).await;
+    let (engine, _, queue) = open(SCOPE, true).await;
+    refuse_queue_frames(false).await;
+    assert_eq!(queue, serde_json::json!(["partial", 2, 0]));
+    assert_eq!(depth(&engine).await, "2");
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
 async fn a_copy_never_outlives_the_account_it_was_queued_under() {
     const SCOPE: &str = "cache-wasm-salvage-account";
     closed_with_queue(SCOPE).await;

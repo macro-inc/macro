@@ -88,7 +88,10 @@ fn read(connection: &Db, scope: &str, pending: Option<SalvagedQueue>, now_ms: i6
             .marked();
         }
     };
-    let holds = pending.as_ref().is_some_and(|pending| held.holds(pending));
+    let known = pending.as_ref().filter(|pending| held.holds(pending));
+    let holds = known.is_some();
+    // It may have been joined with an older one that is not here.
+    let complete = held.complete && known.is_none_or(|pending| pending.complete);
     let pending = pending.filter(|_| !holds);
     let foreign = pending.as_ref().filter(|pending| !held.admits(pending));
     let foreign = foreign.map_or(0, SalvagedQueue::len);
@@ -97,7 +100,7 @@ fn read(connection: &Db, scope: &str, pending: Option<SalvagedQueue>, now_ms: i6
     let mut read = QueueRead {
         queue: None,
         dropped: held.dropped + foreign,
-        complete: held.complete,
+        complete,
         abandoned: held.queue.rounds > MAX_ROUNDS && !held.queue.is_empty(),
         forget_pending,
     };

@@ -48,7 +48,11 @@ impl SalvageFile {
                     };
                 }
                 READ_ATTEMPT => file.reads += 1,
-                LOSS => file.lost = true,
+                LOSS => {
+                    file.lost = true;
+                    // The read before it ended.
+                    file.reads = 0;
+                }
                 IMPORT_ATTEMPT => file.imports += 1,
                 _ => break,
             }
@@ -81,6 +85,11 @@ impl SalvageFile {
     /// Returns the queue no database is known to hold yet.
     pub fn queue(&self) -> Option<&SalvagedQueue> {
         self.queue.as_ref()
+    }
+
+    /// Returns whether something queued after the file's queue may be lost.
+    pub fn lost(&self) -> bool {
+        self.lost
     }
 
     /// Consumes the file's queue, which is not all there was once something
