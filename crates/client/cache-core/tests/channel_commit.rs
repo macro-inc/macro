@@ -589,6 +589,26 @@ fn a_pending_edit_never_brings_back_an_entry_known_removed() {
 }
 
 #[test]
+fn a_removal_kept_for_a_pending_edit_goes_back_with_a_reset() {
+    block_on(async {
+        let mut engine = held_with_mutations().await;
+        queue(&mut engine, &saying(root("m2", "20"), "pending"), false).await;
+        let removal = removing(changes("c1", "10", "11"), &["m2"]);
+        apply(&mut engine, "11", &[], &removal).await;
+        // The server went back to before the removal.
+        let reset = ChannelTimelineCommit {
+            reset: true,
+            ..whole("5")
+        };
+        apply(&mut engine, "5", &[root("m1", "10")], &reset).await;
+        assert_eq!(roots(&mut engine).await, covered(&["m1"]));
+        let entries = [root("m2", "20"), root("m1", "10")];
+        apply(&mut engine, "6", &entries, &changes("c1", "5", "6")).await;
+        assert_eq!(roots(&mut engine).await, covered(&["m2", "m1"]));
+    });
+}
+
+#[test]
 fn a_settled_answer_never_replaces_newer_content() {
     block_on(async {
         let mut engine = held_with_mutations().await;
@@ -660,14 +680,16 @@ fn a_removal_beats_an_older_copy_in_its_own_response() {
 }
 
 #[test]
-fn a_page_whose_entries_have_no_position_covers_nothing() {
+fn nothing_is_covered_beside_an_entry_without_a_position() {
     block_on(async {
-        let mut engine = Engine::new(InMemoryStorage::new());
-        let mut placeless = root("m2", "20");
+        let mut placeless = root("m4", "40");
         placeless["sortKey"] = json!("");
-        let entries = [placeless, root("m1", "10")];
-        apply(&mut engine, "10", &entries, &whole("10")).await;
-        assert_eq!(roots(&mut engine).await, None);
+        for commit in [whole("11"), changes("c1", "10", "11")] {
+            let mut engine = held().await;
+            let entries = [placeless.clone()];
+            apply(&mut engine, "11", &entries, &commit).await;
+            assert_eq!(roots(&mut engine).await, None);
+        }
     });
 }
 

@@ -122,7 +122,10 @@ impl ChannelAdmission {
                         seq,
                     });
                 } else {
-                    // A list cannot order an entry without its position.
+                    // A list cannot order an entry without its position, so
+                    // nothing of its channel is known complete.
+                    let channel_id = entry_channel_id(record).map(str::to_owned);
+                    self.write.uncovered.extend(channel_id);
                     for write in &mut self.write.coverage {
                         write.spans.clear();
                     }
@@ -316,12 +319,23 @@ impl<S: Storage> Engine<S> {
         );
         for entries in sets {
             let keys = self.channel_entries(channel_id, entries).await?;
-            admission.deleted.extend(keys.into_iter().filter(|key| {
-                let removed = guard.entries.get(key).is_some_and(|state| state.removed);
-                !admission.stamped.contains_key(key)
-                    && !updates.contains_key(key)
-                    && !(removed && pending.contains(key))
-            }));
+            for key in keys {
+                if admission.stamped.contains_key(&key) || updates.contains_key(&key) {
+                    continue;
+                }
+                let removed = guard.entries.get(&key).filter(|state| state.removed);
+                match removed.filter(|_| pending.contains(&key)) {
+                    // Never ahead of what the channel is reset to.
+                    Some(state) => admission.write.tombstones.push(ChannelTombstone {
+                        record_key: key,
+                        channel_id: channel_id.to_owned(),
+                        seq: after.map_or(state.seq, |after| after.min(state.seq)),
+                    }),
+                    None => {
+                        admission.deleted.insert(key);
+                    }
+                }
+            }
         }
         let mut doomed = admission.deleted.clone();
         if let Some(through) = pruned_through.filter(|_| !commit.reset) {

@@ -355,7 +355,7 @@ fn apply(
             // projection may hold facts it fed, as the build before derived
             // them.
             let dropped = |key: &PredicateRecordKey| {
-                *every_document || changed.contains(key_typename(key.as_str()))
+                *every_document || dropping.contains(key_typename(key.as_str()))
             };
             let mut queue = conform_queue(
                 connection,
