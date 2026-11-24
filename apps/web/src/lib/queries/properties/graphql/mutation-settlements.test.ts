@@ -28,6 +28,31 @@ function setup() {
 }
 
 describe('property mutation settlements', () => {
+  it('waits for a write by the mutation uuid it was queued under', async () => {
+    const test = setup();
+    const pending = test.observer.waitForMutation('uuid-1');
+    expect(test.observer.reported('uuid-1')).toBe(false);
+    test.settle({
+      transactionId: '1',
+      status: 'superseded',
+      replacementTransactionId: '2',
+      mutationUuid: 'uuid-1',
+    });
+    expect(test.observer.reported('uuid-1')).toBe(true);
+    test.settle({ transactionId: '2', status: 'committed' });
+    await expect(pending).resolves.toBeUndefined();
+    test.settle({
+      transactionId: '3',
+      status: 'permanently-failed',
+      error: 'refused',
+      mutationUuid: 'uuid-2',
+    });
+    await expect(test.observer.waitForMutation('uuid-2')).rejects.toThrow(
+      'refused'
+    );
+    test.observer.dispose();
+  });
+
   it('buffers settlements that arrive before the queued acknowledgement', async () => {
     const test = setup();
     test.settle({ transactionId: '1', status: 'committed' });
