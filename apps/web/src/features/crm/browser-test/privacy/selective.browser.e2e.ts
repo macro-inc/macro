@@ -285,7 +285,7 @@ test('a disconnected mailbox connects without enabling selected sharing', async 
   await expect(page.getByText('member@example.com')).toBeVisible();
   await expect(connect).toHaveCount(0);
   await expect(
-    page.getByText('Your emails are not contributing to CRM.')
+    page.getByText('Primary mailbox · Sharing off', { exact: true })
   ).toBeVisible();
   await expect(page.getByTestId('policy-calls')).not.toContainText('replace');
   await expect(page.getByTestId('last-change')).toHaveText('');

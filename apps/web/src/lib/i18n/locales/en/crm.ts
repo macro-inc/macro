@@ -23,10 +23,6 @@ export default {
   policySelected: 'Primary mailbox · Selected by rules',
   policyAll: 'Primary mailbox · All eligible mail',
   policyOff: 'Primary mailbox · Sharing off',
-  policySelectedDescription:
-    'Share whole threads that match your rules. Person and company rules follow their current records. Exclusions always apply.',
-  policyAllDescription:
-    'All eligible past and future email is shared. Your exclusions still apply.',
   policyRuleDescription:
     'A thread is included if any rule matches. Private threads and blacklists take priority.',
   policyDomain: 'Domain',
@@ -164,7 +160,7 @@ export default {
     'Your thread is excluded from CRM. Manage it in Email settings; a teammate’s copy may still be shared.',
   privacyThreadsTitle: 'Excluded threads',
   privacyThreadsDescription:
-    'Excluded threads stop sharing your copy through CRM, including mail already shared. A teammate’s contributed copy can still be visible. Company and contact records stay. To exclude a thread, choose “Exclude thread from CRM” in its header or menu.',
+    'To add one, choose “Exclude thread from CRM” in the thread’s menu.',
   privacyNoThreads: 'No excluded threads.',
   privacyThreadNoSubject: '(No subject)',
   privacyRestoreThread: 'Remove',
@@ -341,11 +337,9 @@ export default {
   privacyTeamTitle: 'Team blacklist',
   privacyPersonalTitle: 'My blacklist',
   privacyTeamDescription:
-    'These domains are excluded from everyone’s CRM email contributions. Any member can add a domain; only admins can remove one.',
+    'Hides every thread with someone at these domains or their subdomains from everyone’s shared email, past and future. Only admins can remove a domain.',
   privacyPersonalDescription:
-    'These domains are excluded from your contributions. Teammates can still contribute their copies of the same conversation.',
-  privacyDomainDescription:
-    'Subdomains are included. A blocked participant excludes the entire email thread. Existing companies stay visible.',
+    'Hides threads with these domains from your shared email only. A teammate’s copy can still be shared.',
   privacyNoDomains: 'No domains blocked.',
   privacyRemove: 'Remove',
   privacyRemoveDomain: 'Remove {{domain}}',
@@ -361,16 +355,14 @@ export default {
   privacyLoading: 'Loading email settings…',
   privacyRetry: 'Retry',
   privacyContributionTitle: 'Your email contribution',
-  privacyAvailability:
-    'Email contribution is optional and separate from CRM access.',
   privacyConnect: 'No email connected',
   privacyConnectEmail: 'Connect email',
-  privacyShared: 'Your eligible emails are shared with your team.',
-  privacyNotShared: 'Your emails are not contributing to CRM.',
   privacyOn: 'Sharing on',
   privacyOff: 'Sharing off',
   privacyConsentDescription:
-    'Opting in shares the full content of all available past and future emails from this mailbox with your team, except blocked threads. Review both blacklists below first. Blocking a domain also hides previously shared matching threads. Stopping sharing withdraws your email contributions; companies and contacts remain.',
+    'Shares the full content of your past and future email with your team, except blocked threads. If you stop later, companies and contacts stay. Review both blacklists below first.',
+  privacyStopDescription:
+    'Stopping withdraws your email from CRM. Companies and contacts stay.',
   privacyStop: 'Stop sharing my emails',
   privacyShare: 'Share my emails with CRM',
   privacyBanner: 'Your emails aren’t contributing to CRM.',

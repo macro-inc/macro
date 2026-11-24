@@ -101,13 +101,12 @@ function DomainBlocklist(props: {
           ? t('crm.privacyTeamTitle')
           : t('crm.privacyPersonalTitle')
       }
-    >
-      <p class="text-sm text-ink-muted">
-        {props.scope === 'team'
+      description={
+        props.scope === 'team'
           ? t('crm.privacyTeamDescription')
-          : t('crm.privacyPersonalDescription')}{' '}
-        {t('crm.privacyDomainDescription')}
-      </p>
+          : t('crm.privacyPersonalDescription')
+      }
+    >
       <SettingsCard>
         <For
           each={domains()}
@@ -185,8 +184,10 @@ function ThreadExclusions(props: {
   const [after, setAfter] = createSignal<string>();
   const query = props.source.createExcludedThreads(after);
   return (
-    <SettingsSection title={t('crm.privacyThreadsTitle')}>
-      <p class="text-sm text-ink-muted">{t('crm.privacyThreadsDescription')}</p>
+    <SettingsSection
+      title={t('crm.privacyThreadsTitle')}
+      description={t('crm.privacyThreadsDescription')}
+    >
       <Show
         when={!query.isPending && query.data}
         fallback={
@@ -333,61 +334,59 @@ function LegacyEmailPrivacySettings(props: {
         </p>
       }
     >
-      <SettingsSection title={t('crm.privacyContributionTitle')}>
-        <p class="text-sm text-ink-muted">{t('crm.privacyAvailability')}</p>
-        <SettingsCard>
+      <SettingsSection
+        title={t('crm.privacyContributionTitle')}
+        description={
+          settings()?.enabled
+            ? t('crm.privacyStopDescription')
+            : t('crm.privacyConsentDescription')
+        }
+      >
+        <SettingsCard class="@container">
           <SettingsRow
             label={settings()?.mailboxEmail ?? t('crm.privacyConnect')}
             description={
-              settings()?.enabled
-                ? t('crm.privacyShared')
-                : t('crm.privacyNotShared')
+              settings()?.enabled ? t('crm.privacyOn') : t('crm.privacyOff')
             }
+            stackOnNarrow
           >
-            <Show
-              when={settings()?.enabled || settings()?.mailboxLinkId}
-              fallback={
+            <div class="flex flex-wrap gap-2 @[460px]:justify-end">
+              <Show when={!settings()?.enabled && !settings()?.mailboxLinkId}>
                 <ConnectEmailButton onConnectEmail={props.onConnectEmail} />
-              }
-            >
-              <span class="text-sm text-ink-muted">
-                {settings()?.enabled ? t('crm.privacyOn') : t('crm.privacyOff')}
-              </span>
-            </Show>
+              </Show>
+              <Button
+                variant={settings()?.enabled ? 'secondary' : 'primary'}
+                size="sm"
+                disabled={
+                  (!settings()?.enabled &&
+                    (!settings()?.mailboxLinkId || props.policyUnavailable)) ||
+                  source.update.isPending
+                }
+                onClick={() => {
+                  if (!settings()?.enabled && props.policyUnavailable) return;
+                  source.update.mutate(
+                    {
+                      action: 'set_consent',
+                      enabled: !settings()?.enabled,
+                      link_id: settings()?.mailboxLinkId,
+                    },
+                    { onSuccess: (data) => data.enabled && props.onOptIn?.() }
+                  );
+                }}
+              >
+                {settings()?.enabled
+                  ? t('crm.privacyStop')
+                  : t('crm.privacyShare')}
+              </Button>
+            </div>
           </SettingsRow>
         </SettingsCard>
-        <p class="text-sm text-ink-muted">
-          {t('crm.privacyConsentDescription')}
-        </p>
       </SettingsSection>
       <DomainBlocklist source={source} scope="team" />
       <DomainBlocklist source={source} scope="personal" />
       <Show when={threadExclusions().enabled}>
         <ThreadExclusions source={source} onOpenThread={props.onOpenThread} />
       </Show>
-      <div class="flex justify-end">
-        <Button
-          variant={settings()?.enabled ? 'secondary' : 'primary'}
-          disabled={
-            (!settings()?.enabled &&
-              (!settings()?.mailboxLinkId || props.policyUnavailable)) ||
-            source.update.isPending
-          }
-          onClick={() => {
-            if (!settings()?.enabled && props.policyUnavailable) return;
-            source.update.mutate(
-              {
-                action: 'set_consent',
-                enabled: !settings()?.enabled,
-                link_id: settings()?.mailboxLinkId,
-              },
-              { onSuccess: (data) => data.enabled && props.onOptIn?.() }
-            );
-          }}
-        >
-          {settings()?.enabled ? t('crm.privacyStop') : t('crm.privacyShare')}
-        </Button>
-      </div>
     </Show>
   );
 }
@@ -447,8 +446,13 @@ function SelectiveEmailPrivacy(
   const overview = () => (
     <>
       <EmailPolicyNotices settings={settings} onInspect={() => go('current')} />
-      <SettingsSection title={t('crm.privacyContributionTitle')}>
-        <SettingsCard>
+      <SettingsSection
+        title={t('crm.privacyContributionTitle')}
+        description={
+          policy()?.enabled ? t('crm.policyRecordsRemain') : undefined
+        }
+      >
+        <SettingsCard class="@container">
           <SettingsRow
             label={mailbox() ?? t('crm.privacyConnect')}
             description={
@@ -458,8 +462,9 @@ function SelectiveEmailPrivacy(
                   ? t('crm.policySelected')
                   : t('crm.policyAll')
             }
+            stackOnNarrow
           >
-            <div class="flex flex-wrap justify-end gap-2">
+            <div class="flex flex-wrap gap-2 @[460px]:justify-end">
               <Show when={needsMailbox()}>
                 <ConnectEmailButton onConnectEmail={props.onConnectEmail} />
               </Show>
@@ -473,16 +478,21 @@ function SelectiveEmailPrivacy(
                   {t('crm.policyChange')}
                 </Button>
               </Show>
+              <Show when={policy()?.enabled}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={
+                    props.source.update.isPending || settings.state.busy
+                  }
+                  onClick={stop}
+                >
+                  {t('crm.privacyStop')}
+                </Button>
+              </Show>
             </div>
           </SettingsRow>
         </SettingsCard>
-        <p class="text-sm text-ink-muted leading-relaxed">
-          {!policy()?.enabled
-            ? t('crm.privacyNotShared')
-            : policy()?.mode === 'selected'
-              ? t('crm.policySelectedDescription')
-              : t('crm.policyAllDescription')}
-        </p>
       </SettingsSection>
       <SettingsSection
         title={t('crm.policyRules')}
@@ -592,20 +602,6 @@ function SelectiveEmailPrivacy(
           source={props.source}
           onOpenThread={props.onOpenThread}
         />
-      </Show>
-      <p class="text-sm text-ink-muted leading-relaxed">
-        {t('crm.policyRecordsRemain')}
-      </p>
-      <Show when={policy()?.enabled}>
-        <div class="flex justify-end">
-          <Button
-            variant="secondary"
-            disabled={props.source.update.isPending || settings.state.busy}
-            onClick={stop}
-          >
-            {t('crm.privacyStop')}
-          </Button>
-        </div>
       </Show>
     </>
   );

@@ -99,6 +99,11 @@ for (const admin of [false, true]) {
     await expect(
       dialog.getByText('member@example.com', { exact: true })
     ).toBeInViewport();
+    const share = dialog
+      .getByText('Sharing off', { exact: true })
+      .locator('xpath=ancestor::section')
+      .getByRole('button', { name: 'Share my emails with CRM', exact: true });
+    await expect(share).toBeInViewport();
     await page.screenshot({ path: testInfo.outputPath('privacy-review.png') });
     const teamRemove = dialog.getByRole('button', {
       name: 'Remove team.example.com',
@@ -133,9 +138,7 @@ for (const admin of [false, true]) {
     await page.screenshot({
       path: testInfo.outputPath('privacy-controls.png'),
     });
-    await dialog
-      .getByRole('button', { name: 'Share my emails with CRM', exact: true })
-      .click();
+    await share.click();
     await expect(page.getByTestId('last-change')).toHaveText(
       JSON.stringify({
         action: 'set_consent',
