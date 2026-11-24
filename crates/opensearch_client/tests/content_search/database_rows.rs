@@ -94,6 +94,7 @@ async fn an_older_write_landing_after_a_newer_one_changes_nothing() -> anyhow::R
         indexed(&client, &raw, &ORDERED).await?,
         vec![IndexedDatabaseRow {
             row_id: ORDERED.row,
+            database_id: ORDERED.database,
             table_version: newer,
         }]
     );
@@ -134,6 +135,7 @@ async fn a_database_restored_right_after_its_trash_is_indexed_again() -> anyhow:
         indexed(&client, &raw, &RESTORED).await?,
         vec![IndexedDatabaseRow {
             row_id: RESTORED.row,
+            database_id: RESTORED.database,
             table_version: version,
         }]
     );

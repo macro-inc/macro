@@ -43,6 +43,8 @@ pub struct DatabaseRowWrites {
 pub struct IndexedDatabaseRow {
     /// The row.
     pub row_id: Uuid,
+    /// The database holding it.
+    pub database_id: Uuid,
     /// The table version the document reflects.
     pub table_version: i64,
 }
@@ -350,7 +352,7 @@ async fn search_rows(
         "size": size,
         "query": query,
         "sort": [{"row_id": "asc"}],
-        "_source": ["row_id", "table_version"],
+        "_source": ["row_id", "database_id", "table_version"],
     });
     if let Some(after) = after_row_id {
         body["search_after"] = json!([after]);
@@ -358,6 +360,7 @@ async fn search_rows(
 
     let response = client
         .search(opensearch::SearchParts::Index(&[index]))
+        .allow_partial_search_results(false)
         .body(body)
         .send()
         .await
@@ -380,11 +383,8 @@ async fn search_rows(
             operation,
         }
     })?;
-    let hits = answer["hits"]["hits"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-    hits.into_iter()
+    complete_page(&answer)?
+        .iter()
         .map(|hit| {
             serde_json::from_value(hit["_source"].clone()).map_err(|error| {
                 OpensearchClientError::DeserializationFailed {
@@ -394,6 +394,29 @@ async fn search_rows(
             })
         })
         .collect()
+}
+
+/// The hits of a page every shard answered in time. A partial page would
+/// let a caller page past rows a failed shard holds, or read an empty page
+/// as the end.
+pub(crate) fn complete_page(answer: &serde_json::Value) -> Result<&Vec<serde_json::Value>> {
+    let operation = OpensearchOperation::PageDatabaseRows;
+    let failed_shards = answer["_shards"]["failed"].as_u64().unwrap_or_default();
+    if answer["timed_out"].as_bool() == Some(true) || failed_shards > 0 {
+        return Err(OpensearchClientError::Unknown {
+            details: format!(
+                "incomplete page: timed_out={}, failed shards={failed_shards}",
+                answer["timed_out"]
+            ),
+            operation,
+        });
+    }
+    answer["hits"]["hits"]
+        .as_array()
+        .ok_or_else(|| OpensearchClientError::DeserializationFailed {
+            details: "search response has no hits array".to_owned(),
+            operation,
+        })
 }
 
 #[cfg(test)]

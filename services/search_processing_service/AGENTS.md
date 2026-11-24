@@ -116,8 +116,11 @@ OpenSearch, and exposes backfill HTTP routes for each.
   search's exposure gate uses) and raises the table's watermark only after
   every write succeeded. Never index from event payloads, and never raise a
   watermark before the writes for it landed (README "Database rows").
-  Trash does not bump the table version: a pass rereads the table after
-  writing and removes what it wrote if the table went. The 15-minute sweep
+  Trash and restore do not bump the table version, so every pass that reads
+  and writes a database's documents or moves its watermarks holds that
+  database's advisory lock (`DatabaseRowSource::lock_database`, a
+  transaction-scoped lock on its own pool). Only a table that is gone, which
+  never comes back, is cleaned up without it. The 15-minute sweep
   (`inbound/database_row_sweep.rs`) is the safety net for lost events and
   tag relabels outside databases; keep it cheap, and keep the whole-index
   scan on its slower cadence.

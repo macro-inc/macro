@@ -360,8 +360,9 @@ Four vocabularies must agree:
 
 Initiatives, forms, and databases themselves are not in OpenSearch; Cmd+K finds
 them through Quick Access (section 15) and agents through their list tools.
-That is the minimum. Database rows are indexed (`database_rows`), as candidates
-that search re-checks in Postgres before showing.
+That is the minimum. Database rows are indexed (`database_rows`) as candidates
+only; search does not read that index yet, and will re-check every hit in
+Postgres before showing it.
 
 For full-text search, follow the `AGENTS.md` recipes in
 `crates/opensearch_client` (index shapes), `crates/models_search`,

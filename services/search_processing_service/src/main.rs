@@ -70,6 +70,9 @@ pub type AgentSessionIndexer = domain::agent_session_index::AgentSessionIndexSer
     outbound::agent_session_search::OpenSearchAgentSessionIndex,
 >;
 
+/// Connections that hold database row passes' locks: see `database_row_lock_pool`.
+const DATABASE_ROW_LOCK_CONNECTIONS: u32 = 12;
+
 /// Production wiring for the database rows index.
 pub type DatabaseRowIndexer = domain::database_row_index::DatabaseRowIndexService<
     outbound::database_row_index::PgDatabaseRows,
@@ -286,8 +289,16 @@ async fn main() -> anyhow::Result<()> {
         outbound::agent_session_search::OpenSearchAgentSessionIndex(opensearch_client.clone()),
     ));
 
+    // Each database row pass holds one of these for its database's lock, apart
+    // from `db`, which its reads use. One per live-lane worker, plus a
+    // backfill and the sweep; more passes wait for a connection.
+    let database_row_lock_pool = PgPoolOptions::new()
+        .max_connections(DATABASE_ROW_LOCK_CONNECTIONS)
+        .connect_lazy_with(outbound::database_row_index::lock_pool_options(
+            config.database_url.as_ref(),
+        )?);
     let database_row_indexer = Arc::new(DatabaseRowIndexer::new(
-        outbound::database_row_index::PgDatabaseRows::new(db.clone()),
+        outbound::database_row_index::PgDatabaseRows::new(db.clone(), database_row_lock_pool),
         outbound::database_row_index::OpenSearchDatabaseRows(opensearch_client.clone()),
     ));
 

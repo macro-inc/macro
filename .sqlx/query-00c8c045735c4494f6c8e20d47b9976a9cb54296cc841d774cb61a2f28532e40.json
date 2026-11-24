@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH changed AS MATERIALIZED (\n            SELECT property_definition_id, max(updated_at) AS changed_at\n            FROM property_options\n            WHERE updated_at > $1\n            GROUP BY property_definition_id\n        )\n        SELECT DISTINCT c.table_id AS \"table_id!\"\n        FROM changed\n        JOIN database_columns c ON c.property_definition_id = changed.property_definition_id\n        JOIN LATERAL (\n            SELECT w.updated_at\n            FROM database_row_search_watermarks w\n            WHERE w.table_id = c.table_id\n            -- Keeps the lookup per column: without it Postgres flattens the\n            -- lateral into a join over every watermark.\n            LIMIT 1\n        ) w ON TRUE\n        WHERE changed.changed_at > w.updated_at - INTERVAL '1 minute'\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "table_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "00c8c045735c4494f6c8e20d47b9976a9cb54296cc841d774cb61a2f28532e40"
+}

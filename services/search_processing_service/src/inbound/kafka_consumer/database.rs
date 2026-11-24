@@ -11,7 +11,7 @@ use crate::domain::database_row_index::{PassKind, TableSelection};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct DatabaseEventDescription {
     /// `None` when the event changes nothing the index holds.
-    pub(super) pass: Option<(Uuid, TableSelection)>,
+    pub(super) pass: Option<(Uuid, TableSelection, PassKind)>,
     pub(super) event_type: &'static str,
 }
 
@@ -21,7 +21,11 @@ pub(super) struct DatabaseEventDescription {
 pub(super) fn describe_database_event(event: &DatabaseTopicEvent) -> DatabaseEventDescription {
     match event {
         DatabaseTopicEvent::Created(metadata) => DatabaseEventDescription {
-            pass: Some((metadata.database_id.into_uuid(), TableSelection::All)),
+            pass: Some((
+                metadata.database_id.into_uuid(),
+                TableSelection::All,
+                PassKind::CatchUp,
+            )),
             event_type: "database.created",
         },
         DatabaseTopicEvent::TablesChanged(metadata) => DatabaseEventDescription {
@@ -34,19 +38,34 @@ pub(super) fn describe_database_event(event: &DatabaseTopicEvent) -> DatabaseEve
                         .map(|table| table.table_id.into_uuid())
                         .collect(),
                 ),
+                PassKind::CatchUp,
             )),
             event_type: "database.tables_changed",
         },
         DatabaseTopicEvent::Trashed(metadata) => DatabaseEventDescription {
-            pass: Some((metadata.database_id.into_uuid(), TableSelection::All)),
+            pass: Some((
+                metadata.database_id.into_uuid(),
+                TableSelection::All,
+                PassKind::CatchUp,
+            )),
             event_type: "database.trashed",
         },
         DatabaseTopicEvent::Restored(metadata) => DatabaseEventDescription {
-            pass: Some((metadata.database_id.into_uuid(), TableSelection::All)),
+            // A watermark a pass raised just before the trash would read
+            // as up to date; a restore rereads every row.
+            pass: Some((
+                metadata.database_id.into_uuid(),
+                TableSelection::All,
+                PassKind::Full,
+            )),
             event_type: "database.restored",
         },
         DatabaseTopicEvent::Purged(metadata) => DatabaseEventDescription {
-            pass: Some((metadata.database_id.into_uuid(), TableSelection::All)),
+            pass: Some((
+                metadata.database_id.into_uuid(),
+                TableSelection::All,
+                PassKind::CatchUp,
+            )),
             event_type: "database.purged",
         },
         // Names, sharing and appearance are not indexed; search checks
@@ -75,7 +94,8 @@ pub(super) async fn process_database_event(
     event: &DatabaseMacroEvent,
     attempts: &Attempts,
 ) -> Attempted {
-    let Some((database_id, selection)) = describe_database_event(&event.event().event).pass else {
+    let Some((database_id, selection, kind)) = describe_database_event(&event.event().event).pass
+    else {
         return Ok((super::Handled::Ignored, 0));
     };
     attempts
@@ -83,7 +103,8 @@ pub(super) async fn process_database_event(
             context.database_row_indexer.reconcile_database(
                 database_id,
                 selection.clone(),
-                PassKind::CatchUp,
+                kind,
+                None,
             )
         })
         .await

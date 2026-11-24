@@ -27,12 +27,39 @@ use crate::domain::database_row_index::{
 #[derive(Clone)]
 pub struct PgDatabaseRows {
     db: PgPool,
+    /// Connections that hold a database's index lock for a pass, apart from
+    /// `db`, so passes holding locks cannot take every connection their own
+    /// reads need. Built by [`lock_pool_options`].
+    locks: PgPool,
 }
 
 impl PgDatabaseRows {
-    pub fn new(db: PgPool) -> Self {
-        Self { db }
+    pub fn new(db: PgPool, locks: PgPool) -> Self {
+        Self { db, locks }
     }
+}
+
+/// How long a pass waits for a database's lock before it fails and is
+/// retried (in place, then through the replay queue).
+const LOCK_TIMEOUT: &str = "30s";
+
+/// A held lock is an open transaction; bound it far above any pass, so a
+/// connection a crashed or stuck pass left open is closed by the server.
+const LOCK_IDLE_TIMEOUT: &str = "15min";
+
+/// Connect options for the lock pool: `lock_timeout` bounds the wait for an
+/// advisory lock, and `idle_in_transaction_session_timeout` is set here
+/// rather than inherited, so a server default cannot end a pass whose lock
+/// transaction sits idle during OpenSearch writes.
+pub fn lock_pool_options(
+    database_url: &str,
+) -> Result<sqlx::postgres::PgConnectOptions, sqlx::Error> {
+    Ok(database_url
+        .parse::<sqlx::postgres::PgConnectOptions>()?
+        .options([
+            ("lock_timeout", LOCK_TIMEOUT),
+            ("idle_in_transaction_session_timeout", LOCK_IDLE_TIMEOUT),
+        ]))
 }
 
 fn limit(limit: usize) -> i64 {
@@ -57,6 +84,25 @@ impl Drop for PgSweepLease {
 
 impl DatabaseRowSource for PgDatabaseRows {
     type SweepLease = PgSweepLease;
+    /// A transaction holding `pg_advisory_xact_lock`: committing, rolling
+    /// back or dropping it (which rolls it back) releases the lock, so no
+    /// error path can leave it held on a pooled connection.
+    type DatabaseLock = sqlx::Transaction<'static, sqlx::Postgres>;
+
+    async fn lock_database(&self, database_id: Uuid) -> Result<Self::DatabaseLock, Report> {
+        let mut transaction = self.locks.begin().await?;
+        sqlx::query!(
+            "SELECT pg_advisory_xact_lock(hashtext('database_row_search'), hashtext($1::TEXT))",
+            database_id.to_string(),
+        )
+        .execute(&mut *transaction)
+        .await?;
+        Ok(transaction)
+    }
+
+    async fn unlock_database(&self, lock: Self::DatabaseLock) -> Result<(), Report> {
+        Ok(lock.commit().await?)
+    }
 
     async fn lead_stale_sweep(&self) -> Result<Option<PgSweepLease>, Report> {
         let mut connection = self.db.acquire().await?;
@@ -133,7 +179,14 @@ impl DatabaseRowSource for PgDatabaseRows {
     }
 
     async fn lagging_tables(&self, after: Option<Uuid>, page: usize) -> Result<Vec<Uuid>, Report> {
-        Ok(index::read_lagging_tables(&self.db, after, limit(page)).await?)
+        let mut transaction = self.db.begin().await?;
+        // A sweep read walks every table; give up rather than hold the round.
+        sqlx::query!("SET LOCAL statement_timeout = '30s'")
+            .execute(&mut *transaction)
+            .await?;
+        let tables = index::read_lagging_tables(&mut *transaction, after, limit(page)).await?;
+        transaction.commit().await?;
+        Ok(tables)
     }
 
     async fn relabelled_tables(
@@ -141,7 +194,13 @@ impl DatabaseRowSource for PgDatabaseRows {
         since: chrono::DateTime<chrono::Utc>,
         page: usize,
     ) -> Result<Vec<Uuid>, Report> {
-        Ok(index::read_relabelled_tables(&self.db, since, limit(page)).await?)
+        let mut transaction = self.db.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '30s'")
+            .execute(&mut *transaction)
+            .await?;
+        let tables = index::read_relabelled_tables(&mut *transaction, since, limit(page)).await?;
+        transaction.commit().await?;
+        Ok(tables)
     }
 
     async fn gone_tables(&self, page: usize) -> Result<Vec<Uuid>, Report> {
@@ -194,6 +253,7 @@ impl DatabaseRowIndex for OpenSearchDatabaseRows {
             .into_iter()
             .map(|row| IndexedRow {
                 row_id: row.row_id,
+                database_id: row.database_id,
                 table_version: row.table_version,
             })
             .collect())

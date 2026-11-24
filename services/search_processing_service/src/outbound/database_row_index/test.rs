@@ -79,12 +79,12 @@ async fn indexes_relabels_and_removes_a_database(pool: PgPool) {
         .await
         .unwrap();
     let service = DatabaseRowIndexService::new(
-        PgDatabaseRows::new(pool.clone()),
+        PgDatabaseRows::new(pool.clone(), pool.clone()),
         OpenSearchDatabaseRows(client.clone()),
     );
 
     service
-        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp)
+        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp, None)
         .await
         .unwrap();
     assert_eq!(
@@ -142,7 +142,7 @@ async fn indexes_relabels_and_removes_a_database(pool: PgPool) {
         .await
         .unwrap();
     service
-        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp)
+        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp, None)
         .await
         .unwrap();
     assert_eq!(indexed(&client).await, Vec::new());
@@ -155,7 +155,7 @@ async fn indexes_relabels_and_removes_a_database(pool: PgPool) {
         .await
         .unwrap();
     service
-        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp)
+        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp, None)
         .await
         .unwrap();
     let restored: Vec<(Uuid, i64)> = indexed(&client)

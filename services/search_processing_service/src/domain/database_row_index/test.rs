@@ -18,6 +18,12 @@ const ROW_C: Uuid = uuid!("60000000-0000-7000-8000-00000000000c");
 #[derive(Default)]
 struct FakeSource {
     state: Mutex<SourceState>,
+    /// The one database's index lock.
+    lock: Arc<tokio::sync::Mutex<()>>,
+    /// Told when a pass first reads rows' text.
+    reading_rows: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    /// Told when a pass next asks for the lock.
+    locking: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
 }
 
 #[derive(Default)]
@@ -52,6 +58,7 @@ impl FakeSource {
                     .collect(),
                 ..SourceState::default()
             }),
+            ..Self::default()
         }
     }
 
@@ -77,6 +84,19 @@ impl SourceState {
 
 impl DatabaseRowSource for FakeSource {
     type SweepLease = ();
+    type DatabaseLock = tokio::sync::OwnedMutexGuard<()>;
+
+    async fn lock_database(&self, _database_id: Uuid) -> Result<Self::DatabaseLock, Report> {
+        if let Some(locking) = self.locking.lock().unwrap().take() {
+            let _ = locking.send(());
+        }
+        Ok(self.lock.clone().lock_owned().await)
+    }
+
+    async fn unlock_database(&self, lock: Self::DatabaseLock) -> Result<(), Report> {
+        drop(lock);
+        Ok(())
+    }
 
     async fn lead_stale_sweep(&self) -> Result<Option<()>, Report> {
         Ok(Some(()))
@@ -151,6 +171,9 @@ impl DatabaseRowSource for FakeSource {
     }
 
     async fn row_texts(&self, row_ids: &[Uuid]) -> Result<Vec<RowSearchText>, Report> {
+        if let Some(reading) = self.reading_rows.lock().unwrap().take() {
+            let _ = reading.send(());
+        }
         let state = self.state.lock().unwrap();
         let Some(table) = state.table.filter(|_| state.searchable()) else {
             return Ok(Vec::new());
@@ -265,6 +288,13 @@ impl DatabaseRowSource for FakeSource {
 struct FakeIndex {
     documents: Mutex<BTreeMap<Uuid, DatabaseRowDocument>>,
     fail_next_write: Mutex<bool>,
+    /// Holds the next scoped delete: says when it started, then waits.
+    paused_delete: Mutex<
+        Option<(
+            tokio::sync::oneshot::Sender<()>,
+            tokio::sync::oneshot::Receiver<()>,
+        )>,
+    >,
 }
 
 impl FakeIndex {
@@ -340,6 +370,11 @@ impl DatabaseRowIndex for FakeIndex {
     }
 
     async fn delete(&self, scope: RowIndexScope) -> Result<u64, Report> {
+        let paused = self.paused_delete.lock().unwrap().take();
+        if let Some((started, resume)) = paused {
+            let _ = started.send(());
+            let _ = resume.await;
+        }
         let mut documents = self.documents.lock().unwrap();
         let before = documents.len();
         documents.retain(|_, document| match scope {
@@ -362,6 +397,7 @@ impl DatabaseRowIndex for FakeIndex {
             .take(size)
             .map(|document| IndexedRow {
                 row_id: document.row_id,
+                database_id: document.database_id,
                 table_version: document.table_version,
             })
             .collect())
@@ -563,7 +599,7 @@ async fn trash_removes_the_database_and_restore_brings_it_back() {
     let service = DatabaseRowIndexService::new(source, index);
 
     service
-        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp)
+        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp, None)
         .await
         .unwrap();
     assert_eq!(service.index.contents(), Vec::new());
@@ -574,7 +610,7 @@ async fn trash_removes_the_database_and_restore_brings_it_back() {
         .source
         .edit(|state| state.database_searchable = Some(true));
     service
-        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp)
+        .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp, None)
         .await
         .unwrap();
     assert_eq!(
@@ -602,6 +638,7 @@ async fn a_purged_database_leaves_the_index() {
             DATABASE,
             TableSelection::Tables(vec![TABLE]),
             PassKind::CatchUp,
+            None,
         )
         .await
         .unwrap();
@@ -621,7 +658,7 @@ async fn the_stale_sweep_removes_documents_of_gone_rows_and_tables() {
     let service = DatabaseRowIndexService::new(source, index);
 
     let removal = service
-        .remove_stale(&CancellationToken::new())
+        .remove_stale(None, &CancellationToken::new())
         .await
         .unwrap();
 
@@ -710,4 +747,79 @@ async fn a_sweep_reindexes_a_table_whose_tag_was_relabelled_elsewhere() {
         service.index.contents(),
         vec![(ROW_A, "critical".to_owned(), 6)]
     );
+}
+
+#[tokio::test]
+async fn a_trash_during_a_backfill_pass_leaves_nothing_indexed() {
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6"), (ROW_B, "B at 6")]);
+    let (reading, read) = tokio::sync::oneshot::channel();
+    *source.reading_rows.lock().unwrap() = Some(reading);
+    let service = DatabaseRowIndexService::new(source, FakeIndex::default());
+
+    // The database is trashed while the backfill reads its rows, and the
+    // trash's event is handled at once.
+    let backfill = service.reconcile_database(DATABASE, TableSelection::All, PassKind::Full, None);
+    let trash = async {
+        read.await.unwrap();
+        service
+            .source
+            .edit(|state| state.database_searchable = Some(false));
+        service
+            .reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp, None)
+            .await
+    };
+    let (backfilled, trashed) = tokio::join!(backfill, trash);
+    backfilled.unwrap();
+    trashed.unwrap();
+
+    assert_eq!(service.index.contents(), Vec::new());
+    assert_eq!(service.source.watermark_of(TABLE), None);
+}
+
+#[tokio::test]
+async fn a_restore_overlapping_a_trash_pass_keeps_its_rows() {
+    // The trash pass has decided to delete when the database is restored and
+    // a backfill pass starts. The backfill writes at the same table version
+    // the trash deletes at, so only their order decides what is left.
+    let source = FakeSource::new(6, &[(ROW_A, "A at 6"), (ROW_B, "B at 6")]);
+    source.edit(|state| {
+        state.database_searchable = Some(false);
+        state.watermarks.insert(TABLE, (DATABASE, 6));
+    });
+    let index = FakeIndex::holding(&[(ROW_A, "A at 6", 6), (ROW_B, "B at 6", 6)]);
+    let (deleting, delete_started) = tokio::sync::oneshot::channel();
+    let (resume_delete, resumed) = tokio::sync::oneshot::channel();
+    *index.paused_delete.lock().unwrap() = Some((deleting, resumed));
+    let service = DatabaseRowIndexService::new(source, index);
+
+    let trash = service.reconcile_database(DATABASE, TableSelection::All, PassKind::CatchUp, None);
+    let restore = async {
+        delete_started.await.unwrap();
+        service
+            .source
+            .edit(|state| state.database_searchable = Some(true));
+        let (locking, lock_asked) = tokio::sync::oneshot::channel();
+        *service.source.locking.lock().unwrap() = Some(locking);
+        let backfill =
+            service.reconcile_database(DATABASE, TableSelection::All, PassKind::Full, None);
+        let resume = async {
+            // The delete goes on once the backfill has asked for the lock.
+            lock_asked.await.unwrap();
+            let _ = resume_delete.send(());
+        };
+        let (backfilled, ()) = tokio::join!(backfill, resume);
+        backfilled
+    };
+    let (trashed, restored) = tokio::join!(trash, restore);
+    trashed.unwrap();
+    restored.unwrap();
+
+    assert_eq!(
+        service.index.contents(),
+        vec![
+            (ROW_A, "A at 6".to_owned(), 6),
+            (ROW_B, "B at 6".to_owned(), 6)
+        ]
+    );
+    assert_eq!(service.source.watermark_of(TABLE), Some(6));
 }

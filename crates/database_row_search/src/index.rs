@@ -300,7 +300,10 @@ where
                 SELECT t.id
                 FROM database_tables t
                 JOIN database_entities de ON de.database_id = t.database_id
-                LEFT JOIN database_row_search_watermarks w ON w.table_id = t.id
+                -- The cursor repeated on the watermark side gives its scan an
+                -- index condition; Postgres does not carry it across the join.
+                LEFT JOIN database_row_search_watermarks w
+                    ON w.table_id = t.id AND w.table_id > $1
                 WHERE t.id > $1
                     AND de.trashed_at IS NULL
                     AND (w.table_id IS NULL OR t.version > w.indexed_version)
@@ -330,14 +333,30 @@ pub async fn read_relabelled_tables<'e, Executor>(
 where
     Executor: sqlx::PgExecutor<'e>,
 {
+    // Starts from the options changed since `since`, through
+    // `idx_property_options_updated_at`, one line per definition; the
+    // watermark of each table placing one is a primary key probe. Joined
+    // plainly, the planner walks every column in table order instead.
     sqlx::query_scalar!(
         r#"
+        WITH changed AS MATERIALIZED (
+            SELECT property_definition_id, max(updated_at) AS changed_at
+            FROM property_options
+            WHERE updated_at > $1
+            GROUP BY property_definition_id
+        )
         SELECT DISTINCT c.table_id AS "table_id!"
-        FROM property_options po
-        JOIN database_columns c ON c.property_definition_id = po.property_definition_id
-        JOIN database_row_search_watermarks w ON w.table_id = c.table_id
-        WHERE po.updated_at > $1
-            AND po.updated_at > w.updated_at - INTERVAL '1 minute'
+        FROM changed
+        JOIN database_columns c ON c.property_definition_id = changed.property_definition_id
+        JOIN LATERAL (
+            SELECT w.updated_at
+            FROM database_row_search_watermarks w
+            WHERE w.table_id = c.table_id
+            -- Keeps the lookup per column: without it Postgres flattens the
+            -- lateral into a join over every watermark.
+            LIMIT 1
+        ) w ON TRUE
+        WHERE changed.changed_at > w.updated_at - INTERVAL '1 minute'
         LIMIT $2
         "#,
         since,

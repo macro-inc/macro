@@ -26,6 +26,7 @@ fn a_tables_event_reconciles_the_tables_it_names() {
                     uuid!("20000000-0000-7000-8000-000000000001"),
                     uuid!("20000000-0000-7000-8000-000000000002"),
                 ]),
+                PassKind::CatchUp,
             )),
             event_type: "database.tables_changed",
         }
@@ -34,7 +35,11 @@ fn a_tables_event_reconciles_the_tables_it_names() {
 
 #[test]
 fn trash_purge_and_restore_reconcile_the_whole_database() {
-    for event_type in ["database.trashed", "database.purged", "database.restored"] {
+    for (event_type, kind) in [
+        ("database.trashed", PassKind::CatchUp),
+        ("database.purged", PassKind::CatchUp),
+        ("database.restored", PassKind::Full),
+    ] {
         let event: DatabaseTopicEvent = serde_json::from_value(json!({
             "event_type": event_type,
             "metadata": {"database_id": "10000000-0000-7000-8000-000000000001"},
@@ -45,7 +50,8 @@ fn trash_purge_and_restore_reconcile_the_whole_database() {
             describe_database_event(&event).pass,
             Some((
                 uuid!("10000000-0000-7000-8000-000000000001"),
-                TableSelection::All
+                TableSelection::All,
+                kind,
             )),
             "{event_type}"
         );

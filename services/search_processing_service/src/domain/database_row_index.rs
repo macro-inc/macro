@@ -9,7 +9,11 @@
 //! write carries the table version its text was read at, so the index keeps
 //! the newest state whatever order writes land in.
 
-use std::{collections::HashSet, sync::Arc, time::Instant};
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::Arc,
+    time::Instant,
+};
 
 use chrono::{DateTime, Utc};
 
@@ -48,6 +52,26 @@ pub trait DatabaseRowSource: Send + Sync + 'static {
     fn lead_stale_sweep(
         &self,
     ) -> impl Future<Output = Result<Option<Self::SweepLease>, Report>> + Send;
+
+    /// Held for the length of one pass over a database's documents; dropping
+    /// it releases the lock.
+    type DatabaseLock: Send;
+
+    /// Wait, for a bounded time, for the database's index lock. Every pass
+    /// that reads rows and writes or deletes their documents, or moves a
+    /// watermark, holds it, so passes over one database never interleave: a
+    /// trash or restore does not bump the table version, so only their order
+    /// keeps an older observation from undoing a newer one.
+    fn lock_database(
+        &self,
+        database_id: Uuid,
+    ) -> impl Future<Output = Result<Self::DatabaseLock, Report>> + Send;
+
+    /// Release the lock.
+    fn unlock_database(
+        &self,
+        lock: Self::DatabaseLock,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// The table, or `None` when it no longer exists.
     fn table_state(
@@ -160,6 +184,7 @@ pub enum RowIndexScope {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IndexedRow {
     pub row_id: Uuid,
+    pub database_id: Uuid,
     pub table_version: i64,
 }
 
@@ -272,13 +297,15 @@ impl<S, I> DatabaseRowIndexService<S, I> {
 impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
     /// Bring the selected tables of a database up to date, or remove the
     /// database's documents when it is gone, trashed, or has no database
-    /// entity.
+    /// entity. A backfill passes its `gate`, admitted once per table before
+    /// the table's lock; live events pass `None` and are never gated.
     #[tracing::instrument(
         err,
-        skip(self, selection),
+        skip(self, selection, gate),
         fields(
             tables = tracing::field::Empty,
             searchable = tracing::field::Empty,
+            lock_wait_ms = tracing::field::Empty,
         )
     )]
     pub async fn reconcile_database(
@@ -286,6 +313,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         database_id: Uuid,
         selection: TableSelection,
         kind: PassKind,
+        gate: Option<&BackfillGate>,
     ) -> Result<(), Report> {
         let span = tracing::Span::current();
         let tables = self.source.database_tables(database_id).await?;
@@ -293,8 +321,21 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         span.record("searchable", searchable);
 
         let Some(tables) = tables.filter(|tables| tables.searchable) else {
-            self.remove_database(database_id).await?;
-            return Ok(());
+            return self
+                .with_database_lock(database_id, async || {
+                    // Restored since the read above: the restore's own pass
+                    // reindexes it, after this one.
+                    let still_gone = !self
+                        .source
+                        .database_tables(database_id)
+                        .await?
+                        .is_some_and(|tables| tables.searchable);
+                    if still_gone {
+                        self.remove_database(database_id).await?;
+                    }
+                    Ok(())
+                })
+                .await;
         };
 
         let table_ids = match selection {
@@ -304,13 +345,18 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         span.record("tables", table_ids.len());
 
         for table_id in table_ids {
+            let _permit = match gate {
+                Some(gate) => Some(gate.admit().await),
+                None => None,
+            };
             self.reconcile_table(table_id, kind).await?;
         }
         Ok(())
     }
 
-    /// Bring one table up to date and raise its watermark to the version
-    /// read at the start, once every write for it succeeded.
+    /// Bring one table up to date, holding its database's lock, and raise
+    /// its watermark to the version read at the start once every write for
+    /// it succeeded.
     #[tracing::instrument(
         err,
         skip(self),
@@ -322,6 +368,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
             rows_written = tracing::field::Empty,
             rows_deleted = tracing::field::Empty,
             rows_superseded = tracing::field::Empty,
+            lock_wait_ms = tracing::field::Empty,
         )
     )]
     pub async fn reconcile_table(
@@ -330,9 +377,45 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         kind: PassKind,
     ) -> Result<TableOutcome, Report> {
         let span = tracing::Span::current();
-        let outcome = self.reconcile_table_inner(table_id, kind, &span).await?;
+        let outcome = match self.source.table_state(table_id).await? {
+            // A table that is gone never comes back, so no lock is needed.
+            None => {
+                self.index.delete(RowIndexScope::Table(table_id)).await?;
+                self.source.forget_table(table_id).await?;
+                TableOutcome::Removed
+            }
+            Some(state) => {
+                self.with_database_lock(state.database_id, async || {
+                    self.reconcile_table_inner(table_id, kind, &span).await
+                })
+                .await?
+            }
+        };
         span.record("outcome", <&'static str>::from(outcome));
         Ok(outcome)
+    }
+
+    /// Run `pass` holding the database's lock, recording the wait as
+    /// `lock_wait_ms` on the current span. The lock is released whether the
+    /// pass succeeds or fails.
+    async fn with_database_lock<T>(
+        &self,
+        database_id: Uuid,
+        pass: impl AsyncFnOnce() -> Result<T, Report>,
+    ) -> Result<T, Report> {
+        let waited = Instant::now();
+        let lock = self.source.lock_database(database_id).await?;
+        tracing::Span::current().record("lock_wait_ms", elapsed_ms(waited));
+
+        let result = pass().await;
+        match result {
+            Ok(value) => {
+                self.source.unlock_database(lock).await?;
+                Ok(value)
+            }
+            // Dropping the lock releases it.
+            Err(error) => Err(error),
+        }
     }
 
     async fn reconcile_table_inner(
@@ -519,9 +602,13 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
     #[tracing::instrument(
         err,
         skip_all,
-        fields(checked, removed, gone_tables, pages, duration_ms)
+        fields(checked, removed, gone_tables, pages, duration_ms, lock_wait_ms)
     )]
-    pub async fn remove_stale(&self, cancel: &CancellationToken) -> Result<StaleRemoval, Report> {
+    pub async fn remove_stale(
+        &self,
+        gate: Option<&BackfillGate>,
+        cancel: &CancellationToken,
+    ) -> Result<StaleRemoval, Report> {
         let started = Instant::now();
         let mut removal = StaleRemoval::default();
         let mut pages = 0_usize;
@@ -542,16 +629,43 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
                 .await?
                 .into_iter()
                 .collect();
-            let deletes: Vec<RowIndexWrite> = page
-                .iter()
-                .filter(|row| !live.contains(&row.row_id))
-                .map(|row| RowIndexWrite::Delete {
-                    row_id: row.row_id,
-                    table_version: row.table_version,
-                })
-                .collect();
-            if !deletes.is_empty() {
-                removal.removed += self.index.write(deletes).await?.applied;
+            let mut stale: BTreeMap<Uuid, Vec<IndexedRow>> = BTreeMap::new();
+            for row in page.iter().filter(|row| !live.contains(&row.row_id)) {
+                stale.entry(row.database_id).or_default().push(*row);
+            }
+
+            // Check each database's stale rows again under its lock before
+            // deleting: a restore's pass may have rewritten them meanwhile, at
+            // the very version this page read.
+            if let Some(gate) = gate
+                && !stale.is_empty()
+            {
+                let _permit = gate.admit().await;
+            }
+            for (database_id, rows) in stale {
+                removal.removed += self
+                    .with_database_lock(database_id, async || {
+                        let row_ids: Vec<Uuid> = rows.iter().map(|row| row.row_id).collect();
+                        let live: HashSet<Uuid> = self
+                            .source
+                            .searchable_row_ids(&row_ids)
+                            .await?
+                            .into_iter()
+                            .collect();
+                        let deletes: Vec<RowIndexWrite> = rows
+                            .iter()
+                            .filter(|row| !live.contains(&row.row_id))
+                            .map(|row| RowIndexWrite::Delete {
+                                row_id: row.row_id,
+                                table_version: row.table_version,
+                            })
+                            .collect();
+                        if deletes.is_empty() {
+                            return Ok(0);
+                        }
+                        Ok(self.index.write(deletes).await?.applied)
+                    })
+                    .await?;
             }
         }
 
@@ -561,6 +675,9 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
                 break;
             }
             for table_id in gone {
+                if let Some(gate) = gate {
+                    let _permit = gate.admit().await;
+                }
                 self.index.delete(RowIndexScope::Table(table_id)).await?;
                 self.source.forget_table(table_id).await?;
                 removal.gone_tables += 1;
@@ -656,7 +773,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         if lease.is_some() {
             self.catch_up(relabelled_since, cancel).await?;
             if scan_index {
-                self.remove_stale(cancel).await?;
+                self.remove_stale(None, cancel).await?;
             }
         }
         drop(lease);
@@ -674,7 +791,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
     ) -> Result<BackfillReceipt, BackfillError> {
         let mut enqueued = 0;
         let reindex = |database_id: Uuid| async move {
-            self.reconcile_database(database_id, TableSelection::All, PassKind::Full)
+            self.reconcile_database(database_id, TableSelection::All, PassKind::Full, Some(gate))
                 .await
                 .map_err(|error| BackfillError::Index(anyhow::anyhow!("{error:#}")))
         };
@@ -682,14 +799,12 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         if !req.database_ids.is_empty() {
             let mut seen = HashSet::new();
             for database_id in req.database_ids {
+                if cancel.is_cancelled() {
+                    break;
+                }
                 if !seen.insert(database_id) {
                     continue;
                 }
-                let _permit = tokio::select! {
-                    biased;
-                    () = cancel.cancelled() => break,
-                    permit = gate.admit() => permit,
-                };
                 reindex(database_id).await?;
                 enqueued += 1;
                 progress.add(1).await;
@@ -711,11 +826,9 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
                 break;
             }
             for database_id in database_ids {
-                let _permit = tokio::select! {
-                    biased;
-                    () = cancel.cancelled() => break 'pages,
-                    permit = gate.admit() => permit,
-                };
+                if cancel.is_cancelled() {
+                    break 'pages;
+                }
                 reindex(database_id).await?;
                 after = Some(database_id);
                 enqueued += 1;
@@ -724,7 +837,7 @@ impl<S: DatabaseRowSource, I: DatabaseRowIndex> DatabaseRowIndexService<S, I> {
         }
 
         if !cancel.is_cancelled() {
-            self.remove_stale(&cancel)
+            self.remove_stale(Some(gate), &cancel)
                 .await
                 .map_err(|error| BackfillError::Index(anyhow::anyhow!("{error:#}")))?;
         }

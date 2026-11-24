@@ -95,6 +95,36 @@ fn any_other_failed_item_fails_the_batch() {
     ));
 }
 
+#[test]
+fn a_page_a_shard_did_not_answer_is_not_the_end() {
+    let partial = json!({
+        "timed_out": false,
+        "_shards": {"total": 3, "successful": 2, "failed": 1},
+        "hits": {"hits": []},
+    });
+    assert!(complete_page(&partial).is_err());
+
+    let timed_out = json!({
+        "timed_out": true,
+        "_shards": {"total": 3, "successful": 3, "failed": 0},
+        "hits": {"hits": []},
+    });
+    assert!(complete_page(&timed_out).is_err());
+
+    let without_hits = json!({"timed_out": false, "_shards": {"failed": 0}});
+    assert!(complete_page(&without_hits).is_err());
+
+    let complete = json!({
+        "timed_out": false,
+        "_shards": {"total": 3, "successful": 3, "failed": 0},
+        "hits": {"hits": []},
+    });
+    assert_eq!(
+        complete_page(&complete).unwrap(),
+        &Vec::<serde_json::Value>::new()
+    );
+}
+
 /// Uses a uniquely named scratch index behind its own alias; never touches
 /// application indices.
 #[tokio::test]
@@ -124,17 +154,16 @@ async fn an_older_state_never_overwrites_a_newer_one() {
         )
         .await
         .unwrap();
-    client
-        .inner
-        .indices()
-        .put_alias(IndicesPutAliasParts::IndexName(&[&index], &alias))
-        .send()
-        .await
-        .unwrap()
-        .error_for_status_code()
-        .unwrap();
-
+    // Everything after the index exists runs in here, so a failure still
+    // reaches the teardown below.
     let result: anyhow::Result<()> = async {
+        client
+            .inner
+            .indices()
+            .put_alias(IndicesPutAliasParts::IndexName(&[&index], &alias))
+            .send()
+            .await?
+            .error_for_status_code()?;
         let written = write_rows(
             &client.inner,
             &alias,
@@ -197,6 +226,7 @@ async fn an_older_state_never_overwrites_a_newer_one() {
             page,
             vec![IndexedDatabaseRow {
                 row_id: ROW,
+                database_id: DATABASE,
                 table_version: 9
             }]
         );
@@ -242,12 +272,15 @@ async fn an_older_state_never_overwrites_a_newer_one() {
     }
     .await;
 
-    client
+    let teardown = client
         .inner
         .indices()
         .delete(IndicesDeleteParts::Index(&[&index]))
         .send()
         .await
-        .unwrap();
+        .map_err(anyhow::Error::from)
+        .and_then(|response| Ok(response.error_for_status_code()?));
+    // The test's own failure comes first; a failed teardown only after.
     result.unwrap();
+    teardown.unwrap();
 }
