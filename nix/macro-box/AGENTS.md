@@ -141,7 +141,7 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `/tmp` (`JoinsNamespaceOf` the display), which holds only `:1`'s socket.
   They keep user namespaces (Chromium's sandbox) and W+X memory (JITs). The
   firewall rejects group `macro-agent` on 127.0.0.1:5900 and :9222 (macro's
-  own VNC and DevTools), and neither Xvnc listens on an abstract socket.
+  own VNC and DevTools) and :5902 (the screen encoder), and neither Xvnc listens on an abstract socket.
 - agent.env is a systemd credential (`LoadCredential`), never process
   environment: the runtime reads `MUPPET_CREDENTIALS_FILE`
   (`/run/credentials/macro-agent.service/agent.env`). The runtime contract
@@ -179,6 +179,21 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `GSETTINGS_SCHEMA_DIR` with GNOME's `toolkit-accessibility` on by default
   (there is no dconf), which computer-use-linux needs before it reads a tree.
   `xclip` is on the unit's PATH for the clipboard.
+- Agent computers (Docker and Firecracker images) also have `macro-agent-screen-encoder.socket`
+  (`_agent-screen-encoder.nix`, `files/agent-screen-encoder`) on
+  127.0.0.1:5902 for watching the agent in Macro: `Accept=yes`, one
+  instance per connection in the desktop's sandbox and `/tmp` (none of the
+  agent's home), at most 4, unloaded when it ends. A connection sends
+  `<fps> <width> <height> <keyint>\n` (fps 1-60, even width 160-1920 and
+  height 120-1080, keyint 1-600; anything else closes it) and gets
+  fragmented MP4 of `:1` scaled to exactly that size until it closes:
+  `ftyp` + `moov`, then one `moof` + `mdat` per frame, Constrained Baseline
+  H.264, no B-frames, starting on a keyframe. A frame's fragment goes out
+  when the next frame is captured (1/fps behind). The agent's group can't
+  connect (the firewall, as for 5900 and 9222), so it can't crowd out
+  viewers. The harness reaches it only through the fleet's
+  exec tunnel. On Firecracker `macro-agent.target` wants the socket, so a
+  person's computer doesn't listen on 5902.
 - `harnessd.service` runs `harnessd serve` as `macro` (socket
   `/run/harnessd/harnessd.sock`, RuntimeDirectory 0700; restarts always) with
   the unwrapped pinned Claude Code. The control plane execs `harnessd` (the
@@ -354,12 +369,17 @@ existing credentials: no new pairing and no Claude login.
   DevTools on loopback only with a profile under its home; the `agent` sink
   and its monitor exist; the clipboard round-trips on `:1`; AT-SPI reports
   `IsEnabled`; computer-use-linux lists Chromium's
-  window, reads its AT-SPI tree and returns a screenshot PNG; the agent rejects a credentialed repo URL without
+  window, reads its AT-SPI tree and returns a screenshot PNG; the screen
+  encoder listens on 127.0.0.1:5902 only, runs each viewer as macro with group
+  `macro-agent` in `macro-agent.slice` with no capabilities, sends Constrained
+  Baseline fMP4 starting on a keyframe, ends with its connection, and closes
+  on a bad config line or a hang-up without one (a port probe), with every
+  instance unloaded and the socket still listening; the agent rejects a credentialed repo URL without
   contacting the repo; a rewritten file restarts it, and it clones from an
   in-VM git server, links the image's packages and runs, without its
   credentials in its environment or the rest of macro's home in its view;
   neither the agent's unit nor Openbox can reach `systemd-run --user`,
-  macro's session bus, its files, `:0`, 5900 or 9222, and the agent's
+  macro's session bus, its files, `:0`, 5900, 5902 or 9222, and the agent's
   browser can't open macro's files or DevTools;
   `claude` in its unit keeps the gateway environment without a sign-in and
   gets `CLAUDE_CODE_OAUTH_TOKEN` from a (fake) `credential.json`, which it
@@ -389,12 +409,18 @@ existing credentials: no new pairing and no Claude login.
   `block_resize` of the volume grows the mounted `/home`; a
   repeat with the same id is a wake and keeps the machine id and files, another id changes
   it, and a cold boot mounts `/home` at boot. The first identity is a
-  person's (macro has sudo and the Docker socket, no agent units); the second
-  an agent's (no sudo; the agent's desktop runs; an environment macro puts
+  person's (macro has sudo and the Docker socket, no agent units, nothing on
+  5902); the second an agent's (no sudo; the agent's desktop runs and its
+  screen encoder answers with fMP4 starting on a keyframe; an environment macro puts
   in the inbox is installed as `/var/lib/macrod/agent.env`, 0600 macro).
 - `nix build .#checks.x86_64-linux.macro-box-claude-wrapper` runs
   `files/claude-wrapper` against a fake claude: no credential, a credential,
   an unreadable one and one without a token.
+- `nix build .#checks.x86_64-linux.macro-box-screen-encoder` runs the
+  agent screen encoder against Xvfb (`files/test-agent-screen-encoder.sh`):
+  bad config lines are refused with no output; a good one gives
+  Constrained Baseline H.264 as `ftyp`, `moov`, then one `moof` + `mdat` per
+  frame, the first a keyframe.
 - `nix build .#checks.x86_64-linux.macro-box-boot` runs
   `files/test-start-agent.sh`: start-agent's lock adoption, rollback and
   muppet API check (the code's `muppetApi` against the image's `apiLevel`), and

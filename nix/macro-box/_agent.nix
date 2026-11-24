@@ -303,6 +303,17 @@ let
     load-module module-null-sink sink_name=agent sink_properties=device.description=Agent
     set-default-sink agent
   '';
+  # The screen as fragmented MP4 on 127.0.0.1:5902, for a person watching
+  # the agent in Macro over the stream and WebRTC transports.
+  screenEncoder = import ./_agent-screen-encoder.nix {
+    inherit
+      pkgs
+      lib
+      sandbox
+      desktopEnvironment
+      ;
+    ffmpeg = ffmpegX11grab;
+  };
   waitForDisplay = pkgs.writeShellScript "wait-for-agent-display" ''
     until [ -S /tmp/.X11-unix/X${toString displayNumber} ]; do sleep 0.2; done
   '';
@@ -321,6 +332,12 @@ in
         description = "computer-use-linux, built from source at a pinned release.";
       };
     };
+    screenEncoder = lib.mkOption {
+      type = lib.types.package;
+      readOnly = true;
+      default = screenEncoder.encoder;
+      description = "The agent screen encoder's per-connection script, for its check.";
+    };
     mcpServers = lib.mkOption {
       type = lib.types.attrsOf json.type;
       readOnly = true;
@@ -334,10 +351,11 @@ in
     environment.systemPackages = [ cfg.computerUse.package ];
     users.groups.${agentGroup} = { };
     # macro's own desktop and browser are for macro's sessions, not the
-    # agent (its group), whose sandbox they would let it out of.
+    # agent (its group), whose sandbox they would let it out of; the screen
+    # encoder is for the person watching, whose viewers it could crowd out.
     networking.firewall.extraCommands = lib.concatMapStrings (iptables: ''
       ${iptables} -w -N macro-agent-out 2>/dev/null || ${iptables} -w -F macro-agent-out
-      ${iptables} -w -A macro-agent-out -p tcp -m multiport --dports 5900,9222 -m owner --gid-owner ${agentGroup} -j REJECT --reject-with tcp-reset
+      ${iptables} -w -A macro-agent-out -p tcp -m multiport --dports 5900,5902,9222 -m owner --gid-owner ${agentGroup} -j REJECT --reject-with tcp-reset
       ${iptables} -w -C OUTPUT -o lo -j macro-agent-out 2>/dev/null || ${iptables} -w -I OUTPUT -o lo -j macro-agent-out
     '') [ "iptables" "ip6tables" ];
     networking.firewall.extraStopCommands = lib.concatMapStrings (iptables: ''
@@ -425,6 +443,9 @@ in
         ExecStart = "${lib.getExe' config.systemd.package "systemctl"} restart --no-block macro-agent.service";
       };
     };
+
+    systemd.sockets.macro-agent-screen-encoder = screenEncoder.socket;
+    systemd.services."macro-agent-screen-encoder@" = screenEncoder.service;
 
     # The agent's own desktop for computer use, beside macro's :0. Only :1's
     # filesystem socket is in its /tmp; no abstract one.
