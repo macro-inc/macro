@@ -110,3 +110,27 @@ if [ -s "$dylib_refs" ]; then
   cat "$dylib_refs" >&2
   exit 1
 fi
+
+# Every binary must run on the Mac this DMG is for. The Intel app cross-compiles
+# on Apple silicon, so a slice built for the runner (a bundled Nix dylib, say)
+# would only fail when an Intel Mac launches it.
+expected_arch="${DESKTOP_MACH_O_ARCH:?}"
+wrong_arch=$(mktemp)
+mach_o_count=0
+while IFS= read -r -d '' file; do
+  archs=$(lipo -archs "$file" 2>/dev/null) || continue
+  mach_o_count=$((mach_o_count + 1))
+  if ! tr ' ' '\n' <<< "$archs" | grep -qxF "$expected_arch"; then
+    echo "${file#"$app/"}: $archs" >> "$wrong_arch"
+  fi
+done < <(find "$app" -type f -print0)
+if [ -s "$wrong_arch" ]; then
+  echo "App bundle has binaries without an $expected_arch slice:" >&2
+  cat "$wrong_arch" >&2
+  exit 1
+fi
+if ! lipo -archs "$framework/Chromium Embedded Framework" | tr ' ' '\n' | grep -qxF "$expected_arch"; then
+  echo "lipo could not read the Chromium framework, so the architecture check proves nothing" >&2
+  exit 1
+fi
+echo "All $mach_o_count Mach-O files in the app have an $expected_arch slice."
