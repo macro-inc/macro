@@ -2,6 +2,7 @@
 
 use crate::domain::mailbox::live_pass::{FolderPass, StreamKind};
 use crate::domain::mailbox::progress::ImportCompleted;
+use crate::domain::mailbox::schedule::PollIntervals;
 use crate::domain::mailbox::*;
 use email_api_client::domain::models::{
     MailFolder, MailboxChangePage, ProviderId, StreamPosition, StreamToken,
@@ -261,6 +262,7 @@ impl MailboxSyncRepository for PgMailboxSync {
         &self,
         lease: &StreamLease,
         page: &MailboxChangePage,
+        polls: PollIntervals,
     ) -> Result<CommittedPage, MailboxError> {
         let (position, complete) = match &page.position {
             StreamPosition::Continue(position) => (position, false),
@@ -276,8 +278,21 @@ impl MailboxSyncRepository for PgMailboxSync {
         ids.dedup();
         let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_attachment_completion(&mut tx, lease.mailbox).await?;
+        // A working subscription passes the webhook's test
+        // (`notification_binding`: the mailbox's current generation, not
+        // expired), was registered with Graph, and its upkeep has not failed
+        // since: Graph notifies its changes, so a checkpoint's next poll is
+        // only a safety net.
         let advanced = sqlx::query!(
             r#"
+            WITH subscribed AS (
+                SELECT EXISTS (
+                    SELECT 1 FROM email_provider_subscriptions p
+                    JOIN email_mailbox_watch_work w ON w.link_id = p.link_id
+                    WHERE p.link_id = $8 AND p.generation = $9 AND p.provider_id IS NOT NULL
+                        AND p.expires_at > now() AND w.failures = 0
+                ) AS working
+            )
             UPDATE email_sync_streams s SET position = $4,
                 initial_complete = s.initial_complete OR $5,
                 -- A round's first page records the reader revision it started at,
@@ -286,14 +301,16 @@ impl MailboxSyncRepository for PgMailboxSync {
                 round_started_at = CASE WHEN s.position IS NULL THEN s.lease_started_at ELSE s.round_started_at END,
                 last_completed_at = CASE WHEN $5 THEN now() ELSE last_completed_at END,
                 next_run_at = CASE WHEN $5 AND (s.notified_at IS NULL OR s.notified_at <= s.lease_started_at)
-                    THEN now() + interval '2 minutes' ELSE now() END,
+                    THEN now() + make_interval(secs => CASE WHEN subscribed.working THEN $10::float8 ELSE $11::float8 END)
+                    ELSE now() END,
                 -- A checkpoint that started reading after the notification has
                 -- answered it; a deferred or partial read leaves it pending.
                 notified_at = CASE WHEN $5 AND s.notified_at <= s.lease_started_at THEN NULL ELSE s.notified_at END,
                 lease_id = NULL, lease_until = NULL
-            FROM email_links l WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3
+            FROM email_links l, subscribed WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3
                 AND s.lease_until > now() AND s.link_id = l.id AND s.generation = l.sync_generation
                 AND l.is_sync_active AND l.grant_generation = $6
+            RETURNING s.next_run_at > now() AS "scheduled!", subscribed.working AS "subscribed!"
         "#,
             lease.id,
             lease.lease_id,
@@ -301,14 +318,21 @@ impl MailboxSyncRepository for PgMailboxSync {
             position.expose(),
             complete,
             lease.mailbox.grant_generation,
-            page.reader_revision
+            page.reader_revision,
+            lease.mailbox.link_id,
+            lease.mailbox.sync_generation,
+            f64::from(polls.subscribed),
+            f64::from(polls.unsubscribed)
         )
-        .execute(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await
-        .map_err(db_error)?;
-        if advanced.rows_affected() != 1 {
-            return Err(MailboxError::Stale);
-        }
+        .map_err(db_error)?
+        .ok_or(MailboxError::Stale)?;
+        let next_poll_seconds = advanced.scheduled.then_some(if advanced.subscribed {
+            polls.subscribed
+        } else {
+            polls.unsubscribed
+        });
         // The round's checkpoint lists everything its live pass was there
         // for, and the folder's later rounds read new mail themselves.
         if complete && !lease.initial_complete && lease.pass == FolderPass::Folder {
@@ -348,6 +372,7 @@ impl MailboxSyncRepository for PgMailboxSync {
         Ok(CommittedPage {
             queued,
             import_completed,
+            next_poll_seconds,
         })
     }
 

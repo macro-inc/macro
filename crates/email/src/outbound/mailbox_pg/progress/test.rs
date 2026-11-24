@@ -293,6 +293,10 @@ async fn enumeration_reports_the_page_it_committed(db: PgPool) {
     assert_eq!(span["outlook.folder_initial_complete"], "true");
     assert_eq!(span["outlook.import_round"], "true");
     assert!(span["outlook.due_ms"].parse::<i64>().unwrap() >= 0);
+    assert_eq!(
+        span["outlook.poll_interval_seconds"], "120",
+        "the mailbox has no subscription"
+    );
     assert!(matches!(
         super::super::test::page().position,
         StreamPosition::Checkpoint(_)

@@ -47,6 +47,7 @@ pub(super) fn enumerate_span(lease: &StreamLease) -> Span {
         outlook.stream_id = %lease.id,
         outlook.import_round = !lease.initial_complete,
         outlook.due_ms = since_ms(lease.due_at),
+        outlook.poll_interval_seconds = tracing::field::Empty,
         outlook.page_items = tracing::field::Empty,
         outlook.rows_queued = tracing::field::Empty,
         outlook.live_pass_opened = tracing::field::Empty,

@@ -41,6 +41,15 @@ mailbox may get no change notifications and syncs by polling alone (each
 folder about every 2 minutes). A run that works, a reconnect or a lifecycle
 event resets it.
 
+A finished folder is polled again 10 minutes after its last poll while its
+mailbox has a working subscription (one of the mailbox's current generation,
+registered with Graph, not expired, with no failed renewal since), and 2
+minutes after otherwise; a change notification or a `missed` lifecycle event
+makes it due at once either way. Each finished folder's enumerate span records
+the interval it scheduled in `@outlook.poll_interval_seconds` (600 or 120).
+Every folder of every mailbox waits in one claim line for the sync loops, so a
+due folder, notified or not, is read `@outlook.due_ms` after it came due.
+
 Sync work defers itself: a refused or failed unit is parked and retried
 later, so most of these alerts clear without action. Don't edit queue rows in
 production. An importing folder reads its next page only while its mailbox has
