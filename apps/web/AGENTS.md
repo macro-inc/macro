@@ -1839,7 +1839,9 @@ call the reviewed workspace tools, and show separate task/project totals.
 Desktop shows every import run behind the rail footer's imports button
 (`features/import-jobs`, in `FooterActions`); tablets, which have no rail, keep
 the corner pill in `ToastRegion`; phones never show it. Both are independent of
-the import dialog. Its backend-free check is
+the import dialog. A row's open button goes to the chat that ran the import
+(`open-session.ts`): it closes the list, focuses that chat, and reads "You're
+in this chat" when the chat is already the active split. Its backend-free check is
 `bunx playwright test --config src/features/import-jobs/browser-test/playwright.config.ts`.
 
 ### Agent backend hosting

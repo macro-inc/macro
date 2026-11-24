@@ -54,6 +54,7 @@ function useImportJobsActions(onOpened: () => void) {
 
   return {
     jobs: imports.jobs,
+    isSessionActive: context.isSessionActive,
     open,
     dismiss: (job: ImportJob) => imports.dismiss(job.key),
     reconnect: (job: ImportJob) => fireAndForget(reconnect(job), 'import-jobs'),
@@ -91,6 +92,7 @@ export function ImportJobsRailView(props: { onEmptied?: () => void }) {
       jobs={imports.jobs()}
       open={listOpen()}
       onOpenChange={setListOpen}
+      isSessionActive={imports.isSessionActive}
       onOpen={imports.open}
       onDismiss={dismiss}
       onReconnect={imports.reconnect}
@@ -107,6 +109,7 @@ export function ImportJobsCornerView() {
       jobs={imports.jobs()}
       expanded={expanded()}
       onExpandedChange={setExpanded}
+      isSessionActive={imports.isSessionActive}
       onOpen={imports.open}
       onDismiss={imports.dismiss}
       onReconnect={imports.reconnect}

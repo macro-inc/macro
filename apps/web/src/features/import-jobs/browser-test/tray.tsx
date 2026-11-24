@@ -47,6 +47,8 @@ const context: ImportJobsContext = {
   createReport: (source) => () =>
     source === 'notion' ? notionReport() : undefined,
   openSession: (sessionId) => setOpened(sessionId),
+  // The opened session stands in for the active split.
+  isSessionActive: (sessionId) => opened() === sessionId,
   createDismissals: () => ({ restore: () => [], save: () => {} }),
   reconnect: async (source) => {
     setOpened(`reconnect:${source}`);

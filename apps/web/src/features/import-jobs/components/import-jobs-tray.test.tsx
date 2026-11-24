@@ -15,13 +15,18 @@ afterEach(cleanup);
 
 function tray(
   jobs: ImportJob[],
-  handlers: { onOpen?: () => void; onReconnect?: () => void } = {}
+  handlers: {
+    onOpen?: () => void;
+    onReconnect?: () => void;
+    activeSessionId?: string;
+  } = {}
 ) {
   render(() => (
     <ImportJobsRailButton
       jobs={jobs}
       open
       onOpenChange={vi.fn()}
+      isSessionActive={(sessionId) => sessionId === handlers.activeSessionId}
       onOpen={handlers.onOpen ?? vi.fn()}
       onDismiss={vi.fn()}
       onReconnect={handlers.onReconnect ?? vi.fn()}
@@ -53,6 +58,7 @@ describe('import jobs tray', () => {
         jobs={jobs()}
         open={false}
         onOpenChange={vi.fn()}
+        isSessionActive={() => false}
         onOpen={vi.fn()}
         onDismiss={vi.fn()}
         onReconnect={vi.fn()}
@@ -151,6 +157,37 @@ describe('import jobs tray', () => {
       },
     ]);
     expect(screen.getByText('Import failed')).toBeTruthy();
+  });
+});
+
+describe('a finished import opens the chat that ran it', () => {
+  const done: ImportJob = {
+    key: 'notion:completed:1',
+    source: 'notion',
+    phase: { kind: 'completed', partial: false },
+    sessionId: 'import-chat',
+    dismissable: true,
+  };
+
+  it('names the chat as where it goes', () => {
+    const onOpen = vi.fn();
+    tray([done], { onOpen, activeSessionId: 'other-chat' });
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Open the chat that ran the Notion import',
+      })
+    );
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so when that chat is already the active one, and still goes there', () => {
+    const onOpen = vi.fn();
+    tray([done], { onOpen, activeSessionId: 'import-chat' });
+    expect(screen.queryByRole('button', { name: /^Open the chat/ })).toBeNull();
+    const here = screen.getByRole('button', { name: 'You’re in this chat' });
+    expect(here.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(here);
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 });
 

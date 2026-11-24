@@ -7,7 +7,8 @@ export default {
   hideImports: 'Hide imports',
   somethingFailed: 'An import failed',
   failedAnnouncement: '{{source}} import failed',
-  openImport: 'Open the {{source}} import',
+  openImport: 'Open the chat that ran the {{source}} import',
+  inThisChat: 'You’re in this chat',
   dismissImport: 'Dismiss the {{source}} import',
   scanningPages: {
     one: 'Scanning {{count}} page',

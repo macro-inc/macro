@@ -24,7 +24,9 @@ test('follows a Notion import from scanning to done, then dismisses it', async (
   const notion = tray.getByRole('listitem', { name: 'Notion' });
   await expect(notion).toContainText('Scanning 120 pages');
   await expect(
-    notion.getByRole('button', { name: 'Open the Notion import' })
+    notion.getByRole('button', {
+      name: 'Open the chat that ran the Notion import',
+    })
   ).toHaveCount(0);
   await expect(
     notion.getByRole('button', { name: 'Dismiss the Notion import' })
@@ -39,7 +41,9 @@ test('follows a Notion import from scanning to done, then dismisses it', async (
     'aria-valuenow',
     '25'
   );
-  await notion.getByRole('button', { name: 'Open the Notion import' }).click();
+  await notion
+    .getByRole('button', { name: 'Open the chat that ran the Notion import' })
+    .click();
   await expect(page.getByRole('status', { name: 'Opened session' })).toHaveText(
     'notion-session'
   );
@@ -48,6 +52,11 @@ test('follows a Notion import from scanning to done, then dismisses it', async (
   await expect(tray).toHaveCount(0);
   await page.waitForTimeout(100);
   await expect(button).not.toBeFocused();
+  // Back in the list, the row says that chat is the one showing, and still
+  // goes there.
+  await button.click();
+  await notion.getByRole('button', { name: 'You’re in this chat' }).click();
+  await expect(tray).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Finish Notion' }).click();
   await button.click();
