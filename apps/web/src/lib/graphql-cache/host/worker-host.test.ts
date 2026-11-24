@@ -31,6 +31,7 @@ import {
   COORDINATOR_CONNECT_ATTEMPTS,
   COORDINATOR_CONNECT_TIMEOUT_MS,
 } from '../worker/startup';
+import { CacheRequestTimeoutError } from './errors';
 import { CacheNavigationError } from './navigation-error';
 import {
   createWorkerCacheHost,
@@ -736,7 +737,7 @@ describe('createWorkerCacheHost', () => {
       scope: 'scope-1',
       onInitializationError,
     });
-    const rejected = expect(host.currentRevision()).rejects.toThrow(
+    const rejected = expect(host.authority?.current()).rejects.toThrow(
       'cache worker timeout: registration'
     );
     await vi.advanceTimersByTimeAsync(
@@ -975,8 +976,83 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('ends a read that waits ten seconds for an owner nobody announces, and takes the next one', async () => {
+    vi.useFakeTimers();
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('read');
+    adapter.ignoredKinds.add('write');
+    const outcome = vi.fn();
+    const settle = async (read: Promise<unknown>) => {
+      outcome(
+        await read.then(
+          () => 'answered',
+          (error) => error
+        )
+      );
+    };
+    // One read is already with the old owner, one arrives while none is.
+    const before = settle(host.readQuery({ query: 'query Before { user }' }));
+    await vi.advanceTimersByTimeAsync(4_000);
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    await vi.advanceTimersByTimeAsync(1_000);
+    const during = settle(host.readQuery({ query: 'query During { user }' }));
+    // Another candidate does not start the wait over.
+    await vi.advanceTimersByTimeAsync(5_000);
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    await vi.advanceTimersByTimeAsync(3_999);
+    expect(outcome).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await before;
+    await vi.advanceTimersByTimeAsync(1_000);
+    await during;
+    expect(outcome.mock.calls).toEqual([
+      [new CacheRequestTimeoutError('read')],
+      [new CacheRequestTimeoutError('read')],
+    ]);
+
+    adapter.options.onCacheReadAvailabilityChanged?.('ready');
+    adapter.ignoredKinds.clear();
+    await expect(
+      host.readQuery({ query: 'query After { user }' })
+    ).resolves.toEqual({ kind: 'miss' });
+    host.dispose();
+  });
+
+  it('ends a read that waits ten seconds for the first owner, without ending the startup', async () => {
+    vi.useFakeTimers();
+    configureAdapter = (fake) => fake.ignoredKinds.add('init');
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    const refused = expect(
+      host.readQuery({ query: 'query Initial { user }' })
+    ).rejects.toEqual(new CacheRequestTimeoutError('read'));
+    const write = host.writeQuery({
+      generation: TEST_AUTHORITY_GENERATION,
+      query: 'query Initial { user }',
+      data: { user: true },
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await refused;
+    const adapter = requireAdapter();
+    adapter.respond(1, null);
+    await write;
+    await expect(
+      host.readQuery({ query: 'query Next { user }' })
+    ).resolves.toEqual({ kind: 'miss' });
+    expect(onInitializationError).not.toHaveBeenCalled();
+    host.dispose();
+  });
+
   it('queues parked reads, writes, and teardown in call order without background timeouts', async () => {
     vi.useFakeTimers();
+    const visibility = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockReturnValue('hidden');
     const host = createWorkerCacheHost({
       scope: 'scope-1',
       requestTimeoutMs: 10,
@@ -1003,6 +1079,9 @@ describe('createWorkerCacheHost', () => {
       'write',
       'teardown',
     ]);
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(9);
     adapter.options.onCacheReadAvailabilityChanged?.('ready');
     for (const request of queued)
       adapter.respond(request.id, responseFor(request));
@@ -1012,6 +1091,7 @@ describe('createWorkerCacheHost', () => {
 
   it('keeps an initially parked host initializing without failing reads or writes', async () => {
     vi.useFakeTimers();
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     configureAdapter = (fake) => fake.ignoredKinds.add('init');
     const onInitializationError = vi.fn();
     const host = createWorkerCacheHost({

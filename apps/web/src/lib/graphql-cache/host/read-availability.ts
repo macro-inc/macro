@@ -1,4 +1,5 @@
 import type { CacheRequest } from '../protocol';
+import { visibleTimeout } from './visible-timeout';
 
 /** Only RPCs that cannot durably change storage may time out or bypass a handoff. */
 export function isReadOnlyCacheRequest(kind: CacheRequest['kind']): boolean {
@@ -85,9 +86,11 @@ export class CacheReadAvailability {
     this.unavailable = undefined;
   }
 
+  /** `expiresAfter` bounds a read's wait; a write has none. */
   async waitUntilReady(
     initialize: () => Promise<void>,
-    readOnly: boolean
+    readOnly: boolean,
+    expiresAfter?: { timeoutMs: number; error: () => Error }
   ): Promise<void> {
     if (readOnly && this.unavailable) throw this.unavailable;
     let rejectRead: ((error: Error) => void) | undefined;
@@ -95,12 +98,20 @@ export class CacheReadAvailability {
       rejectRead = reject;
       if (readOnly) this.waiting.add(reject);
     });
+    const stopTimeout =
+      readOnly && expiresAfter
+        ? visibleTimeout(
+            () => rejectRead?.(expiresAfter.error()),
+            expiresAfter.timeoutMs
+          )
+        : undefined;
     try {
       // Both read and write startup waits take the same microtask path so
       // making reads interruptible cannot reorder admission ahead of writes.
       await Promise.race([initialize(), blocked]);
       if (readOnly && this.unavailable) throw this.unavailable;
     } finally {
+      stopTimeout?.();
       if (rejectRead) this.waiting.delete(rejectRead);
     }
   }

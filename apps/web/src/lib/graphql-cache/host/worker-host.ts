@@ -108,6 +108,7 @@ import type {
   InspectQueryArgs,
   InspectQueryVariantsArgs,
 } from './types';
+import { visibleTimeout } from './visible-timeout';
 
 type Pending = {
   authorityGeneration?: string;
@@ -119,7 +120,9 @@ type Pending = {
   opKey?: number;
   admitted: boolean;
   startedAt: number;
-  timer?: ReturnType<typeof setTimeout>;
+  /** Waiting for an owner, which a hidden page may do for as long as it likes. */
+  waiting: boolean;
+  stopTimeout?: () => void;
 };
 
 function isInitializationRequest(kind: CacheRequest['kind']): boolean {
@@ -145,9 +148,10 @@ export interface WorkerHostOptions {
   scope: string;
   hotCapacity?: number;
   /**
-   * Read-only request timeout in ms (default 10s). A hung worker rejects
-   * cache reads; mutating requests remain pending so callers cannot retry an
-   * operation that may already have completed durably.
+   * Read-only request timeout in ms (default 10s), for the wait until an owner
+   * is ready and then again for its answer. A hung worker rejects cache reads;
+   * mutating requests remain pending so callers cannot retry an operation that
+   * may already have completed durably.
    */
   requestTimeoutMs?: number;
   /**
@@ -428,7 +432,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       const error = new CacheResponseError(msg.error, msg.errorCode);
       if (isOwnerEpochLoss(error)) observeOwnerEpochLoss(error);
       pending.delete(msg.id);
-      if (entry.timer !== undefined) clearTimeout(entry.timer);
+      entry.stopTimeout?.();
       recordRequestOutcome(entry, 'error', error);
       entry.reject(cacheAuthorityError(error));
       if (isOwnerLockUnavailable(error))
@@ -439,7 +443,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return;
     }
     pending.delete(msg.id);
-    if (entry.timer !== undefined) clearTimeout(entry.timer);
+    entry.stopTimeout?.();
     if (
       isReadOnlyCacheRequest(entry.kind) &&
       (msg.authorityGeneration ?? entry.authorityGeneration) !==
@@ -547,14 +551,12 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     readAvailability.wait();
     // Keep read/write/teardown admission ordered at the coordinator. Pausing
     // their deadlines must not create a separate page-side read queue.
-    for (const entry of pending.values()) {
-      if (
-        (isInitializationRequest(entry.kind) ||
-          isReadOnlyCacheRequest(entry.kind)) &&
-        entry.timer !== undefined
-      ) {
-        clearTimeout(entry.timer);
-        entry.timer = undefined;
+    for (const [id, entry] of pending) {
+      if (isInitializationRequest(entry.kind)) {
+        entry.stopTimeout?.();
+        entry.stopTimeout = undefined;
+      } else if (isReadOnlyCacheRequest(entry.kind) && !entry.waiting) {
+        armRequestTimeout(id, entry, requestTimeoutMs, true);
       }
     }
   }
@@ -573,9 +575,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     // Cancel only the callers, not initialization or admitted worker fibers.
     // Writes remain queued until the engine has safely drained and reopened.
     for (const [id, entry] of pending) {
-      if (isInitializationRequest(entry.kind) && entry.timer !== undefined) {
-        clearTimeout(entry.timer);
-        entry.timer = undefined;
+      if (isInitializationRequest(entry.kind)) {
+        entry.stopTimeout?.();
+        entry.stopTimeout = undefined;
       }
       if (!isReadOnlyCacheRequest(entry.kind)) continue;
       // A typed search has no network fallback to hurry to. The coordinator
@@ -584,17 +586,18 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       // rest. A host on its way out keeps nothing waiting.
       if (entry.typedSearch && state !== 'disposing') {
         // An owner change that never completes must still end the wait.
-        if (entry.timer !== undefined) clearTimeout(entry.timer);
-        entry.timer = setTimeout(() => {
+        entry.stopTimeout?.();
+        const timer = setTimeout(() => {
           if (!pending.delete(id)) return;
           recordRequestOutcome(entry, 'error', error);
           entry.reject(error);
           finishGracefulDisposeIfDrained();
         }, requestTimeoutMs);
+        entry.stopTimeout = () => clearTimeout(timer);
         continue;
       }
       pending.delete(id);
-      if (entry.timer !== undefined) clearTimeout(entry.timer);
+      entry.stopTimeout?.();
       recordRequestOutcome(entry, 'error', error);
       entry.reject(error);
     }
@@ -790,7 +793,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const entries = [...pending.values()];
     pending.clear();
     for (const entry of entries) {
-      if (entry.timer !== undefined) clearTimeout(entry.timer);
+      entry.stopTimeout?.();
       recordRequestOutcome(entry, 'error', error);
       if (
         transportUncertain &&
@@ -1228,18 +1231,34 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   function armRequestTimeout(
     id: number,
     entry: Pending,
-    timeoutMs: number
+    timeoutMs: number,
+    waiting = false
   ): void {
-    if (entry.timer !== undefined) clearTimeout(entry.timer);
-    entry.timer = setTimeout(() => {
-      if (pending.delete(id)) {
-        const error = new CacheRequestTimeoutError(entry.kind);
-        recordRequestOutcome(entry, 'error', error);
-        entry.reject(error);
-        if (isInitializationRequest(entry.kind)) reconnectUnanswered(error);
-        finishGracefulDisposeIfDrained();
-      }
-    }, timeoutMs);
+    entry.stopTimeout?.();
+    entry.waiting = waiting;
+    const expire = () => {
+      if (!pending.delete(id)) return;
+      const error = new CacheRequestTimeoutError(entry.kind);
+      recordRequestOutcome(entry, 'error', error);
+      entry.reject(error);
+      if (isInitializationRequest(entry.kind)) reconnectUnanswered(error);
+      finishGracefulDisposeIfDrained();
+    };
+    if (waiting) {
+      entry.stopTimeout = visibleTimeout(expire, timeoutMs);
+      return;
+    }
+    const timer = setTimeout(expire, timeoutMs);
+    entry.stopTimeout = () => clearTimeout(timer);
+  }
+
+  /** Bounds a request as it is admitted. A write has no deadline here. */
+  function boundRequest(id: number, entry: Pending): void {
+    const waiting = readAvailability.timeoutsPaused;
+    if (isReadOnlyCacheRequest(entry.kind))
+      armRequestTimeout(id, entry, requestTimeoutMs, waiting);
+    else if (isInitializationRequest(entry.kind) && !waiting)
+      armRequestTimeout(id, entry, initializationTimeoutMs);
   }
 
   function request(
@@ -1267,7 +1286,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       // The coordinator may still run its copy; only the caller stops waiting.
       const drop = () => {
         if (!pending.delete(id)) return;
-        if (entry.timer !== undefined) clearTimeout(entry.timer);
+        entry.stopTimeout?.();
         entry.reject(supersededError());
         finishGracefulDisposeIfDrained();
       };
@@ -1288,18 +1307,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         typedSearch: isTypedSearch({ ...msg, id }),
         opKey,
         admitted: false,
+        waiting: false,
         startedAt: now(),
       };
-      const timeoutMs = readAvailability.timeoutsPaused
-        ? undefined
-        : isInitializationRequest(msg.kind)
-          ? initializationTimeoutMs
-          : isReadOnlyCacheRequest(msg.kind)
-            ? requestTimeoutMs
-            : undefined;
-      if (timeoutMs !== undefined) {
-        armRequestTimeout(id, entry, timeoutMs);
-      }
+      boundRequest(id, entry);
       pending.set(id, entry);
       signal?.addEventListener('abort', drop, { once: true });
       try {
@@ -1309,9 +1320,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         startLegacyIdbDeletion();
         if (pending.has(id)) entry.admitted = true;
       } catch (error) {
-        if (pending.delete(id) && entry.timer !== undefined) {
-          clearTimeout(entry.timer);
-        }
+        pending.delete(id);
+        entry.stopTimeout?.();
         const requestError = asError(error);
         recordRequestOutcome(entry, 'error', requestError);
         entry.reject(requestError);
@@ -1548,7 +1558,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         ? ensureInitialized()
         : readAvailability.waitUntilReady(
             ensureInitialized,
-            isReadOnlyCacheRequest(msg.kind)
+            isReadOnlyCacheRequest(msg.kind),
+            {
+              timeoutMs: requestTimeoutMs,
+              error: () => new CacheRequestTimeoutError(msg.kind),
+            }
           );
     // Every other caller keeps its exact place in line: no extra hop.
     if (signal) await untilAborted(ready, signal);
