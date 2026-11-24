@@ -374,6 +374,9 @@ pub struct ThreadHistoryInfo {
     pub pretty_sender: String,
     pub is_read: bool,
     pub inbox_visible: bool,
+    /// Whether the thread holds mail the user received, not only mail they
+    /// sent or drafted; a thread without any was never in the inbox.
+    pub has_received_mail: bool,
     pub is_draft: bool,
     pub is_important: bool,
 }

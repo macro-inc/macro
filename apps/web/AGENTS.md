@@ -1265,7 +1265,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   no results), the keys stay in the field. `wide` lets the open field take the rest of
   the header (the view hides its other actions from `onOpenChange`), and
   `suggestions` lists rows under the field that the arrows walk before the
-  results; Email's wide search uses both. It registers the
+  results (a row that `editsQuery`, such as Email's `in:` views, keeps the
+  keyboard in the field); `operators` marks search operators (`in:sent`) in
+  the text, which `search-operator-text.tsx` draws as tokens behind the input
+  while the text stays ordinary editable text; future operators reuse it.
+  Email's wide search uses all of them. It registers the
   split's Escape that clears a search from the list; keep a view's own Escape
   steps (leaving a tab) conditional on no search, and selection clearing at
   `HOTKEY_PRIORITY_HIGH` so it runs first. Covered by `ListHeader.test.tsx` and the browser test below.

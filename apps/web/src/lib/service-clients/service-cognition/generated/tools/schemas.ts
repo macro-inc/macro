@@ -1541,6 +1541,7 @@ export const SearchToolResponse = z.object({
                 snippet: z.union([z.string(), z.null()]).optional(),
                 is_read: z.boolean(),
                 inbox_visible: z.boolean(),
+                has_received_mail: z.boolean().optional(),
                 is_draft: z.boolean(),
                 is_important: z.boolean(),
                 id: z.string().uuid(),

@@ -487,3 +487,27 @@ async fn get_thread_summary_info_latest_message_without_sender_contact(
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("get_thread_summary_info"))
+)]
+async fn get_thread_summary_info_reports_whether_mail_was_received(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
+    let received = Uuid::parse_str("00000000-0000-0000-0000-000000000301")?;
+    let sent_only = Uuid::parse_str("00000000-0000-0000-0000-000000000302")?;
+    sqlx::query!(
+        "UPDATE email_threads SET has_received_mail = false WHERE id = $1",
+        sent_only
+    )
+    .execute(&pool)
+    .await?;
+
+    let result = get_thread_summary_info(&pool, &[link_id], &[received, sent_only]).await?;
+
+    assert!(result.get(&received).unwrap().has_received_mail);
+    assert!(!result.get(&sent_only).unwrap().has_received_mail);
+    Ok(())
+}
