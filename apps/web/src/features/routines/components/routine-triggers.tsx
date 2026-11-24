@@ -727,6 +727,12 @@ function TriggerSentence(
                   <span class="text-sm text-ink-muted">in</span>
                   <ScopeToken {...props} trigger={value()} />
                 </span>
+                <Show when={value().events.includes('email.labeled')}>
+                  <span class="flex min-w-0 max-w-full items-center gap-2">
+                    <span class="text-sm text-ink-muted">with</span>
+                    <SettingsToken {...props} trigger={value()} />
+                  </span>
+                </Show>
               </Show>
             </>
           )}

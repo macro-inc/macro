@@ -224,3 +224,20 @@ fn stored_label_events_must_carry_their_labels() {
         .is_err()
     );
 }
+
+#[test]
+fn a_shared_label_routine_drops_the_owners_labels_and_inboxes() {
+    let trigger: ActionTrigger = serde_json::from_value(json!({
+        "type": "events",
+        "filters": [
+            { "events": ["email.labeled"], "labels": [LABEL], "inboxes": [OTHER_ID] },
+            { "events": ["email.labeled"], "labels": [OTHER_INBOX_LABEL] },
+        ]
+    }))
+    .unwrap();
+    let any_label: ActionTrigger = serde_json::from_value(json!({
+        "type": "events", "filters": [{ "events": ["email.labeled"] }]
+    }))
+    .unwrap();
+    assert_eq!(trigger.without_owners_mail(), any_label);
+}

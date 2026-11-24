@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import TagSimpleIcon from '@icon/system/regular/tag-simple.svg';
 import { useEmailUserLabelsQuery } from '@queries/email/labels';
@@ -56,6 +57,13 @@ function createLabelGroups() {
   };
 }
 
+/** The accessible name of a chosen label's pill, which removes it. */
+function removeLabel(name: string | undefined) {
+  return name
+    ? t('routineFilters.removeLabel', { name })
+    : t('routineFilters.removeUnknownLabel');
+}
+
 /** Which labels a thread must gain one of; none chosen is any label. */
 export function RoutineEmailLabels(props: {
   labels: string[];
@@ -89,7 +97,7 @@ export function RoutineEmailLabels(props: {
   const severalAccounts = () => groups.groups().length > 1;
   return (
     <div class="mb-3 grid gap-1.5">
-      <span class="text-xs font-medium">Labels</span>
+      <span class="text-xs font-medium">{t('routineFilters.labels')}</span>
       <div class="flex flex-wrap gap-1.5">
         <Button
           variant="secondary"
@@ -97,7 +105,7 @@ export function RoutineEmailLabels(props: {
           aria-pressed={props.labels.length === 0}
           onClick={() => props.onChange([])}
         >
-          Any label
+          {t('routineFilters.anyLabel')}
         </Button>
         <For each={props.labels}>
           {(id) => (
@@ -105,11 +113,11 @@ export function RoutineEmailLabels(props: {
               variant="secondary"
               size="sm"
               aria-pressed={true}
-              aria-label={`Remove ${groups.name(id) ?? 'unknown label'}`}
+              aria-label={removeLabel(groups.name(id))}
               onClick={() => toggle(id)}
             >
               <TagSimpleIcon class="size-3.5" />
-              {groups.name(id) ?? 'Unknown label'}
+              {groups.name(id) ?? t('routineFilters.unknownLabel')}
             </Button>
           )}
         </For>
@@ -119,7 +127,7 @@ export function RoutineEmailLabels(props: {
           aria-expanded={choosing()}
           onClick={() => setChoosing(!choosing())}
         >
-          Choose labels
+          {t('routineFilters.chooseLabels')}
           <CaretDownIcon
             class={cn(
               'size-3 transition-transform',
@@ -132,19 +140,23 @@ export function RoutineEmailLabels(props: {
         <div class="grid gap-1 rounded-lg border border-edge-muted p-1.5">
           <Input
             size="sm"
-            aria-label="Search labels"
-            placeholder="Search labels"
+            aria-label={t('routineFilters.searchLabels')}
+            placeholder={t('routineFilters.searchLabels')}
             value={search()}
             onInput={(e) => setSearch(e.currentTarget.value)}
           />
           <div class="max-h-52 overflow-y-auto">
             <Show
               when={!groups.loading()}
-              fallback={<p class="p-2 text-xs text-ink-muted">Loading…</p>}
+              fallback={
+                <p class="p-2 text-xs text-ink-muted">
+                  {t('routineFilters.loadingLabels')}
+                </p>
+              }
             >
               <Show when={groups.failed()}>
                 <p class="p-2 text-xs text-failure">
-                  Your labels couldn’t be loaded.
+                  {t('routineFilters.labelsUnavailable')}
                 </p>
               </Show>
               <Show
@@ -152,8 +164,8 @@ export function RoutineEmailLabels(props: {
                 fallback={
                   <p class="p-2 text-xs text-ink-muted">
                     {search().trim()
-                      ? 'No label matches.'
-                      : 'Your inboxes have no labels yet.'}
+                      ? t('routineFilters.noLabelMatches')
+                      : t('routineFilters.noLabels')}
                   </p>
                 }
               >
@@ -204,12 +216,13 @@ export function RoutineEmailLabels(props: {
 export function RoutineEmailLabelsLabel(props: { labels: string[] }) {
   const groups = createLabelGroups();
   const label = () => {
-    if (!props.labels.length) return 'Any label';
-    if (props.labels.length > 2) return `${props.labels.length} labels`;
-    const names = props.labels.map(groups.name);
-    return names.every(Boolean)
-      ? names.join(' or ')
-      : `${props.labels.length} ${props.labels.length === 1 ? 'label' : 'labels'}`;
+    const count = props.labels.length;
+    if (!count) return t('routineFilters.anyLabel');
+    const [first, second] = props.labels.map(groups.name);
+    if (count === 1 && first) return first;
+    if (count === 2 && first && second)
+      return t('routineFilters.eitherLabel', { first, second });
+    return t('routineFilters.labelCount', { count });
   };
   return <span title={label()}>{label()}</span>;
 }

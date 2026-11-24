@@ -189,7 +189,7 @@ export function TriggerMenu(props: {
   let input: HTMLInputElement | undefined;
   let content: HTMLElement | undefined;
   const [search, setSearch] = createSignal('');
-  const [drilled, setDrilled] = createSignal<TriggerType>();
+  const [drilledLabel, setDrilled] = createSignal<string>();
   // One list per change of the props, so its rows keep their identity.
   const types = createMemo(() => {
     if (props.offerEvents === false)
@@ -203,6 +203,8 @@ export function TriggerMenu(props: {
       ),
     }));
   });
+  /** The type opened on a phone, as the menu offers it now. */
+  const drilled = () => types().find((type) => type.label === drilledLabel());
   /** On a phone: every type, or only the opened one above its events. */
   const shownTypes = () => {
     const type = drilled();
@@ -378,7 +380,7 @@ export function TriggerMenu(props: {
                         class="touch:min-h-11"
                         onTouchEnd={keepTapInMenu}
                         onSelect={() =>
-                          setDrilled(drilled() ? undefined : type)
+                          setDrilled(drilled() ? undefined : type.label)
                         }
                       >
                         {/* Taps land on the row, which outlives the drill. */}

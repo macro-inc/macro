@@ -144,12 +144,13 @@ impl From<RoutineTriggers> for Vec<RoutineTrigger> {
 }
 
 impl ActionTrigger {
-    /// This trigger for someone other than its owner: inboxes are the
-    /// owner's own, so it watches every inbox of whoever it is for.
-    pub fn without_inboxes(&self) -> Self {
+    /// This trigger for someone other than its owner: inboxes and email
+    /// labels are the owner's own, so it watches every inbox and any label of
+    /// whoever it is for.
+    pub fn without_owners_mail(&self) -> Self {
         match self {
             Self::Events { filters } => Self::Events {
-                filters: filters.without_inboxes(),
+                filters: filters.without_owners_mail(),
             },
             Self::Multiple { triggers } => Self::Multiple {
                 triggers: RoutineTriggers(
@@ -158,7 +159,7 @@ impl ActionTrigger {
                         .iter()
                         .map(|trigger| match trigger {
                             RoutineTrigger::Events { filters } => RoutineTrigger::Events {
-                                filters: filters.without_inboxes(),
+                                filters: filters.without_owners_mail(),
                             },
                             other => other.clone(),
                         })
@@ -734,12 +735,24 @@ impl EventFilters {
     /// The same filters watching every inbox. Two that differed only in their
     /// inboxes become one.
     fn without_inboxes(&self) -> Self {
+        self.cleared(|filter| filter.inboxes = None)
+    }
+
+    /// The same filters watching every inbox and any email label.
+    fn without_owners_mail(&self) -> Self {
+        self.cleared(|filter| {
+            filter.inboxes = None;
+            filter.labels = None;
+        })
+    }
+
+    fn cleared(&self, clear: impl Fn(&mut EventFilter)) -> Self {
         let mut filters: Vec<EventFilter> = self
             .0
             .iter()
             .cloned()
             .map(|mut filter| {
-                filter.inboxes = None;
+                clear(&mut filter);
                 filter
             })
             .collect();
