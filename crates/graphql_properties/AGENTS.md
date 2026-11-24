@@ -14,7 +14,8 @@ edge.
   `load_entity_properties` — the edge embedded by other object types.
 - `src/definitions.rs`: `GraphqlPropertyDefinition`, option values — the schema
   side (what properties exist), as opposed to `objects.rs` (values set on an
-  entity).
+  entity). A failed definition listing or tag-set read is logged and answered
+  with `catalog_read_error` (generic, coded `INTERNAL`), never the report text.
 - `src/tags.rs`: `GraphqlTagSet` and `load_tag_sets` — the viewer's personal
   and team tag sets (TAG-typed definitions whose options are labels); the team
   set is listed whenever the viewer is on a team, with a null definition until
