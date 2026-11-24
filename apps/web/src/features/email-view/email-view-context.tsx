@@ -176,6 +176,8 @@ export type EmailViewContext = {
   shownTab: Accessor<EmailShownView>;
   /** The search field holds a query, whatever it says. */
   searchHasText: Accessor<boolean>;
+  /** A search is open: its field is open, or holds a query. */
+  searchOpen: Accessor<boolean>;
   /** Tells the view whether its search is open, for as long as the field is mounted. */
   registerSearchField: (field: EmailSearchField) => void;
   /** Focus, Signal and Noise show as tabs: in the Inbox, never in a search. */
@@ -309,6 +311,13 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     })
   );
   const state = persistedState;
+  const [searchField, setSearchField] = createSignal<EmailSearchField>();
+  const registerSearchField = (field: EmailSearchField) => {
+    setSearchField(field);
+    onCleanup(() =>
+      setSearchField((current) => (current === field ? undefined : current))
+    );
+  };
 
   // Saved views: the URL names the open view; its definition fills the All tab.
   const savedViewsEnabled = () => Boolean(props.savedViewSource);
@@ -348,7 +357,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       })
     );
   /** Returns to the tab and inboxes from before the view, or to `tab`. */
-  const clearSavedViewState = (tab?: EmailTab) =>
+  const clearSavedViewState = (tab?: EmailTab) => {
     setState(
       produce((draft) => {
         const before = draft.beforeSavedView;
@@ -362,6 +371,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         draft.beforeSavedView = undefined;
       })
     );
+    searchField()?.close();
+  };
   if (savedViewSource && savedViewsList)
     savedViewCreation = createSavedViewCreation({
       kind: 'email',
@@ -406,7 +417,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         const accountChanged =
           previousViewer !== undefined && viewer !== previousViewer;
         if (id && !accountChanged) {
-          if (id !== previousId)
+          if (id !== previousId) {
             setState(
               produce((draft) => {
                 rememberBeforeSavedView(draft);
@@ -414,6 +425,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
                 draft.search = '';
               })
             );
+            searchField()?.close();
+          }
           return;
         }
         if (state.beforeSavedView) clearSavedViewState();
@@ -469,13 +482,6 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   });
   const searchHasText = () =>
     canSearchEmailTab(state.tab) && state.search.trim() !== '';
-  const [searchField, setSearchField] = createSignal<EmailSearchField>();
-  const registerSearchField = (field: EmailSearchField) => {
-    setSearchField(field);
-    onCleanup(() =>
-      setSearchField((current) => (current === field ? undefined : current))
-    );
-  };
   // An open field is a search before anything is typed in it.
   const searchOpen = () => searchHasText() || Boolean(searchField()?.open());
   const typedSearch = createMemo(() => parseEmailSearch(state.search));
@@ -786,6 +792,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
           draft.search = '';
         })
       );
+      searchField()?.close();
       fireAndForget(navigateToList(id), 'email-view');
     });
   };
@@ -948,6 +955,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       ),
     shownTab,
     searchHasText,
+    searchOpen,
     registerSearchField,
     showsInboxTabs,
     setInboxIds,

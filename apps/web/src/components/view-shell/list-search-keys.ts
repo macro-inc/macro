@@ -31,6 +31,11 @@ export type ListSearchSuggestions = {
 
 export type ListSearchKeysOptions = {
   value: () => string;
+  /**
+   * Whether the view keeps the field open as a search before anything is
+   * typed in it, so Escape in the list closes it.
+   */
+  open?: () => boolean;
   /** Empties the query and collapses the field. */
   clear: () => void;
   /** Moves keyboard focus into the view's result list. */
@@ -146,7 +151,8 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
     onCleanup(
       registerListSearch(scopeId, {
         isActive: () =>
-          options.value().trim().length > 0 && (options.ownsEscape?.() ?? true),
+          (options.value().trim().length > 0 || (options.open?.() ?? false)) &&
+          (options.ownsEscape?.() ?? true),
         clear: options.clear,
       })
     );

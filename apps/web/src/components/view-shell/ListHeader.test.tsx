@@ -38,9 +38,12 @@ function setup(
     /** The search found nothing, so the list has no first row. */
     empty?: boolean;
     recent?: string[];
+    /** The view keeps the field's open state, as Email does. */
+    controlled?: boolean;
   } = {}
 ) {
   const [search, setSearch] = createSignal(options.search ?? '');
+  const [open, setOpen] = createSignal(false);
   const [selected, setSelected] = createSignal(options.selected ?? 0);
   const [active, setActive] = createSignal(-1);
   const focusResults = vi.fn();
@@ -67,6 +70,8 @@ function setup(
             list.focus();
           }}
           registerFocus={() => {}}
+          open={options.controlled ? open() : undefined}
+          onOpenChange={setOpen}
           suggestions={
             options.recent
               ? {
@@ -121,7 +126,8 @@ function setup(
       hotkey: 'escape',
       scopeId: splitScope,
       description: 'Leave the tab',
-      condition: () => selected() === 0 && !search().trim(),
+      condition: () =>
+        selected() === 0 && !search().trim() && !(options.controlled && open()),
       keyDownHandler: backToDefaultTab,
       registrationType: 'add',
     });
@@ -162,6 +168,7 @@ function setup(
     field,
     search,
     selected,
+    open,
     focusResults,
     goToFirst,
     backToDefaultTab,
@@ -270,6 +277,21 @@ it('clears the search on Escape in the list, after a selection', () => {
 
   press('Escape');
   expect(search()).toBe('');
+  expect(view.queryByRole('searchbox')).toBeNull();
+  expect(backToDefaultTab).not.toHaveBeenCalled();
+
+  press('Escape');
+  expect(backToDefaultTab).toHaveBeenCalledOnce();
+});
+
+it('closes a field its view keeps open on Escape in the list, before leaving the tab', () => {
+  const { view, open, backToDefaultTab, list } = setup({ controlled: true });
+  fireEvent.click(view.getByRole('button', { name: 'Search tasks' }));
+  list().focus();
+  expect(open()).toBe(true);
+
+  press('Escape');
+  expect(open()).toBe(false);
   expect(view.queryByRole('searchbox')).toBeNull();
   expect(backToDefaultTab).not.toHaveBeenCalled();
 

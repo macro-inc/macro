@@ -175,8 +175,9 @@ keeping the previous rows dimmed while a new query loads. The keyboard's Search
 key drops the keyboard to show the results; the field's X clears the text and
 keeps the keyboard; Cancel (or Android Back) clears the search and returns to
 the mailbox. Opening a result and coming back returns to the search page with
-its results. If the flag turns off or the tab changes to one that cannot be
-searched while the page is open, the page closes and its search ends. The
+its results. If the flag turns off, the tab changes to one that cannot be
+searched, or a view is picked before a word is typed while the page is open,
+the page closes and its search ends. The
 dock's app-wide search is unchanged. Check at 390px with touch
 emulation: the pill row scrolls, so the search pill can start off screen on a
 tab far to the right.
@@ -187,8 +188,8 @@ keeps its app-wide meaning inside Email too ([navigation](navigation.md)):
 `g e` opens Email on Signal and `g s` on Sent from any view, as long as no
 editor or input (Email search included) has focus; other mailboxes are in the
 sidebar. `Escape` in a
-list steps back one level: it clears a selection, then a search, and with
-neither returns to Signal; in the reading pane it first hands the keyboard back
+list steps back one level: it clears a selection, then a search (an open
+field counts, empty or not), and with neither returns to Signal; in the reading pane it first hands the keyboard back
 to the list. From the search field, `ArrowDown` or `Enter` moves to the first
 result and `Escape` leaves the field with the search kept (see
 [list search keys](navigation.md)). `?` lists every shortcut for the focused

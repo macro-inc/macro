@@ -40,7 +40,8 @@ export function ListHeader(props: {
 }
 
 /**
- * The query belongs to the view; only the expanded presentation is local.
+ * The query belongs to the view. Whether the field is open is local, unless
+ * the view keeps it (`open`) to count an open, empty field as a search.
  *
  * The field hands the keyboard to the results instead of trapping it:
  * ArrowDown or Enter moves to the first result, and Escape leaves the field
@@ -60,7 +61,10 @@ export function ListHeaderSearch(props: {
    * left empty. The view hides its other header actions while it is open.
    */
   wide?: boolean;
-  /** Set by a view that keeps the field's open state, to close it itself. */
+  /**
+   * Set by a view that keeps the field's open state, to close it itself. An
+   * open field is then a search, which Escape in the list closes.
+   */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   onFocusChange?: (focused: boolean) => void;
@@ -96,6 +100,7 @@ export function ListHeaderSearch(props: {
   };
   const keys = useListSearchKeys({
     value: () => props.value,
+    open: () => props.open ?? false,
     clear,
     focusResults: () => props.focusResults,
     input: () => input,

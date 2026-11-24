@@ -411,7 +411,7 @@ function EmailViewRoot() {
   const {
     state,
     setTab,
-    searchHasText,
+    searchOpen,
     selectedThread,
     composing,
     list: listController,
@@ -455,7 +455,7 @@ function EmailViewRoot() {
       return selectedThread() === undefined && !composing();
     },
     hasSelection: () => listController.selection.count() > 0,
-    hasSearch: searchHasText,
+    hasSearch: searchOpen,
   });
 
   const savedViewKind = () => savedViews?.view().kind;
