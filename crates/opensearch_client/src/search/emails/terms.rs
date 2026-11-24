@@ -156,8 +156,8 @@ fn addresses_query<'a>(
     keyword_fields: &'static [&'static str],
     compact: bool,
 ) -> Vec<QueryType<'a>> {
-    let holds_syntax = |term: &String| escape_syntax(term) != *term;
-    let queries = if match_type == "regexp" && terms.iter().any(holds_syntax) {
+    let regexp_syntax = match_type == "regexp" && terms.iter().any(|term| holds_syntax(term));
+    let queries = if regexp_syntax {
         vec![(build_regexp_address_string(terms), keyword_fields.to_vec())]
     } else {
         let segments = segment_fields(keyword_fields);
@@ -349,6 +349,11 @@ fn one_word(term: &str) -> Option<&str> {
     around.all(|c| c.is_ascii_punctuation()).then_some(word)
 }
 
+/// Whether `term` holds punctuation a simple_query_string reads as syntax.
+fn holds_syntax(term: &str) -> bool {
+    escape_syntax(term) != term
+}
+
 /// `term` as literal text for a simple_query_string, which otherwise reads
 /// punctuation in it as syntax: a leading `-` as NOT, so `-lunch` matched
 /// every message whose addresses lack `lunch`, `|` as OR, `(` as a group and
@@ -402,7 +407,7 @@ pub(super) fn build_text_query_string(terms: &[String], match_type: &str, compac
             match (match_type, word) {
                 // Regexp punctuation is syntax, so the term runs as typed.
                 ("regexp", _) if term.chars().count() >= MIN_PREFIX_LEN => format!("{}*", term),
-                ("regexp", _) if !compact => format!("({})", term),
+                ("regexp", _) if !compact || holds_syntax(term) => format!("({})", term),
                 ("partial", Some(word)) if long => format!("{}*", escape_syntax(word)),
                 _ if compact => phrase(term),
                 _ => format!("({})", escape_syntax(word.unwrap_or(term))),

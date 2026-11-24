@@ -331,16 +331,31 @@ impl EmailQueryBuilder {
             self.inner.build_content_bool_query()?
         };
 
-        let terms = self
-            .inner
-            .terms
+        // A name search matches its terms in the subject alone.
+        let term_fields = if self.subject_only {
+            EmailTextFields::Subject
+        } else {
+            EmailTextFields::Any
+        };
+        let terms = self.inner.terms.iter().map(|term| (term, term_fields));
+        let conditions = self
+            .text_conditions
             .iter()
-            .map(|term| clauses(term, EMAIL_KEYWORD_FIELDS, EMAIL_TEXT_FIELDS));
-        let conditions = self.text_conditions.iter().map(|condition| {
-            let (keyword_fields, text_fields) = condition.fields.fields();
-            clauses(&condition.text, keyword_fields, text_fields)
-        });
-        let compact = terms.chain(conditions).sum::<usize>() > MAX_TERM_CLAUSES;
+            .map(|condition| (&condition.text, condition.fields));
+        let term_clauses: usize = terms
+            .chain(conditions)
+            .map(|(text, fields)| {
+                let (keyword_fields, text_fields) = fields.fields();
+                clauses(text, keyword_fields, text_fields)
+            })
+            .sum();
+        // Each address or label filter a request lists is a clause of its own.
+        let listed_filters = self.sender.len()
+            + self.cc.len()
+            + self.bcc.len()
+            + self.recipients.len()
+            + self.exclude_labels.len();
+        let compact = term_clauses + listed_filters > MAX_TERM_CLAUSES;
 
         // In subject_only mode (name search), replace with a match on TITLE_KEY (subject).
         // Otherwise replace with simple_query_string across all email fields.

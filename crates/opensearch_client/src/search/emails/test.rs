@@ -1183,3 +1183,60 @@ fn a_term_that_may_be_one_token_is_read_by_the_analyzer() {
         );
     }
 }
+
+#[test]
+fn a_short_regexp_term_runs_as_typed_in_the_compact_form() {
+    let terms = vec!["a*".to_string(), "東京".to_string(), "b".to_string()];
+
+    assert_eq!(
+        build_text_query_string(&terms, "regexp", true),
+        r#"(a*) + "東京" + "b""#
+    );
+}
+
+/// Whether a partial `follow-up` condition stays a phrase prefix in the search
+/// `set` describes, which the compact form would quote.
+fn keeps_phrase_prefix(
+    set: &dyn Fn(EmailQueryBuilder) -> EmailQueryBuilder,
+    terms: usize,
+) -> anyhow::Result<bool> {
+    let terms = (0..terms).map(|i| format!("word{i}")).collect();
+    let builder = EmailQueryBuilder::new(terms)
+        .match_type("partial")
+        .user_id("user123")
+        .text_conditions(vec![EmailTextCondition {
+            fields: EmailTextFields::Subject,
+            text: "follow-up".to_string(),
+            exclude: true,
+        }]);
+    let json = set(builder).build_bool_query()?.build().to_json();
+    let condition = json["bool"]["must_not"][0].to_string();
+    Ok(condition.contains("match_phrase_prefix"))
+}
+
+#[test]
+fn a_name_search_counts_its_terms_in_the_subject_alone() -> anyhow::Result<()> {
+    assert!(!keeps_phrase_prefix(&|builder| builder, 46)?);
+    assert!(keeps_phrase_prefix(
+        &|builder| builder.subject_only(true),
+        46
+    )?);
+    Ok(())
+}
+
+#[test]
+fn listed_filters_count_toward_the_clauses_of_a_search() -> anyhow::Result<()> {
+    let senders = |count: usize| -> Vec<String> {
+        (0..count).map(|i| format!("user{i}@example.com")).collect()
+    };
+
+    assert!(keeps_phrase_prefix(
+        &|builder| builder.sender(senders(10)),
+        40
+    )?);
+    assert!(!keeps_phrase_prefix(
+        &|builder| builder.sender(senders(120)),
+        40
+    )?);
+    Ok(())
+}
