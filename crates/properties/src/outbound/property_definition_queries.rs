@@ -10,6 +10,7 @@ use models_properties::{DataType, EntityType, db};
 use sqlx::{PgExecutor, Pool, Postgres};
 use uuid::Uuid;
 
+use super::query_error::{DEFINITION_NAME_INDEXES, OPTION_VALUE_INDEXES, violates_unique};
 use crate::domain::model::{
     CreatePropertyDefinitionOutcome, GetOrCreateTagDefinitionResult, PropertyDefinitionOwner,
 };
@@ -486,7 +487,7 @@ pub async fn create_property_definition(
     .await
     {
         Ok(row) => row,
-        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+        Err(err) if violates_unique(&err, &DEFINITION_NAME_INDEXES) => {
             return Ok(CreatePropertyDefinitionOutcome::DuplicateName);
         }
         Err(err) => return Err(err.into()),
@@ -517,7 +518,7 @@ pub async fn create_property_definition(
         .await
         {
             Ok(()) => {}
-            Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+            Err(err) if violates_unique(&err, &OPTION_VALUE_INDEXES) => {
                 return Ok(CreatePropertyDefinitionOutcome::DuplicateOptionValue);
             }
             Err(err) => return Err(err.into()),

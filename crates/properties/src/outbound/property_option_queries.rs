@@ -8,7 +8,7 @@ use sqlx::{PgExecutor, Pool, Postgres};
 use uuid::Uuid;
 
 use super::entity_property_queries::EntityPropertyMutationRow;
-use super::query_error::PropertyQueryError;
+use super::query_error::{OPTION_VALUE_INDEXES, PropertyQueryError, violates_unique};
 use crate::domain::database_option_writer::ColorChange;
 
 use crate::domain::model::{
@@ -263,7 +263,7 @@ pub async fn insert_property_option_unless_id_taken(
     {
         Ok(Some(row)) => row,
         Ok(None) => return Ok(CreatePropertyOptionWithIdOutcome::IdTaken),
-        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+        Err(err) if violates_unique(&err, &OPTION_VALUE_INDEXES) => {
             return Ok(CreatePropertyOptionWithIdOutcome::DuplicateValue);
         }
         Err(err) => return Err(err.into()),

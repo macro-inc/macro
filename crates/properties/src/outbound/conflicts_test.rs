@@ -4,6 +4,7 @@
 
 use super::definitions_test::user_1;
 use super::properties_pg_repo::PropertiesPgRepo;
+use super::query_error::{DEFINITION_NAME_INDEXES, OPTION_VALUE_INDEXES};
 use crate::domain::ports::{MockNotificationService, MockPermissionService};
 use crate::domain::service::PropertiesService;
 use crate::domain::service_impl::PropertiesServiceImpl;
@@ -155,4 +156,35 @@ async fn a_replayed_add_answers_with_its_option_after_a_rename(pool: Pool<Postgr
         replayed.value,
         PropertyOptionValue::String("Middling".to_string())
     );
+}
+
+/// The conflict arms match taken names and values by index name, so a renamed
+/// or added unique index would turn a taken name into an internal failure. The
+/// primary keys are left out: their ids are minted by the server.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_conflict_arms_name_every_unique_index_but_the_keys(pool: Pool<Postgres>) {
+    let indexes: Vec<(String, String)> = sqlx::query_as(
+        "SELECT table_class.relname::text, index_class.relname::text
+         FROM pg_index
+         JOIN pg_class table_class ON table_class.oid = pg_index.indrelid
+         JOIN pg_class index_class ON index_class.oid = pg_index.indexrelid
+         WHERE pg_index.indisunique
+           AND NOT pg_index.indisprimary
+           AND table_class.relname IN ('property_definitions', 'property_options')
+         ORDER BY 1, 2",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let named: Vec<(String, String)> = DEFINITION_NAME_INDEXES
+        .iter()
+        .map(|index| ("property_definitions", index))
+        .chain(
+            OPTION_VALUE_INDEXES
+                .iter()
+                .map(|index| ("property_options", index)),
+        )
+        .map(|(table, index)| (table.to_string(), (*index).to_string()))
+        .collect();
+    assert_eq!(indexes, named);
 }
